@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1301",
+    "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+    "head": "9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+      "head": "9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a"
+    },
+    "fixHunks": 0,
+    "newHunks": 67,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+          "apps/desktop/src-tauri/src/metaproject.rs",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/metaproject.css",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "apps/desktop/src/platform/metaproject.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-contract.ts",
+          "src/integrations/metaproject-explorer-v2.ts",
+          "src/integrations/metaproject-explorer-tree.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 21,
+  "minutes": {
+    "min": 12,
+    "max": 30
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "e893f6e64f26acc4",
+  "warnings": [],
+  "next": "dispatch"
+}

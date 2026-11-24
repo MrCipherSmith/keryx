@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+    "apps/desktop/src-tauri/src/metaproject.rs",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts",
+    "apps/desktop/src/platform/metaproject.ts",
+    "docs/docs/guides/desktop-metaproject.md",
+    "src/integrations/metaproject-explorer-contract.ts",
+    "src/integrations/metaproject-explorer-tree.test.ts",
+    "src/integrations/metaproject-explorer-v2.ts"
+  ],
+  "changedLines": 2993
+}

@@ -1,0 +1,131 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: explicit-hash-range (diff mode, slice-01 only)
+- Slice read in full: slice-01 (flow 518 package files, `metaproject.rs`, `MetaprojectTree.tsx`, `MetaprojectView.tsx`, `metaproject.css`, `useMetaprojectTree.ts`, `platform/metaproject.ts`)
+- Context read beyond the slice: `MetaprojectView.tsx` around the catalog read (396-425) and the list mount (880-919); `MetaprojectTree.dom.test.tsx` searched for focus/Show more/Retry coverage.
+
+### Stack note
+The Desktop UI is React with hooks; it has no MobX. Frontend laws 1, 4 and 5 (actions, `public`, inter-store callbacks) and the `mobx-store-template` / storybook rules have nothing to apply to. `.metaproject/rules/stacks/react/code-style-patterns.mdc` does not exist in this checkout (also noted in the flow journal), so Part A severities come from the canonical rubric directly.
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [F-001] Keyboard focus is lost when the focused status row is replaced (Retry, Show more on the last page, snapshot change)
+- **Severity**: major
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (flatten / row keys)
+- **Rule**: canonical rubric (trigger + outcome); plan "Desktop UI": roving focus, focus never moved by data arriving
+- **Problem**: status rows carry a different React key per state: `loading:${parent}`, `error:${parent}`, `more:${parent}`. When the row that holds DOM focus changes state, React unmounts that `<li>` and mounts a new one, and nothing puts focus back. `tabbable` falls back to the selected row or row 0 (tabIndex moves) but `document.activeElement` becomes `<body>`. Reachable paths:
+  1. Keyboard Retry: focus on an error row, press Enter/Space -> `model.retry` sets the folder to loading -> `error:p` is replaced by `loading:p` -> focus lost. Same for a failed next page: `error:p` becomes `more:p` (loading).
+  2. Keyboard Show more on the last page: focus on `more:p`, press Enter -> page arrives with no `nextCursor` -> the `more:p` row is removed -> focus lost.
+  3. A user arrows onto a "Loading…" row (status rows stay in keyboard navigation by operator decision); when the children arrive the loading row is removed -> focus lost.
+  4. A new snapshot (refresh/rebuild) while focus is anywhere in the tree: `useMetaprojectTree` drops every folder, the whole tree collapses to `loading:` at the root, every focused row unmounts.
+- **Why it matters**: the `onKeyDown` handler sits on the `<ul role="tree">`; once focus is on `<body>` the arrow keys, Home/End and Enter do nothing, so a keyboard user who presses Retry or Show more has to Tab back into the tree from the start of the page. This is the WAI-ARIA tree behaviour AC5 claims. The existing tests drive Retry and Show more by `.click()` and only check that data arriving does not *take* focus from outside (`MetaprojectTree.dom.test.tsx` 138-169, 226-236, 315-326); none presses Enter on a status row and checks `document.activeElement`.
+- **Fix**: give every status row of a parent one stable key/id (e.g. `status:${parent}`) so loading/error/more for the same parent update the same `<li>` in place and keep focus; and in the existing `useLayoutEffect`, when `focusId` no longer names a rendered row while the tree held focus (track `list.current.contains(document.activeElement)` before the update, or check `document.activeElement === document.body` after a row the tree owned vanished), focus the row that now sits at the old index (the first appended entry after Show more, the parent folder for a vanished loading row). Add a test: focus "Show more", press Enter on the last page, expect focus on the first new entry; focus the error row, press Enter, expect focus to stay in the tree.
+- **Patch** (sketch):
+```diff
+-      rows.push({ type: "loading", id: `loading:${parent}`, level, parent });
++      rows.push({ type: "loading", id: `status:${parent}`, level, parent });
+...
+-      rows.push({ type: "error", id: `error:${parent}`, level, parent, message: folder.error ?? "The read failed." });
++      rows.push({ type: "error", id: `status:${parent}`, level, parent, message: folder.error ?? "The read failed." });
+...
+-    if (folder.more?.status === "failed") rows.push({ type: "error", id: `error:${parent}`, ...
+-    else if (folder.nextCursor) rows.push({ type: "more", id: `more:${parent}`, ...
++    if (folder.more?.status === "failed") rows.push({ type: "error", id: `status:${parent}`, ...
++    else if (folder.nextCursor) rows.push({ type: "more", id: `status:${parent}`, ...
+```
+  plus the focus-restore in the layout effect for rows that disappear.
+
+### [F-002] `useMetaprojectTree` writes refs during render
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts
+- **Problem**: on a snapshot change the hook increments `generation.current` and replaces `state.current` in the render body. React asks render to be pure; the write is idempotent here (the second StrictMode render sees the new snapshot and does nothing), so there is no demonstrated wrong behaviour today. Under a discarded concurrent render (a transition that is thrown away and rendered again with the old snapshot) the loaded children would be dropped twice and re-read. No such transition exists in the explorer now.
+- **What would settle it**: none needed now; if the explorer ever renders catalog changes inside `startTransition`, move the reset into a keyed state (e.g. `useState` keyed by snapshot, or derive with a `useRef` compared in `useLayoutEffect`).
+
+### Clean Areas
+- Component layering: no API/IO in `MetaprojectTree`; reads go through the injected `RequestTree` in `useMetaprojectTree`, and the view wires `requestMetaprojectTree` as default (injectable for tests).
+- Effects: the unread-parent effect is idempotent (`ensure` returns on a known parent; the `exhaustive-deps` suppression is deliberate and keyed on `unread.join`); the reveal effect is bounded by `tree.handled` and stops on failure, missing row or end of pages; late answers are retired by `generation`.
+- Old-snapshot cursors: `read` pins `expectedSnapshotId` to the scope snapshot and the generation check drops answers from a previous snapshot; the tree is mounted only inside `catalog && graphState`, so `expectedSnapshotId` is never empty.
+- Keys: entry rows `d:`/`n:` prefixed and unique per scope; the tree is keyed by scope in the view.
+- Older CLI (AC4): a numeric `negotiate` result maps to `supportsTree: false`; `validCapabilities` checks `METAPROJECT_REQUIRED_ACTIONS` (six), not `METAPROJECT_CAPABILITIES`.
+- TypeScript: no `any`, no non-null assertions added in production code; tree response guard validates entry type per scope and parent; `matchesRequest` checks scope and parent.
+- ARIA: role tree with name, treeitem with level/posinset/setsize (`-1` while more pages), `aria-expanded` on containers, `aria-selected` on nodes and module folders, single roving `tabIndex=0`.
+- CSS: existing tokens only, no new colours.
+- Rust slice (`RequestV2::Tree`, `valid_v2`, tests): outside this lens (not frontend); read for context only.
+
+### Routing audit
+graph_used: no (payload `layers` supplied the affected set; no further blast-radius question) · wiki_used: not-relevant (payload wiki layer empty; plan.md covered intent) · ctx_used: yes (`keryx ctx rg` for slice sections and view/test lookups) · raw_rg_used: no
+
+### Not verified
+- No tests run (allowed_tools read-only, exec_budget_s 0). F-001 is from reading the key/unmount path, not from a failing test.
+- Rust not compiled (no toolchain; CI pending).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-frontend",
+    "summary": "React tree integration is clean on layering, effects, snapshot handling and the older-CLI handshake. One major: keyboard focus is lost when a focused status row (error/loading/Show more) changes state or a new snapshot collapses the tree, because status rows change React key per state. One info on render-phase ref writes. No MobX in this stack; MobX laws not applicable.",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "major",
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "line": null,
+        "quote": "rows.push({ type: \"loading\", id: `loading:${parent}`, level, parent });",
+        "problem": "Status rows use a different key per state (loading:/error:/more: + parent). When the row holding DOM focus changes state or disappears, React unmounts that <li> and nothing restores focus; activeElement becomes <body>. Paths: keyboard Enter on an error row (Retry -> loading row), keyboard Enter on Show more when the next page is the last (more row removed), arrowing onto a Loading row and the children arriving, and a new snapshot collapsing the tree to a root loading row.",
+        "impact": "The tree's onKeyDown is on the <ul role=tree>; with focus on <body>, arrows/Home/End/Enter stop working and a keyboard user must Tab back into the tree after every keyboard Retry or last Show more. Breaks the roving-focus behaviour AC5 claims; tests click these controls and never assert focus after a keyboard activation.",
+        "suggested_fix": "Key every status row of a parent with one stable id (status:${parent}) so loading/error/more update the same <li> in place; in the layout effect, when focusId no longer names a rendered row and the tree held focus before the update, focus the row now at the old index (first appended entry after Show more, parent folder for a vanished Loading row). Add tests that press Enter on Show more (last page) and on the error row and assert document.activeElement stays inside the tree.",
+        "evidence": "MetaprojectTree.tsx flatten(): loading row id `loading:${parent}`, error row `error:${parent}`, more row `more:${parent}`; activate() -> model.retry / model.more; useMetaprojectTree retry() sets status loading, read() drops nextCursor on the last page, snapshot change resets folders. MetaprojectTree.dom.test.tsx 138-169 and 315-326 drive Retry/Show more by .click(); 226-236 only checks focus is not taken from outside.",
+        "confidence": "high",
+        "reviewer": "review-frontend",
+        "dedupe_key": "metaproject-tree-status-row-focus-loss",
+        "blocking_merge": false,
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/metaproject/MetaprojectTree.tsx flatten(): loading row (`loading:${parent}`)",
+            "apps/desktop/src/metaproject/MetaprojectTree.tsx flatten(): failed-folder error row (`error:${parent}`)",
+            "apps/desktop/src/metaproject/MetaprojectTree.tsx flatten(): failed-next-page error row (`error:${parent}`)",
+            "apps/desktop/src/metaproject/MetaprojectTree.tsx flatten(): Show more row (`more:${parent}`)",
+            "apps/desktop/src/metaproject/useMetaprojectTree.ts snapshot reset in render (all folders dropped -> root loading row)"
+          ],
+          "enumeration_method": "Enumerated every Row variant pushed in flatten() (entry, loading, error x2, more) and every model transition that changes a parent's row type (ensure, retry, more, read success without nextCursor, not-found forget, snapshot reset). Entry rows keep a stable d:/n: id across loads and are not in the class; every status-row transition changes or removes the key."
+        }
+      },
+      {
+        "id": "F-002",
+        "severity": "info",
+        "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "line": null,
+        "quote": "generation.current++;",
+        "problem": "On a snapshot change the hook mutates generation.current and state.current during render. Idempotent under StrictMode double render, so no wrong behaviour today.",
+        "impact": "None demonstrated. A discarded concurrent render (transition) would drop loaded children twice and re-read; the explorer has no such transition now.",
+        "suggested_fix": "No change needed now. If catalog updates ever render inside startTransition, move the reset out of render (state keyed by snapshot, or compare in useLayoutEffect).",
+        "evidence": "useMetaprojectTree.ts: `if (state.current.graph.snapshot !== snapshot) { generation.current++; ... state.current = {...} }` in the hook body.",
+        "confidence": "medium",
+        "reviewer": "review-frontend",
+        "dedupe_key": "metaproject-tree-render-phase-ref-write",
+        "blocking_merge": false,
+        "location_class": "in-diff"
+      }
+    ],
+    "needs_context": [],
+    "inputs_unreadable": [],
+    "follow_ups": [],
+    "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+  }
+}
+```

@@ -1393,6 +1393,43 @@ test("a page of results in flight when the explorer is hidden and shown again is
   } finally { debounce.restore(); }
 });
 
+test("a next page refused as stale-snapshot shows the Refresh catalog banner; another failure stays an inline search failure", async () => {
+  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
+  const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
+  const searchFailure = () => [...host.querySelectorAll('[role="alert"]')].find(alert => alert.textContent?.startsWith("Search failed."))?.textContent;
+  for (const failure of [
+    new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading."),
+    new MetaprojectRequestError("source-unavailable", "The wiki could not be read."),
+  ]) {
+    const debounce = holdDebounce();
+    const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
+      if (input.action === "catalog") return { ...catalog, schemaVersion: 2 };
+      if (input.action === "search") {
+        if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
+        throw failure;
+      }
+      if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
+      return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
+    };
+    const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild, createCytoscape: await headlessCytoscape() };
+    try {
+      await act(async () => { root.render(null); });
+      await showView(props, true);
+      await act(async () => { button("Wiki").click(); });
+      await typeQuery("query");
+      await debounce.run();
+      await act(async () => { button("Load more results").click(); });
+      if (failure.code === "stale-snapshot") {
+        expect(staleBanner()).toBe(true);
+        expect(searchFailure()).toBeUndefined();
+      } else {
+        expect(staleBanner()).toBe(false);
+        expect(searchFailure()).toContain("The wiki could not be read.");
+      }
+    } finally { debounce.restore(); }
+  }
+});
+
 test("a failed quiet re-read on return shows no error and leaves the explorer as it was", async () => {
   let catalogReads = 0;
   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
@@ -1896,7 +1933,7 @@ test("a rebuild reload that a later one superseded shows no banner when it fails
 
 type TreeInput = import("../platform/metaproject").MetaprojectTreeRequest;
 type TreeV2 = import("../../../../src/integrations/metaproject-explorer-contract").MetaprojectTreeV2;
-type TreeAnswer = { entries: unknown[]; nextCursor?: string; partial?: boolean };
+type TreeAnswer = { entries: unknown[]; nextCursor?: string; partial?: boolean; snapshotId?: string } | Error;
 
 /**
  * A protocol-2 explorer whose CLI offers `tree`. Catalog and tree answers follow `state.snapshot`;
@@ -1919,6 +1956,7 @@ function treeExplorer(trees: Record<string, TreeAnswer>, nodes: MetaprojectCatal
     const key = `${input.expectedSnapshotId}|${input.scope}|${input.parent ?? ""}|${input.cursor ?? ""}`;
     const answer = () => {
       const found = trees[key];
+      if (found instanceof Error) return Promise.reject(found);
       return found
         ? Promise.resolve({ schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? "", scope: input.scope, parent: input.parent ?? null, partial: false, ...found } as TreeV2)
         : Promise.reject(new Error(`No tree answer for ${key}`));
@@ -1985,12 +2023,16 @@ test("the tree shows without a query and flat results with one; clearing it brin
     await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
     expect(host.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Project files");
     expect(treeHeading()).toBe("Files · 3");
+    // The list landmark is named by its visible heading, with or without a query.
+    const landmarkName = () => document.getElementById(host.querySelector("nav.metaproject-list")?.getAttribute("aria-labelledby") ?? "")?.textContent;
+    expect(landmarkName()).toBe("Files · 3");
     await expandFolder("src");
     expect(treeRow("Client")).not.toBeNull();
     await typeTreeQuery("client");
     await act(async () => { timer.run(); });
     expect(host.querySelector('[role="tree"]')).toBeNull();
     expect(treeHeading()).toBe("Results · 1");
+    expect(landmarkName()).toBe("Results · 1");
     expect(listRow("Client")).not.toBeNull();
     await typeTreeQuery("");
     expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
@@ -2094,15 +2136,39 @@ test("a new snapshot keeps the expanded set, drops stale children and answers, a
   expect(treeRows().some(row => row.textContent === "Show more")).toBe(false);
 });
 
+test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows", async () => {
+  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
+  const explorer = treeExplorer({
+    ...STANDARD_TREES,
+    "s1|graph|src|": { entries: [{ type: "node", node: file }], snapshotId: "s2" },
+    "s1|wiki|other|": new MetaprojectRequestError("stale-snapshot", "Metaproject changed. Refresh and retry."),
+  });
+  const createCytoscape = await headlessCytoscape();
+  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+  const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
+  await expandFolder("src");
+  expect(staleBanner()).toBe(true);
+  expect(() => treeRow("Client")).toThrow();
+  await act(async () => { button("Refresh catalog").click(); });
+  expect(staleBanner()).toBe(false);
+  await act(async () => { button("Wiki").click(); });
+  await expandFolder("Other");
+  expect(staleBanner()).toBe(true);
+  expect(() => treeRow("Guide")).toThrow();
+});
+
 test("the selection shown by default reveals nothing: only a selection the user made expands folders", async () => {
   // The Graph falls back to the catalog's first node (a file in src), the Wiki to its first page.
   const explorer = treeExplorer(STANDARD_TREES, [file, page]);
   const createCytoscape = await headlessCytoscape();
   await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
   await act(async () => {});
+  // The fallback is selected and shown, yet its folder stays collapsed.
+  expect(host.querySelector(".metaproject-content")?.textContent).toContain("Client");
   expect(treeRow("src").getAttribute("aria-expanded")).toBe("false");
   await act(async () => { button("Wiki").click(); });
   await act(async () => {});
+  expect(host.querySelector(".metaproject-article h2")?.textContent).toBe("Guide");
   expect(treeRow("Other").getAttribute("aria-expanded")).toBe("false");
   expect(explorer.treeCalls.map(call => `${call.scope}|${call.parent ?? ""}`).sort()).toEqual(["graph|", "wiki|"]);
 });

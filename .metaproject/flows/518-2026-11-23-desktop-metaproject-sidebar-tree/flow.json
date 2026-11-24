@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-23T20:56:48.820Z",
+  "updatedAt": "2026-11-23T21:31:29.571Z",
   "source": {
     "type": "description",
     "ref": null
@@ -243,6 +243,26 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Fix round 1: review findings of PR 1301 (3 major, 19 minor)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T21:31:29.571Z",
+            "outcome": "started",
+            "detail": "518-T12 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -358,6 +378,16 @@
       "at": "2026-11-23T20:56:48.820Z",
       "event": "task-done",
       "detail": "T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check"
+    },
+    {
+      "at": "2026-11-23T21:31:28.859Z",
+      "event": "task-added",
+      "detail": "T12: Fix round 1: review findings of PR 1301 (3 major, 19 minor)"
+    },
+    {
+      "at": "2026-11-23T21:31:29.571Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 518-T12 fix round 1"
     }
   ],
   "acKinds": {

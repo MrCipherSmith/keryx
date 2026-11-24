@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import type {
-  MetaprojectNode,
-  MetaprojectTreeEntry,
-  MetaprojectTreeScope,
+import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  metaprojectWikiGroupKey,
+  type MetaprojectNode,
+  type MetaprojectTreeEntry,
+  type MetaprojectTreeScope,
 } from "../../../../src/integrations/metaproject-explorer-contract";
 import { Icon } from "../components/Icon";
 import { NODE_KIND_LABELS } from "./labels";
@@ -22,19 +23,26 @@ const rowId = (entry: MetaprojectTreeEntry) => `${isContainer(entry) ? "d" : "n"
 const nodeOf = (entry: MetaprojectTreeEntry): MetaprojectNode | undefined =>
   entry.type === "node" ? entry.node : entry.type === "folder" ? entry.module : undefined;
 
+/**
+ * A parent shows at most one status row at a time (loading, error or more). They share one id, so a
+ * Retry or Show more updates the focused row in place instead of replacing it.
+ */
+const statusId = (parent: string) => `status:${parent}`;
+
 /** The visible rows, depth first, and the parents shown as loading that nobody has asked for yet. */
 function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
   const rows: Row[] = [];
   const unread: string[] = [];
   const visit = (parent: string, level: number) => {
     const folder = tree.folders.get(parent);
+    const id = statusId(parent);
     if (!folder || folder.status === "loading") {
       if (!folder) unread.push(parent);
-      rows.push({ type: "loading", id: `loading:${parent}`, level, parent });
+      rows.push({ type: "loading", id, level, parent });
       return;
     }
     if (folder.status === "failed") {
-      rows.push({ type: "error", id: `error:${parent}`, level, parent, message: folder.error ?? "The read failed." });
+      rows.push({ type: "error", id, level, parent, message: folder.error ?? "The read failed." });
       return;
     }
     // More pages: the set's size is not known yet (ARIA's -1).
@@ -43,8 +51,8 @@ function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
       rows.push({ type: "entry", id: rowId(entry), level, posinset: index + 1, setsize, parent, entry });
       if (isContainer(entry) && tree.expanded.has(entryKey(entry))) visit(entryKey(entry), level + 1);
     });
-    if (folder.more?.status === "failed") rows.push({ type: "error", id: `error:${parent}`, level, parent, message: folder.more.error });
-    else if (folder.nextCursor) rows.push({ type: "more", id: `more:${parent}`, level, parent, loading: folder.more?.status === "loading" });
+    if (folder.more?.status === "failed") rows.push({ type: "error", id, level, parent, message: folder.more.error });
+    else if (folder.nextCursor) rows.push({ type: "more", id, level, parent, loading: folder.more?.status === "loading" });
   };
   visit(TREE_ROOT, 1);
   return { rows, unread };
@@ -55,7 +63,7 @@ type Step = { parent: string; container: string } | { parent: string; node: stri
 function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[] {
   if (scope === "wiki") {
     if (node.kind !== "wiki") return [];
-    const group = node.pageType || "other";
+    const group = metaprojectWikiGroupKey(node);
     return [{ parent: TREE_ROOT, container: group }, { parent: group, node: node.id }];
   }
   if (node.kind !== "file" && node.kind !== "module" && node.kind !== "symbol") return [];
@@ -90,8 +98,10 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
   const { rows, unread } = flatten(tree);
   const [focusId, setFocusId] = useState("");
   const list = useRef<HTMLUListElement>(null);
-  const focusRequest = useRef(false);
+  /** The element focused inside the tree and the index of its row, so a row that leaves can hand focus on. */
+  const focused = useRef<{ element: HTMLElement; index: number } | null>(null);
   const scrollRequest = useRef("");
+  const rowElements = () => [...list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []];
 
   useEffect(() => {
     for (const parent of unread) model.ensure(scope, parent);
@@ -124,15 +134,33 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
   useLayoutEffect(() => {
     const root = list.current;
     if (!root) return;
+    const elements = rowElements();
     if (scrollRequest.current) {
-      const row = [...root.querySelectorAll<HTMLElement>("[data-row]")].find(item => item.dataset.row === scrollRequest.current);
+      const row = elements.find(item => item.dataset.row === scrollRequest.current);
       if (row) { row.scrollIntoView?.({ block: "nearest" }); scrollRequest.current = ""; }
     }
-    if (focusRequest.current) {
-      focusRequest.current = false;
-      root.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]')?.focus();
+    // The focused row left (its folder's children or last page arrived, a new snapshot): focus the row
+    // now at its place. Focus that was outside the tree is never taken.
+    const lost = focused.current;
+    const active = document.activeElement;
+    if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
+      elements[Math.min(lost.index, elements.length - 1)]?.focus();
     }
+    remember(document.activeElement);
   });
+
+  /** Records where focus is when it is inside the tree, and forgets it otherwise. */
+  function remember(element: Element | null) {
+    const row = element instanceof HTMLElement && list.current?.contains(element) ? element.closest<HTMLElement>("[data-row]") : null;
+    focused.current = element instanceof HTMLElement && row ? { element, index: rowElements().indexOf(row) } : null;
+  }
+  // Focus moving out of the tree is forgotten; a row removed while focused is not, so it can hand focus on.
+  const onBlur = (event: FocusEvent<HTMLUListElement>) => {
+    const element = event.target;
+    queueMicrotask(() => {
+      if (element.isConnected && focused.current?.element === element) remember(document.activeElement);
+    });
+  };
 
   const selectedRow = rows.find(row => row.type === "entry" && nodeOf(row.entry)?.id === selection);
   const tabbable = rows.find(row => row.id === focusId) ?? selectedRow ?? rows[0];
@@ -152,10 +180,9 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
       else toggle(entryKey(entry));
     }
   };
+  // Focus moves now, to a row already shown; nothing is left pending for a later render.
   const moveTo = (row: Row | undefined) => {
-    if (!row) return;
-    setFocusId(row.id);
-    focusRequest.current = true;
+    if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
@@ -208,7 +235,7 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
   }
 
   return (
-    <ul ref={list} role="tree" aria-label={label} className="metaproject-tree" onKeyDown={onKeyDown}>
+    <ul ref={list} role="tree" aria-label={label} className="metaproject-tree" onKeyDown={onKeyDown} onBlur={onBlur}>
       {rows.map(row => {
         const common = {
           "data-row": row.id,
@@ -216,15 +243,16 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
           "aria-level": row.level,
           tabIndex: row === tabbable ? 0 : -1,
           style: { paddingInlineStart: `calc(var(--sp-3) + ${row.level - 1} * var(--sp-4))` },
-          onFocus: () => setFocusId(row.id),
+          onFocus: (event: FocusEvent<HTMLLIElement>) => { setFocusId(row.id); remember(event.target); },
         };
         if (row.type === "loading") {
           return <li key={row.id} {...common} aria-disabled="true" className="metaproject-tree-status"><span role="status">Loading…</span></li>;
         }
         if (row.type === "error") {
+          // The same live region as the loading row it replaces, so the failure is announced.
           return (
             <li key={row.id} {...common} className="metaproject-tree-status metaproject-tree-error" onClick={onRowClick(row)}>
-              <span>Could not load. {row.message}</span>
+              <span role="status">Could not load. {row.message}</span>
               <button type="button" className="btn btn-sm" tabIndex={-1} onClick={onRowClick(row)}>Retry</button>
             </li>
           );
@@ -258,6 +286,8 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
               <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
             </span>
             <span className="metaproject-tree-name" {...(module && { onClick: onRowClick(row) })}>{entry.name}</span>
+            {/* A module folder's name selects the module, so it carries the kind label node rows show. */}
+            {module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}
             <span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>
           </li>
         );

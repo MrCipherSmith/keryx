@@ -11,6 +11,9 @@ import type { MetaprojectTreeRequest } from "../platform/metaproject";
 /** The key of a tree's root; graph folder paths and wiki group keys are never empty. */
 export const TREE_ROOT = "";
 
+/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */
+export const MAX_TREE_READS = 3;
+
 export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
 
 /** The loaded children of one tree parent (the root, a graph folder or a wiki group). */
@@ -63,7 +66,9 @@ const emptyScope = (snapshot: string): ScopeTree => ({ snapshot, expanded: new S
  * The explorer's tree data: per scope, the expanded folders, the loaded pages of each parent and
  * what the tree last revealed. A new snapshot drops loaded children and every pending answer and
  * keeps the expanded set; the tree re-reads what it shows. A cursor is only ever sent for the
- * snapshot that issued it. `onStale` is told when the CLI answers for another snapshot.
+ * snapshot that issued it. At most `MAX_TREE_READS` reads run at once. `onStale` is told when a read
+ * answers `stale-snapshot` (the transport's answer to a reply for another snapshot) or, from a
+ * `request` that does not check, a page of another snapshot; that page is never shown.
  */
 export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
   cwd: string;
@@ -111,6 +116,23 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
     });
   }, [update]);
 
+  // Reads wait in order for a free slot, so re-reading many expanded folders never exhausts the
+  // read permits Desktop shares with the explorer's own reads.
+  const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });
+  const limit = useCallback((task: () => unknown) => {
+    const pool = slots.current;
+    const start = () => {
+      pool.active++;
+      // A read reports its own failure on its folder's row; this catch only keeps the slot count right.
+      void Promise.resolve().then(task).catch(() => undefined).finally(() => {
+        pool.active--;
+        pool.queue.shift()?.();
+      });
+    };
+    if (pool.active < MAX_TREE_READS) start();
+    else pool.queue.push(start);
+  }, []);
+
   const read = useCallback((scope: MetaprojectTreeScope, parent: string, cursor?: string) => {
     const issued = generation.current;
     const pinned = state.current[scope].snapshot;
@@ -119,7 +141,8 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
     const input: MetaprojectTreeRequest = {
       scope, expectedSnapshotId: pinned, ...(parent !== TREE_ROOT && { parent }), ...(cursor && { cursor }),
     };
-    void Promise.resolve().then(() => send(root, input)).then(page => {
+    // A read queued under a snapshot that has since been retired never starts.
+    limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {
       if (!current()) return;
       if (page.snapshotId !== pinned) throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
       setFolder(scope, parent, folder => {
@@ -148,8 +171,8 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
       setFolder(scope, parent, folder => cursor && folder
         ? { ...folder, more: { status: "failed", error } }
         : { status: "failed", entries: [], partial: false, error });
-    });
-  }, [forgetVanished, setFolder, update]);
+    }));
+  }, [forgetVanished, limit, setFolder, update]);
 
   const ensure = useCallback((scope: MetaprojectTreeScope, parent: string) => {
     if (state.current[scope].folders.has(parent)) return;

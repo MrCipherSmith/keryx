@@ -279,6 +279,14 @@ export interface MetaprojectOpenSpecHistory extends SnapshotV2 {
 export const METAPROJECT_TREE_SCOPES = ["graph", "wiki"] as const;
 export type MetaprojectTreeScope = typeof METAPROJECT_TREE_SCOPES[number];
 
+/** The wiki tree group of pages without a page type. */
+export const METAPROJECT_WIKI_UNTYPED_GROUP = "other";
+
+/** The key of the wiki tree group that holds `node`: its page type, or the untyped group. */
+export function metaprojectWikiGroupKey(node: Pick<MetaprojectNode, "pageType">): string {
+  return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP;
+}
+
 /** One child of a tree parent: a graph folder, a wiki page-type group, or a node. */
 export type MetaprojectTreeEntry =
   | { type: "folder"; path: string; name: string; files: number; module?: MetaprojectNode }

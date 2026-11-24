@@ -1,0 +1,239 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, wave 1, round 1. PR 1301 (flow 518), head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a. Slice read in full: slice-02.
+
+## Mutation pass: not executed by this reviewer
+
+The payload grants `run-tests`, but `keryx review mutate` writes `mutation-<n>.json/.md` into `research-evidence/`, and the dispatch brief (item 8) lets this reviewer run only the listed read-only commands and write only this result file. So no mutant was run. **0 of 52 proposed mutants were run, and 52 were not reached.** No mutation result in this report is observed. Every finding below rests on fixture or producer evidence read from the code, not on a predicted mutation.
+
+The baselines for the nearest suites were run at the reviewed head and are green:
+- `bun test src/integrations/metaproject-explorer-tree.test.ts`: 10 pass, 0 fail.
+- `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts`: 125 pass, 0 fail.
+
+The 52 `mutant_candidates` are in REVIEW_RESULT. Each anchor was checked unique in its file with `keryx ctx rg -F`, except U3/U4: `if (!current()) return;` occurs twice in that file, so those two anchors are multi-line. Suggested suites:
+- core (T*, C*): `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts` (package root)
+- desktop (P*, U*, M*, W*): `bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx` (package apps/desktop). M2 can loop on a failed next page, so run it with a timeout.
+
+| mutation | result |
+|---|---|
+| all 52 candidates | not run (see above) |
+
+## Findings (summary)
+
+- F1 minor: the "never symbols" assertions in the core tree tests cannot fail, because a tree read never loads the symbol layer.
+- F2 minor: the fixtures reach `graphTree`/`wikiTree` already sorted, so the file-path and wiki-title sorts that AC1 requires are not pinned.
+- F3 minor: the tree's stale-snapshot path (an answer for another snapshot, or a `stale-snapshot` error leading to `onStale`) has no test. Every fake reader echoes `expectedSnapshotId`.
+- F4 minor: AC5 names the Up key, but no test presses ArrowUp.
+- F5 minor: an empty but built graph and an empty wiki are untested at both ends: the core root, and Desktop's "No indexed files." and "No Wiki pages." copies.
+- F6 minor: the test "data arriving never moves focus" never shows that the data arrived.
+- F7 minor: the test "the selection shown by default reveals nothing" asserts only collapsed state, with no proof that a default selection was shown.
+- I1 info: the platform's malformed-tree table skips three validator gates.
+- I2 info: core's `WIKI_UNTYPED_GROUP` cannot be reached from the producer. The `"other"` key it shares with Desktop's `revealSteps` is pinned by no test.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-02 tests are deterministic. They use fake readers with held promises, a manual setTimeout, a restored scrollIntoView patch and temporary dirs cleaned in afterEach, with no sleeps and no real network, and they cover AC1, AC2 and AC4 to AC6 well. The mutation pass was NOT executed: keryx review mutate writes to research-evidence/, which this dispatch forbids, so 52 mutant_candidates are handed to the main session (0 run, 52 not reached). Seven minor gaps were found by reading the fixtures and their producers: vacuous symbol assertions, pre-sorted fixtures, the untested stale-snapshot path, ArrowUp, empty-tree states, and two tests that assert only negative state.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "file": "src/integrations/metaproject-explorer-tree.test.ts",
+      "line": null,
+      "quote": "expect(result.entries.some((entry) => entry.type === \"node\" && entry.node.kind === \"symbol\")).toBe(false);",
+      "problem": "This test, and the 'never symbols' claim in the root test's name, assert only that no symbol node appears. The fixture writes symbols.jsonl, but a tree request never loads it. MetaprojectExplorerV2's graphRequest() maps a `tree` request to the default `{ action: \"catalog\" }`, and loadExplorerGraph reads symbols.jsonl only for search, symbol detail or calls/defines neighbors (src/integrations/metaproject-explorer.ts:180). model.nodes holds no symbol for these assertions to exclude.",
+      "impact": "AC1's 'never symbols' is not tested. The assertion passes whether or not graphTree filters symbols. If a later change loads symbols for tree reads, or drops the `node.kind !== \"file\"` filter's symbol exclusion, this test stays green. Today that filter is pinned only by module nodes.",
+      "suggested_fix": "Give the assertion a positive artifact. Either unit-test graphTree/MetaprojectExplorerV2.tree with a GraphModel whose nodes include `{ kind: \"symbol\", path: \"src/a.ts\" }`, and assert that the src listing and the folder counts (src: 4) exclude it. Or first prove that the symbol layer is loaded on the path under test (a symbol node is present in the model) before asserting its absence from the entries.",
+      "evidence": "src/integrations/metaproject-explorer-v2.ts graphRequest(): `default: return { action: \"catalog\" };`. src/integrations/metaproject-explorer.ts:180 loads symbols only for `request.action === \"search\"` or a symbol detail/neighbors. Tests: metaproject-explorer-tree.test.ts, 'lists a nested folder's children and never returns symbols'.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "file": "src/integrations/metaproject-explorer-tree.test.ts",
+      "line": null,
+      "quote": "expect(pages.entries.map(label)).toEqual([\"node:wiki:components/alpha.md\", \"node:wiki:components/zeta.md\"]);",
+      "problem": "AC1 requires sorted children, but the fixtures can't separate the sort graphTree/wikiTree add from the order the producer already emits. (1) The wiki producer reads page files in filename order (`readdir(...).filter(...).sort()`, src/integrations/metaproject-explorer.ts:67), and the titles Alpha/Zeta follow the filenames alpha.md/zeta.md. The new `pages.sort(... compareText(a.title, b.title) ...)` therefore has nothing to reorder. (2) builtGraph writes nodes.jsonl with each folder's files already in ascending path order (src/lib/deep/c.ts before d.ts, many/file-00..14 in order), so `files.sort((a, b) => compareText(a.path, b.path))` also gets pre-sorted input. Folder order IS pinned, because src, docs, pkg and many are inserted out of order.",
+      "impact": "If either sort comparator is removed or broken, the suite stays green while the tree lists files or wiki pages out of order (wiki by filename instead of title).",
+      "suggested_fix": "Give the wiki pages titles that invert filename order (for example components/alpha.md titled '# Zeta' and zeta.md titled '# Alpha'), then assert title order. Write nodes.jsonl in reverse or shuffled order (for example list many/file-14 before many/file-00, and src/lib/deep/d.ts before c.ts). Mutants T5 and T9 confirm both once they are run.",
+      "evidence": "Producer: src/integrations/metaproject-explorer.ts:67 `(await readdir(path.join(root, dir))).filter((name) => name.endsWith(\".md\")).sort()`. Fixture: builtGraph `files` array and wikiOnly titles '# Zeta'/'# Alpha' in zeta.md/alpha.md.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (page.snapshotId !== pinned) throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");",
+      "problem": "This PR adds the tree's stale-snapshot handling: an answer for another snapshot is refused, and a `stale-snapshot` answer or error calls `onStale`, which MetaprojectView wires to `markStale`. No test reaches it. Both fake tree readers always answer with `snapshotId: input.expectedSnapshotId` (MetaprojectTree.dom.test.tsx reader(), MetaprojectView.dom.test.tsx treeExplorer().requestTree), and the MetaprojectTree harness passes `onStale: () => {}`. `keryx ctx rg 'onStale|stale-snapshot'` over both DOM test files finds only that no-op.",
+      "impact": "If the snapshot check or the onStale call is removed, the suite stays green. The tree would then render rows from a different snapshot, and the 'Project knowledge changed while loading' banner would never appear for tree reads. AC6 ('drops stale ... answers') is covered only for answers that arrive after a local snapshot change, not for a CLI that has already moved on.",
+      "suggested_fix": "In MetaprojectView.dom.test.tsx, have treeExplorer answer one tree read with `snapshotId: \"s2\"` while the catalog is still s1. Also reject one read with `new MetaprojectRequestError(\"stale-snapshot\", ...)`. Assert that the explorer's stale banner (Refresh catalog) appears and that the folder shows no rows from that answer. Mutants U1 and U2 pin it.",
+      "evidence": "MetaprojectTree.dom.test.tsx: `return Promise.resolve({ schemaVersion: 2 as const, snapshotId: input.expectedSnapshotId ?? SNAPSHOT, ...` and `onStale: () => {}`. MetaprojectView.dom.test.tsx treeExplorer: `snapshotId: input.expectedSnapshotId ?? \"\"`. MetaprojectView.tsx:754 `onStale: markStale`.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "case \"ArrowUp\": moveTo(rows[index - 1]); break;",
+      "problem": "AC5 lists Up/Down/Left/Right/Home/End/Enter/Space. The keyboard test 'keys move, expand, collapse and select as a WAI-ARIA tree' presses every key except ArrowUp. `keryx ctx rg ArrowUp` over MetaprojectTree.dom.test.tsx and MetaprojectView.dom.test.tsx returns 0 matches.",
+      "impact": "If ArrowUp handling is removed or inverted, the suite stays green, while one of the documented keys (docs/docs/guides/desktop-metaproject.md key table) and an AC5 behaviour is unverified.",
+      "suggested_fix": "In the keyboard test, after `ArrowDown` to src, press `ArrowUp` and assert `focused()` is 'docs'. Optionally also assert that ArrowUp on the first row keeps focus there.",
+      "evidence": "keryx ctx rg -n 'ArrowUp' on both DOM test files: 0 matches. AC5 text in pr-context requirements.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "? root.partial ? \"The graph is not built yet. Rebuild the graph to browse its files.\" : \"No indexed files.\"",
+      "problem": "Empty trees are tested only for a graph that is not built (partial: true). No test covers a built graph with no indexed files or an empty wiki. On Desktop, 'No indexed files.' and 'No Wiki pages.' have 0 matches in the tests. In core, no fixture has `graphPresent` true and zero file nodes: builtGraph always has files, and wikiOnly has no graph. That leaves the `parent !== undefined` guard in `if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();` unpinned. That guard keeps an empty root from answering `not-found`.",
+      "impact": "If that guard is removed, an empty but built graph's root answers not-found. Desktop would then show 'Could not load.' instead of 'No indexed files.', and the suite stays green.",
+      "suggested_fix": "Core: a fixture with an empty nodes.jsonl (graph present). Assert that `tree({scope:'graph'})` resolves to `{ entries: [], partial: false }`. Desktop: two DOM tests, one with a root answer `{ entries: [], partial: false }` in graph scope ('No indexed files.') and one in wiki scope ('No Wiki pages.'). Mutants T2 and M9 cover it.",
+      "evidence": "keryx ctx rg 'No indexed files|No Wiki pages' over the DOM tests: 0 matches. metaproject-explorer-tree.test.ts fixtures: wikiOnly (no storage) and builtGraph (files always present).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F6",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "line": null,
+      "quote": "await act(async () => { tree.release(\"src|\"); });\n    expect(document.activeElement).toBe(outside);",
+      "problem": "'data arriving never moves focus' asserts only that focus stayed outside. It never checks that the held page arrived and rendered. If the release did nothing (wrong key, the read never sent, rows not rendered), the test still passes.",
+      "impact": "The test can pass when the path it names ('data arriving') never ran.",
+      "suggested_fix": "After the release, add `expect(item(\"client.ts\")).not.toBeNull();` (and that no row reads 'Loading…') before the focus assertion.",
+      "evidence": "Test body: only `expect(document.activeElement).toBe(outside)` follows the release.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F7",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "line": null,
+      "quote": "expect(treeRow(\"src\").getAttribute(\"aria-expanded\")).toBe(\"false\");\n  await act(async () => { button(\"Wiki\").click(); });",
+      "problem": "'the selection shown by default reveals nothing' asserts only negative state: folders collapsed, and no tree reads beyond the roots. It never checks that a default selection exists, for example that the details panel shows src/client.ts or the Guide article in Wiki. If the fallback selection stopped being set, nothing would be revealed for that reason too, and the test passes.",
+      "impact": "The rule it pins (MetaprojectView passes `selected={route.selection ? activeNode : undefined}`) is unprotected against a regression that also drops the fallback selection. The test cannot tell 'default selection not revealed' from 'no default selection'.",
+      "suggested_fix": "Before the collapsed assertions, assert the fallback is selected: `host.querySelector('[aria-label=\"Graph node details\"]')?.textContent` contains 'src/client.ts' in Graph, and the Guide article heading in Wiki. Mutant W2 confirms it.",
+      "evidence": "Test body asserts aria-expanded=false twice plus the treeCalls list. MetaprojectView.tsx:929 `selected={route.selection ? activeNode : undefined}`.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "I1",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.test.ts",
+      "line": null,
+      "quote": "{ ...wikiRoot, entries: [{ type: \"group\", key: \"\", name: \"Guide\", pages: 1 }] },",
+      "problem": "The 'rejects malformed tree pages' table omits three validator gates added in apps/desktop/src/platform/metaproject.ts: a wiki group under a non-null parent (`parent === null`), a folder with an empty name (`value.name.length > 0`), and an empty-string parent (`parent.length > 0`).",
+      "impact": "These gates are possibly unpinned. This is a reading observation; no mutation was run (P1, P2 and P5 are proposed).",
+      "suggested_fix": "Add `{ ...wikiRoot, parent: \"guide\" }` (a group under a group), `{ ...graphRoot, entries: [{ type: \"folder\", path: \"src\", name: \"\", files: 1 }] }` and `{ ...graphRoot, parent: \"\" }` to the malformed list.",
+      "evidence": "Malformed list in the diff, compared against validTreeEntry/validTree in apps/desktop/src/platform/metaproject.ts.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "I2",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "const key = node.pageType ?? WIKI_UNTYPED_GROUP;",
+      "problem": "The producer always sets pageType from WIKI_PAGE_TYPES (src/integrations/metaproject-explorer.ts:78), so no core fixture can reach the untyped 'other' group. Desktop's revealSteps hard-codes the same key (`node.pageType || \"other\"`), and the Desktop tests use a fake 'other' group. No test ties the two together.",
+      "impact": "If either side's key drifts, nothing goes red. Today the branch cannot be reached from the loader, so there is no user-visible effect.",
+      "suggested_fix": "Either drop the fallback, or export the constant from the contract module and use it in both places.",
+      "evidence": "src/integrations/metaproject-explorer.ts:78 `pageType: type`. MetaprojectTree.tsx revealSteps `const group = node.pageType || \"other\";`.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "T1", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (!model.graphPresent) return { entries: [], partial: true };", "replacement": "if (false) return { entries: [], partial: true };", "kind": "behavior"},
+    {"id": "T2", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();", "replacement": "if (!folders.size && !files.length) throw notFoundParent();", "kind": "behavior"},
+    {"id": "T3", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();", "replacement": "if (false) throw notFoundParent();", "kind": "behavior"},
+    {"id": "T4", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (node.kind !== \"file\" || !node.path.startsWith(prefix)) continue;", "replacement": "if (node.kind === \"module\" || !node.path.startsWith(prefix)) continue;", "kind": "behavior"},
+    {"id": "T5", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "files.sort((a, b) => compareText(a.path, b.path))", "replacement": "files", "kind": "behavior"},
+    {"id": "T6", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "[...folders].sort(([a], [b]) => compareText(a, b))", "replacement": "[...folders]", "kind": "behavior"},
+    {"id": "T7", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "const key = node.pageType ?? WIKI_UNTYPED_GROUP;", "replacement": "const key = node.pageType ?? \"untyped\";", "kind": "behavior"},
+    {"id": "T8", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": ".sort((a, b) => compareText(a.name, b.name) || compareText(a.key, b.key))", "replacement": ".slice()", "kind": "behavior"},
+    {"id": "T9", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "pages.sort((a, b) => compareText(a.title, b.title) || compareText(a.path, b.path))", "replacement": "pages", "kind": "behavior"},
+    {"id": "T10", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (typeof offset !== \"number\" || (offset > 0 && offset >= items.length)) {", "replacement": "if (typeof offset !== \"number\") {", "kind": "behavior"},
+    {"id": "T11", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (!page.length && offset < items.length) throw", "replacement": "if (false) throw", "kind": "behavior"},
+    {"id": "T12", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "const key = hash([\"tree\", scope, parent ?? null]);", "replacement": "const key = hash([\"tree\", scope]);", "kind": "behavior"},
+    {"id": "T13", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "parent: parent ?? null, entries: page", "replacement": "parent: null, entries: page", "kind": "behavior"},
+    {"id": "T14", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (node.kind !== \"wiki\") continue;", "replacement": "if (false) continue;", "kind": "behavior"},
+    {"id": "C1", "file": "src/integrations/metaproject-explorer-contract.ts", "anchor": "return scope === \"graph\" ? isMetaprojectRelativePath(value) : validId(value);", "replacement": "return validId(value);", "kind": "behavior"},
+    {"id": "C2", "file": "src/integrations/metaproject-explorer-contract.ts", "anchor": "return scope === \"graph\" ? isMetaprojectRelativePath(value) : validId(value);", "replacement": "return isMetaprojectRelativePath(value);", "kind": "behavior"},
+    {"id": "C3", "file": "src/integrations/metaproject-explorer-contract.ts", "anchor": "\"openspec-history\", \"tree\",", "replacement": "\"openspec-history\",", "kind": "behavior"},
+    {"id": "C4", "file": "src/integrations/metaproject-explorer-contract.ts", "anchor": "&& (parent === undefined || validTreeParent(scope, parent))", "replacement": "&& true", "kind": "behavior"},
+    {"id": "P1", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "scope === \"wiki\" && parent === null && typeof value.key", "replacement": "scope === \"wiki\" && typeof value.key", "kind": "behavior"},
+    {"id": "P2", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "&& value.name.length > 0 && positiveInteger(value.files)", "replacement": "&& positiveInteger(value.files)", "kind": "behavior"},
+    {"id": "P3", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "&& value.module.kind === \"module\" && value.module.path === value.path", "replacement": "&& value.module.kind === \"module\"", "kind": "behavior"},
+    {"id": "P4", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "value.node.kind === (scope === \"graph\" ? \"file\" : \"wiki\")", "replacement": "true", "kind": "behavior"},
+    {"id": "P5", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "typeof parent === \"string\" && parent.length > 0 ? parent", "replacement": "typeof parent === \"string\" ? parent", "kind": "behavior"},
+    {"id": "P6", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "supportsTree: response.actions.includes(\"tree\")", "replacement": "supportsTree: true", "kind": "behavior"},
+    {"id": "P7", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "&& response.scope === request.scope && response.parent === (request.parent ?? null)", "replacement": "&& true", "kind": "behavior"},
+    {"id": "P8", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "supportsTree: response.actions.includes(\"tree\")", "replacement": "supportsTree: false", "kind": "behavior"},
+    {"id": "U1", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (page.snapshotId !== pinned) throw", "replacement": "if (false) throw", "kind": "behavior"},
+    {"id": "U2", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();", "replacement": ";", "kind": "behavior"},
+    {"id": "U3", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "then(page => {\n      if (!current()) return;", "replacement": "then(page => {", "kind": "behavior"},
+    {"id": "U4", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "catch(cause => {\n      if (!current()) return;", "replacement": "catch(cause => {", "kind": "behavior"},
+    {"id": "U5", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (!cursor && parent !== TREE_ROOT && cause instanceof", "replacement": "if (parent !== TREE_ROOT && cause instanceof", "kind": "behavior"},
+    {"id": "U6", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "const seen = new Set(base.entries.map(entryKey));", "replacement": "const seen = new Set<string>();", "kind": "behavior"},
+    {"id": "U7", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "partial: base.partial || page.partial,", "replacement": "partial: page.partial,", "kind": "behavior"},
+    {"id": "U8", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (!gone.length) return tree;", "replacement": "return tree;", "kind": "behavior"},
+    {"id": "U9", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (state.current[scope].folders.has(parent)) return;", "replacement": "if (false) return;", "kind": "behavior"},
+    {"id": "U10", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": " || folder.more?.status === \"loading\") return;", "replacement": ") return;", "kind": "behavior"},
+    {"id": "U11", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "expanded: scope.expanded, handled: scope.handled", "replacement": "handled: scope.handled", "kind": "behavior"},
+    {"id": "U12", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "expanded: scope.expanded, handled: scope.handled", "replacement": "expanded: scope.expanded", "kind": "behavior"},
+    {"id": "M1", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "case \"ArrowUp\": moveTo(rows[index - 1]); break;", "replacement": "case \"ArrowUp\": break;", "kind": "behavior"},
+    {"id": "M2", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (folder.nextCursor && folder.more?.status !== \"failed\")", "replacement": "if (folder.nextCursor)", "kind": "behavior"},
+    {"id": "M3", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (folder.status === \"failed\") { model.setHandled(scope, selection); return; }", "replacement": "if (folder.status === \"failed\") { return; }", "kind": "behavior"},
+    {"id": "M4", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "\"container\" in step && !(selected.kind === \"module\" && step.container === selected.path)", "replacement": "\"container\" in step", "kind": "behavior"},
+    {"id": "M5", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "|| tree.handled === selection) return;", "replacement": ") return;", "kind": "behavior"},
+    {"id": "M6", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "entry.module && key !== \" \"", "replacement": "entry.module", "kind": "behavior"},
+    {"id": "M7", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "else if (rows[index + 1]?.level === current.level + 1)", "replacement": "else", "kind": "behavior"},
+    {"id": "M8", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const setsize = folder.nextCursor ? -1 : folder.entries.length;", "replacement": "const setsize = folder.entries.length;", "kind": "behavior"},
+    {"id": "M9", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "root.partial ? \"The graph is not built yet. Rebuild the graph to browse its files.\" : \"No indexed files.\"", "replacement": "\"The graph is not built yet. Rebuild the graph to browse its files.\"", "kind": "presentation"},
+    {"id": "M10", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "row.scrollIntoView?.({ block: \"nearest\" });", "replacement": ";", "kind": "behavior"},
+    {"id": "M11", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (!folder) unread.push(parent);", "replacement": ";", "kind": "behavior"},
+    {"id": "M12", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "event.preventDefault();", "replacement": ";", "kind": "behavior"},
+    {"id": "W1", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "protocol === 2 && supportsTree && !searchQuery", "replacement": "protocol === 2 && !searchQuery", "kind": "behavior"},
+    {"id": "W2", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "selected={route.selection ? activeNode : undefined}", "replacement": "selected={activeNode}", "kind": "behavior"}
+  ],
+  "mutation_pass": {
+    "executed": false,
+    "reason": "keryx review mutate writes mutation-<n>.json/.md into research-evidence/. The dispatch brief allows this reviewer only read-only commands plus tests, and allows it to write only its result file.",
+    "proposed": 52,
+    "run": 0,
+    "not_reached": 52,
+    "suites": {
+      "core (T*, C*)": "bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts",
+      "desktop (P*, U*, M*, W*), package apps/desktop": "bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx"
+    },
+    "baseline": "green at head: core tree suite 10 pass; desktop three files 125 pass"
+  },
+  "follow_ups": [
+    "Run the 52 mutant_candidates in this result through keryx review mutate (core suite for T*/C*, desktop suite for P*/U*/M*/W*; M2 can loop, so use --timeout-ms). Report each survivor as a minor 'gate unpinned' finding, and use the results to confirm or retire F2/F3/F5/F7/I1."
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 7, "info": 2}
+}
+```
+
+## Notes
+
+- Determinism is fine throughout slice-02. There are no sleeps or wall-clock waits: `manualTimer()` fakes the search debounce, held promises gate async reads, and `await act(async () => {})` only flushes microtasks. Prototype patches (`scrollIntoView`, `window.setTimeout`) are restored in `finally`. The core tests use per-test `mkdtemp` roots, removed in `afterEach`. Mocks stand at the transport boundary (the `request`/`requestTree`/`negotiate` props, and the `InvokeExplorer` call).
+- The tests stay with their packages (core `src/integrations`, desktop `src/metaproject`, `src/platform`).
+- Not verified: Rust `cargo test` (AC3) is outside this slice and not run, since there is no toolchain. No mutation results.
+
+Routing audit: graph_used: payload layers (built by gdgraph at the PR head), no live query; wiki_used: not-relevant (testing lens; the producer was read directly); ctx_used: yes (keryx ctx rg/read/run); raw_rg_used: no.

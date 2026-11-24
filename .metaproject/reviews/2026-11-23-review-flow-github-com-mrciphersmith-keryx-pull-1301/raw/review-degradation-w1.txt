@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "Wave 1, round 1, PR 1301 (base a5d1ab23, head 9f4ec475), slice-01 read in full (flow-518 package files plus metaproject.rs, MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, platform/metaproject.ts). Read-only; nothing run (allowed_tools read-only, exec_budget_s 0). Rust not compiled (no toolchain; CI pending). No blocker or major: no path found where a user of base behaviour gets a wrong, lost or blocked result. Two minor debt findings and one data-dependent question. Acceptance criteria: the frozen AC1-AC9 from the payload were used as the description alongside the PR body; no diff-vs-description disagreement found in this slice.\n\nConsumers: payload `layers.affected` lists App.dom.test.tsx, App.tsx, main.tsx, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, OpenSpecView.tsx, useExplorerNavigation.ts, platform/metaproject.test.ts, app-navigation.fixture.tsx; `truncated` is empty, so the graph cap dropped none. Traced: App.tsx (global keydown handler is modifier shortcuts only, no clash with tree arrow/Home/End keys), OpenSpecView.tsx (uses requestMetaprojectV2 only; its guard/matchesRequest paths for its actions are unchanged), useExplorerNavigation.ts (scroll-restore MutationObserver stops on keydown/pointerdown; tree lazy loads only add mutations it already handles). Test files in the list belong to slice-02 and were not reviewed (only read for context on negotiateMetaproject usage). main.tsx and the fixture were not traced (they mount App only). Symbol search for negotiateMetaproject/METAPROJECT_CAPABILITIES consumers was search-derived (keryx ctx rg over apps/desktop and src).\n\nVerified clean (traced, no finding):\n- Capability handshake: base validCapabilities required METAPROJECT_CAPABILITIES (six actions at base); head requires METAPROJECT_REQUIRED_ACTIONS, the same six (platform/metaproject.ts validCapabilities vs contract.ts:152 now listing `tree`). An older CLI negotiates exactly as on base; Rust ACTIONS unchanged at six and capability_response unchanged; Rust v2_request forwards any parsed RequestV2 without per-action gating, so no cached probe blocks `tree`.\n- negotiateMetaprojectExplorer vs base negotiateMetaproject: same probe call, same legacy fallback, same legacy-handshake branch; only the return shape widened. View's Negotiate type widened and a number result maps to supportsTree:false, so existing injected doubles keep the flat list.\n- MetaprojectView without `tree` (protocol 1, older CLI, or tests injecting request/requestV2 without requestTree): treeScope is null and the flat <ul>, Load more, empty-state and heading render exactly as base.\n- Tree requests never carry an empty pin: the nav (and so the tree) renders only when `catalog` is set (MetaprojectView.tsx `mode !== \"openspec\" && catalog && graphState`), so expectedSnapshotId is always the catalog sha256.\n- Selection path: tree onSelect -> remember(node) -> openHit({node}) -> select / wiki navigate, the same path a search hit used on base; the fallback first-node selection is not revealed (operator decision, journal).\n- Snapshot changes: generation counter retires in-flight reads; quiet re-read with an unchanged snapshot leaves tree state untouched; a changed snapshot drops folders, keeps the expanded set.\n- Rust RequestV2::Tree / TreeScope / valid_v2 arm: mirrors OpenspecList/History shape; v1 Request enum and metaproject_args untouched; null-valued keys still refused by the existing guard.\n- RelationshipGraph re-render cost: its effects key on layout/fit (RelationshipGraph.tsx), so the extra Explorer renders the tree hook triggers do not re-layout the canvas.\n- isMetaprojectV2Response / matchesRequest: only a `tree` case added; other actions' branches unchanged.\n- CSS: new rules are scoped to .metaproject-tree / .metaproject-tree-* selectors; existing .metaproject-row rules unchanged.\n\nPre-existing (not filed): MetaprojectView.tsx loadMoreSearch has the same unreachable `page.snapshotId !== resolvedSearch.snapshotId` branch as F-002 because requestMetaprojectV2's matchesRequest already rejects a mismatched snapshot with a generic error.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": "export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {",
+      "problem": "The handshake moved to negotiateMetaprojectExplorer and the old negotiateMetaproject survives as a one-line wrapper whose only callers are the platform tests. Production (MetaprojectView default) now calls negotiateMetaprojectExplorer, while most handshake cases in metaproject.test.ts (lines ~50-119) still go through the wrapper.",
+      "impact": "Two exported entry points for one handshake; the wrapper is a leftover of the old surface that exists only to keep tests compiling, and readers cannot tell which one the app uses.",
+      "suggested_fix": "Point the existing handshake tests at negotiateMetaprojectExplorer (asserting `.protocol`) and delete negotiateMetaproject, or mark it explicitly as a test-only alias.",
+      "evidence": "consumer-trace: keryx ctx rg 'negotiateMetaproject[^E]' over apps/desktop finds only platform/metaproject.ts:277 (definition) and 11 hits in platform/metaproject.test.ts; MetaprojectView.tsx imports negotiateMetaprojectExplorer (slice-01 diff, import block) and uses it as the default negotiator. Base: MetaprojectView imported negotiateMetaproject directly (removed line in the same hunk).",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (page.snapshotId !== pinned) throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");",
+      "problem": "This branch cannot run: every tree read sends expectedSnapshotId = pinned, and requestMetaprojectV2 -> matchesRequest (platform/metaproject.ts:311) already rejects a response whose snapshotId differs, throwing the generic Error 'Incompatible Metaproject v2 response. Choose the bundled CLI in Desktop Settings.' (line 305). The hook's doc comment ('`onStale` is told when the CLI answers for another snapshot', line 66) therefore describes behaviour that does not happen: for that case onStale is not called and the folder shows the misleading 'Choose the bundled CLI' error row.",
+      "impact": "Dead code plus a doc comment that misstates the stale path; low user impact because the Core answers a mismatched pin with a `stale-snapshot` error code (AC2), which the catch branch handles correctly.",
+      "suggested_fix": "Drop the unreachable check and reword the comment to 'told when the CLI answers stale-snapshot'; or, if a mismatched answer must be treated as stale, make matchesRequest's snapshot mismatch throw MetaprojectRequestError('stale-snapshot', ...) so both this hook and loadMoreSearch get the stale banner.",
+      "evidence": "consumer-trace: read() in useMetaprojectTree.ts builds input with expectedSnapshotId: pinned and calls latest.current.request = requestMetaprojectTree -> requestMetaprojectV2 (platform/metaproject.ts), whose matchesRequest returns false when response.snapshotId !== request.expectedSnapshotId, leading to the generic throw before the hook's .then runs. Refute attempt: checked whether requestTree can be something other than requestMetaprojectTree in production: MetaprojectView passes `requestTree ?? requestMetaprojectTree` and App passes no requestTree, so the guard always applies. Sibling MetaprojectView.tsx:674 has the same shape (pre-existing).",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (node.path === \".\" || !node.path) return [];",
+      "problem": "The graph tree has no row for a root module (path \".\", which the Core accepts as a module node, metaproject-explorer-v2.ts:41) nor for a module whose folder holds no indexed file nodes: graphTree lists only folders that contain file nodes and attaches a module only to such a folder (metaproject-explorer-v2.ts:117-129). On base, without a query, the Graph list was the flat catalog, where such a module could appear if it was among the catalog's first 200 nodes. With the tree, those modules are reachable from the list only by search, and a reveal of one does nothing. This repository's module map has no \".\" module, so whether any real project hits this depends on data. If true: minor, a module shown on base's no-query list is reachable only through search.",
+      "impact": "Possible loss of no-query access to root-level or file-less modules in projects that have them.",
+      "suggested_fix": "Check: run `keryx metaproject-explorer --request '{\"version\":2,\"action\":\"catalog\"}'` on a project whose graph has a module with path \".\" (or a module folder with no indexed files) and see whether that module appears among the root tree entries.",
+      "evidence": "Read, not run: revealSteps returns [] for path \".\"; graphTree root entries are folders with file counts plus root files only. Refute attempt: keryx ctx rg over .metaproject/data/gdgraph/artifacts/module-map.json found no \".\" module in this repository, so it is left as a question rather than a finding.",
+      "confidence": "low",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-01"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Summary: slice-01 shows no blocker or major degradation compared with base. The capability handshake still requires the same six actions, so an older CLI keeps the flat list. The tree is mounted only with protocol 2, `supportsTree`, no query and Graph/Wiki mode, and the selection path matches a search hit's. Two minor debt findings: the `negotiateMetaproject` wrapper is now used only by tests, and an unreachable snapshot-mismatch branch has a doc comment that misstates when `onStale` fires. One data-dependent question about root-level or file-less modules, which the graph tree does not list. Not run: nothing was executed (read-only lane), and the Rust code was not compiled.

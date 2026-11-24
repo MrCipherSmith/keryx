@@ -1,0 +1,73 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: explicit-hash-range, supplied slice text (slice-01 only, read in full, 2534 lines)
+- Changed code files reviewed: 6 (apps/desktop/src-tauri/src/metaproject.rs, apps/desktop/src/metaproject/MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, apps/desktop/src/platform/metaproject.ts). Flow package files (plan, AC, dispatch, flow.json, resolved/*.json, journal) in the slice were read; they hold no code, credentials or personal data beyond the repository owner handle already public on the PR.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [F-001] Desktop tree response guard does not tie entries to the requested parent
+- **Severity**: info
+- **File**: apps/desktop/src/platform/metaproject.ts (validTreeEntry)
+- **Attack vector**: none reachable. It would need a CLI that answers `tree` with a folder `path` or group `key` outside the requested parent; the CLI is the user-selected/bundled local executable that Tauri already authenticates in its probe, and every value echoed back as a later `parent` is re-validated by Rust `relative_path` / `valid_text` before reaching argv (no shell).
+- **Problem**: `validTreeEntry` checks that a folder path is checkout-relative and a group key non-empty, but not that a folder is a direct child of `parent` or that a group key is bounded (Rust caps it at 4096 UTF-16 units, so an oversized key only produces an `invalid-input` on expand).
+- **Why it matters**: defence-in-depth only; a misbehaving CLI could render rows under the wrong folder. No filesystem, shell or HTML sink is reached.
+- **Fix**: optional: in `validTreeEntry` require `value.path` to equal `${parent}/${value.name}` (or `value.name` at the root) for folders, and cap group key length at 4096.
+
+### Clean Areas
+- Injection / command injection: `metaproject_args` still builds an argv vector (`metaproject-explorer --request <json>`), no shell; the new `Tree` variant goes through the same `deny_unknown_fields` serde enum, null rejection and 16 KiB cap.
+- Path traversal: graph `parent` is validated with `relative_path` (rejects `..`, `.`, empty segments, leading `/`, backslash, control chars, drive letters); Rust tests cover `../escape`, `/src`, `src\\lib`. The core tree service (context read only, other slice) answers from the in-memory graph model; `keryx ctx rg "readFile|readdir|statSync|existsSync|join\("` over src/integrations/metaproject-explorer-v2.ts found no filesystem call.
+- Snapshot pinning: `expectedSnapshotId` must be a 64-hex digest (Rust `digest`), the TS `matchesRequest` checks snapshot, scope and parent of the answer, and the hook drops answers from an older generation and never resends an old-snapshot cursor.
+- XSS / React: all CLI-supplied strings (titles, names, error messages) render as JSX text; no `dangerouslySetInnerHTML`, `innerHTML` or `eval` in the new files (ctx rg, 0 matches). Row lookup uses `dataset.row ===` comparison rather than interpolating ids into a CSS selector. Inline style uses only the numeric level.
+- Response bounds: tree pages are capped at `METAPROJECT_PAGE_SIZE_V2` entries and `METAPROJECT_RESPONSE_BYTES_V2` bytes; node kinds are restricted per scope.
+- Capability handshake: relaxing the required set to six fixed actions does not widen what Desktop sends; `tree` is sent only when the CLI lists it.
+- Secrets, crypto, auth/authz, IDOR, CSRF, open redirect, logging: no relevant code in the slice; nothing found.
+
+### Not verified
+- Rust was not compiled or run (no toolchain; CI pending). Review of the Rust validation is by reading only.
+- `.metaproject/rules/activity/review.mdc` (shared reviewer laws) was not opened; severities follow the canonical rubric as restated in the skill and the security-baseline table.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable or reachable security weakness in slice-01. The new tree request is validated in Rust like the other v2 actions (exact keys, relative-path parent, digest pin, argv without shell); Desktop renders CLI data as text and binds answers to the requested snapshot/scope/parent. One info: the tree response guard does not check that entries are children of the requested parent.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": "      return scope === \"graph\" && isMetaprojectRelativePath(value.path) && typeof value.name === \"string\"",
+      "problem": "validTreeEntry checks a folder path is checkout-relative and a group key is non-empty, but not that a folder is a direct child of the requested parent or that a group key is bounded.",
+      "impact": "Defence-in-depth only: a misbehaving CLI could place rows under the wrong folder. Not reachable by an attacker: the CLI is the probed local executable, and any value echoed back as a parent is re-validated by Rust relative_path/valid_text before it reaches argv (no shell, no filesystem sink on the Desktop side).",
+      "suggested_fix": "Optionally require a folder's path to equal `${parent}/${name}` (or name at the root) and cap a group key at 4096 characters in validTreeEntry.",
+      "evidence": "slice-01 apps/desktop/src/platform/metaproject.ts validTreeEntry/validTree; apps/desktop/src-tauri/src/metaproject.rs valid_v2 Tree arm and relative_path.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff",
+      "blocking_merge": false
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full (2534 lines)", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: payload layers already listed affected files; no blast-radius question arose), wiki_used: no (not-relevant: intent stated in plan.md), ctx_used: yes (keryx ctx rg x3), raw_rg_used: no.

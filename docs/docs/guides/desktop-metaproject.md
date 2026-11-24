@@ -306,8 +306,9 @@ part of it: creating or editing another file in the checkout can mark the
 graph stale, and the results already loaded stay valid.
 
 Before its first read, Desktop asks the selected CLI which read actions it
-serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
-than Desktop keeps working when it adds actions.
+serves. Desktop accepts a CLI that lists every action it requires, so a CLI newer
+than Desktop keeps working when it adds actions. Desktop uses an optional action,
+such as `tree`, only when the CLI lists it; without it, the list stays flat.
 
 Desktop can calculate a file or wiki neighborhood from a complete catalog.
 It asks the CLI for a neighborhood when the catalog is limited or the
@@ -329,7 +330,7 @@ and can carry example file pairs. See the
 | The **Graph** tree reads **The graph is not built yet.** | Select **Rebuild graph**, or run `keryx gdgraph build` from the open checkout. |
 | The list shows **Catalog · shown of total** instead of a tree | The selected CLI does not serve the tree. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. Search and the flat list keep working. |
 | The CLI does not support Metaproject Explorer | Choose the bundled CLI in **Settings → Desktop**, or update the CLI and Desktop together. |
-| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
+| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop requires. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
 | A page has no **Relationships** section | Confirm the page links to other wiki pages or declares the code it covers, then rebuild the graph and check the filters in **Graph**. |
 
 For maintenance of wiki references and freshness, see

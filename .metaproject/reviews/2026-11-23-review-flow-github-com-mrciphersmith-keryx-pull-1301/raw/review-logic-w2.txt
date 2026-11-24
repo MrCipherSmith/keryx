@@ -1,0 +1,90 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: `explicit-hash-range`, slice-02 only (read in full, lines 1-1612)
+- Spec compliance gate: ran against AC1, AC2, AC9 (the criteria this slice's files carry); AC3-AC8 belong to other slices.
+
+### Summary
+Slice-02 adds the core v2 `tree` action (contract types, parser, `graphTree`/`wikiTree`, the shared `offsetPage` extracted from `search`), its core tests, the Desktop tree/view/platform tests and the guide section. The server logic is sound: the parser refuses every malformed shape AC2 names, the cursor is bound to snapshot and `(scope, parent)` and checked before the parent, folders are derived only from safe-path file nodes (the `safeGraphNode` filter at metaproject-explorer-v2.ts:460 runs before `read`), counts include subfolders, module folders match the loader's `dirname` modules, symbols cannot appear (the tree maps to a `catalog` graph load, which never loads symbols), and the tree's snapshot equals the catalog's because both use the same graph request. The `search` refactor onto `offsetPage` is behaviour-identical (same guards, same messages). No blocker or major found; two info observations.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC1 (folders first with counts and modules, files sorted, pages of <=100 chained without gaps or duplicates, wiki groups) and AC2 (invalid-input, not-found, stale-snapshot, capabilities lists `tree`, v1 unchanged) are implemented and exercised by metaproject-explorer-tree.test.ts; AC9 is met by the guide section.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+- [F-001] info: a corrupt graph is reported to the tree as "not built".
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+- [F-002] info: the `other` wiki group is unreachable with the current loader.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Core tree action, parser, paging refactor, tests and docs in slice-02 are logically sound; AC1/AC2/AC9 met. Two info observations: a corrupt graph reads as 'not built' in the tree, and the untyped-wiki 'other' group cannot be produced by the current loader.",
+  "slices": [{ "id": "slice-02", "coverage": "read in full, lines 1-1612", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "if (!model.graphPresent) return { entries: [], partial: true };",
+      "problem": "graphTree treats every `graphPresent === false` as 'no graph'. loadExplorerGraph also sets graphPresent=false when nodes.jsonl/edges.jsonl exist but fail to parse (it records graphError 'Graph storage could not be read; rebuild the graph'). The tree then answers an empty partial page and Desktop (MetaprojectTree.tsx:206) shows 'The graph is not built yet.'",
+      "impact": "Wording only: the user sees 'not built' for a built-but-unreadable graph. The remedy (rebuild) is the same, and the catalog banner still carries graphReason, so nothing is lost or wrong in data.",
+      "suggested_fix": "Optional: leave as is, or let the not-built empty state read 'The graph is missing or could not be read. Rebuild the graph to browse its files.'",
+      "evidence": "src/integrations/metaproject-explorer.ts:115-119 (catch sets graphPresent=false and graphError); metaproject-explorer-v2.ts graphTree first line; MetaprojectTree.tsx:206 empty-state text.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "const key = node.pageType ?? WIKI_UNTYPED_GROUP;",
+      "problem": "The fallback group `other` is never produced today: wikiPages (metaproject-explorer.ts:63-78) only reads the folders of WIKI_PAGE_TYPES and always sets `pageType: type`, and no WIKI_PAGE_TYPES type is named `other`. The guide's sentence 'Pages without a page type are under Other' and the Desktop tests' 'Other' group describe a state the CLI cannot emit.",
+      "impact": "None at runtime; a harmless fallback for the optional `pageType` field. The guide promises a group users will never see.",
+      "suggested_fix": "Keep the fallback (it guards the optional field), and optionally drop or soften the guide sentence about untyped pages.",
+      "evidence": "src/integrations/metaproject-explorer.ts:63 and :78; src/wiki/types.ts:13-21 (closed WikiPageType union without 'other').",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+### Suggested Patches
+None warranted.
+
+### Not verified / honesty notes
+- Rules `.metaproject/rules/core/async-patterns.mdc`, `.metaproject/rules/core/error-handling.mdc` and the review activity rule were not opened in this run; the slice has no async fan-out, timeouts or catch blocks in new code beyond the existing cursor parser, so no finding depended on their severity tables.
+- Desktop implementation files (`MetaprojectTree.tsx`, `useMetaprojectTree.ts`, `platform/metaproject.ts`, `MetaprojectView.tsx`) and the Rust transport are in other slices; read only for context (one grep), not reviewed.
+- No tests executed (exec_budget_s = 0); relied on the orchestrator's recorded runs.

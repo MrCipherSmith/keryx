@@ -1,0 +1,98 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review
+
+Scope: branch feat/desktop-metaproject-sidebar-tree, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a, scope mode diff, slice-01 read in full (flow 518 package files, apps/desktop/src-tauri/src/metaproject.rs, MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, platform/metaproject.ts). Load profile: not provided (plan.md states none). Concrete triggers used: the number of expanded sibling folders/groups re-read after a new snapshot, the process-wide Tauri read permit (MAX_ACTIVE = 8), and the ~0.8 s CLI child spawned per explorer read (description.md). Context read outside the slice: src/integrations/metaproject-explorer-v2.ts (tree service, snapshot check order) and metaproject.rs:184-331 (ReadPermit, v2_request, child timeout).
+
+Summary: The tree's reads are a client-side fan-out of CLI child processes with no client bound; the only bound is the Rust permit, which refuses (does not queue) the 9th concurrent read across every project window. After a refresh or rebuild, every expanded sibling folder is re-read at once, so a user with ~7+ expanded siblings gets "Too many Metaproject reads" error rows and can starve the explorer's own detail/neighbors reads. No retry storm, no shared-state race and no unbounded growth was found: failed folders are not re-read automatically, stale answers are dropped by generation, and cursors are snapshot-pinned. Stats: blocker 0 | major 1 | minor 0 | info 1.
+
+### CLI / Multi-Session
+
+[F-001] Tree re-read fan-out after a new snapshot exceeds the fail-fast read permit (major) — see REVIEW_RESULT.
+
+### Concurrency & Races
+
+None detected. Snapshot change bumps `generation` and drops in-flight answers (useMetaprojectTree.ts `current()`); a cursor is only sent for the snapshot that issued it; `ensure`/`more` refuse a second read of a parent already loading; Core checks `expectedSnapshotId` before the parent (`V2Read.read` -> `checkSnapshot`), so a snapshot race answers `stale-snapshot`, not `not-found`.
+
+### Resources
+
+Covered by F-001 (permit exhaustion). In-flight reads are not cancelled on collapse, scope switch or snapshot change; each keeps its child and permit up to the 150 s child timeout (metaproject.rs `cli_response`). The plan puts read cancellation out of scope; noted inside F-001 as an aggravating factor, not filed separately. Loaded folder pages are kept per snapshot and bounded by the project's folder count; reset on every snapshot change.
+
+### Caching
+
+None detected. The per-scope tree cache is keyed by snapshot and fully invalidated on snapshot change (expanded set kept by design).
+
+### Lock Contention
+
+Not applicable (no locks or transactions in the diff).
+
+### Async / Queues
+
+F-002 (info): the reveal effect has no attempt cap if a listed folder answers `not-found`; unreachable with the current Core under one snapshot.
+
+### Retry / Timeout / Circuit Breaker
+
+None detected. Retry and Show more are user-initiated, one parent at a time; a failed folder stays failed until Retry; `onStale` only raises the mismatch banner (MetaprojectView.tsx `markStale`), it does not trigger a read.
+
+### Idempotency & Distributed Invariants
+
+None detected (read-only action).
+
+Clean areas: Part A, C, D, E (except F-002 note), F, G reviewed. Not verified: Rust was not compiled or run (no toolchain; read-only lens, exec_budget_s 0); behaviour under the dev bridge (no permit there) not examined.
+
+REVIEW_RESULT:
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "One major: after a new snapshot the tree re-reads every expanded sibling folder at once, one CLI child each, with no client-side bound; the Tauri permit (MAX_ACTIVE = 8, process-wide, fail-fast) refuses the excess, so folders show 'Too many Metaproject reads' error rows and concurrent explorer reads (detail, neighbors, other windows) can fail too. One info on the reveal effect's missing attempt cap. No races, retry storms or unbounded growth found.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "for (const parent of unread) model.ensure(scope, parent);",
+      "problem": "Child-process fan-out over a user-sized collection with no client bound. `flatten` collects every visible parent with no loaded folder into `unread`, and this effect calls `model.ensure` for all of them in one pass; each `ensure` -> `read` is one `metaproject_request` -> one CLI child (~0.8 s, loads the whole graph). After any new snapshot (Refresh, Rebuild graph, the quiet catalog re-read on returning to the view) `useMetaprojectTree` drops every loaded folder and keeps the expanded set, so once the root answers, every expanded top-level folder (and, a level later, every expanded child of those) is read at the same moment. The only bound is Rust `ReadPermit::acquire` (metaproject.rs, `MAX_ACTIVE: usize = 8`, a process-wide static), which does not queue: the 9th concurrent read fails with `unavailable: Too many Metaproject reads. Retry shortly.`.",
+      "impact": "Trigger: a user has 7 or more sibling folders expanded in Graph (or sibling groups in Wiki) and the snapshot changes, while the explorer re-issues its own detail/neighbors reads for the selection. Outcome: the reads beyond the 8 permits fail; those folders render 'Could not load. Too many Metaproject reads. Retry shortly.' and stay failed until the user clicks Retry on each one; and because the permit is shared by every project window, the same burst can make the explorer's detail/neighbors reads (or another window's reads) fail with the same error. Old-generation tree reads are not cancelled and keep their permits until their child exits (up to the 150 s child timeout), so two refreshes in quick succession double the pressure.",
+      "suggested_fix": "Bound tree reads on the client: route `read` in useMetaprojectTree.ts through a small FIFO limiter (e.g. at most 2-3 tree reads in flight; queued reads check `current()` before starting so a retired generation never spawns), leaving permits for the explorer's own reads. Optionally treat an `unavailable` answer from the permit as retryable once with backoff and jitter rather than a terminal folder error. Rule: async-patterns.mdc Rule 3 / concurrency-patterns.mdc Rule 4 (bounded child fan-out, default 4).",
+      "evidence": "MetaprojectTree.tsx `flatten` pushes every missing expanded parent into `unread`; the effect `for (const parent of unread) model.ensure(scope, parent)` issues them together. useMetaprojectTree.ts on snapshot change: `const keep = (scope) => ({ ...emptyScope(snapshot), expanded: scope.expanded, handled: scope.handled })` (folders dropped, expanded kept); `read` calls `send(root, input)` with no limiter. metaproject.rs:184-200 `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`, `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\".into())`; v2_request acquires the permit per request before spawn_blocking; cli_response uses `Duration::from_secs(150)`. Failed folders are not auto-retried (`unread` only lists parents with no folder entry), so the error rows persist.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: effect `for (const parent of unread) model.ensure(scope, parent)` (fan-out site)",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: reveal effect `model.ensure(scope, step.parent)` / `model.more(scope, step.parent)` (one read per render, sequential; not a fan-out)",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts: `read` (the single spawn point all tree reads pass through; where the bound belongs)",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts: `retry` and `more` (user-initiated, one parent each; not a fan-out)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all \"model.ensure|const ensure|const read = |unread.push\" apps/desktop/src/metaproject/ (3 production hits in MetaprojectTree.tsx/useMetaprojectTree.ts, the rest are test doubles), plus reading every caller of `read` in useMetaprojectTree.ts (ensure, more, retry). Only the `unread` effect issues several reads in one pass."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (!folder) { model.ensure(scope, step.parent); return; }",
+      "problem": "The reveal effect runs on every render with no attempt cap. If a parent it just found listed in its grandparent answers `not-found`, useMetaprojectTree deletes that folder and its expanded key, the next render re-expands it (earlier step) and re-ensures it, and the loop spawns one CLI read per cycle until the selection changes.",
+      "impact": "No trigger with the current Core: `V2Read.read` checks `expectedSnapshotId` before the parent, and `graphTree`/`wikiTree` list only folders/groups they would answer for under the same snapshot, so a listed parent cannot answer `not-found` in that snapshot. Recorded so a future change to the tree service (e.g. a folder listed from one source and resolved from another) does not turn it into a read loop.",
+      "suggested_fix": "On a `not-found` during reveal, mark the selection handled (as the `failed` branch already does), e.g. have the not-found path record the parent as 'gone' for the current generation so reveal stops instead of re-ensuring.",
+      "evidence": "useMetaprojectTree.ts not-found branch deletes the folder and filters the expanded set; reveal effect has no deps array and only stops on `tree.handled === selection`, which the not-found path does not set. src/integrations/metaproject-explorer-v2.ts `read` -> `checkSnapshot(...)` first; `graphTree` throws `notFoundParent()` only when the prefix holds no file node.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 },
+  "inputs_unreadable": [],
+  "needs_context": []
+}
+```
+
+Routing audit: graph_used: no (payload `layers` supplied the affected set; reviewer is read-only, diff text given) | wiki_used: not-relevant (no domain rule question; flow plan.md was the context doc) | ctx_used: yes (keryx ctx rg / ctx read for metaproject-explorer-v2.ts, rules, schema) | raw_rg_used: no.

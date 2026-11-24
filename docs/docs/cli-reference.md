@@ -8298,4 +8298,4 @@ A version 2 client starts with the `capabilities` probe, which lists the actions
 keryx metaproject-explorer --request '{"version":2,"action":"capabilities"}'
 ```
 
-Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses.
+Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the actions it requires, and uses an optional action such as `tree` only when the CLI lists it.

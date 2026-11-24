@@ -274,10 +274,6 @@ export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExpl
   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
 }
 
-export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
-  return (await negotiateMetaprojectExplorer(cwd, call)).protocol;
-}
-
 export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
 
 /** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
@@ -304,12 +300,15 @@ export async function requestMetaprojectV2<T extends MetaprojectV2Response = Met
     || new TextEncoder().encode(JSON.stringify(response)).length > METAPROJECT_RESPONSE_BYTES_V2) {
     throw new Error("Incompatible Metaproject v2 response. Choose the bundled CLI in Desktop Settings.");
   }
+  // A well-formed answer for another snapshot than the one pinned is the CLI having moved on.
+  if ("expectedSnapshotId" in request && request.expectedSnapshotId !== undefined
+    && (!("snapshotId" in response) || response.snapshotId !== request.expectedSnapshotId)) {
+    throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
+  }
   return response as T;
 }
 
 function matchesRequest(response: MetaprojectV2Response, request: MetaprojectRequestV2): boolean {
-  if ("expectedSnapshotId" in request && request.expectedSnapshotId !== undefined
-    && (!("snapshotId" in response) || response.snapshotId !== request.expectedSnapshotId)) return false;
   switch (request.action) {
     case "detail": return "node" in response && response.node.id === request.id;
     case "neighbors": return "root" in response && response.root === request.id;

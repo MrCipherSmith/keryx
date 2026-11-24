@@ -5,9 +5,10 @@ import path from "node:path";
 
 import {
   METAPROJECT_CAPABILITIES, METAPROJECT_PAGE_SIZE_V2, MetaprojectRequestError, parseExplorerRequest,
-  parseExplorerRequestV1, type MetaprojectRequestV2, type MetaprojectTreeEntry, type MetaprojectTreeV2,
+  parseExplorerRequestV1, type MetaprojectNode, type MetaprojectRequestV2, type MetaprojectTreeEntry, type MetaprojectTreeV2,
 } from "./metaproject-explorer-contract";
-import { metaprojectExplorer } from "./metaproject-explorer";
+import { explorerGraphFreshness, loadExplorerGraph, metaprojectExplorer } from "./metaproject-explorer";
+import { metaprojectExplorerV2 } from "./metaproject-explorer-v2";
 
 type TreeRequest = Extract<MetaprojectRequestV2, { action: "tree" }>;
 
@@ -20,12 +21,12 @@ async function writeSource(root: string, relative: string, text: string): Promis
   await writeFile(destination, text);
 }
 
-/** Wiki pages of two types; no graph is built. */
+/** Wiki pages of two types, titled against their file order; no graph is built. */
 async function wikiOnly(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "keryx-explorer-tree-"));
   roots.push(root);
-  await writeSource(root, ".metaproject/wiki/components/zeta.md", "# Zeta\n");
-  await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Alpha\n");
+  await writeSource(root, ".metaproject/wiki/components/zeta.md", "# Alpha\n");
+  await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Zeta\n");
   await writeSource(root, ".metaproject/wiki/domain-models/order.md", "# Order\n");
   return root;
 }
@@ -41,7 +42,8 @@ async function builtGraph(): Promise<string> {
     ...Array.from({ length: MANY_FOLDERS }, (_, index) => `many/dir-${String(index).padStart(3, "0")}/f.ts`),
     ...Array.from({ length: MANY_FILES }, (_, index) => `many/file-${String(index).padStart(2, "0")}.ts`),
   ];
-  await writeSource(root, `${storage}/nodes.jsonl`, files.map((file) => JSON.stringify({ id: file, kind: "file", path: file, language: "typescript" })).join("\n"));
+  // Written in reverse, so only the tree's own sort can put them in order.
+  await writeSource(root, `${storage}/nodes.jsonl`, [...files].reverse().map((file) => JSON.stringify({ id: file, kind: "file", path: file, language: "typescript" })).join("\n"));
   await writeSource(root, `${storage}/edges.jsonl`, "");
   await writeSource(root, `${storage}/symbols.jsonl`, JSON.stringify({ id: "src/a.ts#run", path: "src/a.ts", name: "run", startLine: 1 }));
   await writeSource(root, `${storage}/calls.jsonl`, "");
@@ -90,7 +92,7 @@ describe("metaproject explorer tree (AC1)", () => {
     expect(file?.type === "node" && file.node).toMatchObject({ kind: "file", title: "root.ts", path: "root.ts" });
   });
 
-  test("lists a nested folder's children and never returns symbols", async () => {
+  test("lists a nested folder's children", async () => {
     const root = await builtGraph();
     const src = await tree(root, { scope: "graph", parent: "src" });
     expect(src.parent).toBe("src");
@@ -101,9 +103,39 @@ describe("metaproject explorer tree (AC1)", () => {
     expect(deep.entries.map(label)).toEqual(["node:file:src/lib/deep/c.ts", "node:file:src/lib/deep/d.ts"]);
     const pkg = await tree(root, { scope: "graph", parent: "pkg" });
     expect(pkg.entries.map(label)).toEqual(["folder:pkg/inner:1:module:pkg/inner"]);
-    for (const result of [src, lib, deep, pkg]) {
-      expect(result.entries.some((entry) => entry.type === "node" && entry.node.kind === "symbol")).toBe(false);
-    }
+  });
+
+  test("leaves symbols out of listings and folder counts even when the graph model holds them", async () => {
+    const root = await builtGraph();
+    const symbols: MetaprojectNode[] = [
+      { id: "symbol:src/a.ts#run", kind: "symbol", title: "run", path: "src/a.ts" },
+      { id: "symbol:only/x.ts#y", kind: "symbol", title: "y", path: "only/x.ts" },
+      { id: "symbol:top.ts#z", kind: "symbol", title: "z", path: "top.ts" },
+    ];
+    let loaded: MetaprojectNode[] = [];
+    const read = (request: TreeRequest) => metaprojectExplorerV2(root, request, async (checkout, graphRequest) => {
+      const graph = await loadExplorerGraph(checkout, graphRequest);
+      loaded = [...graph.nodes, ...symbols];
+      return { graph: { ...graph, nodes: loaded }, freshness: () => explorerGraphFreshness(checkout, graph), confirm: async () => {}, track: async () => {} };
+    });
+    const top = await read({ version: 2, action: "tree", scope: "graph" });
+    expect(loaded.filter((node) => node.kind === "symbol")).toHaveLength(symbols.length);
+    if (!("entries" in top) || !("scope" in top)) throw new Error("Expected a tree response");
+    expect(top.entries.map(label)).toEqual([
+      "folder:docs:1:module:docs", `folder:many:${MANY_FOLDERS + MANY_FILES}:module:many`, "folder:pkg:1", "folder:src:4:module:src", "node:file:root.ts",
+    ]);
+    const src = await read({ version: 2, action: "tree", scope: "graph", parent: "src" });
+    if (!("entries" in src) || !("scope" in src)) throw new Error("Expected a tree response");
+    expect(src.entries.map(label)).toEqual(["folder:src/lib:3:module:src/lib", "node:file:src/a.ts"]);
+    await expect(read({ version: 2, action: "tree", scope: "graph", parent: "only" })).rejects.toMatchObject({ code: "not-found" });
+  });
+
+  test("answers an empty, complete root for a built graph without files", async () => {
+    const root = await wikiOnly();
+    await writeSource(root, `${storage}/nodes.jsonl`, "");
+    await writeSource(root, `${storage}/edges.jsonl`, "");
+    expect(await tree(root, { scope: "graph" })).toMatchObject({ entries: [], partial: false, parent: null });
+    await expect(tree(root, { scope: "graph", parent: "src" })).rejects.toMatchObject({ code: "not-found" });
   });
 
   test("chains pages of at most the page size to the full child list", async () => {
@@ -138,7 +170,8 @@ describe("metaproject explorer tree (AC1)", () => {
     expect(groups.entries.map(label)).toEqual(["group:component:Component:2", "group:domain-model:Domain model:1"]);
     const pages = await tree(root, { scope: "wiki", parent: "component" });
     expect(pages.parent).toBe("component");
-    expect(pages.entries.map(label)).toEqual(["node:wiki:components/alpha.md", "node:wiki:components/zeta.md"]);
+    // By title (Alpha, Zeta), not by file name.
+    expect(pages.entries.map(label)).toEqual(["node:wiki:components/zeta.md", "node:wiki:components/alpha.md"]);
   });
 
   test("answers an empty, partial graph tree while the graph is not built, and the wiki tree as usual", async () => {
@@ -205,7 +238,7 @@ describe("metaproject explorer tree (AC2)", () => {
     const first = await tree(root, { scope: "graph", parent: "many" });
     if (!first.nextCursor) throw new Error("Expected a next cursor");
     await expect(tree(root, { scope: "graph", expectedSnapshotId: "0".repeat(64) })).rejects.toMatchObject({ code: "stale-snapshot" });
-    await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Alpha\n\nRevised.\n");
+    await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Zeta\n\nRevised.\n");
     await expect(tree(root, { scope: "graph", parent: "many", cursor: first.nextCursor })).rejects.toMatchObject({ code: "stale-snapshot" });
     await expect(tree(root, { scope: "wiki", expectedSnapshotId: first.snapshotId })).rejects.toMatchObject({ code: "stale-snapshot" });
   });

@@ -1,0 +1,122 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: `explicit-hash-range` (slice-01 only, read in full: flow 518 package files, `apps/desktop/src-tauri/src/metaproject.rs`, `MetaprojectTree.tsx`, `MetaprojectView.tsx`, `metaproject.css`, `useMetaprojectTree.ts`, `platform/metaproject.ts`)
+- Spec compliance gate: ran against `.metaproject/flows/518-.../plan.md` and AC1-AC9. Context read outside the slice: `src/integrations/metaproject-explorer-v2.ts` (tree service, `checkSnapshot` order, wiki group keys), `src/integrations/metaproject-explorer.ts` (wiki `pageType` source), the rest of `MetaprojectView.tsx` (catalog gate, `openHit`, `activeNode`).
+
+### Summary
+The transport and the hook are sound: the Rust variant validates scope-dependent parents and stays out of `ACTIONS`; Desktop requires only the six actions and reads `supportsTree` from the probe; the hook retires answers on a snapshot change, never sends an old-snapshot cursor, and appends pages without duplicates. I checked the reveal loop for a request loop on `not-found` and found none: Core checks the snapshot before the parent (v2.ts:324), and reveal reads a parent only after finding it in that snapshot's listing. The tree does not render before the catalog arrives (view line 900), so no empty `expectedSnapshotId` is ever sent. One defect: in the roving focus, a keyboard move to the already-focused row leaves a focus request pending, and a later data render then pulls focus into the tree. That breaks the plan's "focus is never moved by data arriving" and AC6.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC3 (Rust) was not compiled or run here (exec budget 0, no toolchain). It depends on CI.
+
+### Logic Bugs
+
+### [F-001] Home on the first row / End on the last row leaves a focus request that a later data render executes, stealing focus
+- **Severity**: major
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (moveTo, and the layout effect that consumes `focusRequest`)
+- **Problem**: `moveTo` calls `setFocusId(row.id)` and sets `focusRequest.current = true`. The request is consumed only in a dependency-free `useLayoutEffect`, so it needs a commit. Press Home while focus is already on the first row, or End on the last row. `focusId` already equals that row's id, because `onFocus` keeps it in sync, so React bails out of the state update. Nothing commits and `focusRequest` stays `true`. The next commit of the tree then runs `root.querySelector('[role="treeitem"][tabindex="0"]').focus()`, whatever caused that commit: a folder page arriving, a reveal's `setHandled`, a snapshot reset.
+- **Why it matters**: Repro: focus the first tree row and press Home. Click a node in the graph canvas, or the details panel. The selection change runs the reveal effect, `setHandled` re-renders the tree, and keyboard focus jumps from the canvas into the tree. The plan says "Focus is never moved by data arriving", and AC6 says a selection made elsewhere scrolls its row into view "without moving focus". This is a silent wrong result on a named input.
+- **Fix**: In `moveTo`, focus at once when the target is already the focus target. Do not rely on a commit: `if (row.id === focusId) { list.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(row.id)}"]`)?.focus(); return; }`. Otherwise, clear `focusRequest` when no state change follows. Add a DOM test: Home on the first row, then a model update, then assert `document.activeElement` did not change.
+
+### Async & Concurrency
+None detected. The hook drops late answers through `generation` on a snapshot change. `more` refuses a second in-flight page, and `retry` acts only on a failed read. A `not-found` on a re-read cannot loop through reveal: the stale-snapshot check comes first in Core, and reveal reads only parents it saw listed.
+
+### Error Handling
+None detected. A failed first page shows an error row, and Retry re-reads that parent only. A failed next page keeps the loaded entries. `stale-snapshot` raises the explorer's refresh banner.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. The `tree` guard checks scope/parent echo (`matchesRequest`), entry types per scope, positive counts, and `module.path === folder.path`.
+
+### Edge Cases
+- [F-002] info: revealing a symbol expands its file's folder but scrolls to no row, because the tree has no symbol rows. A wiki node selected in Graph mode also has no row. Both leave `scrollRequest` set to an id that never renders until the next reveal replaces it. This is harmless and already noted as untested in the journal. If a symbol should reveal its file row, push a `node` step for the file. The tree would then need the file's id, which the symbol node does not carry, so the simplest fix is to set no scroll request when `revealSteps` yields no row.
+- [F-003] info: the `requestTree` prop doc in `MetaprojectView` says "injected without a negotiation, it alone turns the tree on". Without `requestV2`, though, `protocol` starts at 1, and `treeScope` requires protocol 2. The tree turns on only with `requestTree` **and** `requestV2` injected. This affects the test seam's documentation only.
+
+### Suggested Patches
+```diff
+   const moveTo = (row: Row | undefined) => {
+     if (!row) return;
++    if (row.id === focusId) {
++      list.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(row.id)}"]`)?.focus();
++      return;
++    }
+     setFocusId(row.id);
+     focusRequest.current = true;
+   };
+```
+
+Routing audit: graph_used: payload layers (affected/relatedTests) used, no extra graph query needed; wiki_used: not-relevant (plan/AC supplied the intent); ctx_used: yes (`keryx ctx rg` for the service, view and Rust usages); raw_rg_used: no.
+
+Not verified: Rust compile/tests (AC3), which wait for CI. I did not run the focus repro (read-only, exec budget 0). It rests on React's same-value `setState` bail-out skipping the commit.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Transport, handshake, hook and reveal logic are sound (no reveal request loop: Core checks the snapshot before the parent; no empty expectedSnapshotId: the list renders only after the catalog). One major: a keyboard move to the already-focused row (Home on first, End on last) leaves focusRequest pending because setFocusId bails out, and the next data-driven commit pulls focus into the tree, against the plan and AC6. Two info notes. Rust not compiled (CI).",
+  "slices": [{"id": "slice-01", "status": "DONE", "coverage": "read in full (2534 lines)"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "  const moveTo = (row: Row | undefined) => {\n    if (!row) return;\n    setFocusId(row.id);\n    focusRequest.current = true;\n  };",
+      "problem": "moveTo sets focusRequest and relies on a commit for the layout effect to consume it. Home on the first row or End on the last row targets the row whose id already equals focusId (kept in sync by onFocus), so React bails out of setFocusId, nothing commits, and focusRequest stays true. The next commit for any reason (folder page arriving, reveal setHandled after a selection made elsewhere, snapshot reset) focuses the tabbable treeitem.",
+      "impact": "Repro: focus the first tree row, press Home, then click a node in the graph canvas. The reveal re-renders the tree and keyboard focus jumps from the canvas into the tree. This violates the plan ('Focus is never moved by data arriving') and AC6 ('without moving focus').",
+      "suggested_fix": "In moveTo, when row.id === focusId, focus the row element directly (querySelector by data-row with CSS.escape) and return without setting focusRequest. Add a DOM test: Home on the first row, trigger a model update, assert document.activeElement is unchanged.",
+      "evidence": "MetaprojectTree.tsx: moveTo is the only writer of focusRequest.current = true. The layout effect (no deps) is its only reader and needs a commit. onFocus: () => setFocusId(row.id) keeps focusId equal to the focused row. The Home/End cases call moveTo(rows[0]) / moveTo(rows.at(-1)) unconditionally.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "metaproject-tree-pending-focus-request",
+      "class_scope": {
+        "sites": ["apps/desktop/src/metaproject/MetaprojectTree.tsx:155"],
+        "enumeration_method": "Read every write of focusRequest in MetaprojectTree.tsx (the only file with a roving-focus request ref in the slice). moveTo is the sole writer. Its callers are ArrowDown/ArrowUp (index±1, always a different row), ArrowRight (the first child, a different row), ArrowLeft (the parent, a different row), Home and End (can equal the current row). Only Home and End can target the current row, and both go through moveTo, so the class has one site."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "    scrollRequest.current = selected.kind === \"module\" ? `d:${selected.path}` : `n:${selected.id}`;",
+      "problem": "For a symbol, or a wiki node in Graph mode, revealSteps yields no row, but a scroll request is still set to an id the tree never renders. It lingers until the next reveal, and the symbol's file row is not scrolled to.",
+      "impact": "No visible defect beyond the symbol's file not being scrolled into view, which the journal already lists as untested.",
+      "suggested_fix": "Set scrollRequest only when the steps end at a row: a file node step, or a module folder. Alternatively, reveal the symbol's file row.",
+      "evidence": "revealSteps returns [] for non-file/module/symbol kinds in graph scope and pushes no node step for symbols. flatten creates rows only for folder/group/node entries, and graph node entries are files.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "publication": "finding"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "   * a negotiation, it alone turns the tree on.",
+      "problem": "The prop doc says that injecting requestTree without a negotiation turns the tree on. Without requestV2, protocol initialises to 1 and treeScope requires protocol === 2, so the tree stays off.",
+      "impact": "A test author following the doc gets the flat list. This affects the test seam only.",
+      "suggested_fix": "Reword it as: 'injected together with requestV2 and without a negotiation, it turns the tree on'.",
+      "evidence": "useState(negotiates ? null : requestV2 ? 2 : 1); treeScope = protocol === 2 && supportsTree && ...",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "publication": "finding"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 0, "info": 2},
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

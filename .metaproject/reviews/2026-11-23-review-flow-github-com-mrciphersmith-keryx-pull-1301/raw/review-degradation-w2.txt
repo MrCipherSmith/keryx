@@ -1,0 +1,34 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": [{ "id": "slice-02", "status": "COVERED", "coverage": "read in full (1611 lines): MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx (tree block), platform/metaproject.test.ts, docs guide, metaproject-explorer-contract.ts, metaproject-explorer-v2.ts, metaproject-explorer-tree.test.ts" }],
+  "summary": "No finding of minor or above: against base a5d1ab236 the slice adds a new read-only `tree` action and refactors search paging without changing any existing behaviour I could trace. One info finding (documented, intended scope change of the Graph sidebar). Verified clean: (1) METAPROJECT_CAPABILITIES gained \"tree\" — every consumer walked (keryx ctx rg --all over src, apps, docs, scripts: metaproject-explorer-v2.ts:453 capabilities answer; platform/metaproject.test.ts:39,68,70,124; metaproject-explorer.test.ts:231; metaproject-explorer-tree.test.ts). The only runtime gate that required the whole list was Desktop validCapabilities (base apps/desktop/src/platform/metaproject.ts:172 `METAPROJECT_CAPABILITIES.every(...)`); head replaces it with METAPROJECT_REQUIRED_ACTIONS (the six base actions, metaproject.ts:171-181), so a Desktop at head still accepts a six-action CLI and a base Desktop reading a head CLI still finds its six; the Rust ACTIONS list at base (metaproject.rs:23) is the same six (Rust head is slice-01, not reviewed here). (2) search() paging refactor into offsetPage: base metaproject-explorer-v2.ts:327-335 vs head — same out-of-range test and message (\"The Metaproject search cursor offset is out of range.\"), same response-limit message (\"Metaproject search hit exceeds the response limit.\"), same page size/byte limit, same nextCursor condition and key; behaviour identical. (3) parseV2: new `tree` case and destructured `scope`/`parent` do not touch other cases; v1 parse untouched; unversioned {action:\"tree\"} still refused by v1 (tested). (4) MetaprojectV2Response / MetaprojectRequestV2 union widening: consumers MetaprojectView.tsx:151,259, OpenSpecView.tsx:18, metaproject-explorer.ts:225-228 are type-level only; runtime validation stays per action (platform isMetaprojectV2Response switch). (5) tree() node safety: refute attempt for unsafe paths breaking a folder page — metaproject-explorer-v2.ts:460 filters all loaded nodes through safeGraphNode before V2Read, so graphTree only sees relative paths; Desktop validTreeEntry's module.path===path matches the server's modules.get(folderPath). (6) tree() uses the full loaded model (loadExplorerGraph has no node cap; the CATALOG_NODES cap is only in the v1 handler, metaproject-explorer.ts:239-243), so deep folders are complete. (7) dev bridge apps/desktop/dev/bridge.ts:730-739 forwards via generic parseExplorerRequest, so tree passes through. (8) Tests leaned on are not blind: the view test for an older CLI uses the real negotiateMetaprojectExplorer with exactly the six actions; the lacking-action test removes `catalog`; the paging test chains real cursors over 135 entries. Not flagged (new path, not slower than base): wikiTree rebuilds each group array by spread per page (quadratic in group size) on every tree request. Graph importers: payload layers.affected (depth 2, 37 files, truncated: []) — I traced the export consumers above; the remaining listed files (commands/*, ctx/*, security/*) import the contract/explorer for unrelated actions and were not individually opened. No acceptance-criteria conflict found; Rust AC3 not verifiable here (no toolchain, slice-01). Read-only run: no tests executed by me (exec_budget_s 0).",
+  "findings": [
+    {
+      "id": "DEG-W2-001",
+      "severity": "info",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": null,
+      "quote": "- In **Graph**, it shows the folders and files of the checkout. The header",
+      "problem": "On base, the Graph sidebar without a query listed the v2 catalog's interleaved nodes (wiki pages, modules, files, OpenSpec specs and changes — catalog groups at metaproject-explorer-v2.ts catalog(), and MetaprojectView.tsx:599 passes all results in Graph mode). With a tree-capable CLI the Graph sidebar now lists only folders (module folders) and file nodes: wiki pages, spec/change nodes and the root module (`module:.`) are no longer browsable there without a search. The guide describes the new content but does not say these kinds left the Graph list.",
+      "impact": "A user who reached a spec, change or the root module from the Graph sidebar must now search, or use the Wiki/OpenSpec views. Base only showed the first ~200 interleaved nodes, so this was already partial; it is the plan's intended design (AC1/AC6), hence info.",
+      "suggested_fix": "Optionally add one sentence to the guide's Browse the tree section: wiki pages are under Wiki, specs and changes under OpenSpec, and search reaches any item.",
+      "evidence": "base-diff: base guide said the list header shows 'Catalog · shown of total' for the catalog list; head guide (this slice) says Graph shows folders and files. graphTree (metaproject-explorer-v2.ts, head) keeps only node.kind === 'file' plus module-backed folders. Refute: read plan rows 62-67 — the tree replacing the flat list is intended, so not filed above info.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: yes (payload layers.affected consumed; no rebuild needed, read-only), wiki_used: no (not-relevant: intent stated in plan/AC), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

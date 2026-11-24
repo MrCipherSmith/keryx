@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { METAPROJECT_CAPABILITIES, MetaprojectRequestError, parseExplorerRequestV1 } from "../../../../src/integrations/metaproject-explorer-contract";
 import {
-  METAPROJECT_REQUIRED_ACTIONS, isMetaprojectResponse, isMetaprojectV2Response, negotiateMetaproject,
+  METAPROJECT_REQUIRED_ACTIONS, isMetaprojectResponse, isMetaprojectV2Response,
   negotiateMetaprojectExplorer, requestMetaprojectTree, requestMetaprojectV2,
 } from "./metaproject";
 
@@ -47,9 +47,9 @@ describe("Metaproject capability negotiation", () => {
       if (parsed.action !== "catalog") throw new Error("Expected catalog handshake");
       return v1Catalog;
     };
-    expect(await negotiateMetaproject("/checkout", fakeLegacyReader)).toBe(1);
+    expect((await negotiateMetaprojectExplorer("/checkout", fakeLegacyReader)).protocol).toBe(1);
     expect(calls).toEqual([probe, { action: "catalog" }]);
-    const error = await readError(negotiateMetaproject("/checkout", async (request) => {
+    const error = await readError(negotiateMetaprojectExplorer("/checkout", async (request) => {
       parseExplorerRequestV1(request);
       return { ...v1Catalog, counts: undefined };
     }));
@@ -57,18 +57,18 @@ describe("Metaproject capability negotiation", () => {
   });
 
   test("accepts the typed unsupported version only after the handshake", async () => {
-    expect(await negotiateMetaproject("/checkout", async (request) => {
+    expect((await negotiateMetaprojectExplorer("/checkout", async (request) => {
       if (request.action === "capabilities") throw new Error("unsupported-version: Try an earlier protocol.");
       return v1Catalog;
-    })).toBe(1);
-    expect(await negotiateMetaproject("/checkout", async () => capabilities)).toBe(2);
+    })).protocol).toBe(1);
+    expect((await negotiateMetaprojectExplorer("/checkout", async () => capabilities)).protocol).toBe(2);
   });
 
   test("negotiates protocol 2 with a CLI that lists more actions than Desktop uses", async () => {
     const newer = { schemaVersion: 2, actions: ["openspec-diff", ...[...METAPROJECT_CAPABILITIES].reverse()] };
-    expect(await negotiateMetaproject("/checkout", async () => newer)).toBe(2);
+    expect((await negotiateMetaprojectExplorer("/checkout", async () => newer)).protocol).toBe(2);
     for (const actions of [METAPROJECT_CAPABILITIES.slice(1), [...METAPROJECT_CAPABILITIES, 1], "catalog"]) {
-      const lacking = await readError(negotiateMetaproject("/checkout", async () => ({ schemaVersion: 2, actions })));
+      const lacking = await readError(negotiateMetaprojectExplorer("/checkout", async () => ({ schemaVersion: 2, actions })));
       expect(String(lacking)).toContain("invalid Metaproject capabilities");
     }
   });
@@ -76,14 +76,14 @@ describe("Metaproject capability negotiation", () => {
   test("does not downgrade transport errors, invalid responses or a later data error", async () => {
     for (const error of ["Could not run the selected CLI", "Timed out"]) {
       const calls: unknown[] = [];
-      const failure = await readError(negotiateMetaproject("/checkout", async (request) => {
+      const failure = await readError(negotiateMetaprojectExplorer("/checkout", async (request) => {
         calls.push(request);
         throw new Error(error);
       }));
       expect(String(failure)).toContain(error);
       expect(calls).toEqual([probe]);
     }
-    const invalid = await readError(negotiateMetaproject("/checkout", async () => ({ ...capabilities, actions: [] })));
+    const invalid = await readError(negotiateMetaprojectExplorer("/checkout", async () => ({ ...capabilities, actions: [] })));
     expect(String(invalid)).toContain("invalid Metaproject capabilities");
     const calls: unknown[] = [];
     const reader = async (request: { action: string }) => {
@@ -91,7 +91,7 @@ describe("Metaproject capability negotiation", () => {
       if (request.action === "capabilities") return capabilities;
       throw new Error("unsupported-version: Try an earlier protocol.");
     };
-    await negotiateMetaproject("/checkout", reader);
+    await negotiateMetaprojectExplorer("/checkout", reader);
     const error = await readError(requestMetaprojectV2("/checkout", { action: "catalog", version: 2 }, reader));
     expect(error instanceof MetaprojectRequestError && error.code).toBe("unsupported-version");
     expect(calls).toEqual([probe, { action: "catalog", version: 2 }]);
@@ -116,7 +116,7 @@ describe("Metaproject tree capability", () => {
   test("a CLI offering only the six actions Desktop always sends negotiates and reports no tree", async () => {
     expect([...METAPROJECT_REQUIRED_ACTIONS]).toEqual(["catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history"]);
     const older = async () => ({ schemaVersion: 2, actions: [...METAPROJECT_REQUIRED_ACTIONS] });
-    expect(await negotiateMetaproject("/checkout", older)).toBe(2);
+    expect((await negotiateMetaprojectExplorer("/checkout", older)).protocol).toBe(2);
     expect(await negotiateMetaprojectExplorer("/checkout", older)).toEqual({ protocol: 2, supportsTree: false });
   });
 
@@ -205,5 +205,15 @@ describe("Metaproject tree responses", () => {
       throw new Error("not-found: Unknown Metaproject tree parent.");
     }));
     expect(error instanceof MetaprojectRequestError && error.code).toBe("not-found");
+  });
+
+  test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {
+    const other = "c".repeat(64);
+    const tree = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest },
+      async () => ({ ...graphRoot, snapshotId: other, parent: "src", entries: [{ type: "node", node: file }] })));
+    expect(tree instanceof MetaprojectRequestError && tree.code).toBe("stale-snapshot");
+    const search = await readError(requestMetaprojectV2("/checkout", { version: 2, action: "search", query: "x", cursor: "c", expectedSnapshotId: digest },
+      async () => ({ schemaVersion: 2, snapshotId: other, hits: [], partial: false })));
+    expect(search instanceof MetaprojectRequestError && search.code).toBe("stale-snapshot");
   });
 });

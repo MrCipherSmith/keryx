@@ -1,0 +1,2558 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+    "apps/desktop/src-tauri/src/metaproject.rs",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/metaproject.css",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts",
+    "apps/desktop/src/platform/metaproject.ts",
+    "docs/docs/guides/desktop-metaproject.md",
+    "src/integrations/metaproject-explorer-contract.ts",
+    "src/integrations/metaproject-explorer-tree.test.ts",
+    "src/integrations/metaproject-explorer-v2.ts"
+  ],
+  "files": [
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.tsx",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "apps/desktop/src/metaproject/RelationshipList.tsx",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/integrations/metaproject-explorer.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/integrations/metaproject-explorer-v2.ts",
+      "path": [
+        "src/integrations/metaproject-explorer.ts",
+        "src/integrations/metaproject-explorer-v2.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/platform/metaproject.ts",
+      "path": [
+        "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "apps/desktop/src/metaproject/NodeDetailsPanel.tsx",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "apps/desktop/src/metaproject/RelationshipGraph.tsx",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/metaproject-explorer.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "src/commands/metaproject-explorer.ts",
+        "src/integrations/service.ts",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r02/scope.json",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-03.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-09.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-09.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-10.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-10.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r03/scope.json",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r03/slices/slice-02.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-12.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-12.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-13.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-13.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/scope.json",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-05.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-06.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "path": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-06.diff",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "source": "text-link",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/dev/bridge.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "apps/desktop/dev/bridge.ts",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/metaproject-explorer.ts",
+        "src/integrations/service.ts",
+        "src/integrations/metaproject-explorer-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "apps/desktop/src/platform/metaproject.ts",
+      "path": [
+        "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+        "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/integrations/metaproject-explorer.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {METAPROJECT_CAPABILITIES, MetaprojectAnyRequest, MetaprojectRequestV2} of src/integrations/metaproject-explorer-contract.ts (hop 1, from src/integrations/metaproject-explorer-contract.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/App.tsx (hop 2, from apps/desktop/src/metaproject/MetaprojectView.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/metaproject/NodeDetailsPanel.tsx (hop 2, from src/integrations/metaproject-explorer-contract.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/metaproject/RelationshipGraph.tsx (hop 2, from src/integrations/metaproject-explorer-contract.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/metaproject/RelationshipList.tsx (hop 2, from src/integrations/metaproject-explorer-contract.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {decideClaudeSettingsTarget, moveClaudeSettingsHooks} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/ctx/runtimes.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CTX_HOOK_SENTINEL, Confidence, DecisionCodec, HARNESS_ADAPTERS, HarnessAdapter, HookAction, MANAGED_KEY, Settings, SurfaceAdapter, UNSUPPORTED_CTX_GUARD, allowAction, ctxHookCommand, managedGroups, parseToolName, preToolUseMatcher, refusalAction, surfacesOf} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {decideClaudeSettingsTarget, moveClaudeSettingsHooks} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SettingsFileOwner, installIntegration, settingsFileOwnerFor, uninstallIntegration} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {doctorIntegration, harnessAdapterIds} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/ctx/hook-install.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SettingsFileOwner, getHarnessAdapter, installIntegration, uninstallIntegration} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/ctx/orient-runtimes.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {Confidence, HARNESS_ADAPTERS, ORIENT_SENTINEL, Settings, SettingsFileOwner, SurfaceAdapter, UNSUPPORTED_ORIENT, installIntegration, surfacesOf, uninstallIntegration} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/security/agent-hooks/runtimes.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AGENT_CHECK_INPUT_COMMAND, AGENT_CHECK_OUTPUT_COMMAND, AGENT_HOOKS_SENTINEL, HARNESS_ADAPTERS, SECURITY_HOOKS_KEY, Settings, SurfaceAdapter, checkInputCommand, checkOutputCommand, isManagedBy, surfaceRelativePath, surfacesOf} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/labels.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MetaprojectEdgeKind, MetaprojectNodeKind} from src/integrations/metaproject-explorer-contract.ts; changed: {METAPROJECT_CAPABILITIES, METAPROJECT_TREE_SCOPES, MetaprojectAnyRequest, MetaprojectRequestV2, MetaprojectTreeEntry, MetaprojectTreeScope, MetaprojectTreeV2, MetaprojectV2Response, isMetaprojectTreeScope, parseExplorerRequest}"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueOriginDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graphLayout.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {METAPROJECT_EDGE_KINDS_V2, MetaprojectEdge, MetaprojectEdgeKind, MetaprojectNeighbors, MetaprojectNode, MetaprojectNodeKind} from src/integrations/metaproject-explorer-contract.ts; changed: {METAPROJECT_CAPABILITIES, METAPROJECT_TREE_SCOPES, MetaprojectAnyRequest, MetaprojectRequestV2, MetaprojectTreeEntry, MetaprojectTreeScope, MetaprojectTreeV2, MetaprojectV2Response, isMetaprojectTreeScope, parseExplorerRequest}"
+    },
+    {
+      "file": "src/integrations/metaproject-projection.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {METAPROJECT_EDGE_LIMIT, METAPROJECT_NODE_LIMIT, MetaprojectEdge, MetaprojectNeighbors, MetaprojectNode, MetaprojectRequest} from src/integrations/metaproject-explorer-contract.ts; changed: {METAPROJECT_CAPABILITIES, METAPROJECT_TREE_SCOPES, MetaprojectAnyRequest, MetaprojectRequestV2, MetaprojectTreeEntry, MetaprojectTreeScope, MetaprojectTreeV2, MetaprojectV2Response, isMetaprojectTreeScope, parseExplorerRequest}"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/flows/FlowsBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/commands/bundle.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RulesExportResult, getHarnessAdapter, harnessAdapterIds, installedRulesExportHarnesses, renderRulesForHarnesses} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/integrations.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CapabilityMatrixDocument, DEFAULT_MATRIX_ARTIFACT, DoctorIntegrationResult, HarnessAdapter, SURFACE_FLAG_ORDER, SurfaceResult, checkCapabilityMatrix, doctorIntegration, generateCapabilityMatrix, getHarnessAdapter, harnessAdapterIds, installIntegration, uninstallIntegration, writeCapabilityMatrix} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EDIT_GUARD_HOOK_MATCHER, JEV_EDIT_GUARD_SURFACE, createSettingsFileOwner, editGuardHookCommand, editGuardSettingsRelativePath, installSurfaces, uninstallSurfaces} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/security/audit-harness/surfaces.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HARNESS_ADAPTERS, SETTINGS_FILE_OWNERS, SUBSYSTEM_AGENTS, SUBSYSTEM_INSTRUCTIONS, SUBSYSTEM_RULES_EXPORT} from src/integrations/index.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/impact-evidence/host.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HARNESS_ADAPTERS, surfacesOf} from src/integrations/index.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": ".claude/settings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/README.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/flow-orchestrator-input-contract.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-pr-feedback-input-contract.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-pr-feedback-output-contract.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/subagent-result.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/integrations/install-state/claude.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/memory/metrics/run-2026-08-10T12-13-22Z.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/dispositions.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/all.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-architecture-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-architecture-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-architecture-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-backend-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-backend-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-backend-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-clean-code-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-clean-code-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-clean-code-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-frontend-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-frontend-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-frontend-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-frontend-conventions-04-05-06-07-08.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-frontend-conventions-09-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-highload-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-highload-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-highload-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-logic-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-logic-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-logic-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-performance-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-performance-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-performance-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-security-code-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-security-code-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-security-code-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-style-01-02-03-04-05.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-style-06-07-08-09.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-style-10-11.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/payloads/review-testing-practices-04-05-07-10.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/pr940.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/manifest.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"input\" (changed in apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx) is mentioned by 4674 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T17.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T22.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.dispatch.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/dispatch/T8.request.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T6.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/results/T8.result.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/verification/fix-round-4.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/keryx-dashboard.html",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r02/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-10-19-review-flow-pr/layers/graph/storage/calls.jsonl",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/consolidated-findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-clean-code-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-degradation-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-frontend-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-highload-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-layout-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-logic-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-performance-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-regression-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-security-code-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-style-w2.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-testing-practices-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/payloads/review-ui-ux-w3.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/prior_findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/raw/review-highload-w3.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/raw/review-logic-w3.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/raw/review-regression-w3.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/research-evidence/blast-radius-brief.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-06.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-07.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-08.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-architecture-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-clean-code-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-degradation-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-frontend-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-highload-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-layout-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-logic-w2.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-performance-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-regression-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-security-code-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-style-w2.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-testing-practices-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/payloads/review-ui-ux-w1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r03/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-layout-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/raw/review-testing-practices-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/research-evidence/mutants-r4.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/research-evidence/mutation-2.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/research-evidence/mutation-2.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-06.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-07.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-08.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-09.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-10.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 182 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/raw/review-regression-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch-r05/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/consolidated-findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/payloads/review-premise-1.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/payloads/review-verifier-2.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/raw/review-degradation-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/raw/review-highload-w3.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/raw/review-performance-w2.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/research.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-branch/verdict-interim.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/raw/review-frontend-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/canonical-findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/prior_findings.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-architecture-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-architecture-w2.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-backend-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-backend-w2.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-frontend-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-frontend-w2.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/raw/review-highload-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"count-label\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 110 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/blast-radius.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/raw/review-ui-ux-w1.txt",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "css-class \"btn-sm\" (changed in apps/desktop/src/metaproject/MetaprojectTree.tsx) is mentioned by 86 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/browser.rs",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/pick.js",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"keydown\" (changed in apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx) is mentioned by 77 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/graphLayout.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MetaprojectEdge, MetaprojectEdgeKind, MetaprojectNeighbors, MetaprojectNode, MetaprojectNodeKind} from src/integrations/metaproject-explorer-contract.ts; changed: {METAPROJECT_CAPABILITIES, METAPROJECT_TREE_SCOPES, MetaprojectAnyRequest, MetaprojectRequestV2, MetaprojectTreeEntry, MetaprojectTreeScope, MetaprojectTreeV2, MetaprojectV2Response, isMetaprojectTreeScope, parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/integrations.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HARNESS_ADAPTERS} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/commands/update.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CTX_GUARD_CLAUDE, JEV_EDIT_GUARD_SURFACE, LEARNING_OBSERVER_CLAUDE, ORIENT_CLAUDE, SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE, readInstallState, recordSurfaceInstalled} from src/integrations/service.ts; changed: {parseExplorerRequest}"
+    },
+    {
+      "file": "src/integrations/owner.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/integrations/metaproject-explorer-contract.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {settingsFileOwnerFor} from src/integrations/index.ts; changed: {parseExplorerRequest}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/metaproject.rs",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 27,
+    "changedFilesResolved": 11,
+    "changedFilesUnresolved": 16,
+    "candidates": 28,
+    "retained": 23,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 21,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 190,
+    "droppedTestConsumer": 5,
+    "textLinksAdded": 11,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 19,
+      "2": 4
+    }
+  },
+  "graph": {
+    "nodes": 4675,
+    "edges": 17793
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the head source did not parse"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/metaproject.css",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "not a JS/TS module: every importer is reached by the file edge"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "names": [
+          "MetaprojectTreeModel",
+          "RequestTree",
+          "ScopeTree",
+          "TREE_ROOT",
+          "TreeFolder",
+          "entryKey",
+          "parentOf",
+          "useMetaprojectTree"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: MetaprojectTreeModel, RequestTree, ScopeTree, TREE_ROOT, TreeFolder, entryKey, parentOf, useMetaprojectTree"
+      },
+      {
+        "file": "apps/desktop/src/platform/metaproject.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "apps/desktop/src/platform/metaproject.ts",
+        "names": [
+          "METAPROJECT_REQUIRED_ACTIONS",
+          "MetaprojectNegotiation",
+          "MetaprojectTreeRequest",
+          "isMetaprojectResponse",
+          "isMetaprojectV2Response",
+          "negotiateMetaproject",
+          "negotiateMetaprojectExplorer",
+          "requestMetaproject",
+          "requestMetaprojectTree",
+          "requestMetaprojectV2"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: METAPROJECT_REQUIRED_ACTIONS, MetaprojectNegotiation, MetaprojectTreeRequest, isMetaprojectResponse, isMetaprojectV2Response, negotiateMetaproject, negotiateMetaprojectExplorer, requestMetaproject, requestMetaprojectTree, requestMetaprojectV2"
+      },
+      {
+        "file": "src/integrations/metaproject-explorer-contract.ts",
+        "names": [
+          "METAPROJECT_CAPABILITIES",
+          "METAPROJECT_TREE_SCOPES",
+          "MetaprojectAnyRequest",
+          "MetaprojectRequestV2",
+          "MetaprojectTreeEntry",
+          "MetaprojectTreeScope",
+          "MetaprojectTreeV2",
+          "MetaprojectV2Response",
+          "isMetaprojectTreeScope",
+          "parseExplorerRequest"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: METAPROJECT_CAPABILITIES, METAPROJECT_TREE_SCOPES, MetaprojectAnyRequest, MetaprojectRequestV2, MetaprojectTreeEntry, MetaprojectTreeScope, MetaprojectTreeV2, MetaprojectV2Response, isMetaprojectTreeScope, parseExplorerRequest"
+      },
+      {
+        "file": "src/integrations/metaproject-explorer-tree.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/integrations/metaproject-explorer-v2.ts",
+        "names": [
+          "metaprojectExplorerV2"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: metaprojectExplorerV2"
+      }
+    ],
+    "barrels": [
+      "src/integrations/index.ts",
+      "src/integrations/service.ts"
+    ],
+    "textKeys": 14,
+    "textHubs": [
+      {
+        "key": "keydown",
+        "kind": "event",
+        "via": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "hits": 77
+      },
+      {
+        "key": "btn",
+        "kind": "css-class",
+        "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "hits": 182
+      },
+      {
+        "key": "btn-sm",
+        "kind": "css-class",
+        "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "hits": 86
+      },
+      {
+        "key": "count-label",
+        "kind": "css-class",
+        "via": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "hits": 110
+      },
+      {
+        "key": "input",
+        "kind": "event",
+        "via": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "hits": 4674
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/integrations/metaproject-explorer-contract.ts"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/integrations/metaproject-explorer-contract.ts"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/integrations/metaproject-explorer-contract.ts"
+    },
+    {
+      "file": "src/integrations/metaproject-explorer.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "METAPROJECT_CAPABILITIES",
+        "MetaprojectAnyRequest",
+        "MetaprojectRequestV2"
+      ],
+      "via": "src/integrations/metaproject-explorer-contract.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

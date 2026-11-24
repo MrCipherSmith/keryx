@@ -1,0 +1,78 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: branch feat/desktop-metaproject-sidebar-tree, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a, scope mode diff, slice-02 read in full (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx tree block, platform/metaproject.test.ts, docs/docs/guides/desktop-metaproject.md, src/integrations/metaproject-explorer-contract.ts, src/integrations/metaproject-explorer-v2.ts, src/integrations/metaproject-explorer-tree.test.ts). Load profile: not provided (payload context_doc plan.md states none). Concrete triggers used: one CLI child per tree read (each folder expansion and each Show more page), the number of entries under one tree parent, and a snapshot change between pages. Context read outside the slice, for the request path only: metaproject-explorer-v2.ts `metaprojectExplorerV2` (lines ~450-473), metaproject.rs ReadPermit (lines 184-204), MetaprojectTree.tsx and useMetaprojectTree.ts (to confirm what the slice's tests exercise).
+
+Summary: The Core `tree` action in this slice is a read-only, stateless, per-process read: no shared mutable state, no lock, no write, no retry, and its paging is idempotent within a snapshot (deterministic sort, cursors bound to the snapshot and to a hash of scope+parent, `expectedSnapshotId` checked before the cursor and the parent). Pages are bounded by count (100) and bytes (900 KiB items, 1 MiB response). No blocker, major or minor in this slice. One info: every tree read runs the whole v2 load pipeline, which lengthens how long each tree child holds a Desktop read permit. Stats: blocker 0 | major 0 | minor 0 | info 1.
+
+Cross-reference (not re-filed, one finding per defect across lenses): the client-side fan-out of tree reads after a new snapshot against the fail-fast Rust permit (MAX_ACTIVE = 8) is review-highload-w1 F-001 on slice-01 (MetaprojectTree.tsx / useMetaprojectTree.ts). This slice's test "a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old cursor" (MetaprojectView.dom.test.tsx) re-reads only two parents, so no test in this slice exercises that fan-out or the permit refusal; any fix for F-001 will need its own test.
+
+### CLI / Multi-Session
+
+None detected. The tree action writes nothing under `.metaproject/`; a concurrent `keryx gdgraph build` in another session is covered by the existing `track`/`confirm()` observation in `metaprojectExplorerV2`, which the tree action passes through like every other v2 data action, so a torn graph read answers `source-changed`/`stale-snapshot`, not a mixed page.
+
+### Concurrency & Races
+
+None detected. `V2Read.tree` reads only the per-request model. `checkSnapshot` runs in `read()` before the action; `cursorValue` checks the cursor's snapshot and key before `graphTree`/`wikiTree`, so a cursor from another snapshot answers `stale-snapshot` and one from another parent answers `invalid-input` (both covered by metaproject-explorer-tree.test.ts AC2). `files.sort` and `pages.sort` mutate arrays built for this request only.
+
+### Resources
+
+F-001 (info) below. Page size and byte caps hold for tree entries (`offsetPage` with METAPROJECT_PAGE_SIZE_V2 and TREE_ITEMS_BYTES; an entry too large for a page answers `response-limit`, not an endless empty page). Per-request maps (`folders`, `modules`, `groups`) are bounded by the graph's node count and freed with the process.
+
+### Caching
+
+None detected. No cache is added; Desktop's per-snapshot tree state is slice-01 and was reviewed there.
+
+### Lock Contention
+
+Not applicable (no locks or transactions).
+
+### Async / Queues
+
+None detected in this slice. Reveal paging ("pages until found") issues one read per effect run, sequentially; reviewed in slice-01 (w1 F-002).
+
+### Retry / Timeout / Circuit Breaker
+
+None detected. The tree action has no retry; Retry in the tests is user-initiated and re-reads one parent (MetaprojectTree.dom.test.tsx asserts exactly one new call).
+
+### Idempotency & Distributed Invariants
+
+None detected. Read-only action; repeated reads of the same parent and cursor within a snapshot return the same page (sort by `compareText` on unique folder names, file paths, and title then path for wiki pages), so a retried page cannot duplicate or skip entries; the client also de-duplicates appended pages by entry key.
+
+Clean areas: Part 0, A, B (except F-001 note), C, D, E, F, G reviewed for slice-02.
+
+Not verified: no command or test was run (allowed_tools read-only, exec_budget_s 0); the orchestrator's runs (core 443 pass, Desktop 998 pass, lint/typecheck, docs:check) are taken as reported. Rust was not compiled (no toolchain). Timing of a tree read on a large checkout was not measured; F-001's cost claim rests on reading the code path, not a profile.
+
+REVIEW_RESULT:
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "slice-02 (Core tree action, contract, tests, docs): read-only, stateless, snapshot-bound and bounded paging; no race, lock, retry or unbounded growth. One info: each tree read runs the full v2 load pipeline (graph + OpenSpec + relationship checks), so every folder expansion or Show more page holds a Desktop read permit for a full catalog-cost read, which lengthens the window of w1 F-001's permit exhaustion. The fan-out itself is w1 F-001 (slice-01) and is not re-filed.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "const { entries, partial } = scope === \"graph\" ? graphTree(this.model, parent) : { entries: wikiTree(this.model.nodes, parent), partial: false };",
+      "problem": "A tree read needs only the graph's node list (or the wiki nodes), but it goes through the same pipeline as a catalog read: `graphRequest` maps `tree` to `{ action: \"catalog\" }` (default branch), and `metaprojectExplorerV2` then loads the whole graph, reads OpenSpec, and runs `buildRelationships` (with its per-target filesystem checks) before `V2Read.tree` uses `this.model.nodes` alone. The snapshot id hashes the relationships and diagnostics, so they cannot simply be skipped without changing the snapshot contract shared with the other actions.",
+      "impact": "Trigger: each folder expansion and each Show more page is one CLI child doing a full catalog-cost load. Outcome: no failure on its own, but each tree child holds one of Desktop's 8 process-wide read permits for that whole duration, so the burst described in review-highload-w1 F-001 (expanded folders re-read after a new snapshot) keeps permits longer and the refusal window for the explorer's detail/neighbors reads widens. No load level is stated, so no stall is claimed.",
+      "suggested_fix": "No change required for this PR. If w1 F-001's client-side limiter is not enough in practice, give `tree` a lighter load path that still produces the same snapshot id (e.g. reuse a cheaper snapshot derivation), or measure a tree read on a large checkout before deciding.",
+      "evidence": "metaproject-explorer-v2.ts: `graphRequest(...)` default `return { action: \"catalog\" }`; `metaprojectExplorerV2`: `Promise.all([load(root, graphRequest(request)), readOpenSpec(root)])`, then `await buildRelationships(source, graph, root, track)`, `await confirm()`, then `new V2Read(...).read(request, freshness)`; `V2Read.tree` reads only `this.model` / `this.model.nodes`. Snapshot: `hash([model.base.snapshotId, source.catalog.snapshotId, openEdges, diagnostics])`. metaproject.rs:185-199 `MAX_ACTIVE: usize = 8`, fail-fast `Too many Metaproject reads`.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```

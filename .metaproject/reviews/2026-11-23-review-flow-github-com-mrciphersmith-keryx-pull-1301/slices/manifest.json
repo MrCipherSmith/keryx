@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 148000,
+      "contentHash": "f8156422f5d2703636d0d9ae74b3ad42823833312f0162347b5bd5109ee2c70f",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+        "apps/desktop/src-tauri/src/metaproject.rs",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src-tauri/src/metaproject.rs, apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx (+2)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 89656,
+      "contentHash": "1738dfeb81f02c3a4052ac7f10f73da50048e646988a79a4233634fecd09f04a",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-contract.ts",
+        "src/integrations/metaproject-explorer-v2.ts",
+        "src/integrations/metaproject-explorer-tree.test.ts"
+      ],
+      "domain": "apps [test], docs [docs], src/integrations +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "schema: src/integrations/metaproject-explorer-contract.ts",
+          "source code: src/integrations/metaproject-explorer-v2.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 237656,
+    "files": 27,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

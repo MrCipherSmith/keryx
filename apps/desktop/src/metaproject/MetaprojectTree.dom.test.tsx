@@ -13,6 +13,7 @@ let createElement: typeof import("react").createElement;
 let act: (fn: () => void | Promise<void>) => Promise<void>;
 let Tree: typeof import("./MetaprojectTree").MetaprojectTree;
 let useTree: typeof import("./useMetaprojectTree").useMetaprojectTree;
+let MAX_TREE_READS: number;
 let root: Root;
 let host: HTMLElement;
 
@@ -70,7 +71,7 @@ beforeAll(async () => {
   registerDom();
   const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
   Tree = (await import("./MetaprojectTree")).MetaprojectTree;
-  useTree = (await import("./useMetaprojectTree")).useMetaprojectTree;
+  ({ useMetaprojectTree: useTree, MAX_TREE_READS } = await import("./useMetaprojectTree"));
   host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
 });
 beforeEach(async () => { await act(() => root.render(null)); });
@@ -143,6 +144,8 @@ test("a failed folder read shows an inline error whose Retry re-reads only that 
   const error = item("Could not load.");
   expect(error.textContent).toContain("graph read failed");
   expect(error.getAttribute("aria-level")).toBe("2");
+  // The failure is announced like the loading row it replaced.
+  expect(error.querySelector('[role="status"]')?.textContent).toBe("Could not load. source-unavailable: graph read failed");
   expect(item("guide.md")).not.toBeNull();
   tree.answers["src|"] = SRC_PAGE;
   const before = tree.calls.length;
@@ -174,6 +177,9 @@ test("selecting a node row calls the selection callback; a module folder selects
   const chosen: string[] = [];
   const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
   await act(async () => { root.render(createElement(Harness, { request: tree.request, onSelect: picked => chosen.push(picked.id) })); });
+  // A module folder carries the Module kind label; a plain folder does not.
+  expect(item("src").querySelector(".metaproject-meta")?.textContent).toBe("Module");
+  expect(item("docs").querySelector(".metaproject-meta")).toBeNull();
   await act(async () => { item("README.md").click(); });
   await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-name")?.click(); });
   expect(chosen).toEqual([readme.id, srcModule.id]);
@@ -191,12 +197,23 @@ test("keys move, expand, collapse and select as a WAI-ARIA tree", async () => {
   const first = item("docs");
   expect(first.tabIndex).toBe(0);
   await act(async () => { first.focus(); });
+  // Up on the first row stays there.
+  await key(first, "ArrowUp");
+  expect(focused()).toBe("docs");
   await key(first, "ArrowDown");
+  expect(focused()).toBe("src");
+  await key(document.activeElement!, "ArrowUp");
+  expect(focused()).toBe("docs");
+  await key(document.activeElement!, "ArrowDown");
   expect(focused()).toBe("src");
   await key(document.activeElement!, "ArrowRight");
   expect(item("src").getAttribute("aria-expanded")).toBe("true");
   expect(focused()).toBe("src");
   await key(document.activeElement!, "ArrowRight");
+  expect(focused()).toBe("client.ts");
+  await key(document.activeElement!, "ArrowDown");
+  expect(focused()).toBe("server.ts");
+  await key(document.activeElement!, "ArrowUp");
   expect(focused()).toBe("client.ts");
   await key(document.activeElement!, "ArrowDown");
   expect(focused()).toBe("server.ts");
@@ -233,7 +250,10 @@ test("data arriving never moves focus", async () => {
     await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
     outside.focus();
     await act(async () => { tree.release("src|"); });
-    expect(document.activeElement).toBe(outside);
+    // The data did arrive, and focus stayed where it was.
+    expect(item("client.ts")).not.toBeNull();
+    expect(items().some(row => row.textContent === "Loading…")).toBe(false);
+    expect(document.activeElement === outside).toBe(true);
   } finally { outside.remove(); }
 });
 
@@ -242,6 +262,18 @@ test("a graph that is not built shows an empty-state line", async () => {
   await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
   expect(host.querySelector('[role="tree"]')).toBeNull();
   expect(host.textContent).toContain("The graph is not built yet.");
+});
+
+test("a built graph without files and a wiki without pages show their own empty-state lines", async () => {
+  const graph = reader({ "|": { entries: [], partial: false } });
+  await act(async () => { root.render(createElement(Harness, { request: graph.request })); });
+  expect(host.querySelector('[role="tree"]')).toBeNull();
+  expect(host.querySelector('[role="status"]')?.textContent).toBe("No indexed files.");
+  await act(async () => { root.render(null); });
+  const wiki = reader({ "|": { entries: [], partial: false } }, "wiki");
+  await act(async () => { root.render(createElement(Harness, { request: wiki.request, scope: "wiki" })); });
+  expect(host.querySelector('[role="tree"]')).toBeNull();
+  expect(host.querySelector('[role="status"]')?.textContent).toBe("No Wiki pages.");
 });
 
 test("wiki groups show their page counts and hold their pages", async () => {
@@ -326,6 +358,107 @@ test("a failed next page shows an inline error whose Retry asks for the same pag
   await act(async () => { [...error.querySelectorAll("button")].find(button => button.textContent === "Retry")?.click(); });
   expect(tree.calls.map(call => call.cursor)).toEqual([undefined, "next", "next"]);
   expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["README.md", "client.ts"]);
+});
+
+test("Home on the first row and End on the last leave nothing that a later render could act on", async () => {
+  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    await act(async () => { item("docs").focus(); });
+    await key(item("docs"), "Home");
+    expect(focused()).toBe("docs");
+    await act(async () => { outside.focus(); });
+    // A selection made elsewhere re-renders the tree with no keyboard input.
+    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: client.id, selected: client })); });
+    expect(item("client.ts").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement === outside).toBe(true);
+    await act(async () => { item("README.md").focus(); });
+    await key(item("README.md"), "End");
+    expect(focused()).toBe("README.md");
+    await act(async () => { outside.focus(); });
+    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: server.id, selected: server })); });
+    expect(item("server.ts").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement === outside).toBe(true);
+  } finally { outside.remove(); }
+});
+
+test("a keyboard Retry keeps focus on the folder's status row, then on the first row read", async () => {
+  const tree = reader({ "|": { entries: [folder("src", 2)], partial: false }, "src|": new Error("source-unavailable: graph read failed") });
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("Could not load.").focus(); });
+  tree.answers["src|"] = SRC_PAGE;
+  tree.hold.add("src|");
+  await key(item("Could not load."), "Enter");
+  expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
+  expect(document.activeElement?.textContent).toBe("Loading…");
+  await act(async () => { tree.release("src|"); });
+  expect(item("client.ts")).not.toBeNull();
+  expect(focused()).toBe("client.ts");
+});
+
+test("a keyboard Show more keeps focus in the tree: on the row while it loads, then on the first row appended", async () => {
+  const tree = reader({
+    "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
+    "|next": { entries: [leaf(client), leaf(server)], partial: false },
+  });
+  tree.hold.add("|next");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("Show more").focus(); });
+  await key(item("Show more"), "Enter");
+  expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
+  expect(document.activeElement?.textContent).toBe("Loading…");
+  await act(async () => { tree.release("|next"); });
+  expect(items().some(row => row.textContent === "Show more")).toBe(false);
+  expect(focused()).toBe("client.ts");
+});
+
+test("tree reads run at most three at a time, and queued reads of a retired snapshot never start", async () => {
+  const names = ["a", "b", "c", "d", "e", "f"];
+  const answers: Record<string, Answer> = {
+    "|": { entries: names.map(name => folder(name, 1)), partial: false },
+    ...Object.fromEntries(names.map(name => [name, { entries: [leaf(node(`${name}-file`, `${name}/${name}.ts`))], partial: false }])),
+  };
+  const calls: MetaprojectTreeRequest[] = [];
+  const waiting: (() => void)[] = [];
+  let holdAll = false;
+  let inFlight = 0;
+  let peak = 0;
+  const request = (_cwd: string, input: MetaprojectTreeRequest): Promise<MetaprojectTreeV2> => {
+    calls.push(input);
+    peak = Math.max(peak, ++inFlight);
+    const settle = (): MetaprojectTreeV2 => {
+      inFlight--;
+      const answer = answers[input.parent ?? "|"];
+      if (!answer || answer instanceof Error) throw new Error(`No answer for ${input.parent}`);
+      return { schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? SNAPSHOT, scope: "graph", parent: input.parent ?? null, ...answer };
+    };
+    if (!holdAll) return Promise.resolve().then(settle);
+    return new Promise(resolve => { waiting.push(() => resolve(settle())); });
+  };
+  const releaseAll = async () => {
+    while (waiting.length) await act(async () => { for (const release of waiting.splice(0)) release(); });
+  };
+  await act(async () => { root.render(createElement(Harness, { request })); });
+  for (const name of names) await act(async () => { item(name).click(); });
+  expect(names.every(name => item(name).getAttribute("aria-expanded") === "true")).toBe(true);
+  peak = 0;
+  holdAll = true;
+  const second = "b".repeat(64);
+  await act(async () => { root.render(createElement(Harness, { request, snapshot: second })); });
+  await act(async () => { waiting.shift()?.(); });
+  expect(peak <= MAX_TREE_READS).toBe(true);
+  expect(calls.filter(call => call.expectedSnapshotId === second && call.parent)).toHaveLength(3);
+  // The snapshot changes again before those reads answer: the three still queued never start.
+  const third = "c".repeat(64);
+  await act(async () => { root.render(createElement(Harness, { request, snapshot: third })); });
+  await releaseAll();
+  expect(peak <= MAX_TREE_READS).toBe(true);
+  expect(calls.filter(call => call.expectedSnapshotId === second && call.parent)).toHaveLength(3);
+  expect(calls.filter(call => call.expectedSnapshotId === third && call.parent).map(call => call.parent).sort()).toEqual(names);
+  for (const name of names) expect(item(`${name}.ts`)).not.toBeNull();
 });
 
 test("an expanded folder that is not found after a new snapshot is forgotten quietly", async () => {

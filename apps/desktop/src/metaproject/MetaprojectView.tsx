@@ -3,6 +3,7 @@ import {
   rankMetaprojectSearchHits,
   METAPROJECT_EDGE_KINDS,
   METAPROJECT_EDGE_KINDS_V2,
+  MetaprojectRequestError,
   type MetaprojectCatalog,
   type MetaprojectDetail,
   type MetaprojectDirection,
@@ -263,6 +264,7 @@ function Explorer({
   visible?: boolean;
 }) {
   const symbolReasonId = useId();
+  const listHeadingId = useId();
   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
   const { route, setRoute, visit, navigate, switchView, back, canGoBack, root } = useExplorerNavigation();
   const { mode, query } = route;
@@ -676,8 +678,10 @@ function Explorer({
         ? { mode: searchMode, query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
         : current);
     } catch (cause) {
-      if (generation === latestSearch.current.generation && projectGeneration === project.current)
-        setSearchError({ query: searchQuery, message: errMessage(cause) });
+      if (generation !== latestSearch.current.generation || projectGeneration !== project.current) return;
+      // The CLI answered for another snapshot: offer Refresh catalog, as every other stale read does.
+      if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") setSnapshotMismatch(true);
+      else setSearchError({ query: searchQuery, message: errMessage(cause) });
     } finally { pageInFlight.current = false; }
   };
   // A rebuild outlives catalog reloads; only leaving the explorer (unmount, or a project
@@ -915,8 +919,8 @@ function Explorer({
             </div>
           )}
           <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
-            <nav className="metaproject-list" aria-label="Search results" ref={list}>
-              <h2>{listHeading}</h2>
+            <nav className="metaproject-list" aria-labelledby={listHeadingId} ref={list}>
+              <h2 id={listHeadingId}>{listHeading}</h2>
               {searchFailure && (
                 <div className="inline-banner tone-warn" role="alert">
                   <span>Search failed. {searchFailure}</span>

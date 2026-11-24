@@ -1,0 +1,127 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR 1301, branch `feat/desktop-metaproject-sidebar-tree`, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a, diff mode. Slice read in full: slice-01 (flow 518 package files; apps/desktop/src-tauri/src/metaproject.rs; MetaprojectTree.tsx; MetaprojectView.tsx; metaproject.css; useMetaprojectTree.ts; platform/metaproject.ts). The Core `tree` service (src/integrations/metaproject-explorer-v2.ts) is not in this slice and was not reviewed.
+- Context read outside the slice: RelationshipGraph/NodeDetailsPanel/MetaprojectView memoization (keryx ctx rg), metaproject.rs request path (one CLI child spawned per request via spawn_blocking, no concurrency cap), folder sizes of this checkout (`git ls-files`, direct-children count per folder).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 2 | info: 2
+
+### Findings
+
+### [F-001] Reveal of a selection pages a large folder sequentially, one CLI spawn per 100 entries
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (reveal effect)
+- **Hot path**: once per (folder, snapshot) when the user selects a file from the graph, search results, Back or the details panel and its folder is not yet loaded far enough.
+- **Problem**: The reveal effect resolves one step per render: read the ancestor (`model.ensure`), then, if the target is not in the loaded entries, `model.more` for the next page, and repeat. Each step is one `metaproject_request` = one CLI child process (metaproject.rs spawns per request). In this checkout `src/commands` has 479 direct files, `src/review` 374, `src/tui` 339; revealing `src/commands/<late-alphabet>.ts` from a graph click is root + `src` + up to 5 pages of `src/commands` = ~7 sequential reads. At the ~0.8 s per read the flow description cites, the row appears ~5-6 s after the click, and every intermediate page is appended to the visible tree.
+- **Why it matters**: Correct and non-blocking (async; UI stays responsive), and the plan explicitly accepts "reveal pages until the row is found", with read latency out of scope. The cost lands on the next stage that tunes latency: a reveal-specific request (e.g. a `tree` request that returns the page containing a given child, or the ancestors' pages in one call) would make it one round trip.
+- **Fix**: Track separately with the read-latency stage; no change required for this PR.
+
+### [F-002] New snapshot re-reads every expanded folder concurrently with no limit
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (`for (const parent of unread) model.ensure(scope, parent)`) with useMetaprojectTree.ts snapshot reset
+- **Hot path**: on a snapshot change (rebuild/refresh) while the tree is shown; rare, not per keystroke.
+- **Problem**: A snapshot change drops all loaded folders and keeps the expanded set; `flatten` then reports every expanded folder whose parent is loaded as `unread`, and the effect calls `ensure` for all of them at once, level by level. Each is a separate CLI child process loading the graph. The width is the user's expanded set at that level (caller-sized, not fixed small) — async-patterns.mdc Rule 3, which rates unbounded fan-out off a hot path as `minor`.
+- **Why it matters**: With a dozen expanded sibling folders a rebuild spawns a dozen concurrent CLI processes. Correct today; a bound is cheap.
+- **Fix**: Cap concurrent tree reads (e.g. 4) inside `useMetaprojectTree.read`, queueing the rest; or re-read only expanded folders that are visible.
+
+### [F-003] Every tree state change re-renders the whole Explorer
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts (`const [, render] = useReducer(...)` in the hook mounted by Explorer)
+- **Hot path**: each expand/collapse (ArrowRight/ArrowLeft, chevron), each page arrival, each `setHandled`.
+- **Problem**: Tree state lives in a ref inside the Explorer and is published by forcing an Explorer render, so a folder toggle re-renders the Explorer (graph canvas, panels) and the whole tree (all visible rows, no row memoization). The Explorer's expensive derivations are memoized (graphIndex, nodes, results, layout in RelationshipGraph), so the extra cost is VDOM diffing; no measurement shows it noticeable.
+- **Fix**: None needed now; if the tree gets slow with many rows, move the state into a small external store subscribed only by MetaprojectTree, and memoize row components.
+
+### [F-004] Revealing a symbol leaves a scroll request that is never satisfied
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (`scrollRequest.current = selected.kind === "module" ? ... : \`n:${selected.id}\``)
+- **Hot path**: every tree render after a symbol is selected elsewhere, until another reveal overwrites it.
+- **Problem**: The tree never renders symbol rows, so `n:<symbolId>` is never found; the no-deps `useLayoutEffect` keeps running `querySelectorAll("[data-row]")` and a linear find on every render. Cost is one DOM query per render (small); noted because it is also an unreachable request.
+- **Fix**: For a symbol, scroll to its file row (`n:<file id>` is not known from the symbol; alternatively set no scroll request for symbols).
+
+### Clean Areas
+- CLI/TUI hot paths: keyboard handling is O(visible rows) per key (`rows.find`/`indexOf`), local `setFocusId` only; focus `onFocus` sets the same id (React bails out). No sync I/O on interactive paths.
+- Rust (metaproject.rs): `Tree` validation is O(input length), same as the existing variants; required-action set unchanged.
+- Platform transport: `validTree` bounded by `METAPROJECT_PAGE_SIZE_V2`; response size check reuses the existing 1 MiB bound; `actions.includes("tree")` once per negotiation.
+- Duplicate reads: `ensure` and `more` are idempotent while a read is in flight (map entry / `more.status === "loading"`); late answers dropped by generation; page append dedupes with one Set per page.
+- Memory: loaded folders bounded by the project's index and reset per snapshot; no listeners/timers added; no new dependencies or large imports.
+- CSS: no expensive selectors of note.
+- N+1 / indexes / pagination: not applicable on the client; server-side tree paging is in a slice not assigned to this reviewer.
+
+### Not verified
+- No timing was run (exec_budget_s = 0); the ~0.8 s per read comes from the flow description, folder sizes from `git ls-files` (indexed-file counts may differ). Core tree service performance not reviewed (other slice). Rust not compiled.
+
+REVIEW_RESULT
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No blocker or major performance issues in slice-01. Two minor: reveal pages large folders sequentially (one CLI spawn per 100 entries, ~7 sequential reads for src/commands), and unbounded concurrent re-reads of expanded folders on snapshot change. Two info: whole-Explorer re-render per tree state change; unsatisfiable scroll request after a symbol reveal.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (folder.nextCursor && folder.more?.status !== \"failed\") { model.more(scope, step.parent); return; }",
+      "problem": "Reveal of an outside selection resolves one ancestor read or one next page per render step; each is a separate metaproject_request (one CLI child spawn). For a file late in a large folder it pages sequentially through every 100-entry page.",
+      "impact": "In this checkout src/commands has 479 direct files: revealing a late file from a graph click needs root + src + up to 5 pages = ~7 sequential reads, ~5-6 s at the ~0.8 s/read the flow cites; all intermediate pages are appended to the visible tree. Async and correct; accepted by the plan; latency is out of scope.",
+      "suggested_fix": "Track with the read-latency stage: a tree request that returns the page containing a named child (or the ancestors' pages in one call) would make reveal one round trip.",
+      "evidence": "slice-01 MetaprojectTree.tsx reveal useEffect; metaproject.rs spawns a CLI per request (spawn_blocking + Command::new); git ls-files direct-children counts: src/commands 479, src/review 374, src/tui 339.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "for (const parent of unread) model.ensure(scope, parent);",
+      "problem": "After a snapshot change all loaded folders are dropped and the expanded set kept; every expanded folder whose parent is loaded is read at once, with no concurrency bound, each a separate CLI child process.",
+      "impact": "Unbounded fan-out over a caller-sized set (async-patterns.mdc Rule 3; off a hot path, so minor): a rebuild with many expanded sibling folders spawns that many concurrent CLI processes.",
+      "suggested_fix": "Cap concurrent tree reads in useMetaprojectTree.read (e.g. 4) with a small queue.",
+      "evidence": "slice-01 MetaprojectTree.tsx unread effect; useMetaprojectTree.ts snapshot reset keeps `expanded` and empties `folders`.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const [, render] = useReducer((value: number) => value + 1, 0);",
+      "problem": "Tree state is published by forcing a render of the Explorer that owns the hook, so each expand/collapse, page arrival or setHandled re-renders the whole Explorer and all visible tree rows (rows not memoized).",
+      "impact": "Extra VDOM work per tree change; Explorer's heavy derivations are memoized, so no measured cost.",
+      "suggested_fix": "If needed later, move tree state into an external store subscribed only by MetaprojectTree and memoize rows.",
+      "evidence": "slice-01 useMetaprojectTree.ts; keryx ctx rg useMemo in MetaprojectView.tsx/RelationshipGraph.tsx.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "scrollRequest.current = selected.kind === \"module\" ? `d:${selected.path}` : `n:${selected.id}`;",
+      "problem": "For a symbol selection the tree never renders an `n:<symbolId>` row, so the scroll request stays set and the no-deps useLayoutEffect re-queries all [data-row] elements on every render until another reveal overwrites it.",
+      "impact": "One DOM query per render; negligible cost, but an unreachable request.",
+      "suggested_fix": "Set no scroll request for symbols (or scroll to the containing file row when known).",
+      "evidence": "slice-01 MetaprojectTree.tsx revealSteps (symbol yields only folder steps) and the useLayoutEffect.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+Routing audit: graph_used: payload layers (affected/relatedTests) read, no extra gdgraph call — not needed for perf scope; wiki_used: not-relevant (no wiki entries in layers); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

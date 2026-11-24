@@ -1,0 +1,98 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 adds the read-only v2 `tree` action to the shared explorer contract and the v2 reader, extracts the search paging into a reusable `offsetPage`, and adds Desktop transport/view tests and the guide section. Dependency direction is sound: the new types live in the shared contract module that Desktop already imports in 11 non-test files (an established pattern, not new coupling); the reader answers `tree` from the same snapshot-bound model and cursor scheme as `search`, without calling `git status` freshness, as its own comment requires; capabilities grow while Desktop's required-action list stays at six. One minor coupling: the wiki group key rule for page-less pages is defined privately in core and re-derived by hand in Desktop's reveal logic. One info: core now formats a display label for wiki groups while Desktop owns every other display label.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "const key = node.pageType ?? WIKI_UNTYPED_GROUP;",
+      "problem": "The wiki tree's grouping rule (a page's group key is its pageType, or the private constant `WIKI_UNTYPED_GROUP = \"other\"` when absent) is part of the tree contract that clients depend on to build reveal paths, but it is not exported from the shared contract module. Desktop re-implements it independently in `apps/desktop/src/metaproject/MetaprojectTree.tsx` revealSteps: `const group = node.pageType || \"other\";` (a hand-copied literal, and `||` where core uses `??`). Cross-module coupling on an unpublished rule.",
+      "impact": "If core renames the untyped group or changes the grouping key, Desktop's 'selection made elsewhere reveals its path' silently stops finding the group (reveal ends with not-found, no error). The `??`/`||` divergence would also split an empty-string pageType between the two sides; today `metaproject-explorer.ts` always sets pageType from the wiki folder type, so no concrete defect is triggered now — hence minor.",
+      "suggested_fix": "Export the rule from `src/integrations/metaproject-explorer-contract.ts` (e.g. `export const METAPROJECT_WIKI_UNTYPED_GROUP = \"other\"; export function metaprojectWikiGroupKey(node: MetaprojectNode): string { return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP; }`) and use it in both `wikiTree` (metaproject-explorer-v2.ts) and `revealSteps` (MetaprojectTree.tsx), which already imports the contract module.",
+      "evidence": "Slice-02 diff, metaproject-explorer-v2.ts hunk @@ 71,177: `const WIKI_UNTYPED_GROUP = \"other\";` (module-private) and `const key = node.pageType ?? WIKI_UNTYPED_GROUP;`. Context read: apps/desktop/src/metaproject/MetaprojectTree.tsx:58 `const group = node.pageType || \"other\";`. `keryx ctx rg \"pageType\" apps/desktop/src --glob '!*.test.*'` shows that single Desktop re-derivation; `keryx ctx rg pageType src/integrations` shows the single core derivation at metaproject-explorer-v2.ts:145.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/integrations/metaproject-explorer-v2.ts:145",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx:58"
+        ],
+        "enumeration_method": "keryx ctx rg \"pageType\" over apps/desktop/src (non-test) and src/integrations + src/wiki; only these two sites derive a wiki tree group key"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "function wikiGroupName(key: string): string {",
+      "problem": "The core reader now produces a human-readable display label for wiki groups (`domain-model` -> `Domain model`) in the transport response, while Desktop owns every other display label for the explorer (`apps/desktop/src/metaproject/labels.ts`: NODE_KIND_LABELS, RELATIONSHIP_KIND_LABELS). Presentation wording is split across the CLI/Desktop boundary.",
+      "impact": "No defect. Changing a group's wording, or localising it, now needs a CLI release rather than a Desktop change, and an older CLI keeps its labels. Opinion without a named rule violation, hence info.",
+      "suggested_fix": "Optional: keep `name` in the contract for other clients, but let Desktop label groups from `key` via labels.ts (falling back to `name`), so Desktop wording stays in one place.",
+      "evidence": "Slice-02 diff, metaproject-explorer-v2.ts hunk @@ 71,177 (`wikiGroupName`) and the AC1 test expecting `group:domain-model:Domain model:1`; context read of apps/desktop/src/metaproject/labels.ts.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1612 lines, two reads)", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: explicit-hash-range, slice-02 only
+- Stack detected: generic-ts core (Bun) + React Desktop (hooks, no MobX in this slice)
+
+### Summary
+The `tree` action is added along the existing seams: types and request parsing in the shared contract, computation in the v2 reader behind the same snapshot and cursor checks as `search`, and paging deduplicated into `offsetPage`. Desktop learns `tree` from capabilities without raising its required-action set. No layer or dependency-direction violation in this slice.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. Desktop importing `src/integrations/metaproject-explorer-contract` is the established pattern (11 non-test Desktop files already do).
+
+### Module Boundary Violations
+- [F-001] minor — the wiki group-key rule (`pageType ?? "other"`) is private to core and hand-copied in Desktop's `revealSteps` (`pageType || "other"`). Export one helper from the contract and use it on both sides.
+
+### Design Pattern Misuse
+None detected. `offsetPage` is a clean extraction of the search pager, reused by `tree`.
+
+### Dependency Inversion
+None detected. Tests inject `requestTree`/`negotiate` via props.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React-side component files are outside this slice.
+
+### Questions
+- [F-002] info — should wiki group display names come from the CLI (`wikiGroupName`) or from Desktop's `labels.ts`, which owns every other explorer label?
+
+### Not verified / not read
+- Not read: `## Severity (canonical)` in review-orchestrator/SKILL.md, SKILL.detail.md, and `.metaproject/rules/*/activity/review.mdc`. The severities follow this reviewer's own mapping table (cross-module coupling = minor; opinion = info).
+- Rust transport and the Desktop component and hook sources are in other slices. I read `MetaprojectTree.tsx` and `labels.ts` for context only.
+- History (`git log`/`blame`) not consulted.
+- `gdgraph affected` not run. The graph layer in the payload was used as given.
+- No commands executed beyond `keryx ctx rg`/`keryx ctx read`.
+
+Routing audit: graph_used: payload layers only (not-relevant beyond that), wiki_used: no (not-relevant, the contract is self-describing in the diff), ctx_used: yes, raw_rg_used: no.

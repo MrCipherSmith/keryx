@@ -7,7 +7,7 @@ import { OpenSpecReadError, normalizeOpenSpecSearchText, readOpenSpec, type Open
 import {
   METAPROJECT_CAPABILITIES, METAPROJECT_EDGE_LIMIT, METAPROJECT_NODE_LIMIT, METAPROJECT_PAGE_SIZE_V2,
   METAPROJECT_RESPONSE_BYTES_V2, METAPROJECT_SCHEMA_V2, METAPROJECT_SCOPES, MetaprojectRequestError,
-  isMetaprojectRelativePath, isOpenSpecKind, type MetaprojectEdge, type MetaprojectEdgeEvidence,
+  isMetaprojectRelativePath, isOpenSpecKind, metaprojectWikiGroupKey, type MetaprojectEdge, type MetaprojectEdgeEvidence,
   type MetaprojectHitV2, type MetaprojectNode, type MetaprojectOpenSpecState, type MetaprojectProjection,
   type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectTreeEntry,
   type MetaprojectTreeV2, type MetaprojectV2Response,
@@ -29,8 +29,6 @@ const MAX_DETAIL_RELATIONSHIPS = 40;
 const CATALOG_METADATA_BYTES = 128 * 1024;
 const SEARCH_ITEMS_BYTES = 900 * 1024;
 const TREE_ITEMS_BYTES = 900 * 1024;
-/** Wiki pages without a page type are grouped under this key. */
-const WIKI_UNTYPED_GROUP = "other";
 const MAX_LEGACY_HITS_PER_SCOPE = 12_000;
 
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value));
@@ -142,8 +140,10 @@ function wikiTree(nodes: readonly MetaprojectNode[], parent?: string): Metaproje
   const groups = new Map<string, MetaprojectNode[]>();
   for (const node of nodes) {
     if (node.kind !== "wiki") continue;
-    const key = node.pageType ?? WIKI_UNTYPED_GROUP;
-    groups.set(key, [...groups.get(key) ?? [], node]);
+    const key = metaprojectWikiGroupKey(node);
+    const group = groups.get(key);
+    if (group) group.push(node);
+    else groups.set(key, [node]);
   }
   if (parent === undefined) {
     return [...groups].map(([key, pages]) => ({ type: "group" as const, key, name: wikiGroupName(key), pages: pages.length }))

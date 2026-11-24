@@ -1,0 +1,51 @@
+STATUS: DONE
+
+## Security Review — review-security-code, wave 2, round 1 (PR 1301, flow 518)
+
+### Scope
+- Branch: feat/desktop-metaproject-sidebar-tree
+- Base / merge-base: a5d1ab236fe85dee62a758a19390049dde4eb7f9; head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a
+- Scope mode: diff (supplied slice text; diff not rebuilt)
+- Slice read in full: slice-02 (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, docs/guides/desktop-metaproject.md, metaproject-explorer-contract.ts, metaproject-explorer-v2.ts, metaproject-explorer-tree.test.ts)
+- Context read outside the slice: src/integrations/metaproject-explorer-v2.ts:450-473 (entry point of the v2 reader), the isMetaprojectRelativePath / safeGraphNode call sites (keryx ctx rg).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Checked and found clean
+- Input validation at the boundary: `tree` in parseV2 uses an exact key allowlist (action, version, expectedSnapshotId, scope, parent, cursor), a closed scope enum, `expectedSnapshotId` as SHA-256 hex, a graph `parent` through isMetaprojectRelativePath (rejects absolute, drive-letter, backslash, control chars, empty, `.` and `..` segments, >4096 chars), a wiki `parent` and `cursor` length-bounded. Tests cover `/src`, `../outside`, `src/../outside`, `src/`, `C:/src`, wrong types and extra keys.
+- Path traversal: the `tree` action never touches the filesystem with `parent`. graphTree and wikiTree work only over the in-memory graph model, and that model's nodes are already filtered by safeGraphNode at metaprojectExplorerV2 (metaproject-explorer-v2.ts:460), so a hostile nodes.jsonl path such as `../x` cannot reach a tree answer. The Desktop validator also refuses a folder path that escapes and a module whose path differs from its folder (platform/metaproject.test.ts "rejects malformed tree pages").
+- Wiki `parent` is used only as a Map key (no prototype-pollution exposure: Map, not object), and is echoed back only in the `parent` field.
+- Cursor integrity: tree cursors reuse cursorValue (strict base64url round-trip, 3-tuple, SHA-256 snapshot, key bound to hash(["tree", scope, parent]), positive safe-integer offset); offsetPage refuses out-of-range offsets. Cross-parent and cross-scope cursors answer invalid-input; another snapshot answers stale-snapshot (tests present).
+- Resource bounds / DoS: pages capped at METAPROJECT_PAGE_SIZE_V2 (100) and TREE_ITEMS_BYTES (900 KiB), whole response capped at METAPROJECT_RESPONSE_BYTES_V2 (1 MiB). Per-request work is linear in the graph's node count for the graph scope; wikiTree's per-group array spread is quadratic in pages per group, which is a performance concern for the performance lens, not an attacker vector (the input is the local checkout's own wiki).
+- Error disclosure: not-found and invalid-input messages are fixed strings; no path, parent or internal detail is echoed; non-typed errors collapse to source-unavailable.
+- Injection (SQL, command, template, eval), secrets, crypto, auth/IDOR, CSRF, open redirect: not applicable to this slice (local read-only CLI action and its tests; no execution, no secrets, no network surface).
+- React patterns in the slice's test files: no dangerouslySetInnerHTML, eval or storage of sensitive data. MetaprojectTree.tsx itself is not in slice-02 and was not reviewed here.
+- Docs: no secrets or personal data.
+
+### Not verified
+- Rust `RequestV2::Tree` validation (apps/desktop/src-tauri/src/metaproject.rs) and the Desktop components (MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts tree validator body) are outside slice-02 and were not reviewed; platform/metaproject.ts was read only through the rg match lines.
+- No commands executed (exec_budget_s = 0); git history not read.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-02 (core tree action, contract, tests, docs): no security findings. The tree parent is validated as a checkout-relative path (graph) or a bounded id (wiki), is never used for filesystem access, and the tree reads only nodes already filtered by safeGraphNode; cursors are snapshot- and request-bound; pages and responses are byte-capped; errors are fixed strings.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: payload layers block supplied the affected set; one entry point read directly), wiki_used: no (not-relevant: contract intent stated in the diff and plan), ctx_used: yes (keryx ctx rg, keryx ctx read), raw_rg_used: no.

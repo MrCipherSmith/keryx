@@ -1,0 +1,366 @@
+[
+  {
+    "id": "T1",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (!model.graphPresent) return { entries: [], partial: true };",
+    "replacement": "if (false) return { entries: [], partial: true };",
+    "kind": "behavior"
+  },
+  {
+    "id": "T2",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();",
+    "replacement": "if (!folders.size && !files.length) throw notFoundParent();",
+    "kind": "behavior"
+  },
+  {
+    "id": "T3",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();",
+    "replacement": "if (false) throw notFoundParent();",
+    "kind": "behavior"
+  },
+  {
+    "id": "T4",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (node.kind !== \"file\" || !node.path.startsWith(prefix)) continue;",
+    "replacement": "if (node.kind === \"module\" || !node.path.startsWith(prefix)) continue;",
+    "kind": "behavior"
+  },
+  {
+    "id": "T5",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "files.sort((a, b) => compareText(a.path, b.path))",
+    "replacement": "files",
+    "kind": "behavior"
+  },
+  {
+    "id": "T6",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "[...folders].sort(([a], [b]) => compareText(a, b))",
+    "replacement": "[...folders]",
+    "kind": "behavior"
+  },
+  {
+    "id": "T7",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "const key = node.pageType ?? WIKI_UNTYPED_GROUP;",
+    "replacement": "const key = node.pageType ?? \"untyped\";",
+    "kind": "behavior"
+  },
+  {
+    "id": "T8",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": ".sort((a, b) => compareText(a.name, b.name) || compareText(a.key, b.key))",
+    "replacement": ".slice()",
+    "kind": "behavior"
+  },
+  {
+    "id": "T9",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "pages.sort((a, b) => compareText(a.title, b.title) || compareText(a.path, b.path))",
+    "replacement": "pages",
+    "kind": "behavior"
+  },
+  {
+    "id": "T10",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (typeof offset !== \"number\" || (offset > 0 && offset >= items.length)) {",
+    "replacement": "if (typeof offset !== \"number\") {",
+    "kind": "behavior"
+  },
+  {
+    "id": "T11",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (!page.length && offset < items.length) throw",
+    "replacement": "if (false) throw",
+    "kind": "behavior"
+  },
+  {
+    "id": "T12",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "const key = hash([\"tree\", scope, parent ?? null]);",
+    "replacement": "const key = hash([\"tree\", scope]);",
+    "kind": "behavior"
+  },
+  {
+    "id": "T13",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "parent: parent ?? null, entries: page",
+    "replacement": "parent: null, entries: page",
+    "kind": "behavior"
+  },
+  {
+    "id": "T14",
+    "file": "src/integrations/metaproject-explorer-v2.ts",
+    "anchor": "if (node.kind !== \"wiki\") continue;",
+    "replacement": "if (false) continue;",
+    "kind": "behavior"
+  },
+  {
+    "id": "C1",
+    "file": "src/integrations/metaproject-explorer-contract.ts",
+    "anchor": "return scope === \"graph\" ? isMetaprojectRelativePath(value) : validId(value);",
+    "replacement": "return validId(value);",
+    "kind": "behavior"
+  },
+  {
+    "id": "C2",
+    "file": "src/integrations/metaproject-explorer-contract.ts",
+    "anchor": "return scope === \"graph\" ? isMetaprojectRelativePath(value) : validId(value);",
+    "replacement": "return isMetaprojectRelativePath(value);",
+    "kind": "behavior"
+  },
+  {
+    "id": "C3",
+    "file": "src/integrations/metaproject-explorer-contract.ts",
+    "anchor": "\"openspec-history\", \"tree\",",
+    "replacement": "\"openspec-history\",",
+    "kind": "behavior"
+  },
+  {
+    "id": "C4",
+    "file": "src/integrations/metaproject-explorer-contract.ts",
+    "anchor": "&& (parent === undefined || validTreeParent(scope, parent))",
+    "replacement": "&& true",
+    "kind": "behavior"
+  },
+  {
+    "id": "P1",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "scope === \"wiki\" && parent === null && typeof value.key",
+    "replacement": "scope === \"wiki\" && typeof value.key",
+    "kind": "behavior"
+  },
+  {
+    "id": "P2",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "&& value.name.length > 0 && positiveInteger(value.files)",
+    "replacement": "&& positiveInteger(value.files)",
+    "kind": "behavior"
+  },
+  {
+    "id": "P3",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "&& value.module.kind === \"module\" && value.module.path === value.path",
+    "replacement": "&& value.module.kind === \"module\"",
+    "kind": "behavior"
+  },
+  {
+    "id": "P4",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "value.node.kind === (scope === \"graph\" ? \"file\" : \"wiki\")",
+    "replacement": "true",
+    "kind": "behavior"
+  },
+  {
+    "id": "P5",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "typeof parent === \"string\" && parent.length > 0 ? parent",
+    "replacement": "typeof parent === \"string\" ? parent",
+    "kind": "behavior"
+  },
+  {
+    "id": "P6",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "supportsTree: response.actions.includes(\"tree\")",
+    "replacement": "supportsTree: true",
+    "kind": "behavior"
+  },
+  {
+    "id": "P7",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "&& response.scope === request.scope && response.parent === (request.parent ?? null)",
+    "replacement": "&& true",
+    "kind": "behavior"
+  },
+  {
+    "id": "P8",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "anchor": "supportsTree: response.actions.includes(\"tree\")",
+    "replacement": "supportsTree: false",
+    "kind": "behavior"
+  },
+  {
+    "id": "U1",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "if (page.snapshotId !== pinned) throw",
+    "replacement": "if (false) throw",
+    "kind": "behavior"
+  },
+  {
+    "id": "U2",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();",
+    "replacement": ";",
+    "kind": "behavior"
+  },
+  {
+    "id": "U3",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "then(page => {\n      if (!current()) return;",
+    "replacement": "then(page => {",
+    "kind": "behavior"
+  },
+  {
+    "id": "U4",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "catch(cause => {\n      if (!current()) return;",
+    "replacement": "catch(cause => {",
+    "kind": "behavior"
+  },
+  {
+    "id": "U5",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "if (!cursor && parent !== TREE_ROOT && cause instanceof",
+    "replacement": "if (parent !== TREE_ROOT && cause instanceof",
+    "kind": "behavior"
+  },
+  {
+    "id": "U6",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "const seen = new Set(base.entries.map(entryKey));",
+    "replacement": "const seen = new Set<string>();",
+    "kind": "behavior"
+  },
+  {
+    "id": "U7",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "partial: base.partial || page.partial,",
+    "replacement": "partial: page.partial,",
+    "kind": "behavior"
+  },
+  {
+    "id": "U8",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "if (!gone.length) return tree;",
+    "replacement": "return tree;",
+    "kind": "behavior"
+  },
+  {
+    "id": "U9",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "if (state.current[scope].folders.has(parent)) return;",
+    "replacement": "if (false) return;",
+    "kind": "behavior"
+  },
+  {
+    "id": "U10",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": " || folder.more?.status === \"loading\") return;",
+    "replacement": ") return;",
+    "kind": "behavior"
+  },
+  {
+    "id": "U11",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "expanded: scope.expanded, handled: scope.handled",
+    "replacement": "handled: scope.handled",
+    "kind": "behavior"
+  },
+  {
+    "id": "U12",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "anchor": "expanded: scope.expanded, handled: scope.handled",
+    "replacement": "expanded: scope.expanded",
+    "kind": "behavior"
+  },
+  {
+    "id": "M1",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "case \"ArrowUp\": moveTo(rows[index - 1]); break;",
+    "replacement": "case \"ArrowUp\": break;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M2",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "if (folder.nextCursor && folder.more?.status !== \"failed\")",
+    "replacement": "if (folder.nextCursor)",
+    "kind": "behavior"
+  },
+  {
+    "id": "M3",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "if (folder.status === \"failed\") { model.setHandled(scope, selection); return; }",
+    "replacement": "if (folder.status === \"failed\") { return; }",
+    "kind": "behavior"
+  },
+  {
+    "id": "M4",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "\"container\" in step && !(selected.kind === \"module\" && step.container === selected.path)",
+    "replacement": "\"container\" in step",
+    "kind": "behavior"
+  },
+  {
+    "id": "M5",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "|| tree.handled === selection) return;",
+    "replacement": ") return;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M6",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "entry.module && key !== \" \"",
+    "replacement": "entry.module",
+    "kind": "behavior"
+  },
+  {
+    "id": "M7",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "else if (rows[index + 1]?.level === current.level + 1)",
+    "replacement": "else",
+    "kind": "behavior"
+  },
+  {
+    "id": "M8",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "const setsize = folder.nextCursor ? -1 : folder.entries.length;",
+    "replacement": "const setsize = folder.entries.length;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M9",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "root.partial ? \"The graph is not built yet. Rebuild the graph to browse its files.\" : \"No indexed files.\"",
+    "replacement": "\"The graph is not built yet. Rebuild the graph to browse its files.\"",
+    "kind": "presentation"
+  },
+  {
+    "id": "M10",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "row.scrollIntoView?.({ block: \"nearest\" });",
+    "replacement": ";",
+    "kind": "behavior"
+  },
+  {
+    "id": "M11",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "if (!folder) unread.push(parent);",
+    "replacement": ";",
+    "kind": "behavior"
+  },
+  {
+    "id": "M12",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "anchor": "event.preventDefault();",
+    "replacement": ";",
+    "kind": "behavior"
+  },
+  {
+    "id": "W1",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "anchor": "protocol === 2 && supportsTree && !searchQuery",
+    "replacement": "protocol === 2 && !searchQuery",
+    "kind": "behavior"
+  },
+  {
+    "id": "W2",
+    "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "anchor": "selected={route.selection ? activeNode : undefined}",
+    "replacement": "selected={activeNode}",
+    "kind": "behavior"
+  }
+]

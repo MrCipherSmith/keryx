@@ -1,0 +1,68 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "PR #1301 body has no checkbox checklist; each stated claim was worked as a row against slice-02 (core contract/v2, core tree tests, Desktop tree/view/platform tests, Desktop Metaproject guide). Every claim that slice-02 can settle agrees with the diff. One minor documentation gap: two unchanged sentences (guide and CLI reference) and one troubleshooting row still say Desktop requires/uses every action it uses, while Desktop now uses `tree` optionally. One info: the CLI reference's metaproject-explorer section does not describe the new `tree` request.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": null,
+      "quote": "serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer",
+      "problem": "PR body claims: \"The handshake still requires only the six existing actions, so an older CLI keeps working; Desktop learns `supportsTree` from the probe.\" The diff confirms Desktop now USES `tree` without requiring it (apps/desktop/src/platform/metaproject.test.ts: \"a CLI offering only the six actions Desktop always sends negotiates and reports no tree\"; MetaprojectView.tsx:752 `const treeScope = protocol === 2 && supportsTree && ...`). Three unchanged doc sentences still equate 'accepted' with 'lists every action it uses': desktop-metaproject.md:309 \"Desktop accepts a CLI that lists every action it uses\", desktop-metaproject.md:332 troubleshooting row \"The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses.\", and cli-reference.md:8301 \"Desktop accepts any CLI whose list includes the ones it uses.\"",
+      "impact": "A reader of these lines concludes that a CLI lacking `tree` (an action this Desktop now uses) is refused with 'invalid Metaproject capabilities', which contradicts the new guide text (\"With an older CLI, the list stays the flat catalog list\") the same PR added. The code is correct; the cost is a reader who trusts the stale wording.",
+      "suggested_fix": "Reword the three sites from 'every action it uses' to 'every action it requires' (the six in METAPROJECT_REQUIRED_ACTIONS), and note that Desktop uses optional actions such as `tree` only when the CLI lists them.",
+      "evidence": "Found with `keryx ctx rg -n 'every action it uses|action this Desktop uses|includes the ones it uses' docs README.md` (3 matches: docs/docs/guides/desktop-metaproject.md:309, :332; docs/docs/cli-reference.md:8301). None of the three lines is in the diff; slice-02 hunk @@ 308,336 @@ of the guide shows lines 309 and 332 as context only.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pre-existing",
+      "class_scope": {
+        "sites": ["docs/docs/guides/desktop-metaproject.md:309", "docs/docs/guides/desktop-metaproject.md:332", "docs/docs/cli-reference.md:8301"],
+        "enumeration_method": "keryx ctx rg for the three phrasings of 'accepts a CLI listing the actions it uses' across docs and README.md; 3 matches"
+      }
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop.",
+      "problem": "PR body: \"Core: new read-only v2 action `tree` (`scope: graph | wiki`, optional `parent`, paged with snapshot-bound cursors ...). Listed in `capabilities`\". The guide the diff edits links readers to this section as the \"CLI response contract\" (desktop-metaproject.md, context line \"[CLI response contract](../cli-reference.md#metaproject-explorer)\"), but the section names no `tree` request or response. The section was already non-exhaustive (it omits openspec-list/openspec-history too), so this is a completeness note, not a contradiction.",
+      "impact": "A third-party client author reading the CLI reference cannot learn the `tree` request shape (scope, parent, cursor) or its not-found/stale-snapshot/invalid-input answers without reading src/integrations/metaproject-explorer-contract.ts.",
+      "suggested_fix": "Optionally add one sentence and an example `{\"version\":2,\"action\":\"tree\",\"scope\":\"graph\",\"parent\":\"src\"}` to the metaproject-explorer section.",
+      "evidence": "docs/docs/cli-reference.md:8285-8301 read in full; `keryx ctx rg -n 'openspec-history' docs README.md src/integrations` shows no user-facing doc enumerating v2 actions (only docs/requirements/keryx-metaproject-openspec/specification.md:101-107, a requirements table for the OpenSpec feature, judged merely related).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "location_class": "pre-existing",
+      "publication": "question"
+    }
+  ],
+  "slices": [{"id": "slice-02", "status": "DONE", "coverage": "read in full, 1611 lines"}],
+  "unread_inputs": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+## Checklist form (PR body claims; the body carries no checkbox checklist)
+
+| Box or claim (quoted) | State | What the diff shows | Expectation / verdict |
+|---|---|---|---|
+| "Without a search, the Metaproject sidebar is now a tree ... in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module node); in **Wiki**, pages grouped by page type." | claim | metaproject-explorer-v2.ts graphTree (folders sorted then files, `files: count`, `module`) and wikiTree (groups by `pageType ?? "other"`); tree test AC1 cases | Agrees |
+| "Folders load on demand, so the whole project is reachable." | claim | `parent` paging + offsetPage cursors; test "chains pages of at most the page size to the full child list" (135 entries over 2 pages, no dup) | Agrees |
+| "Core: new read-only v2 action `tree` (`scope: graph \| wiki`, optional `parent`, paged with snapshot-bound cursors, `not-found` / `stale-snapshot` / `invalid-input`)" | claim | contract.ts `case "tree"` parse; v2.ts `tree()` with `cursorValue(this.base.snapshotId, key, ...)`; AC2 tests | Agrees |
+| "Listed in `capabilities`; v1 unchanged." | claim | contract.ts METAPROJECT_CAPABILITIES adds `"tree"`; test "lists tree among the capabilities and leaves v1 parsing and responses unchanged" | Agrees |
+| "Transport: Rust `RequestV2::Tree` with validation and tests." | claim | Rust file is in slice-01, not this slice | Not settled here (slice-01's reviewer) |
+| "The handshake still requires only the six existing actions ... Desktop learns `supportsTree` from the probe." | claim | platform/metaproject.test.ts "Metaproject tree capability" describe | Agrees in TS; docs wording stale -> PC-001 |
+| "Desktop: `MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space), `useMetaprojectTree` (... retry per folder, Show more, snapshot changes), mounted ... only with no query and a CLI that offers `tree`." | claim | MetaprojectTree.dom.test.tsx keyboard/retry/Show-more tests; MetaprojectView.dom.test.tsx "a CLI without tree ... keeps the flat list" and "tree shows without a query and flat results with one" | Agrees (components themselves in slice-01; MetaprojectTree.tsx:145-190 and MetaprojectView.tsx:752-758 read for context) |
+| "A selection made elsewhere reveals its path; the item shown by default on first open does not." | claim | View test "the selection shown by default reveals nothing" and "a selection made elsewhere expands its ancestors" | Agrees |
+| "Docs: the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour." | claim | desktop-metaproject.md new "Browse the tree" section, key table, older-CLI paragraph and 3 troubleshooting rows; strings checked against MetaprojectTree.tsx (`Could not load.`, `Retry`, `Show more`, `Loading…`, "The graph is not built yet. Rebuild the graph to browse its files.") and MetaprojectView.tsx (`Files ·`, `Wiki ·`, `Catalog ·`) | Agrees; untouched sibling text stale -> PC-001 |
+| Verification: "`bun test src/integrations` 443 pass; lint/typecheck exit 0; Desktop tsc exit 0; `bun test src` 998 pass; docs:check exit 0" | claim | Orchestrator re-ran these at head with the same counts; verify-tests-to-run-1.txt exit 0 (70 + 19 pass) | Agrees |
+| "`keryx health run` PASS" | claim | Not re-run (exec_budget_s 0) | Unverified, not filed |
+| "Not run locally: the Rust tests ... this PR's CI is the first run." / "No native walkthrough of the packaged app yet." | disclosure | pr-context.md CI: "desktop check: pending" | Honest disclosure; consistent |
+
+Not verified: Rust transport claim (slice-01), `keryx health run`, CI results (pending at collection). Commands run: keryx ctx rg/read only; no files written other than this one.
