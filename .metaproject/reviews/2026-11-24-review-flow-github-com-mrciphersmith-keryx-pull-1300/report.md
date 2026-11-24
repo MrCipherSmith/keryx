@@ -1,8 +1,13 @@
-Reviewed `d7b0f7058e919a5880319588ad95395b7ff66153` against `88e3faba9a1732f45a4ff7200588832e8b83f121` · round 3 (fix range of round 2) · PR #1300.
+Partial review: pr-files waived by the operator: Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge
+Partial review: quotes-located waived by the operator: Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge
+
+Reviewed `d7b0f7058e919a5880319588ad95395b7ff66153` against `88e3faba9a1732f45a4ff7200588832e8b83f121` · round 3 (fix range of round 2) · PR #1300. — the PR has since moved to `6449683` and merged as `2f3cd17ee`.
 
 **Changes requested — 0 Blocker, 3 Major, 18 Minor, 12 info.** All three majors confirmed by execution (verifications.json).
 
 Evidence level: ran — round tests (verify-tests-to-run-1: root 2722 pass / 1 unrelated timeout; verify-tests-to-run-2: that test 6/0 alone, Desktop 1051/0), verifier repros for FE-R3-001/FE-R3-002/TP-R3-008, testing-practices mutation passes in scratch worktrees (80 mutants).
+Plan estimate vs actual: plan 14-35 min (27 dispatches); actual 22 min from first to last raw reply (30 replies); pauses over 10 min: 0
+опциональные роли не запускались: review-clean-code, review-style (включить: --style или --with-role <роль> у `keryx review start|required`, либо reviewRoles в routing.config.json)
 
 Not run: regression and blast radius (the round plan had no tests-to-run/blast radius for the fix range); review-layout measurements in the running app.
 

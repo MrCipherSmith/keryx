@@ -1,4 +1,4 @@
-Reviewed `6a2a3031f740833e60b82856a9a266b5ffab5e10` against `b147408a8748cdbd8506b371adb5957947e4477a` · round 1 (wave 1 only, operator override) · PR #1300.
+Reviewed `6a2a3031f740833e60b82856a9a266b5ffab5e10` against `b147408a8748cdbd8506b371adb5957947e4477a` · round 1 (wave 1 only, operator override) · PR #1300. — the PR has since moved to `6449683` and merged as `2f3cd17ee`.
 
 **Changes requested — 2 Blocker, 6 Major, 9 Minor, 15 info.**
 

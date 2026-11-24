@@ -1,8 +1,12 @@
-Reviewed `4cb6c43ef1532ed245e5617cf74ee55788b91d38` against `d7b0f7058e919a5880319588ad95395b7ff66153` · round 4 (fix range of round 3) · PR #1300.
+Partial review: pr-files waived by the operator: Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge
+Partial review: quotes-located waived by the operator: Rounds 1-4 reviewed only their fix range by design; the dispositions are recorded after the merge
+
+Reviewed `4cb6c43ef1532ed245e5617cf74ee55788b91d38` against `d7b0f7058e919a5880319588ad95395b7ff66153` · round 4 (fix range of round 3) · PR #1300. — the PR has since moved to `6449683` and merged as `2f3cd17ee`.
 
 **Changes requested — 0 Blocker, 2 Major, 21 Minor, 15 info.** RG-R4-001 confirmed by execution (verifications.json); TP-R4-006 confirmed by execution too.
 
 Evidence level: ran — round tests (verify-tests-to-run-1: root focused 68/0, Desktop 1070/0), verifier repro for RG-R4-001, testing-practices mutation passes in scratch worktrees (67 mutants).
+Plan estimate vs actual: plan 20-50 min (40 dispatches); actual 32 min from first to last raw reply (40 replies); pauses over 10 min: 1 (11 min), 21 min without them
 
 Not run: layout measurement in the running app; full root suite.
 

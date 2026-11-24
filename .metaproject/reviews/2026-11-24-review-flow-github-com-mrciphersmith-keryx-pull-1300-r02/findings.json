@@ -31,6 +31,10 @@
       "method": "execution",
       "evidence": "Scratch script (bun run <scratch>/check.ts, scratch dir removed afterwards) at head 4cb6c43ef called src/integrations/issues-board.ts listIssuePage({viewer, api: <throws if reached>}, {source: \"repository\"}, <temp dir>) where `git -C <temp dir> rev-parse --git-dir` printed 'fatal: not a git repository'. Output: emitted: \"configuration: Open a Git project with a GitHub.com remote.\" (thrown by projectRepository -> reviewRepositories before any network call); head repositoryUnavailable(reason, true) from apps/desktop/src/issues/useIssueCollection.ts: null; base test /(?:^|\\b)configuration:/i (git show d7b0f7058:apps/desktop/src/issues/IssuesBoard.tsx line 147): true. Head IssuesBoard.tsx:156 `const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;` gates the 'Show issues assigned to me' button (line 278), so the base offered the fallback for this reason and head does not. Not executed: the Desktop render itself and the Tauri pass-through of the CLI stderr (traced by the finding, not re-run).",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
     }
   },
   {
@@ -64,6 +68,10 @@
       "method": "execution",
       "evidence": "Site: head 4cb6c43ef apps/desktop/src/test/app-navigation.fixture.tsx:320 `await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });` directly before line 321 assert 'No notice before keryx has saved the session'; the preceding waitFor (line 319) only waits for flagWrites() > 0. Scratch worktree (git worktree add --detach <scratch>/v4 4cb6c43ef, bun install --frozen-lockfile; removed afterwards). Baseline: bun test src/shell/ProjectNavigation.dom.test.tsx -> 4 pass, 0 fail. Mutant (apps/desktop/src/session/subjectBinding.ts apply() catch: `return; // not stored yet: tried again after its turn` -> `setTimeout(() => this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED), 40); return;`): 3 runs -> 4 pass, 0 fail each. Control (same notice raised synchronously): 3 pass, 1 fail, `AssertionError: No notice before keryx has saved the session` at fixture line 321. So the check catches only a notice inside the 20 ms window. Severity: .metaproject/rules/core/tdd-workflow.mdc Rule 6 'Never wait with a sleep or a fixed delay' and its table row 'Sleep or fixed delay for async work (Rule 6) | always | major' (exception only for fake timers advanced by the test; this is a real setTimeout); none of the four blocker shapes in review-orchestrator '## Severity (canonical)' applies, so major is within the rubric.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
     }
   },
   {
@@ -84,7 +92,11 @@
       "reported_line": null
     },
     "dedupe_key": "desktop-issues-fallback-decodes-configuration-category",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-001"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "AR-R4-002",
@@ -104,7 +116,11 @@
       "reported_line": null
     },
     "dedupe_key": "desktop-cli-reason-prefix-strip-duplicated",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-002"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "AR-R4-003",
@@ -124,7 +140,11 @@
       "reported_line": null
     },
     "dedupe_key": "desktop-session-flags-write-copies",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-003"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#AR-R4-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "CC4-001",
@@ -153,7 +173,11 @@
       ],
       "enumeration_method": "Read the single useEffect that consumes `focus` (ReviewBoard.tsx:496-521); every branch that writes focused.current."
     },
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-001"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "CC4-002",
@@ -183,7 +207,11 @@
       ],
       "enumeration_method": "keryx ctx rg 'FLAGS_LOCK_TIMING' src (non-test): every function that takes `timing` positionally; backfillSessionSubject (3 params) is under the threshold."
     },
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-002"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "CC4-003",
@@ -207,7 +235,11 @@
     },
     "dedupe_key": "file-lock-doc-createdir-throw",
     "blocking_merge": false,
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-003"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "CC4-004",
@@ -228,7 +260,11 @@
     },
     "dedupe_key": "issues-default-source-doc-per-account",
     "blocking_merge": false,
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-004"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "CC4-007",
@@ -250,7 +286,11 @@
     "dedupe_key": "bindIssueSubject-boolean-flag",
     "degradation_class": "debt",
     "evidence_kind": "base-diff",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-007"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#CC4-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "DG-R4-006",
@@ -279,7 +319,11 @@
     "dedupe_key": "flags-lock-sync-async-duplicated-rules",
     "degradation_class": "debt",
     "evidence_kind": "base-diff",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-006"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#DG-R4-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "PC-009",
@@ -307,7 +351,11 @@
       ],
       "enumeration_method": "keryx ctx rg -i '3 s|3 с|retry\"|ending in|locked by another' over implementation-plan.md, cli-reference.md, src/session/organize.ts and organize.test.ts, plus the payload PR body"
     },
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-009"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "PC-010",
@@ -326,7 +374,11 @@
       "method": "substring",
       "reported_line": null
     },
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-010"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#PC-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "ST-R4-004",
@@ -347,7 +399,11 @@
     },
     "dedupe_key": "pending-flow-links-settle-nested-ternary",
     "blocking_merge": false,
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-004"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#ST-R4-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-001",
@@ -368,7 +424,11 @@
     },
     "dedupe_key": "prworkrow-refocus-guards-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-001"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-002",
@@ -389,7 +449,11 @@
     },
     "dedupe_key": "reviewboard-focus-stale-arm-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-002"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-003",
@@ -410,7 +474,11 @@
     },
     "dedupe_key": "issuesboard-focus-guard-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-003"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-004",
@@ -431,7 +499,11 @@
     },
     "dedupe_key": "file-lock-nonce-failure-cleanup-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-004"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-007",
@@ -452,7 +524,11 @@
     },
     "dedupe_key": "app-work-row-refusal-shape-not-keryx",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-007"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-008",
@@ -473,7 +549,11 @@
     },
     "dedupe_key": "linkflow-refusal-reason-in-rpc-data-dropped",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-008"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-009",
@@ -494,7 +574,11 @@
     },
     "dedupe_key": "app-offer-linking-mapping-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-009"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "TP-R4-010",
@@ -515,7 +599,11 @@
     },
     "dedupe_key": "review-css-test-declarations-not-truncation",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-010"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "UX-R4-001",
@@ -543,7 +631,11 @@
       ],
       "enumeration_method": "keryx ctx rg \"pr-work-offer|aria-disabled\" apps/desktop/src — FlowOffer is the only renderer of .pr-work-offer and the only aria-disabled control in the work row"
     },
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-001"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#UX-R4-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   },
   {
     "id": "DG-R4-002",
@@ -896,6 +988,10 @@
     },
     "dedupe_key": "issue-open-lock-free-settled-read-unpinned",
     "evidence_kind": "probe",
-    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-011"
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02#TP-R4-011",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 22d7d167e (T24/T25/T26); .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md 'Review round 4 on PR #1300 and its fix round'; mutants in research-evidence/round4-fix-mutants-A.md and -B.md"
+    }
   }
 ]

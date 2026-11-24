@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "tracked": true,
+  "counts": {
+    "inScope": 37,
+    "covered": 37,
+    "omitted": 0,
+    "uncovered": 0
+  },
+  "omissionReasons": {},
+  "files": [
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T18.implement.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T19.implement.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/acp/types.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewProgress.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/session/useAcpSession.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "docs/docs/guides/desktop-issues.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/acp/shell-session-organize.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/commands/issues.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/commands/issues.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/integrations/issues-board.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/integrations/issues-github.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    },
+    {
+      "file": "src/session/organize.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-03"
+    }
+  ],
+  "omissions": [],
+  "waived": false
+}
