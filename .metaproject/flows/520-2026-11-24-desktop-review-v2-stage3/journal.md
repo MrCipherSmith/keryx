@@ -124,3 +124,5 @@
 - Found and fixed: an empty blast-radius.json left in the round 2 package by a refused recount broke `round-trip.test.ts` (every committed package must ingest).
 - Full backend `bun test src/review` + file-lock: 5535/5536, the one failure being that artifact; round-trip green after removing it. Desktop 155/155; root and Desktop tsc and eslint clean.
 - 2026-11-24T10:39:58.834Z - task-done: T10: review-orchestrator round on the branch
+- 2026-11-24T11:15:32.837Z - task-added: T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test
+- 2026-11-24T11:15:37.890Z - task-done: T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test

@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T10:39:58.834Z",
+  "updatedAt": "2026-11-24T11:15:37.890Z",
   "source": {
     "type": "description",
     "ref": null
@@ -354,6 +354,22 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 0e0520295; file-lock.reclaim.test.ts red before (1 fail) and green after (4/4); all 13 withFileLock caller test files pass; CI on 0e0520295 pending"
     }
   ],
   "history": [
@@ -599,6 +615,16 @@
       "at": "2026-11-24T10:39:58.834Z",
       "event": "task-done",
       "detail": "T10: review-orchestrator round on the branch"
+    },
+    {
+      "at": "2026-11-24T11:15:32.837Z",
+      "event": "task-added",
+      "detail": "T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test"
+    },
+    {
+      "at": "2026-11-24T11:15:37.890Z",
+      "event": "task-done",
+      "detail": "T18: Fix CI: stale-lock reclaim deleted a fresh lock that reused the stale lock's inode (Linux); identity now dev+ino+mtime+still stale; new in-place rewrite test"
     }
   ],
   "acKinds": {
