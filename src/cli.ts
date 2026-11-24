@@ -35,7 +35,6 @@
 // for those.
 // retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command
 
-import { applyProjectGithubAccount } from "./review/project-github-env";
 import { ensureSafeBunExec } from "./lib/safe-exec";
 
 // R1-01 / R2-01 / R2-07 (info): run as early as this module can — before
@@ -94,6 +93,7 @@ import {
   printCommandHelp,
   registerModelTurnPort,
   shouldInterceptHelp,
+  applyProjectGithubAccount,
 } from "./cli-registry";
 
 export {
