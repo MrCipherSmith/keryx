@@ -4,7 +4,7 @@
 
 import { githubPostReview } from "../flow/tracker/github";
 import { parseGhJson } from "./pr-comments";
-import type { PostResult, ReviewEvent } from "./publish";
+import type { HeadInPull, PostResult, ReviewEvent } from "./publish";
 
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/;
 
@@ -86,16 +86,20 @@ export async function githubFindPublished(ref: string, marker: string, gh: GhRun
 }
 
 /**
- * Whether `reviewed` is still in the pull request's history: GitHub reports `current` ahead of it. Diverged, behind,
- * identical or any failed read answers no, as Desktop's check does (desk-publication.ts reviewedHeadInPull).
+ * Whether `reviewed` is still in the pull request's history: GitHub reports `current` ahead of it (`yes`); diverged,
+ * behind or identical is `no`. A failed read is `unknown`, never `no`: it is not evidence of a force-push. A ref the
+ * compare API cannot address (a number, a branch, another host) is `skip`.
  */
-export async function githubReviewedHeadInPull(ref: string, reviewed: string, current: string, gh: GhRun = runGh): Promise<boolean> {
+export async function githubReviewedHeadInPull(ref: string, reviewed: string, current: string, gh: GhRun = runGh): Promise<HeadInPull> {
   const pr = pullRequestPath(ref);
-  if (pr === undefined || !/^[0-9a-f]{40}$/i.test(reviewed) || !/^[0-9a-f]{40}$/i.test(current)) return false;
+  if (pr === undefined) return "skip";
+  if (!/^[0-9a-f]{40}$/i.test(reviewed) || !/^[0-9a-f]{40}$/i.test(current)) return "unknown";
   try {
     const result = await gh(["api", "--hostname", "github.com", `repos/${pr.repo}/compare/${reviewed}...${current}?per_page=1`, "--jq", ".status"]);
-    return result.exitCode === 0 && result.stdout.trim() === "ahead";
+    const status = result.stdout.trim();
+    if (result.exitCode !== 0 || !["ahead", "behind", "diverged", "identical"].includes(status)) return "unknown";
+    return status === "ahead" ? "yes" : "no";
   } catch {
-    return false;
+    return "unknown";
   }
 }

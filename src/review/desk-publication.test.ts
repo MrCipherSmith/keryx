@@ -914,3 +914,17 @@ test("flow 521 round 3: a desk-attempt.json is trusted only with a UUID for the 
     expect(await readSessionAttempt(pkg)).toBeUndefined();
   }
 });
+
+test("flow 521 round 4: re-registering after the pull request was retargeted keeps the base the round was registered on", async () => {
+  const pkg = symbolicSessionPackage("session-retarget");
+  const first = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
+  if (!("record" in first)) throw new Error(first.skipped);
+  const again = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: "e".repeat(40) }) });
+  expect(again).toEqual({ record: first.record });
+  const store = new DeskRunStore();
+  try {
+    expect(store.byId(first.record.attemptId)?.run.baseSha).toBe(revision.baseSha);
+  } finally {
+    store.close();
+  }
+});

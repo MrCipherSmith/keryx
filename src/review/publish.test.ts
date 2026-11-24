@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { withFileLock } from "../lib/fs";
 import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
 import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
 import { quoteSha256 } from "./round-record";
@@ -439,11 +440,11 @@ describe("publishReview: round-3 fixes of the shared publication guard", () => {
     } };
   };
 
-  test("a round a later round of its Review follows is refused, as Desktop refuses it", async () => {
+  test("a round a later round of its Review follows is not published as is for a moved head, as Desktop refuses it", async () => {
     withHead();
     const io = posting("u");
-    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, laterRound: async () => 2 }))
-      .rejects.toThrow(/Round 2 of this Review already follows this one/);
+    await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, laterRound: async () => 2, reviewedHeadInPull: async () => "yes" }))
+      .rejects.toThrow(/Round 2 of this Review already follows this one, so it is not published as is/);
     expect(io.posts).toEqual([]);
   });
 
@@ -452,12 +453,58 @@ describe("publishReview: round-3 fixes of the shared publication guard", () => {
     const io = posting("u");
     const asked: string[] = [];
     await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) },
-      reviewedHeadInPull: async (_ref, reviewed, current) => (asked.push(`${reviewed.slice(0, 1)}..${current.slice(0, 1)}`), false) }))
+      reviewedHeadInPull: async (_ref, reviewed, current) => (asked.push(`${reviewed.slice(0, 1)}..${current.slice(0, 1)}`), "no" as const) }))
       .rejects.toThrow(/no longer in the pull request's history/);
     expect(asked).toEqual(["a..b"]);
     expect(io.posts).toEqual([]);
-    await publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => true });
+    await publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => "yes" });
     expect(io.posts).toHaveLength(1);
+  });
+
+  test("an unanswered ancestry check is reported as such, never as a force-push; a ref it cannot address is left to GitHub", async () => {
+    withHead();
+    const io = posting("u");
+    await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => "unknown" }))
+      .rejects.toThrow(/^GitHub could not say whether the reviewed commit aaaaaaa is still in the pull request/);
+    expect(io.posts).toEqual([]);
+    await publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => "skip" });
+    expect(io.posts).toHaveLength(1);
+  });
+
+  test("a later round refuses only the as-is publish of a moved head, as Desktop does", async () => {
+    withHead();
+    const io = posting("u");
+    await publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED) }, laterRound: async () => 2 });
+    expect(io.posts).toHaveLength(1);
+  });
+
+  test("T3: a session publisher waits for the package lock even when it resolved an Attempt", async () => {
+    withHead();
+    const attempt = path.join(root, "attempt-lock");
+    mkdirSync(attempt);
+    const io = posting("u");
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const holder = withFileLock(path.join(pkg, "publication.lock"), () => held);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const publishing = publishReview(pkg, { post: io.post, confirm: async () => true, publication: { directory: attempt, id: "0b0c1d2e-0000-4000-8000-000000000002" } });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(io.posts).toEqual([]);
+    release();
+    await holder;
+    await publishing;
+    expect(io.posts).toHaveLength(1);
+  });
+
+  test("an unknown result names every receipt to remove: removing one alone would refuse again", async () => {
+    withHead();
+    const attempt = path.join(root, "attempt-unknown");
+    mkdirSync(attempt);
+    const publication = { directory: attempt, id: "0b0c1d2e-0000-4000-8000-000000000003" };
+    await expect(publishReview(pkg, { post: async () => ({ ok: false, detail: "gh exited 1", uncertain: true }), confirm: async () => true, publication }))
+      .rejects.toThrow(/could not be confirmed/);
+    const refusal = publishReview(pkg, { post: posting("u").post, confirm: async () => true, publication });
+    await expect(refusal).rejects.toThrow(new RegExp(`remove ${path.join(attempt, "publication-receipt.json").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} and ${path.join(pkg, "publication-receipt.json").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   });
 
   test("the moved-head first line follows the head gate: a comment line is skipped, and naming the commit is not enough", async () => {

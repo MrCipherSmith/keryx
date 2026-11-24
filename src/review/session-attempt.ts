@@ -98,12 +98,14 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
   const own = await realpath(input.packageDir);
   if (own === storeRoot || own.startsWith(`${storeRoot}${path.sep}`)) return { skipped: "the package belongs to a Desktop review attempt" };
   const { baseRefOid, ...key } = await input.resolveKey(pr.repo, pr.number);
-  // `review start --target <pr>` without --base records the base branch (`origin/main`): the PR's base commit stands in.
-  const recorded = manifest.target.base ?? "";
-  const baseSha = FULL_SHA.test(recorded) ? recorded : baseRefOid ?? "";
-  if (!FULL_SHA.test(baseSha)) return { skipped: "neither the package nor the pull request gives the full base commit it was reviewed against" };
   const round = readRoundNumber(input.packageDir) ?? 1;
   const id = sessionAttemptId(key, manifest.reviewId, round);
+  // `review start --target <pr>` without --base records the base branch (`origin/main`): the PR's base commit at the first
+  // registration stands in, and later registrations keep it, so a retargeted PR never re-pins a base nobody reviewed.
+  const recorded = manifest.target.base ?? "";
+  const registeredBase = store.byId(id)?.run.baseSha;
+  const baseSha = FULL_SHA.test(recorded) ? recorded : registeredBase ?? baseRefOid ?? "";
+  if (!FULL_SHA.test(baseSha)) return { skipped: "neither the package nor the pull request gives the full base commit it was reviewed against" };
   const record: SessionAttemptRecord = { attemptId: id, repositoryId: key.repositoryId, viewer: key.viewer, number: key.number };
   const directory = store.directory(id);
   // An attempt the operator decided on (completed, closed, archived, deleted) keeps the evidence it was decided on.
@@ -141,8 +143,11 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
     },
   };
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  // Under the lock Desktop's publication holds, so a preview or submit never reads a half-copied package.
+  // Under the lock Desktop's save, skip and submit hold, so none of them reads a half-copied package (a preview reads
+  // without the lock and may fail once while a copy runs; it is read again on refresh).
   await withFileLock(path.join(directory, "publication.lock"), async () => {
+    // Decided while this registration read the package: the decision stands and the copy stays.
+    if (store.byId(id)?.run.decision) return;
     // The copy is refreshed in place: the attempt directory keeps Desktop's own files (receipt, draft) beside it.
     const target = path.join(directory, "package");
     await rm(target, { recursive: true, force: true });

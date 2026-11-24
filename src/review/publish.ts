@@ -48,13 +48,17 @@ export type PublishOptions = {
    * A review of a moved head is published as is only then, as Desktop does; without the seam GitHub's own refusal of an
    * unknown `commit_id` is the check.
    */
-  reviewedHeadInPull?: ((ref: string, reviewed: string, current: string) => Promise<boolean>) | undefined;
+  reviewedHeadInPull?: ((ref: string, reviewed: string, current: string) => Promise<HeadInPull>) | undefined;
   /** Shows the body to the operator and answers whether to post it. */
   confirm: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   now?: (() => Date) | undefined;
   /** Set when the operator's yes came from a card instead of the terminal prompt; recorded in published.json. */
   confirmedVia?: ConfirmedVia | undefined;
 } & CardPress;
+
+/** Whether the reviewed commit is still in the pull request: `skip` when the ref cannot be compared (then GitHub's own
+ * check of `commit_id` decides), `unknown` when GitHub did not answer. */
+export type HeadInPull = "yes" | "no" | "unknown" | "skip";
 
 export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; url?: string | undefined; registryWarning?: string | undefined };
 
@@ -210,14 +214,20 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (moved !== undefined && event !== "COMMENT") {
     throw new Error(`The pull request has moved from the reviewed commit ${reviewedHead!.slice(0, 7)} to ${moved.slice(0, 7)}. Run the update round on the new head, or publish this review as is with --event COMMENT.`);
   }
-  // The same acceptance as Desktop's publish (desk-publication.ts): a superseded round and a commit the PR no longer
-  // contains are never published as is.
-  const later = await options.laterRound?.();
-  if (later !== undefined) {
-    throw new Error(`Round ${later} of this Review already follows this one. Publish that round, or open its update round with keryx review advance.`);
-  }
-  if (moved !== undefined && options.reviewedHeadInPull !== undefined && !(await options.reviewedHeadInPull(manifest.target.ref, reviewedHead!, moved))) {
-    throw new Error(`The reviewed commit ${reviewedHead!.slice(0, 7)} is no longer in the pull request's history (force-push or rebase). Run the update round on the new head; this review can only be saved locally.`);
+  // The same acceptance as Desktop's publish (desk-publication.ts) for the as-is variant: an Attempt a later round of its
+  // Review superseded, or a commit the PR no longer contains, is never published as is for a moved head.
+  if (moved !== undefined) {
+    const later = await options.laterRound?.();
+    if (later !== undefined) {
+      throw new Error(`Round ${later} of this Review already follows this one, so it is not published as is. Publish that round, or open its update round with keryx review advance.`);
+    }
+    const inPull = await options.reviewedHeadInPull?.(manifest.target.ref, reviewedHead!, moved);
+    if (inPull === "no") {
+      throw new Error(`The reviewed commit ${reviewedHead!.slice(0, 7)} is no longer in the pull request's history (force-push or rebase). Run the update round on the new head; this review can only be saved locally.`);
+    }
+    if (inPull === "unknown") {
+      throw new Error(`GitHub could not say whether the reviewed commit ${reviewedHead!.slice(0, 7)} is still in the pull request, so nothing was posted. Publish again when GitHub answers.`);
+    }
   }
   const readiness = await computeReadiness(packageDir, options.readiness ?? {});
   const failing = failingItems(readiness);
@@ -261,7 +271,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
         await each((dir) => confirmPublicationReceipt(dir, found));
         throw new Error(`Review ${manifest.reviewId} round ${roundBlock.round} has already been published: ${found}.`);
       }
-      throw new Error(`A previous publish of review ${manifest.reviewId} round ${roundBlock.round} has an unknown result. Check the pull request before sending another review; if it is not there, remove ${path.join(receiptDir, "publication-receipt.json")} and publish again.`);
+      throw new Error(`A previous publish of review ${manifest.reviewId} round ${roundBlock.round} has an unknown result. Check the pull request before sending another review; if it is not there, remove ${receiptDirs.map((dir) => path.join(dir, "publication-receipt.json")).join(" and ")} and publish again.`);
     }
     if (!(await options.confirm(body, ref, event))) return null;
     // The operator read the body for the head shown; a push while they read makes it stale.

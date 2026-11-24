@@ -127,7 +127,7 @@ import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull } f
 import { laterRoundOf, registerSessionPackageForProject, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
-import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+import { publishReview, reviewEvent, type HeadInPull, type PostResult, type ReviewEvent } from "../review/publish";
 import { findPreviousRound, NOT_REVIEW_PACKAGES, skippedRound, type PriorRoundDeps } from "../review/prior-round";
 import { recordFinishedRound } from "../review/round-registry";
 import { carryPremiseDecisions } from "../review/premise-question";
@@ -677,7 +677,7 @@ export interface ReviewCommandSeams {
   /** Test seam: posts the review to GitHub for `publish`. Default: `gh pr review`. */
   postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
   findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
-  reviewedHeadInPull?: (ref: string, reviewed: string, current: string) => Promise<boolean>;
+  reviewedHeadInPull?: (ref: string, reviewed: string, current: string) => Promise<HeadInPull>;
   /** Registers a session package as a Desktop Attempt; without seams the project's GitHub account is used. */
   registerSession?: SessionRegistrar;
   /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */

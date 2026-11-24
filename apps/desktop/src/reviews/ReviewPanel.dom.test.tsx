@@ -769,6 +769,18 @@ test("a refused Update review that says stale: is shown, but never as a moved ra
   await act(() => root.render(null));
 });
 
+test("an Update review refused because the pull request moved again asks for a board refresh", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(67);
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "advance") throw new Error("stale: The pull request revision has changed. Refresh the board to review its current range.");
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 67, headSha: reviewedHead }, { publishCommand });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.body.textContent).toContain("The PR revision changed. Refresh the board to load the latest range.");
+  await act(() => root.render(null));
+});
+
 test("a session attempt is labelled Session and offers no Desktop coordinator session", async () => {
   const { reviewedHead, reviewed } = headMovedFixture(66);
   const session: DeskRun = { ...reviewed, id: "attempt-session", source: "session" };

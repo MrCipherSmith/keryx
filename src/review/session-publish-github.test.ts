@@ -60,11 +60,18 @@ describe("session publish GitHub port", () => {
   test("the reviewed commit is in the pull request only when GitHub reports the current head ahead of it", async () => {
     const a = "a".repeat(40), c = "c".repeat(40);
     const ahead = fakeGh([{ stdout: "ahead\n" }]);
-    expect(await githubReviewedHeadInPull(PR, a, c, ahead.gh)).toBe(true);
+    expect(await githubReviewedHeadInPull(PR, a, c, ahead.gh)).toBe("yes");
     expect(ahead.calls[0]!.args).toEqual(["api", "--hostname", "github.com", `repos/org/repo/compare/${a}...${c}?per_page=1`, "--jq", ".status"]);
-    for (const answer of [{ stdout: "diverged\n" }, { stdout: "behind\n" }, { exitCode: 1 }]) {
-      expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([answer]).gh)).toBe(false);
+    for (const answer of [{ stdout: "diverged\n" }, { stdout: "behind\n" }]) {
+      expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([answer]).gh)).toBe("no");
     }
-    expect(await githubReviewedHeadInPull(PR, "short", c, fakeGh([{ stdout: "ahead" }]).gh)).toBe(false);
+    // A failed or unreadable answer is not evidence of a force-push.
+    for (const answer of [{ exitCode: 1 }, { stdout: "something else\n" }]) {
+      expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([answer]).gh)).toBe("unknown");
+    }
+    expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([new Error("spawn failed")]).gh)).toBe("unknown");
+    expect(await githubReviewedHeadInPull(PR, "short", c, fakeGh([{ stdout: "ahead" }]).gh)).toBe("unknown");
+    // A ref the compare API cannot address is left to GitHub's own commit_id check.
+    expect(await githubReviewedHeadInPull("123", a, c, fakeGh([{ stdout: "ahead" }]).gh)).toBe("skip");
   });
 });
