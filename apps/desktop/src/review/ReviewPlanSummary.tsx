@@ -11,6 +11,16 @@ export interface ReviewPlanSummaryCheck {
   name: string;
   category: "baseline" | "project";
   slices: readonly string[];
+  assignments?: readonly ReviewPlanSummaryAssignment[];
+}
+
+export interface ReviewPlanSummaryAssignment {
+  wave: number;
+  slices: readonly string[];
+  tier: "light" | "middle" | "strong";
+  tierReason: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface ReviewPlanSummarySliceReason {
@@ -106,6 +116,15 @@ export function ReviewPlanSummary({ data }: { data: ReviewPlanSummaryData }) {
           {!data.checksComplete && <p className="field-hint">The final dispatch list is not available yet.</p>}
           <ul>{data.checks.map((check, index) => <li key={`${check.name}-${index}`}>
             <strong>{check.name}</strong> · {check.category}{check.slices.length > 0 && <span> · {check.slices.join(", ")}</span>}
+            {(check.assignments?.length ?? 0) > 0 && <ul aria-label={`${check.name} model assignments`}>
+              {check.assignments!.map((assignment, assignmentIndex) => <li key={`${assignment.wave}-${assignmentIndex}`}>
+                Wave {assignment.wave} · Selected tier: {assignment.tier}
+                {(assignment.provider || assignment.model) && <span> · Dispatch model: {assignment.provider && assignment.model
+                  ? `${assignment.provider} / ${assignment.model}` : assignment.provider ?? assignment.model}</span>}
+                {assignment.slices.length > 0 && <span> · {assignment.slices.join(", ")}</span>}
+                {assignment.tierReason && <span> · {assignment.tierReason}</span>}
+              </li>)}
+            </ul>}
           </li>)}</ul>
         </details> : <p className="field-hint">No reviewer assignments are recorded in this plan.</p>}
       {(data.sliceReasons?.length ?? 0) > 0 && <details>

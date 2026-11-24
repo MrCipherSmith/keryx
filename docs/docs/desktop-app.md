@@ -40,6 +40,10 @@ trusted project override. Existing personal model assignments are offered
 in the dialog as starting values when no class is configured. Existing personal
 routing overrides keep their priority unless you select **Replace previous
 personal routing overrides with these tiers** when saving.
+The review plan lists the selected tier, dispatch model when known, and the
+selection reason for each reviewer assignment. This is the planned dispatch
+target; it does not claim a runtime fallback model was used. Older saved
+packages may not include those per-assignment details.
 If an earlier Keryx release activated your routing settings for this project
 only, the dialog shows the migration command. Global saving becomes available
 after you explicitly adopt or replace those settings.
@@ -117,8 +121,7 @@ initial round compares the PR head with its merge base. An update round uses
 the comparison range recorded for that round. You can return to the card later, cancel an
 active review or retry an interrupted one. Windows and worktrees share an active
 run when the verified GitHub account, PR, and base and head commits match.
-Manual reviews have a 30-minute time limit and
-unlimited tokens by default.
+The default time limit is 1,200 minutes for an automatic orchestrated review, 400 minutes for a manual orchestrated review and 30 minutes for a single reviewer. Set a shorter time or token budget in the launch form. Scheduled reviews keep the time and token budget of their rule.
 
 The review uses committed controls from the GitHub repository's default branch. The installed review skills supply defaults when the selected branch has no review controls. The PR's base and head still determine the code comparison.
 

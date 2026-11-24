@@ -74,3 +74,16 @@ test("ReviewPlanSummary names the final-check stage when available", () => {
   } }));
   expect(html).toContain("Current stage: Running final review checks");
 });
+
+test("ReviewPlanSummary shows each dispatched assignment's tier, provider/model, and selection reason", () => {
+  const html = renderToStaticMarkup(createElement(ReviewPlanSummary, { data: {
+    ...data,
+    checks: [{ name: "review-security-code", category: "project", slices: ["S-1"], assignments: [
+      { wave: 2, slices: ["S-1"], tier: "strong", tierReason: "security-sensitive project reviewer", provider: "anthropic", model: "claude-sonnet" },
+    ] }],
+  } }));
+  expect(html).toContain("Wave 2 · Selected tier: strong");
+  expect(html).toContain("Dispatch model: anthropic / claude-sonnet");
+  expect(html).toContain("security-sensitive project reviewer");
+  expect(html).toContain("Show reviewer assignments");
+});
