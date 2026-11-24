@@ -3,9 +3,10 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "../lib/fs";
+import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { isPrBound } from "./complete-head-gate";
+import { isPrBound, type PrSnapshot } from "./complete-head-gate";
+import { beginPublicationReceipt, confirmPublicationReceipt, dropPublicationReceipt, headMovedLine, publicationMarker, readPublicationReceipt, receiptPublished } from "./publication-guard";
 import { readRunProfile } from "./run-profile";
 import { publicProjectReport } from "./report-overlay";
 import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
@@ -18,14 +19,25 @@ import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewM
 export const REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"] as const;
 export type ReviewEvent = (typeof REVIEW_EVENTS)[number];
 
-export type PostResult = { ok: boolean; detail: string };
+/** `url`: where GitHub put the review. `uncertain`: the request may have landed and its answer was lost. */
+export type PostResult = { ok: boolean; detail: string; url?: string | undefined; uncertain?: boolean | undefined };
 
 export type PublishOptions = {
   event?: ReviewEvent | undefined;
   partial?: boolean | undefined;
   readiness?: ReadinessOptions | undefined;
-  /** Posts the review to the pull request. */
-  post: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  /** Posts the review to the pull request, pinned to `commitId` when one is given. */
+  post: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
+  /**
+   * After an earlier publish of this package ended with an unknown result: the URL of the review carrying `marker`,
+   * undefined when there is none, null when it cannot be told. Without it such a package stays refused.
+   */
+  findPublished?: ((ref: string, marker: string) => Promise<string | undefined | null>) | undefined;
+  /**
+   * The Desktop Attempt this package is registered as (./session-attempt.ts): its directory holds the receipt and the
+   * lock Desktop's `desk-publish` also uses, and its id is the marker, so either path refuses what the other posted.
+   */
+  publication?: { directory: string; id: string } | undefined;
   /** Shows the body to the operator and answers whether to post it. */
   confirm: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   now?: (() => Date) | undefined;
@@ -33,7 +45,35 @@ export type PublishOptions = {
   confirmedVia?: ConfirmedVia | undefined;
 } & CardPress;
 
-export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; registryWarning?: string | undefined };
+export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; url?: string | undefined; registryWarning?: string | undefined };
+
+const FULL_SHA = /^[0-9a-f]{40}$/i;
+const sameCommit = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+
+/** The pull request as the tracker reports it; undefined when no tracker was given or it could not say. */
+async function readPullRequest(options: PublishOptions, ref: string): Promise<PrSnapshot | undefined> {
+  const lookup = options.readiness?.prLookup;
+  if (lookup === undefined) return undefined;
+  const pr = await lookup(ref).catch(() => null);
+  return pr === null || !pr.exists ? undefined : pr;
+}
+
+/** A merged or closed pull request takes no review. */
+function refuseClosed(pr: PrSnapshot | undefined, ref: string): void {
+  const state = typeof pr?.state === "string" ? pr.state.toUpperCase() : "";
+  if (state === "MERGED" || state === "CLOSED") throw new Error(`The pull request ${ref} is ${state.toLowerCase()}; a review cannot be published to it. Save the report locally instead.`);
+}
+
+/** The PR's current head when it moved away from the reviewed one; both must be full commit SHAs to tell. */
+function movedHead(reviewed: string | null, pr: PrSnapshot | undefined): string | undefined {
+  const current = typeof pr?.headSha === "string" ? pr.headSha : "";
+  return reviewed !== null && FULL_SHA.test(reviewed) && FULL_SHA.test(current) && !sameCommit(reviewed, current) ? current : undefined;
+}
+
+/** The marker key of a session package: its review id and round, reduced to characters a comment cannot break out of. */
+export function sessionPublicationId(reviewId: string, round: number): string {
+  return `${reviewId}#r${round}`.replace(/[^\w.#:-]/g, "_");
+}
 
 export function reviewEvent(value: string | undefined): ReviewEvent {
   const wanted = (value ?? "COMMENT").trim().toUpperCase();
@@ -151,6 +191,14 @@ export async function publishReview(packageDir: string, options: PublishOptions)
     throw new Error(`Review ${manifest.reviewId} is not bound to a pull request (target ${manifest.target.kind} ${manifest.target.ref}); there is nothing to publish to.`);
   }
   const event = options.event ?? "COMMENT";
+  const reviewedHead = manifest.target.head ?? null;
+  const pr = await readPullRequest(options, manifest.target.ref);
+  refuseClosed(pr, manifest.target.ref);
+  // Owner decision D1: a review of a commit the pull request has moved past is published only as a Comment.
+  const moved = movedHead(reviewedHead, pr);
+  if (moved !== undefined && event !== "COMMENT") {
+    throw new Error(`The pull request has moved from the reviewed commit ${reviewedHead!.slice(0, 7)} to ${moved.slice(0, 7)}. Run the update round on the new head, or publish this review as is with --event COMMENT.`);
+  }
   const readiness = await computeReadiness(packageDir, options.readiness ?? {});
   const failing = failingItems(readiness);
   const partial = failing.length > 0;
@@ -160,22 +208,65 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   }
   const report = publicProjectReport(await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => ""));
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
-  const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
+  const firstReportLine = report.split(/\r?\n/).find((line) => line.trim() !== "") ?? "";
+  // The first line names the reviewed commit; a report that already does so (as `review complete` asks) keeps its own.
+  const movedLine = moved === undefined || firstReportLine.toLowerCase().includes(reviewedHead!.slice(0, 7).toLowerCase())
+    ? "" : `${headMovedLine({ reviewedHead: reviewedHead!, currentHead: moved })}\n\n`;
+  const head = `${movedLine}${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
   const foot = runModeFooter(packageDir);
   const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
   const visible = `${head}${minors}${foot}`;
-  const reviewedHead = manifest.target.head ?? null;
   const findings = await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), []);
   const roundBlock = buildRoundBlock({ body: visible, round: readRoundNumber(packageDir) ?? 1, reviewId: manifest.reviewId, reviewedHead, findings: Array.isArray(findings) ? findings : [] });
-  const body = `${visible}\n${renderRoundBlock(roundBlock)}\n`;
-  if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };
-  const result = await options.post(manifest.target.ref, event, body);
-  if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
+  const record = options.publication;
+  const receiptDir = record?.directory ?? packageDir;
+  const marker = publicationMarker(record?.id ?? sessionPublicationId(manifest.reviewId, roundBlock.round));
+  const body = `${visible}\n${renderRoundBlock(roundBlock)}\n\n${marker}\n`;
+  const ref = manifest.target.ref;
+  // Shared with Desktop (./publication-guard.ts): one publication per package, guarded by a receipt and the marker.
+  const url = await withFileLock(path.join(receiptDir, "publication.lock"), async () => {
+    // A package published before it was registered keeps its receipt beside it: both places are read.
+    const receipts = await Promise.all([...new Set([receiptDir, packageDir])].map((dir) => readPublicationReceipt(dir)));
+    const receipt = receipts.find(receiptPublished) ?? receipts.find((item) => item !== undefined);
+    if (receiptPublished(receipt)) throw new Error(`Review ${manifest.reviewId} round ${roundBlock.round} has already been published${receipt!.url === undefined ? "" : `: ${receipt!.url}`}.`);
+    if (receipt !== undefined) {
+      const found = await options.findPublished?.(ref, marker);
+      if (typeof found === "string") {
+        await confirmPublicationReceipt(receiptDir, found);
+        throw new Error(`Review ${manifest.reviewId} round ${roundBlock.round} has already been published: ${found}.`);
+      }
+      throw new Error(`A previous publish of review ${manifest.reviewId} round ${roundBlock.round} has an unknown result. Check the pull request before sending another review; if it is not there, remove ${path.join(receiptDir, "publication-receipt.json")} and publish again.`);
+    }
+    if (!(await options.confirm(body, ref, event))) return null;
+    // The operator read the body for the head shown; a push while they read makes it stale.
+    if (options.readiness?.prLookup !== undefined) {
+      const now = await readPullRequest(options, ref);
+      refuseClosed(now, ref);
+      const before = pr?.headSha ?? null;
+      const after = now?.headSha ?? null;
+      if (before !== null && (after === null || !sameCommit(before, after))) {
+        throw new Error(`stale: The pull request head changed while the review was being confirmed (${before.slice(0, 7)} → ${(after ?? "unknown").slice(0, 7)}). Publish again to see the review for the current head.`);
+      }
+    }
+    const commitId = reviewedHead !== null && FULL_SHA.test(reviewedHead) ? reviewedHead : undefined;
+    await beginPublicationReceipt(receiptDir);
+    const result = await options.post(ref, event, body, commitId);
+    if (!result.ok) {
+      if (result.uncertain === true) {
+        throw new Error(`The review could not be confirmed (${result.detail}). Check the pull request before publishing again.`);
+      }
+      await dropPublicationReceipt(receiptDir);
+      throw new Error(`GitHub refused the review: ${result.detail}`);
+    }
+    await confirmPublicationReceipt(receiptDir, result.url);
+    return result.url ?? "";
+  });
+  if (url === null) return { readiness, body, event, partial, posted: false };
   await writeFileAtomic(
     path.join(packageDir, "published.json"),
-    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }, null, 2)}\n`,
+    `${JSON.stringify({ pr: ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(url === "" ? {} : { url }), ...(moved === undefined ? {} : { prHead: moved }), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }, null, 2)}\n`,
   );
   // Flow 458: keryx's own record that it finished (and posted) this round, outside the repository (./round-registry.ts).
   const registered = recordFinishedRound(packageDir, "publish");
-  return { readiness, body, event, partial, posted: true, ...(registered.error === undefined ? {} : { registryWarning: `round not recorded in the local round registry: ${registered.error}` }) };
+  return { readiness, body, event, partial, posted: true, ...(url === "" ? {} : { url }), ...(registered.error === undefined ? {} : { registryWarning: `round not recorded in the local round registry: ${registered.error}` }) };
 }

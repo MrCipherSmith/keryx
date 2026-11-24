@@ -119,7 +119,8 @@ export interface DeskRun extends DeskRevision {
   /** Most recent write to this attempt’s coordinator transcript. */
   lastActivityAt?: string;
   id: string;
-  source: "manual" | "scheduled" | "existing";
+  /** `session`: a package an agent made in a session, registered by `keryx review publish` or `complete` (flow 521). */
+  source: "manual" | "scheduled" | "existing" | "session";
   schedule?: DeskSchedule;
   options?: DeskReviewOptions;
   /** Effective options used to produce this run’s evidence. */

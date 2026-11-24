@@ -64,7 +64,8 @@ export function useReviewRuns(
       const message = errMessage(cause);
       if (action.kind === "status") setReadError(message);
       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
-      else setActionError({ kind: action.kind, message });
+      // An update round is a start of the next round: its refusal shows where a start's does.
+      else setActionError({ kind: action.kind === "advance" ? "start" : action.kind, message });
       if (/^(access|configuration):/i.test(message)) {
         setSnapshot(null);
         if (action.kind === "status") setActionError(null);

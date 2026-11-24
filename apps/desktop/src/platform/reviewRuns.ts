@@ -10,6 +10,8 @@ let mutationVersion = 0;
 export type ReviewRunAction =
   | { kind: "status"; id?: string; activityId?: string }
   | { kind: "start"; baseSha: string; headSha: string; options?: DeskReviewOptions }
+  /** The update round of the attempt's Review on this range: `keryx review advance`, the command sessions also use. */
+  | { kind: "advance"; id: string; baseSha: string; headSha: string }
   | { kind: "continue"; id: string; guidance?: string }
   | { kind: "cancel"; id: string }
   | { kind: "readiness"; id: string }

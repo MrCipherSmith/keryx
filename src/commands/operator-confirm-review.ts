@@ -32,7 +32,9 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe, HIDDEN_IN_CARD, hiddenInCard } from "../lib/card-safe";
 import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
-import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
+import { githubAdapter, githubPrFiles } from "../flow/service";
+import { githubFindPublished, githubPostPullReview } from "../review/session-publish-github";
+import { registerSessionPackageForProject, sessionPublication, type SessionAttemptRecord } from "../review/session-attempt";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";
@@ -56,7 +58,10 @@ import type { CommentsReplyRun } from "./review";
 export interface ReviewConfirmSeams {
   prLookup?: PrLookup;
   prFiles?: (ref: string) => Promise<string[] | null>;
-  postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
+  findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
+  /** Flow 521: registers a session package as a Desktop Attempt before it is shown and posted. Off unless set. */
+  registerSession?: (packageDir: string, projectRoot: string) => Promise<SessionAttemptRecord | undefined>;
   replyPass?: (args: string[], dryRun: boolean) => Promise<CommentsReplyRun>;
 }
 
@@ -182,7 +187,9 @@ type PublishPrepared = { dir: string; body: string; ref: string; event: ReviewEv
 
 function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrepared> {
   const readiness = (): ReadinessOptions => ({ prLookup: seams.prLookup ?? trackerPrLookup, prFiles: seams.prFiles ?? githubPrFiles });
-  const post = (): ((ref: string, event: ReviewEvent, body: string) => Promise<PostResult>) => seams.postReview ?? githubPostReview;
+  const post = (): ((ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>) => seams.postReview ?? githubPostPullReview;
+  const attemptOf = (dir: string, projectRoot: string) => sessionPublication(dir,
+    seams.registerSession && ((packageDir) => seams.registerSession!(packageDir, projectRoot)), () => undefined);
   return {
     name: "review_publish",
     description:
@@ -205,12 +212,14 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         const event = reviewEvent(typeof input["event"] === "string" ? input["event"] : undefined);
         const partialAsked = input["partial"] === true;
         const dir = await resolvePackage(ref, ctx.projectRoot);
+        const publication = await attemptOf(dir, ctx.projectRoot);
         let target = "";
         // A dry run of the real function: it checks readiness, builds the body and asks `confirm`, which declines.
         const result = await publishReview(dir, {
           event,
           partial: partialAsked,
           readiness: readiness(),
+          publication,
           post: async () => ({ ok: false, detail: "dry run" }),
           confirm: async (_body, targetRef) => {
             target = targetRef;
@@ -246,7 +255,10 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         event: prepared.event,
         partial: prepared.partial,
         readiness: readiness(),
+        // The Attempt registered when the card was built: the body shown carries its marker.
+        publication: await sessionPublication(prepared.dir, undefined, () => undefined),
         post: post(),
+        findPublished: seams.findPublished ?? githubFindPublished,
         now: () => new Date(confirmation.at),
         confirmedVia: confirmation.confirmedVia,
         ...cardPressFields(confirmation),
@@ -912,5 +924,7 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
 }
 
 export function reviewConfirmSpecs(): readonly OperatorConfirmSpec[] {
-  return buildReviewConfirmSpecs();
+  return buildReviewConfirmSpecs({
+    registerSession: (packageDir, projectRoot) => registerSessionPackageForProject(projectRoot, packageDir, { prLookup: trackerPrLookup, prFiles: githubPrFiles }),
+  });
 }

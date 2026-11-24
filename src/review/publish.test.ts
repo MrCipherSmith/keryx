@@ -10,6 +10,8 @@ import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader,
 import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
 import { quoteSha256 } from "./round-record";
 import { computeReadiness } from "./readiness";
+import type { PrSnapshot } from "./complete-head-gate";
+import { headMovedLine, publicationMarker } from "./publication-guard";
 import type { VerdictFinding } from "./verdict";
 
 const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
@@ -108,8 +110,8 @@ describe("publishReview", () => {
     expect(result).toMatchObject({ posted: true, partial: false });
     const body = io.posts[0]!.body;
     expect(body.startsWith("# Review\n\nRequest changes.\n")).toBe(true);
-    // Flow 458: the only addition is the hidden round block at the foot.
-    expect(body.replace(/\n<!-- keryx:round .* -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
+    // Flow 458: the only additions are the hidden round block and (flow 521) the shared duplicate marker at the foot.
+    expect(body.replace(/\n<!-- keryx:round .* -->\n\n<!-- keryx-desktop-review pr7932-r1#r1 -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
   });
 
   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
@@ -285,5 +287,129 @@ describe("keryx review publish", () => {
       console.error = original;
     }
     expect(errors.join("\n")).toContain("Unknown option");
+  });
+});
+
+// Flow 521 T7: the session path shares Desktop's receipt, duplicate marker and moved-head first line, pins the review to
+// the reviewed commit, publishes a moved head only as a Comment (D1), and re-reads the head after the operator's yes.
+describe("publishReview: the publication guard shared with Desktop", () => {
+  const REVIEWED = "a".repeat(40);
+  const NEWER = "b".repeat(40);
+  const receipt = () => path.join(pkg, "publication-receipt.json");
+  const withHead = (report = "# Review\n\nRequest changes.\n"): void => {
+    makePackage({ ready: true });
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    write("manifest.json", { ...manifest, target: { ...manifest.target, head: REVIEWED } });
+    write("report.md", report);
+  };
+  const at = (...heads: Array<string | Partial<PrSnapshot>>) => {
+    let call = 0;
+    return async (): Promise<PrSnapshot> => {
+      const next = heads[Math.min(call++, heads.length - 1)]!;
+      return typeof next === "string" ? { exists: true, state: "OPEN", headSha: next } : { exists: true, state: "OPEN", headSha: REVIEWED, ...next };
+    };
+  };
+  const posting = () => {
+    const posts: Array<{ event: ReviewEvent; body: string; commitId: string | undefined }> = [];
+    return { posts, post: async (_ref: string, event: ReviewEvent, body: string, commitId?: string): Promise<PostResult> => {
+      posts.push({ event, body, commitId });
+      return { ok: true, detail: "posted", url: `${PR}#pullrequestreview-${posts.length}` };
+    } };
+  };
+
+  test("the body ends with the marker Desktop also writes, and the review is pinned to the reviewed commit", async () => {
+    withHead();
+    const io = posting();
+    const result = await publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED) } });
+    expect(io.posts).toHaveLength(1);
+    expect(io.posts[0]!.commitId).toBe(REVIEWED);
+    expect(io.posts[0]!.body.trimEnd().endsWith(publicationMarker("pr7932-r1#r1"))).toBe(true);
+    expect(result.url).toBe(`${PR}#pullrequestreview-1`);
+    expect(JSON.parse(readFileSync(receipt(), "utf8"))).toEqual({ url: `${PR}#pullrequestreview-1` });
+    expect(JSON.parse(readFileSync(path.join(pkg, "published.json"), "utf8"))).toMatchObject({ url: `${PR}#pullrequestreview-1` });
+  });
+
+  test("publishing the same package twice is refused the second time; nothing is posted again", async () => {
+    withHead();
+    const io = posting();
+    await publishReview(pkg, { post: io.post, confirm: async () => true });
+    let asked = false;
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => (asked = true) })).rejects.toThrow(/already been published: .*pullrequestreview-1/);
+    expect(io.posts).toHaveLength(1);
+    expect(asked).toBe(false);
+  });
+
+  test("a lost response keeps the receipt; the next publish finds the review by its marker or stays refused", async () => {
+    withHead();
+    const lost = async (): Promise<PostResult> => ({ ok: false, detail: "gh exited 1", uncertain: true });
+    await expect(publishReview(pkg, { post: lost, confirm: async () => true })).rejects.toThrow(/could not be confirmed/);
+    expect(JSON.parse(readFileSync(receipt(), "utf8"))).toEqual({});
+    const io = posting();
+    const markers: string[] = [];
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, findPublished: async (_ref, marker) => (markers.push(marker), undefined) }))
+      .rejects.toThrow(/unknown result/);
+    expect(markers).toEqual([publicationMarker("pr7932-r1#r1")]);
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, findPublished: async () => `${PR}#pullrequestreview-9` }))
+      .rejects.toThrow(/already been published: .*pullrequestreview-9/);
+    expect(JSON.parse(readFileSync(receipt(), "utf8"))).toEqual({ url: `${PR}#pullrequestreview-9` });
+    expect(io.posts).toEqual([]);
+  });
+
+  test("a certain refusal drops the receipt, so the operator can publish again", async () => {
+    withHead();
+    await expect(publishReview(pkg, { post: async () => ({ ok: false, detail: "HTTP 422" }), confirm: async () => true })).rejects.toThrow(/HTTP 422/);
+    expect(existsSync(receipt())).toBe(false);
+    const io = posting();
+    await publishReview(pkg, { post: io.post, confirm: async () => true });
+    expect(io.posts).toHaveLength(1);
+  });
+
+  test("D1: on a moved head only a Comment is published, pinned to the reviewed commit, with the shared first line", async () => {
+    withHead();
+    const io = posting();
+    for (const event of ["REQUEST_CHANGES", "APPROVE"] as const) {
+      await expect(publishReview(pkg, { event, partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } }))
+        .rejects.toThrow(/moved from the reviewed commit aaaaaaa to bbbbbbb[\s\S]*--event COMMENT/);
+    }
+    expect(io.posts).toEqual([]);
+    // The plain report does not name the reviewed commit, so the readiness head item fails and --partial is needed.
+    await publishReview(pkg, { event: "COMMENT", partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
+    expect(io.posts[0]!.commitId).toBe(REVIEWED);
+    expect(io.posts[0]!.body.split("\n")[0]).toBe(headMovedLine({ reviewedHead: REVIEWED, currentHead: NEWER }));
+    expect(JSON.parse(readFileSync(path.join(pkg, "published.json"), "utf8"))).toMatchObject({ head: REVIEWED, prHead: NEWER });
+  });
+
+  test("D1: a report whose first line already names the reviewed commit keeps it and gets no second one", async () => {
+    withHead(`Reviewed aaaaaaa — the PR has since moved on to bbbbbbb.\n\n# Review\n`);
+    const io = posting();
+    await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
+    expect(io.posts[0]!.body.startsWith("Reviewed aaaaaaa — the PR has since moved on to bbbbbbb.")).toBe(true);
+    expect(io.posts[0]!.body).not.toContain("The pull request has moved to");
+  });
+
+  test("the first line a moved head writes passes the head gate of review complete", async () => {
+    const { completeHeadGate } = await import("./complete-head-gate");
+    const report = `${headMovedLine({ reviewedHead: REVIEWED, currentHead: NEWER })}\n\n# Review\n`;
+    await expect(completeHeadGate({ manifest: { target: { kind: "pr", ref: PR, head: REVIEWED } } as never, report, lookup: at(NEWER) })).resolves.toEqual({ warnings: [] });
+  });
+
+  test("a merged or closed pull request takes no review", async () => {
+    for (const state of ["MERGED", "CLOSED"]) {
+      withHead();
+      const io = posting();
+      await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at({ state }) } }))
+        .rejects.toThrow(new RegExp(`is ${state.toLowerCase()}`));
+      expect(io.posts).toEqual([]);
+    }
+  });
+
+  test("a push while the operator reads makes the confirmed body stale: nothing is posted and no receipt is left", async () => {
+    withHead();
+    // The head is read before the body is built, by the readiness checklist, and again after the operator's yes.
+    const io = posting();
+    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED, REVIEWED, NEWER) } }))
+      .rejects.toThrow(/^stale: .*aaaaaaa → bbbbbbb/);
+    expect(io.posts).toEqual([]);
+    expect(existsSync(receipt())).toBe(false);
   });
 });

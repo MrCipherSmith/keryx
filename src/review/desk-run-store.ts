@@ -415,6 +415,19 @@ export class DeskRunStore {
     });
   }
 
+  /** Flow 521: a session review package registered as an Attempt (./session-attempt.ts). Re-registering refreshes only
+   * a `session` row the operator has not decided on; any other row with that id is left alone. */
+  recordSession(cwd: string, key: DeskRunKey, run: DeskRun) {
+    if (run.source !== "session") throw new Error("configuration: Only a session review can be recorded as a session attempt.");
+    this.db.run(
+      `INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)
+      ON CONFLICT(id) DO UPDATE SET state=excluded.state, details=excluded.details
+      WHERE json_extract(runs.details,'$.source')='session' AND json_extract(runs.details,'$.decision') IS NULL`,
+      [run.id, key.repositoryId, key.number, key.viewer, run.state, cwd, JSON.stringify(key), storedDetails(run)],
+    );
+    this.assignReviews();
+  }
+
   reportForSearch(key: DeskRunKey, id: string): string | undefined {
     return this.db.query<{ report: string | null }, [string, number, string, string]>(
       "SELECT json_extract(details,'$.result.report') AS report FROM runs WHERE repo=? AND pr=? AND viewer=? AND id=?",

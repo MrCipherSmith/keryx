@@ -8,6 +8,7 @@ import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
 import { DESK_PUBLISH_USAGE, runReviewDeskPublish } from "./review-desk-publish";
 import { BOARD_USAGE, runReviewBoard } from "./review-board";
 import { REVIEWS_USAGE, runReviewReviews } from "./review-reviews";
+import { ADVANCE_USAGE, runReviewAdvance } from "./review-advance";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -121,7 +122,9 @@ import {
   renderCrossFamilyReviewLine,
 } from "../review/cross-family";
 import type { CrossFamilyReviewDecision } from "../lib/provider-config";
-import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/github";
+import { githubAdapter, githubPrFiles } from "../flow/tracker/github";
+import { githubFindPublished, githubPostPullReview } from "../review/session-publish-github";
+import { registerSessionPackageForProject, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
@@ -672,7 +675,10 @@ export interface ReviewCommandSeams {
   /** Test seam: reads a PR's own file list for the readiness checklist. Default: `gh pr view --json files`. */
   prFiles?: (ref: string) => Promise<string[] | null>;
   /** Test seam: posts the review to GitHub for `publish`. Default: `gh pr review`. */
-  postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
+  findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
+  /** Registers a session package as a Desktop Attempt; without seams the project's GitHub account is used. */
+  registerSession?: SessionRegistrar;
   /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */
   confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   /** Test seam: the previous-round search of `start|attach` (sources, git, the pull request read). Default: the real ones. */
@@ -814,6 +820,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "reviews") {
       await runReviewReviews(args.slice(1));
+      return;
+    }
+    if (command === "advance") {
+      await runReviewAdvance(args.slice(1));
       return;
     }
     if (command === "attach") {
@@ -5058,11 +5068,17 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
     }
     return promptYes(`Post this ${kind} review to ${target}? [y/N] `);
   });
+  const readiness = { prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles };
+  // Flow 521: the package is (re)registered as a Desktop Attempt first, so both publish paths share one receipt.
+  const register = seams === undefined ? (dir: string) => registerSessionPackageForProject(process.cwd(), dir, readiness) : seams.registerSession;
+  const publication = await sessionPublication(packageDir, register, (text) => console.log(`warning: ${text}`));
   const result = await publishReview(packageDir, {
     event,
     partial,
-    readiness: { prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles },
-    post: seams?.postReview ?? githubPostReview,
+    readiness,
+    publication,
+    post: seams?.postReview ?? githubPostPullReview,
+    findPublished: seams?.findPublished ?? githubFindPublished,
     confirm,
   });
   console.log(readinessLine(result.readiness));
@@ -5153,6 +5169,14 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     console.log(
       `${tally.unknown} of ${tally.total} findings read \`unknown\` — nobody recorded an outcome for them.`,
     );
+  }
+  // Flow 521: a session's PR review becomes an Attempt of its Review, listed and publishable in Desktop.
+  const register = seams === undefined
+    ? (dir: string) => registerSessionPackageForProject(process.cwd(), dir, { prLookup: trackerPrLookup, prFiles: githubPrFiles })
+    : seams.registerSession;
+  if (register !== undefined) {
+    const recorded = await sessionPublication(await resolveReviewPackagePath(process.cwd(), ref), register, (text) => console.error(`warning: ${text}`));
+    if (recorded !== undefined) console.log(`desktop attempt: ${recorded.id}`);
   }
 }
 
@@ -5374,6 +5398,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["accounts", () => console.log(ACCOUNTS_USAGE)],
   ["board", () => console.log(BOARD_USAGE)],
   ["reviews", () => console.log(REVIEWS_USAGE)],
+  ["advance", () => console.log(ADVANCE_USAGE)],
   ["rules", () => console.log(RULES_USAGE)],
   ["watch", () => console.log(WATCH_USAGE)],
   ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
@@ -5544,6 +5569,8 @@ Usage:
                         Reads pull requests and discussions of a connected GitHub repository.
   ${REVIEWS_USAGE}
                         Lists this account's local Reviews of a connected repository with state, freshness and rounds.
+  ${ADVANCE_USAGE}
+                        Opens the update round of a pull request's Review on its current head (Desktop and sessions).
   ${WATCH_USAGE}
   ${RULES_USAGE}
                         Manages the local macOS pull request watcher.

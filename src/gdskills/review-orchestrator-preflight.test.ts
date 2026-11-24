@@ -441,16 +441,17 @@ describe("Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md",
     expect(bullet("- `ignore`:")).not.toContain("step 4");
   });
 
-  test("stop-and-start says truthfully that nothing carries over until advance exists", () => {
+  test("stop-and-start says truthfully what carries over: plan never builds on a partial round, advance only on a registered one", () => {
     const stop = bullet("**Stop and start on the new head**");
-    expect(stop).toContain("Until `keryx review --help` lists `advance`, a stopped round is partial and `keryx review plan` never takes a partial package as the previous round");
+    expect(stop).toContain("the stopped round is partial. `keryx review plan` never takes a partial package as the previous round");
+    expect(stop).toContain("`keryx review advance` builds on a partial round only once that round is an Attempt of the Review (step 4)");
+    expect(stop).not.toContain("Until `keryx review --help` lists `advance`");
     // The bundled skill ships to other projects: no keryx source paths in it.
     expect(headMoved()).not.toMatch(/`src\/[\w/.-]+\.ts/);
     expect(stop).toContain("the stopped round's findings reach it at most as context");
-    expect(stop).toContain("per-finding answers do not carry over yet");
     expect(stop).toContain("names the slices it did not cover");
     expect(stop).not.toContain("enters the new plan as unchecked");
-    expect(bullet("**Update the review to `<new sha>`**")).toContain("carry over by finding id only with `advance`; before it they do not");
+    expect(bullet("**Update the review to `<new sha>`**")).toContain("carry over by finding id only with `advance`; a round planned with `keryx review plan` does not carry them");
   });
 
   test("a round completed on a moved head names the reviewed SHA on the report's first line before complete", () => {
@@ -459,11 +460,12 @@ describe("Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md",
     expect(decide).toContain("before completing: `keryx review complete` refuses it otherwise.");
   });
 
-  test("the update round is keryx review advance, stage 3's command, with review plan while advance is not listed", () => {
+  test("flow 521 AC6: the update round is keryx review advance, the command Desktop's Update review runs, with review plan to run it here", () => {
     const update = step(4);
-    expect(update).toContain("`keryx review advance`");
-    expect(update).toContain("the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)");
-    expect(update).not.toContain("Desktop runs the same command");
+    expect(update).toContain("`keryx review advance --json --repo <owner/name> --number <n>` opens the next round of the same Review on the current head");
+    expect(update).toContain("Desktop's \"Update review\" runs the same command");
+    expect(update).toContain("`keryx review complete` and `keryx review publish` register a pull request package as one");
+    expect(update).not.toContain("today Desktop's prompt still differs");
     expect(update).toContain("`keryx review --help` does not list `advance`");
     expect(update).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
   });
@@ -500,6 +502,10 @@ describe("Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md",
     const open = buildAutonomousPrompt({ ref });
     expect(fixed).toContain("Keep this range throughout the review.");
     expect(fixed).not.toContain("Open one more round only if the head moved");
+    // AC6: the fixed-range Desktop prompt names the same update command as the skill, and no longer sends moves elsewhere.
+    expect(fixed).toContain("Its update round is opened with keryx review advance, outside this run.");
+    expect(fixed).not.toContain("New commits belong to a separate request");
+    expect(bullet("**Unattended**")).toContain("its update round is `keryx review advance`, opened from Desktop, never by the run itself");
     expect(open).toContain("Open one more round only if the head moved while you worked, and review the new head.");
     expect(open).not.toContain("Keep this range throughout the review.");
     const unattended = bullet("**Unattended**");

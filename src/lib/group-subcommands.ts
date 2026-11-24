@@ -157,6 +157,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "ci-triage",
       "board",
       "reviews",
+      "advance",
       "rules",
       "watch",
       "desk-run",
