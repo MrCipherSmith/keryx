@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T07:19:31.820Z",
+  "updatedAt": "2026-11-24T07:37:09.572Z",
   "source": {
     "type": "description",
     "ref": null
@@ -100,15 +100,22 @@
       "id": "T5",
       "title": "Store: reviews table, rounds and attempts, migration and its test, badge round with parity",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:19:40.519Z",
+            "outcome": "started",
+            "detail": "519-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -119,8 +126,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:37:04.175Z",
+            "outcome": "started",
+            "detail": "519-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -162,7 +175,7 @@
       "id": "T9",
       "title": "Migration on a copy of the local working database",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -172,7 +185,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -317,6 +331,26 @@
     {
       "at": "2026-11-24T07:19:31.820Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-24T07:19:40.519Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 519-T5"
+    },
+    {
+      "at": "2026-11-24T07:37:04.175Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 519-T6"
+    },
+    {
+      "at": "2026-11-24T07:37:09.335Z",
+      "event": "task-done",
+      "detail": "T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity"
+    },
+    {
+      "at": "2026-11-24T07:37:09.572Z",
+      "event": "task-done",
+      "detail": "T9: Migration on a copy of the local working database"
     }
   ],
   "acKinds": {
