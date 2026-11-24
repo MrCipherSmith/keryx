@@ -1,0 +1,860 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The fix round added a client-side read limiter to useMetaprojectTree, with no prior finding behind i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-architecture-w1-F-001",
+      "finding": "r2-architecture-w1-F-001"
+    },
+    {
+      "id": "review-architecture-w2:architecture-w2-r2-F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding architecture-w2-r2-F-001 (The client tree-read bound is sized against the Tauri read-permit cap (`const MAX_ACTIVE: usize = 8;) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-architecture-w2-F-001",
+      "finding": "r2-architecture-w2-F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (New in the fix round (the read limiter added with the stale-snapshot / concurrency changes). The com) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-clean-code-w1-F-001",
+      "finding": "r2-clean-code-w1-F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The comment hard-codes a number owned by another module in another language: 'eight read permits' is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-clean-code-w1-F-002",
+      "finding": "r2-clean-code-w1-F-002"
+    },
+    {
+      "id": "review-clean-code-w2:clean-code-w2-F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding clean-code-w2-F-001 (The component's doc comment describes the rule this fix round replaced. The new useLayoutEffect move) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-clean-code-w2-F-001",
+      "finding": "r2-clean-code-w2-F-001"
+    },
+    {
+      "id": "review-clean-code-w2:clean-code-w2-F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding clean-code-w2-F-002 (The fix round adds a second construction of the same stale-snapshot error with the same literal mess) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-clean-code-w2-F-002",
+      "finding": "r2-clean-code-w2-F-002"
+    },
+    {
+      "id": "review-clean-code-w2:clean-code-w2-F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding clean-code-w2-F-003 (The new symbol test repeats the `tree()` helper's response-narrowing guard twice (for `top` and `src) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-clean-code-w2-F-003",
+      "finding": "r2-clean-code-w2-F-003"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (Answering frontend/performance concerns about re-reads exhausting Desktop's 8 read permits, the fix ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-degradation-w1-F-001",
+      "finding": "r2-degradation-w1-F-001"
+    },
+    {
+      "id": "review-degradation-w2:degradation-w2-F-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding degradation-w2-F-001 (Reads of a retired snapshot that are already in flight keep their slots until they settle, so after ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-degradation-w2-F-001",
+      "finding": "r2-degradation-w2-F-001"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (Introduced by the fix for frontend-w1-F-001: the loading row and the Show more row of a parent share) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-frontend-w1-F-001",
+      "finding": "r2-frontend-w1-F-001"
+    },
+    {
+      "id": "review-frontend-w1:F-002",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-002 (When the root answers empty, the component renders the empty-state <p> and the <ul> unmounts. The la) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-frontend-w1-F-002",
+      "finding": "r2-frontend-w1-F-002"
+    },
+    {
+      "id": "review-frontend-w2:F-001",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-001 (After onStale() the catch falls through to setFolder(... status: \"failed\" ...). The folder shows 'Co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-frontend-w2-F-001",
+      "finding": "r2-frontend-w2-F-001"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (Introduced by the fix for the read-permit pressure (round-1 fix round, commit 6c83eb7fb, new limiter) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-highload-w1-F-001",
+      "finding": "r2-highload-w1-F-001"
+    },
+    {
+      "id": "review-highload-w2:highload-w2-F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding highload-w2-F-001 (The FIFO limiter added for highload-w1-F-001 lives in a `useRef` of `useMetaprojectTree`. That gives) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-highload-w2-F-001",
+      "finding": "r2-highload-w2-F-001"
+    },
+    {
+      "id": "review-highload-w2:highload-w2-F-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding highload-w2-F-002 (A read that has already started when the snapshot changes keeps its limiter slot until its CLI child) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-highload-w2-F-002",
+      "finding": "r2-highload-w2-F-002"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (Answering ui-ux-w1-UX-004, the fix adds a 'Module' label to module folder rows. In the row (display:) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-layout-w1-LY-001",
+      "finding": "r2-layout-w1-LY-001"
+    },
+    {
+      "id": "review-layout-w1:fu1",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Measure LY-001 in a real engine: at a 720px window with the details panel docked (list column 150px), the width of `.metaproject-tree-name` on a level-3 module folder row with a 4-digit count, at --te",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "LY-001 reasoned from CSS; no layout-engine measurement",
+      "remains": "a real-engine measurement of the Module label at the 150px list column"
+    },
+    {
+      "id": "review-layout-w2:fu1",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Out of my slices, not reviewed here: the Module kind label added to module folder rows (MetaprojectTree.tsx, `{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}`, hunk @@ ",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "the Module label hunk was reviewed by review-layout-w1 (r2-layout-w1-LY-001)",
+      "remains": "a layout-engine measurement of the Module label"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (This is new code from the fix for frontend-w1-F-001. When the focused row is removed, the layout eff) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-logic-w1-F-001",
+      "finding": "r2-logic-w1-F-001"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (The limiter frees a slot only when the read's promise settles. A read already started under a snapsh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-logic-w2-F-001",
+      "finding": "r2-logic-w2-F-001"
+    },
+    {
+      "id": "review-logic-w4:logic-w4-F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding logic-w4-F-001 (A snapshot change retires the reads in flight, but they keep their limiter slots until the transport) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-logic-w4-F-001",
+      "finding": "r2-logic-w4-F-001"
+    },
+    {
+      "id": "review-performance-w1:performance-w1-F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding performance-w1-F-001 (The tree read limiter added in the fix round (MAX_TREE_READS = 3) is one FIFO queue shared by both s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-performance-w1-F-001",
+      "finding": "r2-performance-w1-F-001"
+    },
+    {
+      "id": "review-performance-w1:performance-w1-F-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding performance-w1-F-002 (The focus-restore fix (for frontend-w1-F-001 and logic-w1-F-001) adds O(rows) querySelectorAll scans) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-performance-w1-F-002",
+      "finding": "r2-performance-w1-F-002"
+    },
+    {
+      "id": "review-performance-w2:performance-w2r2-F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding performance-w2r2-F-001 (The dependency-less useLayoutEffect runs after every render. It calls rowElements() (querySelectorAl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-performance-w2-F-001",
+      "finding": "r2-performance-w2-F-001"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (The PR body (pr-context.md, Intent round 1) was not updated for the fix round 6c83eb7fb. Its claims ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-pr-contract-w1-PC-001",
+      "finding": "r2-pr-contract-w1-PC-001"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The fix (answering ui-ux-w1-UX-004) adds a user-visible 'Module' kind label to module folder rows. T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-pr-contract-w1-PC-002",
+      "finding": "r2-pr-contract-w1-PC-002"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-001 (PR body Verification claims \"Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.\" and \"`bu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-pr-contract-w2-PC-001",
+      "finding": "r2-pr-contract-w2-PC-001"
+    },
+    {
+      "id": "review-style-w1:style-w1-F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding style-w1-F-001 (The fix for the read cap (answering the permit-pool concern of this round) wraps the whole read in `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-style-w1-F-001",
+      "finding": "r2-style-w1-F-001"
+    },
+    {
+      "id": "review-style-w2:style-w2-F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding style-w2-F-001 (The new tree-read limiter names one thing twice: the ref is `slots` and its value is read into `pool) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-style-w2-F-001",
+      "finding": "r2-style-w2-F-001"
+    },
+    {
+      "id": "review-style-w2:style-w2-F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding style-w2-F-002 (In the new test \"an answer for another snapshot than the one pinned is refused as stale-snapshot\", `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-style-w2-F-002",
+      "finding": "r2-style-w2-F-002"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run mutant_candidates TP2-M1..TP2-M12 through `keryx review mutate` (nearest suites: apps/desktop `bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx sr",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "mutant candidates recorded in the reviewer result; keryx review mutate not run this round",
+      "remains": "the mutation pass over TP2-M1..M12"
+    },
+    {
+      "id": "review-testing-practices-w2:testing-practices-r2-F1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding testing-practices-r2-F1 (Fix round 1 (frontend-w1-F-001 / ui-ux-w1-UX-001) added two mechanisms so that focus is never taken ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-testing-practices-w2-F1",
+      "finding": "r2-testing-practices-w2-F1"
+    },
+    {
+      "id": "review-testing-practices-w2:testing-practices-r2-F2",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding testing-practices-r2-F2 (The keyboard-Retry test asserts that the focused element is a treeitem reading 'Loading…'. The share) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-testing-practices-w2-F2",
+      "finding": "r2-testing-practices-w2-F2"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run the 15 mutant_candidates of review-testing-practices-w2 through `keryx review mutate` against the nearest suites in mutant_notes, previous-round gates first. A survivor among M6-M10 settles or ext",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "mutant candidates recorded in the reviewer result; keryx review mutate not run this round",
+      "remains": "the mutation pass over M1..M15"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-001",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-001 (Nielsen #9 (error recovery) and #5 (error prevention). When a tree read answers stale-snapshot, the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding r2-ui-ux-w2-UX-001",
+      "finding": "r2-ui-ux-w2-UX-001"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "architecture-w1-F-001": "open",
+      "architecture-w1-F-002": "open",
+      "architecture-w1-F-003": "open",
+      "architecture-w1-F-004": "open",
+      "architecture-w2-F-001": "closed",
+      "architecture-w2-F-002": "open",
+      "degradation-w1-F-001": "closed",
+      "degradation-w1-F-002": "closed",
+      "degradation-w1-F-003": "open",
+      "degradation-w2-DEG-W2-001": "open",
+      "frontend-w1-F-001": "closed",
+      "frontend-w1-F-002": "open",
+      "frontend-w2-F-001": "open",
+      "frontend-w2-F-002": "open",
+      "frontend-w2-F-003": "open",
+      "highload-w1-F-001": "open",
+      "highload-w1-F-002": "open",
+      "highload-w2-F-001": "open",
+      "layout-w1-LY-001": "open",
+      "layout-w1-LY-002": "open",
+      "logic-w1-F-001": "closed",
+      "logic-w1-F-002": "open",
+      "logic-w1-F-003": "open",
+      "logic-w2-F-001": "open",
+      "logic-w2-F-002": "open",
+      "performance-w1-F-001": "open",
+      "performance-w1-F-002": "open",
+      "performance-w1-F-003": "open",
+      "performance-w1-F-004": "open",
+      "performance-w2-F-001": "closed",
+      "performance-w2-F-002": "open",
+      "pr-contract-w1-PC-001": "closed",
+      "pr-contract-w2-PC-001": "closed",
+      "pr-contract-w2-PC-002": "open",
+      "security-code-w1-F-001": "open",
+      "testing-practices-w1-F1": "closed",
+      "testing-practices-w1-F2": "open",
+      "testing-practices-w1-F3": "closed",
+      "testing-practices-w1-F4": "open",
+      "testing-practices-w1-F5": "open",
+      "testing-practices-w1-F6": "closed",
+      "testing-practices-w1-F7": "open",
+      "testing-practices-w1-I1": "open",
+      "testing-practices-w1-I2": "closed",
+      "ui-ux-w1-UX-001": "open",
+      "ui-ux-w1-UX-002": "open",
+      "ui-ux-w1-UX-003": "open",
+      "ui-ux-w1-UX-004": "closed",
+      "ui-ux-w1-UX-005": "open",
+      "ui-ux-w1-UX-006": "open",
+      "ui-ux-w2-UX-001": "open",
+      "ui-ux-w2-UX-002": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:97a8363b49dc",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:97a8363b49dc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 295568,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:82fd81c93485",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:82fd81c93485",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 316434,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:0237f4e2a437",
+        "rawEvidence": "raw/review-degradation-w2.txt#sha256:0237f4e2a437",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 360201,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:5f479fd63fd7",
+        "rawEvidence": "raw/review-frontend-w2.txt#sha256:5f479fd63fd7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 321193,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:fc3527d16993",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:fc3527d16993",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 320762,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:decc90e8006c",
+        "rawEvidence": "raw/review-layout-w2.txt#sha256:decc90e8006c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 291952,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:861c12d766dd",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:861c12d766dd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 698715,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 4,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:272217b77466",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:272217b77466",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 295234,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:db62068ed762",
+        "rawEvidence": "raw/review-pr-contract-w2.txt#sha256:db62068ed762",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 307534,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:c22a98eb3090",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:c22a98eb3090",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 330650,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:a153aca5ebf7",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:a153aca5ebf7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 451339,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 3,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:f09ed20eedf2",
+        "rawEvidence": "raw/review-style-w2.txt#sha256:f09ed20eedf2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 284616,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:378156cf0818",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:378156cf0818",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 332910,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:60058f833505",
+        "rawEvidence": "raw/review-ui-ux-w2.txt#sha256:60058f833505",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": {
+          "tokens_in": 312215,
+          "tokens_out": 0,
+          "model": "claude-opus-5-5",
+          "dispatches": 2,
+          "unknown": 0
+        },
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 31,
+    "known": 31,
+    "unknown": 0,
+    "tokens_in": 4919323,
+    "tokens_out": 0,
+    "complete": true
+  },
+  "setAside": [
+    "raw/review-premise.txt"
+  ]
+}

@@ -1,0 +1,30 @@
+[
+ {
+  "id": "M1",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "  return next ?? rows[at];",
+  "replacement": "  return next ?? after[0];",
+  "kind": "behavior"
+ },
+ {
+  "id": "M2",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "  const next = parent === undefined ? after[0] : after.find(row => row.parent === parent);",
+  "replacement": "  const next = after[0];",
+  "kind": "behavior"
+ },
+ {
+  "id": "M3",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "  if (at < 0) return undefined;",
+  "replacement": "",
+  "kind": "behavior"
+ },
+ {
+  "id": "M4",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "      const target = handOffTarget(rows, lost.anchor, lost.parent);",
+  "replacement": "      const target = undefined as ReturnType<typeof handOffTarget>;",
+  "kind": "behavior"
+ }
+]

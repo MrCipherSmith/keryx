@@ -1,0 +1,25 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Slice-02 carries no rendered sizing, spacing, overflow, position or inline-style change: it holds the MetaprojectTree and MetaprojectView DOM tests (happy-dom, ARIA/keyboard/data assertions only), the platform transport tests, the Desktop Metaproject guide, the core tree contract and parser, the server-side tree builder (metaproject-explorer-v2.ts) and its tests. None of these files renders a box, so this lens has nothing to measure in this slice and files no findings. The rendered tree (MetaprojectTree.tsx, metaproject.css, MetaprojectView.tsx) is not in slice-02 and was not reviewed here. No measurement was attempted: exec_budget_s = 0 and no real-CSS tier was run.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1612 lines): MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx hunk, platform/metaproject.test.ts hunks, docs/docs/guides/desktop-metaproject.md hunks, metaproject-explorer-contract.ts hunks, metaproject-explorer-v2.ts hunks, metaproject-explorer-tree.test.ts", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+- Scope check: slice-02 touches no layout-bearing code. The two DOM test files assert ARIA attributes, focus, call counts and text under happy-dom; per this lens's Rule 1 they cannot observe geometry, and they do not claim to (no `toHaveClass` sizing assertions, no `getBoundingClientRect`). The guide, contract, server tree builder and its tests produce data, not boxes.
+- Layout-relevant inputs this slice feeds to another slice, noted for whoever holds the rendering slice, not filed: folder `name`, wiki group `name` (from `wikiGroupName`, e.g. "Domain model") and node titles are unbounded-length strings rendered as tree rows, and the folder file count / group page count is a trailing number next to them. Whether a row truncates instead of overflowing at the 320px floor and at the sidebar's narrowest width is decided in `apps/desktop/src/metaproject/MetaprojectTree.tsx` and `metaproject.css`, outside slice-02.
+- Not verified: no real-engine measurement was run (exec_budget_s = 0, read-only); nothing in this slice needed one.
+
+Routing audit: graph_used: no (not-relevant: the payload's `layers` block already enumerated affected files and the slice is self-contained); wiki_used: no (not-relevant: no layout concept to look up); ctx_used: no (slice and inputs read with the Read tool; a raw `cat` was refused by the ctx hook and not retried); raw_rg_used: no.

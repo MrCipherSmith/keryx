@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts",
+    "apps/desktop/src/platform/metaproject.ts"
+  ],
+  "files": [
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/OpenSpecView.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/platform/metaproject.ts",
+      "path": [
+        "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "apps/desktop/src/platform/metaproject.ts",
+      "path": [
+        "apps/desktop/src/metaproject/useExplorerNavigation.ts",
+        "apps/desktop/src/metaproject/OpenSpecView.tsx",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "path": [
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/App.tsx (hop 2, from apps/desktop/src/metaproject/MetaprojectView.tsx): run it, it is not read"
+    }
+  ],
+  "unresolved": [],
+  "counts": {
+    "changedFilesSeen": 7,
+    "changedFilesResolved": 7,
+    "changedFilesUnresolved": 0,
+    "candidates": 6,
+    "retained": 5,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 0,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 1,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 2,
+      "2": 3
+    }
+  },
+  "graph": {
+    "nodes": 4675,
+    "edges": 17794
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/platform/metaproject.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/platform/metaproject.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/metaproject/MetaprojectView.tsx"
+    }
+  ],
+  "testCommand": "bun test"
+}

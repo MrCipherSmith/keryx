@@ -1,0 +1,35 @@
+{
+  "reviewer": "review-ui-ux",
+  "wave": 1,
+  "waves": 1,
+  "slices": [
+    "slice-02"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-02",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/slices/slice-02.diff",
+      "bytes": 98096
+    }
+  ],
+  "result": "raw/review-ui-ux-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  }
+}

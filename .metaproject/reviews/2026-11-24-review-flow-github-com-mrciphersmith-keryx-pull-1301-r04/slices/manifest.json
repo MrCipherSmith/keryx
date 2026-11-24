@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 49705,
+      "contentHash": "aa785d852555987827ac8b147d9791cbbbc714384df631a6aa820233a3cb108f",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], apps",
+      "split": "domain",
+      "roles": [
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-regression",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "fix slice: answers 4 prior finding(s) r4-clean-code-w2-F-001, r4-degradation-w2-F-002, r4-frontend-w2-F-001, r4-logic-w2-F-001"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "r4-clean-code-w2-F-001",
+        "r4-degradation-w2-F-002",
+        "r4-frontend-w2-F-001",
+        "r4-logic-w2-F-001"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 20823,
+      "contentHash": "909f7b516e9b882830a2a0158e099235d20b851b53674beaf22466303378a3d8",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+      ],
+      "domain": "apps [test], apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/MetaprojectTree.tsx"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 774,
+      "contentHash": "8f3f413a8edf2daa7aa30c2748c224000f92ec30df4bbe9c51ecfdc5808d3ad4",
+      "files": [
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "domain": "apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/platform/metaproject.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 33515,
+      "contentHash": "16513cd10f33a7be05e6fb36bb892912a10486460bb5e6edcef89efc684a80f2",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 4, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 134768,
+      "contentHash": "23b6530dfb75580fd0b3687caac2722a07515392b15e7905b0d041f524996069",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.fix_context.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.fix_context.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T13.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T14.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json"
+      ],
+      "domain": ".metaproject",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 4, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 78756,
+      "contentHash": "842d30acbf9c0bd5b70bd8f786fee05325dfd1792a51543a5d7cab1d16e242c2",
+      "files": [
+        "apps/desktop/src-tauri/src/metaproject.rs",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "domain": "apps",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src-tauri/src/metaproject.rs, apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx (+2)",
+          "second look: unchanged since round 4, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 130257,
+      "contentHash": "0c28a571179c9b009b0781a3f65f87ae850ec4e59353b2f5853516d64732fd1d",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-contract.ts",
+        "src/integrations/metaproject-explorer-v2.ts",
+        "src/integrations/metaproject-explorer-tree.test.ts"
+      ],
+      "domain": "apps [test], docs [docs], src/integrations +1 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "schema: src/integrations/metaproject-explorer-contract.ts",
+          "source code: src/integrations/metaproject-explorer-v2.ts",
+          "second look: unchanged since round 4, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 7,
+    "bytes": 448598,
+    "files": 40,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

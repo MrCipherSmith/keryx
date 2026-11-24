@@ -1,0 +1,75 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Round 3 (fix delta f43a13c3f..b2043b98d, slice-01). The new permit-refusal retry in useMetaprojectTree is bounded: 2 retries, a linear wait of 150/300 ms plus up to 150 ms of jitter, at most about 750 ms in all. It matches only the Rust refusal text, which comes before any child is spawned, so a retry spawns no extra CLI child for a refused attempt and cannot amplify load on the permit pool. It keeps the hook's client slot during the wait, so MAX_TREE_READS still bounds in-flight reads. It re-checks the generation before each re-send. One info: a retry still runs after the view unmounts, because unmount does not retire the generation (bounded, at most MAX_TREE_READS x 2 extra reads). There are no blocker, major or minor findings. Of the 9 prior findings, 7 are closed, 1 is partial (the comment still hard-codes 'eight') and 1 is open (a retired read still holds its slot; accepted as the cost of the cap).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-highload",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;",
+      "problem": "This answers the round-2 permit concern (r2-architecture-w1-F-001's alternative, a retry on 'unavailable'). The new permit retry stops only when the snapshot generation changes (`current()`). The generation is bumped only by a snapshot change, never on unmount. A read refused a permit while its MetaprojectView is closing (the project window closes, or the user leaves the explorer) therefore still waits and re-sends up to PERMIT_RETRIES times after the hook is gone. Each re-send that gets a permit spawns a CLI child under the 150 s Rust bound, and its answer goes to an unmounted component.",
+      "impact": "The work is bounded: at most MAX_TREE_READS (3) reads x 2 retries per unmounted tree, with waits of about 750 ms at most. The trigger is the case the retry exists for: every permit taken, e.g. several project windows re-reading at once, while one of them closes. It then competes for the same shared permits with the windows still open. No data is harmed, and before this round the first attempt already outlived unmount, so this is a small extension of existing behaviour, not a new class.",
+      "suggested_fix": "Optional: bump `generation.current` in an unmount cleanup (useEffect(() => () => { generation.current++; }, [])). The existing `current()` checks then stop queued reads, pending retries and late answers alike.",
+      "evidence": "useMetaprojectTree.ts: `generation.current++` appears only inside `if (state.current.graph.snapshot !== snapshot)`. attempt() re-checks `current()` before and after `pause(...)`. No effect cleanup exists in the hook (it imports only useCallback, useMemo, useReducer, useRef). Refusal text: apps/desktop/src-tauri/src/metaproject.rs:199 `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\".into())`, returned by ReadPermit::acquire before the child is run.",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-permit-retry-outlives-unmount",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r2-architecture-w2-F-001", "disposition": "closed"},
+    {"id": "r2-clean-code-w1-F-002", "disposition": "partial"},
+    {"id": "r2-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r2-logic-w2-F-001", "disposition": "open"},
+    {"id": "r2-performance-w2-F-001", "disposition": "closed"},
+    {"id": "r2-style-w2-F-002", "disposition": "closed"},
+    {"id": "r2-testing-practices-w2-F1", "disposition": "closed"},
+    {"id": "r2-ui-ux-w2-UX-001", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, fix delta f43a13c3f..b2043b98d (slice-01, kind fix). Scope mode diff. Load profile: not provided. The concrete triggers used are several project windows sharing Desktop's process-wide 8 read permits (`MAX_ACTIVE`, metaproject.rs:186), and up to MAX_TREE_READS tree reads per explorer. Files reviewed: apps/desktop/src/metaproject/useMetaprojectTree.ts (whole file at head), apps/desktop/src/metaproject/MetaprojectTree.tsx (fix hunks), apps/desktop/src/platform/metaproject.test.ts (fix hunk), the added DOM tests (by title, plus the permit-retry tests in full), and metaproject.rs ReadPermit for context.
+
+Summary: The permit retry is capped (2), uses a growing wait with jitter, and fires only on the pre-spawn permit refusal. Its retries are therefore read-only and do not amplify load. It never runs past a snapshot change, and the client limiter still bounds in-flight reads. Stats: blocker 0 | major 0 | minor 0 | info 1.
+
+Findings:
+- CLI / Multi-Session: [F-001] (info) The permit retry outlives unmount, because unmount does not retire the generation. It is bounded at 3 reads x 2 retries.
+- Concurrency & Races: None detected. The `slots` pool and the generation counter are mutated only on the JS event loop. The transport turns a refusal by Rust into a rejection, and errMessage keeps the full 'unavailable: …' text: 'unavailable' is not in METAPROJECT_ERROR_CODES, so the error is rethrown raw.
+- Resources: None detected. The wait's timer resolves within 750 ms; the limiter's slot is released in `.finally`.
+- Caching: None detected (not applicable).
+- Lock Contention: None detected. The client slot is kept during the wait while the Rust permit is not, which is what is needed to keep MAX_TREE_READS a hard bound.
+- Async / Queues: None detected. The queue is bounded by the parents shown on screen, and reads queued under a retired generation never start.
+- Retry / Timeout / Circuit Breaker: None detected. The cap is 2, the wait grows linearly (150, then 300 ms) with up to 150 ms of uniform jitter, and the retry is limited to the one refusal Rust says to retry.
+- Idempotency & Distributed Invariants: None detected. Tree reads are read-only, and every retry re-sends the same pinned expectedSnapshotId.
+
+Prior dispositions (checked against the head code):
+- r2-architecture-w1-F-001 closed. The comment no longer promises that the rest of the permits stay free; it says the permits are shared by every window. Exhaustion is now handled by the retry on 'unavailable', which was the finding's own alternative.
+- r2-architecture-w2-F-001 closed. The headroom promise that could go stale has been removed, and a refusal is now retried instead of failing the folder.
+- r2-clean-code-w1-F-002 partial. The new isPermitRefusal comment names `metaproject.rs`, but the MAX_TREE_READS comment still hard-codes 'Desktop's eight read permits' instead of naming MAX_ACTIVE.
+- r2-frontend-w2-F-001 closed. The catch returns after onStale(), so the row stays loading and no dead Retry appears. Tests: a stale-snapshot next page in the DOM test, and `deadRetry()` in the View test.
+- r2-logic-w2-F-001 open (info, an accepted cost). limit() still frees a slot only when the task settles. The new retry path re-checks current() around its wait, so a retired read no longer keeps its slot through the retries. An in-flight send still holds its slot until the CLI answers.
+- r2-performance-w2-F-001 closed. The layout effect passes its `elements` to remember(), and onFocus takes the index from `rows.findIndex` with no DOM query. Only onBlur's microtask still queries the DOM, once per blur.
+- r2-style-w2-F-002 closed (renamed to treeError / searchError).
+- r2-testing-practices-w2-F1 closed. Two tests were added: 'focus that left the tree stays outside when the focused Show more row's page arrives' and '… when the focused Loading row is replaced by children'.
+- r2-ui-ux-w2-UX-001 closed. The early return after onStale() is in place, and the View test asserts there is no 'Could not load.' row while the banner shows.
+
+Clean Areas: Part 0 (retry cap/backoff, child fan-out bounded by MAX_TREE_READS), Part A, Part B, Part C (n/a), Part D, Part E, Part F, Part G were all reviewed.
+
+Not verified: nothing was run (exec_budget_s 0). The test evidence is the provided verify-tests-to-run-1.txt at b2043b98d (exit 0), which I did not re-open. The behaviour of several windows contending for the shared permits was checked by reading the code only.
+
+Routing audit: graph_used: no (the payload's layers block supplied the affected files and related tests). wiki_used: not-relevant (a narrow fix-delta review). ctx_used: yes (keryx ctx rg / ctx read). raw_rg_used: no.
+KERYX_USAGE {"tokens_in":124612,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

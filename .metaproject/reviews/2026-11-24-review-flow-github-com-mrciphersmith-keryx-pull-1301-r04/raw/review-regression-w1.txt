@@ -1,0 +1,29 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B, round 5, delta 3ad918b66..0d6df2937 (fix round 4), slice-01 (fix) read in full. No regression found; 0 findings. The delta changes two things that dependents can feel. (1) useMetaprojectTree's `reload` input is now required (useMetaprojectTree.ts:115, `reload: unknown`). Every caller of useMetaprojectTree was enumerated with `keryx ctx rg -n useMetaprojectTree apps/desktop/src --all` (complete, 6 matches in 4 files). There are two call sites: MetaprojectView.tsx:760-762 passes `reload: catalog`, and the MetaprojectTree.dom.test.tsx Harness passes `reload: props.reload ?? 0`. MetaprojectTree.tsx imports only types and constants from the hook. The whole Desktop tsc passed at the head (research-evidence/verify-tests-to-run-1.txt: exit 0, 1021 pass), so no caller lost the argument. The value semantics are unchanged: the effect at useMetaprojectTree.ts:262-268 compares by identity exactly as before. (2) The focus target choice moved from an inline nested ternary into handOffTarget() (MetaprojectTree.tsx:86-92), called from the layout effect at :191. I compared it branch by branch with the removed expression. With no anchor, or an anchor not shown, the result is undefined and the caller falls back to the old index. With no parent, the result is after[0] ?? rows[at]. With a parent, it is the parent's first row after the anchor ?? rows[at]. That matches the removed code exactly, so the behaviour is unchanged. The component doc at MetaprojectTree.tsx:116-120 and plan.md are text only. Coverage: this round has NO computed blast-radius record. plan.json:224 says the blast radius was not computed (the recount was refused because of a base mismatch), and scope.md:71/:93 say the scope-B screen did not run. So I used the payload's `layers.affected` set (depth 2, truncated: []) as the candidate list: App.tsx, MetaprojectView.tsx, MetaprojectTree.dom.test.tsx and MetaprojectView.dom.test.tsx. No cap-dropped list exists to report, because there was no cap record at all. The graph walks dependents only, and runtime edges are not in it. Neither delta change has a runtime-keyed consumer: the hook is called directly and handOffTarget is module-private. The non-code files in the slice (flow dispatch JSON, flow.json, journal, plan.md, resolved/T15.implement.json) have no code radius, and the radius cannot answer for them. They are flow records with no consumer in the code graph. Prior dispositions: r4-clean-code-w2-F-001 closed. The component doc now defers to handOff and states the status-row rule (MetaprojectTree.tsx:117-120). r4-frontend-w2-F-001 closed. `reload` is required (useMetaprojectTree.ts:115) and both callers pass it. The test Harness keeps an optional prop of its own that defaults to a constant 0, which is legal: a test that needs recovery passes a changing value. r4-logic-w2-F-001 closed. plan.md:49 now states the hand-off rule, and the new matrix row covers the stale-snapshot state, with banner only, no Retry and re-read on catalog load. r4-degradation-w2-F-002 (info, unreported) open. The `reload` doc at useMetaprojectTree.ts:111-112 still says 'Changes whenever the explorer loads its catalog (Refresh catalog included)'. MetaprojectView.tsx:758 still says 'Every catalog load (a new catalog object) re-reads…'. The quiet re-read on returning to the explorer, which finds the same snapshot, still skips setCatalog, so `reload` does not change. The new plan.md matrix cell ('every catalog load re-reads parked reads, same snapshot id included') repeats the same overclaim. It is still info, with no user-visible effect because the banner stays up and recovers the rows, and it is below scope B's major floor, so it is not refiled here.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "r4-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r4-degradation-w2-F-002", "disposition": "open" },
+    { "id": "r4-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r4-logic-w2-F-001", "disposition": "closed" }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full (fix slice); code context read: MetaprojectTree.tsx handOff/handOffTarget/layout effect and component doc, useMetaprojectTree.ts reload input and reload effect, MetaprojectView.tsx:750-765", "status": "DONE" }
+  ],
+  "follow_ups": [
+    "No blast-radius record was computed for this round (plan.json:224, recount refused on a base mismatch; scope.md:71/:93, scope-B screen did not run). This review used the payload's layers.affected set as the candidate list. If the round needs a screened scope B, compute the radius against base 3ad918b66 and re-ingest."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary: I found no regression in the fix-round-4 delta. Making `reload` required reaches both call sites, and both pass it; Desktop tsc and the whole suite pass at 0d6df2937. The handOffTarget extraction behaves the same as the removed ternary in every branch. Prior dispositions: three are closed, and r4-degradation-w2-F-002 (info) is still open, because the `reload` doc, the MetaprojectView comment and the new plan.md matrix cell still say "every catalog load". Coverage caveat: this round has no computed blast-radius record, so I used the payload's layers.affected set (depth 2, not truncated) instead. The non-code files in the slice have no radius, and the review cannot answer for them. Not verified: I ran no tests myself (exec_budget_s 0). I relied on the recorded test output at the head.
+
+Routing audit: graph_used: yes (payload layers.affected from the graph at 0d6df2937; no separate gdgraph call), wiki_used: not-relevant (narrow fix-delta regression check), ctx_used: yes (keryx ctx rg/read/show), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":125288,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

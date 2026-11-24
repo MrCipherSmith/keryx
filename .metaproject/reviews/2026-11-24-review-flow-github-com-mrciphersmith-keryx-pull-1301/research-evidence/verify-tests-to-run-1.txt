@@ -1,0 +1,21 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts && cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree
+time: 2026-11-24T07:10:15.607Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+ 31 pass
+ 0 fail
+ 147 expect() calls
+Ran 31 tests across 2 files. [5.25s]
+
+ 133 pass
+ 0 fail
+ 596 expect() calls
+Ran 133 tests across 3 files. [804.00ms]

@@ -1,0 +1,88 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: round-5 delta base 3ad918b66a990c7f0b04180e17d9fb74fb82713a
+- Merge-base (PR vs main): a5d1ab236fe85dee62a758a19390049dde4eb7f9
+- Scope mode: explicit-hash-range 3ad918b66..0d6df2937, slice-01 (fix) only
+- Spec compliance gate: ran against plan.md and the AC list. Fix round 4 changes no behaviour except making `reload` required, so no AC regresses. AC7 is green per verify-tests-to-run-1.txt: 1021 pass, exit 0.
+
+### Prior dispositions (checked against the code)
+- r4-clean-code-w2-F-001: **closed**. The component doc at MetaprojectTree.tsx:116-121 now defers to `handOff`: "a status row hands it to its own parent's next row, any other row to the row after the one that preceded it". This matches handOff() at :72-79 (an entry row anchors to rows[index-1]; a status row anchors to `d:<parent>` or to the parent's last entry, with `parent` set) and handOffTarget() at :86-92.
+- r4-frontend-w2-F-001: **closed**. useMetaprojectTree.ts:115 is now `reload: unknown;` (required), and its doc says why. `keryx ctx rg -n "useMetaprojectTree\(" apps/desktop/src --all` finds one production caller: MetaprojectView.tsx:760-761, which passes `reload: catalog`. The DOM-test Harness (MetaprojectTree.dom.test.tsx:71) passes `reload: props.reload ?? 0`. The omission the finding described can no longer type-check. Making the field required (`reload: unknown`) still accepts `undefined` passed explicitly, but no caller does that.
+- r4-logic-w2-F-001: **closed**. plan.md:49 drops "Focus is never moved by data arriving". It now states the operator rule: focus is never taken from elsewhere, and a replaced row hands focus to the row now at its place, with entry and status rows treated separately, as in handOff. The state x event matrix gains a "folder or page read answered stale-snapshot" row: parked as Loading, no Retry, banner only, and the reveal waits on it. That row's wording has its own defect, filed as F-001 below.
+- r4-degradation-w2-F-002: **open** (unreported in fix round 4, and nothing in the delta touches it). useMetaprojectTree.ts:111-113 still says `reload` "Changes whenever the explorer loads its catalog (Refresh catalog included)". MetaprojectView.tsx:758 still says "Every catalog load (a new catalog object) re-reads…". The quiet re-read at MetaprojectView.tsx:410-412 returns before setCatalog when the snapshot is unchanged. In that case `reload` keeps its value and parked rows are not re-read. The PR body in pr-context.md still says the same.
+
+### Summary
+Slice-01 is the fix-round-4 bookkeeping: the T15 dispatch, fix_context and resolved context, flow.json, journal.md, and the plan.md amendment. It also carries the two code hunks on my lens: the component doc reword and `reload` becoming required. Both code changes are correct: the doc matches handOff and handOffTarget, and every caller supplies `reload`. One new info finding: the plan amendment written for r4-logic-w2-F-001 copies the "every catalog load re-reads" over-claim of the still-open r4-degradation-w2-F-002 into the spec.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. `reload: unknown` is now required, and both call sites (MetaprojectView.tsx:761, MetaprojectTree.dom.test.tsx:71) supply it.
+
+### Edge Cases
+None detected.
+
+## Regressions the fixes introduced
+[F-001] (info): this answers r4-logic-w2-F-001. The new plan.md matrix row states that every catalog load re-reads parked reads. That is the claim r4-degradation-w2-F-002 showed to be too broad: a quiet re-read that finds the same snapshot does not re-read them.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Fix round 4 (slice-01): r4-clean-code-w2-F-001, r4-frontend-w2-F-001 and r4-logic-w2-F-001 are closed against the code. r4-degradation-w2-F-002 is open: it was unreported and nothing in the delta touches it. One new info finding: the plan.md stale-snapshot row added for r4-logic-w2-F-001 repeats the 'every catalog load re-reads' over-claim.",
+  "slices": [{"id": "slice-01", "status": "DONE", "coverage": "read in full; touched code read for context: MetaprojectTree.tsx:55-121, MetaprojectView.tsx:395-424 and :758-761, useMetaprojectTree.ts reload doc/effect"}],
+  "prior_dispositions": [
+    {"id": "r4-clean-code-w2-F-001", "disposition": "closed"},
+    {"id": "r4-degradation-w2-F-002", "disposition": "open"},
+    {"id": "r4-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r4-logic-w2-F-001", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "line": null,
+      "quote": "every catalog load re-reads parked reads, same snapshot id included (fix round 3); a new snapshot drops them",
+      "problem": "The plan amendment that answers r4-logic-w2-F-001 adds a matrix row for stale-snapshot reads. Its 'new snapshot' cell says that every catalog load re-reads parked reads, same snapshot id included. Not every catalog load does. A quiet re-read (the explorer shown again) that finds the same snapshot returns before setCatalog (MetaprojectView.tsx:410-412). The catalog object, and with it the `reload` input, stays the same, so the reload effect in useMetaprojectTree.ts (~:260-268) does not run and the rows stay parked. This is the over-claim of r4-degradation-w2-F-002, which is still open. The fix round has now copied it into the spec that later fix rounds and the flow-complete verifier check behaviour against.",
+      "impact": "There is no runtime defect. The quiet path also leaves snapshotMismatch set, so the Refresh catalog banner stays up and still recovers the rows. The risk is to the flow: a verifier checking the code against this cell could report the quiet path as a spec gap, or a worker could 'fix' it by making quiet reads replace the catalog.",
+      "suggested_fix": "Close this together with r4-degradation-w2-F-002, with one wording for all four sites: the plan.md cell, the `reload` doc in useMetaprojectTree.ts, the MetaprojectView.tsx:758 comment and the PR body. For example: 'every catalog load that replaces the catalog (Refresh catalog, Rebuild, a new snapshot) re-reads parked reads, same snapshot id included'.",
+      "evidence": "plan.md stale-snapshot matrix row (slice-01 hunk @@ 29,72, new line 66). MetaprojectView.tsx:409-413: `if (quiet && result.snapshotId === loadedSnapshot.current) { setFreshness(...); return; }` comes before `setCatalog(result)` and `setSnapshotMismatch(false)`. MetaprojectView.tsx:761 passes `reload: catalog`. useMetaprojectTree.ts:262 `const loadedCatalog = useRef(reload);` and its effect re-read only when `loadedCatalog.current !== reload`. `keryx ctx rg -n \"every catalog load|catalog load\" apps/desktop/src/metaproject plan.md docs guide --hidden --all` finds the claim at plan.md:66 and MetaprojectView.tsx:758. The PR body in pr-context.md carries it as well.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes, reported honestly:
+- I read only slice-01. The handOffTarget refactor and the test hunks of this delta are in other slices and were read here only as context for the doc check.
+- I ran no tests (exec_budget_s = 0). Test status comes from research-evidence/verify-tests-to-run-1.txt as the brief states it; I did not re-check that file.
+- I did not check that the PR body edit matches the delta beyond the wording that F-001 and r4-degradation-w2-F-002 cover.
+- Routing audit: graph_used no (payload layers block used instead; the delta's code callers were enumerated with ctx rg); wiki_used no (not-relevant, flow-internal behaviour); ctx_used yes; raw_rg_used no.
+KERYX_USAGE {"tokens_in":131799,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

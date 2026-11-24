@@ -1,0 +1,80 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 4 delta b2043b98d..3ad918b66, slices 02 and 03 read in full. Fix round 3 is clean at function level: read() is down to about 25 lines, with the permit back-off in withPermitRetry and failure classification in settleFailure; the permit refusal is classified once in the transport. The limiter doc, the TreeFolder doc and the ensure/more docs now match the code. One stale doc remains: the MetaprojectTree component doc still gives the old focus hand-off rule that handOff() replaced (minor). One info: the permit-refusal prefix is a second literal restating the exported message.",
+  "slices": [
+    { "id": "slice-02", "status": "DONE" },
+    { "id": "slice-03", "status": "DONE", "coverage": "Its two hunks show apps/desktop/src/platform/metaproject.ts lines as removed, but `git diff b2043b98d..3ad918b66` on that file shows only the 12 added lines (permit classifier, also in slice-02), and both 'removed' lines are still present at the head (metaproject.ts:268 and :316). This is a slicing artifact with no change to review." }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": " * when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its\n * place: the one after the row that preceded it, when that row is still shown.",
+      "problem": "Documentation drift in a symbol this delta changed. The fix for r3-logic-w5-F-002 replaced the hand-off rule. A status row now anchors to its own parent: a Loading row anchors to `d:<parent>`, and a Show more row to the parent's last entry, and focus goes to the next row of that parent (handOff(), with the layout effect's `after.find(row => row.parent === lost.parent)`). Only an entry row still uses 'the row before it'. The component doc above `export function MetaprojectTree` still states only the old rule, 'the one after the row that preceded it'. That rule is the one the new test 'a focused Show more whose page lands with the children of the folder above it…' shows to be wrong: the row before Show more there is src's Loading row. The handOff doc and the layout-effect comment in the same file give the new rule, so one behaviour is now documented two ways.",
+      "impact": "A reader of the component's public doc expects the pre-fix behaviour. A later change made to match that doc would bring back the r3-logic-w5-F-002 misfocus.",
+      "suggested_fix": "Reword the last sentence of the doc so it defers to handOff, for example: '…when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place (`handOff`): a status row hands it to its own parent's next row, any other row to the row after the one that preceded it.'",
+      "evidence": "MetaprojectTree.tsx:101-107 (component doc, unchanged by the delta) against handOff() at :958-965 of slice-02 (new) and the layout effect's target lookup (`lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)`), both changed in this delta. The new test in MetaprojectTree.dom.test.tsx expects focus on README.md, not on the row after the Loading row.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": "const PERMIT_REFUSAL_PREFIX = \"unavailable: Too many Metaproject reads\";",
+      "problem": "The prefix the classifier matches on is a second hand-written literal. It restates the start of the exported METAPROJECT_PERMIT_REFUSAL on the line above it. Nothing ties the two together, so a change to one wording can leave the other behind. The platform test covers the full message, and the full message starts with the prefix, so today the two agree.",
+      "impact": "Low: two adjacent constants in one file. Recorded so the next edit of the message also updates the prefix.",
+      "suggested_fix": "Derive one from the other, for example `const PERMIT_REFUSAL_PREFIX = METAPROJECT_PERMIT_REFUSAL.slice(0, METAPROJECT_PERMIT_REFUSAL.indexOf(\".\"));`. Or match on the full constant if the Rust text is pinned anyway.",
+      "evidence": "apps/desktop/src/platform/metaproject.ts at 3ad918b66, the two constants added by this delta; Rust source of the text is apps/desktop/src-tauri/src/metaproject.rs:199.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `b2043b98d` | Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a`
+- Scope mode: `explicit-hash-range` (b2043b98d..3ad918b66) | Changed files reviewed: 7 code/test files (slice-02), plus flow records. slice-03 is a slicing artifact: its hunks show no real change.
+
+### Summary
+Fix round 3 is structurally sound. Lifting withPermitRetry and settleFailure out of read() resolves r3-clean-code-w1-F-002. The rewritten limiter and TreeFolder/ensure/more docs resolve r3-clean-code-w1-F-001 and r3-clean-code-w2-F-001. One component-level doc still states the focus rule that this delta replaced.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+#### Functions
+No function issues found. read() is about 25 lines; withPermitRetry (12) and settleFailure (25) each do one job; handOff is a pure helper.
+#### Comments
+- [F-001] minor: the MetaprojectTree component doc (MetaprojectTree.tsx:105-106) still describes the old hand-off rule ('the row after the one that preceded it'), which handOff() replaced.
+#### Error Handling
+No error-handling issues found. The stale-snapshot, not-found and failed outcomes are each recorded as state. The limiter's catch reports unexpected throws. isMetaprojectPermitRefusal excludes typed CLI errors.
+#### DRY
+No DRY issues found. The loading-reset and stale/failed `more` constructions appear twice each, below the 3-copy threshold. [F-002] info: PERMIT_REFUSAL_PREFIX restates METAPROJECT_PERMIT_REFUSAL as a second literal.
+#### SOLID
+No SOLID issues found. The `reload?: unknown` revision input keeps MetaprojectTreeModel's interface unchanged.
+
+### Clean Areas
+useMetaprojectTree.ts (withPermitRetry, settleFailure, reread/retry, reload effect, type and model docs); platform/metaproject.ts classifier and its test; MetaprojectView.tsx reload wiring and comment; flatten() stale handling in MetaprojectTree.tsx; the new DOM and view tests.
+
+### Not verified
+I ran no tests (exec_budget_s 0); I relied on the supplied test output at 3ad918b66 (exit 0). I checked the Rust permit text at metaproject.rs:199 by reading it, not by running it.
+
+Routing audit: graph_used: no (not-relevant: the slices and touched files were supplied); wiki_used: no (not-relevant: function-level lens on supplied diff); ctx_used: yes (keryx ctx rg for symbol checks; one raw `git diff` of a single file, marked keryx:raw, to confirm the slice-03 artifact); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":149501,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

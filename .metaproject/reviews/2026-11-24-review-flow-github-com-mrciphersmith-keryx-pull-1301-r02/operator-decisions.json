@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-highload-w1-F-001",
+      "answer": "dismiss",
+      "reason": "Keeping the slot until the read settles keeps CLI concurrency bounded at 3 (the round-1 major); the remaining latency belongs to the read-latency stage, already out of scope.",
+      "quote": "dismiss",
+      "at": "2026-11-24T07:30:28.962Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "3907195dc638516b14c4bf38c0e8027ff2ded0112846b590792afa0874fc505f"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r2-highload-w1-F-001",
+        "questionText": "r2-highload-w1-F-001: when the snapshot changes, a read already in flight keeps its slot in the tree read limiter (3 slots) until the CLI answers (up to 150 s). The premise judge challenged it: freeing the slot early would let more than 3 CLI children run, which is what the round-1 major asked to bound, and read latency is already out of scope. Uphold the finding (free the slot early) or dismiss it (keep the slot until the read settles)?",
+        "answerText": "dismiss",
+        "time": "2026-11-24T07:30:28.962Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-style-w2-F-001",
+      "answer": "dismiss",
+      "reason": "limit(() => ...) is the established p-limit idiom and the ref-to-local copy is ordinary React; the names stay.",
+      "quote": "dismiss",
+      "at": "2026-11-24T07:30:29.242Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "c33596a665204177ff43d52cac7fe72def97f9314a2a18f68598e14db79df3dc"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r2-style-w2-F-001",
+        "questionText": "r2-style-w2-F-001: the limiter in useMetaprojectTree.ts is named `limit(() => ...)` and its state is `slots`/`pool`. The style reviewer asks for one name for the state and a verb for the function (`readQueue`/`enqueueRead`). The premise judge challenged it: `limit(() => …)` is the p-limit idiom, and copying ref.current into a local is ordinary React. Uphold (rename) or dismiss (keep the names)?",
+        "answerText": "dismiss",
+        "time": "2026-11-24T07:30:29.242Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02#r3-style-w1-F-001",
+      "answer": "dismiss",
+      "reason": "Same kind of naming choice the operator kept in round 2 (slots/pool); the neighbouring destructured fields are aliased too.",
+      "quote": "dismiss",
+      "at": "2026-11-24T08:19:59.123Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "8a026ea89fd02646802b4b8cf88c90ef7c970633d8dee2f830d708de82195fef"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r3-style-w1-F-001",
+        "questionText": "r3-style-w1-F-001: in the permit retry, one wait function has three names: `sleep` (module default), `wait` (hook option) and `pause` (the destructured alias in read()). The premise judge challenged it: in round 2 you kept two names for one thing in this same file (slots/pool), and the neighbouring fields are aliased too (`cwd: root`, `request: send`). Uphold (use `wait` without an alias) or dismiss (keep the names)?",
+        "answerText": "dismiss",
+        "time": "2026-11-24T08:19:59.123Z"
+      }
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: diff, supplied slice `slice-01` only (read in full, 2534 lines)
+- Stack detected: fullstack — Rust (Tauri command), TypeScript platform transport, React (no MobX in Desktop)
+
+### Summary
+The slice adds an optional `tree` action through the Desktop transport (Rust `RequestV2::Tree`, TS `requestMetaprojectTree`, a strict response guard) and a tree UI split into a data hook (`useMetaprojectTree`) and a rendering component (`MetaprojectTree`), mounted by `MetaprojectView`. Dependency direction is sound: view -> component -> hook -> platform -> core contract, no cycle, and the capability handshake now pins its own required set (six actions) on both the Rust and TS sides with literal tests, so an older CLI still negotiates. No blocker or major; one minor (a core grouping rule re-derived on the client) and three info notes.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 3
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. `useMetaprojectTree.ts` imports only a type from `platform/metaproject.ts` and types/error class from the core contract; `MetaprojectTree.tsx` imports the hook module, not the reverse.
+
+### Module Boundary Violations
+- [F-001] minor — Wiki group key rule duplicated across the contract boundary (`apps/desktop/src/metaproject/MetaprojectTree.tsx`, `revealSteps`).
+- [F-004] info — Required-action set now lives in two places (Rust `ACTIONS`, TS `METAPROJECT_REQUIRED_ACTIONS`), detached from the contract.
+
+### Design Pattern Misuse
+- [F-002] info — Production prop types and initial state widened for test seams (`Negotiate` union; `requestTree` alone turns the tree on).
+
+### Dependency Inversion
+None detected. `requestTree` is injected through the view into the hook (`RequestTree` type), which is the I/O boundary the project already uses for `request`/`requestV2`/`negotiate`.
+
+### Framework-Specific (NestJS / React+MobX)
+- [F-003] info — Reveal orchestration lives in a dependency-less `useEffect` in the component rather than in the tree model.
+
+### Findings
+
+#### [F-001] Wiki group key rule re-derived on the client
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (`revealSteps`)
+- **Problem**: The client hard-codes the core's grouping rule: `const group = node.pageType || "other";`. The rule's owner is the core service (`src/integrations/metaproject-explorer-v2.ts:33` `const WIKI_UNTYPED_GROUP = "other";`, applied at line 145 as `node.pageType ?? WIKI_UNTYPED_GROUP`), which the contract does not export. Two copies of one domain rule on two sides of the contract, and they already differ (`||` vs `??`: an empty-string `pageType` maps to `"other"` on the client but to `""` in core).
+- **Why it matters**: Reveal (AC6) depends on the client predicting the server's key. If core changes the untyped-group key or its normalisation, reveal of wiki pages silently stops at the root (`setHandled` after "not found"), and no test on either side ties the two together.
+- **Fix**: Export the key (or a `metaprojectWikiGroupKey(node)` helper) from `src/integrations/metaproject-explorer-contract.ts`, use it in `metaproject-explorer-v2.ts` and in `revealSteps`.
+
+#### [F-002] Test seams shape the production prop type and initial state
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/MetaprojectView.tsx
+- **Problem**: `type Negotiate = (cwd: string) => Promise<1 | 2 | MetaprojectNegotiation>;` keeps the bare-number form only so older test doubles still type-check, and `useState(!negotiates && Boolean(requestTree))` turns the tree on because a test injected a reader. This follows the file's pre-existing pattern (`negotiates` is already derived from which seams were injected), so it is not a new violation.
+- **Why it matters**: Production behaviour branches on which test seams are present; the union widens every future caller's contract.
+- **Fix** (optional): migrate the test doubles to return `MetaprojectNegotiation` and narrow `Negotiate` to it.
+
+#### [F-003] Reveal algorithm sits in the component, not in the tree model
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (the reveal `useEffect` with no dependency list)
+- **Problem**: The hook owns data and paging, but the multi-step reveal (walk ancestors, `ensure`, `more`, `setExpanded`, `setHandled`) is orchestrated from an effect that runs after every render in the component. The rule the skill cites for this (`.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2) does not exist in this checkout, so no named rule is violated.
+- **Why it matters**: The reveal state machine is only testable through the DOM and re-evaluates on every render.
+- **Fix** (optional): move `revealSteps` and the step loop into `useMetaprojectTree` as `reveal(scope, node)`, leaving the component to request a scroll.
+
+#### [F-004] Required action set duplicated in Rust and TS
+- **Severity**: info
+- **File**: apps/desktop/src/platform/metaproject.ts (`METAPROJECT_REQUIRED_ACTIONS`); apps/desktop/src-tauri/src/metaproject.rs (`ACTIONS`)
+- **Problem**: Previously the TS check used the contract's `METAPROJECT_CAPABILITIES`; now the required set is a Desktop-local literal, mirrored in Rust. Each side pins its literal by test (`metaproject.test.ts:117`, Rust `tree_stays_optional_for_a_cli`), so per-side drift is caught; cross-language drift is not. This is the intended design (plan.md: the CLI must offer only what Desktop always sends).
+- **Fix**: none required.
+
+### Suggested Patches
+```diff
+--- a/src/integrations/metaproject-explorer-contract.ts
++++ b/src/integrations/metaproject-explorer-contract.ts
++/** The tree group key of a wiki page: its page type, or `other` without one. */
++export const metaprojectWikiGroupKey = (node: { pageType?: string }) => node.pageType || "other";
+--- a/apps/desktop/src/metaproject/MetaprojectTree.tsx
++++ b/apps/desktop/src/metaproject/MetaprojectTree.tsx
+-    const group = node.pageType || "other";
++    const group = metaprojectWikiGroupKey(node);
+```
+(and use the same helper at `metaproject-explorer-v2.ts:145`; choose `||` or `??` once, deliberately.)
+
+### Not verified
+- Rust was not compiled or run (no toolchain; `cargo test` pending in CI).
+- Slices other than slice-01 (core contract/service, tests, docs) were not reviewed; F-001's core-side citation was read via `keryx ctx rg` only to confirm the duplicated rule.
+- Layers: wiki and memory layers were empty in the payload; `gdgraph affected` was taken from the payload, not re-run.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-architecture",
+    "summary": "Transport and tree UI keep a sound dependency direction (view -> component -> hook -> platform -> contract, no cycle); the handshake's required set is pinned on both sides so older CLIs negotiate. One minor: the wiki untyped-group key rule is re-derived on the client instead of shared through the contract. Three info notes on test-seam typing, reveal placement and the duplicated required-action list.",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "line": null,
+        "quote": "const group = node.pageType || \"other\";",
+        "problem": "The client re-derives the core's wiki tree grouping rule (untyped pages -> group key \"other\") instead of taking it from the contract. Core owns it as an unexported constant (src/integrations/metaproject-explorer-v2.ts:33 WIKI_UNTYPED_GROUP, applied at :145 with `??`); the client copy uses `||`, so the two already differ for an empty-string pageType.",
+        "impact": "Wiki reveal (AC6) depends on the client predicting the server's group key; a change to the core rule silently stops reveal at the root with no test tying the two sides.",
+        "suggested_fix": "Export a single key helper or constant from src/integrations/metaproject-explorer-contract.ts and use it in both metaproject-explorer-v2.ts and revealSteps.",
+        "evidence": "MetaprojectTree.tsx revealSteps (slice-01 diff); keryx ctx rg '\"other\"|pageType' src/integrations/metaproject-explorer-v2.ts -> lines 33 and 145.",
+        "confidence": "high",
+        "reviewer": "review-architecture",
+        "location_class": "in-diff",
+        "publication": "finding"
+      },
+      {
+        "id": "F-002",
+        "severity": "info",
+        "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "line": null,
+        "quote": "type Negotiate = (cwd: string) => Promise<1 | 2 | MetaprojectNegotiation>;",
+        "problem": "The production prop type keeps the bare protocol number only for older test doubles, and initial tree support is switched on by the presence of an injected requestTree. Follows the file's existing seam pattern (negotiates derived from injection), so no new named violation.",
+        "impact": "Production behaviour branches on which test seams are present; the union widens the contract for future callers.",
+        "suggested_fix": "Optionally migrate test doubles to return MetaprojectNegotiation and narrow Negotiate.",
+        "evidence": "slice-01 diff, MetaprojectView.tsx hunks @@ 123,178 and @@ 231,304.",
+        "confidence": "medium",
+        "reviewer": "review-architecture",
+        "location_class": "in-diff",
+        "publication": "finding"
+      },
+      {
+        "id": "F-003",
+        "severity": "info",
+        "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "line": null,
+        "quote": "// Reveal a selection made elsewhere: expand its ancestors, reading and paging as needed; stop at a failure.",
+        "problem": "The reveal state machine (ensure/more/setExpanded/setHandled over ancestor steps) is orchestrated from a dependency-less useEffect in the rendering component while the data model lives in useMetaprojectTree. The React layering rule the skill cites (code-style-patterns.mdc Rule 2) is absent from this checkout, so this is an opinion, not a named violation.",
+        "impact": "Reveal is testable only through the DOM and re-evaluates after every render.",
+        "suggested_fix": "Optionally move revealSteps and the step loop into the model as reveal(scope, node).",
+        "evidence": "slice-01 diff, MetaprojectTree.tsx; .metaproject/rules/stacks/react/ does not exist (ls).",
+        "confidence": "medium",
+        "reviewer": "review-architecture",
+        "location_class": "in-diff",
+        "publication": "finding"
+      },
+      {
+        "id": "F-004",
+        "severity": "info",
+        "file": "apps/desktop/src/platform/metaproject.ts",
+        "line": null,
+        "quote": "export const METAPROJECT_REQUIRED_ACTIONS = [",
+        "problem": "The required capability set moved from the contract's METAPROJECT_CAPABILITIES to a Desktop-local literal mirrored by Rust ACTIONS. Each side pins its literal by test (metaproject.test.ts:117; Rust tree_stays_optional_for_a_cli); cross-language drift is not checked. Intended by plan.md.",
+        "impact": "None today; a future required action must be added in two places.",
+        "suggested_fix": "None required.",
+        "evidence": "keryx ctx rg METAPROJECT_REQUIRED_ACTIONS|METAPROJECT_CAPABILITIES apps/desktop src --all.",
+        "confidence": "high",
+        "reviewer": "review-architecture",
+        "location_class": "in-diff",
+        "publication": "omit"
+      }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 },
+    "needs_context": [],
+    "inputs_unreadable": [],
+    "follow_ups": [
+      "AC3 (Rust) remains unverified until CI runs cargo test."
+    ]
+  }
+}
+```
+
+Routing audit: graph_used: payload layers (gdgraph affected at PR head), not re-run; wiki_used: not-relevant (payload wiki layer empty); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

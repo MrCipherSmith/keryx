@@ -1,0 +1,61 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 5, slice-07 (second-look: MetaprojectTree/MetaprojectView DOM tests, platform transport tests, core tree contract/v2 service/tests, docs). Fix round 4 (3ad918b66..0d6df2937) in this slice only adds tests and a required `reload` input on the Harness; each new test is correct against the code it pins. The empty next-page test: Show more hands off with anchor d:src and parent root; with no root entry after src, handOffTarget returns the anchor, so focus lands on src as asserted. The parked-page test: a 'stale' more-folder renders as a loading row, and activate() ignores loading rows, so click/Enter send nothing until Refresh catalog. The reveal-through-stale test: the reveal effect returns on a 'stale' folder without marking the selection handled, and the catalog-driven `reload` re-read lets the same reveal finish. The Wiki re-read test matches useMetaprojectTree's reload effect, which re-reads parked folders of both scopes. The permit-classifier test matches isMetaprojectPermitRefusal ignoring typed CLI errors. `reload: unknown` is now required and its one production caller (MetaprojectView.tsx:760-762) passes `catalog`. Unchanged round-1 code in the slice (contract parser, graphTree/wikiTree, offsetPage, docs) has no new defect. No blocker, major, minor or info findings.",
+  "findings": [],
+  "needs_context": [],
+  "slices": [{ "id": "slice-07", "coverage": "read in full (all 2289 lines); also read the 3ad918b66..0d6df2937 delta of its files and, for context, MetaprojectTree.tsx (handOff/handOffTarget/flatten/reveal), useMetaprojectTree.ts reload effect, MetaprojectView.tsx useMetaprojectTree call", "status": "DONE" }],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`; round delta `3ad918b66..0d6df2937`
+- Scope mode: `explicit-hash-range` (slice-07, second-look)
+- Spec compliance gate: ran against AC5/AC6/AC4 for the test files in the slice. Nothing was found unimplemented. Execution evidence comes from the supplied verify-tests-to-run-1.txt (exit 0, 1021 pass). I did not re-run the tests (exec_budget_s = 0).
+
+### Summary
+In this slice, fix round 4 adds tests only, plus the Harness `reload` prop that matches the now-required hook input. Each new assertion was traced against MetaprojectTree.tsx and useMetaprojectTree.ts at the head and holds. The required `reload` has exactly one production caller, and that caller supplies it.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. The empty-next-page focus test covers a fallback branch. The core CLI cannot produce that branch under one snapshot, because `offsetPage` refuses an offset at or past the end. The test pins defensive behaviour, which is not a defect.
+
+### Not verified
+- I did not run the tests myself. I relied on the supplied verify-tests-to-run-1.txt.
+- No native app walkthrough.
+
+### Routing audit
+- graph_used: no. Not relevant: a delta of tests only, and the payload layers named the callers.
+- wiki_used: no. Not relevant.
+- ctx_used: yes. `keryx ctx rg` for the reload callers, `keryx ctx read` for the schema.
+- raw_rg_used: no. One raw `git diff` of the 88-line round delta, with a keryx:raw marker.
+KERYX_USAGE {"tokens_in":160725,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Round 3 delta f43a13c3f..b2043b98d (fix round 2), slice-05 second look. The anchored focus hand-off (moreId split plus the `before` anchor) fixes the batched-commit misplacement (r2-logic-w1-F-001) and the Loading-to-Show-more reuse (r2-frontend-w1-F-001). The permit retry matches the real Rust refusal string, because Tauri rejects with the raw string and `unavailable` is not a typed code. The limiter catch now reports instead of dropping. One regression: a stale-snapshot tree answer now leaves its folder or page in `loading` with no way out. A real snapshot change resets the tree, but when Refresh catalog returns the same snapshot id the folder stays on Loading for the life of the explorer. In round 2 its Retry would have succeeded.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "New in fix round 2, from the answer to r2-ui-ux-w2-UX-001. A tree read refused as stale-snapshot now returns early. A first read leaves the folder at `status: \"loading\"`, and a next-page read leaves `more: { status: \"loading\" }`. Only a change of the `snapshot` prop clears either state: the reset at the top of the hook compares `state.current.graph.snapshot !== snapshot`. Refresh catalog (MetaprojectView.tsx `onClick={() => setRevision(value => value + 1)}`) runs a non-quiet catalog read. When that read returns the same snapshotId as before, the tree is not reset. snapshotId is a content hash (metaproject-explorer-v2.ts `hash([...])`), so the same id comes back whenever the data returns to its earlier content. After that, nothing reads the folder again. `ensure()` skips it because `folders.has(parent)`. `retry()` acts only on `failed`. `more()` returns while `more.status === \"loading\"`. The row is a Loading row with no Retry, and collapsing or expanding does nothing. The reveal effect also stops on `folder.status === \"loading\"` or on the blocked `more()`, so a selection made elsewhere under that folder never reveals.",
+      "impact": "The folder, page group or root of the tree stays on \"Loading…\" with no recovery until the project's content really changes or the explorer remounts (another cwd). Reproduction: the snapshot id briefly differs and then comes back to the same content. One way is a read during a graph or wiki write, which the docs say is not atomic (cli-reference: \"not an atomic snapshot while graph or wiki files are being written\"), for example `keryx gdgraph build` rerun with no code change. Another is a wiki page saved and then reverted. A tree read in that window answers stale-snapshot, the banner shows, and Refresh catalog returns the original id. The banner goes away, and the folder stays on Loading permanently. In round 2 the same case showed an error row whose Retry re-sent the original pinned snapshot and succeeded, so this is a regression for that case. The MetaprojectView test 'a tree answer for another snapshot, or a stale-snapshot refusal, ...' runs exactly this path: the catalog stays `s1` after Refresh catalog. It never checks that `src` loads afterwards.",
+      "suggested_fix": "Make Refresh catalog re-read what was refused, even when the snapshot is unchanged. Option (a): give useMetaprojectTree an `epoch` that MetaprojectView increments on every non-quiet catalog read, or on clearing snapshotMismatch. Reset the scopes on it, as on a snapshot change: bump the generation, keep the expanded set, drop folders. Option (b): in the stale branch, record the folder as `status: \"stale\"` (or `more: { status: \"stale\" }`), render it as Loading, and let `ensure()`, `more()` and the reveal effect treat `stale` as re-readable once the explorer has cleared the mismatch. Do not simply delete the folder: the `unread` effect would then re-read it immediately in a loop while the CLI is still on another snapshot. Add an assertion to the MetaprojectView test: after Refresh catalog with the catalog still at `s1` and a good `s1|graph|src|` answer, `treeRow(\"Client\")` is shown. Add a matching assertion for a stale next page.",
+      "evidence": "Read at the head b2043b98d. useMetaprojectTree.ts: the reset guard `if (state.current.graph.snapshot !== snapshot)` is the only place that clears folders. The stale branch in read()'s catch returns before setFolder. ensure(): `if (state.current[scope].folders.has(parent)) return;`. more(): `... || folder.more?.status === \"loading\") return;`. retry() handles only `status === \"failed\"` or `more?.status === \"failed\"`. MetaprojectView.tsx: the Refresh catalog button calls `setRevision(value => value + 1)`. The non-quiet catalog effect calls `setCatalog(result)` and `setSnapshotMismatch(false)`, and the tree gets only `snapshot: catalog?.snapshotId`. metaproject-explorer-v2.ts:317: `snapshotId: hash([model.base.snapshotId, source.catalog.snapshotId, openEdges, diagnostics])` (sha256 over content). MetaprojectView.dom.test.tsx 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows': after `button(\"Refresh catalog\").click()` the explorer's `state.snapshot` stays `s1`, and the test asserts only that the banner is gone. Not executed (read-only, exec_budget_s 0). The path was traced in the code.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts:187 (stale branch, first read: folder left at status loading)",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts:187 (same branch, cursor read: more left at status loading)",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts:173 (an answer for another snapshot is thrown into the same branch)",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts:95 (the only reset, keyed on the snapshot id alone)",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx:124 and :130 (reveal waits on the stuck loading states)"
+        ],
+        "enumeration_method": "Listed every writer and reader of TreeFolder.status and TreeFolder.more in useMetaprojectTree.ts and MetaprojectTree.tsx (setFolder callers: ensure, more, retry, read's then and catch; readers: flatten, ensure, more, retry, reveal effect). Only read's catch can leave a 'loading' state that nothing settles. Its stale branch serves both the first-read and the cursor path, including the in-hook snapshot mismatch throw at :173. The only path that clears a folder is the snapshot-compare reset at :95. The one view-level recovery is the Refresh catalog button (keryx ctx rg 'Refresh catalog' MetaprojectView.tsx: one button, setRevision)."
+      }
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [{ "id": "slice-05", "coverage": "read in full (2664 lines); delta f43a13c3f..b2043b98d also read from git for apps/desktop/src", "status": "DONE" }],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: f43a13c3f (round-3 delta base)
+- Merge-base: `f43a13c3f35e488744bb8906c2c275d433f8d98b` (PR merge-base with main a5d1ab236)
+- Scope mode: `explicit-hash-range` (f43a13c3f..b2043b98d), slice-05 (second-look)
+- Spec compliance gate: ran against AC5/AC6 (focus, retry, stale-snapshot behaviour). No acceptance criterion is unimplemented. F-001 is a regression in AC5's "failed folder read ... Retry" recovery on the stale path, not a missing criterion.
+
+### Summary
+Fix round 2 places focus correctly when rows change above the focused row, splits the first-read and next-page status ids, retries a refused read permit, and reports throws from the limiter. One regression: a stale-snapshot refusal now leaves its folder stuck on Loading. A real snapshot change recovers it, but nothing recovers it when Refresh catalog returns the same snapshot id.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+[F-001] A stale-snapshot tree read leaves its folder or page stuck on Loading when Refresh catalog returns the same snapshot (useMetaprojectTree.ts, the stale branch of read()'s catch). Severity major. Fix: reset or re-read the refused parents on every non-quiet catalog read, not only on a snapshot change.
+
+### Async & Concurrency
+None detected. The permit retry checks `current()` before and after its wait, keeps its limiter slot for at most about 0.6 s, and matches the Rust refusal string. Tauri rejects with the raw string, and `unavailable` is not in METAPROJECT_ERROR_CODES, so the prefix survives requestMetaprojectV2.
+
+### Error Handling
+None detected. The limiter's catch now logs instead of dropping.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None beyond F-001. I checked the focus hand-off for these cases: a first read that answers with a next page, two folders answering in one commit, the last page with no new entries (`elements[anchor]` fallback), a root Loading row (`before` undefined, index fallback), and a new snapshot (anchor gone, index fallback). Each lands on a sensible row.
+
+### Not verified
+Nothing was run (read-only, exec_budget_s 0). F-001 was traced in the code, not reproduced. The test output at the head (verify-tests-to-run-1.txt, exit 0) was not re-read; the brief says it passed.
+
+Routing audit: graph_used: no (the payload's layers block was enough; the slice set the scope) · wiki_used: not-relevant (narrow delta) · ctx_used: yes (keryx ctx rg) · raw_rg_used: no. metaproject index: not read; this was a bounded subagent review with an explicit brief.
+KERYX_USAGE {"tokens_in":195601,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

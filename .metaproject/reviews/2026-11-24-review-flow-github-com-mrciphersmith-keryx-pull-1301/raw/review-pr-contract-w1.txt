@@ -1,0 +1,99 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 2 (fix delta 9f4ec475b..f43a13c3f), slice-01 read in full. The PR body has no checklist boxes; its stated claims were each set against the fix diff. No claim is contradicted by the code: the handshake still requires only the six actions (the fix only rewords the docs to 'requires' and adds the optional `tree` sentence), and `supportsTree` still comes from the probe. Two info findings: the PR body was not refreshed for the fix round (its verification counts and 'this PR's CI is the first run' predate it, and it does not mention that a snapshot-mismatched v2 answer for any action now raises stale-snapshot / Refresh catalog instead of 'Incompatible Metaproject v2 response'), and the new 'Module' label on module folder rows is not in the guide. Prior findings: 13 closed, 2 open (logic-w2-F-002 guide still promises an 'Other' group the CLI cannot emit; ui-ux-w1-UX-005 count still unlabelled).",
+  "slices": [{"id": "slice-01", "status": "DONE", "coverage": "read in full; for dispositions also read the full 9f4ec475b..f43a13c3f diff of MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts, MetaprojectView.tsx, metaproject-explorer-contract.ts and the docs"}],
+  "findings": [
+    {
+      "id": "PC-001",
+      "reviewer": "review-pr-contract",
+      "severity": "info",
+      "location_class": "pr-process",
+      "file": null,
+      "line": null,
+      "quote": null,
+      "problem": "The PR body (pr-context.md, Intent round 1) was not updated for the fix round 6c83eb7fb. Its claims 'Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass' and '`bun test src/integrations` 443 pass' predate the tests the fix added (MetaprojectTree.dom.test.tsx +137 lines, MetaprojectView.dom.test.tsx +68, platform/metaproject.test.ts, metaproject-explorer-tree.test.ts two new tests), and 'Not run locally: the Rust tests ... this PR's CI is the first run' is now superseded (CI at f43a13c3f: 29 success, 1 skipped, Rust cargo test included). The Transport bullet also does not mention a behaviour change the fix made outside the tree: apps/desktop/src/platform/metaproject.ts requestMetaprojectV2 now throws `new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\")` for any v2 answer whose snapshotId differs from expectedSnapshotId (detail, search, neighbors, tree), where matchesRequest used to reject it as 'Incompatible Metaproject v2 response. Choose the bundled CLI in Desktop Settings.'; MetaprojectView.tsx search Show-more now shows the Refresh catalog banner for it.",
+      "impact": "A reader of the PR body sees stale verification numbers and no mention that the Incompatible-response error path for snapshot mismatches became a stale/Refresh path for every v2 read. The code and the guide ('asks to refresh if the underlying data changes') agree; the cost is only a reader trusting the body. Unverified: the current test counts were not run by this reviewer (exec budget 0).",
+      "suggested_fix": "Refresh the PR body: update or drop the test counts, replace 'this PR's CI is the first run' with the CI result, and add one line under Transport that a v2 answer for another snapshot now raises stale-snapshot (Refresh catalog) for every action.",
+      "evidence": "pr-context.md lines 14, 20-23 versus `git diff 9f4ec475b..f43a13c3f` of apps/desktop/src/platform/metaproject.ts (snapshot check moved out of matchesRequest into requestMetaprojectV2 as MetaprojectRequestError stale-snapshot) and MetaprojectView.tsx (stale-snapshot -> setSnapshotMismatch(true)); test file churn from `git diff --stat`; CI state from pr-context.md 'CI: passing'.",
+      "confidence": "high",
+      "publication": "question"
+    },
+    {
+      "id": "PC-002",
+      "reviewer": "review-pr-contract",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}",
+      "problem": "The fix (answering ui-ux-w1-UX-004) adds a user-visible 'Module' kind label to module folder rows. The guide paragraph that explains module folders, docs/docs/guides/desktop-metaproject.md:97 'A folder that is also a module can be selected as that module: click its name or press **Enter** to select it', does not say how a reader recognises such a folder, and the diff does not touch it.",
+      "impact": "Low: a reader following the guide learns that some folders select a module on click but not that the 'Module' label marks them, which is the cue the fix added. Nothing in the guide is made wrong.",
+      "suggested_fix": "Optional: in desktop-metaproject.md, after 'A folder that is also a module', add 'shows a **Module** label and'.",
+      "evidence": "slice-01 MetaprojectTree.tsx hunk @@ 273,297 @@; `keryx ctx rg` over docs/docs/guides/desktop-metaproject.md for module-folder wording finds only lines 97-100, none mentioning the label.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "frontend-w1-F-001", "disposition": "closed"},
+    {"id": "logic-w1-F-001", "disposition": "closed"},
+    {"id": "architecture-w2-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-002", "disposition": "closed"},
+    {"id": "performance-w2-F-001", "disposition": "closed"},
+    {"id": "pr-contract-w2-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-F1", "disposition": "closed"},
+    {"id": "testing-practices-w1-F3", "disposition": "closed"},
+    {"id": "testing-practices-w1-F6", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-004", "disposition": "closed"},
+    {"id": "logic-w2-F-002", "disposition": "open"},
+    {"id": "pr-contract-w1-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-I2", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-005", "disposition": "open"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2},
+  "inputs_unreadable": []
+}
+```
+
+## Checklist form
+
+The PR body carries no checklist boxes (no Documentation needed / Tests updated / Breaking change / Screenshots). Each stated claim was worked as a row:
+
+| Claim (quoted) | State | What the fix diff shows | Result |
+|---|---|---|---|
+| "The handshake still requires only the six existing actions, so an older CLI keeps working; Desktop learns `supportsTree` from the probe." | stated | platform/metaproject.ts negotiateMetaprojectExplorer unchanged: `supportsTree: response.actions.includes("tree")`; docs reworded to "every action it requires" | holds |
+| "Listed in `capabilities`; v1 unchanged." | stated | no fix hunk touches capabilities or v1 | holds |
+| "`MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space)" | stated | moveTo now focuses directly; status rows share `status:${parent}`; layout effect hands lost focus on | holds (strengthened) |
+| "A selection made elsewhere reveals its path" | stated | revealSteps now uses exported metaprojectWikiGroupKey | holds |
+| "Docs: the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour." | stated | guide adds "uses an optional action, such as `tree`, only when the CLI lists it; without it, the list stays flat" | holds; new Module label undocumented -> PC-002 (info) |
+| Verification counts / "this PR's CI is the first run" | stated | fix added tests; CI has now run | stale -> PC-001 (info) |
+| Removal of exported `negotiateMetaproject` | not mentioned | `keryx ctx rg 'negotiateMetaproject\('` over apps and src: 0 matches | Desktop-internal export, no consumer; not a breaking-change claim to contradict |
+
+## Prior dispositions — basis
+
+- frontend-w1-F-001 closed: flatten() gives loading/error/more one id `statusId(parent)`; the layout effect refocuses the row at the lost index when the focused element is disconnected and focus fell to body.
+- logic-w1-F-001 closed: focusRequest removed; moveTo focuses the row element immediately.
+- architecture-w2-F-001 / testing-practices-w1-I2 closed: `METAPROJECT_WIKI_UNTYPED_GROUP` and `metaprojectWikiGroupKey` exported from metaproject-explorer-contract.ts and used by wikiTree and revealSteps.
+- degradation-w1-F-001 closed: wrapper deleted, no remaining caller.
+- degradation-w1-F-002 closed: matchesRequest no longer rejects a snapshot mismatch; requestMetaprojectV2 throws stale-snapshot; hook doc comment reworded to match.
+- performance-w2-F-001 closed: push in place.
+- pr-contract-w2-PC-001 closed: all three sites (desktop-metaproject.md:309, :332, cli-reference.md:8301) reworded to "requires".
+- pr-contract-w1-PC-001 closed: cli-reference.md:8301 now names `tree` as optional.
+- testing-practices-w1-F1 closed: new test injects symbol nodes into the model, asserts they were loaded, and checks listings and counts exclude them.
+- testing-practices-w1-F3 closed: MetaprojectView.dom.test.tsx:2139 drives a tree answer with snapshotId s2 and a stale-snapshot rejection and asserts the banner; platform/metaproject.test.ts:210 pins the transport.
+- testing-practices-w1-F6 closed: asserts client.ts rendered and no Loading row before the focus check.
+- ui-ux-w1-UX-004 closed: Module kind label on module folder rows (no title/aria-description, but the visual cue the finding asked for is present).
+- logic-w2-F-002 open: the fallback stays (as suggested) but desktop-metaproject.md:103 still reads "Pages without a page type are under **Other**", a group the loader cannot produce.
+- ui-ux-w1-UX-005 open: MetaprojectTree.tsx `<span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>` unchanged, no unit or label.
+
+## Not verified / honesty notes
+
+- No tests were run (exec budget 0); test counts in PC-001 are not re-measured. Behaviour of the focus-restore code was judged from the code and the added tests' names, not executed.
+- Conduct note: during this run I mistakenly created a stray one-character file at /Users/tsaitler.aleksandr/work/sandbox/keryx/.metaproject/reviews/placeholder-never-used.txt (main checkout, outside this worktree) and removed it immediately with `rm`; nothing else outside the result file was written.
+
+Routing audit: graph_used: no (not-relevant — dispositions settled from the diff and targeted reads; payload layers block consulted), wiki_used: no (not-relevant — docs checked directly), ctx_used: yes (keryx ctx rg / diff / read), raw_rg_used: no. Raw `git diff` used once with a keryx:raw marker to read exact fix hunks.
+KERYX_USAGE {"tokens_in":139634,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

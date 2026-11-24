@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2 (fix delta 9f4ec475b..f43a13c3f), slice-01 read in full, code mode only (no render supplied). Context: Keryx Desktop, developers browsing project knowledge; primary task: find and select a file, module or wiki page in the Metaproject sidebar tree; surface type: app screen. The fix hunks introduce no new UX or WCAG defect. The ui-ux findings: UX-004 is closed (module folder rows now carry the visible 'Module' kind label, which also enters the treeitem's accessible name); UX-005 (info, unlabelled counts) is still open: the count span is unchanged. Focus handling in the fix (one status-row id per parent so Retry / Show more update the focused <li> in place; a focused row that leaves hands focus to the row now at its index, only when focus fell to <body>; moveTo focuses immediately) closes frontend-w1-F-001 and logic-w1-F-001 at code level, and the error row now shares the loading row's role=status span, so a failure replaces 'Loading…' in the same live region. Of the non-UX prior findings, all are closed at code level except logic-w2-F-002: the guide still says 'Pages without a page type are under **Other**' (desktop-metaproject.md:103). Slop score: 0 (app screen; the delta adds no style, palette, font or surface; the only visual addition reuses the existing .metaproject-meta class that node rows use). WCAG 2.2 AA floor: no regression found in code; not measured on a render. Checks not run: live render at 1440/768/390 px and light/dark (no URL or screenshots supplied; screenshots of the Graph tree with an expanded module folder, a failed folder row and a Show more row would close it); computed contrast of .metaproject-meta inside a folder row; screen-reader read of the module folder treeitem name and of the loading->error live-region announcement; keyboard focus restore exercised in WKWebView (Tauri macOS), as opposed to the jsdom tests. Routing audit: graph_used: no (not-relevant: the slice and its 8 files were handed over in the payload); wiki_used: no (not-relevant: delta review of a fix round); ctx_used: yes (keryx ctx rg for the guide's 'Other' sentence and the stale-snapshot tests, keryx ctx read for the schema); raw_rg_used: no. git diff of the fix delta was read raw with a keryx:raw marker to judge the dispositions against code.",
+  "slices": ["slice-01"],
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "frontend-w1-F-001", "disposition": "closed"},
+    {"id": "logic-w1-F-001", "disposition": "closed"},
+    {"id": "architecture-w2-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-002", "disposition": "closed"},
+    {"id": "performance-w2-F-001", "disposition": "closed"},
+    {"id": "pr-contract-w2-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-F1", "disposition": "closed"},
+    {"id": "testing-practices-w1-F3", "disposition": "closed"},
+    {"id": "testing-practices-w1-F6", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-004", "disposition": "closed"},
+    {"id": "logic-w2-F-002", "disposition": "open"},
+    {"id": "pr-contract-w1-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-I2", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-005", "disposition": "open"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+## Disposition evidence (read against code at f43a13c3f)
+
+- **frontend-w1-F-001: closed.** MetaprojectTree.tsx flatten(): loading, error (both kinds) and more rows all use `statusId(parent)` = `status:${parent}`, so a keyboard Retry (error -> loading) or Show more (more -> more loading -> error) keeps the same `<li key>` and focus. Rows that leave (loading row replaced by children, the last page removing the more row, a snapshot reset) are handled by the layout effect: `if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) elements[Math.min(lost.index, elements.length - 1)]?.focus();`. Focus that was outside the tree is not taken: onBlur forgets it via queueMicrotask. The restore was verified by reading the code only; it was not run.
+- **logic-w1-F-001: closed.** `moveTo` now calls `.focus()` on the rendered row at once and leaves no pending request (the `focusRequest` ref is gone), so Home on the first row or End on the last row cannot leave a request for a later commit to consume.
+- **architecture-w2-F-001: closed.** `metaprojectWikiGroupKey` and `METAPROJECT_WIKI_UNTYPED_GROUP` are exported from metaproject-explorer-contract.ts. Both wikiTree (core) and revealSteps (Desktop) call the helper, and both now use `||`.
+- **degradation-w1-F-001: closed.** The `negotiateMetaproject` wrapper is deleted from platform/metaproject.ts.
+- **degradation-w1-F-002: closed.** The snapshot check moved out of `matchesRequest`. `requestMetaprojectV2` now throws `MetaprojectRequestError("stale-snapshot", …)` for an answer that belongs to another snapshot. The hook's doc comment now describes that path.
+- **performance-w2-F-001: closed.** wikiTree pushes into the existing group array.
+- **pr-contract-w2-PC-001: closed.** All three sites now say "requires": guide :309 and :333, and cli-reference :8301.
+- **testing-practices-w1-F1: closed.** The new test injects symbol nodes into the graph model, asserts they were loaded, and asserts that the listings and folder counts exclude them.
+- **testing-practices-w1-F3: closed.** MetaprojectView.dom.test.tsx has a new test: "a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows".
+- **testing-practices-w1-F6: closed.** After the release, the test asserts that `item("client.ts")` is present and that no row reads "Loading…", then checks focus.
+- **ui-ux-w1-UX-004: closed.** `{module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}` gives module folder rows the same kind cue that node rows show. The optional title/aria-description was not added. That part of the suggestion was secondary.
+- **logic-w2-F-002: open.** The fallback is kept, as the finding suggested. The guide still promises the unreachable group: docs/docs/guides/desktop-metaproject.md:103 "Pages without a page type are under **Other**." It was found with `keryx ctx rg "Other|without a page type"`.
+- **pr-contract-w1-PC-001: closed.** cli-reference :8301 now says Desktop "uses an optional action such as `tree` only when the CLI lists it".
+- **testing-practices-w1-I2: closed.** One exported helper now holds the key on both sides.
+- **ui-ux-w1-UX-005: open (info).** The count span is unchanged: `<span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>`. It still has no unit, title or aria-label.
+
+## What works (keep)
+- The error row reuses the loading row's `role="status"` span in place. Because the key is shared, React updates the same span, so screen readers announce a failure where "Loading…" was.
+- Module folders are now visually distinct without changing the behaviour the operator decided on.
+
+## Checks not run
+- Live render at 1440/768/390 px, light/dark, contrast and target sizes: no URL or screenshots were supplied.
+- Screen-reader and accessibility-tree reading of the module folder treeitem and the live-region announcements.
+- Focus restore in the real WKWebView. The DOM tests in verify-tests-to-run-1.txt ran under jsdom.
+KERYX_USAGE {"tokens_in":133268,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

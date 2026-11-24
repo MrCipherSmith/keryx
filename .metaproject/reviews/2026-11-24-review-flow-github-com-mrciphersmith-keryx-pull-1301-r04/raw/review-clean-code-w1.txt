@@ -1,0 +1,84 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `3ad918b66` | Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (round range 3ad918b66..0d6df2937)
+- Scope mode: `explicit-hash-range` (fix round, delta) | Slices read in full: slice-01 (fix) | Changed files in slice: 8 (6 flow-package files, MetaprojectTree.tsx doc hunk, useMetaprojectTree.ts `reload` hunk)
+
+### Summary
+Round 5 is fix round 4. The component doc on `MetaprojectTree` now defers to `handOff` and matches what `handOff` and `handOffTarget` do. `reload` is required, and the DOM-test Harness passes `reload: props.reload ?? 0`. plan.md states the current focus rule and has a stale-snapshot row. Three of the four attached prior findings are closed. r4-degradation-w2-F-002 (info) was not addressed and is still open. The plan.md row added for r4-logic-w2-F-001 repeats the same overclaim at a new site, so this report adds one info finding for that site. No other function-, comment-, DRY- or SOLID-level issue is in the slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Prior dispositions
+- r4-clean-code-w2-F-001: **closed**. MetaprojectTree.tsx:118-120 now reads "(`handOff`): a status row hands it to its own parent's next row, any other row to the row after the one that preceded it." This matches handOff at :72-79 and handOffTarget at :86-92. An entry row anchors to rows[index-1] and gets the row after it. A status row anchors within its parent and gets that parent's next row. The one fallback the sentence leaves out is that focus stays on the anchor when the parent gained no rows. The `handOffTarget` doc it defers to states that fallback, so the two texts no longer contradict each other.
+- r4-frontend-w2-F-001: **closed**. useMetaprojectTree.ts declares `reload: unknown;` (no longer optional), and its doc says why it is required. Both callers pass it: MetaprojectView.tsx:761 passes `reload: catalog`, and the MetaprojectTree.dom.test.tsx Harness at :71 passes `reload: props.reload ?? 0`. No Retry was added for a stale park, in line with the operator decision.
+- r4-logic-w2-F-001: **closed**. plan.md (Desktop UI, WAI-ARIA bullet) no longer says "Focus is never moved by data arriving". It now states the operator's hand-off rule and cites fix rounds 1 and 3. The state × event matrix has a new row: "folder or page read answered stale-snapshot" (parked, Loading, no Retry, banner). See F-001 for a wording overclaim in that new row.
+- r4-degradation-w2-F-002: **open**. Nothing in the delta touches it (claimed_disposition unreported). The `reload` doc at useMetaprojectTree.ts still begins "Changes whenever the explorer loads its catalog (Refresh catalog included), whether or not the snapshot changed". The quiet re-read in MetaprojectView.tsx:410-414 still returns before `setCatalog(result)` when the snapshot is unchanged, so `reload` (the catalog object) does not change on that path. The fix round also added another copy of this wording to plan.md (F-001).
+
+### Findings
+
+#### Functions
+No function issues found. The slice's code hunks are a doc comment and a type change. `handOffTarget` is outside slice-01; I read it only to judge the doc.
+
+#### Comments
+
+### [F-001] The new plan.md stale row says every catalog load re-reads parked reads, which the quiet re-read does not do
+
+- **Severity**: info
+- **File**: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md (stale-snapshot matrix row)
+- **Principle**: Clean Code — comments (two places documenting one behaviour; claim broader than the code)
+- **Problem**: The matrix row added to answer r4-logic-w2-F-001 reads "every catalog load re-reads parked reads, same snapshot id included". When the explorer is shown again, it re-reads the catalog quietly. If that read finds the same snapshot, it returns before `setCatalog` (MetaprojectView.tsx:410-414). So `reload` does not change and the parked reads are not sent again. This is the overclaim r4-degradation-w2-F-002 found in the `reload` doc and the view comment. The fix round copied it into the spec that later fix rounds and the flow-complete verifier check behaviour against.
+- **Impact**: Users are not affected. The quiet path does not clear the Refresh catalog banner either, so a user-started load still recovers the row. A verifier reading the plan literally could treat the quiet path as a spec gap and "fix" it so that a background re-read changes `reload`.
+- **Fix**: In the plan row and in the `reload` doc (the r4-degradation-w2-F-002 site), say "every user-started catalog load (Refresh catalog, Rebuild) or a new snapshot re-reads parked reads, same snapshot id included".
+
+#### Error Handling
+No error-handling issues found. The slice adds no catch or failure path.
+
+#### DRY
+No DRY issues found.
+
+#### SOLID
+No SOLID issues found. Making `reload` required narrows the contract to what the hook needs and widens no interface.
+
+### Clean Areas
+MetaprojectTree component doc against handOff/handOffTarget, the `reload` type and its doc, the plan.md focus sentence, and the flow bookkeeping files (T15 dispatch, fix_context, resolved context, flow.json, journal). The bookkeeping files are data and raise no Clean Code concern.
+
+Routing audit: graph_used: no (not-relevant: a bounded fix-slice review with its files named in the payload); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg`); raw_rg_used: no. One raw `git diff` of the two code files in the round range was run, with a keryx:raw marker, to see the full code hunks next to the slice.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Fix round 4 closes r4-clean-code-w2-F-001 (the component doc now defers to handOff and matches it), r4-frontend-w2-F-001 (`reload` is required and every caller passes it) and r4-logic-w2-F-001 (plan.md has the current focus rule and a stale-snapshot row). r4-degradation-w2-F-002 is still open. The new plan.md row repeats its 'every catalog load re-reads' overclaim, which is reported as one info finding.",
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    {"id": "r4-clean-code-w2-F-001", "disposition": "closed"},
+    {"id": "r4-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r4-logic-w2-F-001", "disposition": "closed"},
+    {"id": "r4-degradation-w2-F-002", "disposition": "open"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "line": null,
+      "quote": "every catalog load re-reads parked reads, same snapshot id included (fix round 3)",
+      "problem": "The plan.md matrix row added to answer r4-logic-w2-F-001 says 'every catalog load re-reads parked reads, same snapshot id included'. The quiet re-read that runs when the explorer is shown again returns before setCatalog when the snapshot is unchanged (MetaprojectView.tsx:410-414). `reload` (the catalog object, MetaprojectView.tsx:761) therefore does not change, and the parked reads are not sent again. This is the overclaim of r4-degradation-w2-F-002, still open in the `reload` doc, now copied into the flow spec.",
+      "impact": "Users are not affected: the quiet path leaves the Refresh catalog banner up, and a user-started load recovers the row. Later fix rounds and the flow-complete verifier check behaviour against plan.md. Read literally, the row makes the quiet path look like a spec gap that someone could 'fix'.",
+      "suggested_fix": "Reword the plan row, and the `reload` doc at the r4-degradation-w2-F-002 site, to 'every user-started catalog load (Refresh catalog, Rebuild) or a new snapshot re-reads parked reads, same snapshot id included'.",
+      "evidence": "plan.md stale-snapshot matrix row (added in 0d6df2937). MetaprojectView.tsx:393-414: the quiet flag and the early return `if (quiet && result.snapshotId === loadedSnapshot.current)` come before `setCatalog(result)` at :414. MetaprojectView.tsx:761 passes `reload: catalog`. The useMetaprojectTree reload effect re-reads only when `loadedCatalog.current !== reload`.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+  "inputs_unreadable": []
+}
+```
+KERYX_USAGE {"tokens_in":128535,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301#performance-w1-F-001",
+      "answer": "dismiss",
+      "reason": "Sequential reveal paging is specified by plan.md (reveal pages until the row is found); read latency is out of scope in description.md; tracked for the read-latency stage.",
+      "quote": "Отклонить, в этап задержек (Recommended)",
+      "at": "2026-11-23T21:31:17.270Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "a0c237db6d2f34dce02c70a542c9240a691bf9ea657f0ba1162693a2dcb109f7"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-performance-w1-F-001",
+        "questionText": "Находка performance-w1-F-001: чтобы раскрыть путь к файлу в большой папке (например, в src/commands около 480 файлов), дерево читает страницы по 100 записей по очереди. Это примерно 5–6 секунд. Так сделано по плану, а задержка чтений официально вне рамок флоу 518. Что делать с находкой?",
+        "answerText": "Отклонить, в этап задержек (Recommended)",
+        "time": "2026-11-23T21:31:17.270Z"
+      }
+    },
+    {
+      "kind": "mutation-waiver",
+      "quote": "waive",
+      "reason": "The fix round changed the code the 52 round-1 mutants target, so the mutants are stale; round 2 reviews the delta.",
+      "confirmedVia": "host-question",
+      "at": "2026-11-24T06:53:14.213Z",
+      "subject": {
+        "head": "9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a",
+        "items": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "M1",
+          "M10",
+          "M11",
+          "M12",
+          "M2",
+          "M3",
+          "M4",
+          "M5",
+          "M6",
+          "M7",
+          "M8",
+          "M9",
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "T1",
+          "T10",
+          "T11",
+          "T12",
+          "T13",
+          "T14",
+          "T2",
+          "T3",
+          "T4",
+          "T5",
+          "T6",
+          "T7",
+          "T8",
+          "T9",
+          "U1",
+          "U10",
+          "U11",
+          "U12",
+          "U2",
+          "U3",
+          "U4",
+          "U5",
+          "U6",
+          "U7",
+          "U8",
+          "U9",
+          "W1",
+          "W2"
+        ]
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "mutation-r1",
+        "questionText": "Round 1 of PR #1301 has 52 mutant candidates that were never run. Its ledger won't close without them, so round 2 would re-review everything (19 dispatches) instead of only the fix commits. What should happen to the round-1 mutation pass?",
+        "answerText": "waive",
+        "time": "2026-11-24T06:53:14.213Z"
+      }
+    }
+  ]
+}

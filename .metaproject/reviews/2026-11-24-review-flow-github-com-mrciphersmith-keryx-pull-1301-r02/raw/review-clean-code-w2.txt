@@ -1,0 +1,93 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Round 3 delta f43a13c3f..b2043b98d (fix round 2). The changed code stays inside the solid-principles.mdc thresholds and error-handling.mdc rules. The round-2 clean-code findings are fixed: the MetaprojectTree doc now states the focus hand-off rule, and the limiter catch's comment is correct and the catch reports the error with console.error. One minor documentation-drift finding is new: the stale-snapshot branch now leaves a folder, or its next page, in the 'loading' state with no read in flight, but the TreeFolder.more doc still defines that state as 'being read'. One info finding: permit refusal is detected by matching the Rust message text. Concern: slice-03 (apps/desktop/src/platform/metaproject.ts) has no change in this range. `git diff --stat f43a13c3f..b2043b98d -- apps/` does not list the file. The two lines the slice shows as removed are still present at the head (metaproject.ts:268 and :304-305). There was nothing to review there, and the slice looks like a slicing artifact.",
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1181 lines; code hunks cross-checked against git diff f43a13c3f..b2043b98d for MetaprojectTree.tsx and useMetaprojectTree.ts)" },
+    { "id": "slice-03", "coverage": "read in full; the file has no change in the reviewed range, so there was nothing to review" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "  /** The next page: being read, or its read failed. */",
+      "problem": "Documentation drift in a symbol the delta changed. The new stale-snapshot branch in read() returns after onStale(). Its comment says: 'The row stays loading; a Retry here would only send the retired snapshot again'. So a folder whose first read answers stale-snapshot keeps `status: \"loading\"`, and a stale next page keeps `more: { status: \"loading\" }`, with no request in flight. The field docs that define those states still describe the old rule. TreeFolder.more reads 'The next page: being read, or its read failed.' MetaprojectTreeModel.ensure reads 'Reads `parent`'s first page unless it is loaded, being read, or failed.' MetaprojectTreeModel.more reads 'a page already being read is not asked for again'. The same state is now documented two ways: the catch comment says the row waits for Refresh catalog, and the type docs say a read is in progress.",
+      "impact": "A maintainer who reads the type docs will take a 'loading' folder or page to mean a request is pending. They may then add a timeout or a dedupe, or debug a 'stuck' Loading row, without knowing that the state also means 'waiting for Refresh catalog after a stale answer'. ensure() and more() deliberately do not re-read in that state, so that state is how a stale row is kept from being re-sent.",
+      "suggested_fix": "Extend the three docs with the stale case. For example, TreeFolder.more: '/** The next page: being read, waiting for Refresh catalog after a stale-snapshot answer, or its read failed. */'. On ensure and more, add: 'loading also covers a read answered stale-snapshot; Refresh catalog (a new snapshot) re-reads it'. Alternatively, give the state its own name (for example `status: \"stale\"`) and render it as a loading row, so the type says what the comment says.",
+      "evidence": "useMetaprojectTree.ts at b2043b98d, read() catch: `if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") { latest.current.onStale(); return; }`. It is preceded by the comment 'The row stays loading; a Retry here would only send the retired snapshot again.' The same file holds TreeFolder.more ('being read, or its read failed') and the MetaprojectTreeModel.ensure and more docs ('being read'). The tests added in this round assert the new behaviour: MetaprojectTree.dom.test.tsx 'a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row', and the MetaprojectView test's deadRetry() check.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "problem": "The new permit retry recognises a refusal by the human-readable text of a Rust error string. The literal now has three copies: apps/desktop/src-tauri/src/metaproject.rs:199 (`Err(\"unavailable: Too many Metaproject reads. Retry shortly.\".into())`), useMetaprojectTree.ts:24, and MetaprojectTree.dom.test.tsx:503 (`PERMIT_REFUSAL`). Rewording the Rust message would turn the retry off without any test failing: the test feeds its own copy of the string.",
+      "impact": "A wording change in metaproject.rs silently drops the retry, and a permit refusal goes back to being a terminal folder error. Rated info, not minor: matching the `unavailable:` message prefix is this codebase's established idiom for Tauri string errors (githubAccounts.ts:28 and review.ts:35 do the same), so by Clean Code law 5 it is not a violation.",
+      "suggested_fix": "Optional: export the prefix as a named constant from useMetaprojectTree.ts and import it in the test, so the TS side has one copy. Add a comment at metaproject.rs:199 noting that Desktop matches this text. Or have the Rust side return a stable token, for example a 'permits-busy' marker, if the error shape ever moves off plain strings.",
+      "evidence": "Found with `keryx ctx rg -n \"Too many Metaproject reads\" apps/desktop/src apps/desktop/src-tauri/src/metaproject.rs`: 3 sites. Prefix matching elsewhere, from `keryx ctx rg \"startsWith\\(\\\"unavailable|unavailable:\"`: githubAccounts.ts:28 and review.ts:35.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "slice-03 (apps/desktop/src/platform/metaproject.ts) shows two removed hunks, but the file is unchanged in f43a13c3f..b2043b98d and both hunks are still present at the head (metaproject.ts:268, :304-305). The parent should check the slicer for this range."
+  ]
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `f43a13c3f` | Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (delta base f43a13c3f)
+- Scope mode: `explicit-hash-range` (f43a13c3f..b2043b98d) | Changed code files reviewed: 5 (MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts); the flow-package JSON and Markdown in slice-02 are records, not code.
+
+### Summary
+Fix round 2 is small and stays inside every threshold. The round-2 clean-code findings are closed: the MetaprojectTree doc now states the hand-off rule, and the limiter catch's comment is accurate and the catch reports the error instead of dropping it. One stale doc remains: the type docs still say a "loading" folder or page is being read, which the new stale-snapshot branch no longer guarantees.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+
+#### Functions
+No function issues found. `attempt`, the layout effect and `remember` are under 40 lines. Parameter counts are fine.
+
+#### Comments
+- [F-001] minor — useMetaprojectTree.ts `TreeFolder.more`, and the `ensure` and `more` docs, say "being read", but a stale-snapshot answer now leaves that state with no read in flight.
+
+#### Error Handling
+No error-handling issues found. The limiter catch now reports with console.error (Rule 3). attempt() rethrows the original cause. The stale branch's early return is a deliberate fallback with a comment giving the reason.
+
+#### DRY
+- [F-002] info — the permit-refusal message text has three copies: Rust, the hook and the test. This follows the codebase's established prefix-matching idiom.
+
+#### SOLID
+No SOLID issues found.
+
+### Clean Areas
+- Focus hand-off anchored to the preceding row, with a fallback to the clamped index (MetaprojectTree.tsx layout effect).
+- Distinct `status:` and `more:` ids. The statusId doc matches the new rule.
+- MetaprojectTree component doc matches the behaviour the new tests assert.
+- `wait` injected for the retry delay, with a default `sleep`.
+- Test renames (`treeError`/`searchError`) and the new view-test assertion.
+
+### Concerns
+- slice-03 has no change in this range. Its two "removed" hunks are present at the head, so nothing was reviewed in platform/metaproject.ts.
+- Not verified: no tests were run (exec_budget_s 0). I relied on the supplied verify output (Desktop tsc and suite exit 0 at b2043b98d).
+
+Routing audit: graph_used: no (not-relevant: the slices name the files) | wiki_used: no (not-relevant: a delta function-level review) | ctx_used: yes (`keryx ctx rg` for the literal and prefix enumeration) | raw_rg_used: no. One `git diff` of three files ran with the `keryx:raw` marker, to read the exact delta hunks.
+KERYX_USAGE {"tokens_in":142556,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

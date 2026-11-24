@@ -1,0 +1,74 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 2 delta 9f4ec475b..f43a13c3f, slices slice-02 and slice-03 (both new), read in full. The fix round's structural changes are sound. The untyped wiki group rule now lives once in the shared contract (METAPROJECT_WIKI_UNTYPED_GROUP + metaprojectWikiGroupKey in src/integrations/metaproject-explorer-contract.ts) and both sides use it: wikiTree in metaproject-explorer-v2.ts:143 and revealSteps in MetaprojectTree.tsx. The private WIKI_UNTYPED_GROUP constant is gone. This settles round-1 architecture-w1-F-001 / architecture-w2-F-001; a search found no other literal \"other\" group key in src/integrations or apps/desktop/src/metaproject. The snapshot-mismatch rule moved out of matchesRequest and became a typed MetaprojectRequestError('stale-snapshot') thrown in the platform transport (requestMetaprojectV2) after shape validation. That fits the layering: the transport maps the wire to domain error codes, and the hook and view react to the code. The view's loadMoreSearch now branches on that code. The read limiter is a private concern of useMetaprojectTree and adds no new dependency direction. negotiateMetaproject was removed and no caller is left (keryx ctx rg). The dependency direction is unchanged: Desktop imports the core contract, and the core imports nothing from Desktop. One info: MAX_TREE_READS = 3 is sized against the Rust ReadPermit cap (MAX_ACTIVE = 8 in apps/desktop/src-tauri/src/metaproject.rs) only through a comment. No blocker, major or minor findings.",
+  "findings": [
+    {
+      "id": "architecture-w2-r2-F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "export const MAX_TREE_READS = 3;",
+      "problem": "The client tree-read bound is sized against the Tauri read-permit cap (`const MAX_ACTIVE: usize = 8;` in apps/desktop/src-tauri/src/metaproject.rs) only through the doc comment (\"the rest of Desktop's eight read permits stay free for the explorer\"). Nothing in code ties the two numbers together.",
+      "impact": "If MAX_ACTIVE is lowered, the comment and the headroom it promises go stale silently. Tree reads could then use the permits the explorer's own reads rely on, and those reads would fail with `unavailable: Too many Metaproject reads`. Today 3 of 8 holds.",
+      "suggested_fix": "Optional. Leave the comment as the record, or add a short note next to MAX_ACTIVE in metaproject.rs that the Desktop tree hook keeps MAX_TREE_READS below it.",
+      "evidence": "useMetaprojectTree.ts lines 14-15 (comment + constant); metaproject.rs: `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8;`, `ReadPermit::acquire` returns `unavailable: Too many Metaproject reads. Retry shortly.`",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: 9f4ec475b (fix-round base)
+- Merge-base: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`
+- Scope mode: `explicit-hash-range` (9f4ec475b..f43a13c3f), slices slice-02 and slice-03
+- Stack detected: generic-ts core plus React (Desktop), no MobX
+
+### Summary
+The fix round moved the wiki group key rule into the shared contract and uses it on both the core and the Desktop side. The snapshot-mismatch check became a typed `stale-snapshot` error at the transport boundary, and tree reads are now bounded inside the tree hook. None of these changes introduces a layer violation or reverses a dependency. The round-1 architecture finding on the duplicated group key is resolved.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. Desktop still depends on `src/integrations/metaproject-explorer-contract.ts`, and the core depends on nothing in Desktop.
+
+### Module Boundary Violations
+None detected. The group key helper is exported from the contract module, which is the public surface both sides already import.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS and MobX. React: the focus restore and the read limiter are kept in the component and hook that own them.
+
+### Info
+- architecture-w2-r2-F-001: the value of MAX_TREE_READS (3) depends on the Rust MAX_ACTIVE (8) only through a comment.
+
+### Notes on verification
+- Read in full: slice-02.diff (2271 lines) and slice-03.diff. Context checked: apps/desktop/src-tauri/src/metaproject.rs lines 180-215 (ReadPermit).
+- Searches through `keryx ctx rg`:
+  - `metaprojectWikiGroupKey|METAPROJECT_WIKI_UNTYPED_GROUP|"other"|negotiateMetaproject\b|permits|MAX_TREE_READS` over src/integrations, apps/desktop/src and metaproject.rs.
+  - `negotiateMetaproject` over apps/desktop/src.
+- No tests were run (exec_budget_s = 0). The supplied test evidence and CI were not re-run.
+- Routing audit: graph_used: payload layers block (affected list) only; wiki_used: not-relevant (payload wiki layer empty); ctx_used: yes (keryx ctx rg / ctx read); raw_rg_used: no. One raw `sed` excerpt of 35 lines of metaproject.rs was read with an escape marker to confirm the permit cap.
+KERYX_USAGE {"tokens_in":155969,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree",
+  "command": "bun --cwd apps/desktop test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts",
+  "baseline": {
+    "exitCode": 1,
+    "ms": 547,
+    "timedOut": false,
+    "cwd": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/data/review/mutate-scratch/keryx-mutate-hMHydb/tree",
+    "tail": "src/session/LineComments.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/session/Transcript.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/session/taskStream.test.ts:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/session/CommandCard.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/metaproject/MetaprojectTree.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/metaproject/MetaprojectView.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/platform/metaproject.test.ts:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\n 430 pass\n 48 fail\n 47 errors\n 7987 expect() calls\nRan 478 tests across 93 files. [365.00ms]\nerror: script \"test\" exited with code 1"
+  },
+  "mutants": [],
+  "totals": {
+    "killed": 0,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-24T09:13:55.187Z",
+  "head": "3ad918b66a990c7f0b04180e17d9fb74fb82713a",
+  "treeHash": "aa558232587eefb5e3ac4ff01b6f7fe309b37eba16dbacc147576b17265f46c8",
+  "loadavg": [
+    8.986328125,
+    17.76806640625,
+    18.98681640625
+  ],
+  "provenanceMs": 457,
+  "copyMs": 26606
+}

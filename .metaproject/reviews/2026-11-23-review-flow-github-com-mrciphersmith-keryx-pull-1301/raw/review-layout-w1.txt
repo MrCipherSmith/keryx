@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Read slice-01 in full. The layout surface is the new sidebar tree: MetaprojectTree.tsx (flat treeitem rows, level indent through an inline logical padding-inline-start) and the metaproject.css additions (flex rows, ellipsis name, flex:none kind label / count). Nothing could be measured: exec_budget_s is 0, allowed commands exclude running a browser, and apps/desktop has no real-CSS tier (package.json has only `bun test src`, which runs happy-dom and loads no stylesheet). Per Rule 1 every observation is therefore info, unverified. One arithmetic concern is worth a measurement before merge: at the window minimum (tauri.conf.json minWidth 720, container query <=760px narrows the list column to minmax(150px,190px), or 150-180px with the details panel), the fixed costs of a tree row (12px start + 16px per level, 12px end padding, 2px border, 12px chevron, two 4px gaps, a nowrap trailing label) leave roughly 12px for the name at level 5 and nothing from level 6, after which the row exceeds the column and the list scrolls sideways. RTL: Desktop has no RTL locale or i18n (no rtl/i18n/locale hit under apps/desktop/src), so the non-mirroring chevronRight icon is not a finding. Locale geometry: all strings are English literals, no catalog. No blocker, major or minor.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "line": null,
+      "quote": ".metaproject-tree-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }",
+      "problem": "Unverified (not measured). A tree row's name is the only shrinkable item (min-inline-size: 0) while its indent grows 16px per level and its trailing kind label / count is flex: none and nowrap. In the narrow-host list column the name has no floor and is computed to reach about 12px at level 5 and 0px from level 6; past that the row's fixed parts exceed the column, and the nav (overflow: auto) scrolls sideways. The previous flat list wrapped names (overflow-wrap: anywhere) and had no indent, so it did not have this shape.",
+      "impact": "At the 720px window minimum with the details panel open, a user browsing a deep folder (e.g. apps/desktop/src-tauri/src/... is level 5; .metaproject/skills/gdskills/review/<skill>/ files are level 6) would see file names truncated to a few characters or invisible while the 'File' label still shows, and no title tooltip carries the full name. Wiki rows carry the wider 'Wiki page' label on every row, leaving roughly 33px for a title at level 2 in a 150px column.",
+      "suggested_fix": "Measure first (see evidence). If confirmed: cap the indent (e.g. min(level-1, N) * var(--sp-4) or a smaller per-level step in the <=760px container query), drop the redundant per-row kind label in the tree where the scope already implies it (every graph node row is a File, every wiki node row a Wiki page), and add a title attribute with the full name/path on .metaproject-tree-name so an ellipsised name stays readable.",
+      "evidence": "Arithmetic only, from source: tokens.css --sp-1 4px, --sp-3 12px, --sp-4 16px, --fs-sm 12px; MetaprojectTree.tsx row style paddingInlineStart calc(var(--sp-3) + (level-1) * var(--sp-4)); .metaproject-row padding var(--sp-2) var(--sp-3) (inline-end 12px kept, block overridden) and 1px border; .metaproject-tree-chevron inline-size 12px; gap var(--sp-1); metaproject.css @container metaproject (max-width: 760px) grid-template-columns minmax(150px, 190px) and, with details, minmax(150px, 180px); tauri.conf.json minWidth 720. Name width = 150 - (12 + 16(L-1)) - 12 - 2 - 12 - 8 - label; with a ~28px label: L=5 -> ~12px, L=6 -> <0. Not measured: exec_budget_s=0 and no real-CSS tier in apps/desktop (bun test runs happy-dom). What would settle it: mount the explorer in a real engine (Tauri webview or Playwright Chromium) at a 720px window with the details panel open, expand to a level-5 and a level-6 file, and read getBoundingClientRect().width of .metaproject-tree-name and nav.metaproject-list scrollWidth vs clientWidth.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/metaproject.css",
+      "line": null,
+      "quote": ".metaproject-tree-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-block-size: 28px; padding-block: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); }",
+      "problem": "Unverified (not measured). Loading and error rows do not carry .metaproject-row, so they get the inline-start indent from the inline style but no inline-end padding and no 1px border, while entry and 'Show more' rows have 12px end padding plus border. The error row's Retry button can therefore sit flush against the list's inline end, 13px further out than the counts on the rows above it.",
+      "impact": "Cosmetic misalignment of the Retry button and error text against neighbouring rows' trailing column; no clipping expected because the row wraps (flex-wrap: wrap).",
+      "suggested_fix": "Give .metaproject-tree-status padding-inline-end: var(--sp-3) and a 1px transparent border (or add the shared row class) so status rows share the entry rows' box.",
+      "evidence": "Read from source: MetaprojectTree.tsx renders loading/error li with className 'metaproject-tree-status' only; .metaproject-row (padding var(--sp-2) var(--sp-3), border 1px) applies to entry and more rows. Offset computed, not measured; settle by measuring the Retry button's right edge vs a sibling row's .count-label right edge in a real engine.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Measure LY-001 in a real layout engine (packaged app or Playwright Chromium) at the 720px window minimum with the details panel open: width of .metaproject-tree-name on a level-5 and level-6 graph row, and nav.metaproject-list scrollWidth vs clientWidth. Only a measured result can raise it above info."
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full (lines 1-2533); layout-relevant parts: MetaprojectTree.tsx, metaproject.css, MetaprojectView.tsx list mount", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Summary (review-layout, wave 1, round 1)
+
+- Slice read: slice-01, in full.
+- Measured: nothing. exec_budget_s = 0, and apps/desktop has no real-CSS test tier (its tests run under happy-dom, which loads no CSS). Every observation is therefore `info`, marked unverified.
+- LY-001 (info, medium): at the 720px window minimum, the narrow-host list column (150-190px) has room only for the tree row's fixed parts. By arithmetic, file names reach about 12px at level 5 and 0px from level 6, after which the list scrolls sideways. This needs a real-engine measurement before merge.
+- LY-002 (info, low): loading and error rows have no inline-end padding or border, so Retry sits about 13px past the trailing column of the other rows.
+- Not findings: RTL (Desktop ships no RTL locale or i18n) and locale-length geometry (no translation catalog).
+
+Routing audit: graph_used: no (the payload gave the changed files and affected set; the review stayed inside the slice and the CSS it touches). wiki_used: not-relevant (a geometry lens with no domain question). ctx_used: yes (keryx ctx rg and keryx ctx read for the slice index, CSS tokens, the container query and the labels). raw_rg_used: no.

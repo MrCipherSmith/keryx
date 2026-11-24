@@ -1,0 +1,615 @@
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json
+@@ 1,60 @@
++{
++ "review_feedback": [
++  {
++   "id": "r4-clean-code-w2-F-001",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++   "line": 105,
++   "problem": "Documentation drift in a symbol this delta changed. The fix for r3-logic-w5-F-002 replaced the hand-off rule. A status row now anchors to its own parent: a Loading row anchors to `d:<parent>`, and a Show more row to the parent's last entry, and focus goes to the next row of that parent (handOff(), with the layout effect's `after.find(row => row.parent === lost.parent)`). Only an entry row still uses 'the row before it'. The component doc above `export function MetaprojectTree` still states only the old rule, 'the one after the row that preceded it'. That rule is the one the new test 'a focused Show more whose page lands with the children of the folder above it…' shows to be wrong: the row before Show more there is src's Loading row. The handOff doc and the layout-effect comment in the same file give the new rule, so one behaviour is now documented two ways.",
++   "impact": "A reader of the component's public doc expects the pre-fix behaviour. A later change made to match that doc would bring back the r3-logic-w5-F-002 misfocus.",
++   "suggested_fix": "Reword the last sentence of the doc so it defers to handOff, for example: '…when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place (`handOff`): a status row hands it to its own parent's next row, any other row to the row after the one that preceded it.'"
++  },
++  {
++   "id": "r4-frontend-w2-F-001",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
++   "line": 114,
++   "problem": "A stale-snapshot read is parked as status 'stale' (or more: {status: 'stale'}) and only a change of `reload` re-reads it (the useEffect comparing loadedCatalog.current to reload is the sole caller of reread(scope, parent, 'stale')). `reload` is optional: a caller that omits it has no exit from a parked row, since ensure skips present folders, more refuses a set non-failed page, and retry acts only on 'failed'. The DOM-test Harness in MetaprojectTree.dom.test.tsx omits it; MetaprojectView passes reload: catalog.",
++   "impact": "No user-visible defect at this head. The type does not encode the contract the round-3 major fix depends on, so a new caller or a refactor of the view's call can silently bring back the permanent Loading row.",
++   "suggested_fix": "Make `reload` required and pass a value from the test Harness; or, when reload is undefined, treat 'stale' like 'failed' (offer Retry) so no state lacks an exit. Premise judge: take the first fix only (make `reload` required, update callers including the DOM test Harness); do NOT offer Retry on a stale park (operator decision: banner only, no Retry)."
++  },
++  {
++   "id": "r4-style-w2-F-001",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++   "line": 180,
++   "problem": "Ternary chain (a ternary inside a ternary) added by this delta. The layout effect that restores focus now picks the focus target with `const target = at < 0 ? undefined : (lost.parent === undefined ? after[0] : after.find(...)) ?? rows[at];`. The next line adds a third conditional (`target ? ... : elements[Math.min(...)]`). The three fallbacks are: no anchor, then the old index; an anchor without a parent, then the next row; an anchor with a parent, then the parent's next row, else the anchor itself. A reader has to unpack all three from one expression with a `??` between the branches.",
++   "impact": "Readability. This is the code the round-3 focus finding (r3-logic-w5-F-002) was about, and the next reader checking a focus hand-off has to work through two nested conditionals and a nullish fallback in one statement.",
++   "suggested_fix": "Move the target choice into a small named helper next to handOff, with early returns. For example: `function handOffTarget(rows: readonly Row[], anchor?: string, parent?: string): Row | undefined { const at = anchor === undefined ? -1 : rows.findIndex(row => row.id === anchor); if (at < 0) return undefined; const after = rows.slice(at + 1); const next = parent === undefined ? after[0] : after.find(row => row.parent === parent); return next ?? rows[at]; }`. The effect then reads `const target = handOffTarget(rows, lost.anchor, lost.parent);`."
++  },
++  {
++   "id": "r4-testing-practices-w1-F1",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++   "line": 43,
++   "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). This round adds the `stale` state and three branches that decide what a parked read looks like and whether it can be asked for again. (a) flatten renders a stale folder as a Loading row (`|| folder.status === \"stale\"`). (b) flatten renders a stale next page as loading (`loading: Boolean(folder.more)`, which replaces `folder.more?.status === \"loading\"`). (c) more() refuses a stale page (`(folder.more && folder.more.status !== \"failed\")`). None of the stale tests asserts the row while it is parked. 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' (MetaprojectView.dom.test.tsx:2139) and 'a next tree page answered for another snapshot is read again after Refresh catalog finds the same snapshot' (:2171) check, before Refresh catalog, only the banner, the absence of a 'Could not load.' row and the absence of Client/Late. Neither asserts a 'Loading…' row (or a busy Show more) under src or the root, and neither activates the parked Show more row. MetaprojectTree.dom.test.tsx:511 ('a next page refused as stale-snapshot…') also asserts only the onStale count, the absent Retry and README.",
++   "impact": "Suppose (a) is dropped and the stale folder renders as an empty ready folder (no row at all). Or suppose (b) is reverted, so a parked page shows an actionable 'Show more' that more() then silently refuses. Or suppose (c) is reverted, so Enter on the parked row re-sends the cursor while the banner is up. In each case the listed tests stay green: each asserts only what is absent before the refresh and what is present after it. The operator's decision that a stale row 'shows as loading, banner only' has no test.",
++   "suggested_fix": "In the MetaprojectView stale test, before clicking Refresh catalog, assert that the row under src is 'Loading…' (`treeRows().some(row => row.textContent === \"Loading…\")`). In the page twin, assert that the root's next-page row reads 'Loading…'. Then press Enter or click it, and assert that `explorer.treeCalls.filter(call => call.cursor === \"page-2\")` still has length 1 before Refresh catalog. That pins (a), (b) and (c) with the existing fixtures. Mutation pass (round-4 package research-evidence/mutation-1.json): M4, M5, M6 survived; the new assertions must kill them."
++  },
++  {
++   "id": "r4-testing-practices-w1-F2",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++   "line": 144,
++   "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). In the reveal effect, a step folder parked as `stale` makes the reveal wait instead of giving up. Without `|| folder.status === \"stale\"`, the stale folder has empty entries and no nextCursor, so the effect reaches `model.setHandled(scope, selection)`. That marks the selection handled, so after Refresh catalog re-reads the folder, the selection made elsewhere is never revealed. No test combines reveal with a stale answer. The three reveal tests (MetaprojectTree.dom.test.tsx:302, :327, :336; MetaprojectView.dom.test.tsx:2078) drive ready, paged and failed step folders only.",
++   "impact": "The branch exists so that the reveal survives a stale step and Refresh catalog, and that is the case the round's major is about. If the branch is deleted, a graph-to-tree reveal that crosses a stale folder ends with the folder loaded and collapsed and the row not scrolled into view, and every test stays green.",
++   "suggested_fix": "Add one MetaprojectView test. Make the first read of `src` answer for snapshot s2 (stale), as in the :2139 fixture. Select the src file from elsewhere (as at :2078). Then set the src answer to SRC_CHILDREN and click Refresh catalog. Assert that src is aria-expanded=\"true\" and that the file's row is present (scrolled). Assert that a second elsewhere selection is not needed. Mutation pass: M7 survived; the new test must kill it."
++  },
++  {
++   "id": "r4-testing-practices-w1-F3",
++   "severity": "minor",
++   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
++   "line": 265,
++   "problem": "Mandatory under the lens's mutation rule: this gate was added in answer to the earlier round's major (r3-regression-w1-F-001). The reload effect re-reads parked reads in both scopes, but both recovery tests park a read in the graph scope only. The :2139 test does park a Wiki read: it expands 'Other' under a stale-snapshot refusal and asserts the banner. It then ends without Refresh catalog, so the Wiki half of the loop is never exercised. Cutting the list to `[\"graph\"]`, or to the scope on screen, leaves nothing to notice.",
++   "impact": "A Wiki group answered stale-snapshot would stay 'Loading…' with no banner after Refresh catalog finds the same snapshot. That is exactly the dead state the round-3 major described, now only for Wiki, and it can come back unprotected.",
++   "suggested_fix": "Extend :2139 after its final assertions. Set `trees[\"s1|wiki|other|\"]` to a ready answer with Guide, click Refresh catalog, flush, and assert that the banner is gone, Guide is present and no 'Loading…' row remains. Optionally park the Wiki read while Graph is on screen, to pin that the scope not shown is re-read too. Mutation pass: M3 survived; the new test must kill it. Also pin two further gates that survived: M12 (isMetaprojectPermitRefusal must return false for a MetaprojectRequestError carrying the refusal text, platform/metaproject.test.ts) and M15 (the `?? rows[at]` focus fallback when a page appends nothing to the focused parent, MetaprojectTree.dom.test.tsx)."
++  }
++ ],
++ "review_package": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03",
++ "mutation_evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/research-evidence/mutation-1.json"
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.json
+@@ 1,92 @@
++{
++ "contract_version": "1.0.0",
++ "run_id": "518",
++ "dispatch_id": "518-T15",
++ "orchestrator": "flow-orchestrator",
++ "target_skill": "task-implementer",
++ "task": {
++  "title": "Fix round 4: review round 4 findings of PR 1301 (6 minor in code)",
++  "intent": "fix",
++  "description": "Fix exactly the 6 upheld code findings of review round 4 listed in fix_context.review_feedback (dispatch/T15.fix_context.json) and nothing else. Full finding objects: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/findings.json; premise notes: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/research-evidence/premises.json; mutation results: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/research-evidence/mutation-1.json. Operator decisions to keep: a stale snapshot shows only the Refresh catalog banner (no Retry; a parked row renders as Loading); focus goes to the row now at the same place; a retired in-flight read keeps its limiter slot; names limit/slots/pool, sleep/wait/pause and reload/loadedCatalog stay (dismissed r2-style-w2-F-001, r3-style-w1-F-001, r4-style-w2-F-002); silent 2x permit retry stays. Tests first: each new test must fail against the mutant it targets (M3, M4, M5, M6, M7, M12, M15 in mutation-1.json / mutants.json) — show it red by applying the mutant temporarily, then revert. Do not change behaviour except making `reload` required. Do not edit plan.md (the orchestrator amends it). Report each finding's outcome by id."
++ },
++ "acceptance_criteria": [
++  "- AC1: A v2 `tree` request with `scope: \"graph\"` returns, for the root and for any folder, the folders containing indexed files (sorted, with file counts, a module folder carrying its module node) followed by that folder's file nodes (sorted), never symbols; pages of at most 100 entries chain by `nextCursor` to the full child list with no duplicate or missing entry; `scope: \"wiki\"` returns page-type groups at the root and a group's pages under it. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts`]",
++  "- AC2: Malformed `tree` requests (unknown keys, bad scope, absolute or `..` parent, bad cursor) answer `invalid-input`; an unknown parent answers `not-found`; a cursor or `expectedSnapshotId` from another snapshot answers `stale-snapshot`; `capabilities` lists `tree`; v1 requests parse and answer exactly as before. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts` · sensitive: failure-scenario]",
++  "- AC3: The Desktop Rust command accepts a well-formed `tree` request, refuses a malformed one, and still requires of a CLI only the six existing actions. [verify: exec `cd apps/desktop/src-tauri && cargo test --locked metaproject`]",
++  "- AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]",
++  "- AC5: The tree component renders folders, groups and node rows with WAI-ARIA tree semantics and roving focus; Up/Down/Left/Right/Home/End/Enter/Space behave as the plan states; expanding reads a folder once and shows a loading row; a failed folder read shows an inline error whose Retry re-reads only that folder; \"Show more\" appends the next page in order; selecting a node row calls the selection callback with that node; a graph that is not built shows an empty-state line. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx` · sensitive: failure-scenario]",
++  "- AC6: In the explorer, the tree shows without a query and flat results with one; expanded folders and the selection survive leaving and returning to the view and switching between Graph and Wiki; a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus; a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old-snapshot cursor. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++  "- AC7: The Desktop package type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
++  "- AC8: The core package lints and type-checks. [verify: exec `bun run lint && bun run typecheck`]",
++  "- AC9: The Desktop Metaproject guide describes the tree (Graph folders, Wiki groups, keyboard, behaviour with an older CLI) and the docs checks pass. [verify: exec `bun run docs:check`]"
++ ],
++ "context_refs": [
++  {
++   "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
++   "kind": "context",
++   "exists": true
++  },
++  {
++   "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
++   "kind": "plan",
++   "exists": true
++  },
++  {
++   "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
++   "kind": "custom",
++   "exists": true
++  },
++  {
++   "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json",
++   "kind": "custom",
++   "exists": true
++  },
++  {
++   "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json",
++   "kind": "custom",
++   "exists": true
++  }
++ ],
++ "files_to_read": [
++  "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++  "apps/desktop/src/metaproject/useMetaprojectTree.ts",
++  "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
++  "apps/desktop/src/metaproject/MetaprojectView.tsx",
++  "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++  "apps/desktop/src/platform/metaproject.ts",
++  "apps/desktop/src/platform/metaproject.test.ts",
++  ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/findings.json",
++  ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/research-evidence/mutants.json",
++  ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/research-evidence/mutation-1.json"
++ ],
++ "constraints": [
++  "Never edit flow.json.",
++  "Never edit frozen acceptance criteria.",
++  "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++  "Return a subagent-result; first line must be STATUS:.",
++  "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++  "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++  "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
++  "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++  "Scope: apps/desktop/src/metaproject/** and apps/desktop/src/platform/metaproject.ts with its test. Scope freeze: fix the listed findings only; anything else you would change goes back as a question in behavior_changes.",
++  "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`.",
++  "FIX_CONTEXT: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json holds fix_context.review_feedback (id + suggested_fix per finding); treat each suggested_fix as a hypothesis (task-implementer 1.3)."
++ ],
++ "allowed_actions": [
++  "read",
++  "write",
++  "run-command",
++  "git"
++ ],
++ "output_contract": {
++  "schema": "subagent-result",
++  "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
++ },
++ "budget": {
++  "max_output_tokens": null
++ },
++ "provenance": {
++  "created_at": "2026-11-24T08:30:00Z",
++  "created_by": "flow-orchestrator"
++ }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "518",
+   "slug": "desktop-metaproject-sidebar-tree",
+   "title": "Desktop Metaproject: tree navigation in the sidebar",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T20:02:01.811Z",
+-  "updatedAt": "2026-11-24T08:29:38.651Z",
++  "updatedAt": "2026-11-24T09:27:37.501Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": "sha256:6967eb6b3ab4713dfc3c8f19fcf5fa9f32c2e8a1a949da12507ceb10e2a87c41",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "owner": {
+     "value": "MrCipherSmith",
+     "basis": "stated",
+     "source": "`--owner` flag on `flow init`"
+   },
+   "origin": {
+     "kind": "human-request",
+     "quote": "теперь смотри что по плану дальше, заводи фло в новой ворктри и реализуй следующий этап",
+     "source": "Claude Code session of 2026-11-24, after flows 512 and 514 were recorded; the tree is the owner's third complaint deferred by flow 515"
+   },
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 289,349 @@
+     {
+       "id": "T14",
+       "title": "Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)",
+       "kind": "implement",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-24T08:21:35.580Z",
+             "outcome": "started",
+             "detail": "518-T14 fix round 3"
+           }
+         ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T15",
++      "title": "Fix round 4: review round 4 findings of PR 1301 (6 minor in code)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T09:20:54.516Z",
++            "outcome": "started",
++            "detail": "518-T15 fix round 4"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T20:02:01.811Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T20:04:59.726Z",
+       "event": "task-added",
+       "detail": "T5: Core: tree action in contract, service and capabilities, with tests"
+     },
+     {
+       "at": "2026-11-23T20:05:00.015Z",
+       "event": "task-added",
+       "detail": "T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests"
+     },
+     {
+       "at": "2026-11-23T20:05:00.313Z",
+       "event": "task-added",
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 470,524 @@
+     },
+     {
+       "at": "2026-11-24T07:38:01.554Z",
+       "event": "task-done",
+       "detail": "T13: Fix round 2: review round 2 findings of PR 1301 (9 minor in code)"
+     },
+     {
+       "at": "2026-11-24T08:21:34.937Z",
+       "event": "task-added",
+       "detail": "T14: Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)"
+     },
+     {
+       "at": "2026-11-24T08:21:35.580Z",
+       "event": "task-attempt",
+       "detail": "T14: started (attempt 1) — 518-T14 fix round 3"
+     },
+     {
+       "at": "2026-11-24T08:29:38.651Z",
+       "event": "task-done",
+       "detail": "T14: Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)"
++    },
++    {
++      "at": "2026-11-24T09:20:33.706Z",
++      "event": "task-added",
++      "detail": "T15: Fix round 4: review round 4 findings of PR 1301 (6 minor in code)"
++    },
++    {
++      "at": "2026-11-24T09:20:54.516Z",
++      "event": "task-attempt",
++      "detail": "T15: started (attempt 1) — 518-T15 fix round 4"
++    },
++    {
++      "at": "2026-11-24T09:27:37.501Z",
++      "event": "task-done",
++      "detail": "T15: Fix round 4: review round 4 findings of PR 1301 (6 minor in code)"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "bun test src/integrations/metaproject-explorer-tree.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts",
+       "sensitivity": "failure-scenario"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "cd apps/desktop/src-tauri && cargo test --locked metaproject"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx",
+       "sensitivity": "failure-scenario"
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
++    "apps/desktop/src/platform/metaproject.test.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md
+@@ 29,53 @@
+ - 2026-11-24 - orchestrator: T9 verification on 69f2c16b8 (+ docs-only b5d655738): bun run lint exit 0; bun run typecheck exit 0; bun test src/integrations 443 pass, 0 fail; Desktop bunx tsc --noEmit exit 0 and bun test src 998 pass, 0 fail (after the T7 fix round); bun run docs:check exit 0; keryx health run PASS (no gate conditions; optional sonarqube/coverage sources absent).
+ - 2026-11-23T20:56:48.820Z - task-done: T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check
+ - 2026-11-24 - operator (question card): first-green gate -> "Открыть PR и ревью" (standard review, no extra hardening); completion choice -> "A: PR, ревью, мерж, закрыть" (merge into main after a clean review and green CI, then implemented and complete).
+ - 2026-11-23T21:31:17.393Z - decision d-mwts638q-3d8360 [review decide-premise, ordinary]: chose dismiss; no recommendation
+ - 2026-11-23T21:31:28.859Z - task-added: T12: Fix round 1: review findings of PR 1301 (3 major, 19 minor)
+ - 2026-11-23T21:31:29.571Z - task-attempt: T12: started (attempt 1) — 518-T12 fix round 1
+ - 2026-11-24 - orchestrator: review round 1 of PR 1301 (package .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301): 23 reviewer replies, 52 findings (0 blocker, 3 major, 20 minor, 29 info); verifier: 3 majors unverifiable by site-check (code matches); premise judge: 22 upheld, 1 challenged. Operator dismissed performance-w1-F-001 ("Отклонить, в этап задержек": sequential reveal paging is by plan, read latency out of scope; recorded with keryx review decide-premise). Fix round T12 by task-implementer: all 22 upheld findings fixed; red->green tests for the 3 majors (focus kept on status-row change, tree reads bounded to 3 in flight with retired-snapshot reads never started, no pending focus request after Home/End). Operator answers on the fix round's behaviour questions: focus goes to the row now at the same place ("На то же место"), module cue = existing Module label ("Метка Module"), stale-snapshot on Load more shows the Refresh catalog banner ("Баннер Refresh catalog", implemented with its own red->green test). Orchestrator re-run: core tree/explorer 31 pass, typecheck/lint/docs:check exit 0, Desktop tsc exit 0 and bun test src 1006 pass.
+ - 2026-11-24T05:09:34.959Z - task-done: T12: Fix round 1: review findings of PR 1301 (3 major, 19 minor)
+ - 2026-11-24T06:53:14.263Z - decision d-mwuc8rcy-6141ed [review waive-mutation, ordinary]: chose waive; no recommendation
+ - 2026-11-24T07:30:29.062Z - decision d-mwudknqg-240e95 [review decide-premise, ordinary]: chose dismiss; no recommendation
+ - 2026-11-24T07:30:29.318Z - decision d-mwudknxr-dc2683 [review decide-premise, ordinary]: chose dismiss; no recommendation
+ - 2026-11-24T07:31:25.961Z - task-added: T13: Fix round 2: review round 2 findings of PR 1301 (9 minor in code)
+ - 2026-11-24T07:31:46.127Z - task-attempt: T13: started (attempt 1) — 518-T13 fix round 2
+ - 2026-11-24 - task-implementer: T13 fix round 2 (9 minor findings of review round 2). Red first: 7 new/extended assertions failed on the head for the intended reasons (focus landed on Show more / on three.md instead of client.ts; Could not load. row after stale-snapshot on folder and page; no permit retry; unexpected throw dropped). Fixed: first-read status row and next-page row get distinct ids (status:/more:), focus hand-off anchored to the row before the focused one with clamped-index fallback, layout effect and onFocus reuse rows instead of extra querySelectorAll, doc comment reworded; stale-snapshot after onStale leaves the row loading (no dead Retry); permit refusal ("unavailable: Too many Metaproject reads") retried up to 2 times with jittered wait (injectable `wait`), MAX_TREE_READS comment says permits are shared by all windows; limiter catch now reports unexpected throws with console.error; platform test variables renamed treeError/searchError. Two focus-leaves-the-tree tests added (green on the head: missing-test finding). Desktop tsc exit 0; bun test src 1014 pass, 0 fail; keryx health run --changed PASS. Not committed.
+ - 2026-11-24T07:38:01.554Z - task-done: T13: Fix round 2: review round 2 findings of PR 1301 (9 minor in code)
+ - 2026-11-24T08:19:59.205Z - decision d-mwufcbij-ce0f52 [review decide-premise, ordinary]: chose dismiss; no recommendation
+ - 2026-11-24T08:21:34.937Z - task-added: T14: Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)
+ - 2026-11-24T08:21:35.580Z - task-attempt: T14: started (attempt 1) — 518-T14 fix round 3
+ - 2026-11-24 - task-implementer: T14 fix round 3 (1 major, 6 minor of review round 3). Red first: 6 tests failed on the head for the intended reasons (src and a Show more page stayed Loading after Refresh catalog with an unchanged snapshot; focus landed on server.ts instead of README.md; permit classifier missing from the transport). Fixed: a stale-snapshot answer parks the folder or page as `stale` (rendered as Loading, banner only, no Retry) and useMetaprojectTree re-reads parked reads when its new `reload` input changes (MetaprojectView passes the catalog object, so every catalog load, same snapshotId included, recovers them); permit refusal classified once in platform/metaproject.ts (METAPROJECT_PERMIT_REFUSAL, isMetaprojectPermitRefusal) and used by the hook and the DOM test; back-off lifted to module-level withPermitRetry, failure classification to settleFailure (read() now under 40 lines); limiter and TreeFolder/ensure/more docs reworded; status rows anchor focus hand-off to their own parent (Loading row -> parent row, Show more -> parent last entry). Two retry snapshot-guard tests added, each shown to fail with its guard removed. Desktop tsc exit 0; bun test src 1019 pass, 0 fail. Rust metaproject.rs:199 comment not added (no Rust edits). Not committed.
+ - 2026-11-24T08:29:38.651Z - task-done: T14: Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)
++- 2026-11-24T09:19:21.278Z - decision d-mwuhgo14-e983ff [review decide-premise, ordinary]: chose dismiss; no recommendation
++- 2026-11-24T09:20:33.706Z - task-added: T15: Fix round 4: review round 4 findings of PR 1301 (6 minor in code)
++- 2026-11-24T09:20:54.516Z - task-attempt: T15: started (attempt 1) — 518-T15 fix round 4
++- 2026-11-24 - task-implementer: T15 fix round 4 (7 minor of review round 4). Tests first: each new assertion shown red against its mutant (M3, M4, M5, M6, M7, M12, M15) and green after. Fixed: component doc defers to handOff; handOffTarget helper replaces the nested ternary; `reload` is required; stale tests now assert the parked Loading row, the refused Show more, the reveal through a stale folder and the Wiki re-read; isMetaprojectPermitRefusal pinned false for a typed error; empty-page focus fallback pinned. Orchestrator amended plan.md (focus rule as decided in fix rounds 1 and 3; state-matrix row for stale-snapshot reads; r4-logic-w2-F-001). r4-style-w2-F-002 dismissed by the operator (names reload/loadedCatalog stay). Desktop tsc exit 0; bun test src 1021 pass, 0 fail. PR body PC-001 still pending (needs the MrCipherSmith gh account).
++- 2026-11-24T09:27:37.501Z - task-done: T15: Fix round 4: review round 4 findings of PR 1301 (6 minor in code)
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md
+@@ 29,72 @@
+   partial: boolean;      // the source behind the scope is missing or incomplete
+ }
+ type MetaprojectTreeEntry =
+   | { type: "folder"; path: string; name: string; files: number; module?: MetaprojectNode }
+   | { type: "group"; key: string; name: string; pages: number }
+   | { type: "node"; node: MetaprojectNode };
+ ```
+ 
+ Paging: at most `METAPROJECT_PAGE_SIZE_V2` entries and `METAPROJECT_RESPONSE_BYTES_V2` per page, with the existing snapshot-bound cursor helpers. A graph that is not built answers `entries: []`, `partial: true` for `scope: "graph"`; the wiki scope answers from whatever wiki pages the catalog source has. `capabilities` adds `"tree"` to `METAPROJECT_CAPABILITIES`. v1 parsing and responses do not change.
+ 
+ ## Transport
+ 
+ - **Rust** (`apps/desktop/src-tauri/src/metaproject.rs`): add `RequestV2::Tree { scope: TreeScope, parent: Option<String>, cursor: Option<String>, expected_snapshot_id }`, validated in `valid_v2` (graph `parent` a `relative_path`, wiki `parent` `valid_text`, cursor `valid_text`). `ACTIONS` — the set a CLI must offer — stays the six existing actions. Rust tests cover accept and refuse cases. Verified in GitHub CI only (no local cargo).
+ - **Desktop platform** (`apps/desktop/src/platform/metaproject.ts`): request/response types for `tree`, a response guard, and the negotiated capability set exposed to the view (for example `supportsTree`), so the view can tell an older CLI from a newer one. The handshake still requires only the actions Desktop always sends.
+ - **Dev bridge**: no change expected (it uses `parseExplorerRequest`); confirm with a test or a note.
+ 
+ ## Desktop UI
+ 
+ New component `apps/desktop/src/metaproject/MetaprojectTree.tsx` (+ `MetaprojectTree.dom.test.tsx`), mounted inside `nav.metaproject-list` of `MetaprojectView.tsx` when there is no search query, the mode is Graph or Wiki, and the CLI offers `tree`. Otherwise the list renders exactly as today.
+ 
+-- WAI-ARIA tree: `role="tree"` with an accessible name; rows `role="treeitem"` with `aria-level`, `aria-setsize`, `aria-posinset`, `aria-expanded` on folders/groups, `aria-selected` on the selected node; one roving `tabIndex=0`. Keys: Up/Down move, Right expands or enters the first child, Left collapses or goes to the parent, Enter/Space selects a node row or toggles a folder, Home/End go to the first/last visible row. Focus is never moved by data arriving.
++- WAI-ARIA tree: `role="tree"` with an accessible name; rows `role="treeitem"` with `aria-level`, `aria-setsize`, `aria-posinset`, `aria-expanded` on folders/groups, `aria-selected` on the selected node; one roving `tabIndex=0`. Keys: Up/Down move, Right expands or enters the first child, Left collapses or goes to the parent, Enter/Space selects a node row or toggles a folder, Home/End go to the first/last visible row. Data arriving never takes focus from elsewhere; when the focused row itself is replaced (its folder or next page loaded, or its status row removed), focus goes to the row now at its place: an entry row's successor, a status row's first following row of its own parent (operator decision, fix round 1; parent-scoped in fix round 3).
+ - Rows: folder/group = disclosure chevron, name, count; node row = title and the existing kind label; a module folder row selects the module node on Enter/click on its name and toggles on the chevron.
+ - Selecting a node row calls the same path a search result uses today (`openHit`/`select`/`openDocument`), so Graph, panel, Wiki and Back behave as they do now.
+ - Loading: a folder being read shows one "Loading…" row under it; a failed read shows an inline row with the error and a Retry that re-reads only that folder; a `nextCursor` shows a "Show more" row that appends the next page.
+ - State: expanded folders and loaded children are kept per scope (graph, wiki) in the explorer state that already survives leaving the view (flow 515). A new snapshot drops loaded children, keeps the expanded set, re-reads expanded folders, and silently forgets folders that no longer exist.
+ - Reveal: when the selection changes from outside the tree (graph click, search result, Back, details panel), the tree expands the selected node's ancestor folders (reading them as needed), scrolls the row into view (`block: "nearest"`) and does not take focus.
+ - Heading: `Files` in Graph, `Wiki` in Wiki, with the root counts; search keeps `Results · N`.
+ - Styling uses the existing tokens and list classes of `metaproject.css`; no new colours.
+ 
+ ## State × event matrix
+ 
+ | state \ event | expand folder | select node row | selection changes elsewhere | type a search query | clear the query | leave the view and return | new snapshot (refresh/rebuild) | CLI without `tree` |
+ |---|---|---|---|---|---|---|---|---|
+ | root loading | — | — | revealed once root arrives (AC6) | flat results replace the tree; the root read's late answer is dropped (AC6) | tree returns | loading continues or re-reads; no duplicate rows (AC6) | read restarts on the new snapshot (AC6) | flat list, no error (AC4) |
+ | root loaded | folder shows "Loading…", then children (AC5) | node selected exactly as a search result would (AC5) | ancestors expand, row scrolled into view, focus unchanged (AC6) | flat results (AC6) | tree with the same expanded folders (AC6) | same expanded folders and selection (AC6) | children re-read for expanded folders; vanished folders dropped (AC6) | — |
+ | folder loading | second expand/collapse does not issue a second read (AC5) | — | reveal waits for it | late answer dropped from view, kept for the cache only if same snapshot | — | — | late answer for the old snapshot dropped (AC6) | — |
+ | folder read failed | Retry re-reads that folder only; other folders unaffected (AC5) | — | reveal stops at the failed folder, no loop (AC6) | — | error row still shown | error row still shown | re-read on the new snapshot | — |
++| folder or page read answered stale-snapshot | parked: the row stays "Loading…", no Retry; the Refresh catalog banner shows (operator decision) | — | reveal waits on the parked folder | — | parked row still shown | parked row still shown | every catalog load re-reads parked reads, same snapshot id included (fix round 3); a new snapshot drops them | — |
+ | more pages | "Show more" appends the next page in order, no duplicates (AC5) | — | reveal pages until the row is found or pages end (AC6) | — | — | loaded pages kept | cursor from old snapshot never sent (AC6) | — |
+ | graph not built (`partial`, empty) | — | — | — | flat results | existing "graph is not built" state stays; tree shows an empty-state line (AC5) | — | tree appears after rebuild (AC6) | — |
+ 
+ ## Verification
+ 
+ Core contract and service tests, Desktop platform tests, tree component and view tests, the full Desktop suite with `tsc`, core typecheck and lint, the Rust tests in GitHub CI, docs check, then the managed review. Every check is a task (tasks.md). The native walkthrough is outside the criteria by operator decision; it joins the pending native check of flows 512 and 514.
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 107,140 @@
+   const steps: Step[] = folders.map((_, index) => ({
+     parent: folders.slice(0, index).join("/"), container: folders.slice(0, index + 1).join("/"),
+   }));
+   if (node.kind === "file") steps.push({ parent: folders.join("/"), node: node.id });
+   return steps;
+ }
+ 
+ /**
+  * The explorer sidebar as a WAI-ARIA tree: graph folders and files, or wiki page-type groups and
+  * pages. Data lives in `model` (the explorer's), so this component can come and go with the search.
+  * Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree;
+  * when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its
+- * place: the one after the row that preceded it, when that row is still shown.
++ * place (`handOff`): a status row hands it to its own parent's next row, any other row to the row
++ * after the one that preceded it.
+  */
+ export function MetaprojectTree({ scope, label, model, selection, selected, onSelect }: {
+   scope: MetaprojectTreeScope;
+   /** The tree's accessible name. */
+   label: string;
+   model: MetaprojectTreeModel;
+   /** The explorer's selected node id. */
+   selection: string;
+   /** The selected node, when the explorer knows it: revealed when the selection came from elsewhere. */
+   selected?: MetaprojectNode;
+   onSelect: (node: MetaprojectNode) => void;
+ }) {
+   const tree = model.get(scope);
+   const { rows, unread } = flatten(tree);
+   const [focusId, setFocusId] = useState("");
+   const list = useRef<HTMLUListElement>(null);
+   /**
+    * The element focused inside the tree, its row's index and where it hands focus (`handOff`), so a
+    * row that leaves can hand focus to the row now at its place.
+    */
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 92,135 @@
+ }
+ 
+ const emptyScope = (snapshot: string): ScopeTree => ({ snapshot, expanded: new Set(), folders: new Map(), handled: "" });
+ 
+ /**
+  * The explorer's tree data: per scope, the expanded folders, the loaded pages of each parent and
+  * what the tree last revealed. A new snapshot drops loaded children and every pending answer and
+  * keeps the expanded set; the tree re-reads what it shows. A cursor is only ever sent for the
+  * snapshot that issued it. At most `MAX_TREE_READS` reads run at once. `onStale` is told when a read
+  * answers `stale-snapshot` (the transport's answer to a reply for another snapshot) or, from a
+  * `request` that does not check, a page of another snapshot; that page is never shown, and the read
+  * is parked as stale until `reload` changes, which re-reads it under the snapshot then current.
+  */
+ export function useMetaprojectTree({ cwd, snapshot, request, onStale, reload, wait = sleep }: {
+   cwd: string;
+   snapshot: string;
+   request: RequestTree;
+   onStale: () => void;
+   /**
+    * Changes whenever the explorer loads its catalog (Refresh catalog included), whether or not the
+-   * snapshot changed: parked stale reads are sent again then.
++   * snapshot changed: parked stale reads are sent again then. Required: a change of it is the only way
++   * out of a stale read, which offers no Retry.
+    */
+-  reload?: unknown;
++  reload: unknown;
+   /** Waits before a permit retry; tests pass one that does not use the clock. */
+   wait?: (ms: number) => Promise<void>;
+ }): MetaprojectTreeModel {
+   const [, render] = useReducer((value: number) => value + 1, 0);
+   const state = useRef<Record<MetaprojectTreeScope, ScopeTree>>({ graph: emptyScope(snapshot), wiki: emptyScope(snapshot) });
+   // Every snapshot change retires the answers still in flight; a read keeps the generation it started in.
+   const generation = useRef(0);
+   if (state.current.graph.snapshot !== snapshot) {
+     generation.current++;
+     const keep = (scope: ScopeTree): ScopeTree => ({ ...emptyScope(snapshot), expanded: scope.expanded, handled: scope.handled });
+     state.current = { graph: keep(state.current.graph), wiki: keep(state.current.wiki) };
+   }
+   const latest = useRef({ cwd, request, onStale, wait });
+   latest.current = { cwd, request, onStale, wait };
+ 
+   const update = useCallback((scope: MetaprojectTreeScope, change: (tree: ScopeTree) => ScopeTree) => {
+     const next = change(state.current[scope]);
+     if (next === state.current[scope]) return;
+     state.current = { ...state.current, [scope]: next };
+     render();

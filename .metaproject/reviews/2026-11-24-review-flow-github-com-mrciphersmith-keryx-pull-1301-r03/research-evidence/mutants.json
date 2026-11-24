@@ -1,0 +1,107 @@
+[
+ {
+  "id": "M1",
+  "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+  "anchor": "onStale: markStale, reload: catalog,",
+  "replacement": "onStale: markStale,",
+  "kind": "behavior"
+ },
+ {
+  "id": "M2",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"stale\");",
+  "replacement": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"failed\");",
+  "kind": "behavior"
+ },
+ {
+  "id": "M3",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "for (const scope of [\"graph\", \"wiki\"] as const) {",
+  "replacement": "for (const scope of [\"graph\"] as const) {",
+  "kind": "behavior"
+ },
+ {
+  "id": "M4",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "if (!folder || folder.status === \"loading\" || folder.status === \"stale\") {",
+  "replacement": "if (!folder || folder.status === \"loading\") {",
+  "kind": "presentation"
+ },
+ {
+  "id": "M5",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "loading: Boolean(folder.more) });",
+  "replacement": "loading: folder.more?.status === \"loading\" });",
+  "kind": "presentation"
+ },
+ {
+  "id": "M6",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "|| (folder.more && folder.more.status !== \"failed\")) return;",
+  "replacement": "|| folder.more?.status === \"loading\") return;",
+  "kind": "behavior"
+ },
+ {
+  "id": "M7",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "if (folder.status === \"loading\" || folder.status === \"stale\") return;",
+  "replacement": "if (folder.status === \"loading\") return;",
+  "kind": "behavior"
+ },
+ {
+  "id": "M8",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "        ? { ...folder, more: { status: \"stale\" } }\n        : { status: \"stale\", entries: [], partial: false });",
+  "replacement": "        ? { ...folder, more: { status: \"loading\" } }\n        : { status: \"loading\", entries: [], partial: false });",
+  "kind": "behavior"
+ },
+ {
+  "id": "M9",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "if (loadedCatalog.current === reload) return;",
+  "replacement": "",
+  "kind": "behavior"
+ },
+ {
+  "id": "M10",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause) || !live()) throw cause;",
+  "replacement": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause)) throw cause;",
+  "kind": "behavior"
+ },
+ {
+  "id": "M11",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "anchor": "    if (!live()) throw cause;\n    return withPermitRetry(",
+  "replacement": "    return withPermitRetry(",
+  "kind": "behavior"
+ },
+ {
+  "id": "M12",
+  "file": "apps/desktop/src/platform/metaproject.ts",
+  "anchor": "return !(error instanceof MetaprojectRequestError) && errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);",
+  "replacement": "return errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);",
+  "kind": "behavior"
+ },
+ {
+  "id": "M13",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": "return { anchor: last?.id ?? own, parent: row.parent };",
+  "replacement": "return { anchor: own, parent: row.parent };",
+  "kind": "behavior"
+ },
+ {
+  "id": "M14",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];",
+  "replacement": ": after[0] ?? rows[at];",
+  "kind": "behavior"
+ },
+ {
+  "id": "M15",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];",
+  "replacement": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent));",
+  "kind": "behavior"
+ }
+]

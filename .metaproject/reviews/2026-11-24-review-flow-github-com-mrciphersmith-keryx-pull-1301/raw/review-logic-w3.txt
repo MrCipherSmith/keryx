@@ -1,0 +1,42 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 2 second look at slice-05 (core tree contract/handler and its tests, platform tree tests, Desktop tree and view DOM tests, the guide), read in full at f43a13c3f, with the 9f4ec475b..f43a13c3f delta for those files read as well. The fix round's core changes are sound: metaprojectWikiGroupKey (pageType || \"other\") is now the single key used by the core wikiTree and by Desktop (MetaprojectTree.tsx:66), so an empty pageType can no longer produce an unreachable \"\" group; the wikiTree group build is now linear; graphTree counts and lists only kind=file nodes, so symbols are excluded from listings and folder counts and a folder holding only symbols answers not-found; offsetPage keeps the search paging behaviour unchanged and refuses out-of-range offsets; an empty built graph answers entries [] with partial false. The transport's new snapshot check (platform/metaproject.ts:304-307) turns an answer for another snapshot than expectedSnapshotId into stale-snapshot after the shape and parent/scope checks, which is what the new platform and View tests assert. No logic defect found in this slice now.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-05", "coverage": "read in full (lines 1-1619); delta 9f4ec475b..f43a13c3f for the same files also read; context: apps/desktop/src/platform/metaproject.ts:280-322", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `9f4ec475b..f43a13c3f` (round 2 delta), slice-05 = second-look
+- Scope mode: explicit-hash-range
+- Spec compliance gate: not re-run in full on this delta; the slice's changes touch AC1, AC2, AC4, AC5, AC6, and none of them leaves a criterion unaddressed.
+
+### Summary
+The fix-round code and tests in this slice are logically sound. The wiki group key is shared between core and Desktop, symbols are excluded from graph tree listings and counts, an empty built graph answers a complete empty root, and a reply for another snapshot is refused as stale-snapshot in the transport.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Spec Gaps / Logic Bugs / Async & Concurrency / Error Handling / Null Safety / Type Contracts / Edge Cases
+None detected.
+
+### Not verified
+- No tests were run (exec_budget_s = 0). The suite results come from research-evidence/verify-tests-to-run-1.txt and CI, as the brief states.
+- Not read: pr-context.md, plan.md, acceptance-criteria.md (the payload inlined the ACs), round-1 findings.json and report.md, and the async/error-handling rule files. This round reports no findings, so nothing here can duplicate a round-1 finding.
+- Desktop hook/component sources (useMetaprojectTree.ts, MetaprojectTree.tsx) belong to other slices. Only the lines named above were read for context.
+
+Routing audit: graph_used: no (the payload's layers block listed affected files and tests, which was enough); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no. Raw git diff of the delta was run with a keryx:raw marker so the hunks could be read in full.
+KERYX_USAGE {"tokens_in":152912,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,83 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: 3ad918b66..0d6df2937 (round 5 delta, fix round 4); head 0d6df2937
+- Scope mode: explicit-hash-range, supplied slice only: slice-01 (fix), read in full
+- Files in the slice: T15 dispatch + fix_context, flow.json, resolved/T15.implement.json, journal.md, plan.md (focus sentence + new stale-snapshot matrix row), MetaprojectTree.tsx (component doc hunk), useMetaprojectTree.ts (`reload` made required + doc)
+- Context read at head (not reviewed as slices): MetaprojectTree.tsx handOff/handOffTarget (:65-92), useMetaprojectTree.ts reload effect (:260-269), MetaprojectView.tsx catalog read (:400-419) and hook call (:756-762), MetaprojectTree.dom.test.tsx Harness (`reload: props.reload ?? 0`)
+- Stack note: plain React hooks, no MobX in these files; MobX laws 1, 4, 5 have no site, law 2 (observer) does not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Prior dispositions
+- r4-clean-code-w2-F-001: closed. The component doc (MetaprojectTree.tsx:117-120) now defers to `handOff` and states the parent-scoped rule for status rows; it agrees with handOff (:72-79) and handOffTarget (:86-92). It simplifies one edge (when the parent gained no row, focus stays on the anchor), and handOffTarget's own doc states that edge, so this is not drift.
+- r4-degradation-w2-F-002: open (unreported, info). The `reload` doc at useMetaprojectTree.ts:111 still reads "Changes whenever the explorer loads its catalog (Refresh catalog included)". This delta edited that doc block and left the sentence as it was. The quiet re-read at MetaprojectView.tsx:410-412 still returns before setCatalog when the snapshot is unchanged, so `reload` does not change on that path. MetaprojectView.tsx:758 ("Every catalog load (a new catalog object)") and the PR body's round-3 line are unchanged. As before, this is wording only, with no user impact.
+- r4-frontend-w2-F-001: closed. `reload: unknown` is required (useMetaprojectTree.ts:115) and its doc names the contract. MetaprojectView passes `reload: catalog`, and the test Harness passes `props.reload ?? 0`. Leaving the key out is now a type error. One residual remains: `unknown` still admits an explicit `undefined` (F-001 below, info).
+- r4-logic-w2-F-001: closed. plan.md:49 now states the decided focus rule (an entry row hands focus to its successor, a status row to the first following row of its own parent) and cites fix rounds 1 and 3. The matrix gains a "folder or page read answered stale-snapshot" row: parked as Loading, no Retry, banner shown, reveal waits, every catalog load re-reads it with the same snapshot id included, and a new snapshot drops it. This matches the reload effect (:260-269), the reveal wait on `stale`, and the operator decisions in journal.md.
+
+### Findings
+
+### [F-001] Required `reload: unknown` still admits an explicit `undefined`
+- Severity: info
+- File: apps/desktop/src/metaproject/useMetaprojectTree.ts (`reload: unknown;`)
+- Rule: TypeScript safety / canonical rubric (no concrete bug: observation)
+- Problem: The fix for r4-frontend-w2-F-001 makes the key required. Because the type is `unknown`, a caller can still write `reload: undefined`, or pass any constant, and type-check. That caller again has no exit from a parked stale read. The production caller passes `catalog`, whose object identity changes on every non-quiet catalog load, so nothing is broken today.
+- Impact: Observation only. The type now catches the omission, which is the likely mistake, but it does not catch a value that never changes.
+- Suggested fix: None needed now. If a second production caller appears, consider typing it `reload: object` (the catalog object), so `undefined` and primitives are refused.
+- Confidence: high
+
+### Clean Areas
+- View/hook boundary: the slice moves no IO into the component. Reads stay in useMetaprojectTree, called from MetaprojectView.
+- Hook contract: the required input is threaded through both callers (view and Harness). tsc passes at the head (verify-tests-to-run-1.txt: Desktop tsc exit 0, 1021 pass).
+- Docs vs code: the component doc, handOff/handOffTarget docs and plan.md agree on the focus rule.
+- TypeScript: no `any`, no `!`, and no new optional props in the delta.
+- Flow bookkeeping files (dispatch, flow.json, resolved, journal): no frontend content.
+
+### Routing audit
+- graph_used: no (not-relevant: the payload's layers block already lists the affected files; the slice is a doc and type delta)
+- wiki_used: no (not-relevant: intent is stated in plan.md and the journal)
+- ctx_used: yes (`keryx ctx rg` for handOff/reload/caller enumeration, `keryx ctx read` for the schema)
+- raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 5 delta 3ad918b66..0d6df2937, slice-01 (fix) read in full. Three of the four prior findings are closed (component doc defers to handOff, `reload` required, plan.md amended with the focus rule and a stale-snapshot matrix row). r4-degradation-w2-F-002 (info, unreported) stays open: the `reload` doc wording is unchanged. One new info finding: required `reload: unknown` still admits an explicit undefined. No blocker, major or minor.",
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    {"id": "r4-clean-code-w2-F-001", "disposition": "closed"},
+    {"id": "r4-degradation-w2-F-002", "disposition": "open"},
+    {"id": "r4-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r4-logic-w2-F-001", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "reviewer": "review-frontend",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "  reload: unknown;",
+      "problem": "Answering r4-frontend-w2-F-001, `reload` is now a required key, but its type is `unknown`, so `reload: undefined` or any constant still type-checks. That caller would have no exit from a parked stale read (the reload effect is the only re-read of a `stale` park).",
+      "impact": "Observation only. The production caller passes the catalog object, whose identity changes on every non-quiet catalog load, and the Harness passes a number. The type now catches an omitted key but not a value that never changes.",
+      "suggested_fix": "No change needed now. If another production caller is added, consider `reload: object` (the catalog object), so undefined and primitives are refused at compile time.",
+      "evidence": "useMetaprojectTree.ts:115 `reload: unknown;`; effect at :262-269 `if (loadedCatalog.current === reload) return;` then reread(scope, parent, \"stale\"); callers: MetaprojectView.tsx:761 `reload: catalog`, MetaprojectTree.dom.test.tsx:71 `reload: props.reload ?? 0` (enumerated with keryx ctx rg 'handOff|reload|useMetaprojectTree\\(' apps/desktop/src/metaproject).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+KERYX_USAGE {"tokens_in":124937,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

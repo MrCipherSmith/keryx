@@ -1,0 +1,2545 @@
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md
+@@ 1,11 @@
++# Acceptance Criteria
++
++- AC1: A v2 `tree` request with `scope: "graph"` returns, for the root and for any folder, the folders containing indexed files (sorted, with file counts, a module folder carrying its module node) followed by that folder's file nodes (sorted), never symbols; pages of at most 100 entries chain by `nextCursor` to the full child list with no duplicate or missing entry; `scope: "wiki"` returns page-type groups at the root and a group's pages under it. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts`]
++- AC2: Malformed `tree` requests (unknown keys, bad scope, absolute or `..` parent, bad cursor) answer `invalid-input`; an unknown parent answers `not-found`; a cursor or `expectedSnapshotId` from another snapshot answers `stale-snapshot`; `capabilities` lists `tree`; v1 requests parse and answer exactly as before. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts` · sensitive: failure-scenario]
++- AC3: The Desktop Rust command accepts a well-formed `tree` request, refuses a malformed one, and still requires of a CLI only the six existing actions. [verify: exec `cd apps/desktop/src-tauri && cargo test --locked metaproject`]
++- AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]
++- AC5: The tree component renders folders, groups and node rows with WAI-ARIA tree semantics and roving focus; Up/Down/Left/Right/Home/End/Enter/Space behave as the plan states; expanding reads a folder once and shows a loading row; a failed folder read shows an inline error whose Retry re-reads only that folder; "Show more" appends the next page in order; selecting a node row calls the selection callback with that node; a graph that is not built shows an empty-state line. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx` · sensitive: failure-scenario]
++- AC6: In the explorer, the tree shows without a query and flat results with one; expanded folders and the selection survive leaving and returning to the view and switching between Graph and Wiki; a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus; a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old-snapshot cursor. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]
++- AC7: The Desktop package type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]
++- AC8: The core package lints and type-checks. [verify: exec `bun run lint && bun run typecheck`]
++- AC9: The Desktop Metaproject guide describes the tree (Graph folders, Wiki groups, keyboard, behaviour with an older CLI) and the docs checks pass. [verify: exec `bun run docs:check`]
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md
+@@ 1,67 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-11-23T20:01:55.320Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.94] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++2. [1.887] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++3. [1.783] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md
++   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.
++   claimType: constraint | confidence: high | version: 0.1.0
++   scope: module:review, memory, entity:managed-review-package
++   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown
++4. [1.722] SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка… (task-note/accepted) - task-notes/sac-proposal-d820f7ae5c4b43af.md
++   Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit.
++   claimType: task-note | confidence: medium | version: 0.1.0
++   scope: unknown
++   provenance: source=sac-proposal link=./.metaproject/workspaces/workspace-55936fb9858144ec/session-evidence/6728c7b5-7e93-43a6-9ab4-ea0e9720eaf2.wrap-up.md (sha256 7f281c7cb8399293e9c361fcb0a4f19815108e08a6dfda27db1acdbd29e7f52b) author=unknown confirmedBy=unknown
++5. [1.699] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++Orchestrator, 2026-11-24:
++
++- **Contract.** `src/integrations/metaproject-explorer-contract.ts`: v2 requests are parsed by `parseV2` with exact key sets; `METAPROJECT_CAPABILITIES` lists the actions a reader serves; `METAPROJECT_PAGE_SIZE_V2 = 100`, `METAPROJECT_RESPONSE_BYTES_V2 = 1 MiB`; cursors are snapshot-bound (`cursor`/`cursorValue` in `metaproject-explorer-v2.ts`). v1 (`parseExplorerRequestV1`) must stay unchanged.
++- **Service.** `src/integrations/metaproject-explorer-v2.ts` serves v2 from the graph model (`loadExplorerGraph` in `metaproject-explorer.ts`) and OpenSpec; nodes carry `path`, `kind` (`file`, `module`, `wiki`, `symbol`, …), `module`, `pageType`.
++- **Rust.** `apps/desktop/src-tauri/src/metaproject.rs`: `RequestV2` is a serde enum with `deny_unknown_fields`, validated in `valid_v2`; `ACTIONS` (6 entries) is what the capability probe requires of a CLI. `tree` must be accepted as a request but must NOT join the required set, or an older CLI would fail the handshake. No local cargo on this Mac (memory: no-local-rust-toolchain); Rust is verified in GitHub CI only.
++- **Desktop transport.** `apps/desktop/src/platform/metaproject.ts` checks capabilities (a CLI "has to cover every action Desktop sends", ~line 167). The UI needs to know whether `tree` is offered.
++- **Dev bridge.** `apps/desktop/dev/bridge.ts` validates with the same `parseExplorerRequest`, so it accepts `tree` once the contract does.
++- **UI.** `MetaprojectView.tsx` renders `nav.metaproject-list` (~line 896) as a flat `<ul>` of `results` (search hits, or the catalog when no query). Route/explorer state (mode, query, selection, Back history) survives leaving the view since flow 515 (`useExplorerNavigation.ts`).
++- **Prior art.** Flow 515's `plan.md` holds the explorer's state × event matrix; the tree adds rows and columns to it rather than replacing it.
++- **Operator decisions (2026-11-24, question card):** Graph tree = folders by path ("Папки по путям"); Wiki tree = pages grouped by page type; criteria verified by tests and CI, native check outside the criteria ("Тесты + CI"); no execution metrics ("Нет").
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md
+@@ 1,33 @@
++# Desktop Metaproject: tree navigation in the sidebar
++
++Status: formalized
++Source: owner request of 2026-11-24 ("look at what is next in the plan, start a flow in a new worktree and implement the next stage"). The tree is the third complaint of the owner's 2026-11-23 review of the Metaproject screen; flow 515 deferred it because it needs a new explorer action and a relaxed capability handshake ([515 description](../515-2026-11-23-desktop-metaproject-graph-panel/description.md), Out of Scope).
++
++## Problem
++
++The left list of the Metaproject screen (`apps/desktop/src/metaproject/MetaprojectView.tsx`, `nav.metaproject-list`) shows, without a search, a flat list of the catalog's first nodes. The catalog is capped at 200 nodes (`METAPROJECT_NODE_LIMIT`), while this repository indexes about 4,600 files, 200 modules and 125 wiki pages. So:
++
++- most of the project cannot be reached from the list without typing a search;
++- the list has no structure: files, modules and wiki pages of every folder are mixed in one column, so the user cannot browse "what is in `src/flow`";
++- the Wiki view lists pages without the grouping the wiki itself uses (architecture, components, business rules, …).
++
++## Expected Outcome
++
++- Without a search query, the list is a tree. In **Graph** it mirrors the indexed files by folder: folders first, then files, each folder with the number of indexed files under it; a folder that is a module can be selected as that module's graph node. In **Wiki** pages are grouped by page type.
++- Folders load their children on demand from a new paged Core action, so the whole project is reachable however large it is.
++- The tree is keyboard-operable as a WAI-ARIA tree, keeps its expanded folders when the user leaves the explorer and comes back, and reveals the selected node when the selection changes elsewhere (graph click, search result, Back).
++- With a search query the list stays the current flat result list.
++- A Desktop talking to an older CLI that does not offer the tree action keeps today's flat list, with no error.
++
++## Outcome criteria
++
++- On this repository, every indexed file is reachable from the Graph list without typing a search: the root lists the top-level folders, and expanding them leads to any file (measured by the tree contract tests over a fixture, and by the operator on this checkout).
++
++## Out of Scope
++
++- Changing what the graph, the details panel or the OpenSpec view show (flows 515 and 514 own them).
++- Read latency and cancellation of explorer reads (about 0.8 s per read; a separate stage).
++- Actions on a tree row beyond selecting it (open in Files, send to a session, start a flow).
++- Drag and drop, renaming, or any write to the project.
++- Native screenshots for the guide.
++- New dependencies.
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md
+@@ 1,31 @@
++# Flow Journal
++
++- 2026-11-23T20:02:01.811Z - flow created
++- 2026-11-23T20:04:59.726Z - task-added: T5: Core: tree action in contract, service and capabilities, with tests
++- 2026-11-23T20:05:00.015Z - task-added: T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests
++- 2026-11-23T20:05:00.313Z - task-added: T7: Desktop: MetaprojectTree component and explorer integration, with tests
++- 2026-11-23T20:05:00.616Z - task-added: T8: Docs: describe the tree in the Desktop Metaproject guide
++- 2026-11-23T20:05:00.958Z - task-added: T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check
++- 2026-11-23T20:05:01.344Z - task-added: T10: Verify: Rust tests and all required checks green in GitHub CI on the PR
++- 2026-11-23T20:05:01.659Z - task-added: T11: Review: managed review rounds on the PR until clean
++- 2026-11-23T20:05:02.023Z - task-done: T1: Collect remaining context
++- 2026-11-23T20:05:02.367Z - task-done: T2: Implement per plan
++- 2026-11-23T20:05:02.729Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-23T20:05:03.029Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-23T20:05:10.115Z - frozen: 9 criteria; checksum recorded
++- 2026-11-23T20:05:10.432Z - started
++- 2026-11-23T20:05:38.865Z - task-attempt: T5: started (attempt 1) — 518-T5
++- 2026-11-24 - orchestrator: T5 returned DONE_WITH_CONCERNS (29 pass in the AC1/AC2 suites, 443 in src/integrations, typecheck and eslint clean; re-run by the orchestrator: 29 pass, 0 fail). Concern carried to T6: apps/desktop/src/platform/metaproject.ts (~line 172) requires every action in METAPROJECT_CAPABILITIES, so adding `tree` there would make Desktop refuse an older CLI; T6 must switch it to a fixed required set and re-check metaproject.test.ts fixtures built from that list. Behaviour choices: wiki group names derived from the key ("domain-model" -> "Domain model", untyped -> "Other"), confirmed by the operator on the question card ("Из ключа"); graph not built -> entries [] and partial true for any parent; cursor decoded before parent; partial false when the graph exists; wiki parent validated as an id. Refactor: search and tree paging share offsetPage.
++- 2026-11-23T20:26:36.792Z - task-done: T5: Core: tree action in contract, service and capabilities, with tests
++- 2026-11-23T20:26:56.305Z - task-attempt: T6: started (attempt 1) — 518-T6
++- 2026-11-24 - orchestrator: T6 returned DONE_WITH_CONCERNS. Re-run by the orchestrator: platform + view tests 105 pass, 0 fail; Desktop tsc exit 0 (worker: whole Desktop suite 979 pass). Fixed the T5 handshake defect: validCapabilities requires METAPROJECT_REQUIRED_ACTIONS (the six), negotiateMetaprojectExplorer exposes supportsTree; strict tree response guard; requestMetaprojectTree added. Rust RequestV2::Tree + 2 tests written but NOT compiled (no cargo here): AC3 waits for GitHub CI. Dev bridge needs no change (uses parseExplorerRequest). Carry to T7: the view must call negotiateMetaprojectExplorer (or widen Negotiate) to read supportsTree.
++- 2026-11-23T20:33:14.698Z - task-done: T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests
++- 2026-11-23T20:33:40.322Z - task-attempt: T7: started (attempt 1) — 518-T7
++- 2026-11-24 - orchestrator: T7 returned DONE_WITH_CONCERNS, then DONE after one fix round. Operator answers on the question card (2026-11-24): module folder keys as implemented ("Оставить"); reveal only a user selection ("Только выбор пользователя") — differed from the implementation, fixed in the fix round with a red-then-green test; status rows stay in keyboard navigation ("Оставить"); wording as implemented ("Подходит"). Fix round also added tests for module reveal, Show-more failure + Retry, and not-found after a snapshot change (all passed on existing code). Re-run by the orchestrator: Desktop suite 998 pass, 0 fail; tsc exit 0. Deviation reported by the worker: first T7 pass wrote implementation before tests (not observed red); the fix-round test was red first. Untested: symbol reveal (only ancestors expand). Note: .metaproject/rules/stacks/react/code-style-patterns.mdc named by the skill does not exist in this checkout.
++- 2026-11-23T20:52:53.486Z - task-done: T7: Desktop: MetaprojectTree component and explorer integration, with tests
++- 2026-11-23T20:53:06.658Z - task-attempt: T8: started (attempt 1) — 518-T8
++- 2026-11-24 - orchestrator: T8 done. Guide gained 'Browse the tree' and 'Search' subsections and three recovery rows; worker ran docs:check: exit 0 (2392 links, 0 broken; 67 tests pass). Worker notes not confirmed from code: Back revealing the tree (left out of the guide), row-click toggling a module folder (guide names the chevron only), the older-CLI recovery wording.
++- 2026-11-23T20:54:47.803Z - task-done: T8: Docs: describe the tree in the Desktop Metaproject guide
++- 2026-11-24 - orchestrator: T9 verification on 69f2c16b8 (+ docs-only b5d655738): bun run lint exit 0; bun run typecheck exit 0; bun test src/integrations 443 pass, 0 fail; Desktop bunx tsc --noEmit exit 0 and bun test src 998 pass, 0 fail (after the T7 fix round); bun run docs:check exit 0; keryx health run PASS (no gate conditions; optional sonarqube/coverage sources absent).
++- 2026-11-23T20:56:48.820Z - task-done: T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check
++- 2026-11-24 - operator (question card): first-green gate -> "Открыть PR и ревью" (standard review, no extra hardening); completion choice -> "A: PR, ревью, мерж, закрыть" (merge into main after a clean review and green CI, then implemented and complete).
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md
+@@ 1,71 @@
++# Plan — tree navigation in the Metaproject sidebar
++
++## Approach
++
++One new read-only v2 action, `tree`, returns the children of one tree node, paged. Desktop asks for the root when the list first shows the tree and for a folder's children when the user expands it. The action is optional: a reader lists it in `capabilities`, and Desktop uses the tree only when the answering CLI offers it. Everything else in the explorer is unchanged.
++
++Rejected: sending the whole tree in `catalog` (4,600 files exceed the catalog's 200-node cap and the 1 MiB response bound on larger repos); building the tree client-side from search results (incomplete and slow).
++
++## Contract (Core, `src/integrations/metaproject-explorer-contract.ts`)
++
++Request:
++
++```ts
++{ version: 2; action: "tree"; scope: "graph" | "wiki"; parent?: string; cursor?: string; expectedSnapshotId?: string }
++```
++
++- `scope: "graph"` — `parent` absent is the checkout root; otherwise a checkout-relative folder path (`isMetaprojectRelativePath`). Children: the folders directly under `parent` that contain at least one indexed file node (any depth), sorted by name; then the file nodes directly under `parent`, sorted by name. Symbols never appear. A folder whose path equals a module node's path carries that module node.
++- `scope: "wiki"` — `parent` absent lists one group per wiki page type present (key = the page type, `other` for pages without one), sorted by display name; `parent` = a group key lists that group's pages sorted by title.
++- Exact keys, as every other v2 action; anything else is `invalid-input`. An unknown `parent` is `not-found`. A mismatched `expectedSnapshotId` or a cursor from another snapshot is `stale-snapshot`.
++
++Response:
++
++```ts
++interface MetaprojectTreeV2 {
++  schemaVersion: 2; snapshotId: string;
++  scope: "graph" | "wiki"; parent: string | null;
++  entries: MetaprojectTreeEntry[];
++  nextCursor?: string;   // more entries of this parent
++  partial: boolean;      // the source behind the scope is missing or incomplete
++}
++type MetaprojectTreeEntry =
++  | { type: "folder"; path: string; name: string; files: number; module?: MetaprojectNode }
++  | { type: "group"; key: string; name: string; pages: number }
++  | { type: "node"; node: MetaprojectNode };
++```
++
++Paging: at most `METAPROJECT_PAGE_SIZE_V2` entries and `METAPROJECT_RESPONSE_BYTES_V2` per page, with the existing snapshot-bound cursor helpers. A graph that is not built answers `entries: []`, `partial: true` for `scope: "graph"`; the wiki scope answers from whatever wiki pages the catalog source has. `capabilities` adds `"tree"` to `METAPROJECT_CAPABILITIES`. v1 parsing and responses do not change.
++
++## Transport
++
++- **Rust** (`apps/desktop/src-tauri/src/metaproject.rs`): add `RequestV2::Tree { scope: TreeScope, parent: Option<String>, cursor: Option<String>, expected_snapshot_id }`, validated in `valid_v2` (graph `parent` a `relative_path`, wiki `parent` `valid_text`, cursor `valid_text`). `ACTIONS` — the set a CLI must offer — stays the six existing actions. Rust tests cover accept and refuse cases. Verified in GitHub CI only (no local cargo).
++- **Desktop platform** (`apps/desktop/src/platform/metaproject.ts`): request/response types for `tree`, a response guard, and the negotiated capability set exposed to the view (for example `supportsTree`), so the view can tell an older CLI from a newer one. The handshake still requires only the actions Desktop always sends.
++- **Dev bridge**: no change expected (it uses `parseExplorerRequest`); confirm with a test or a note.
++
++## Desktop UI
++
++New component `apps/desktop/src/metaproject/MetaprojectTree.tsx` (+ `MetaprojectTree.dom.test.tsx`), mounted inside `nav.metaproject-list` of `MetaprojectView.tsx` when there is no search query, the mode is Graph or Wiki, and the CLI offers `tree`. Otherwise the list renders exactly as today.
++
++- WAI-ARIA tree: `role="tree"` with an accessible name; rows `role="treeitem"` with `aria-level`, `aria-setsize`, `aria-posinset`, `aria-expanded` on folders/groups, `aria-selected` on the selected node; one roving `tabIndex=0`. Keys: Up/Down move, Right expands or enters the first child, Left collapses or goes to the parent, Enter/Space selects a node row or toggles a folder, Home/End go to the first/last visible row. Focus is never moved by data arriving.
++- Rows: folder/group = disclosure chevron, name, count; node row = title and the existing kind label; a module folder row selects the module node on Enter/click on its name and toggles on the chevron.
++- Selecting a node row calls the same path a search result uses today (`openHit`/`select`/`openDocument`), so Graph, panel, Wiki and Back behave as they do now.
++- Loading: a folder being read shows one "Loading…" row under it; a failed read shows an inline row with the error and a Retry that re-reads only that folder; a `nextCursor` shows a "Show more" row that appends the next page.
++- State: expanded folders and loaded children are kept per scope (graph, wiki) in the explorer state that already survives leaving the view (flow 515). A new snapshot drops loaded children, keeps the expanded set, re-reads expanded folders, and silently forgets folders that no longer exist.
++- Reveal: when the selection changes from outside the tree (graph click, search result, Back, details panel), the tree expands the selected node's ancestor folders (reading them as needed), scrolls the row into view (`block: "nearest"`) and does not take focus.
++- Heading: `Files` in Graph, `Wiki` in Wiki, with the root counts; search keeps `Results · N`.
++- Styling uses the existing tokens and list classes of `metaproject.css`; no new colours.
++
++## State × event matrix
++
++| state \ event | expand folder | select node row | selection changes elsewhere | type a search query | clear the query | leave the view and return | new snapshot (refresh/rebuild) | CLI without `tree` |
++|---|---|---|---|---|---|---|---|---|
++| root loading | — | — | revealed once root arrives (AC6) | flat results replace the tree; the root read's late answer is dropped (AC6) | tree returns | loading continues or re-reads; no duplicate rows (AC6) | read restarts on the new snapshot (AC6) | flat list, no error (AC4) |
++| root loaded | folder shows "Loading…", then children (AC5) | node selected exactly as a search result would (AC5) | ancestors expand, row scrolled into view, focus unchanged (AC6) | flat results (AC6) | tree with the same expanded folders (AC6) | same expanded folders and selection (AC6) | children re-read for expanded folders; vanished folders dropped (AC6) | — |
++| folder loading | second expand/collapse does not issue a second read (AC5) | — | reveal waits for it | late answer dropped from view, kept for the cache only if same snapshot | — | — | late answer for the old snapshot dropped (AC6) | — |
++| folder read failed | Retry re-reads that folder only; other folders unaffected (AC5) | — | reveal stops at the failed folder, no loop (AC6) | — | error row still shown | error row still shown | re-read on the new snapshot | — |
++| more pages | "Show more" appends the next page in order, no duplicates (AC5) | — | reveal pages until the row is found or pages end (AC6) | — | — | loaded pages kept | cursor from old snapshot never sent (AC6) | — |
++| graph not built (`partial`, empty) | — | — | — | flat results | existing "graph is not built" state stays; tree shows an empty-state line (AC5) | — | tree appears after rebuild (AC6) | — |
++
++## Verification
++
++Core contract and service tests, Desktop platform tests, tree component and view tests, the full Desktop suite with `tsc`, core typecheck and lint, the Rust tests in GitHub CI, docs check, then the managed review. Every check is a task (tasks.md). The native walkthrough is outside the criteria by operator decision; it joins the pending native check of flows 512 and 514.
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json
+@@ 1,45 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "518",
++  "dispatch_id": "518-T5",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Core: tree action in contract, service and capabilities, with tests",
++    "description": "Add the read-only v2 Metaproject action `tree` exactly as plan.md section 'Contract (Core ...)' specifies: request parsing in parseV2 (exact keys, scope graph|wiki, optional parent/cursor/expectedSnapshotId), response types MetaprojectTreeV2 / MetaprojectTreeEntry, `tree` added to METAPROJECT_CAPABILITIES, and the service implementation in metaproject-explorer-v2.ts (graph scope: folders containing indexed file nodes with file counts and the module node of a module folder, then file nodes, sorted, never symbols; wiki scope: page-type groups at the root, pages under a group; paging with METAPROJECT_PAGE_SIZE_V2 and the snapshot-bound cursor helpers; not-found for unknown parent; graph not built -> entries [] and partial true). v1 parsing and responses must not change. Write the tests in the new file src/integrations/metaproject-explorer-tree.test.ts, using the fixture style of src/integrations/metaproject-explorer.test.ts, covering AC1 and AC2 (including the failure scenarios), and keep src/integrations/metaproject-explorer.test.ts passing.",
++    "intent": "implement"
++  },
++  "acceptance_criteria": [
++    "AC1: A v2 `tree` request with `scope: \"graph\"` returns, for the root and for any folder, the folders containing indexed files (sorted, with file counts, a module folder carrying its module node) followed by that folder's file nodes (sorted), never symbols; pages of at most 100 entries chain by `nextCursor` to the full child list with no duplicate or missing entry; `scope: \"wiki\"` returns page-type groups at the root and a group's pages under it. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts`]",
++    "AC2: Malformed `tree` requests (unknown keys, bad scope, absolute or `..` parent, bad cursor) answer `invalid-input`; an unknown parent answers `not-found`; a cursor or `expectedSnapshotId` from another snapshot answers `stale-snapshot`; `capabilities` lists `tree`; v1 requests parse and answer exactly as before. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts` · sensitive: failure-scenario]"
++  ],
++  "context_refs": [
++    { "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md", "kind": "context", "exists": true },
++    { "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md", "kind": "plan", "exists": true },
++    { "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md", "kind": "custom", "exists": true },
++    { "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json", "kind": "custom", "exists": true }
++  ],
++  "files_to_read": [
++    "src/integrations/metaproject-explorer-contract.ts",
++    "src/integrations/metaproject-explorer-v2.ts",
++    "src/integrations/metaproject-explorer.ts",
++    "src/integrations/metaproject-projection.ts",
++    "src/integrations/metaproject-explorer.test.ts"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "Scope: only src/integrations/** (contract, v2 service, the new test file, and the existing explorer test if a fixture needs extending). Do not touch apps/desktop/**; the Rust and Desktop transport are task T6.",
++    "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`."
++  ],
++  "allowed_actions": ["read", "write", "run-command", "git"],
++  "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md" },
++  "budget": { "max_output_tokens": null },
++  "provenance": { "created_at": "2026-11-23T20:15:00Z", "created_by": "flow-orchestrator" }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json
+@@ 1,74 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "518",
++  "dispatch_id": "518-T6",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests",
++    "intent": "implement",
++    "description": "Carry the new v2 `tree` action (already implemented in Core by T5: see src/integrations/metaproject-explorer-contract.ts, MetaprojectTreeV2 / MetaprojectTreeEntry / parseV2 'tree' case) through the Desktop transport, as plan.md section 'Transport' says. (1) apps/desktop/src-tauri/src/metaproject.rs: add RequestV2::Tree { scope (graph|wiki), parent: Option<String>, cursor: Option<String>, expected_snapshot_id } validated in valid_v2 (graph parent = relative_path, wiki parent = valid_text, cursor = valid_text, pin = digest); keep ACTIONS (the set a CLI must offer) at the six existing actions; add Rust unit tests next to the existing ones for accept/refuse of tree requests and for the unchanged required set. There is NO cargo on this machine: you cannot compile Rust; write it carefully in the file's existing style, mirror existing variants exactly, and say clearly in your result that Rust was not compiled (CI will). (2) apps/desktop/src/platform/metaproject.ts: KNOWN DEFECT from T5 — around line 172 the capability check requires every action in METAPROJECT_CAPABILITIES, which now includes `tree`, so an older CLI without `tree` would be refused. Change it to a fixed required set (the six actions Desktop always sends) and expose whether the answering CLI offers `tree` (e.g. a `supportsTree`/capability set from the negotiation that the view can read). Add the request/response typing and a response guard for `tree` responses, and a function the view can call to request a tree page (follow how openspec-list is requested and guarded). Update apps/desktop/src/platform/metaproject.test.ts: its fixtures build capabilities from METAPROJECT_CAPABILITIES (~lines 65-67) — add cases: CLI offering the six actions only negotiates fine and reports tree unsupported; CLI offering tree reports it supported; a malformed tree response is rejected. (3) apps/desktop/dev/bridge.ts uses parseExplorerRequest and should need no change; confirm and say so. Do NOT build the tree UI (that is T7) and do not change MetaprojectView beyond what the type changes force; if a type change forces a view edit, keep it minimal and report it."
++  },
++  "acceptance_criteria": [
++    "AC3: The Desktop Rust command accepts a well-formed `tree` request, refuses a malformed one, and still requires of a CLI only the six existing actions. [verify: exec `cd apps/desktop/src-tauri && cargo test --locked metaproject`]",
++    "AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    "apps/desktop/src-tauri/src/metaproject.rs",
++    "apps/desktop/src/platform/metaproject.ts",
++    "apps/desktop/src/platform/metaproject.test.ts",
++    "apps/desktop/dev/bridge.ts",
++    "src/integrations/metaproject-explorer-contract.ts"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "Scope: apps/desktop/src-tauri/src/metaproject.rs, apps/desktop/src/platform/metaproject.ts and its test, and only forced type fixes elsewhere in apps/desktop/src. Do not touch src/integrations/** (T5 is committed) unless a contract bug blocks you: then report it instead of fixing it.",
++    "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T20:35:00Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json
+@@ 1,77 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "518",
++  "dispatch_id": "518-T7",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "task-implementer",
++  "task": {
++    "title": "Desktop: MetaprojectTree component and explorer integration, with tests",
++    "intent": "implement",
++    "description": "Build the sidebar tree exactly as plan.md sections 'Desktop UI' and 'State × event matrix' specify. Create apps/desktop/src/metaproject/MetaprojectTree.tsx and apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx; mount the tree in the `nav.metaproject-list` of MetaprojectView.tsx when there is no search query, the mode is Graph (scope graph) or Wiki (scope wiki), and the CLI offers `tree`; otherwise render the list exactly as today. Transport is ready (T6): apps/desktop/src/platform/metaproject.ts exports negotiateMetaprojectExplorer(cwd, call?) -> { protocol, supportsTree } and requestMetaprojectTree(cwd, request, call?). MetaprojectView currently uses negotiateMetaproject via an injectable `negotiate` prop that returns 1|2; widen it (or add an injectable alternative) so the view learns supportsTree, keeping existing test doubles working, and make the tree request injectable for tests like the other requests. Behaviour to implement and test: WAI-ARIA tree (role tree with a name, treeitem rows with aria-level/setsize/posinset, aria-expanded on folders/groups, aria-selected on the selected node, one roving tabIndex=0); keys Up/Down/Left/Right/Home/End/Enter/Space as in the plan; folder/group rows with chevron, name and count; node rows with title and kind label; a module folder selects its module node on the name and toggles on the chevron; selecting a node row goes through the same path a search hit uses today (openHit/select/openDocument) so Graph, panel, Wiki and Back behave unchanged; a folder read shows one Loading row, is issued once even on repeated toggles, a failed read shows an inline error row whose Retry re-reads only that folder; nextCursor shows a Show more row that appends the next page in order with no duplicates; graph not built (partial with no entries) shows an empty-state line. State: expanded folders and loaded children per scope (graph, wiki) live in explorer state that survives leaving the view and switching Graph/Wiki (see useExplorerNavigation.ts and how flow 515 kept state); a new catalog snapshot drops loaded children and late answers, keeps the expanded set, re-reads expanded folders, forgets folders that no longer exist, and never sends an old-snapshot cursor. Reveal: when the selection changes from outside the tree (graph click, search result, Back, details panel) expand its ancestor folders (reading as needed, stop at a failed folder, page until found or pages end), scroll the row into view with block nearest, never move focus. Heading: 'Files' in Graph, 'Wiki' in Wiki (with counts); search keeps 'Results · N'. Use existing tokens and classes in the Metaproject stylesheet (find it with keryx ctx rg 'metaproject-list' apps/desktop/src); no new colours, no new dependencies. Extend MetaprojectView.dom.test.tsx for AC4 (CLI without tree -> flat list, no error) and AC6, and put component-level behaviour in MetaprojectTree.dom.test.tsx for AC5."
++  },
++  "acceptance_criteria": [
++    "AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]",
++    "AC5: The tree component renders folders, groups and node rows with WAI-ARIA tree semantics and roving focus; Up/Down/Left/Right/Home/End/Enter/Space behave as the plan states; expanding reads a folder once and shows a loading row; a failed folder read shows an inline error whose Retry re-reads only that folder; \"Show more\" appends the next page in order; selecting a node row calls the selection callback with that node; a graph that is not built shows an empty-state line. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx` · sensitive: failure-scenario]",
++    "AC6: In the explorer, the tree shows without a query and flat results with one; expanded folders and the selection survive leaving and returning to the view and switching between Graph and Wiki; a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus; a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old-snapshot cursor. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
++    "AC7: The Desktop package type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/useExplorerNavigation.ts",
++    "apps/desktop/src/metaproject/RelationshipList.tsx",
++    "apps/desktop/src/platform/metaproject.ts",
++    ".metaproject/flows/515-2026-11-23-desktop-metaproject-graph-panel/plan.md"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "Scope: apps/desktop/src/metaproject/** (new MetaprojectTree component and test, MetaprojectView and its test, the Metaproject stylesheet) and, only if needed for injection, apps/desktop/src/platform/metaproject.ts. Do not touch src/integrations/** or src-tauri/**; report a transport bug instead of fixing it there.",
++    "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T20:50:00Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json
+@@ 1,65 @@
++{
++  "contract_version": "1.0.0",
++  "run_id": "518",
++  "dispatch_id": "518-T8",
++  "orchestrator": "flow-orchestrator",
++  "target_skill": "documentation",
++  "task": {
++    "title": "Docs: describe the tree in the Desktop Metaproject guide",
++    "intent": "document",
++    "description": "Update docs/docs/guides/desktop-metaproject.md so it describes the sidebar tree shipped by T7: without a search the Graph list is a tree of folders and files (folders first with file counts, a module folder selectable as its module node: Enter or a click on the name selects it, Space or the chevron expands it), the Wiki list groups pages by page type ('domain-model' shown as 'Domain model', untyped pages under 'Other'); folders load on demand with Loading / error with Retry / Show more rows; keyboard (Up/Down, Left/Right, Home/End, Enter/Space); expanded folders survive leaving the explorer and switching Graph/Wiki; a selection made elsewhere expands its path, while the item shown by default on first open does not; with a search the list shows flat results as before; with an older Keryx CLI that does not offer the tree the list stays the flat catalog list and nothing fails; if the graph is not built the Graph tree says so. Fit it into the existing structure (most likely the 'Find a page, file, module or symbol' section and 'Recover from common problems'); match the guide's voice and do not restate unrelated sections. Read the code to confirm wording: apps/desktop/src/metaproject/MetaprojectTree.tsx and MetaprojectView.tsx. Then run `bun run docs:check` from the root and make it pass."
++  },
++  "acceptance_criteria": [
++    "AC9: The Desktop Metaproject guide describes the tree (Graph folders, Wiki groups, keyboard, behaviour with an older CLI) and the docs checks pass. [verify: exec `bun run docs:check`]"
++  ],
++  "context_refs": [
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
++      "kind": "context",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
++      "kind": "plan",
++      "exists": true
++    },
++    {
++      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
++      "kind": "custom",
++      "exists": true
++    }
++  ],
++  "files_to_read": [
++    "docs/docs/guides/desktop-metaproject.md",
++    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx"
++  ],
++  "constraints": [
++    "Never edit flow.json.",
++    "Never edit frozen acceptance criteria.",
++    "Return a subagent-result; first line must be STATUS:.",
++    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
++    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
++    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
++    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
++    "Scope: apps/desktop/src/metaproject/** (new MetaprojectTree component and test, MetaprojectView and its test, the Metaproject stylesheet) and, only if needed for injection, apps/desktop/src/platform/metaproject.ts. Do not touch src/integrations/** or src-tauri/**; report a transport bug instead of fixing it there.",
++    "Scope: docs/docs/guides/desktop-metaproject.md only (and a docs index/nav file only if docs:check demands it). No code changes."
++  ],
++  "allowed_actions": [
++    "read",
++    "write",
++    "run-command",
++    "git"
++  ],
++  "output_contract": {
++    "schema": "subagent-result",
++    "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
++  },
++  "budget": {
++    "max_output_tokens": null
++  },
++  "provenance": {
++    "created_at": "2026-11-23T21:30:00Z",
++    "created_by": "flow-orchestrator"
++  }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 1,13 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "518",
++  "slug": "desktop-metaproject-sidebar-tree",
++  "title": "Desktop Metaproject: tree navigation in the sidebar",
++  "status": "in-progress",
++  "createdAt": "2026-11-23T20:02:01.811Z",
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 15,245 @@
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:6967eb6b3ab4713dfc3c8f19fcf5fa9f32c2e8a1a949da12507ceb10e2a87c41",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "origin": {
++    "kind": "human-request",
++    "quote": "теперь смотри что по плану дальше, заводи фло в новой ворктри и реализуй следующий этап",
++    "source": "Claude Code session of 2026-11-24, after flows 512 and 514 were recorded; the tree is the owner's third complaint deferred by flow 515"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Context collected by the orchestrator: gdctx searches and reads of the contract, v2 service, Rust command, platform transport and MetaprojectView; findings in context.md"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "Generic init task replaced by the specific tasks T5-T11 of this plan"
++    },
++    {
++      "id": "T5",
++      "title": "Core: tree action in contract, service and capabilities, with tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T1"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T20:05:38.865Z",
++            "outcome": "started",
++            "detail": "518-T5"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T20:26:56.305Z",
++            "outcome": "started",
++            "detail": "518-T6"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Desktop: MetaprojectTree component and explorer integration, with tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T6"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T20:33:40.322Z",
++            "outcome": "started",
++            "detail": "518-T7"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Docs: describe the tree in the Desktop Metaproject guide",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T7"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-23T20:53:06.658Z",
++            "outcome": "started",
++            "detail": "518-T8"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T7",
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "lint, typecheck, core integration tests, Desktop tsc and full suite, docs check and health all pass; numbers in journal.md"
++    },
++    {
++      "id": "T10",
++      "title": "Verify: Rust tests and all required checks green in GitHub CI on the PR",
++      "kind": "verify",
++      "status": "todo",
++      "dependsOn": [
++        "T9"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T11",
++      "title": "Review: managed review rounds on the PR until clean",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [
++        "T10"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 267,381 @@
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-23T20:02:01.811Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-23T20:04:59.726Z",
++      "event": "task-added",
++      "detail": "T5: Core: tree action in contract, service and capabilities, with tests"
++    },
++    {
++      "at": "2026-11-23T20:05:00.015Z",
++      "event": "task-added",
++      "detail": "T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests"
++    },
++    {
++      "at": "2026-11-23T20:05:00.313Z",
++      "event": "task-added",
++      "detail": "T7: Desktop: MetaprojectTree component and explorer integration, with tests"
++    },
++    {
++      "at": "2026-11-23T20:05:00.616Z",
++      "event": "task-added",
++      "detail": "T8: Docs: describe the tree in the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T20:05:00.958Z",
++      "event": "task-added",
++      "detail": "T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check"
++    },
++    {
++      "at": "2026-11-23T20:05:01.344Z",
++      "event": "task-added",
++      "detail": "T10: Verify: Rust tests and all required checks green in GitHub CI on the PR"
++    },
++    {
++      "at": "2026-11-23T20:05:01.659Z",
++      "event": "task-added",
++      "detail": "T11: Review: managed review rounds on the PR until clean"
++    },
++    {
++      "at": "2026-11-23T20:05:02.023Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-23T20:05:02.367Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-23T20:05:02.729Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-23T20:05:03.029Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-23T20:05:10.115Z",
++      "event": "frozen",
++      "detail": "9 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-23T20:05:10.432Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-23T20:05:38.865Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 518-T5"
++    },
++    {
++      "at": "2026-11-23T20:26:36.792Z",
++      "event": "task-done",
++      "detail": "T5: Core: tree action in contract, service and capabilities, with tests"
++    },
++    {
++      "at": "2026-11-23T20:26:56.305Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 518-T6"
++    },
++    {
++      "at": "2026-11-23T20:33:14.698Z",
++      "event": "task-done",
++      "detail": "T6: Transport: Rust RequestV2 tree variant and Desktop platform capability exposure, with tests"
++    },
++    {
++      "at": "2026-11-23T20:33:40.322Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 518-T7"
++    },
++    {
++      "at": "2026-11-23T20:52:53.486Z",
++      "event": "task-done",
++      "detail": "T7: Desktop: MetaprojectTree component and explorer integration, with tests"
++    },
++    {
++      "at": "2026-11-23T20:53:06.658Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1) — 518-T8"
++    },
++    {
++      "at": "2026-11-23T20:54:47.803Z",
++      "event": "task-done",
++      "detail": "T8: Docs: describe the tree in the Desktop Metaproject guide"
++    },
++    {
++      "at": "2026-11-23T20:56:48.820Z",
++      "event": "task-done",
++      "detail": "T9: Verify: core tests, lint, typecheck; Desktop tsc and full suite; docs check"
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json
+@@ 397,440 @@
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/integrations/metaproject-explorer-tree.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts",
++      "sensitivity": "failure-scenario"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "cd apps/desktop/src-tauri && cargo test --locked metaproject"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx",
++      "sensitivity": "failure-scenario"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx",
++      "sensitivity": "failure-scenario"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "bun run lint && bun run typecheck"
++    },
++    "AC9": {
++      "kind": "exec",
++      "check": "bun run docs:check"
++    }
++  }
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/integrations/metaproject-explorer-contract.ts",
++    "src/integrations/metaproject-explorer-tree.test.ts",
++    "src/integrations/metaproject-explorer-v2.ts",
++    "src/integrations/metaproject-explorer.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/integrations/metaproject-explorer-v2.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src-tauri/src/metaproject.rs",
++    "apps/desktop/src/platform/metaproject.test.ts",
++    "apps/desktop/src/platform/metaproject.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src-tauri/src/metaproject.rs",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json
+@@ 1,105 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++    "apps/desktop/src/metaproject/MetaprojectView.tsx",
++    "apps/desktop/src/metaproject/metaproject.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 25,89 @@
+ #[derive(Deserialize)]
+ #[serde(tag = "action", rename_all = "lowercase", deny_unknown_fields)]
+ enum Request {
+     Catalog {},
+     Detail { id: String },
+     Search { query: String },
+     Neighbors { id: String, depth: u8, direction: Direction, kinds: Vec<Kind> },
+ }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Direction { Both, Incoming, Outgoing }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "kebab-case")]
+ enum Kind { Imports, Asset, Describes, Links, Contains, Defines, Calls, ChangesSpec, SpecContext }
+ #[derive(Clone, Copy, Eq, PartialEq, Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Scope { Graph, Wiki, Spec, Change, Archive }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Collection { Spec, Change, Archive }
++#[derive(Clone, Copy, Deserialize)]
++#[serde(rename_all = "lowercase")]
++enum TreeScope { Graph, Wiki }
+ 
+ #[derive(Deserialize)]
+ #[serde(tag = "action", rename_all = "kebab-case", rename_all_fields = "camelCase", deny_unknown_fields)]
+ enum RequestV2 {
+     Capabilities {},
+     Catalog { expected_snapshot_id: Option<String> },
+     Detail {
+         id: String, artifact: Option<String>, section: Option<String>, digest: Option<String>,
+         expected_snapshot_id: Option<String>,
+     },
+     Search {
+         query: String, scopes: Option<Vec<Scope>>, cursor: Option<String>,
+         expected_snapshot_id: Option<String>,
+     },
+     Neighbors {
+         id: String, depth: u8, direction: Direction, kinds: Vec<Kind>, include_archive: Option<bool>,
+         expected_snapshot_id: Option<String>,
+     },
+     OpenspecList { collection: Collection, cursor: Option<String>, expected_snapshot_id: Option<String> },
+     OpenspecHistory { id: String, cursor: Option<String>, expected_snapshot_id: Option<String> },
++    /// Optional: sent only to a CLI whose capabilities list `tree`, so it is not in `ACTIONS`.
++    Tree { scope: TreeScope, parent: Option<String>, cursor: Option<String>, expected_snapshot_id: Option<String> },
+ }
+ 
+ fn digest(s: &str) -> bool {
+     s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+ }
+ 
+ fn valid_text(s: &str) -> bool {
+     !s.is_empty() && s.encode_utf16().count() <= 4096
+ }
+ 
+ fn relative_path(s: &str) -> bool {
+     valid_text(s) && !s.contains('\\') && !s.chars().any(|ch| ch.is_ascii_control())
+         && !matches!(s.as_bytes(), [first, b':', ..] if first.is_ascii_alphabetic())
+         && s.split('/').all(|part| !matches!(part, "" | "." | ".."))
+ }
+ 
+ fn valid_v1(request: Request) -> bool {
+     match request {
+         Request::Catalog {} => true,
+         Request::Detail { id } => !id.is_empty() && id.len() <= 4096,
+
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 106,153 @@
+             expected_snapshot_id,
+         ),
+         RequestV2::Search { query, scopes, cursor, expected_snapshot_id } => (
+             query.encode_utf16().count() <= 4096
+                 && scopes.map_or(true, |choices| !choices.is_empty() && choices.len() <= 5
+                     && choices.iter().enumerate().all(|(i, scope)| !choices[..i].contains(scope)))
+                 && cursor.as_deref().map_or(true, valid_text),
+             expected_snapshot_id,
+         ),
+         RequestV2::Neighbors { id, depth, direction, kinds, include_archive, expected_snapshot_id } => {
+             let _ = (direction, include_archive);
+             (valid_text(&id) && (1..=2).contains(&depth) && kinds.len() <= 9, expected_snapshot_id)
+         }
+         RequestV2::OpenspecList { collection, cursor, expected_snapshot_id } => {
+             let _ = collection;
+             (cursor.as_deref().map_or(true, valid_text), expected_snapshot_id)
+         }
+         RequestV2::OpenspecHistory { id, cursor, expected_snapshot_id } => (
+             valid_text(&id) && cursor.as_deref().map_or(true, valid_text), expected_snapshot_id,
+         ),
++        // A graph parent is a checkout-relative folder; a wiki parent is a page-type group key.
++        RequestV2::Tree { scope, parent, cursor, expected_snapshot_id } => (
++            parent.as_deref().map_or(true, |parent| match scope {
++                TreeScope::Graph => relative_path(parent),
++                TreeScope::Wiki => valid_text(parent),
++            }) && cursor.as_deref().map_or(true, valid_text),
++            expected_snapshot_id,
++        ),
+     };
+     valid && pin.as_deref().map_or(true, digest)
+ }
+ 
+ fn metaproject_args(request: &Value) -> Result<Vec<String>, String> {
+     let payload = request.to_string();
+     if payload.len() > 16 * 1024 { return Err("configuration: Metaproject request is too large.".into()); }
+     let valid = if request.get("version").is_some() {
+         let Some(mut body) = request.as_object().cloned() else { return Err(INVALID.into()); };
+         body.remove("version") == Some(Value::from(2)) && !body.values().any(Value::is_null)
+             && serde_json::from_value::<RequestV2>(Value::Object(body)).is_ok_and(valid_v2)
+     } else {
+         serde_json::from_value::<Request>(request.clone()).is_ok_and(valid_v1)
+     };
+     if !valid { return Err(INVALID.into()); }
+     Ok(vec!["metaproject-explorer".into(), "--request".into(), payload])
+ }
+ 
+ #[derive(Eq, PartialEq)]
+ struct ProbeKey {
+
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 369,422 @@
+     fn capabilities_accept_a_cli_that_lists_more_actions() {
+         let capabilities = |actions: Vec<Value>| json!({"schemaVersion": 2, "actions": actions});
+         let needed: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
+         assert!(capability_response(&capabilities(needed.clone())));
+ 
+         // A newer CLI adds an action and may list them in another order.
+         let mut newer = needed.clone();
+         newer.insert(0, Value::from("openspec-diff"));
+         newer.reverse();
+         assert!(capability_response(&capabilities(newer)));
+ 
+         // Every action Desktop sends must still be there, and every entry must be a name.
+         assert!(!capability_response(&capabilities(needed[1..].to_vec())));
+         assert!(!capability_response(&capabilities(Vec::new())));
+         let mut malformed = needed.clone();
+         malformed.push(Value::from(1));
+         assert!(!capability_response(&capabilities(malformed)));
+         assert!(!capability_response(&json!({"schemaVersion": 1, "actions": needed})));
+         assert!(!capability_response(&json!({"schemaVersion": 2, "actions": "catalog"})));
+     }
++
++    #[test]
++    fn validates_tree_requests() {
++        let pin = "a".repeat(64);
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph"})).is_ok());
++        assert!(metaproject_args(&json!({
++            "version":2, "action":"tree", "scope":"graph", "parent":"src/lib", "cursor":"next", "expectedSnapshotId": &pin
++        })).is_ok());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki"})).is_ok());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":"other"})).is_ok());
++
++        assert!(metaproject_args(&json!({"version":2, "action":"tree"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"spec"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"../escape"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"/src"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"src\\lib"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":""})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":null})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "cursor":""})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "expectedSnapshotId":"snapshot"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "depth":1})).is_err());
++        assert!(metaproject_args(&json!({"action":"tree", "scope":"graph"})).is_err());
++    }
++
++    #[test]
++    fn tree_stays_optional_for_a_cli() {
++        assert_eq!(ACTIONS, ["catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history"]);
++        let required: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
++        assert!(capability_response(&json!({"schemaVersion": 2, "actions": required.clone()})));
++        let mut with_tree = required;
++        with_tree.push(Value::from("tree"));
++        assert!(capability_response(&json!({"schemaVersion": 2, "actions": with_tree})));
++    }
+ }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 7,25 @@
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { Icon } from "../components/Icon";
++import { NODE_KIND_LABELS } from "./labels";
++import { TREE_ROOT, entryKey, type MetaprojectTreeModel, type ScopeTree } from "./useMetaprojectTree";
++
++type ContainerEntry = Exclude<MetaprojectTreeEntry, { type: "node" }>;
++
++/** One visible row of the flattened tree. Status rows (loading, error, more) belong to `parent`. */
++type Row =
++  | { type: "entry"; id: string; level: number; posinset: number; setsize: number; parent: string; entry: MetaprojectTreeEntry }
++  | { type: "loading"; id: string; level: number; parent: string }
++  | { type: "error"; id: string; level: number; parent: string; message: string }
++  | { type: "more"; id: string; level: number; parent: string; loading: boolean };
++
++const isContainer = (entry: MetaprojectTreeEntry): entry is ContainerEntry => entry.type !== "node";
++const rowId = (entry: MetaprojectTreeEntry) => `${isContainer(entry) ? "d" : "n"}:${entryKey(entry)}`;
++const nodeOf = (entry: MetaprojectTreeEntry): MetaprojectNode | undefined =>
++  entry.type === "node" ? entry.node : entry.type === "folder" ? entry.module : undefined;
++
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 32,37 @@
++/** The visible rows, depth first, and the parents shown as loading that nobody has asked for yet. */
++function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
++  const rows: Row[] = [];
++  const unread: string[] = [];
++  const visit = (parent: string, level: number) => {
++    const folder = tree.folders.get(parent);
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 39,40 @@
++    if (!folder || folder.status === "loading") {
++      if (!folder) unread.push(parent);
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 42,44 @@
++      return;
++    }
++    if (folder.status === "failed") {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 46,53 @@
++      return;
++    }
++    // More pages: the set's size is not known yet (ARIA's -1).
++    const setsize = folder.nextCursor ? -1 : folder.entries.length;
++    folder.entries.forEach((entry, index) => {
++      rows.push({ type: "entry", id: rowId(entry), level, posinset: index + 1, setsize, parent, entry });
++      if (isContainer(entry) && tree.expanded.has(entryKey(entry))) visit(entryKey(entry), level + 1);
++    });
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 56,65 @@
++  };
++  visit(TREE_ROOT, 1);
++  return { rows, unread };
++}
++
++/** The tree steps from the root to `node`: each names the parent to read and the child to find in it. */
++type Step = { parent: string; container: string } | { parent: string; node: string };
++function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[] {
++  if (scope === "wiki") {
++    if (node.kind !== "wiki") return [];
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 67,100 @@
++    return [{ parent: TREE_ROOT, container: group }, { parent: group, node: node.id }];
++  }
++  if (node.kind !== "file" && node.kind !== "module" && node.kind !== "symbol") return [];
++  if (node.path === "." || !node.path) return [];
++  const parts = node.path.split("/");
++  // A module is its folder's row; a symbol lives in its file, which the tree does not key by path.
++  const folders = node.kind === "file" || node.kind === "symbol" ? parts.slice(0, -1) : parts;
++  const steps: Step[] = folders.map((_, index) => ({
++    parent: folders.slice(0, index).join("/"), container: folders.slice(0, index + 1).join("/"),
++  }));
++  if (node.kind === "file") steps.push({ parent: folders.join("/"), node: node.id });
++  return steps;
++}
++
++/**
++ * The explorer sidebar as a WAI-ARIA tree: graph folders and files, or wiki page-type groups and
++ * pages. Data lives in `model` (the explorer's), so this component can come and go with the search.
++ * Focus moves only with the keyboard or a click; data arriving never takes it.
++ */
++export function MetaprojectTree({ scope, label, model, selection, selected, onSelect }: {
++  scope: MetaprojectTreeScope;
++  /** The tree's accessible name. */
++  label: string;
++  model: MetaprojectTreeModel;
++  /** The explorer's selected node id. */
++  selection: string;
++  /** The selected node, when the explorer knows it: revealed when the selection came from elsewhere. */
++  selected?: MetaprojectNode;
++  onSelect: (node: MetaprojectNode) => void;
++}) {
++  const tree = model.get(scope);
++  const { rows, unread } = flatten(tree);
++  const [focusId, setFocusId] = useState("");
++  const list = useRef<HTMLUListElement>(null);
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 103,103 @@
++  const scrollRequest = useRef("");
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 105,136 @@
++
++  useEffect(() => {
++    for (const parent of unread) model.ensure(scope, parent);
++  }, [model, scope, unread.join("\n")]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  // Reveal a selection made elsewhere: expand its ancestors, reading and paging as needed; stop at a failure.
++  useEffect(() => {
++    if (!selected || selected.id !== selection || tree.handled === selection) return;
++    for (const step of revealSteps(scope, selected)) {
++      const folder = tree.folders.get(step.parent);
++      if (!folder) { model.ensure(scope, step.parent); return; }
++      if (folder.status === "loading") return;
++      if (folder.status === "failed") { model.setHandled(scope, selection); return; }
++      const found = folder.entries.some(entry => "container" in step
++        ? isContainer(entry) && entryKey(entry) === step.container
++        : entry.type === "node" && entry.node.id === step.node);
++      if (!found) {
++        if (folder.nextCursor && folder.more?.status !== "failed") { model.more(scope, step.parent); return; }
++        model.setHandled(scope, selection);
++        return;
++      }
++      if ("container" in step && !(selected.kind === "module" && step.container === selected.path)) {
++        model.setExpanded(scope, step.container, true);
++      }
++    }
++    scrollRequest.current = selected.kind === "module" ? `d:${selected.path}` : `n:${selected.id}`;
++    model.setHandled(scope, selection);
++  });
++
++  useLayoutEffect(() => {
++    const root = list.current;
++    if (!root) return;
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 138,138 @@
++    if (scrollRequest.current) {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 140,141 @@
++      if (row) { row.scrollIntoView?.({ block: "nearest" }); scrollRequest.current = ""; }
++    }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 148,148 @@
++    }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 150,151 @@
++  });
++
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 165,182 @@
++  const selectedRow = rows.find(row => row.type === "entry" && nodeOf(row.entry)?.id === selection);
++  const tabbable = rows.find(row => row.id === focusId) ?? selectedRow ?? rows[0];
++
++  const choose = (node: MetaprojectNode) => {
++    model.setHandled(scope, node.id);
++    onSelect(node);
++  };
++  const toggle = (key: string) => model.setExpanded(scope, key, !tree.expanded.has(key));
++  const activate = (row: Row, key: "Enter" | " " | "click") => {
++    if (row.type === "error") model.retry(scope, row.parent);
++    else if (row.type === "more") model.more(scope, row.parent);
++    else if (row.type === "entry") {
++      const { entry } = row;
++      if (entry.type === "node") choose(entry.node);
++      else if (entry.type === "folder" && entry.module && key !== " ") choose(entry.module);
++      else toggle(entryKey(entry));
++    }
++  };
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 184,184 @@
++  const moveTo = (row: Row | undefined) => {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 186,237 @@
++  };
++
++  const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
++    const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-row]")?.dataset.row : undefined;
++    const current = rows.find(row => row.id === target) ?? tabbable;
++    if (!current) return;
++    const index = rows.indexOf(current);
++    const container = current.type === "entry" && isContainer(current.entry) ? entryKey(current.entry) : null;
++    const open = container !== null && tree.expanded.has(container);
++    switch (event.key) {
++      case "ArrowDown": moveTo(rows[index + 1]); break;
++      case "ArrowUp": moveTo(rows[index - 1]); break;
++      case "Home": moveTo(rows[0]); break;
++      case "End": moveTo(rows.at(-1)); break;
++      case "ArrowRight":
++        if (container === null) break;
++        if (!open) model.setExpanded(scope, container, true);
++        else if (rows[index + 1]?.level === current.level + 1) moveTo(rows[index + 1]);
++        break;
++      case "ArrowLeft":
++        if (open && container !== null) model.setExpanded(scope, container, false);
++        else moveTo(rows.slice(0, index).reverse().find(row => row.level === current.level - 1));
++        break;
++      case "Enter":
++      case " ":
++        activate(current, event.key);
++        break;
++      default:
++        return;
++    }
++    event.preventDefault();
++  };
++
++  const onRowClick = (row: Row) => (event: MouseEvent) => {
++    event.stopPropagation();
++    setFocusId(row.id);
++    activate(row, "click");
++  };
++  const onChevron = (row: Row, key: string) => (event: MouseEvent) => {
++    event.stopPropagation();
++    setFocusId(row.id);
++    toggle(key);
++  };
++
++  const root = tree.folders.get(TREE_ROOT);
++  if (root?.status === "ready" && root.entries.length === 0 && !root.nextCursor) {
++    return <p className="metaproject-meta" role="status">{scope === "graph"
++      ? root.partial ? "The graph is not built yet. Rebuild the graph to browse its files." : "No indexed files."
++      : "No Wiki pages."}</p>;
++  }
++
++  return (
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 239,245 @@
++      {rows.map(row => {
++        const common = {
++          "data-row": row.id,
++          role: "treeitem",
++          "aria-level": row.level,
++          tabIndex: row === tabbable ? 0 : -1,
++          style: { paddingInlineStart: `calc(var(--sp-3) + ${row.level - 1} * var(--sp-4))` },
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 247,251 @@
++        };
++        if (row.type === "loading") {
++          return <li key={row.id} {...common} aria-disabled="true" className="metaproject-tree-status"><span role="status">Loading…</span></li>;
++        }
++        if (row.type === "error") {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 253,254 @@
++          return (
++            <li key={row.id} {...common} className="metaproject-tree-status metaproject-tree-error" onClick={onRowClick(row)}>
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 256,288 @@
++              <button type="button" className="btn btn-sm" tabIndex={-1} onClick={onRowClick(row)}>Retry</button>
++            </li>
++          );
++        }
++        if (row.type === "more") {
++          return (
++            <li key={row.id} {...common} aria-busy={row.loading || undefined} className="metaproject-row metaproject-tree-more" onClick={onRowClick(row)}>
++              {row.loading ? <span role="status">Loading…</span> : "Show more"}
++            </li>
++          );
++        }
++        const { entry } = row;
++        const position = { "aria-posinset": row.posinset, "aria-setsize": row.setsize };
++        if (entry.type === "node") {
++          return (
++            <li key={row.id} {...common} {...position} aria-selected={entry.node.id === selection} className="metaproject-row metaproject-tree-row"
++              onClick={onRowClick(row)}>
++              <span className="metaproject-tree-chevron" aria-hidden="true" />
++              <span className="metaproject-tree-name">{entry.node.title}</span>
++              <span className="metaproject-meta">{NODE_KIND_LABELS[entry.node.kind]}</span>
++            </li>
++          );
++        }
++        const key = entryKey(entry);
++        const open = tree.expanded.has(key);
++        const module = entry.type === "folder" ? entry.module : undefined;
++        return (
++          <li key={row.id} {...common} {...position} aria-expanded={open} {...(module && { "aria-selected": module.id === selection })}
++            className="metaproject-row metaproject-tree-row" onClick={module ? onChevron(row, key) : onRowClick(row)}>
++            <span className="metaproject-tree-chevron" aria-hidden="true" onClick={onChevron(row, key)}>
++              <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
++            </span>
++            <span className="metaproject-tree-name" {...(module && { onClick: onRowClick(row) })}>{entry.name}</span>
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 291,297 @@
++            <span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>
++          </li>
++        );
++      })}
++    </ul>
++  );
++}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 18,58 @@
+   type MetaprojectRequest,
+   type MetaprojectResponse,
+   type MetaprojectSearch,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
+ import { Icon } from "../components/Icon";
+ import { renderRepositoryMarkdown } from "../components/Markdown";
+ import { EmptyState, useEscape } from "../components/ui";
+ import { errMessage } from "../lib/format";
+ import { openExternal } from "../platform/commands";
+-import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
++import {
++  negotiateMetaprojectExplorer, requestMetaproject, requestMetaprojectTree, requestMetaprojectV2, type MetaprojectNegotiation,
++} from "../platform/metaproject";
++import { MetaprojectTree } from "./MetaprojectTree";
+ import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
+ import { NodeDetailsPanel } from "./NodeDetailsPanel";
+ import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
+ import { RelationshipList, summarizeRelationships } from "./RelationshipList";
+ import { RELATIONSHIP_KIND_LABELS } from "./labels";
+ import { useExplorerNavigation } from "./useExplorerNavigation";
++import { useMetaprojectTree, type RequestTree } from "./useMetaprojectTree";
+ import "./metaproject.css";
+ 
+ type Request = (
+   cwd: string,
+   request: MetaprojectRequest,
+ ) => Promise<MetaprojectResponse>;
+ const EMPTY_HITS: readonly MetaprojectHit[] = [];
+ const DOCUMENT_EDGES = ["describes", "links"] as const;
+ const sameLocation = (left: OpenSpecLocation | null, right: OpenSpecLocation | null) =>
+   left === right || (left !== null && right !== null && left.id === right.id && left.collection === right.collection &&
+     left.artifact === right.artifact && left.section === right.section && left.digest === right.digest && left.fragment === right.fragment);
+ 
+ /**
+  * The repository path a Markdown link in `source` points at: percent-decoded, relative to the
+  * page's folder, or to the repository root when it starts with "/". Null when it cannot be decoded.
+  */
+ function resolveRepositoryPath(source: string, href: string): string | null {
+   let path: string;
+   try { path = decodeURIComponent(href); } catch { return null; }
+   const base = path.startsWith("/") ? "" : source.slice(0, source.lastIndexOf("/") + 1);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 124,179 @@
+             const count = seen.get(base) ?? 0;
+             seen.set(base, count + 1);
+             if ((count ? `${base}-${count}` : base) === fragment) {
+               heading.scrollIntoView();
+               break;
+             }
+           }
+           return;
+         }
+         if (!path) return;
+         const resolved = resolveRepositoryPath(source, path);
+         openPath(resolved ?? path, targetFragment, resolved !== null);
+       }}
+       onAuxClick={(event) => {
+         if ((event.target as Element).closest("a")) event.preventDefault();
+       }}
+     />
+   );
+ }
+ 
+-type Negotiate = (cwd: string) => Promise<1 | 2>;
++/** Protocol negotiation; a bare protocol number means the CLI offers no optional action (no `tree`). */
++type Negotiate = (cwd: string) => Promise<1 | 2 | MetaprojectNegotiation>;
+ 
+ export function MetaprojectView(props: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+   /** Protocol negotiation; given, it runs even when `request`/`requestV2` are injected. */
+   negotiate?: Negotiate;
++  /**
++   * Reads one page of the sidebar tree. Used when the negotiation reports `tree`; injected without
++   * a negotiation, it alone turns the tree on.
++   */
++  requestTree?: RequestTree;
+   /** Test seam for the graph canvas (happy-dom has none); the app passes nothing. */
+   createCytoscape?: CytoscapeFactory;
+   /**
+    * Whether the explorer's view is shown (the app keeps it mounted, hidden, after its first visit).
+    * Hidden, it holds no overlay; shown again, it re-reads the catalog quietly. Defaults to true.
+    */
+   visible?: boolean;
+ }) {
+   return <Explorer key={props.cwd} {...props} />;
+ }
+ 
+ /** Every relationship kind except the symbol layer (`defines`, `calls`). */
+ const SYMBOL_KINDS: readonly MetaprojectEdgeKind[] = ["defines", "calls"];
+ const withoutSymbolKinds = (kinds: readonly MetaprojectEdgeKind[]) => kinds.filter(kind => !SYMBOL_KINDS.includes(kind));
+ const WIKI_KINDS_V1 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS);
+ const WIKI_KINDS_V2 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS_V2);
+ const NO_SYMBOL_LAYER = "Not available: this project's graph has no symbol layer.";
+ const sameKinds = (left: readonly MetaprojectEdgeKind[], right: readonly MetaprojectEdgeKind[]) =>
+   left.length === right.length && left.every(kind => right.includes(kind));
+ 
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 232,264 @@
+       close.current();
+     };
+     window.addEventListener("mousedown", onDown, true);
+     return () => window.removeEventListener("mousedown", onDown, true);
+   }, [anchor]);
+   return (
+     <div ref={panel} id={id} className="menu metaproject-filters-pop" role="dialog" aria-label="Graph filters"
+       style={{ ...position, width: POPOVER_WIDTH }}>
+       {children}
+     </div>
+   );
+ }
+ 
+ function Explorer({
+   cwd,
+   onRebuild,
+   onDraft,
+   request = requestMetaproject,
+   requestV2,
+   negotiate,
++  requestTree,
+   createCytoscape,
+   visible = true,
+ }: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+   negotiate?: Negotiate;
++  requestTree?: RequestTree;
+   createCytoscape?: CytoscapeFactory;
+   visible?: boolean;
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 271,306 @@
+   const [panelWidth, setPanelWidth] = useState(380);
+   const negotiates = Boolean(negotiate) || (!requestV2 && request === requestMetaproject);
+   const [protocol, setProtocol] = useState<1 | 2 | null>(negotiates ? null : requestV2 ? 2 : 1);
++  const [supportsTree, setSupportsTree] = useState(!negotiates && Boolean(requestTree));
+   const archiveSelection = useRef(false);
+   const [protocolError, setProtocolError] = useState("");
+   const [negotiation, setNegotiation] = useState(0);
+   useEffect(() => {
+     if (!negotiates) return;
+     let active = true;
+-    void (negotiate ?? negotiateMetaproject)(cwd).then(value => {
++    void (negotiate ?? negotiateMetaprojectExplorer)(cwd).then(value => {
+       if (!active) return;
++      const settled = typeof value === "number" ? { protocol: value, supportsTree: false } : value;
+       setProtocolError("");
+-      setProtocol(value);
++      setProtocol(settled.protocol);
++      setSupportsTree(settled.supportsTree);
+     }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
+     return () => { active = false; };
+   }, [cwd, negotiate, negotiates, negotiation]);
+   const read: Request = useMemo(() => protocol === 2
+     ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
+     : request, [protocol, request, requestV2]);
+   // The first Wiki page stands in for a missing selection only while nothing is searched.
+   const selection = route.mode === "graph" ? route.selection || catalog?.nodes[0]?.id || ""
+     : route.mode === "wiki" ? route.selection || (route.query.trim() ? "" : catalog?.nodes.find(node => node.kind === "wiki")?.id || "") : "";
+   const shownSelection = useRef(selection);
+   shownSelection.current = selection;
+   archiveSelection.current = route.mode === "graph" && Boolean(route.archive);
+   const [direction, setDirection] = useState<MetaprojectDirection>("both");
+   const [depth, setDepth] = useState<1 | 2>(1);
+   const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(WIKI_KINDS_V1);
+   useEffect(() => {
+     if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
+   }, [protocol]);
+   const defaultKinds = protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1;
+   const filtersChanged = direction !== "both" || depth !== 1 || !sameKinds(kinds, defaultKinds);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 735,782 @@
+   const wikiRelationships = useMemo(
+     () => mode === "wiki" && currentProjection ? summarizeRelationships(currentProjection) : null,
+     [mode, currentProjection],
+   );
+   const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;
+   // While the next selection's relationships load, the last graph stays on screen, marked busy;
+   // a failed read or leaving Graph drops it.
+   const lastGraph = useRef<MetaprojectNeighbors | null>(null);
+   if (mode !== "graph" || relationshipError) lastGraph.current = null;
+   else if (currentProjection) lastGraph.current = currentProjection;
+   // A projection for another root means the read for this selection has not started yet.
+   const relationshipsLoading = loadingRelationships || (projection !== null && projection.root !== selection);
+   const graphProjection = mode !== "graph" ? null : currentProjection ?? (relationshipsLoading ? lastGraph.current : null);
+   const graphBusy = graphProjection !== null && graphProjection !== currentProjection;
+   const showGraph = graphState !== null && (graphState.graph !== "missing" || protocol === 2);
+   const list = useRef<HTMLElement>(null);
+   useEffect(() => {
+     list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+   }, [selection, mode]);
+   const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;
+-  const listHeading = searchQuery ? `Results · ${results.length}` : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
++  // Without a query, a CLI that offers `tree` browses Graph by folder and Wiki by page type; otherwise the flat list.
++  const treeScope = protocol === 2 && supportsTree && !searchQuery && (mode === "graph" || mode === "wiki") ? mode : null;
++  const markStale = useCallback(() => setSnapshotMismatch(true), []);
++  const tree = useMetaprojectTree({ cwd, snapshot: catalog?.snapshotId ?? "", request: requestTree ?? requestMetaprojectTree, onStale: markStale });
++  const listHeading = searchQuery ? `Results · ${results.length}`
++    : treeScope === "graph" ? `Files · ${catalog?.counts.files ?? 0}`
++    : treeScope === "wiki" ? `Wiki · ${catalog?.counts.wiki ?? 0}`
++    : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
+   const showHidden = useCallback(() => {
+     setRoute(current => current.mode === "graph" && !current.panelOpen ? { ...current, panelOpen: true } : current);
+     setRevealRelationships(value => value + 1);
+   }, [setRoute]);
+   const detailPanel = detail?.node.id === selection && detail.node.kind === "wiki" && (
+     <article className="metaproject-article">
+       <header className="metaproject-article-header">
+         <h2>{detail.node.title}</h2>
+         <p className="metaproject-meta">
+           {[detail.node.pageType, detail.node.status, detail.node.path].filter(Boolean).join(" · ")}
+         </p>
+         <button className="btn btn-sm" onClick={() => viewInGraph(detail.node.id, detail.node)}><Icon name="branch" size={14} />View in Graph</button>
+       </header>
+       {unresolvedLink?.selection === selection && (
+         <p className="metaproject-meta" role="status">{unresolvedLink.message}</p>
+       )}
+       {detail.markdown && (
+         <RepositoryMarkdown text={detail.markdown} source={detail.node.path} openPath={openPath}
+           fragment={route.mode === "wiki" ? route.fragment : undefined} />
+       )}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 927,975 @@
+                   <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>Retry search</button>
+                 </div>
+               )}
++              {treeScope ? (
++                <MetaprojectTree key={treeScope} scope={treeScope} label={treeScope === "graph" ? "Project files" : "Wiki pages"}
++                  // Only a selection the user made is revealed; the fallback shown without one expands nothing.
++                  model={tree} selection={selection} selected={route.selection ? activeNode : undefined}
++                  onSelect={node => { remember(node); openHit({ node }); }} />
++              ) : <>
+               <ul>
+                 {results.map(hit => (
+                   <li key={`${hit.node.id}-${hit.section ?? ""}`}>
+                     <button className="metaproject-row" aria-current={selection === hit.node.id ? "true" : undefined} onClick={() => openHit(hit)}>
+                       <strong>{hit.node.title}</strong>
+                       <span className="metaproject-meta">{hit.node.kind} · {hit.node.path}</span>
+                       {hit.snippet && (
+                         <small className="metaproject-snippet">{hit.section ? `${hit.section}: ` : ""}{hit.snippet}</small>
+                       )}
+                     </button>
+                   </li>
+                 ))}
+               </ul>
+               {resolvedSearch?.nextCursor && <button className="btn" onClick={() => void loadMoreSearch()}>Load more results</button>}
+               {!results.length && (
+                 searching
+                   ? <p role="status">Searching project knowledge…</p>
+                   : !searchFailure && !snapshotMismatch && <p>{searchQuery ? "No results." : "No indexed project knowledge."}</p>
+               )}
++              </>}
+             </nav>
+             <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
+               {(detailError || (mode === "wiki" && relationshipError)) && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>{[detailError, mode === "wiki" ? relationshipError : ""].filter(Boolean).join(" · ")}</span>
+                   <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "wiki" && detailPanel}
+               {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
+               {mode === "graph" && !(graphProjection && showGraph) && <div className="metaproject-filter-strip">{filtersButton}</div>}
+               {mode === "graph" && filters}
+               {mode === "graph" && relationshipError && !panelOpen && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>{relationshipError}</span>
+                   <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "graph" && relationshipsLoading && !graphProjection && <p role="status">Loading relationships…</p>}
+               {graphProjection && showGraph && (
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 40,90 @@
+ .metaproject-row {
+   display: grid;
+   gap: var(--sp-1);
+   inline-size: 100%;
+   min-block-size: 28px;
+   padding: var(--sp-2) var(--sp-3);
+   border: 1px solid transparent;
+   border-radius: var(--r-md);
+   background: transparent;
+   color: inherit;
+   font: inherit;
+   text-align: start;
+   overflow-wrap: anywhere;
+ }
+ button.metaproject-row:hover { background: var(--bg-hover); }
+ button.metaproject-row:focus-visible { outline-offset: -3px; }
+ button.metaproject-row[aria-current="true"] {
+   background: var(--bg-selected);
+   border-color: var(--accent);
+ }
++/* Sidebar tree: flat treeitem rows indented by level (inline style), the list's row look. */
++.metaproject-list .metaproject-tree { gap: 0; }
++.metaproject-tree .metaproject-tree-row { display: flex; align-items: center; gap: var(--sp-1); padding-block: var(--sp-1); }
++.metaproject-tree [role="treeitem"]:not([aria-disabled="true"]):hover { background: var(--bg-hover); }
++.metaproject-tree [role="treeitem"]:focus-visible { outline-offset: -3px; }
++.metaproject-tree [role="treeitem"][aria-selected="true"] { background: var(--bg-selected); border-color: var(--accent); }
++.metaproject-tree-chevron { flex: none; display: inline-flex; inline-size: 12px; color: var(--fg-muted); }
++.metaproject-tree-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.metaproject-tree-row > .metaproject-meta, .metaproject-tree-row > .count-label { flex: none; }
++.metaproject-tree-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-block-size: 28px; padding-block: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); }
++.metaproject-tree-more { min-block-size: 28px; padding-block: var(--sp-1); color: var(--accent-text); font-size: var(--fs-sm); }
+ .metaproject-meta, .metaproject-snippet {
+   margin: 0;
+   color: var(--fg-muted);
+   font-size: var(--fs-sm);
+   overflow-wrap: anywhere;
+ }
+ .metaproject-snippet {
+   display: -webkit-box;
+   -webkit-box-orient: vertical;
+   -webkit-line-clamp: 2;
+   overflow: hidden;
+ }
+ 
+ .metaproject-controls {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: flex-start;
+   gap: var(--sp-2) var(--sp-3);
+   padding: var(--sp-3);
+   border: 1px solid var(--border);
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 1,13 @@
++import { useCallback, useMemo, useReducer, useRef } from "react";
++import {
++  MetaprojectRequestError,
++  type MetaprojectTreeEntry,
++  type MetaprojectTreeScope,
++  type MetaprojectTreeV2,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { errMessage } from "../lib/format";
++import type { MetaprojectTreeRequest } from "../platform/metaproject";
++
++/** The key of a tree's root; graph folder paths and wiki group keys are never empty. */
++export const TREE_ROOT = "";
++
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 17,68 @@
++export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
++
++/** The loaded children of one tree parent (the root, a graph folder or a wiki group). */
++export interface TreeFolder {
++  status: "loading" | "ready" | "failed";
++  entries: readonly MetaprojectTreeEntry[];
++  error?: string;
++  nextCursor?: string;
++  /** The source behind the scope is missing or incomplete (a graph that is not built). */
++  partial: boolean;
++  /** The next page: being read, or its read failed. */
++  more?: { status: "loading" } | { status: "failed"; error: string };
++}
++
++/** One scope's tree: kept by the explorer, so it survives leaving the view and switching Graph/Wiki. */
++export interface ScopeTree {
++  snapshot: string;
++  expanded: ReadonlySet<string>;
++  folders: ReadonlyMap<string, TreeFolder>;
++  /** The last selection the tree revealed or chose itself; a different one is revealed. */
++  handled: string;
++}
++
++export interface MetaprojectTreeModel {
++  get(scope: MetaprojectTreeScope): ScopeTree;
++  /** Reads `parent`'s first page unless it is loaded, being read, or failed. */
++  ensure(scope: MetaprojectTreeScope, parent: string): void;
++  setExpanded(scope: MetaprojectTreeScope, key: string, expanded: boolean): void;
++  /** Re-reads one failed parent, or its failed next page. */
++  retry(scope: MetaprojectTreeScope, parent: string): void;
++  /** Appends `parent`'s next page; a page already being read is not asked for again. */
++  more(scope: MetaprojectTreeScope, parent: string): void;
++  setHandled(scope: MetaprojectTreeScope, selection: string): void;
++}
++
++/** A container's key: a graph folder's path or a wiki group's key. A node is keyed by its id. */
++export const entryKey = (entry: MetaprojectTreeEntry) =>
++  entry.type === "folder" ? entry.path : entry.type === "group" ? entry.key : entry.node.id;
++
++/** The parent of an expandable key: wiki groups sit at the root, graph folders under their directory. */
++export function parentOf(scope: MetaprojectTreeScope, key: string): string {
++  if (scope === "wiki") return TREE_ROOT;
++  const slash = key.lastIndexOf("/");
++  return slash < 0 ? TREE_ROOT : key.slice(0, slash);
++}
++
++const emptyScope = (snapshot: string): ScopeTree => ({ snapshot, expanded: new Set(), folders: new Map(), handled: "" });
++
++/**
++ * The explorer's tree data: per scope, the expanded folders, the loaded pages of each parent and
++ * what the tree last revealed. A new snapshot drops loaded children and every pending answer and
++ * keeps the expanded set; the tree re-reads what it shows. A cursor is only ever sent for the
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 72,118 @@
++ */
++export function useMetaprojectTree({ cwd, snapshot, request, onStale }: {
++  cwd: string;
++  snapshot: string;
++  request: RequestTree;
++  onStale: () => void;
++}): MetaprojectTreeModel {
++  const [, render] = useReducer((value: number) => value + 1, 0);
++  const state = useRef<Record<MetaprojectTreeScope, ScopeTree>>({ graph: emptyScope(snapshot), wiki: emptyScope(snapshot) });
++  // Every snapshot change retires the answers still in flight; a read keeps the generation it started in.
++  const generation = useRef(0);
++  if (state.current.graph.snapshot !== snapshot) {
++    generation.current++;
++    const keep = (scope: ScopeTree): ScopeTree => ({ ...emptyScope(snapshot), expanded: scope.expanded, handled: scope.handled });
++    state.current = { graph: keep(state.current.graph), wiki: keep(state.current.wiki) };
++  }
++  const latest = useRef({ cwd, request, onStale });
++  latest.current = { cwd, request, onStale };
++
++  const update = useCallback((scope: MetaprojectTreeScope, change: (tree: ScopeTree) => ScopeTree) => {
++    const next = change(state.current[scope]);
++    if (next === state.current[scope]) return;
++    state.current = { ...state.current, [scope]: next };
++    render();
++  }, []);
++
++  const setFolder = useCallback((scope: MetaprojectTreeScope, parent: string, change: (folder: TreeFolder | undefined) => TreeFolder) => {
++    update(scope, tree => {
++      const folders = new Map(tree.folders);
++      folders.set(parent, change(tree.folders.get(parent)));
++      return { ...tree, folders };
++    });
++  }, [update]);
++
++  /** Once every page of `parent` is read, its expanded children that are gone are forgotten, with their descendants. */
++  const forgetVanished = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    update(scope, tree => {
++      const folder = tree.folders.get(parent);
++      if (!folder || folder.status !== "ready" || folder.nextCursor) return tree;
++      const present = new Set(folder.entries.map(entryKey));
++      const gone = [...tree.expanded].filter(key => parentOf(scope, key) === parent && !present.has(key));
++      if (!gone.length) return tree;
++      const expanded = new Set([...tree.expanded].filter(key => !gone.some(vanished => key === vanished || key.startsWith(`${vanished}/`))));
++      return { ...tree, expanded };
++    });
++  }, [update]);
++
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 136,143 @@
++  const read = useCallback((scope: MetaprojectTreeScope, parent: string, cursor?: string) => {
++    const issued = generation.current;
++    const pinned = state.current[scope].snapshot;
++    const current = () => issued === generation.current;
++    const { cwd: root, request: send } = latest.current;
++    const input: MetaprojectTreeRequest = {
++      scope, expectedSnapshotId: pinned, ...(parent !== TREE_ROOT && { parent }), ...(cursor && { cursor }),
++    };
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 146,173 @@
++      if (!current()) return;
++      if (page.snapshotId !== pinned) throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
++      setFolder(scope, parent, folder => {
++        if (!cursor) return { status: "ready", entries: page.entries, partial: page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
++        // A page appends to the one that asked for it, in order, without repeating a row.
++        const base = folder ?? { status: "ready" as const, entries: [], partial: page.partial };
++        const seen = new Set(base.entries.map(entryKey));
++        const entries = [...base.entries, ...page.entries.filter(entry => !seen.has(entryKey(entry)))];
++        return { status: "ready", entries, partial: base.partial || page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
++      });
++      forgetVanished(scope, parent);
++    }).catch(cause => {
++      if (!current()) return;
++      if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") latest.current.onStale();
++      // A folder that no longer exists is forgotten quietly; the next read of its parent drops its row.
++      if (!cursor && parent !== TREE_ROOT && cause instanceof MetaprojectRequestError && cause.code === "not-found") {
++        update(scope, tree => {
++          const folders = new Map(tree.folders);
++          folders.delete(parent);
++          const expanded = new Set([...tree.expanded].filter(key => key !== parent && !key.startsWith(`${parent}/`)));
++          return { ...tree, folders, expanded };
++        });
++        return;
++      }
++      const error = errMessage(cause);
++      setFolder(scope, parent, folder => cursor && folder
++        ? { ...folder, more: { status: "failed", error } }
++        : { status: "failed", entries: [], partial: false, error });
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 176,220 @@
++
++  const ensure = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    if (state.current[scope].folders.has(parent)) return;
++    setFolder(scope, parent, () => ({ status: "loading", entries: [], partial: false }));
++    read(scope, parent);
++  }, [read, setFolder]);
++
++  const more = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    const folder = state.current[scope].folders.get(parent);
++    if (!folder || folder.status !== "ready" || !folder.nextCursor || folder.more?.status === "loading") return;
++    const cursor = folder.nextCursor;
++    setFolder(scope, parent, current => ({ ...(current ?? folder), more: { status: "loading" } }));
++    read(scope, parent, cursor);
++  }, [read, setFolder]);
++
++  const retry = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    const folder = state.current[scope].folders.get(parent);
++    if (folder?.status === "failed") {
++      setFolder(scope, parent, () => ({ status: "loading", entries: [], partial: false }));
++      read(scope, parent);
++    } else if (folder?.more?.status === "failed" && folder.nextCursor) {
++      setFolder(scope, parent, current => ({ ...(current ?? folder), more: { status: "loading" } }));
++      read(scope, parent, folder.nextCursor);
++    }
++  }, [read, setFolder]);
++
++  const setExpanded = useCallback((scope: MetaprojectTreeScope, key: string, open: boolean) => {
++    update(scope, tree => {
++      if (tree.expanded.has(key) === open) return tree;
++      const expanded = new Set(tree.expanded);
++      if (open) expanded.add(key); else expanded.delete(key);
++      return { ...tree, expanded };
++    });
++  }, [update]);
++
++  const setHandled = useCallback((scope: MetaprojectTreeScope, selection: string) => {
++    update(scope, tree => tree.handled === selection ? tree : { ...tree, handled: selection });
++  }, [update]);
++
++  const get = useCallback((scope: MetaprojectTreeScope) => state.current[scope], []);
++  const scopes = state.current;
++  // A new object whenever a scope changes, so the tree re-renders with it.
++  return useMemo(() => ({ get, ensure, setExpanded, retry, more, setHandled, scopes }),
++    [get, ensure, setExpanded, retry, more, setHandled, scopes]);
++}
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 1,25 @@
+ import {
+-  METAPROJECT_CAPABILITIES, METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
+-  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectV2EdgeKind,
+-  isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectResponse,
+-  type MetaprojectV2Response,
++  METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
++  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectTreeScope,
++  isMetaprojectV2EdgeKind, isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2,
++  type MetaprojectResponse, type MetaprojectTreeScope, type MetaprojectTreeV2, type MetaprojectV2Response,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { errMessage } from "../lib/format";
+ import { invoke, isTauri } from "./backend";
+ 
+ type RecordValue = Record<string, unknown>;
+ const object = (value: unknown): value is RecordValue => value !== null && typeof value === "object" && !Array.isArray(value);
+ const optionalString = (value: unknown) => value === undefined || typeof value === "string";
+ const nonnegativeInteger = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+ 
+ function validNode(value: unknown): boolean {
+   return object(value) && typeof value.id === "string" && typeof value.title === "string" && typeof value.path === "string"
+     && typeof value.kind === "string" && ["wiki", "module", "file", "symbol"].includes(value.kind)
+     && optionalString(value.module) && optionalString(value.pageType) && optionalString(value.status)
+     && (value.line === undefined || nonnegativeInteger(value.line));
+ }
+ 
+ function validEdge(value: unknown): boolean {
+   return object(value) && typeof value.from === "string" && typeof value.to === "string"
+     && isMetaprojectEdgeKind(value.kind)
+     && (value.evidence === undefined || (Array.isArray(value.evidence) && value.evidence.length <= 400 && value.evidence.every((item: unknown) => typeof item === "string")))
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 147,270 @@
+       && isMetaprojectRelativePath(item.specPath) && validSource(item.source)
+       && list(item.requirements, 10_000, validRequirement))
+     && typeof value.partial === "boolean"
+     && (value.artifact === undefined || (object(value.artifact) && validSource(value.artifact.source)
+       && typeof value.artifact.markdown === "string" && optionalString(value.artifact.section)
+       && list(value.artifact.requirements, 10_000, validRequirement)));
+ }
+ 
+ function validV2Hit(value: unknown): boolean {
+   if (!object(value) || !object(value.node) || !validV2Node(value.node) || !isMetaprojectScope(value.scope)
+     || !optionalString(value.snippet) || !optionalString(value.section)) return false;
+   if (value.scope === "graph") return value.node.kind === "module" || value.node.kind === "file" || value.node.kind === "symbol";
+   if (value.scope === "wiki") return value.node.kind === "wiki";
+   const matches = value.matchType === "title" || value.matchType === "path" || value.matchType === "heading" || value.matchType === "body";
+   return value.node.kind === value.scope && matches
+     && (value.source === undefined
+       ? value.section === undefined && (value.matchType === "title" || value.matchType === "path")
+       : validSource(value.source));
+ }
+ 
+-/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop sends. */
++/**
++ * The actions Desktop sends to every protocol-2 CLI; a CLI must offer all of them. Optional actions
++ * (`tree`) are used only when the answering CLI lists them, so an older CLI still negotiates.
++ */
++export const METAPROJECT_REQUIRED_ACTIONS = [
++  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history",
++] as const;
++
++/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop always sends. */
+ function validCapabilities(value: RecordValue): boolean {
+   const { actions } = value;
+   return Object.keys(value).length === 2 && value.schemaVersion === 2
+     && Array.isArray(actions) && actions.every((action: unknown) => typeof action === "string")
+-    && METAPROJECT_CAPABILITIES.every((action) => actions.includes(action));
++    && METAPROJECT_REQUIRED_ACTIONS.every((action) => actions.includes(action));
++}
++
++/** Graph pages hold folders and file nodes; wiki roots hold page-type groups, a group holds wiki nodes. */
++function validTreeEntry(value: unknown, scope: MetaprojectTreeScope, parent: string | null): boolean {
++  if (!object(value)) return false;
++  switch (value.type) {
++    case "folder":
++      return scope === "graph" && isMetaprojectRelativePath(value.path) && typeof value.name === "string"
++        && value.name.length > 0 && positiveInteger(value.files)
++        && (value.module === undefined || (validV2Node(value.module) && object(value.module)
++          && value.module.kind === "module" && value.module.path === value.path));
++    case "group":
++      return scope === "wiki" && parent === null && typeof value.key === "string" && value.key.length > 0
++        && typeof value.name === "string" && positiveInteger(value.pages);
++    case "node":
++      return validV2Node(value.node) && object(value.node) && value.node.kind === (scope === "graph" ? "file" : "wiki");
++    default:
++      return false;
++  }
++}
++
++function validTree(value: RecordValue): boolean {
++  const { scope, parent } = value;
++  const parentKey = typeof parent === "string" && parent.length > 0 ? parent : parent === null ? null : undefined;
++  return isMetaprojectTreeScope(scope) && parentKey !== undefined
++    && typeof value.partial === "boolean" && optionalString(value.nextCursor)
++    && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (entry) => validTreeEntry(entry, scope, parentKey));
+ }
+ 
+ export function isMetaprojectV2Response(value: unknown, action: MetaprojectRequestV2["action"]): value is MetaprojectV2Response {
+   if (!object(value) || value.schemaVersion !== 2) return false;
+   if (action === "capabilities") return validCapabilities(value);
+   if (!isSha256(value.snapshotId)) return false;
+   switch (action) {
+     case "catalog":
+       return validV2Projection(value) && typeof value.graph === "string" && ["ready", "stale", "missing", "unknown"].includes(value.graph)
+         && optionalString(value.graphReason) && typeof value.hasWikiLayer === "boolean" && typeof value.hasSymbolLayer === "boolean"
+         && object(value.counts) && nonnegativeInteger(value.counts.files) && nonnegativeInteger(value.counts.wiki)
+         && nonnegativeInteger(value.counts.modules) && validOpenSpecState(value.openSpec);
+     case "neighbors":
+       return typeof value.root === "string" && validV2Projection(value) && validOpenSpecState(value.openSpec);
+     case "detail":
+       return validV2Node(value.node) && optionalString(value.markdown)
+         && (value.openSpec === undefined || (validOpenSpecDetail(value.openSpec) && object(value.openSpec)
+           && value.openSpec.snapshotId === value.snapshotId && object(value.openSpec.entry) && object(value.node)
+           && value.openSpec.entry.id === value.node.id))
+         && (value.relationships === undefined || list(value.relationships, 40, (row) =>
+           object(row) && validV2Node(row.node) && validV2Edge(row.edge)));
+     case "search":
+       return typeof value.partial === "boolean" && optionalString(value.nextCursor)
+         && list(value.hits, METAPROJECT_PAGE_SIZE_V2, validV2Hit);
+     case "openspec-list":
+       return entryKind(value.collection) && validOpenSpecState(value.openSpec) && typeof value.partial === "boolean"
+         && optionalString(value.nextCursor) && list(value.entries, METAPROJECT_PAGE_SIZE_V2,
+           (entry) => object(entry) && validEntry(entry) && entry.kind === value.collection);
+     case "openspec-history":
+       return typeof value.id === "string" && typeof value.partial === "boolean" && optionalString(value.nextCursor)
+         && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (row) => object(row) && object(row.entry)
+           && row.entry.kind === "archive" && validEntry(row.entry) && validSource(row.source)
+           && list(row.requirements, 10_000, validRequirement));
++    case "tree":
++      return validTree(value);
+   }
+ }
+ 
+ type InvokeExplorer = (request: MetaprojectRequest | MetaprojectRequestV2) => Promise<unknown>;
+ const invokeFor = (cwd: string): InvokeExplorer => (request) => invoke("metaproject_request", { cwd, request });
+ 
++/** What the capability probe settled: the protocol, and the optional actions the answering CLI offers. */
++export interface MetaprojectNegotiation {
++  protocol: 1 | 2;
++  /** The CLI lists `tree`; without it the explorer shows the flat list. */
++  supportsTree: boolean;
++}
++
+ /** A legacy handshake can occur only after this fixed probe. */
+-export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
++export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<MetaprojectNegotiation> {
+   let response: unknown;
+   try {
+     response = await call({ version: 2, action: "capabilities" });
+   } catch (error) {
+     const reason = errMessage(error);
+     if (reason !== "Invalid request" && !/^unsupported-version: .+$/.test(reason)) throw error;
+     const legacy = await call({ action: "catalog" });
+     if (!isMetaprojectResponse(legacy, "catalog")) throw new Error("The selected CLI returned an incompatible legacy Metaproject catalog.");
+-    return 1;
++    return { protocol: 1, supportsTree: false };
++  }
++  if (isMetaprojectV2Response(response, "capabilities") && "actions" in response) {
++    return { protocol: 2, supportsTree: response.actions.includes("tree") };
+   }
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 272,294 @@
+   if (isTauri() && object(response) && Object.keys(response).length === 2 && response.schemaVersion === 1
+-    && response.legacyHandshake === true) return 1;
++    && response.legacyHandshake === true) return { protocol: 1, supportsTree: false };
+   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
+ }
+ 
++export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
++
++/** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
++export function requestMetaprojectTree(
++  cwd: string, request: MetaprojectTreeRequest, call: InvokeExplorer = invokeFor(cwd),
++): Promise<MetaprojectTreeV2> {
++  return requestMetaprojectV2<MetaprojectTreeV2>(cwd, { ...request, version: 2, action: "tree" }, call);
++}
++
+ export async function requestMetaprojectV2<T extends MetaprojectV2Response = MetaprojectV2Response>(
+   cwd: string, request: MetaprojectRequestV2, call: InvokeExplorer = invokeFor(cwd),
+ ): Promise<T> {
+   let response: unknown;
+   try {
+     response = await call(request);
+   } catch (error) {
+     const reason = errMessage(error);
+     const code = METAPROJECT_ERROR_CODES.find((candidate) => reason.startsWith(`${candidate}: `));
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 315,322 @@
+     case "openspec-list": return "collection" in response && response.collection === request.collection;
+     case "openspec-history": return "id" in response && response.id === request.id;
++    case "tree": return "scope" in response && "entries" in response
++      && response.scope === request.scope && response.parent === (request.parent ?? null);
+     case "search": return "hits" in response && response.hits.every((hit) => !request.scopes || request.scopes.includes(hit.scope));
+     default: return true;
+   }
+ }

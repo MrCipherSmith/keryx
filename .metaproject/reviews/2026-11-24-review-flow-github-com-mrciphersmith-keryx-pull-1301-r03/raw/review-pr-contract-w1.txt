@@ -1,0 +1,59 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 4 (delta b2043b98d..3ad918b66, fix round 3). No new PR-contract finding. The new 'Round 3 fixes' bullet and the Verification claims agree with the diff. The round-2 sentence 'a stale-snapshot tree read shows only the banner' is still in the body and still contradicted by the code, so r3-pr-contract-w1-PC-001 stays open (the brief confirms the body was not edited for it). Of the code findings attached, the regression, SRP and docs-drift ones are closed. The three string-drift ones are partial: the TS side now has one source, but nothing on the Rust side ties metaproject.rs:199 to it. The two PERMIT_RETRIES export ones are still open.",
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "r3-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r3-clean-code-w1-F-002", "disposition": "closed"},
+    {"id": "r3-clean-code-w1-F-003", "disposition": "partial"},
+    {"id": "r3-clean-code-w2-F-001", "disposition": "closed"},
+    {"id": "r3-clean-code-w2-F-002", "disposition": "partial"},
+    {"id": "r3-highload-w2-F-001", "disposition": "partial"},
+    {"id": "r3-regression-w1-F-001", "disposition": "closed"},
+    {"id": "r3-style-w1-F-002", "disposition": "open"},
+    {"id": "r3-style-w2-F-001", "disposition": "open"},
+    {"id": "r3-pr-contract-w1-PC-001", "disposition": "open"}
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+## Claim rows (pr-context.md at head 3ad918b66; the body has no checklist boxes, so each stated claim is a row)
+
+| Claim (quoted) | State | What the diff shows | Verdict |
+|---|---|---|---|
+| "Round 3 fixes: a tree read refused as stale-snapshot is parked and every catalog load re-reads it, so Refresh catalog recovers it even when the snapshot id comes back unchanged" | stated | useMetaprojectTree.ts settleFailure sets `status: "stale"` / `more: { status: "stale" }` (:180-186). The `reload` effect re-reads every stale parent when `reload` changes. MetaprojectView.tsx passes `reload: catalog`, and a non-quiet catalog read always calls `setCatalog(result)` (:414). Tests: MetaprojectView.dom.test.tsx, the stale test now asserts `treeRow("Client")` after Refresh catalog, plus the new 'a next tree page answered for another snapshot is read again…' test. | agrees. A quiet freshness read with an unchanged snapshot sets no catalog (:410-412), so it re-reads nothing. It also loads no catalog, so "every catalog load" holds. |
+| "the read-permit refusal is classified once in the platform transport" | stated | platform/metaproject.ts:281-288 adds `METAPROJECT_PERMIT_REFUSAL` and `isMetaprojectPermitRefusal`. useMetaprojectTree.ts imports it. MetaprojectTree.dom.test.tsx imports the constant. | agrees |
+| "a replaced status row hands focus within its own parent" | stated | MetaprojectTree.tsx `handOff()` anchors a status row to its own parent's rows. New test 'a focused Show more whose page lands with the children of the folder above it…' | agrees |
+| "Round 2 fixes: … a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)" | stated (unchanged) | MetaprojectTree.tsx:42-43 `// A stale read shows as loading: …` / `if (!folder \|\| folder.status === "loading" \|\| folder.status === "stale") {` pushes a `{ type: "loading" }` row. useMetaprojectTree.ts:180 says 'The row shows as loading with no Retry'. | still contradicted: r3-pr-contract-w1-PC-001 open (see below) |
+| "a read refused because every permit is busy is retried twice with a short jittered wait" | stated | `PERMIT_RETRIES = 2`; `withPermitRetry` waits `PERMIT_WAIT_MS * n + Math.random() * PERMIT_WAIT_MS` | agrees |
+| "At the head: `cd apps/desktop && bunx tsc --noEmit && bun test src` exit 0, 1019 pass" | stated | research-evidence/verify-tests-to-run-1.txt: '1019 pass / 0 fail … Ran 1019 tests across 90 files' | agrees |
+| "rounds 2-3 touched only Desktop" | stated | `git diff --stat b2043b98d 3ad918b66 -- apps docs src`: 7 files, all under apps/desktop/src | agrees for this delta |
+| "Docs: the Desktop Metaproject guide describes the tree…" | stated | The delta touches no docs. Guide :327 ('Project knowledge changed while loading … Select **Refresh catalog**') now matches the recovered behaviour. Guide :106-107 ('shows **Loading…** until they arrive') was already covered as context in PC-001. | no new disagreement from this delta |
+
+## Prior dispositions (judged against the code at 3ad918b66)
+
+- r3-architecture-w1-F-001, closed. The hook now imports `isMetaprojectPermitRefusal` from platform/metaproject.ts:285. MetaprojectTree.dom.test.tsx takes `METAPROJECT_PERMIT_REFUSAL` from the transport instead of its own literal. The suggested comment at metaproject.rs:199 was not added. That residual drift is counted under the info findings below.
+- r3-clean-code-w1-F-002, closed. `withPermitRetry<T>` is at module scope (useMetaprojectTree.ts:29-40), and read() calls it.
+- r3-clean-code-w1-F-003, partial. On the TS side there is now one classifier. The literal still appears as `METAPROJECT_PERMIT_REFUSAL` and `PERMIT_REFUSAL_PREFIX` (platform/metaproject.ts:281-282), and as its own copy in platform/metaproject.test.ts:213. metaproject.rs:199 has no comment and no Rust test naming the Desktop consumer: `keryx ctx rg --all "Too many Metaproject reads"` finds only that line in src-tauri. A Rust rewording still turns off the retry with every test green.
+- r3-clean-code-w2-F-001, closed. The new `status: "stale"` and `more: { status: "stale" }`, with the updated TreeFolder, ensure and more docs, make the types say what the code does.
+- r3-clean-code-w2-F-002, partial. Same evidence as F-003: the constant is shared with the test, but the Rust side has no comment.
+- r3-highload-w2-F-001, partial. Same evidence: one TS constant, but no stable Rust code and no Rust-side assertion.
+- r3-regression-w1-F-001, closed. The `reload` effect (useMetaprojectTree.ts, `loadedCatalog` ref) re-reads stale parents and pages on each new catalog object. View tests cover both the folder and the Show-more variants with an unchanged snapshot. The suite passes at head (verify-tests-to-run-1.txt). I did not execute anything myself (exec budget 0).
+- r3-style-w1-F-002, open. `export const PERMIT_RETRIES = 2;` (useMetaprojectTree.ts:21) still has no importer: `keryx ctx rg --all PERMIT_RETRIES apps/desktop/src` finds only :21, :30 and :36.
+- r3-style-w2-F-001, open. Same evidence.
+- r3-pr-contract-w1-PC-001, open. The body at 3ad918b66 still reads "a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)". The code renders a stale folder as a loading row (MetaprojectTree.tsx:42-43), and a stale page as a busy Show more (`loading: Boolean(folder.more)`). The new Round-3 bullet ("is parked") softens it, but it does not retract the round-2 sentence. Fix as before: reword it to "shows the Refresh catalog banner and leaves the row loading until the next catalog load".
+
+## Not verified
+
+- Nothing executed (exec_budget_s 0). Test results come from the supplied verify-tests-to-run-1.txt.
+- Not read: `.metaproject/index.md`. This was a bounded, payload-driven review; navigation was limited to the files the delta touches.
+
+Routing audit: graph_used: no (the payload's layers block gave the affected files); wiki_used: not-relevant (no behaviour claim needed a wiki page; I read the guide directly); ctx_used: yes (keryx ctx rg for the literals, PERMIT_RETRIES, MetaprojectView and guide lines); raw_rg_used: no (raw git diff, sed and grep were used for exact excerpts, each marked keryx:raw).
+KERYX_USAGE {"tokens_in":133583,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,35 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 4 delta review (b2043b98d..3ad918b66) of slice-02, in code mode only. No render was supplied. The surface is an app screen: the Desktop Metaproject explorer sidebar tree. Its primary task is to browse project files and wiki pages and select one. The delta changes these user-visible behaviours. (1) A stale-snapshot answer now parks the folder, or its next page, in an explicit `stale` state. The row still renders as the existing 'Loading…' row or the aria-busy Show more row, and every catalog load re-reads it (reload: catalog), so Refresh catalog now recovers the row even when the snapshot id is unchanged. That fixes the dead 'Loading…' state of r3-regression-w1-F-001. (2) A focused status row hands focus to a row of its own parent: from a Loading row to the parent's first child, from Show more to the first appended entry, falling back to the parent row or the old index. (3) The permit-refusal classifier moved to the transport, which the user does not see. Pass 1, deterministic: the markup of the tree rows is unchanged in this delta. The roles, aria-level, roving tabIndex, role=status live regions and the Retry button are as before. No focus, contrast, motion, zoom, naming or form condition was introduced. Pass 2, usability: I traced the focus hand-off against the row set for these cases: a read answered with children, an empty folder (falls back to the parent row), a next page after an expanded last child (the new test covers it), a root status row (index fallback) and a parent row removed by a snapshot change (index fallback). Every case lands on a row next to where the focus was. I checked the stale recovery against MetaprojectView's catalog effect. A quiet read with the same snapshot returns before setCatalog, so polling does not re-read parked rows over and over. A non-quiet read, which Refresh catalog makes, always sets a new catalog object and clears the banner. If Refresh catalog fails, the banner stays as the way out. The parked row still says 'Loading…' while it waits for Refresh catalog. That is the operator-decided banner-only treatment, and r3-pr-contract-w1-PC-001 already covers it, so I do not report it again. Pass 3: the delta changes no visual hierarchy or styling, and the slop score is not applicable (no styling or copy surface changed).",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "Read in full (1511 lines): flow bookkeeping (T14 dispatch, fix_context, resolved, flow.json, journal), MetaprojectTree.tsx, MetaprojectView.tsx, useMetaprojectTree.ts, platform/metaproject.ts and their tests. Context read: MetaprojectView.tsx catalog effect, lines 390-429." }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+- **Verdict:** DONE, no findings in the round-4 delta.
+- **Context:** Keryx Desktop, Metaproject explorer sidebar tree, an app screen. Primary task: browse indexed files or wiki pages by folder or group and select one. Mode: code only, because no URL or screenshots were supplied.
+- **Scores:** slop score n/a (no styling or copy surface changed). WCAG 2.2 AA floor: no new failure in code; the markup is unchanged. Viewports: not run.
+- **What works (keep):**
+  - A stale row now has a real exit through Refresh catalog, even when the snapshot id is unchanged.
+  - The focus hand-off stays inside the parent's own rows, so rows from another folder that arrive in the same commit cannot steal focus.
+  - The stale state still offers no Retry, as the operator decided.
+- **Checks not run:**
+  - Live render at 1440, 768 and 390 px, in light and dark.
+  - A real screen-reader pass: how the 'Loading…' live regions are announced when parked rows are re-read.
+  - Tabbing through the tree in the packaged app.
+  - All three need a running Desktop build or screenshots of the Metaproject sidebar with a stale-snapshot folder before and after Refresh catalog.
+
+Routing audit: graph_used: no (the payload layers already listed the affected files and the scope was a fixed slice); wiki_used: not-relevant (the payload's wiki layer was empty); ctx_used: yes (keryx ctx rg); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":134416,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

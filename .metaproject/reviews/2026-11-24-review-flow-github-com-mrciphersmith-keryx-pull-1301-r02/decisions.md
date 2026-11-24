@@ -1,0 +1,23 @@
+# Decisions
+
+- r3-architecture-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-clean-code-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-clean-code-w1-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-clean-code-w1-F-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-clean-code-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-clean-code-w2-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-highload-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-highload-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-logic-w4-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-logic-w5-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-performance-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-performance-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-regression-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-style-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-style-w1-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-style-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-style-w2-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-style-w2-F-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-testing-practices-w2-F1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-testing-practices-w2-F2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r3-pr-contract-w1-PC-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

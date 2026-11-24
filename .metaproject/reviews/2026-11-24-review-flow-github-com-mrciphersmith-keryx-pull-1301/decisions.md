@@ -1,0 +1,33 @@
+# Decisions
+
+- r2-architecture-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-architecture-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-clean-code-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-clean-code-w1-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-clean-code-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-clean-code-w2-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-clean-code-w2-F-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-degradation-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-degradation-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-frontend-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-frontend-w1-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-frontend-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-highload-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-highload-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-highload-w2-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-layout-w1-LY-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-logic-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-logic-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-logic-w4-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-performance-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-performance-w1-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-performance-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-pr-contract-w1-PC-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-pr-contract-w1-PC-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-pr-contract-w2-PC-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-style-w1-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-style-w2-F-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-style-w2-F-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-testing-practices-w2-F1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-testing-practices-w2-F2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- r2-ui-ux-w2-UX-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

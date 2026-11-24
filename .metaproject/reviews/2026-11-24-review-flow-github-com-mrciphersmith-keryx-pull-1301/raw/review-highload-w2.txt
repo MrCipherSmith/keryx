@@ -1,0 +1,80 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta 9f4ec475b..f43a13c3f (fix round 1), diff mode, slices slice-02 (new) and slice-03 (new), both read in full. Load profile: not provided (plan.md states none). Triggers used: the number of expanded folders re-read after a snapshot change, and the number of project windows that share the process-wide Rust read permits (metaproject.rs `static ACTIVE`, `MAX_ACTIVE: usize = 8`).
+Context read for the hunks: useMetaprojectTree.ts (whole `limit` and `read`, plus `ensure`, `more` and `retry`), metaproject.rs `ReadPermit` and `v2_request`, round-1 finding highload-w1-F-001.
+
+Summary: The fix for highload-w1-F-001 works for one window. Every tree read now goes through one FIFO limiter capped at MAX_TREE_READS = 3. A queued read re-checks its generation before it starts, so a retired snapshot never spawns a child, and the slot is released in `finally` whether the read succeeds or fails. The test holds the reader and asserts the peak and the queued reads that never start. What is left: the cap is per hook instance (one per explorer, so one per window), while the permit pool it protects is shared by the whole process. Stats: blocker 0 | major 0 | minor 1 | info 1.
+
+### CLI / Multi-Session
+[highload-w2-F-001] minor. The tree-read cap is per window, but the Rust permits it protects are process-wide (see the REVIEW_RESULT).
+
+### Concurrency & Races
+None detected. The limiter's `active` counter and queue are touched only on the JS event loop. `start` raises the count synchronously, and the `finally` lowers it and starts the next waiting read, so the count cannot drift. A failed read still frees its slot, because `.catch(() => undefined)` runs before `finally`. The generation guard covers both the queued start (`current() && ...`) and the answer (`if (!current()) return`).
+
+### Resources
+[highload-w2-F-002] info. After a snapshot change, retired reads still hold limiter slots and the new snapshot's reads wait behind them.
+
+### Caching / Lock Contention / Async-Queues / Retry-Timeout / Idempotency
+None detected. The queue is bounded in practice: `ensure` adds a folder only once, guarded by `folders.has`, so each generation queues at most one read per visible expanded parent. Retired entries drain at once because their task resolves `false`. No retry loop was added. The snapshot check moved from `matchesRequest` to a typed `stale-snapshot` error after validation. That is a classification change with no concurrency effect.
+
+Clean areas: Part 0 retry/abort checklist; Part A shared state (hook-local refs only); Part C (no cache added); Part D (no transactions); Part E (FIFO queue, bounded per generation as noted); Part F (no retry); Part G (reads are idempotent).
+
+Not verified: I did not run the tests myself (exec budget 0). I relied on the supplied test evidence (exit 0) and on CI. The multi-window count is my reading of the code, with no run behind it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "The fix-round limiter bounds tree reads to 3 per explorer, and a queued read of a retired snapshot never spawns. The fix is correct for one window. Left over: the cap is per window while Rust's 8 read permits are process-wide (minor), and the new snapshot's reads wait behind retired reads that cannot be cancelled (info).",
+  "findings": [
+    {
+      "id": "highload-w2-F-001",
+      "severity": "minor",
+      "reviewer": "review-highload",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });",
+      "problem": "The FIFO limiter added for highload-w1-F-001 lives in a `useRef` of `useMetaprojectTree`. That gives one pool per explorer, so one per project window. The resource it protects is the process-wide Rust read permit pool (metaproject.rs `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`), which every project window shares and which refuses a request instead of queueing it. The comment on MAX_TREE_READS assumes the 8 permits are one window's to split: \"the rest of Desktop's eight read permits stay free for the explorer\". The other half of the round-1 suggested_fix, a single retry with backoff on the permit's `unavailable` answer, was not done, so a refusal still becomes a terminal folder error.",
+      "impact": "Trigger: three or more project windows re-read their expanded folders at about the same time. Examples: returning to each window's explorer, which does the quiet catalog re-read, or Rebuild graph in one window while another is paging. Each window then holds up to 3 tree reads alongside its own catalog, detail and neighbors reads. Once those pass 8, the extra requests are refused with `unavailable: Too many Metaproject reads. Retry shortly.`. Those folders show 'Could not load.' until the user selects Retry on each one, and an explorer detail or neighbors read in any window can fail the same way. With two windows (6 tree reads plus explorer reads) the margin is about 2. The result is degraded reads the user can retry; no data is lost.",
+      "suggested_fix": "Either make the limiter module-level (one pool shared by every useMetaprojectTree instance in the webview, with MAX_TREE_READS as the process budget), and correct the MAX_TREE_READS comment so it says the permits are shared by all windows. Or treat a permit refusal (`unavailable` whose message starts with 'Too many Metaproject reads') as retryable once or twice, with a short jittered backoff inside `read`, before the folder is marked failed. The second covers both the tree and cross-window pressure.",
+      "evidence": "In useMetaprojectTree.ts the limiter is `const slots = useRef<...>({ active: 0, queue: [] })` and `if (pool.active < MAX_TREE_READS) start(); else pool.queue.push(start);`, with the comment 'the rest of Desktop's eight read permits stay free for the explorer'. In apps/desktop/src-tauri/src/metaproject.rs:184-200: `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`, and `ReadPermit::acquire` returns `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\")` when the count reaches 8. `v2_request` acquires the permit on every request, and `cwd_for(view.label())` shows that several project windows exist. The `read` catch path turns any non-stale, non-not-found error into `{ status: \"failed\", ... }` with no retry. Round-1 highload-w1-F-001 impact already noted that 'the permit is shared by every project window'.",
+      "confidence": "medium",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts: `limit` (per-instance pool, the only client-side bound on tree reads)",
+          "apps/desktop/src-tauri/src/metaproject.rs:184-200 `ReadPermit` (process-wide pool of 8, refuses rather than queues)"
+        ],
+        "enumeration_method": "keryx ctx rg for `Semaphore|permit|MAX_ACTIVE|acquire` in apps/desktop/src-tauri/src: metaproject.rs has one ReadPermit pool used by v2_request; review.rs has its own unrelated MAX_READERS pool. Every tree read passes through useMetaprojectTree `read` -> `limit` (callers: ensure, more, retry)."
+      }
+    },
+    {
+      "id": "highload-w2-F-002",
+      "severity": "info",
+      "reviewer": "review-highload",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {",
+      "problem": "A read that has already started when the snapshot changes keeps its limiter slot until its CLI child exits, because the read cannot be cancelled. The new snapshot's reads queue behind it. The accounting is right, since the child still holds a Rust permit. It does mean that up to 3 slow reads for an old snapshot stall the new tree.",
+      "impact": "Trigger: Rebuild graph or Refresh while 3 tree reads are in flight against a slow CLI. The new snapshot's root and folders show Loading… until those children finish, which can take as long as the 150 s child timeout (child::run_bounded). This is degraded latency, not a failure.",
+      "suggested_fix": "Optional: pass an AbortSignal through RequestTree so the transport can stop waiting for a retired read. Or accept and document it: the slots mirror the Rust permits, which stay held until the child exits.",
+      "evidence": "The limiter releases a slot only in `.finally` after `task` settles. `current()` is checked before start and after the answer, never in between. metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (2271 lines), new" },
+    { "id": "slice-03", "coverage": "read in full, new" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: diff slices supplied, files known); wiki_used: no (not-relevant: concurrency of two known files); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":161329,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

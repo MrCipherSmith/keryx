@@ -1,0 +1,73 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, round 3 delta f43a13c3f..b2043b98d (fix round 2), mode explicit-hash-range. Code files changed in the range: MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts (`git diff --stat f43a13c3f b2043b98d -- apps/`).
+- slice-02 (new) read in full. slice-03 (new) read in full: its two hunks show lines of `apps/desktop/src/platform/metaproject.ts` as removed, but that file has no change in the range (`git diff f43a13c3f b2043b98d -- apps/desktop/src/platform/metaproject.ts` is empty) and both lines are still at the head (metaproject.ts:268 and :304, found with `keryx ctx rg`). There is no code change for slice-03 to review; the slice looks like a slicing artifact and is worth checking in the package.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Round-2 finding r2-performance-w2-F-001 (context, not re-reported)
+The fix holds. The dependency-less useLayoutEffect now does one `rowElements()` query per render and passes the array into `remember(document.activeElement, elements)`. `onFocus` takes its index from this render's `rows` with `findIndex`, with no DOM query. The neighbour lookup (`elements.findIndex(... === lost.before)`) runs only when the focused row has left the DOM. Per arrow key the cost is now one querySelectorAll plus O(n) scans over the visible rows, down from about four queries. `onBlur` still calls `rowElements()`, but only in a microtask after focus leaves a row, not on every move.
+
+### Findings
+
+### [F-001] A permit-retry wait is not cancelled when the explorer unmounts, so up to three reads are sent after it is gone
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts
+- **Hot path**: none. It needs every read permit to be refused at the moment the explorer view unmounts, and it is bounded by MAX_TREE_READS (3) reads and about 750 ms of total wait.
+- **Problem**: `attempt` waits `pause(...)` and then re-checks only `current()`, i.e. the snapshot generation. The generation changes only on a snapshot change (useMetaprojectTree.ts:96), not on unmount, and the hook has no unmount cleanup. So a retry whose wait ends after unmount still calls `send(root, input)`, and that takes one of the shared read permits.
+- **Why it matters**: This is negligible. It is at most three extra CLI reads, sent at the moment permits are already scarce. A request already in flight at unmount behaved the same way before this round. Recorded only because the retry adds a timer that has no cleanup.
+- **Fix**: Optional. Bump `generation.current` in an unmount cleanup (`useEffect(() => () => { generation.current++; }, [])`) so that `current()` is false after unmount and the retry throws instead of sending.
+
+### Clean Areas
+- CLI/TUI hot paths: the focus-tracking layout effect and onFocus were checked per keystroke and per render, as described above. `flatten` is unchanged apart from the id function.
+- Retry and backoff: the wait is bounded (PERMIT_RETRIES = 2, 150 ms × attempt + up to 150 ms jitter) and applies only to the permit-refusal message. Other `unavailable` answers fail at once (covered by a test). The jitter spreads out retries from several folders. Holding the limiter slot through the wait keeps the tree's fan-out at 3 while permits are short, which is the intended backpressure.
+- Memory and cleanup: the limiter's `.catch(console.error)` adds no retained state. The stale-snapshot early return leaves the folder `loading`, which neither re-sends nor polls (the `unread`/`ensure` path skips a parent that already has an entry). There are no new listeners or intervals.
+- React re-renders: the new inline `onFocus` closure per row follows the existing per-row `common` object pattern, and the rows are not memoized children, so no re-render cost is added.
+- N+1 / indexes / pagination / bundle imports / redundant API calls: none in this delta.
+- Tests: the test-only changes (fake `wait`, `refusing` reader, console.error swap) have no runtime cost.
+
+### Not verified
+- Exec budget 0: no timing was run. The keystroke cost is a reasoned count, not measured.
+- slice-03: the slice text does not match the range's diff (see Scope). I reviewed the actual range instead.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Round 3 delta f43a13c3f..b2043b98d. The r2-performance-w2-F-001 fix holds: one querySelectorAll per render, onFocus uses rows.findIndex. The permit retry is bounded and jittered. One info: a retry wait is not cancelled on unmount, so up to 3 reads can be sent afterwards. slice-03 shows platform/metaproject.ts changes that do not exist in the range (the file is unchanged), so there was nothing to review there.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "await pause(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);\n        if (!current()) throw cause;\n        return attempt(retries - 1);",
+      "problem": "The permit-retry wait re-checks only the snapshot generation, which changes on a snapshot change and not on unmount, and the hook has no unmount cleanup. A retry whose wait ends after the explorer unmounts still sends the read.",
+      "impact": "At most MAX_TREE_READS (3) extra CLI reads, within about 750 ms of unmount, and only while every read permit is taken. Negligible; no hot path.",
+      "suggested_fix": "Optional: add useEffect(() => () => { generation.current++; }, []) so that current() is false after unmount and the retry throws instead of sending.",
+      "evidence": "useMetaprojectTree.ts:160-168 (attempt/pause/current), :96 (the only generation bump, on a snapshot change); keryx ctx rg found no unmount effect in useMetaprojectTree.ts.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "slices": [
+    {"id": "slice-02", "status": "DONE"},
+    {"id": "slice-03", "status": "DONE", "coverage": "Read in full. Its hunks show removals in apps/desktop/src/platform/metaproject.ts, but the file is unchanged in f43a13c3f..b2043b98d and both lines are present at the head (:268, :304). There was no code change to review."}
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "slice-03 content does not match the range's diff: apps/desktop/src/platform/metaproject.ts has no change in f43a13c3f..b2043b98d, yet the slice shows two hunks of removals. Check the slicer for this package."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (the payload layers block gave the affected set; no graph question arose), wiki_used: not-relevant (narrow delta perf review), ctx_used: yes (keryx ctx rg), raw_rg_used: no. metaproject index: not read (narrow, bounded subagent per CLAUDE.md dispatch rule).
+KERYX_USAGE {"tokens_in":130964,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

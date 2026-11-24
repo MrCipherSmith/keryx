@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Security Review (round 3, delta f43a13c3f..b2043b98d)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`; range f43a13c3f35e488744bb8906c2c275d433f8d98b..b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Code reviewed: apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/useMetaprojectTree.ts, their DOM tests, MetaprojectView.dom.test.tsx, apps/desktop/src/platform/metaproject.test.ts; flow bookkeeping JSON/markdown (no executable content).
+
+### Summary
+- Blockers: 0 / Major: 0 / Minor: 0 / Info: 0
+
+No security finding in this delta.
+
+### What was checked
+- Permit-refusal retry (useMetaprojectTree.ts `attempt`): bounded to PERMIT_RETRIES = 2, only for the exact `unavailable: Too many Metaproject reads` prefix, stops when the snapshot generation changes, and runs inside the existing 3-slot limiter. No unbounded retry or request amplification against the Rust read-permit pool (worst case 3 calls per folder read, each still behind the process-wide permit check).
+- `Math.random()` jitter in the retry wait: scheduling only, not a token, nonce or identifier; not an insecure-randomness case.
+- Limiter `.catch` now `console.error`s the unexpected error: local webview devtools console; the error comes from Desktop's own handling (onStale/setFolder), carries no credential or secret. No PII/secret logging concern.
+- Stale-snapshot handling now returns after `onStale()` without marking the folder failed: removes a dead Retry; no auth/trust change. The snapshot check in the transport (platform/metaproject.ts:304-307, `stale-snapshot` when `snapshotId !== expectedSnapshotId`) is intact at the head.
+- Focus hand-off (`before` anchor, `moreId`): row ids are compared with `element.dataset.row === lost.before` (string equality), never interpolated into a CSS selector, so file paths with quotes or brackets cannot break or inject into a `querySelector`. Error text and row labels render as React text children (escaped); no `dangerouslySetInnerHTML`, `eval` or `postMessage` handler added.
+- slice-03: `git diff f43a13c3f b2043b98d -- apps/desktop/src/platform/metaproject.ts` is empty; the slice's two removed lines are the round-1 move of the snapshot check from `matchesRequest` into `requestMetaprojectV2` (still present at head, lines 304-307) and the capabilities return now at line 268-270. No security change.
+
+### Clean areas
+Injection (SQL/XSS/command/SSTI/eval), auth/authz, IDOR, input validation (no new boundary input; Rust validation unchanged, no Rust in this delta), secrets/credentials, cryptography, CSRF, path traversal, open redirect, React-specific patterns.
+
+### Not verified
+- No tests run by me (exec_budget_s = 0); relied on the supplied verify-tests output (exit 0) only as context.
+- Did not re-read `.metaproject/rules/core/security-baseline.mdc` or `rules/activity/review.mdc` in this round; no finding depended on a severity from them.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 3 delta (fix round 2) adds a bounded permit-refusal retry, a console.error for unexpected handler throws, a stale-snapshot early return and an anchored focus hand-off. None introduces an injection, auth, secret, crypto, traversal or DoS weakness: retries are capped at 2 behind the 3-slot limiter, Math.random is only jitter, row ids are compared by equality not selector interpolation, and the transport snapshot check is unchanged. slice-03's platform/metaproject.ts lines are unchanged in this range. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": []
+}
+```
+KERYX_USAGE {"tokens_in":126417,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

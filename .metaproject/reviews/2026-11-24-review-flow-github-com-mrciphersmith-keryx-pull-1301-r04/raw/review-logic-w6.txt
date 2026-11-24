@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 5, wave 6. Reviewed slice-02 and slice-03 in full; the range is 3ad918b66..0d6df2937. slice-02: handOffTarget is a pure extraction of the inline focus-target expression from round 3. It keeps the same branches: no anchor shown gives undefined and the old index, no parent gives the row after the anchor, and a parent gives that parent's first row after the anchor or else the anchor. I traced the new empty-page test by hand. The focused row is the root's next-page row more:<root>. Its hand-off takes the last root entry (d:src) as anchor, with the root as parent. The page adds no root entry, so the target falls back to d:src, which is what the test expects. The test-only changes add the `reload` harness prop, the parked stale row shown as Loading, the inert parked Show more, the reveal through a parked folder, the Wiki re-read and the typed-error permit check. Each matches the code it pins: flatten renders status 'stale' as a Loading row; isMetaprojectPermitRefusal rejects any MetaprojectRequestError before it reads the text. slice-03: `git diff 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` is empty, so these hunks are not part of this round's delta. They are the round-1 change against main, already noted as r4-frontend-w2-F-003, and are not reported again. I read them as new code anyway. The capabilities branch now requires `actions`, which validCapabilities already requires. The snapshot check moved out of matchesRequest and now runs after the shape and size checks. A wrong-snapshot answer therefore throws MetaprojectRequestError('stale-snapshot') instead of 'Incompatible … Choose the bundled CLI'. The only request without a snapshotId is capabilities, and it never carries expectedSnapshotId. OpenSpecView's callers send expectedSnapshotId and show errMessage(cause) generically, so they get a clearer message and no behaviour breaks. No logic defect found. Not verified by me: no command was run (exec_budget_s 0); I relied on the supplied test evidence (Desktop tsc and suite exit 0, 1021 pass).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full; MetaprojectTree.tsx 1-106 and 171-211 read for context", "status": "DONE" },
+    { "id": "slice-03", "coverage": "read in full; metaproject.ts 165-335 read at head; no change to this file in 3ad918b66..0d6df2937 (already r4-frontend-w2-F-003)", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `3ad918b66` (round-5 delta base); PR merge-base with main `a5d1ab236`
+- Head: `0d6df2937`
+- Scope mode: explicit-hash-range
+- Spec compliance gate: skipped. This is a delta round on test and refactor changes, no acceptance criterion changes status in it, and AC5/AC6/AC7 are covered by the supplied test run.
+
+### Summary
+handOffTarget is an extraction of the earlier inline expression with the same behaviour, and the new empty-page hand-off test lands on the parent's last entry, as the code says it should. The remaining round-4 changes in these slices are tests, and each matches the code it pins. slice-03 is not part of this range's delta (already recorded as r4-frontend-w2-F-003). Read as new code, it is sound: a wrong-snapshot answer now surfaces as stale-snapshot instead of "Incompatible".
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. A root status row has a `d:<root>` anchor that never renders, so it falls back to the old index. That was already the behaviour before this round, and the handOffTarget doc states it.
+
+### Routing audit
+- graph_used: no. The payload's `layers.affected` (graph at the PR head) was used in place of a live query.
+- wiki_used: not-relevant. A delta of test changes and a refactor, with the intent stated in code docs.
+- ctx_used: yes (`keryx ctx rg`)
+- raw_rg_used: no. One raw `git diff` / `git diff --stat` was run with a `keryx:raw` marker to confirm that metaproject.ts is unchanged in the range.
+KERYX_USAGE {"tokens_in":110634,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

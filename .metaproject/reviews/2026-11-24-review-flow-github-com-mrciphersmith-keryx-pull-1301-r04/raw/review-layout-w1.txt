@@ -1,0 +1,28 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 5 delta (3ad918b66..0d6df2937), slice-02 (new) read in full. The slice carries no rendered-layout change: MetaprojectTree.tsx only moves the focus hand-off target computation into a pure helper `handOffTarget` (same anchor/parent/fallback logic as the removed inline code, no JSX, className or style touched), and the other hunks are tests (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts). `git diff --stat 3ad918b66..0d6df2937 -- apps/ docs/ src/` confirms no CSS file (metaproject.css untouched) and no sizing, spacing, overflow, position or translated-text container changed in this range. Nothing in this lens's scope to measure, so no findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full; no layout-scoped change (focus hand-off helper refactor and tests only)", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+## Summary
+
+- Slice read: slice-02 (new), in full.
+- Layout scope in this delta: none. The only production change, in apps/desktop/src/metaproject/MetaprojectTree.tsx, extracts `handOffTarget(rows, anchor, parent)` from the layout effect; it decides which row receives focus and renders no box. No CSS, class, inline style or text container changed (verified with `git diff --stat` over the range: metaproject.css not in it).
+- Findings: 0 blocker, 0 major, 0 minor, 0 info.
+- Not run: no real-engine measurement, because there was no geometry change to measure (exec_budget_s = 0 as well).
+
+Routing audit: graph_used: no (not-relevant, slice and file set given by the payload); wiki_used: no (not-relevant, no layout concept to look up); ctx_used: no (only one short `git diff --stat`; the Metaproject index was not read because the dispatch scoped this to a bounded payload-driven review); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":89164,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,105 @@
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 155,159 @@
+     if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
+-      elements[Math.min(lost.index, elements.length - 1)]?.focus();
++      const anchor = lost.before === undefined ? -1 : elements.findIndex(element => element.dataset.row === lost.before);
++      const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];
++      next?.focus();
+     }
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 1,46 @@
+ import { useCallback, useMemo, useReducer, useRef } from "react";
+ import {
+   MetaprojectRequestError,
+   type MetaprojectTreeEntry,
+   type MetaprojectTreeScope,
+   type MetaprojectTreeV2,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { errMessage } from "../lib/format";
+ import type { MetaprojectTreeRequest } from "../platform/metaproject";
+ 
+ /** The key of a tree's root; graph folder paths and wiki group keys are never empty. */
+ export const TREE_ROOT = "";
+ 
+-/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */
++/**
++ * Tree reads one explorer keeps in flight at once. Desktop's eight read permits are shared by every
++ * project window, so this only bounds this tree's share; a read refused a permit is retried.
++ */
+ export const MAX_TREE_READS = 3;
+ 
++/** Retries of a read refused a read permit, each after a short jittered wait. */
++export const PERMIT_RETRIES = 2;
++const PERMIT_WAIT_MS = 150;
++/** Desktop's answer when every read permit is taken (`metaproject.rs`); it says to retry shortly. */
++const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith("unavailable: Too many Metaproject reads");
++const sleep = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
++
+ export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
+ 
+ /** The loaded children of one tree parent (the root, a graph folder or a wiki group). */
+ export interface TreeFolder {
+   status: "loading" | "ready" | "failed";
+   entries: readonly MetaprojectTreeEntry[];
+   error?: string;
+   nextCursor?: string;
+   /** The source behind the scope is missing or incomplete (a graph that is not built). */
+   partial: boolean;
+   /** The next page: being read, or its read failed. */
+   more?: { status: "loading" } | { status: "failed"; error: string };
+ }
+ 
+ /** One scope's tree: kept by the explorer, so it survives leaving the view and switching Graph/Wiki. */
+ export interface ScopeTree {
+   snapshot: string;
+   expanded: ReadonlySet<string>;
+   folders: ReadonlyMap<string, TreeFolder>;
+   /** The last selection the tree revealed or chose itself; a different one is revealed. */
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 158,170 @@
+     };
++    // Every permit taken (other windows share them) is worth a short wait before the folder fails.
++    const attempt = async (retries: number): Promise<MetaprojectTreeV2> => {
++      try {
++        return await send(root, input);
++      } catch (cause) {
++        if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;
++        await pause(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);
++        if (!current()) throw cause;
++        return attempt(retries - 1);
++      }
++    };
+     // A read queued under a snapshot that has since been retired never starts.
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 192,216 @@
+     expect(calls).toEqual([{ version: 2, action: "tree", scope: "graph", parent: "src", expectedSnapshotId: digest }]);
+     expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "lib" }, reader))))
+       .toContain("Incompatible Metaproject v2 response");
+     expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "wiki", parent: "src" }, reader))))
+       .toContain("Incompatible Metaproject v2 response");
+     expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, reader))))
+       .toContain("Incompatible Metaproject v2 response");
+     const malformed = await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, async () => ({ ...graphRoot, entries: "src" })));
+     expect(String(malformed)).toContain("Incompatible Metaproject v2 response");
+   });
+ 
+   test("a typed CLI error on a tree read keeps its code", async () => {
+     const error = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "gone" }, async () => {
+       throw new Error("not-found: Unknown Metaproject tree parent.");
+     }));
+     expect(error instanceof MetaprojectRequestError && error.code).toBe("not-found");
+   });
+ 
+   test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {
+     const other = "c".repeat(64);
+-    const tree = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest },
++    const treeError = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest },
+       async () => ({ ...graphRoot, snapshotId: other, parent: "src", entries: [{ type: "node", node: file }] })));
+-    expect(tree instanceof MetaprojectRequestError && tree.code).toBe("stale-snapshot");
+-    const search = await readError(requestMetaprojectV2("/checkout", { version: 2, action: "search", query: "x", cursor: "c", expectedSnapshotId: digest },
++    expect(treeError instanceof MetaprojectRequestError && treeError.code).toBe("stale-snapshot");
++    const searchError = await readError(requestMetaprojectV2("/checkout", { version: 2, action: "search", query: "x", cursor: "c", expectedSnapshotId: digest },
+       async () => ({ schemaVersion: 2, snapshotId: other, hits: [], partial: false })));

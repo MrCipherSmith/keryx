@@ -1,0 +1,153 @@
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 902,921 @@
+         : "Checking OpenSpec support…"}</p>}
+       {mode !== "openspec" && loading && !protocolError && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
+       {mode !== "openspec" && catalog && graphState && (
+         <>
+           {graphState.graph !== "ready" && (
+             <div className="inline-banner tone-warn metaproject-freshness" role="status">
+               <span className="metaproject-freshness-state">Graph is {graphState.graph}.</span>
+               {graphState.graphReason && (
+                 <button type="button" className="btn btn-ghost btn-sm metaproject-freshness-toggle" aria-expanded={freshnessOpen}
+                   aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : graphState.graphReason ?? null)}>
+                   Details<Icon name={freshnessOpen ? "chevronUp" : "chevronDown"} size={12} />
+                 </button>
+               )}
+               {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{graphState.graphReason}</p>}
+               <button className="btn metaproject-rebuild" disabled={rebuilding} onClick={() => void rebuild()}>
+                 {rebuilding ? "Rebuilding…" : "Rebuild graph"}
+               </button>
+             </div>
+           )}
+           <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
+-            <nav className="metaproject-list" aria-label="Search results" ref={list}>
+-              <h2>{listHeading}</h2>
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 271,271 @@
+-  if (isMetaprojectV2Response(response, "capabilities")) return 2;
+   // Tauri validates and caches the handshake against the authorized checkout and actual executable.
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 310,314 @@
+ 
+ function matchesRequest(response: MetaprojectV2Response, request: MetaprojectRequestV2): boolean {
+-  if ("expectedSnapshotId" in request && request.expectedSnapshotId !== undefined
+-    && (!("snapshotId" in response) || response.snapshotId !== request.expectedSnapshotId)) return false;
+   switch (request.action) {
+     case "detail": return "node" in response && response.node.id === request.id;
+     case "neighbors": return "root" in response && response.root === request.id;
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 30,49 @@
+   }
+   throw new Error("Expected the read to fail.");
+ }
+ 
+ const v1Catalog = {
+   ...base, graph: "missing", hasWikiLayer: false, hasSymbolLayer: false,
+   nodes: [], edges: [], truncated: false, counts: { files: 0, wiki: 0, modules: 0 },
+ };
+ const probe = { version: 2, action: "capabilities" };
+ const capabilities = { schemaVersion: 2, actions: METAPROJECT_CAPABILITIES };
+ 
+ describe("Metaproject capability negotiation", () => {
+   test("uses the actual unversioned parser and requires a valid legacy catalog", async () => {
+     const calls: unknown[] = [];
+     const fakeLegacyReader = async (request: unknown): Promise<unknown> => {
+       calls.push(request);
+       const parsed = parseExplorerRequestV1(JSON.parse(JSON.stringify(request)));
+       if (parsed.action !== "catalog") throw new Error("Expected catalog handshake");
+       return v1Catalog;
+     };
+-    expect(await negotiateMetaproject("/checkout", fakeLegacyReader)).toBe(1);
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 52,52 @@
+-    const error = await readError(negotiateMetaproject("/checkout", async (request) => {
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 57,59 @@
+   });
+ 
+   test("accepts the typed unsupported version only after the handshake", async () => {
+-    expect(await negotiateMetaproject("/checkout", async (request) => {
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 62,62 @@
+       return v1Catalog;
+-    })).toBe(1);
+-    expect(await negotiateMetaproject("/checkout", async () => capabilities)).toBe(2);
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 67,68 @@
+   test("negotiates protocol 2 with a CLI that lists more actions than Desktop uses", async () => {
+     const newer = { schemaVersion: 2, actions: ["openspec-diff", ...[...METAPROJECT_CAPABILITIES].reverse()] };
+-    expect(await negotiateMetaproject("/checkout", async () => newer)).toBe(2);
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 71,71 @@
+-      const lacking = await readError(negotiateMetaproject("/checkout", async () => ({ schemaVersion: 2, actions })));
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 76,78 @@
+   test("does not downgrade transport errors, invalid responses or a later data error", async () => {
+     for (const error of ["Could not run the selected CLI", "Timed out"]) {
+       const calls: unknown[] = [];
+-      const failure = await readError(negotiateMetaproject("/checkout", async (request) => {
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 83,85 @@
+       expect(String(failure)).toContain(error);
+       expect(calls).toEqual([probe]);
+     }
+-    const invalid = await readError(negotiateMetaproject("/checkout", async () => ({ ...capabilities, actions: [] })));
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 91,93 @@
+       if (request.action === "capabilities") return capabilities;
+       throw new Error("unsupported-version: Try an earlier protocol.");
+     };
+-    await negotiateMetaproject("/checkout", reader);
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 289,308 @@
+ 
+ ## Inspect the module from the CLI
+ 
+ Run the same read command the app uses from the open checkout to isolate a
+ graph or wiki problem from a rendering problem.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"action":"search","query":"Agent Bus"}'
+ keryx metaproject-explorer --request '{"action":"detail","id":"wiki:architecture/agent-bus.md"}'
+ ```
+ 
+ Copy the `node.id` from a search or catalog result when requesting detail or
+ neighbors. IDs identify a node in the current checkout. Each response carries
+ a `schemaVersion` and `snapshotId`. Desktop compares them before mixing
+ results from separate reads and asks to refresh if the underlying data changes.
+ The snapshot covers the graph, wiki and OpenSpec data. Graph freshness is not
+ part of it: creating or editing another file in the checkout can mark the
+ graph stale, and the results already loaded stay valid.
+ 
+ Before its first read, Desktop asks the selected CLI which read actions it
+-serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
+-than Desktop keeps working when it adds actions.
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 333,333 @@
+-| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 1,9 @@
+ import { createHash } from "node:crypto";
+ import { realpath, stat } from "node:fs/promises";
+ import path from "node:path";
+ 
+ import type { OpenSpecDiagnostic, OpenSpecKind } from "../openspec/catalog";
+ import { OpenSpecReadError, normalizeOpenSpecSearchText, readOpenSpec, type OpenSpecEntrySummary, type OpenSpecSnapshot } from "../openspec/service";
+ import {
+   METAPROJECT_CAPABILITIES, METAPROJECT_EDGE_LIMIT, METAPROJECT_NODE_LIMIT, METAPROJECT_PAGE_SIZE_V2,
+   METAPROJECT_RESPONSE_BYTES_V2, METAPROJECT_SCHEMA_V2, METAPROJECT_SCOPES, MetaprojectRequestError,
+-  isMetaprojectRelativePath, isOpenSpecKind, type MetaprojectEdge, type MetaprojectEdgeEvidence,

@@ -1,0 +1,30 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 4 (delta b2043b98d..3ad918b66, fix round 3), slices slice-02 and slice-03, both new. No findings. The PR body has no checklist boxes. Its claims were worked as rows; every claim touched by this delta agrees with the diff. (1) The claim that a stale-snapshot tree read is parked and every catalog load re-reads it, even with an unchanged snapshot id, matches the diff. useMetaprojectTree.ts adds `status: \"stale\"` / `more: { status: \"stale\" }` and a `reload` effect that calls reread(scope, parent, \"stale\"). MetaprojectView.tsx passes `reload: catalog`. MetaprojectView.dom.test.tsx asserts Client appears after Refresh catalog with the snapshot still at s1. (2) The claim that the read-permit refusal is classified once in the platform transport matches. platform/metaproject.ts adds METAPROJECT_PERMIT_REFUSAL and isMetaprojectPermitRefusal next to requestMetaprojectV2. The hook imports it, and the DOM test imports the constant instead of its private copy. (3) The claim that a replaced status row hands focus within its own parent matches handOff() in MetaprojectTree.tsx and the new test 'a focused Show more whose page lands with the children of the folder above it…'. (4) The Verification claims '1019 pass' and 'rounds 2-3 touched only Desktop' match. research-evidence/verify-tests-to-run-1.txt:720 reads '1019 pass' with exit 0. `git diff --name-only b2043b98d 3ad918b66` outside .metaproject lists only apps/desktop/src files. (5) 'Three managed review rounds' agrees with the round-3 entry. Documentation outside the diff: the delta adds no user-visible string, label, flag or route; the stale row still renders the existing 'Loading…' row and the silent permit retry shows nothing new. docs/docs/guides/desktop-metaproject.md:107-110 (Loading…, Show more, Could not load./Retry) and :327 ('Project knowledge changed while loading … Select Refresh catalog to load a consistent snapshot') still describe the behaviour correctly, and Refresh catalog now also recovers parked tree rows, consistent with that row. Found with `keryx ctx rg` over the guide for Retry|Loading|Show more|busy|permit|stale|Refresh catalog. Not re-reported: r3-pr-contract-w1-PC-001 (PR body wording on the stale row), which the brief says is still open. Slice anomaly, not a finding: slice-03.diff shows two removed lines in apps/desktop/src/platform/metaproject.ts. These are `if (isMetaprojectV2Response(response, \"capabilities\")) return 2;` and the expectedSnapshotId check in matchesRequest. `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` shows no such removals; its only hunk adds the permit classifier. At the head, `keryx ctx rg` finds the snapshot check still at metaproject.ts:316 and the capabilities branch at :268. So the slice misrepresents the delta, and the transport-level stale-snapshot claim of round 1 still holds. Not verified: the GitHub PR body itself (pr-context.md read as given); no Rust read (no Rust changed in the delta).",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (lines 1-1511)", "status": "DONE" },
+    { "id": "slice-03", "coverage": "read in full; its two '-' lines do not appear in the real git diff of the range", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Checklist form (claims; the body has no checkbox items):
+
+| Box or claim (quoted) | State | What the diff shows | Expectation |
+|---|---|---|---|
+| "a tree read refused as stale-snapshot is parked and every catalog load re-reads it, so Refresh catalog recovers it even when the snapshot id comes back unchanged" | claimed | useMetaprojectTree.ts `status: "loading" \| "stale" \| "ready" \| "failed"`; `reload` effect re-reads "stale"; MetaprojectView.tsx `reload: catalog`; view tests for folder and Show more page | agrees |
+| "the read-permit refusal is classified once in the platform transport" | claimed | platform/metaproject.ts `export function isMetaprojectPermitRefusal`; hook imports it; DOM test imports METAPROJECT_PERMIT_REFUSAL | agrees |
+| "a replaced status row hands focus within its own parent" | claimed | MetaprojectTree.tsx `function handOff(rows, index)` with parent-scoped anchor | agrees |
+| "1019 pass" / "rounds 2-3 touched only Desktop" | claimed | verify-tests-to-run-1.txt:720 `1019 pass`; delta's non-.metaproject files are all apps/desktop/src | agrees |
+| "Docs: the Desktop Metaproject guide describes the tree…" | claimed | delta adds no user-visible string; guide :107-110, :327 remain accurate | agrees |
+
+Routing audit: graph_used: no (not-relevant: the payload layers block already named the affected files, and no symbol was renamed); wiki_used: no (not-relevant: the doc candidate was the guide named in the PR body, searched directly); ctx_used: yes (keryx ctx rg, keryx ctx diff); raw_rg_used: no (two raw `git diff` calls, bounded, to check the slice-03 hunk and the changed-file list).
+KERYX_USAGE {"tokens_in":137733,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

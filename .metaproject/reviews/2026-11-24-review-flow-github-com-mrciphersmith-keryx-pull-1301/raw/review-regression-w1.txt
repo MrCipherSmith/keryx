@@ -1,0 +1,74 @@
+STATUS: DONE
+
+review-regression, wave 1, round 2 (delta 9f4ec475b..f43a13c3f, fix commit 6c83eb7fb). Slice read in full: slice-01 (fix). Scope B question: does the fix round break an existing behaviour in its blast radius? No regression found at major or above.
+
+## Prior findings — dispositions (checked against the code at f43a13c3f)
+
+- frontend-w1-F-001 — closed. flatten() gives every status row of a parent one id, `status:${parent}` (MetaprojectTree.tsx statusId), so error -> loading -> more update the same <li> in place. When the focused row does leave (its last page arrives, loading row replaced by children, snapshot collapse), the dependency-free layout effect focuses the row now at the old index, only when document.activeElement is body/disconnected, so focus outside the tree is not taken. Pinned by MetaprojectTree.dom.test.tsx "a keyboard Retry keeps focus..." (:387) and "a keyboard Show more keeps focus in the tree..." (:402).
+- logic-w1-F-001 — closed. moveTo now focuses the target element directly (`rowElements().find(...)?.focus()`); focusRequest is removed and nothing stays pending for a later commit. Pinned by "Home on the first row and End on the last leave nothing that a later render could act on" (:363).
+- architecture-w2-F-001 — closed. METAPROJECT_WIKI_UNTYPED_GROUP and metaprojectWikiGroupKey are exported from metaproject-explorer-contract.ts and used by both wikiTree (metaproject-explorer-v2.ts) and revealSteps (MetaprojectTree.tsx); the ?? / || split is gone (both now `||`).
+- degradation-w1-F-001 — closed. negotiateMetaproject is deleted; `keryx ctx rg --all --hidden 'negotiateMetaproject[^E]' apps/desktop` finds no remaining reference.
+- degradation-w1-F-002 — closed. The snapshot check left matchesRequest; requestMetaprojectV2 now throws MetaprojectRequestError("stale-snapshot") for a well-formed reply for another snapshot, so the hook's catch reaches onStale; the hook doc comment now states that its own check covers an injected `request` that does not check.
+- performance-w2-F-001 — closed. wikiTree pushes into the existing group array.
+- pr-contract-w2-PC-001 — closed. desktop-metaproject.md (the 309 paragraph and the 332 troubleshooting row) and cli-reference.md:8301 now say "requires", and name `tree` as optional.
+- testing-practices-w1-F1 — closed. New test "leaves symbols out of listings and folder counts even when the graph model holds them" injects symbol nodes into the loaded model, asserts they were loaded, then asserts the listings and the src:4 count exclude them and that a symbol-only folder is not-found.
+- testing-practices-w1-F3 — closed. MetaprojectView.dom.test.tsx:2139 "a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows".
+- testing-practices-w1-F6 — closed. The test now asserts client.ts rendered and no Loading… row before the focus assertion.
+- ui-ux-w1-UX-004 — closed. Module folder rows render `NODE_KIND_LABELS.module` as a kind label, like node rows.
+- logic-w2-F-002 — open. Info, and its fix was optional. The fallback is kept, which the finding recommended, but docs/docs/guides/desktop-metaproject.md:103 still says "Pages without a page type are under **Other**", which describes a group the loader cannot produce.
+- pr-contract-w1-PC-001 — closed. cli-reference.md:8301 now says Desktop uses an optional action such as `tree` only when the CLI lists it.
+- testing-practices-w1-I2 — closed. The suggested option is done: the key is exported and both sides use it. There is still no test pinning the shared key, but that was the other option.
+- ui-ux-w1-UX-005 — open. MetaprojectTree.tsx:291 still renders a bare `<span className="count-label">` number, with no unit, aria-label or title.
+
+## Regressions the fixes introduced
+
+None at major or above. Here is what I followed from each fix hunk into the blast radius (payload layers.affected, depth 2; `truncated: []`, so the cap dropped no files):
+
+- requestMetaprojectV2 snapshot check (answers degradation-w1-F-002 / testing-practices-w1-F3). A mismatched snapshot used to throw the generic "Incompatible ... Choose the bundled CLI" Error. Now it throws MetaprojectRequestError("stale-snapshot"). I enumerated every caller that sends expectedSnapshotId:
+  - MetaprojectView loadMoreSearch (:672). It now maps the error to setSnapshotMismatch, covered by the dom test at :1396.
+  - useMetaprojectTree read. It now reaches onStale.
+  - OpenSpecView. Eight reads, :123 :137 :140 :154 :161 :183 :252 :282. Their catches show errMessage(cause), or swallow the error at :287, so the visible text changes from a misleading "choose the bundled CLI" to "Project knowledge changed while loading." No branch depends on the old message.
+
+  The v2 `read` wrapper (MetaprojectView:291) forwards v1-shaped inputs without expectedSnapshotId, so detail, neighbors and catalog are unaffected. platform/metaproject.test.ts still asserts the generic error for an unrelated detail id (:109-111), and that path does not change.
+- Tree read limiter (MAX_TREE_READS = 3). A hung read can hold a slot. I checked the bound by hand: the Tauri side kills the CLI after 150 s (src-tauri/src/metaproject.rs:208, child::run_bounded). The code graph cannot see this runtime edge. Queued reads of a retired snapshot resolve to `false` and release their slot. The folder state they would have written was already dropped by the snapshot reset.
+- negotiateMetaproject removal. No remaining caller in apps/desktop (searched with --hidden).
+- Results <nav> renamed from aria-label="Search results" to aria-labelledby on the heading. No test or code in apps/desktop queries that accessible name.
+- Focus restore (onBlur microtask plus layout-effect `remember`). Focus that moves out of the tree to a non-focusable area clears `focused` through the blur microtask, so a later reveal or snapshot render does not pull focus back into the tree.
+
+Radius limits: the graph walks dependents only and has no runtime edges. I checked the Tauri invoke boundary by hand, as noted above. The docs hunks are non-code and have no radius, so for them the radius could not answer the question. They are prose only and were judged under the dispositions above.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Fix round 6c83eb7fb: 13 of 15 prior findings closed against the code; 2 info findings stay open (logic-w2-F-002: guide still promises an 'Other' group the loader cannot produce; ui-ux-w1-UX-005: tree counts still unlabelled). No regression at major or above: the stale-snapshot move in requestMetaprojectV2 was traced to every expectedSnapshotId caller (MetaprojectView loadMoreSearch, useMetaprojectTree, 8 OpenSpecView reads) and only replaces a misleading error message; the 3-read limiter is bounded by the 150 s Tauri timeout; negotiateMetaproject and the 'Search results' accessible name have no remaining consumer. Blast radius: layers.affected depth 2, 9 files, nothing truncated; the Tauri runtime edge was checked by hand; the docs hunks have no code radius (unresolved, judged as prose).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Not verified: I ran no tests (exec_budget_s = 0). Every disposition comes from reading the code and the test names at f43a13c3f. The DOM behaviour itself relies on the supplied test evidence (verify-tests-to-run-1.txt, exit 0) and the green CI.
+
+Routing audit: graph_used: yes (payload layers.affected at f43a13c3f); wiki_used: not-relevant (narrow fix-round regression check); ctx_used: yes (keryx ctx rg/read/run); raw_rg_used: no. One raw `git diff` was written to a scratch file, with a keryx:raw reason, to read the full fix hunks outside the slice.
+KERYX_USAGE {"tokens_in":164580,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

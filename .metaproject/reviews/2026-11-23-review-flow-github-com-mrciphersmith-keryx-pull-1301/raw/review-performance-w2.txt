@@ -1,0 +1,88 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR 1301 (flow 518), branch `feat/desktop-metaproject-sidebar-tree`, base `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`, mode explicit-hash-range, wave 2 round 1.
+- Slice read in full: slice-02 (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx tree section, platform/metaproject.test.ts, docs guide, metaproject-explorer-contract.ts, metaproject-explorer-v2.ts, metaproject-explorer-tree.test.ts).
+- Context read (not reviewed): metaproject-explorer-v2.ts `boundedItems`, `metaprojectExplorerV2`; metaproject-explorer.ts `loadExplorerGraph`.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [F-001] wikiTree copies the group array for every page (quadratic in group size)
+- **Severity**: minor
+- **File**: src/integrations/metaproject-explorer-v2.ts (`wikiTree`)
+- **Hot path**: once per Wiki `tree` request (root and every group expand / Show more page); W wiki pages in one group cost W²/2 element copies.
+- **Problem**: `groups.set(key, [...groups.get(key) ?? [], node])` allocates a new array of the group's current length for each page.
+- **Why it matters**: correct today, and small wikis make it negligible (2,000 pages in one group is ~2M copies, a few ms); it is a needless O(n²) on a path that grows with the wiki. No measurement exists either way.
+- **Fix**: push into the existing array: `const list = groups.get(key); if (list) list.push(node); else groups.set(key, [node]);`.
+
+### [F-002] Each tree page pays the full explorer load (graph JSONL parse, OpenSpec read, relationship checks, snapshot hash)
+- **Severity**: info
+- **File**: src/integrations/metaproject-explorer-v2.ts (`tree` routed through `metaprojectExplorerV2`)
+- **Hot path**: one CLI request per folder expand, per Show more page, and per ancestor while revealing a selection; each runs `loadExplorerGraph` with a `catalog` request (graphRequest default), `readOpenSpec`, `buildRelationships`, and the SHA-256 of all nodes and edges, then `graphTree` uses only the files under one prefix.
+- **Problem**: this is the established v2 pipeline shared by every action (not introduced here), but the tree makes it a per-click cost rather than a once-per-view catalog read. Frequency is user-driven (human clicks), not per keystroke or per frame, so no bottleneck is shown; no timing on a large checkout was supplied.
+- **Why it matters**: on a large repository each expand could take as long as a full catalog read. Worth a timing of `tree` against `catalog` on a large checkout (e.g. this repo) before deciding anything; a per-process cache is not applicable since the CLI is spawned per request.
+- **Fix**: none required for this PR; track separately if a timing shows expand latency comparable to the catalog load.
+
+### Clean Areas
+- graphTree: one O(N) pass over nodes per request, sort only over the parent's children, no nested scans; paging via `offsetPage` is bounded (100 entries, 900 KiB) and the shared helper replaces duplicated search paging without changing its cost.
+- Request parsing (`parseV2` tree case, `validTreeParent`): constant per request.
+- `tree` does not call `freshness()` (no `git status` per expand).
+- Tests: prototypes (`scrollIntoView`, `window.setTimeout`) are restored in `finally`; temp roots are removed in `afterEach`; no leaks.
+- Not applicable in this slice: DB N+1/indexes, React re-render (no component source in slice-02; MetaprojectTree.tsx/useMetaprojectTree.ts are in another slice), bundle imports, pagination gaps.
+- Docs: no performance claim made.
+
+### Not verified
+- No timing was run (exec budget 0); F-002 is unmeasured by design.
+- Component code (MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectView.tsx, platform/metaproject.ts) is outside slice-02 and was not reviewed here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-02: no blocker or major. One minor: wikiTree rebuilds each group's array per page (O(n^2) in group size). One info: every tree page runs the full v2 load pipeline, now per folder expand; unmeasured.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "    groups.set(key, [...groups.get(key) ?? [], node]);",
+      "problem": "wikiTree allocates a fresh copy of the group's array for every wiki page it adds, making grouping O(W^2) in the size of a page-type group.",
+      "impact": "Runs on every Wiki tree request (root, each group expand, each Show more page). Negligible for small wikis (about 2M element copies for 2,000 pages in one group), but needless quadratic work on a path that scales with the wiki.",
+      "suggested_fix": "const list = groups.get(key); if (list) list.push(node); else groups.set(key, [node]);",
+      "evidence": "slice-02 hunk @@ 71,177 @@ of src/integrations/metaproject-explorer-v2.ts, function wikiTree; reasoned count: one spread per page, each of the group's current length.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "      case \"tree\": return this.tree(request);",
+      "problem": "Each tree page goes through metaprojectExplorerV2, which loads the whole graph (catalog-mode loadExplorerGraph, JSONL parse, SHA-256 over all nodes and edges), reads OpenSpec and builds relationships, while graphTree then uses only the files under one prefix. The pipeline is pre-existing and shared by every v2 action; the tree turns it into a per-click cost (per expand, per Show more, per ancestor on reveal).",
+      "impact": "On a large checkout each folder expand may take about as long as a full catalog read. Frequency is human clicks, not keystrokes or frames, and no timing was supplied, so no bottleneck is demonstrated.",
+      "suggested_fix": "No change required in this PR. Time `tree` against `catalog` on a large checkout; if expand latency approaches the catalog load, track a lighter load path for tree (skip OpenSpec and relationship building) separately.",
+      "evidence": "metaprojectExplorerV2 (metaproject-explorer-v2.ts, Promise.all of load(root, graphRequest(request)) and readOpenSpec(root), then buildRelationships); graphRequest default returns { action: \"catalog\" } for tree; loadExplorerGraph in metaproject-explorer.ts hashes all nodes/edges.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (payload `layers` block used instead; scope fixed to one slice), wiki_used: not-relevant (narrow perf review of supplied diff), ctx_used: yes (`keryx ctx rg` for context lookups), raw_rg_used: no.

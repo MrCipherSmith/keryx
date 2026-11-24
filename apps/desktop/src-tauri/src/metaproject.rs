@@ -42,6 +42,9 @@ enum Scope { Graph, Wiki, Spec, Change, Archive }
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Collection { Spec, Change, Archive }
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum TreeScope { Graph, Wiki }
 
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", rename_all_fields = "camelCase", deny_unknown_fields)]
@@ -62,6 +65,8 @@ enum RequestV2 {
     },
     OpenspecList { collection: Collection, cursor: Option<String>, expected_snapshot_id: Option<String> },
     OpenspecHistory { id: String, cursor: Option<String>, expected_snapshot_id: Option<String> },
+    /// Optional: sent only to a CLI whose capabilities list `tree`, so it is not in `ACTIONS`.
+    Tree { scope: TreeScope, parent: Option<String>, cursor: Option<String>, expected_snapshot_id: Option<String> },
 }
 
 fn digest(s: &str) -> bool {
@@ -117,6 +122,14 @@ fn valid_v2(request: RequestV2) -> bool {
         }
         RequestV2::OpenspecHistory { id, cursor, expected_snapshot_id } => (
             valid_text(&id) && cursor.as_deref().map_or(true, valid_text), expected_snapshot_id,
+        ),
+        // A graph parent is a checkout-relative folder; a wiki parent is a page-type group key.
+        RequestV2::Tree { scope, parent, cursor, expected_snapshot_id } => (
+            parent.as_deref().map_or(true, |parent| match scope {
+                TreeScope::Graph => relative_path(parent),
+                TreeScope::Wiki => valid_text(parent),
+            }) && cursor.as_deref().map_or(true, valid_text),
+            expected_snapshot_id,
         ),
     };
     valid && pin.as_deref().map_or(true, digest)
@@ -372,5 +385,38 @@ mod tests {
         assert!(!capability_response(&capabilities(malformed)));
         assert!(!capability_response(&json!({"schemaVersion": 1, "actions": needed})));
         assert!(!capability_response(&json!({"schemaVersion": 2, "actions": "catalog"})));
+    }
+
+    #[test]
+    fn validates_tree_requests() {
+        let pin = "a".repeat(64);
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph"})).is_ok());
+        assert!(metaproject_args(&json!({
+            "version":2, "action":"tree", "scope":"graph", "parent":"src/lib", "cursor":"next", "expectedSnapshotId": &pin
+        })).is_ok());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki"})).is_ok());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":"other"})).is_ok());
+
+        assert!(metaproject_args(&json!({"version":2, "action":"tree"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"spec"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"../escape"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"/src"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"src\\lib"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":""})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":null})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "cursor":""})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "expectedSnapshotId":"snapshot"})).is_err());
+        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "depth":1})).is_err());
+        assert!(metaproject_args(&json!({"action":"tree", "scope":"graph"})).is_err());
+    }
+
+    #[test]
+    fn tree_stays_optional_for_a_cli() {
+        assert_eq!(ACTIONS, ["catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history"]);
+        let required: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
+        assert!(capability_response(&json!({"schemaVersion": 2, "actions": required.clone()})));
+        let mut with_tree = required;
+        with_tree.push(Value::from("tree"));
+        assert!(capability_response(&json!({"schemaVersion": 2, "actions": with_tree})));
     }
 }

@@ -1,0 +1,9 @@
+[
+  {
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  }
+]

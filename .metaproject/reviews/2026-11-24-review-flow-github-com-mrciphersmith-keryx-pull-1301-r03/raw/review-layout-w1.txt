@@ -1,0 +1,32 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 4 delta b2043b98d..3ad918b66, slice-02 (new), read in full. Nothing in this lens's scope changed. No CSS changed (git diff --stat over apps/desktop and docs: no .css file). No sizing, spacing, overflow, position or logical-property class was added or changed on a rendered element. The one inline style on tree rows (paddingInlineStart calc) is unchanged. The new rendered states reuse existing row markup and classes. A `stale` folder renders the same `metaproject-tree-status` Loading row as `loading` (MetaprojectTree.tsx flatten). A stale next page renders the same `metaproject-row metaproject-tree-more` row in its loading form (`loading: Boolean(folder.more)`; a failed page still takes the error branch first). So no new box geometry, no new conditional sibling and no new translated-text container exist to measure. The rest of the delta is state, focus hand-off, permit-retry and test code, owned by other lenses. No findings. No measurement was taken: exec_budget_s is 0 and no layout claim needed one.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1511 lines); layout-relevant hunks: MetaprojectTree.tsx flatten/render rows, MetaprojectView.tsx hook call", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+- Slice-02 was read in full. It holds the fix-round-3 delta: flow bookkeeping, `useMetaprojectTree.ts`, `MetaprojectTree.tsx`, `MetaprojectView.tsx`, `platform/metaproject.ts` and their tests.
+- **Layout surface of the delta:**
+  - No stylesheet changed.
+  - No sizing or spacing utility was added on a rendered element.
+  - The row indent's inline `paddingInlineStart` is unchanged.
+  - The new `stale` state renders the existing Loading status row, and the existing Show more row in its loading form. Both have identical geometry to the round-3 states.
+- **Findings:** none.
+- **Not verified:** nothing was measured in a real engine (exec_budget_s = 0). No claim here depends on pixels. The geometry of the reused rows was the subject of earlier rounds and did not change in this delta.
+
+Routing audit: graph_used: no (not-relevant: a bounded slice with an explicit file list in the payload); wiki_used: no (not-relevant: no domain question); ctx_used: no (the diff was read directly; one `git diff --stat`); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":127024,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,82 @@
+STATUS: DONE
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "summary": "Round 2 delta 9f4ec475b..f43a13c3f, slices 02 and 03 (both new). The fix round's logic holds. Status rows share one key per parent, so Retry and Show more keep the focused <li> in place, and a removed focused row hands focus to the row now at its index, only when focus was inside the tree (the layout effect's isConnected/body check plus the onBlur microtask). moveTo focuses at once and leaves nothing pending, so logic-w1-F-001 is closed. The FIFO limiter caps tree reads at 3, and a queued read of a retired generation returns false without calling send. requestMetaprojectV2 turns a mismatched snapshot into a typed stale-snapshot after shape validation, which makes the hook's onStale reachable and gives loadMoreSearch the Refresh catalog banner. metaprojectWikiGroupKey is used on both sides, and the server's switch from `??` to `||` also stops an empty pageType making a group keyed \"\", which would collide with TREE_ROOT. negotiateMetaproject has no callers left. No blocker, major or minor. One info.",
+    "slices": [
+      {"id": "slice-02", "status": "DONE", "coverage": "read in full (2271 lines); current MetaprojectTree.tsx, useMetaprojectTree.ts and platform/metaproject.ts read for context"},
+      {"id": "slice-03", "status": "DONE", "coverage": "read in full (deletion-side hunks; the matching additions are in slice-02)"}
+    ],
+    "findings": [
+      {
+        "id": "logic-w4-F-001",
+        "severity": "info",
+        "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "line": null,
+        "quote": "    if (pool.active < MAX_TREE_READS) start();\n    else pool.queue.push(start);",
+        "problem": "A snapshot change retires the reads in flight, but they keep their limiter slots until the transport settles them. The new generation's reads queue behind them, so up to MAX_TREE_READS slow or hung old-snapshot reads can hold back every new-snapshot tree read. The Rust run_bounded timeout is Duration::from_secs(150).",
+        "impact": "No wrong data: retired answers are still dropped by current(). The risk is latency only, and only when the CLI is slow or hangs on reads that were already in flight at a rebuild. Normally a retired read answers quickly, with data or stale-snapshot.",
+        "suggested_fix": "None required. If it is ever observed, release a slot early when its read's generation is retired (the slot is counted toward the cap only while current()), or note the head-of-line behaviour in the limiter comment.",
+        "evidence": "useMetaprojectTree.ts limit(): the slot is decremented only in .finally() after task() settles. read() checks current() only before send and after the answer. metaproject.rs: child::run_bounded(command, Duration::from_secs(150), ...).",
+        "confidence": "medium",
+        "reviewer": "review-logic",
+        "location_class": "in-diff",
+        "publication": "finding"
+      }
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+    "inputs_unreadable": []
+  }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b` (round 2 delta; slices 02 and 03, both new)
+- Scope mode: explicit-hash-range
+- Spec compliance gate: ran against AC1–AC9 in the payload. Only the fix round's delta was checked. Its tests pass at the head (verify-tests-to-run-1.txt exit 0; CI green, including cargo test). No criterion was found unaddressed.
+
+### Summary
+The fix round holds up. I found nothing that is still broken or newly broken. The checks I made:
+- **Focus restore.** Same-type rows with the same key keep their DOM node. A removed focused row restores focus by index, and only when activeElement is body or detached. Focus that has moved out of the tree is forgotten in a microtask after focusout.
+- **Home/End.** No pending request remains after Home or End.
+- **Bounded reads.** Tree reads are capped at 3. Queued reads of a retired generation never call send.
+- **Stale snapshots.** A stale-snapshot is now typed at the transport, after shape validation. OpenSpecView, which also pins expectedSnapshotId, now shows "Project knowledge changed while loading." instead of the misleading "Incompatible … Choose the bundled CLI".
+- **Wiki group key.** The shared key helper also closes an edge case: an empty pageType collided with TREE_ROOT.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+- [logic-w4-F-001] info: retired-generation reads keep their limiter slots until they settle, which is head-of-line latency for the new snapshot's reads (bounded by the 150 s transport timeout).
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Not verified / honesty notes
+- I ran no tests. I relied on the supplied test output (exit 0) and the CI status.
+- Focus behaviour on removal of a focused element in WKWebView (the Tauri macOS engine) was reasoned about, not observed. Both orders work: blur fired on removal, and no blur.
+- I did not re-read the shared rule files (activity/review.mdc, async-patterns.mdc, error-handling.mdc) this run. Severity follows the skill's own mapping table.
+
+Routing audit: graph_used: no (payload layers block used instead), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg ×3), raw_rg_used: no (one raw `git diff` of a single file, marked keryx:raw).
+KERYX_USAGE {"tokens_in":176762,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

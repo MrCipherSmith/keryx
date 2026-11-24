@@ -1,0 +1,100 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta 9f4ec475b..f43a13c3f (fix round 1, commit 6c83eb7fb), diff mode, slice-01 (kind: fix) read in full. Load profile: not provided (plan.md states none). Concrete triggers used instead: the number of tree reads one Desktop window issues at once (expanded folders re-read after a snapshot change, Show more, Retry), the Rust side's process-wide 8 read permits (apps/desktop/src-tauri/src/metaproject.rs ReadPermit, MAX_ACTIVE = 8) and its 150 s child timeout (cli_response, child::run_bounded). Files reviewed: apps/desktop/src/metaproject/useMetaprojectTree.ts, MetaprojectTree.tsx, MetaprojectTree.dom.test.tsx, apps/desktop/src/platform/metaproject.ts, src/integrations/metaproject-explorer-v2.ts, metaproject-explorer-contract.ts, metaproject-explorer-tree.test.ts, docs/docs/cli-reference.md, docs/docs/guides/desktop-metaproject.md. Context read: apps/desktop/src-tauri/src/metaproject.rs:184-215, MetaprojectView.tsx call sites.
+
+Summary: The concurrency-relevant new code is the per-hook read limiter (`limit`, MAX_TREE_READS = 3) that keeps tree re-reads from exhausting the 8 Rust read permits. Its slot accounting is correct on every path (success, failure, retired-snapshot skip), and a retired read that has not started never sends. One minor: a read already in flight under a retired snapshot (or a hung CLI read) keeps its slot until the CLI answers or the 150 s child timeout fires, so the new snapshot's reads and a user's Retry wait behind it. The stale-snapshot move into requestMetaprojectV2 is idempotent on the consumer side (markStale only sets a boolean). Stats: blocker 0 | major 0 | minor 1 | info 0.
+
+### CLI / Multi-Session
+None detected. One MetaprojectView (and so one useMetaprojectTree) per window (App.tsx:172); Graph and Wiki share that hook's single pool of 3, leaving at least 5 of the 8 Rust permits per window for the explorer's own reads.
+
+### Concurrency & Races
+None detected. `slots` is per hook instance; JS is single-threaded, so active++/active-- and queue.shift() cannot interleave. A queued task re-checks `current()` before sending (useMetaprojectTree.ts:145), and the answer handlers re-check it again.
+
+### Resources
+#### [F-001] A read in flight under a retired snapshot, or a hung read, holds a limiter slot until the CLI answers or times out (minor)
+See REVIEW_RESULT.
+
+### Caching
+None detected (no cache in the delta).
+
+### Lock Contention
+None detected.
+
+### Async / Queues
+The limiter queue is unbounded in principle but grows only with distinct unread parents (ensure dedupes on folders.has) plus user Show more/Retry clicks; no finding.
+
+### Retry / Timeout / Circuit Breaker
+No retry loop; Retry is user-driven. The JS `send` has no own timeout, but the Rust child is bounded at 150 s (metaproject.rs:208), which caps F-001.
+
+### Idempotency & Distributed Invariants
+None detected. onStale -> markStale (MetaprojectView.tsx:757) is idempotent; several reads answering stale-snapshot at once only set the same flag.
+
+Clean Areas: Part 0 (multi-session state, retry caps, timer leaks), Part A, Part B (other than F-001), Part C, Part D, Part E, Part F, Part G reviewed.
+
+### Prior dispositions (judged against code at f43a13c3f)
+- frontend-w1-F-001: closed. Status rows share `status:${parent}` (MetaprojectTree.tsx statusId/flatten); the layout effect re-focuses the row at the old index when the focused element has disconnected and focus fell to body.
+- logic-w1-F-001: closed. moveTo focuses the target element directly; focusRequest is gone, so nothing is left pending.
+- architecture-w2-F-001: closed. metaprojectWikiGroupKey / METAPROJECT_WIKI_UNTYPED_GROUP exported from the contract and used by both wikiTree and revealSteps.
+- degradation-w1-F-001: closed. negotiateMetaproject removed; no reference remains in apps/desktop/src (keryx ctx rg, 0 matches).
+- degradation-w1-F-002: closed. The snapshot mismatch now throws MetaprojectRequestError("stale-snapshot") in requestMetaprojectV2; the hook comment describes both paths.
+- performance-w2-F-001: closed. wikiTree pushes in place.
+- pr-contract-w2-PC-001: closed. desktop-metaproject.md:309 and :333 and cli-reference.md:8301 now say "requires" and mention optional `tree`.
+- testing-practices-w1-F1: closed. New test injects symbol nodes into the loaded model, asserts they were loaded, then asserts listings and counts exclude them.
+- testing-practices-w1-F3: closed. MetaprojectView.dom.test.tsx:2139 answers a tree read with snapshotId s2 and rejects one with stale-snapshot, asserting the banner and no rows.
+- testing-practices-w1-F6: closed. The test now asserts client.ts rendered and no Loading row before the focus assertion.
+- ui-ux-w1-UX-004: closed. Module folders render the NODE_KIND_LABELS.module label.
+- logic-w2-F-002: open. Fallback kept (as suggested), but the guide still says "Pages without a page type are under **Other**" (desktop-metaproject.md:103); not in T12's fix context.
+- pr-contract-w1-PC-001: closed. cli-reference.md:8301 now names `tree` as optional and used only when listed.
+- testing-practices-w1-I2: closed. Both sides call the one exported metaprojectWikiGroupKey, so the keys cannot drift.
+- ui-ux-w1-UX-005: open. The count span is still a bare number with no unit or aria-label (MetaprojectTree.tsx:291); not in T12's fix context.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Fix-round delta reviewed for concurrency. The new per-hook tree read limiter (MAX_TREE_READS = 3) keeps its slot count correct on every path and stops retired queued reads before they send. One minor: an in-flight read from a retired snapshot, or a hung read, keeps its slot until the CLI answers or the 150 s Rust timeout, so new-snapshot reads and Retry queue behind it. 13 prior findings closed, 2 info findings open (not in the fix context).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-highload",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (pool.active < MAX_TREE_READS) start();",
+      "problem": "Introduced by the fix for the read-permit pressure (round-1 fix round, commit 6c83eb7fb, new limiter in useMetaprojectTree). A slot is released only when the read's promise settles. A read already sent under a snapshot that has since been retired keeps its slot until the CLI answers (generation changes skip only reads that have not started). The same holds for a hung CLI read. While three such reads are in flight, every new read waits: the new snapshot's re-reads of the expanded folders, Show more, and a user's Retry. Before the limiter, a slow or retired read only delayed its own folder.",
+      "impact": "Trigger: three tree reads in flight when the snapshot changes (for example, several expanded folders re-reading after a graph rebuild, then a second rebuild), or three reads to a CLI that stalls. The whole tree then shows Loading, and Retry shows Loading without sending. This lasts until those reads return, up to the 150 s child timeout in metaproject.rs cli_response. With a normal CLI the delay is about one read's latency. No data is lost or shown wrongly; this is a latency and stall cost only.",
+      "suggested_fix": "Release a retired read's slot early. When `read` starts a task, record the generation with the slot. On a snapshot change (the generation.current++ branch), free the slots of reads from older generations: decrement active for them and start queued tasks. The late answers are already ignored by current(). Alternatively, exempt retired in-flight reads from the count, for example with a per-generation active counter. Add a DOM test that holds three reads, changes the snapshot, and asserts the new root read is sent before the held ones are released.",
+      "evidence": "useMetaprojectTree.ts limit(): `pool.active++` then `Promise.resolve().then(task).catch(() => undefined).finally(() => { pool.active--; pool.queue.shift()?.(); })`, so a slot is freed only on settle. read(): `limit(() => current() && Promise.resolve().then(() => send(root, input))...)`, where current() is checked only before sending. The snapshot-change branch (`generation.current++`, around line 84) does not touch `slots`. Rust bound: apps/desktop/src-tauri/src/metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`. The JS `send` (requestMetaprojectTree -> requestMetaprojectV2) has no timeout of its own. Not executed, because exec_budget_s = 0. The behaviour is reasoned from the code.",
+      "confidence": "medium",
+      "dedupe_key": "metaproject-tree-limiter-retired-slot",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ]
+}
+```
+
+Not verified: nothing was executed (exec_budget_s = 0). Focus and DOM dispositions are judged from the code, and from test names and assertions found with keryx ctx rg, not from a run. Other lenses own the dispositions outside concurrency; they are given here because the brief asked for one per attached id. Routing audit: graph_used: no (payload layers supplied the affected set), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg), raw_rg_used: no. Note: one raw `git diff` was run with the hook's escape marker (`keryx:raw`), to read the full fix hunks that the slice abridges.
+KERYX_USAGE {"tokens_in":159433,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

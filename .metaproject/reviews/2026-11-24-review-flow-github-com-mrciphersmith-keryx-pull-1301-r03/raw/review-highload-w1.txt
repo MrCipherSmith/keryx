@@ -1,0 +1,56 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta b2043b98d..3ad918b66 (fix round 3), diff mode, slice-01 (fix). Load profile: not provided; concrete triggers used: the number of parked stale reads re-read on one catalog load, the 3-slot tree limiter, and the 8 process-wide read permits shared by windows. Files read for context: useMetaprojectTree.ts, platform/metaproject.ts, MetaprojectView.tsx (catalog effect, revision triggers), MetaprojectTree.tsx (stale and more rows).
+Summary: The fix adds no new concurrency defect. The new reload effect re-reads only parked stale reads, once per catalog object. Catalog objects change only on a non-quiet load or a quiet load that finds a new snapshot (MetaprojectView.tsx:410-421; revision bumps at :367, :698, :879, :885, :965, :975, :1023 are all user or rebuild driven, with no polling). The re-reads go through the same MAX_TREE_READS limiter, and a ref guard makes a StrictMode double effect run a no-op. withPermitRetry keeps the old cap (2), the linear backoff with jitter and the liveness check. Stats: 0 blocker | 0 major | 0 minor | 0 info.
+
+Findings:
+- CLI / Multi-Session: None detected.
+- Concurrency & Races: None detected. The reload effect iterates the old folders Map while reread() replaces state.current with a new Map, so iteration is unaffected. A snapshot change resets folders during render before the effect runs, so nothing stale is re-sent under a retired snapshot. A stale answer that lands after a Refresh catalog (same snapshot) re-parks the read and raises the banner again, so the next Refresh recovers it. That is recoverable and not a loop, because reload changes only on a catalog load.
+- Resources: None detected. The re-read fan-out is bounded by the number of parked stale parents (user-expanded folders) and queued through the 3-slot limiter.
+- Caching, Lock Contention, Async / Queues: None detected.
+- Retry / Timeout / Circuit Breaker: None detected. The retry is capped (PERMIT_RETRIES = 2) with linear backoff plus jitter, unchanged by the lift to module scope. A retry still holds its limiter slot during the wait, as before this delta. That is not new code.
+- Idempotency & Distributed Invariants: None detected.
+
+Prior dispositions (judged against the code at 3ad918b66):
+- r3-regression-w1-F-001: closed. A stale answer now sets status/more "stale" (settleFailure). The reload effect (useMetaprojectTree.ts, `loadedCatalog` effect) calls reread(…, "stale") on every new catalog object. MetaprojectView passes `reload: catalog`, and a non-quiet load with an unchanged snapshotId still calls setCatalog(result) with a new object (MetaprojectView.tsx:414). Both the folder variant and the Show more variant (more.status "stale") are covered by reread. more() refuses while any `more` is set other than failed.
+- r3-clean-code-w1-F-002: closed. The back-off is now the module-scope withPermitRetry, and read() calls it with `{ wait: pause, live: current }`.
+- r3-clean-code-w2-F-001: closed. TreeFolder, TreeFolder.more, ensure and more now document the stale state, which is a status of its own.
+- r3-architecture-w1-F-001: partial. Classification moved to the transport (platform/metaproject.ts:281-287, isMetaprojectPermitRefusal), and the hook and MetaprojectTree.dom.test.tsx:82 import it. No comment was added at metaproject.rs:199 naming the Desktop consumer (src-tauri is unchanged in this delta).
+- r3-clean-code-w1-F-003: partial. There is now one TS constant. The Rust side has no comment and no exact-text test, so a reworded Rust message still silently disables the retry.
+- r3-clean-code-w2-F-002: partial. Same as above: the TS side is single-sourced, but the Rust comment and stable token were not added.
+- r3-highload-w2-F-001: partial. The TS side shares one constant. Nothing ties it to metaproject.rs:199: no Rust test asserts the prefix, and platform/metaproject.test.ts:213 also builds the refusal from its own literal. So the drift risk (refusals under multi-window permit pressure becoming terminal again with tests green) remains, rated info as before.
+- r3-style-w1-F-002: open. `export const PERMIT_RETRIES = 2;` still has no importer outside useMetaprojectTree.ts (`keryx ctx rg --all PERMIT_RETRIES apps/desktop`: only useMetaprojectTree.ts:21, :30, :36).
+- r3-style-w2-F-001: open. Same evidence. The DOM tests still do not import it.
+- r3-pr-contract-w1-PC-001: open. The PR body's round-2 bullet still says "a stale-snapshot tree read shows only the banner". The row still shows Loading… (MetaprojectTree.tsx flatten: `folder.status === "stale"` renders a loading row). The brief confirms the body was not edited this round.
+
+Clean Areas: Part 0 (multi-session / permit sharing), A, B, C, D, E, F, G were reviewed for the delta, with no findings.
+Not verified: nothing was executed (exec budget 0). The reviewed-head test output (verify-tests-to-run-1.txt) was not re-read; I relied on the brief's statement that it exits 0.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Fix round 3 adds no concurrency defect. The catalog-driven re-read of parked stale reads fires once per catalog object, only on user-driven or new-snapshot catalog loads, and goes through the 3-slot limiter. withPermitRetry keeps its cap, backoff, jitter and liveness check. The stale-row deadlock (r3-regression-w1-F-001) is closed. The Rust-to-TS permit-refusal text coupling is only partly addressed (TS single-sourced, Rust untied). PERMIT_RETRIES is still exported unused. The PR body's round-2 wording is unchanged.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "partial" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "unread_inputs": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload supplied the affected files), wiki_used: no (not-relevant: narrow fix delta), ctx_used: yes (keryx ctx rg), raw_rg_used: no. Raw git diff and sed were used with keryx:raw markers to read the exact fix hunks and the schema tail.
+KERYX_USAGE {"tokens_in":121387,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

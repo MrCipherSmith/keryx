@@ -1,0 +1,92 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 5 delta 3ad918b66..0d6df2937, slices 02 and 03 read in full. The handOffTarget extraction is a clean single-purpose helper with early return; the reload input made required carries a doc stating why. Two low-cost findings: a third copy of the scrollIntoView stub/restore block in MetaprojectView.dom.test.tsx (minor), and handOffTarget's doc omitting the anchor fallback in its no-parent case (info). Slice-03 holds only removed lines of apps/desktop/src/platform/metaproject.ts that this delta does not touch (`git diff --stat 3ad918b66..0d6df2937` lists no change to that file); the code as it stands at the head (stale-snapshot check moved out of matchesRequest into requestMetaprojectV2, capabilities check folded into the `actions` guard) was read and has no clean-code issue.",
+  "slices": [
+    {"id": "slice-02", "status": "DONE"},
+    {"id": "slice-03", "status": "DONE", "coverage": "Removal-only slice; the file is unchanged in this delta. Read the surrounding head code at metaproject.ts:257-334 for context."}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "line": null,
+      "quote": "test(\"a selection made elsewhere whose folder read is parked stale is revealed once Refresh catalog reads it\", async () => {\n  const timer = manualTimer();\n  const scrolled: HTMLElement[] = [];\n  const original = HTMLElement.prototype.scrollIntoView;\n  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };",
+      "problem": "DRY: the new test adds the third copy in this file of the same block that records scrollIntoView calls by patching HTMLElement.prototype and restores it in a finally (`const scrolled: HTMLElement[] = []; const original = HTMLElement.prototype.scrollIntoView; HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); }; ... finally { HTMLElement.prototype.scrollIntoView = original; }`). The change crosses the 3-copy threshold of solid-principles.mdc.",
+      "impact": "Each copy hand-manages a global prototype patch; a future copy that forgets the finally restore leaks the stub into every later test in the file. Three places to change if the recording shape changes.",
+      "suggested_fix": "Extract one helper next to manualTimer(), for example `function captureScrolls(): { scrolled: HTMLElement[]; restore(): void }`, and use it at all three sites (try { ... } finally { scrolls.restore(); }).",
+      "evidence": "keryx ctx rg -n 'scrollIntoView = function|scrollIntoView = original' MetaprojectView.dom.test.tsx --all: patch at 698/restore 710, patch 2082/restore 2100 (pre-existing), patch 2185/restore 2207 (added by this delta). MetaprojectTree.dom.test.tsx has two further variants (314, 346) that record different values and are not counted.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:698",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:2082",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx:2185"
+        ],
+        "enumeration_method": "keryx ctx rg -n 'HTMLElement.prototype.scrollIntoView = function' apps/desktop/src/metaproject/ --all: 3 identical copies in MetaprojectView.dom.test.tsx, 2 differing variants in MetaprojectTree.dom.test.tsx"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": " * none (the caller falls back to the old index); with no parent, the row after the anchor; with a",
+      "problem": "Comment accuracy: the new handOffTarget doc says that with no parent the target is 'the row after the anchor', and attaches the 'or the anchor itself' fallback only to the parent case. The code (`return next ?? rows[at];`) applies the anchor fallback to both cases: with no parent and the anchor as the last row, it returns the anchor.",
+      "impact": "A reader relying on the doc expects undefined (index fallback) when nothing follows the anchor in the no-parent case; the code focuses the anchor. Behaviour is reasonable; only the doc is narrower than the code.",
+      "suggested_fix": "Move the fallback to cover both cases, e.g. '…with no parent, the row after the anchor; with a parent, that parent's first row after the anchor; in either case the anchor itself when nothing qualifies.'",
+      "evidence": "MetaprojectTree.tsx:81-92 (doc at :83, `return next ?? rows[at];` at :91).",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1},
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `3ad918b66` | Merge-base (main): `a5d1ab236`
+- Scope mode: `explicit-hash-range` (3ad918b66..0d6df2937) | Changed files reviewed: 6 (slice-02: MetaprojectTree.tsx, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, metaproject.test.ts; slice-03: metaproject.ts, removal-only)
+
+### Summary
+Fix round 4 is small and clean: the inline target lookup became `handOffTarget`, a single-purpose helper with an early return, and the layout effect now reads as one call. `reload` is now required with a doc that says why. New tests are focused; one adds a third copy of a scrollIntoView stub block.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+
+#### Functions
+No function issues found. `handOffTarget` (MetaprojectTree.tsx:86-92) is 6 lines, 3 params, one job.
+
+#### Comments
+- [F-002] (info) handOffTarget doc limits the anchor fallback to the parent case; the code applies it in both (MetaprojectTree.tsx:83, :91).
+- The component doc (:114-121) and the layout-effect comment still match handOff/handOffTarget; the useMetaprojectTree `reload` doc matches its now-required type.
+
+#### Error Handling
+No error-handling issues found. At the head, requestMetaprojectV2 throws a typed `MetaprojectRequestError("stale-snapshot", …)` for an answer for another snapshot; `isMetaprojectPermitRefusal` excludes typed errors, now pinned by a test.
+
+#### DRY
+- [F-001] (minor) Third copy of the scrollIntoView record/restore block in MetaprojectView.dom.test.tsx (698, 2082, 2185); extract a `captureScrolls()` helper.
+
+#### SOLID
+No SOLID issues found.
+
+### Clean Areas
+handOff/handOffTarget split, layout-effect focus restore, required `reload` input, Harness `reload` prop, permit-refusal classifier test, matchesRequest at head (pure request/response matcher; snapshot check lives in requestMetaprojectV2).
+
+Not verified / notes: slice-03 contains only deletions in apps/desktop/src/platform/metaproject.ts, a file `git diff --stat 3ad918b66..0d6df2937` shows as unchanged in this delta; I reviewed the head code around it rather than a change. No commands beyond read-only git and keryx ctx rg were run; tests were not re-run (evidence file reports exit 0, 1021 pass).
+
+Routing audit: graph_used: no (payload layers supplied the affected set) | wiki_used: not-relevant | ctx_used: yes (keryx ctx rg) | raw_rg_used: no
+KERYX_USAGE {"tokens_in":106009,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

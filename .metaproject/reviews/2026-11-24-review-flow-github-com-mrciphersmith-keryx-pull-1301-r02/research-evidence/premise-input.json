@@ -1,0 +1,160 @@
+[
+ {
+  "id": "r3-architecture-w1-F-001",
+  "reviewer": "review-architecture",
+  "severity": "minor",
+  "problem": "This answers r2-architecture-w1-F-001, which suggested treating the transport's 'unavailable' as a retryable back-off. The fix puts that classification in the view-model hook (useMetaprojectTree.ts), which matches the raw Rust error text 'unavailable: Too many Metaproject reads'. The transport layer is the one that maps Rust error strings to typed errors: requestMetaprojectV2 matches METAPROJECT_ERROR_CODES prefixes and throws MetaprojectRequestError. Here the hook reaches past that boundary to a string owned by apps/desktop/src-tauri/src/metaproject.rs:199. Nothing ties the two: the Rust side has no reference to the TS consumer, and the DOM test defines its own copy of the literal (MetaprojectTree.dom.test.tsx:503 PERMIT_REFUSAL).",
+  "impact": "No defect today: the strings match. If the Rust message is reworded, isPermitRefusal stops matching and retries silently stop. Folders then fail on the first busy permit, the behaviour this fix round removed. The test suite stays green because it injects its own copy of the string. Any other caller that wants the same back-off, such as the explorer's own reads, would have to copy the literal a third time.",
+  "suggested_fix": "Classify the refusal once, in the transport. For example, in platform/metaproject.ts, export an isMetaprojectPermitRefusal(error) helper (or a typed 'busy' error) next to the existing code mapping in requestMetaprojectV2. Have the hook and the test import it. Add a comment at metaproject.rs:199 naming the Desktop consumer so the Rust side sees the contract.",
+  "evidence": "useMetaprojectTree.ts:24 `const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");`. platform/metaproject.ts:293-296 maps `<code>: ` prefixes to MetaprojectRequestError. 'unavailable' is not in METAPROJECT_ERROR_CODES (metaproject-explorer-contract.ts:329-331), so the raw Error passes through and the hook re-parses it. `keryx ctx rg --all \"Too many Metaproject\" apps/desktop` finds 3 sites: metaproject.rs:199 (producer), useMetaprojectTree.ts:24 (consumer), MetaprojectTree.dom.test.tsx:503 (test's own copy).",
+  "confidence": "high",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": null,
+  "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+  "dedupe_key": "metaproject-permit-refusal-string-coupled-in-hook",
+  "blocking_merge": false,
+  "source": "internal",
+  "merged_from": [
+   "r3-architecture-w2-F-001",
+   "r3-testing-practices-w1-F-001"
+  ],
+  "reported_by": [
+   "review-architecture",
+   "review-testing-practices"
+  ]
+ },
+ {
+  "id": "r3-clean-code-w1-F-001",
+  "reviewer": "review-clean-code",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": 131,
+  "quote": "// Reads wait in order for a free slot, so re-reading many expanded folders never exhausts the\n  // read permits Desktop shares with the explorer's own reads.",
+  "problem": "Documentation drift introduced by the fix for r2-architecture-w1-F-001 and r2-clean-code-w1-F-002. The rewritten MAX_TREE_READS doc (:14-17) now says the permits are shared by every project window, that the cap 'only bounds this tree's share', and that a read refused a permit is retried. The new attempt() retry (:159-169) exists because exhaustion can still happen. The comment above limit() (:131-132), whose body this delta edited, still promises the opposite: the limiter 'never exhausts the read permits'. Two comments describe one behaviour in opposite ways.",
+  "impact": "A reader trusting :131 will treat the permit-refusal retry as dead code, or will remove it. The next person sizing MAX_TREE_READS gets two contradictory statements of what it guarantees.",
+  "suggested_fix": "Reword :131-132 to match :14-17, for example: '// Reads wait in order for a free slot, so this tree holds at most MAX_TREE_READS of the read permits; a refusal while other windows hold the rest is retried in read().'",
+  "evidence": "useMetaprojectTree.ts:14-17 (new doc: 'this only bounds this tree's share; a read refused a permit is retried'), :131-132 (unchanged comment: 'never exhausts the read permits'), :138-141 (limit body edited in this delta), :159-169 (new retry on isPermitRefusal). apps/desktop/src-tauri/src/metaproject.rs:186 `const MAX_ACTIVE: usize = 8;` on a process-wide static.",
+  "confidence": "high",
+  "location_class": "in-diff",
+  "dedupe_key": "metaproject-tree-limiter-comment-contradicts-permit-retry",
+  "source": "internal"
+ },
+ {
+  "id": "r3-clean-code-w1-F-002",
+  "reviewer": "review-clean-code",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": 160,
+  "quote": "const attempt = async (retries: number): Promise<MetaprojectTreeV2> => {",
+  "problem": "SRP, two change drivers in one function. read() was about 40 lines before this delta and is 56 now, past the 40-line threshold. It builds the request, schedules through the limiter, checks the snapshot, merges pages and classifies failures into tree state. The delta adds a third concern inside it: the transport's permit-contention back-off. That covers recognising the refusal, a linear-plus-jitter delay formula, a retry count and the generation check between attempts. The two concerns change for different reasons: Rust permit semantics on one side, and the tree's folder model on the other. The back-off captures only `send`, `root`, `input`, `pause` and `current` from read(), so it does not belong there.",
+  "impact": "Tuning the retry policy (count, delay, which errors qualify) means editing the tree's state-update function. The policy can be tested only through the DOM tree tests (MetaprojectTree.dom.test.tsx:518-544), not on its own.",
+  "suggested_fix": "Lift it to module scope next to isPermitRefusal, for example `async function withPermitRetry<T>(run: () => Promise<T>, { wait, live }: { wait: (ms: number) => Promise<void>; live: () => boolean }, retries = PERMIT_RETRIES): Promise<T>`. read() then calls `withPermitRetry(() => send(root, input), { wait: pause, live: current })`.",
+  "evidence": "useMetaprojectTree.ts:151-206 (read, 56 lines at head; about 40 of them before this delta's 16 added lines, per the hunk offsets -137/+152 and -156/+182), :159-169 (attempt closure), :21-25 (the retry constants and predicate are already module-scope).",
+  "confidence": "medium",
+  "location_class": "in-diff",
+  "dedupe_key": "metaproject-tree-read-embeds-permit-retry-policy",
+  "source": "internal"
+ },
+ {
+  "id": "r3-clean-code-w2-F-001",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": null,
+  "quote": "  /** The next page: being read, or its read failed. */",
+  "problem": "Documentation drift in a symbol the delta changed. The new stale-snapshot branch in read() returns after onStale(). Its comment says: 'The row stays loading; a Retry here would only send the retired snapshot again'. So a folder whose first read answers stale-snapshot keeps `status: \"loading\"`, and a stale next page keeps `more: { status: \"loading\" }`, with no request in flight. The field docs that define those states still describe the old rule. TreeFolder.more reads 'The next page: being read, or its read failed.' MetaprojectTreeModel.ensure reads 'Reads `parent`'s first page unless it is loaded, being read, or failed.' MetaprojectTreeModel.more reads 'a page already being read is not asked for again'. The same state is now documented two ways: the catch comment says the row waits for Refresh catalog, and the type docs say a read is in progress.",
+  "impact": "A maintainer who reads the type docs will take a 'loading' folder or page to mean a request is pending. They may then add a timeout or a dedupe, or debug a 'stuck' Loading row, without knowing that the state also means 'waiting for Refresh catalog after a stale answer'. ensure() and more() deliberately do not re-read in that state, so that state is how a stale row is kept from being re-sent.",
+  "suggested_fix": "Extend the three docs with the stale case. For example, TreeFolder.more: '/** The next page: being read, waiting for Refresh catalog after a stale-snapshot answer, or its read failed. */'. On ensure and more, add: 'loading also covers a read answered stale-snapshot; Refresh catalog (a new snapshot) re-reads it'. Alternatively, give the state its own name (for example `status: \"stale\"`) and render it as a loading row, so the type says what the comment says.",
+  "evidence": "useMetaprojectTree.ts at b2043b98d, read() catch: `if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") { latest.current.onStale(); return; }`. It is preceded by the comment 'The row stays loading; a Retry here would only send the retired snapshot again.' The same file holds TreeFolder.more ('being read, or its read failed') and the MetaprojectTreeModel.ensure and more docs ('being read'). The tests added in this round assert the new behaviour: MetaprojectTree.dom.test.tsx 'a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row', and the MetaprojectView test's deadRetry() check.",
+  "confidence": "high",
+  "reviewer": "review-clean-code",
+  "location_class": "in-diff",
+  "source": "internal"
+ },
+ {
+  "id": "r3-logic-w5-F-002",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "line": null,
+  "quote": "const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];",
+  "problem": "The hand-off anchors to the row just before the focused one. For a focused more:P row whose parent's last entry C is an expanded folder still loading, that anchor is status:C. If C's children and P's next page arrive in one commit, both rows leave, anchor < 0, and focus goes to the old index, now one of C's new children, instead of P's first appended entry.",
+  "impact": "In this rare concurrent case, keyboard focus lands on an unrelated, deeper row. It is the r2-logic-w1-F-001 class narrowed to an anchor that itself leaves.",
+  "suggested_fix": "Anchor status rows to an entry of their own parent: for more:P record P's last entry row id and focus the next entry row with parent === P after it; for status:P use d:P. Fall back to the index only when that entry is gone.",
+  "evidence": "MetaprojectTree.tsx layout effect; `before` recorded as rows[index - 1]?.id in onFocus and elements[index - 1]?.dataset.row in remember().",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "location_class": "in-diff",
+  "source": "internal"
+ },
+ {
+  "id": "r3-regression-w1-F-001",
+  "reviewer": "review-regression",
+  "severity": "major",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": null,
+  "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+  "problem": "Regression introduced by the fix for r2-ui-ux-w2-UX-001 / r2-frontend-w2-F-001. useMetaprojectTree.read() now returns right after onStale() on a stale-snapshot error. The folder stays {status: 'loading'}, or for a page read keeps more: {status: 'loading'}. Nothing in the hook moves a folder out of that state except a change of the `snapshot` prop, which bumps the generation and clears folders. ensure() skips any parent already in `folders`, so collapsing and re-expanding does not re-read it. more() refuses while more.status is 'loading'. retry() acts only on 'failed'. The comment says Refresh catalog 're-reads the tree', but that holds only when the refreshed catalog has a different snapshotId. MetaprojectView's catalog effect (non-quiet read) calls setCatalog(result) and setSnapshotMismatch(false) whatever the snapshotId is. When the refreshed catalog has the pinned snapshotId, the stale banner disappears, useMetaprojectTree receives the same `snapshot`, and the row stays 'Loading\u2026' with no banner, no Retry and no way out until a later snapshot change or a remount. Before this fix the same path ended in 'failed' with a Retry, which in that case would have succeeded.",
+  "impact": "The trigger is a stale-snapshot answer followed by a Refresh catalog that returns the pinned snapshotId. In practice the project knowledge changes and changes back (for example a wiki edit that is reverted) before the user selects Refresh. The quiet freshness re-read does not help, because with an equal snapshotId it only sets freshness (MetaprojectView.tsx, `if (quiet && result.snapshotId === loadedSnapshot.current)`). The affected folder or Show more row then shows a permanent spinner with no recovery control, and its subtree cannot be browsed for the rest of the session. The existing view test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' walks exactly this path: treeExplorer's catalog always returns 's1'. After Refresh catalog the test asserts only that the banner has gone, never what the 'src' folder shows. Rare, but it never resolves on its own. It replaces a recoverable failure with a stuck state.",
+  "suggested_fix": "Keep the banner-only behaviour, but do not leave a dead state. Choose one. (a) On stale-snapshot, delete the folder's entry, or for a page read clear `more`, so the parent counts as unread or Show more again. Then the next render or expand re-reads it under whatever snapshot is current. (b) Have the hook drop every non-ready folder when onStale's banner is cleared, for example by exposing a reset() that MetaprojectView calls in the Refresh-catalog path when the snapshotId is unchanged. (c) Make Refresh catalog always bump the tree's generation. Extend the view test: after Refresh catalog with an unchanged snapshot, assert that 'src' re-reads and shows its children, or at least is not 'Loading\u2026'.",
+  "evidence": "Read at head b2043b98d. useMetaprojectTree.ts read() catch: the stale-snapshot branch returns after onStale(). ensure(): `if (state.current[scope].folders.has(parent)) return;`. more(): returns when `folder.status !== \"ready\"` or `folder.more?.status === \"loading\"`. retry(): acts only on `status === \"failed\"` or `more.status === \"failed\"`. The generation reset happens only on `state.current.graph.snapshot !== snapshot`. MetaprojectView.tsx catalog effect (about lines 403-421): non-quiet path, setCatalog(result) and setSnapshotMismatch(false), with no comparison to the previous snapshot. The tree is mounted with `snapshot: catalog?.snapshotId ?? \"\"` (line 758). The Refresh catalog button is `setRevision(value => value + 1)` (line 881). MetaprojectView.dom.test.tsx:1942-1949: treeExplorer state.snapshot is 's1' and the catalog returns it. Lines 2139-2162: the stale test clicks Refresh catalog, checks only staleBanner() === false, then switches to Wiki. The base f43a13c3f set the folder to failed in this path (git diff f43a13c3f b2043b98d). Not executed (exec budget 0).",
+  "confidence": "medium",
+  "dedupe_key": "metaproject-tree-stale-snapshot-row-stuck-loading",
+  "blocking_merge": false,
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts read() catch, stale-snapshot branch: a folder read (status stays loading)",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts read() catch, stale-snapshot branch: a Show more page read (more.status stays loading)",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx catalog effect: Refresh catalog with an unchanged snapshotId clears the banner without resetting the tree"
+   ],
+   "enumeration_method": "Every path that writes or leaves a TreeFolder 'loading' in useMetaprojectTree.ts (ensure, more, retry and read's catch branches), crossed with every path that leaves it (the snapshot-prop generation reset, read success, the not-found and failed branches). I read all of them in the head file. The consumer side: `keryx ctx rg -n \"useMetaprojectTree|onStale|setSnapshotMismatch|Refresh catalog\" apps/desktop/src --all` gives 67 matches in 23 files. The only consumer of useMetaprojectTree is MetaprojectView.tsx:758, and the only place the banner is cleared is MetaprojectView.tsx:416."
+  },
+  "source": "internal",
+  "merged_from": [
+   "r3-degradation-w1-F-001",
+   "r3-logic-w3-F-001",
+   "r3-regression-w2-R-001",
+   "r3-degradation-w2-F-001",
+   "r3-frontend-w1-F-001",
+   "r3-frontend-w2-F-001",
+   "r3-logic-w1-F-001",
+   "r3-logic-w5-F-001",
+   "r3-ui-ux-w1-UX-001",
+   "r3-ui-ux-w2-UX-001"
+  ],
+  "reported_by": [
+   "review-degradation",
+   "review-frontend",
+   "review-logic",
+   "review-regression",
+   "review-ui-ux"
+  ]
+ },
+ {
+  "id": "r3-style-w1-F-001",
+  "reviewer": "review-style",
+  "severity": "minor",
+  "problem": "One function has three names in fix round 2's permit-retry code. The module default is `sleep`. The hook's injected option is `wait` (`wait = sleep`). Inside read() it is destructured as `wait: pause` and called as `await pause(...)`. A reader at the call site must follow pause -> wait -> sleep to learn that this is the injectable test seam. The fix hunk added this code to answer prior finding r2-architecture-w1-F-001, which suggested retrying 'unavailable'.",
+  "impact": "Readability only. The call site does not say it is the injected `wait`, and grepping for `wait(` or `pause` finds only half of the path. No behavioural effect.",
+  "suggested_fix": "Keep one name. Destructure `wait` without renaming it (`const { cwd: root, request: send, wait } = latest.current;` then `await wait(...)`). Optionally name the default `defaultWait`, or keep `sleep`.",
+  "evidence": "Slice-01 hunk @@ 158,170 `await pause(PERMIT_WAIT_MS * ...)`; head useMetaprojectTree.ts:155 `const { cwd: root, request: send, wait: pause } = latest.current;`; the hook signature `wait = sleep` with the doc comment 'Waits before a permit retry'. The existing `cwd: root` / `request: send` aliases are older and are not flagged.",
+  "confidence": "medium",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": 155,
+  "quote": "const { cwd: root, request: send, wait: pause } = latest.current;",
+  "blocking_merge": false,
+  "source": "internal"
+ },
+ {
+  "id": "r3-testing-practices-w2-F1",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": null,
+  "quote": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;",
+  "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). The permit retry added in this round has two snapshot-generation guards: `|| !current()` before the wait and `if (!current()) throw cause;` after it, so a read whose snapshot was retired during the jittered wait is not re-sent with the retired expectedSnapshotId. Neither retry test changes the snapshot: 'a read refused for want of a read permit is retried after a short wait' and 'a permit refusal that outlasts the retries, or another unavailable answer, marks the folder failed' both render one Harness with the default SNAPSHOT and a `wait` that resolves at once.",
+  "impact": "Deleting either guard leaves nothing in the diff's tests to notice; the next edit to the retry loop can re-send a retired snapshot (an extra stale-snapshot round trip and permit use per refused read) unprotected. No user-visible defect is claimed: the generation check after `attempt` still drops the answer.",
+  "suggested_fix": "In MetaprojectTree.dom.test.tsx add one test with `refusing(1)` and a `wait` that returns a held promise: expand src, re-render the Harness with `snapshot: \"s2\"` while the wait is pending, then resolve the wait; assert the src calls made with expectedSnapshotId SNAPSHOT number exactly 1 (no retry under the retired snapshot) and that the s2 re-read of src lands (client.ts present) as the positive artifact.",
+  "evidence": "Read the two retry tests in slice-02 (MetaprojectTree.dom.test.tsx, `refusing` helper and the two tests after it): neither passes `snapshot` to Harness nor re-renders mid-wait. The guards are at useMetaprojectTree.ts inside `attempt` (head lines ~159-166). Mutants M1 and M2 below would settle it; not run.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "source": "internal"
+ }
+]

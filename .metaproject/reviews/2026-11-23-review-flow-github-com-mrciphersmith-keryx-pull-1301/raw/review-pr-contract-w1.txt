@@ -1,0 +1,82 @@
+STATUS: DONE
+
+review-pr-contract, wave 1, round 1. PR #1301 (flow 518), head 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a. Slice read in full: slice-01 (lines 1-2533).
+
+## Checklist form
+
+pr-context.md has no checklist boxes (no "Documentation needed", "Tests updated", "Breaking change" or "Screenshots" box). So every row below is a claim from the PR body.
+
+| Claim (quoted) | State | What slice-01 shows | Result |
+|---|---|---|---|
+| "Rust `RequestV2::Tree` with validation and tests" | claimed | metaproject.rs adds `Tree { scope: TreeScope, parent, cursor, expected_snapshot_id }`, a `valid_v2` arm (graph parent `relative_path`, wiki parent `valid_text`, cursor `valid_text`), and tests `validates_tree_requests` and `tree_stays_optional_for_a_cli` | agrees. The body says the tests were not compiled or run locally |
+| "The handshake still requires only the six existing actions" | claimed | Rust `ACTIONS` is unchanged and `tree_stays_optional_for_a_cli` asserts the six. platform/metaproject.ts `validCapabilities` now checks `METAPROJECT_REQUIRED_ACTIONS` (the same six) instead of `METAPROJECT_CAPABILITIES` | agrees |
+| "Desktop learns `supportsTree` from the probe" | claimed | `negotiateMetaprojectExplorer` returns `supportsTree: response.actions.includes("tree")`, and false on both legacy paths. The Rust probe cache (`PROBES`) stores the CLI's full response, so a cached probe still carries `tree` (metaproject.rs:273-278, read for context) | agrees |
+| "`MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space)" | claimed | MetaprojectTree.tsx has `role="tree"` with `aria-label`, and `treeitem` rows with `aria-level`, `aria-posinset`/`aria-setsize`, `aria-expanded` and `aria-selected`. One row has `tabIndex 0` and the rest -1. `onKeyDown` handles ArrowDown, ArrowUp, Home, End, ArrowRight, ArrowLeft, Enter and " " | agrees |
+| "`useMetaprojectTree` (per-scope expanded set and pages, retry per folder, Show more, snapshot changes)" | claimed | useMetaprojectTree.ts keeps `state` per graph/wiki scope and has `retry`, `more`, and snapshot `generation` with `keep()` holding `expanded` | agrees |
+| "mounted in `MetaprojectView` only with no query and a CLI that offers `tree`" | claimed | `treeScope = protocol === 2 && supportsTree && !searchQuery && (mode === "graph" \|\| mode === "wiki")`. `supportsTree` starts true only with no negotiation and an injected `requestTree`, which is the documented test seam | agrees |
+| "A selection made elsewhere reveals its path; the item shown by default on first open does not" | claimed | `selected={route.selection ? activeNode : undefined}`, with the inline comment "Only a selection the user made is revealed" | agrees |
+| "in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module node); in **Wiki**, pages grouped by page type" | claimed | the client side agrees: `validTreeEntry` accepts folder/node for graph and group/node for wiki; a module folder name click and Enter call `choose(entry.module)`. The ordering and counts are produced by Core (`metaproject-explorer-v2.ts`), which is not in slice-01 | client side agrees; server side not assessed here (slice-02) |
+| "**Core:** new read-only v2 action `tree` … Listed in `capabilities`; v1 unchanged" | claimed | Core contract and service files are not in slice-01 | not assessed (slice-02) |
+| "**Docs:** the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour" | claimed | docs/docs/guides/desktop-metaproject.md is not in slice-01 | not assessed (slice-02). A `keryx ctx rg` hit shows the guide has an older-CLI recovery row at line 330, so the claim looks plausible, but I did not review it |
+| Verification: "`bun test src/integrations` 443 pass … Desktop … 998 pass … docs:check exit 0" and "**Not run locally:** the Rust tests" | claimed | matches the orchestrator's re-run in the brief. The Rust gap is disclosed and backed by flow.json T10 `status: "todo"` | agrees |
+
+## Documentation outside the diff
+
+Searched with `keryx ctx rg -n --all 'openspec-history|Catalog ·|every action Desktop|METAPROJECT_CAPABILITIES|first 200|metaproject-explorer --request' docs README.md` and with `keryx wiki ask "metaproject explorer v2 capabilities actions desktop handshake"`.
+
+- The wiki returned no page about the Metaproject explorer protocol.
+- docs/docs/cli-reference.md:8295-8301 (`metaproject-explorer`) describes the capability probe in general terms. See PC-001 (info).
+- docs/requirements/keryx-metaproject-openspec/specification.md:101-107 lists the v2 actions of the earlier OpenSpec increment. It is a requirements record for that increment, not user documentation, so it is only related and not filed.
+- The guide's "Catalog · shown of total" lines (147, 249, 330) are in this PR's guide file, which is in slice-02 and not reviewed here.
+
+## Findings
+
+### [PC-001] The CLI reference's capability paragraph does not mention optional actions such as `tree`
+
+- **Severity**: info
+- **File**: docs/docs/cli-reference.md:8301
+- **Problem**: The reference says "Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses." With this diff, Desktop sends `tree` but does not require it. platform/metaproject.ts adds `METAPROJECT_REQUIRED_ACTIONS` with the comment "Optional actions (`tree`) are used only when the answering CLI lists them", and `requestMetaprojectTree` is "call only when the negotiation reported `supportsTree`". The statement is still true as a sufficient condition, so a reader following it gets no wrong result. It just no longer describes the whole handshake, and the `tree` action appears nowhere in the reference.
+- **Why it matters**: a third-party CLI or client author reading the reference cannot learn that `tree` exists or that it is optional. Following "require the actions you send" literally would make a client refuse an older CLI, which is the defect T5/T6 fixed in Desktop.
+- **Fix**: optional. Add one sentence after line 8301, for example: "Some actions, such as `tree`, are optional: Desktop sends them only when the CLI lists them, and works without them."
+
+## Not verified
+
+- Slice-02 was not read, by assignment. The rows for the Core action/capabilities, the v1-unchanged claim and the Docs claim are open for whoever holds slice-02.
+- The Rust tests were not compiled or run (no toolchain on this machine; exec_budget 0). I read their text only.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "pr-context.md has no checklist boxes. I set every PR-body claim that slice-01 can settle against the diff (Rust Tree variant and tests, six-action handshake, supportsTree from the probe, WAI-ARIA tree and keys, per-scope hook state, mount condition, reveal only for a user selection, verification and the disclosed Rust gap), and all of them agree. The Core, v1-unchanged and Docs claims sit in slice-02 and were not assessed. Outside the diff, the CLI reference's capability paragraph does not mention optional actions such as tree (info).",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "info",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses.",
+      "problem": "This diff makes `tree` an optional action. Desktop sends it only when the CLI lists it, and requires only METAPROJECT_REQUIRED_ACTIONS (apps/desktop/src/platform/metaproject.ts: \"Optional actions (`tree`) are used only when the answering CLI lists them\"). The CLI reference's metaproject-explorer section still describes only required actions and never mentions `tree`. The sentence is still true as a sufficient condition, but it no longer describes the handshake.",
+      "impact": "A client or CLI author reading the reference cannot learn that `tree` exists or that it is optional. Following \"require the actions you send\" literally would make a client refuse an older CLI, which is the defect T5/T6 fixed in Desktop. No runtime effect.",
+      "suggested_fix": "Optional: after cli-reference.md line 8301, add one sentence saying that some actions, such as `tree`, are optional: Desktop sends them only when the CLI lists them and works without them.",
+      "evidence": "keryx ctx rg over docs and README for the capability wording found cli-reference.md:8295-8301. Diff side: slice-01 platform/metaproject.ts adds METAPROJECT_REQUIRED_ACTIONS and requestMetaprojectTree (\"call only when the negotiation reported `supportsTree`\"), and Rust adds RequestV2::Tree (\"Optional: sent only to a CLI whose capabilities list `tree`, so it is not in `ACTIONS`\").",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "location_class": "pre-existing",
+      "publication": "finding"
+    }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full, lines 1-2533", "status": "DONE" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "PR-body claims settled only in slice-02 (Core `tree` action listed in capabilities, v1 unchanged, Desktop Metaproject guide describes the tree, keyboard and older-CLI behaviour) were not checked by this lane; confirm they are covered by whichever review-pr-contract or degradation pass holds slice-02."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (payload layers block used; gdgraph not needed for a claims check), wiki_used: yes (keryx wiki ask, no relevant page), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

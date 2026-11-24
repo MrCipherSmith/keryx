@@ -1,0 +1,103 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 2 (fix delta 9f4ec475b..f43a13c3f), slice-01 read in full. The fix hunks are readable and well named: `statusId` gives one name to the shared status-row id, `metaprojectWikiGroupKey` / `METAPROJECT_WIKI_UNTYPED_GROUP` replace the hand-copied literal, the test-only wrapper `negotiateMetaproject` is gone, and `moveTo` is now one line. No changed file crosses a Readability threshold through this delta. One info observation: the task passed to `limit` uses `&&` as a start guard, which hides a control-flow decision inside an expression. Of the 15 attached prior findings, 13 are closed by the code; logic-w2-F-002 (guide sentence about the Other group) and ui-ux-w1-UX-005 (unlabelled count) are unchanged at the head and stay open.",
+  "findings": [
+    {
+      "id": "style-w1-F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {",
+      "problem": "The fix for the read cap (answering the permit-pool concern of this round) wraps the whole read in `limit(() => current() && Promise...)`. The `&&` short-circuit is the guard that skips a read queued under a retired snapshot, so the task returns `false | Promise`, and the guard sits on the same line as the start of a 20-line promise chain. The comment above explains it, which is a sign the expression does not carry the intent by itself.",
+      "impact": "Readability only: a reader scanning `read` sees a promise chain and can miss that it may never start. No behaviour concern.",
+      "suggested_fix": "Optional: give the guard its own statement, e.g. `limit(() => { if (!current()) return; return Promise.resolve().then(() => send(root, input)).then(...); });`, and drop the explanatory comment.",
+      "evidence": "slice-01 hunk @@ 140,159 @@ of apps/desktop/src/metaproject/useMetaprojectTree.ts (added lines: the comment 'A read queued under a snapshot that has since been retired never starts.' and the `limit(() => current() && ...` call).",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "publication": "finding"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full (fix slice)", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+# Style Review Report
+
+## Summary
+The fix round is clean from the style lens. New names (`statusId`, `focused`, `rowElements`, `remember`, `MAX_TREE_READS`, `metaprojectWikiGroupKey`, `METAPROJECT_WIKI_UNTYPED_GROUP`) are specific and follow the surrounding conventions; the duplicated `"other"` literal and the leftover wrapper are removed. One info observation about a guard folded into an `&&` expression.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b` (fix delta, round 2)
+- Scope mode: `explicit-hash-range`
+- Slices: slice-01 (fix), read in full
+
+## Stats
+- major: 0
+- minor: 0
+- info: 1
+
+## Major Issues
+None.
+
+## Minor & Info
+### [style-w1-F-001] Start guard hidden in an `&&` expression
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts (`limit(() => current() && Promise...`)
+- **Problem**: the skip-if-retired guard is a short-circuit at the head of a long promise chain, so the task returns `false | Promise` and needs a comment to be understood.
+- **Fix**: optional; make it an explicit `if (!current()) return;` inside a block body.
+
+## Prior findings (checked against the code at f43a13c3f)
+- frontend-w1-F-001 closed: every status row of a parent now uses `statusId(parent)`; the layout effect hands focus to the row at the lost row's index when the focused row disconnected and focus was not elsewhere.
+- logic-w1-F-001 closed: `focusRequest` is removed; `moveTo` focuses the row element directly, so nothing is left pending.
+- architecture-w2-F-001 closed: `METAPROJECT_WIKI_UNTYPED_GROUP` and `metaprojectWikiGroupKey` are exported from the contract and used by both `wikiTree` and `revealSteps` (one `||` rule now).
+- degradation-w1-F-001 closed: `negotiateMetaproject` is deleted; no remaining reference in apps/desktop (keryx ctx rg `negotiateMetaproject\b`: none).
+- degradation-w1-F-002 closed: the snapshot mismatch moved out of `matchesRequest` and now throws `MetaprojectRequestError("stale-snapshot")`; the hook comment is reworded to match, and the hook's own check is documented as the fallback for a non-checking `request`.
+- performance-w2-F-001 closed: push-in-place grouping.
+- pr-contract-w2-PC-001 closed: all three sites reworded (guide :309 and troubleshooting row, cli-reference).
+- testing-practices-w1-F1 closed: new test injects symbol nodes into the loaded model, proves they are loaded, then asserts listings and counts exclude them.
+- testing-practices-w1-F3 closed: MetaprojectView.dom.test.tsx adds 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows'; platform test pins the transport's stale-snapshot refusal.
+- testing-practices-w1-F6 closed: the test now asserts the page arrived and no Loading row remains before the focus assertion.
+- ui-ux-w1-UX-004 closed: module folders render the `Module` kind label (test at MetaprojectTree.dom.test.tsx asserts it on `src` only).
+- logic-w2-F-002 open: the fallback is kept (as suggested), but the guide still says "Pages without a page type are under **Other**" (docs/docs/guides/desktop-metaproject.md:103, unchanged in this delta). Info, optional fix.
+- pr-contract-w1-PC-001 closed: cli-reference now names `tree` as optional, used only when listed.
+- testing-practices-w1-I2 closed: one shared helper removes the drift the finding described.
+- ui-ux-w1-UX-005 open: `<span className="count-label">` at MetaprojectTree.tsx still renders a bare number with no unit or label; untouched by the delta. Info.
+
+## Positive Notes
+- `statusId` carries a doc comment that states the invariant (one status row per parent) rather than the mechanics.
+- The removal of `focusRequest` replaced a two-step deferred mechanism with a one-line direct call, a clear readability gain.
+
+## Not verified / skipped
+- Nothing executed (allowed_tools read-only, exec_budget_s 0). Dispositions were judged by reading the code at f43a13c3f; behavioural claims (focus hand-off, stale banner) rest on the supplied test output (verify-tests-to-run-1.txt exit 0) and CI, not on a run of mine.
+- Hunks of the delta outside slice-01 (e.g. the `limit`/`slots` definition and the layout-effect focus hand-off in MetaprojectTree.tsx) were read for disposition context only and not reviewed as new code.
+
+Routing audit: graph_used: no (not-relevant: fix-delta review over a supplied slice); wiki_used: no (not-relevant: style lens); ctx_used: yes (keryx ctx rg / ctx read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":132125,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

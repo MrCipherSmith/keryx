@@ -1,0 +1,66 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-04: the flow 518 documents acceptance-criteria.md, context.md, description.md, journal.md lines 1-48, plan.md lines 1-48, 50-65 and 67-72, and tasks.md. Nothing in them is wrong at head 0d6df2937. The plan statements that describe behaviour match the code. Module folder: Enter or a click on its name selects the module, the chevron or Space toggles it (MetaprojectTree.tsx:226, :336-340). Second expand: no second read (useMetaprojectTree.ts:233). Reveal: waits on a loading or stale folder, stops at a failed one, pages until the row is found or the pages end (MetaprojectTree.tsx:157-166). New snapshot: drops children, keeps the expanded set, visible folders are re-read (useMetaprojectTree.ts:123-127, MetaprojectTree.tsx:148-150). Old cursor: never sent (generation guard, useMetaprojectTree.ts:209-216). Vanished folders: forgotten (forgetVanished, not-found branch). The journal entries in the slice are history and stay accurate. The acceptance criteria are unchanged. No findings.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-04",
+      "coverage": "Read in full (267 lines). Second-look kind. The delta's own changes to these files are plan.md line 49 (focus rule), plan.md line 66 (stale-snapshot matrix row) and journal.md lines 49-53 (T15 entries). The slice leaves them out, so I did not review them as slice content. I read them only through git diff for context and report nothing on them.",
+      "status": "COVERED"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `3ad918b66a990c7f0b04180e17d9fb74fb82713a` (delta base, fix round 4)
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (with main); head `0d6df2937`
+- Scope mode: `explicit-hash-range` (delta 3ad918b66..0d6df2937), slice-04 only, second look
+- Spec compliance gate: ran. Slice-04 holds the flow's criteria and plan. I checked the plan's behaviour statements against MetaprojectTree.tsx and useMetaprojectTree.ts at the head. AC verification belongs to the test evidence (verify-tests-to-run-1.txt: Desktop tsc and suite exit 0, 1021 pass).
+
+### Summary
+Slice-04 holds only the flow's own documents. The statements in it that describe tree behaviour match the head's code. These include module-folder activation, the guard against a duplicate read, the reveal waiting on a loading or stale folder and stopping at a failed one, and the snapshot-change behaviour. The journal entries in the slice are history and stay accurate. Nothing is wrong now.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Not verified / skipped
+- Out of scope: the delta's plan.md line 49, plan.md line 66 and journal.md lines 49-53 are not in slice-04 and were not reviewed as slice content. Neither were the code slices.
+- No Rust read. The payload's layers block is empty (affected, symbols, related tests, wiki, memory: all empty), so no layer lead was used.
+
+### Routing audit
+- graph_used: no. The payload's layers block (graph at the PR head) listed no affected files for these documents.
+- wiki_used: not-relevant. The documents under review are the flow's own spec.
+- ctx_used: yes (keryx ctx rg, keryx ctx read).
+- raw_rg_used: no. I ran one raw `git diff` of the two flow documents (keryx:raw marker), which is allowed git history.
+KERYX_USAGE {"tokens_in":125296,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

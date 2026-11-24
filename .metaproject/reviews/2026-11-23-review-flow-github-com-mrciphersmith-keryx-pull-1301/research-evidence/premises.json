@@ -1,0 +1,140 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "frontend-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "No intent signal against it: the operator kept status rows in keyboard navigation (journal.md:24), which makes them focus targets, and the plan promises a keyboard-operable WAI-ARIA tree (plan.md:49, AC5). Row ids change per state (MetaprojectTree.tsx:33,37,46,47) and nothing restores focus (:124-135 only acts on focusRequest set by moveTo :155-159). WAI-ARIA APG tree pattern expects focus to stay on a treeitem. Fix keeps the system consistent."
+    },
+    {
+      "finding_id": "highload-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The plan chose to re-read expanded folders on a new snapshot (plan.md:53) but not to fan them out unbounded; the 8-permit fail-fast in metaproject.rs:186-199 predates the branch (904fd138a) and answers 'Retry shortly', which the tree turns into terminal folder errors (useMetaprojectTree.ts read/catch). Read latency and cancellation are out of scope (description.md:29), so only the non-cancellation tail of the impact is out of scope; the burst-failure core is a correctness outcome, not latency. Overlaps performance-w1-F-002 (same site)."
+    },
+    {
+      "finding_id": "logic-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "Contradicts the stated intent rather than following it: plan.md:49 'Focus is never moved by data arriving' and AC6 'without moving focus' (acceptance-criteria.md:8). moveTo (MetaprojectTree.tsx:155-159) leaves focusRequest pending when setFocusId is a no-op (Home on first / End on last row), and the dependency-free layout effect (:131-134) consumes it on the next unrelated commit. No signal of a deliberate choice."
+    },
+    {
+      "finding_id": "architecture-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The group-key rule is part of the tree contract the plan publishes (plan.md:18, 'other' for pages without a type), yet core keeps it private (metaproject-explorer-v2.ts:33,145) and Desktop hand-copies it with || (MetaprojectTree.tsx:58). Single-source practice supports a shared export; the fix makes the two sides more consistent. Duplicate of architecture-w2-F-001."
+    },
+    {
+      "finding_id": "architecture-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "Same premise as architecture-w1-F-001: contract rule (plan.md:18) duplicated between metaproject-explorer-v2.ts:33/145 and MetaprojectTree.tsx:58 with ?? vs ||. No intent signal for keeping it unexported."
+    },
+    {
+      "finding_id": "degradation-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "negotiateMetaproject (platform/metaproject.ts:277) is now called only from metaproject.test.ts while the view uses negotiateMetaprojectExplorer (journal.md:21). No comment or exemption marks it as a deliberate alias; removing the duplicate entry point is ordinary practice."
+    },
+    {
+      "finding_id": "degradation-w1-F-002",
+      "verdict": "upheld",
+      "reasoning": "For the production transport the check at useMetaprojectTree.ts:124 cannot fire: requestMetaprojectV2 -> matchesRequest (platform/metaproject.ts:311) already throws a generic 'Choose the bundled CLI' error on a snapshot mismatch, so the hook comment (:66) misstates the stale path. The hook takes `request` as an injectable dependency, so the guard is reachable with a fake; this interacts with testing-practices-w1-F3, and the finding's second fix option (matchesRequest throws stale-snapshot) satisfies both findings consistently."
+    },
+    {
+      "finding_id": "frontend-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "AC5 lists Up (acceptance-criteria.md:7) and the docs key table documents it; a missing test of a criterion key is a test gap that stays as reported. Duplicate of testing-practices-w1-F4."
+    },
+    {
+      "finding_id": "performance-w1-F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md:29",
+          "says": "Out of Scope: read latency and cancellation of explorer reads (about 0.8 s per read; a separate stage)"
+        },
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md:66",
+          "says": "state matrix, more pages x selection elsewhere: 'reveal pages until the row is found or pages end (AC6)' - sequential paging is the designed reveal"
+        },
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md:54",
+          "says": "Reveal expands ancestor folders, 'reading them as needed'"
+        }
+      ],
+      "reasoning": "The fact reproduces (MetaprojectTree.tsx:112 pages one step per render), but the cost it names is read latency, which the flow places out of scope, and the paging reveal is the behaviour the plan specifies. The finding itself states it is 'accepted by the plan; latency is out of scope' and its fix is to track it with the read-latency stage.",
+      "question": "Reveal pages sequentially by design and latency is out of scope here. Dismiss and track it in the read-latency stage, or keep it as a finding for this PR?",
+      "options": [
+        "dismiss - track in the read-latency stage",
+        "uphold - change reveal in this PR"
+      ]
+    },
+    {
+      "finding_id": "performance-w1-F-002",
+      "verdict": "upheld",
+      "reasoning": "Same premise as highload-w1-F-001 at the same site (MetaprojectTree.tsx:97, useMetaprojectTree.ts read): unbounded re-read fan-out after a snapshot change. Plan.md:53 chose the re-read, not its concurrency; no bound or intent signal exists."
+    },
+    {
+      "finding_id": "performance-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "groups.set(key, [...groups.get(key) ?? [], node]) at metaproject-explorer-v2.ts:146 copies the array per page; no intent signal, and push-in-place is the idiomatic equivalent with identical output. Minor as reported."
+    },
+    {
+      "finding_id": "pr-contract-w2-PC-001",
+      "verdict": "upheld",
+      "reasoning": "The PR changed Desktop from requiring every action to requiring METAPROJECT_REQUIRED_ACTIONS (platform/metaproject.ts:167-180) and its own new guide text says an older CLI keeps the flat list (desktop-metaproject.md:132), while desktop-metaproject.md:309 and :332 still say Desktop needs every action it uses. Docs contradicting the shipped behaviour; AC9 covers the guide. docs/docs/cli-reference.md carries the same sentence."
+    },
+    {
+      "finding_id": "testing-practices-w1-F1",
+      "verdict": "upheld",
+      "reasoning": "A negative assertion over a model that never contains symbols does not test AC1's 'never symbols' (acceptance-criteria.md:3). Test gaps stay as reported; no intent or practice source shrinks it."
+    },
+    {
+      "finding_id": "testing-practices-w1-F2",
+      "verdict": "upheld",
+      "reasoning": "AC1 requires sorted children (acceptance-criteria.md:3); pre-sorted fixtures cannot detect a removed comparator. A test-strength gap, upheld."
+    },
+    {
+      "finding_id": "testing-practices-w1-F3",
+      "verdict": "upheld",
+      "reasoning": "AC6 requires dropping stale answers (acceptance-criteria.md:8); the fakes always answer the expected snapshot, so onStale is unpinned. Upheld; see degradation-w1-F-002 for the interaction on the snapshot-mismatch branch."
+    },
+    {
+      "finding_id": "testing-practices-w1-F4",
+      "verdict": "upheld",
+      "reasoning": "AC5 lists Up (acceptance-criteria.md:7) and no test presses ArrowUp. Upheld; duplicate of frontend-w2-F-001."
+    },
+    {
+      "finding_id": "testing-practices-w1-F5",
+      "verdict": "upheld",
+      "reasoning": "Empty built-graph and empty-wiki states render distinct text (MetaprojectTree.tsx:204-207) and the core not-found guard is unpinned; a test gap with a concrete regression path. Upheld."
+    },
+    {
+      "finding_id": "testing-practices-w1-F6",
+      "verdict": "upheld",
+      "reasoning": "A focus test that never proves the data arrived can pass vacuously; the plan's 'Focus is never moved by data arriving' (plan.md:49) is the behaviour it should pin. Upheld."
+    },
+    {
+      "finding_id": "testing-practices-w1-F7",
+      "verdict": "upheld",
+      "reasoning": "The operator chose to reveal only user selections (journal.md:24); the test pins that only negatively and cannot distinguish 'no default selection'. Upheld."
+    },
+    {
+      "finding_id": "ui-ux-w1-UX-001",
+      "verdict": "upheld",
+      "reasoning": "The operator kept status rows in keyboard navigation (journal.md:24); the finding accepts that and targets the focus loss when those rows change key (MetaprojectTree.tsx:33-47, 222-238). WCAG 2.4.3 and the WAI-ARIA APG tree pattern support it. Overlaps frontend-w1-F-001."
+    },
+    {
+      "finding_id": "ui-ux-w1-UX-002",
+      "verdict": "upheld",
+      "reasoning": "The loading row is a live region (MetaprojectTree.tsx:222) but the error row replacing it is not (:226-229), so a failure is silent to screen readers; WCAG 4.1.3 Status Messages. The operator's wording choice (journal.md:24) concerns text, not announcement. Upheld."
+    },
+    {
+      "finding_id": "ui-ux-w1-UX-003",
+      "verdict": "upheld",
+      "reasoning": "The nav's aria-label 'Search results' (MetaprojectView.tsx:918) predates the PR, but this PR puts the tree inside it without a query, so the name now disagrees with the visible 'Files'/'Wiki' heading (plan.md:55). The operator's 'wording as implemented' (journal.md:24) covered the tree's strings, not this landmark name. WCAG 2.4.6 / 1.3.1. Upheld."
+    },
+    {
+      "finding_id": "ui-ux-w1-UX-004",
+      "verdict": "upheld",
+      "reasoning": "The operator kept the module-folder key behaviour (journal.md:24) and the finding keeps it; it asks only for a visual cue, which plan.md:50 neither specifies nor rules out. Nielsen #4/#6 support a cue; node rows already show a kind label (MetaprojectTree.tsx:247), so the fix is consistent with siblings."
+    }
+  ]
+}

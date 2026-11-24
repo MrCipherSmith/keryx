@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "tracked": true,
+  "counts": {
+    "inScope": 13,
+    "covered": 13,
+    "omitted": 0,
+    "uncovered": 0
+  },
+  "omissionReasons": {},
+  "files": [
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/platform/metaproject.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "review-regression"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "scope": "B",
+      "status": "covered",
+      "by": "slice-06"
+    }
+  ],
+  "omissions": [],
+  "waived": false
+}

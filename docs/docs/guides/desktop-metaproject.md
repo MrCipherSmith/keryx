@@ -84,15 +84,70 @@ for the pinned grammar assets used by supported languages.
 
 ## Find a page, file, module or symbol
 
+Browse the tree in the list on the left, or search when you know a name.
+
+### Browse the tree
+
+Without a search, the list is a tree:
+
+- In **Graph**, it shows the folders and files of the checkout. The header
+  reads **Files** with the number of indexed files. In each folder, its
+  folders come first, then its files, in name order. Only folders that hold
+  indexed files appear, and each shows how many files it holds, counting its
+  subfolders. A folder that is also a module can be selected as that module:
+  click its name or press **Enter** to select it, and click the chevron or
+  press **Space** to expand or collapse it. Click any other folder to expand
+  or collapse it.
+- In **Wiki**, it groups the pages by page type, such as **Component** or
+  **Domain model** for `domain-model` pages, with the number of pages in each
+  group. Pages without a page type are under **Other**. The header reads
+  **Wiki** with the number of pages.
+
+Click a file or page to select it, as you would a search result. A folder
+loads its contents when you first expand it and shows **Loading…** until
+they arrive. A large folder shows its first entries and a **Show more** row
+that loads the next ones. If a folder fails to load, its row reads **Could
+not load.** with the reason and a **Retry** button. If the project knowledge
+changed while a folder was loading, its row stays on **Loading…** with no
+**Retry**, and the explorer shows **Project knowledge changed while loading**:
+select **Refresh catalog** and the folder loads.
+
+Use the keyboard once the tree has focus:
+
+| Key | Action |
+| --- | --- |
+| **Up** / **Down** | Move to the previous or next row. |
+| **Home** / **End** | Move to the first or last row. |
+| **Right** | Expand a closed folder or group, or move to its first entry when it is open. |
+| **Left** | Collapse an open folder or group, or move to its parent. |
+| **Enter** | Select a file, page or module folder. On another folder or a group it expands or collapses it. On a **Show more** or **Retry** row it runs that action. |
+| **Space** | Expand or collapse a folder or group, or select a file or page. |
+
+Expanded folders and groups stay open when you leave the Metaproject tab and
+return, and when you switch between **Graph** and **Wiki**. When you select an
+item from somewhere else, such as a node in the graph or a link in an
+article, the tree expands the folders on its path and scrolls to it. The item
+shown when you first open the explorer does not expand the tree.
+
+If the graph is not built, the **Graph** tree reads **The graph is not built
+yet. Rebuild the graph to browse its files.** The **Wiki** tree still works.
+
+The tree needs a Keryx CLI that serves it. With an older CLI, the list stays
+the flat catalog list described below and everything else works as before.
+
+### Search
+
 Type a name, path, or phrase from a wiki page into **Search names, paths and
 wiki text**. Use a repository-relative path such as `src/wiki/service.ts`
 when several files share a name. Wiki body matches show a snippet so you can
 see why a page matched. For example, searching for `inode-aware cursor` in
 the Keryx repository finds the **Agent Bus** page.
 
-The list header shows how many catalog items are shown out of the total, as
-**Catalog · shown of total**. While you search it reads **Results** with
-the number of matches instead.
+While you search, the list shows flat results instead of the tree, and the
+header reads **Results** with the number of matches. Clear the search to
+return to the tree. With a CLI that does not serve the tree, the header of
+the list without a search shows how many catalog items are shown out of the
+total, as **Catalog · shown of total**.
 
 Select a result to inspect it. In **Graph**, the selected item becomes the
 center of the graph, with the nodes related to it by the current graph
@@ -254,8 +309,9 @@ part of it: creating or editing another file in the checkout can mark the
 graph stale, and the results already loaded stay valid.
 
 Before its first read, Desktop asks the selected CLI which read actions it
-serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
-than Desktop keeps working when it adds actions.
+serves. Desktop accepts a CLI that lists every action it requires, so a CLI newer
+than Desktop keeps working when it adds actions. Desktop uses an optional action,
+such as `tree`, only when the CLI lists it; without it, the list stays flat.
 
 Desktop can calculate a file or wiki neighborhood from a complete catalog.
 It asks the CLI for a neighborhood when the catalog is limited or the
@@ -273,8 +329,11 @@ and can carry example file pairs. See the
 | **Graph unknown** or a layer fails to load | Rebuild and check the terminal output. For `defines` or `calls`, also check `keryx gdgraph symbols status`. |
 | **Project knowledge changed while loading** | The graph was rebuilt, or a wiki page or OpenSpec file changed, between two reads. Select **Refresh catalog** to load a consistent snapshot. |
 | **Search failed** | Select **Retry search** to repeat the current query. |
+| A tree row reads **Could not load.** | Select **Retry** on that row to read the folder or group again. |
+| The **Graph** tree reads **The graph is not built yet.** | Select **Rebuild graph**, or run `keryx gdgraph build` from the open checkout. |
+| The list shows **Catalog · shown of total** instead of a tree | The selected CLI does not serve the tree. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. Search and the flat list keep working. |
 | The CLI does not support Metaproject Explorer | Choose the bundled CLI in **Settings → Desktop**, or update the CLI and Desktop together. |
-| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
+| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop requires. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
 | A page has no **Relationships** section | Confirm the page links to other wiki pages or declares the code it covers, then rebuild the graph and check the filters in **Graph**. |
 
 For maintenance of wiki references and freshness, see

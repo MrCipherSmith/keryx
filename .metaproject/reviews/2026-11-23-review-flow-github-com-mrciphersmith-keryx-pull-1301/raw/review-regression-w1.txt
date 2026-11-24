@@ -1,0 +1,20 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B (regression) over slice-01 of PR 1301 at 9f4ec475b. No regression found in the blast radius. Walked every code entry of blast-radius.json reachable from slice-01's changed files (MetaprojectView.tsx, MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts, metaproject.rs, metaproject.css): App.tsx (hop 1), OpenSpecView.tsx (hop 1), useExplorerNavigation.ts, main.tsx, test/app-navigation.fixture.tsx (hop 2), plus dev/bridge.ts. Checked boundaries: (1) App.tsx mounts MetaprojectView with no injected negotiate/request, so it now runs negotiateMetaprojectExplorer; the protocol result is unchanged for v1 and v2 CLIs and supportsTree defaults to false on every legacy path. (2) negotiateMetaproject keeps its signature and return value (delegates to negotiateMetaprojectExplorer); its only callers are tests. (3) validCapabilities now requires METAPROJECT_REQUIRED_ACTIONS (the six) instead of METAPROJECT_CAPABILITIES, which now includes `tree`; this keeps an older CLI negotiating, matching Rust ACTIONS (unchanged, still six) and capability_response. (4) The Rust probe passes the full capability response, cached, to the webview, so `tree` in `actions` reaches supportsTree; metaproject_args only widens RequestV2 by a new variant, every existing variant and the v1 Request enum are untouched. (5) OpenSpecView's requestMetaprojectV2 path: isMetaprojectV2Response and matchesRequest gain a `tree` case only; the default and all existing cases are unchanged. (6) Existing test doubles that pass `negotiate` returning 1|2, or inject requestV2 without requestTree, get supportsTree=false and the flat list as before (Negotiate widened, not narrowed). (7) The flat list, its aria-current scroll effect, search results and the snapshot-mismatch banner render exactly as before whenever treeScope is null (search query, OpenSpec modes, protocol 1, CLI without tree). Intended behaviour changes (Graph sidebar without a query no longer lists wiki pages/modules flat; heading text) are the plan's design, not regressions, and belong to scope A. Coverage limits: the blast-radius set (depth 2, cap 40) recorded 216 dropped entries (190 text-hub, 21 unrelated-symbol, 5 test-consumer); the dropped code entries are not reachable from slice-01's symbols, and the test consumers (App.dom.test.tsx etc.) were run green at the head by the orchestrator (70 + 19 pass). The radius could not answer for the non-code files in this slice (flow package .md/.json, metaproject.css) - recorded unresolved, not clean; the Rust file is reached at runtime through the Tauri `metaproject_request` command, a string-keyed IPC edge the code graph does not carry, so it was checked by reading its handler (v2_request/probe) rather than through the graph. Not verified: the Rust changes were not compiled or run (no cargo; CI pending). Skipped: the review activity rule file was not re-read for this run.",
+  "slices": [
+    { "id": "slice-01", "status": "COVERED", "coverage": "read in full (lines 1-2534)" }
+  ],
+  "findings": [],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary: no regression in the blast radius of slice-01. The capability handshake keeps the six required actions on both the TypeScript and Rust sides, existing callers and test doubles of the negotiation and v2 request paths are unaffected, and the flat list is unchanged whenever the tree is not shown. Rust not compiled (CI pending); non-code files and the Tauri IPC edge are outside what the graph can answer.
+
+Routing audit: graph_used: yes (blast-radius.json at PR head, payload layers.affected); wiki_used: not-relevant (regression check of a bounded dependent set); ctx_used: yes (keryx ctx rg / ctx read); raw_rg_used: no.

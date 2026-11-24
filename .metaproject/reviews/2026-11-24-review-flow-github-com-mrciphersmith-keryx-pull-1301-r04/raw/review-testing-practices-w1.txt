@@ -1,0 +1,61 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 5, slice-02 (new, delta 3ad918b66..0d6df2937). No findings. The fix-round tests answer the three round-4 testing-practices findings (F1 parked row shown as Loading and inert, F2 reveal through a parked stale folder, F3 Wiki re-read after Refresh catalog), and each new test carries a positive artifact before its negative assertions. The only production gate changed is handOffTarget, a move of existing logic into a helper; the new empty-page Show more test is the fixture that separates its `?? rows[at]` fallback and its parent filter from the row after the anchor. I did not run the mutation pass: `keryx review mutate` writes into the review package's research-evidence/ and is not on my allowed command list, so the mutants are listed in mutant_candidates for the main session to run. The three nearest suites pass at the head (148 pass, 0 fail).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full; touched files read for context (MetaprojectTree.tsx handOff/handOffTarget, useMetaprojectTree.ts reload doc)", "status": "DONE" } ],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Run mutant_candidates M1-M4 with `keryx review mutate --test \"bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx\" --package <r04 review dir>` from apps/desktop; this reviewer was not allowed to run it (it writes research-evidence/), so no mutation result was observed in this lane."
+  ],
+  "mutant_candidates": [
+    {
+      "id": "M1",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "  return next ?? rows[at];",
+      "replacement": "  return next ?? after[0];",
+      "kind": "behavior"
+    },
+    {
+      "id": "M2",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "  const next = parent === undefined ? after[0] : after.find(row => row.parent === parent);",
+      "replacement": "  const next = after[0];",
+      "kind": "behavior"
+    },
+    {
+      "id": "M3",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "  if (at < 0) return undefined;",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "M4",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "      const target = handOffTarget(rows, lost.anchor, lost.parent);",
+      "replacement": "      const target = undefined as ReturnType<typeof handOffTarget>;",
+      "kind": "behavior"
+    }
+  ]
+}
+```
+
+## Summary
+
+- **Scope:** slice-02 only (new; reviewed as round 1 for this delta): the test additions in MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx and platform/metaproject.test.ts, the `handOffTarget` extraction in MetaprojectTree.tsx, and the `reload` input made required.
+- **Findings:** none.
+- **Round-4 testing findings, checked against the new tests (context, not dispositions):**
+  - F1: the View stale test now asserts the parked row reads `Loading…` under src, and the page twin clicks and presses Enter on the parked next-page row and asserts page-2 was requested only once. The `Loading…` text plus the banner is the positive artifact. If stale were mapped to failed, the row would read "Could not load." and the test would fail.
+  - F2: a new View test parks src's read stale under a reveal, asserts src is expanded and Client absent, then after Refresh catalog asserts Client is selected and scrolled into view. The `scrollIntoView` patch and the manual timer are both restored in `finally`.
+  - F3: the Wiki half of the stale test now refreshes and asserts Guide appears, no Loading row remains, and `other` was read twice with s1.
+  - The new platform assertion pins that a typed `MetaprojectRequestError` whose text equals the permit refusal is not classified as one.
+- **Mutation pass:** not run. `keryx review mutate` writes `mutation-<n>.json` into the review package's `research-evidence/`, and my brief allows writing only this result file and lists no `keryx review mutate`. So no mutation result is reported here, and none is predicted. I listed four candidates. All are on `handOffTarget` and its call site, the only runtime gate in the delta; `reload` becoming required is a type-level change with no runtime mutant. Unreached: 4 of 4.
+- **Tests run:** `bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts` in apps/desktop at 0d6df2937 passed: 148 pass, 0 fail. I ran it through `keryx ctx run`, which wrote its usual gdctx raw log under `.metaproject/data/gdctx/`. The verify output in research-evidence covers the whole suite: 1021 pass.
+- **Routing audit:** graph_used: payload layers (graph at PR head; affected: App.tsx, MetaprojectView.tsx); wiki_used: not-relevant (payload wiki layer empty; test-only delta); ctx_used: yes (`keryx ctx rg`, `keryx ctx run`); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":100604,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,92 @@
+{
+  "review_feedback": [
+    {
+      "id": "frontend-w1-F-001",
+      "suggested_fix": "Key every status row of a parent with one stable id (status:${parent}) so loading/error/more update the same <li> in place; in the layout effect, when focusId no longer names a rendered row and the tree held focus before the update, focus the row now at the old index (first appended entry after Show more, parent folder for a vanished Loading row). Add tests that press Enter on Show more (last page) and on the error row and assert document.activeElement stays inside the tree."
+    },
+    {
+      "id": "highload-w1-F-001",
+      "suggested_fix": "Bound tree reads on the client: route `read` in useMetaprojectTree.ts through a small FIFO limiter (e.g. at most 2-3 tree reads in flight; queued reads check `current()` before starting so a retired generation never spawns), leaving permits for the explorer's own reads. Optionally treat an `unavailable` answer from the permit as retryable once with backoff and jitter rather than a terminal folder error. Rule: async-patterns.mdc Rule 3 / concurrency-patterns.mdc Rule 4 (bounded child fan-out, default 4)."
+    },
+    {
+      "id": "logic-w1-F-001",
+      "suggested_fix": "In moveTo, when row.id === focusId, focus the row element directly (querySelector by data-row with CSS.escape) and return without setting focusRequest. Add a DOM test: Home on the first row, trigger a model update, assert document.activeElement is unchanged."
+    },
+    {
+      "id": "architecture-w1-F-001",
+      "suggested_fix": "Export a single key helper or constant from src/integrations/metaproject-explorer-contract.ts and use it in both metaproject-explorer-v2.ts and revealSteps."
+    },
+    {
+      "id": "architecture-w2-F-001",
+      "suggested_fix": "Export the rule from `src/integrations/metaproject-explorer-contract.ts` (e.g. `export const METAPROJECT_WIKI_UNTYPED_GROUP = \"other\"; export function metaprojectWikiGroupKey(node: MetaprojectNode): string { return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP; }`) and use it in both `wikiTree` (metaproject-explorer-v2.ts) and `revealSteps` (MetaprojectTree.tsx), which already imports the contract module."
+    },
+    {
+      "id": "degradation-w1-F-001",
+      "suggested_fix": "Point the existing handshake tests at negotiateMetaprojectExplorer (asserting `.protocol`) and delete negotiateMetaproject, or mark it explicitly as a test-only alias."
+    },
+    {
+      "id": "degradation-w1-F-002",
+      "suggested_fix": "Drop the unreachable check and reword the comment to 'told when the CLI answers stale-snapshot'; or, if a mismatched answer must be treated as stale, make matchesRequest's snapshot mismatch throw MetaprojectRequestError('stale-snapshot', ...) so both this hook and loadMoreSearch get the stale banner."
+    },
+    {
+      "id": "frontend-w2-F-001",
+      "suggested_fix": "Add an ArrowUp step to the existing keyboard test, e.g. after moving to server.ts press ArrowUp and expect focus on client.ts."
+    },
+    {
+      "id": "performance-w1-F-002",
+      "suggested_fix": "Cap concurrent tree reads in useMetaprojectTree.read (e.g. 4) with a small queue."
+    },
+    {
+      "id": "performance-w2-F-001",
+      "suggested_fix": "const list = groups.get(key); if (list) list.push(node); else groups.set(key, [node]);"
+    },
+    {
+      "id": "pr-contract-w2-PC-001",
+      "suggested_fix": "Reword the three sites from 'every action it uses' to 'every action it requires' (the six in METAPROJECT_REQUIRED_ACTIONS), and note that Desktop uses optional actions such as `tree` only when the CLI lists them."
+    },
+    {
+      "id": "testing-practices-w1-F1",
+      "suggested_fix": "Give the assertion a positive artifact. Either unit-test graphTree/MetaprojectExplorerV2.tree with a GraphModel whose nodes include `{ kind: \"symbol\", path: \"src/a.ts\" }`, and assert that the src listing and the folder counts (src: 4) exclude it. Or first prove that the symbol layer is loaded on the path under test (a symbol node is present in the model) before asserting its absence from the entries."
+    },
+    {
+      "id": "testing-practices-w1-F2",
+      "suggested_fix": "Give the wiki pages titles that invert filename order (for example components/alpha.md titled '# Zeta' and zeta.md titled '# Alpha'), then assert title order. Write nodes.jsonl in reverse or shuffled order (for example list many/file-14 before many/file-00, and src/lib/deep/d.ts before c.ts). Mutants T5 and T9 confirm both once they are run."
+    },
+    {
+      "id": "testing-practices-w1-F3",
+      "suggested_fix": "In MetaprojectView.dom.test.tsx, have treeExplorer answer one tree read with `snapshotId: \"s2\"` while the catalog is still s1. Also reject one read with `new MetaprojectRequestError(\"stale-snapshot\", ...)`. Assert that the explorer's stale banner (Refresh catalog) appears and that the folder shows no rows from that answer. Mutants U1 and U2 pin it."
+    },
+    {
+      "id": "testing-practices-w1-F4",
+      "suggested_fix": "In the keyboard test, after `ArrowDown` to src, press `ArrowUp` and assert `focused()` is 'docs'. Optionally also assert that ArrowUp on the first row keeps focus there."
+    },
+    {
+      "id": "testing-practices-w1-F5",
+      "suggested_fix": "Core: a fixture with an empty nodes.jsonl (graph present). Assert that `tree({scope:'graph'})` resolves to `{ entries: [], partial: false }`. Desktop: two DOM tests, one with a root answer `{ entries: [], partial: false }` in graph scope ('No indexed files.') and one in wiki scope ('No Wiki pages.'). Mutants T2 and M9 cover it."
+    },
+    {
+      "id": "testing-practices-w1-F6",
+      "suggested_fix": "After the release, add `expect(item(\"client.ts\")).not.toBeNull();` (and that no row reads 'Loading…') before the focus assertion."
+    },
+    {
+      "id": "testing-practices-w1-F7",
+      "suggested_fix": "Before the collapsed assertions, assert the fallback is selected: `host.querySelector('[aria-label=\"Graph node details\"]')?.textContent` contains 'src/client.ts' in Graph, and the Guide article heading in Wiki. Mutant W2 confirms it."
+    },
+    {
+      "id": "ui-ux-w1-UX-001",
+      "suggested_fix": "When the focused row's id disappears from `rows`, move focus to its successor in the same parent: on retry/more keep focus on the row that replaces it (e.g. give the error, loading and more rows of one parent a shared stable key/`data-row` such as `status:<parent>`), and when the more row is removed after the last page focus the first newly appended entry (or the last entry of the parent). Set `focusRequest.current = true` only when DOM focus was inside the tree, so data arriving still never steals focus from elsewhere. Add a dom test: focus the error row, press Enter, assert document.activeElement is still a treeitem."
+    },
+    {
+      "id": "ui-ux-w1-UX-002",
+      "suggested_fix": "Put the error text in a live region: e.g. <span role=\"status\">Could not load. {message}</span> (polite, matching the loading row) or keep one persistent visually-hidden role=\"status\" region in the tree that announces load failures."
+    },
+    {
+      "id": "ui-ux-w1-UX-003",
+      "suggested_fix": "Name the landmark from its visible heading (give the <h2> an id and use aria-labelledby), or derive aria-label from the same state as listHeading (\"Search results\" with a query, \"Project files\"/\"Wiki pages\" with the tree, \"Catalog\" otherwise)."
+    },
+    {
+      "id": "ui-ux-w1-UX-004",
+      "suggested_fix": "Keep the behaviour, add a cue: a small \"Module\" kind label (NODE_KIND_LABELS.module, as node rows already show their kind) or the module icon on module folder rows, and a title/aria-description such as \"Select module; use the arrow to expand\"."
+    }
+  ]
+}

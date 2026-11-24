@@ -1,0 +1,26 @@
+STATUS: DONE
+
+review-regression, wave 2, round 2 (delta 9f4ec475b..f43a13c3f), slices slice-02 (new) and slice-03 (new), both read in full. No regression in the blast radius: 0 findings.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B over the fix-round delta. Candidate set: the payload's layers.affected (depth 2, 14 files, truncated: [] so the cap dropped nothing): App.tsx, main.tsx, App.dom.test.tsx, app-navigation.fixture.tsx, MetaprojectTree(.dom.test).tsx, MetaprojectView.dom.test.tsx, OpenSpecView.tsx, useExplorerNavigation.ts, useMetaprojectTree.ts, metaproject-explorer(.test).ts, metaproject-explorer-tree.test.ts, service.ts. Behaviour that moved and the dependents checked against it: (1) platform/metaproject.ts removed the exported negotiateMetaproject wrapper; `keryx ctx rg negotiateMetaproject\\b` over apps, src, docs, scripts finds no remaining caller (tests were migrated to negotiateMetaprojectExplorer). (2) requestMetaprojectV2 now throws MetaprojectRequestError('stale-snapshot') instead of the generic 'Incompatible Metaproject v2 response' Error when a well-formed answer carries another snapshotId than expectedSnapshotId. Every caller that pins expectedSnapshotId was enumerated (`keryx ctx rg expectedSnapshotId` over apps/desktop/src and src/integrations, non-test): OpenSpecView.tsx search/detail/openspec-history/more/moreHistory, MetaprojectView.tsx loadMoreSearch, useMetaprojectTree.ts read. OpenSpecView handles all of them with errMessage(cause) into setError/setSearchProblem, so it only shows a different (more accurate) message; its own snapshot check at OpenSpecView.tsx:126 becomes unreachable but still correct. MetaprojectView.loadMoreSearch now maps stale-snapshot to the Refresh catalog banner (tested); useMetaprojectTree maps it to onStale (tested). No caller branched on the old 'Incompatible' text except platform/metaproject.test.ts, whose remaining assertions are parent/scope mismatches that still take the Incompatible path. (3) The nav landmark moved from aria-label='Search results' to aria-labelledby the visible h2; no dependent or test queries the old label (`keryx ctx rg 'Search results'`). (4) MetaprojectTree status-row ids changed from loading:/error:/more: prefixes to one statusId per parent and focusRequest was replaced by focus hand-off; no dependent reads those ids or the ref. (5) WIKI_UNTYPED_GROUP moved from metaproject-explorer-v2.ts to the exported metaprojectWikiGroupKey/METAPROJECT_WIKI_UNTYPED_GROUP in the contract with the same value 'other'; no other importer of the old private constant. (6) useMetaprojectTree.read now runs through a 3-slot FIFO limiter; its only consumers are ensure/more/retry inside the hook, which never awaited read's result, so the change of return shape breaks nothing; the Rust transport keeps its own ReadPermit (metaproject.rs:308) and CLI timeout, so a hung read is bounded by the existing 'Timed out' path rather than pinning a slot forever. Test evidence at head: verify-tests-to-run-1.txt exit 0; CI 29 success incl. cargo test. Limits: the graph radius is static; runtime edges (Tauri invoke into metaproject.rs, the dev bridge) are outside it and were checked only by reading metaproject.rs v2_request. Docs edits (desktop-metaproject.md, cli-reference.md) and flow/dispatch JSON in slice-02 are non-code: their radius is empty and recorded as unresolved, not clean; I found no consumer that parses that wording. Not read: the shared review activity rule (.metaproject/rules/activity/review.mdc); no command beyond keryx ctx rg and file reads was run.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read in full (2271 lines)" },
+    { "id": "slice-03", "status": "DONE", "coverage": "read in full" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary: the fix round removed negotiateMetaproject, turned a snapshot-mismatched v2 answer into a typed stale-snapshot error, renamed the list landmark, re-keyed tree status rows and bounded tree reads. Every dependent in the 14-file affected set (cap dropped nothing) that consumes those symbols was traced; none loses a behaviour it relied on. Non-code parts of the delta (docs, flow JSON) have an empty radius, which is unresolved rather than clean.
+
+Routing audit: graph_used: yes (payload layers.affected at head f43a13c3f); wiki_used: no (not-relevant: payload wiki layer empty, question answered from code); ctx_used: yes (keryx ctx rg); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":166070,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

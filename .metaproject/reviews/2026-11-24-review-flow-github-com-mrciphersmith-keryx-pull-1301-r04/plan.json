@@ -1,0 +1,227 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r04",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1301",
+    "base": "3ad918b66a990c7f0b04180e17d9fb74fb82713a",
+    "head": "0d6df293794fe1b4582463544f9ad21f5ce202d2"
+  },
+  "round": {
+    "number": 5,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03",
+    "range": {
+      "base": "3ad918b66a990c7f0b04180e17d9fb74fb82713a",
+      "head": "0d6df293794fe1b4582463544f9ad21f5ce202d2"
+    },
+    "fixHunks": 12,
+    "newHunks": 9,
+    "priorFindings": 15,
+    "carried": 11,
+    "line": "round 5 (source: local-package; previous 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03 at 3ad918b66a99; delta 3ad918b66a99..0d6df293794f)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-regression",
+          "review-style",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "r4-clean-code-w2-F-001",
+          "r4-degradation-w2-F-002",
+          "r4-frontend-w2-F-001",
+          "r4-logic-w2-F-001"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "apps/desktop/src/platform/metaproject.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-04",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.fix_context.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.fix_context.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T13.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T14.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-06",
+        "files": [
+          "apps/desktop/src-tauri/src/metaproject.rs",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/metaproject.css",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "apps/desktop/src/platform/metaproject.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-07",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-contract.ts",
+          "src/integrations/metaproject-explorer-v2.ts",
+          "src/integrations/metaproject-explorer-tree.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 29,
+  "minutes": {
+    "min": 16,
+    "max": 40
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 8
+    },
+    "new": {
+      "slices": 2,
+      "dispatches": 13
+    },
+    "secondLook": {
+      "slices": 4,
+      "dispatches": 8
+    }
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "0b963d879985baba",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 192 changed file(s) but the package's recorded scope holds 11 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r04 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "dispatch"
+}

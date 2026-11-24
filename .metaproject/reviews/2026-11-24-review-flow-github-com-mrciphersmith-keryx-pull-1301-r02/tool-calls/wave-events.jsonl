@@ -1,0 +1,2 @@
+{"time":"2026-11-24T08:48:20.810Z","event":"next","package":"/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02","planAuthorized":true,"dispatches":1,"wave":1,"wavesLeft":1,"reasons":{"missing":1,"retry":0,"stalled":0,"escalated":0},"notRun":0,"blocked":0,"done":false,"sincePrevMs":null,"sinceConfirmMs":null}
+{"time":"2026-11-24T08:48:20.810Z","event":"idle","kind":"A","gapMs":3151924,"since":"2026-11-24T07:55:48.886Z"}

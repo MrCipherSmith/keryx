@@ -1,0 +1,45 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Round 5 delta: 3ad918b66a990c7f0b04180e17d9fb74fb82713a..0d6df293794f (fix round 4), merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, slice-07 (second-look), read in full (2289 lines)
+- Files in slice-07: MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, docs/docs/cli-reference.md, docs/docs/guides/desktop-metaproject.md, src/integrations/metaproject-explorer-contract.ts, src/integrations/metaproject-explorer-v2.ts, src/integrations/metaproject-explorer-tree.test.ts
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+Within slice-07, the round-4 fix changed only test files (`git diff --stat 3ad918b66..0d6df2937`): a `reload` input in the tree test harness, a test for an empty Show more page handing focus back, parked-stale tests (Graph and Wiki re-read after Refresh catalog, reveal through a parked folder, parked Show more inert until Refresh), and one permit-classifier assertion that a typed CLI error is never treated as Desktop's permit refusal. None of these is a production path, and none adds a secret, fs access, a shell call or an injection sink. The test temp roots use `mkdtemp` under `os.tmpdir()` and are removed in `afterEach`.
+
+Second look at the production code this slice carries (unchanged in this delta), checked again for what is wrong now:
+- `tree` request parsing (metaproject-explorer-contract.ts `parseV2` case "tree"): exact key allowlist; `scope` checked against a closed list; graph `parent` goes through `isMetaprojectRelativePath` (refuses absolute, drive-letter, backslash, control chars, empty/`.`/`..` segments, over 4096 chars); wiki `parent` is a bounded string used only as a Map key; `cursor` is bounded; `expectedSnapshotId` must be a sha256. No traversal path: `graphTree`/`wikiTree` only filter in-memory graph nodes by string prefix or group key and never touch the filesystem.
+- Cursor (`cursorValue` + `offsetPage`): base64url round-trip check, fixed 3-tuple shape, key bound to `hash(["tree", scope, parent])`, snapshot checked, offset a safe integer >= 1 with range check against the list; page bounded by `METAPROJECT_PAGE_SIZE_V2` and `TREE_ITEMS_BYTES`, so there is no unbounded response. The cursor is not signed, but forging one gives only an in-range offset into data the caller can already read. No vector.
+- Desktop response validation (pinned by platform/metaproject.test.ts): it refuses folder paths with `..`, more than 100 entries, a mismatched scope/parent and a module whose path is not the folder's, and it refuses an answer for another snapshot as `stale-snapshot`.
+- Docs changes: prose only, no credentials or unsafe commands.
+
+### Clean Areas
+Injection (SQL/XSS/command/eval): no sinks, and React renders text only. Auth/IDOR: local read-only CLI with no per-user resources. Input validation: covered above. Secrets: none. Crypto: sha256 is used only as a change detector and cursor key, not for auth. CSRF/open redirect: not applicable. Path traversal: covered above. DoS: page and byte caps; Desktop reads are capped at 3 in flight.
+
+### Not verified / notes
+- I ran no tests (`exec_budget_s` = 0). I relied on the supplied verify output (exit 0, 1021 pass) and did not re-run it.
+- I did not reopen `.metaproject/rules/core/security-baseline.mdc` or the review activity rule for this delta round. With no findings, no severity mapping depended on them.
+- The Rust transport (`apps/desktop/src-tauri/src/metaproject.rs`) is not in slice-07 and was not reviewed here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 5 second look at slice-07. The round-4 delta in this slice changed only tests (reload harness input, parked-stale and empty-page focus tests, a permit-classifier assertion); none touches a security-relevant path. The unchanged tree request parsing, cursor binding, paging bounds and Desktop response validation still hold: graph parent is a validated checkout-relative path used only as an in-memory prefix, cursors are snapshot- and request-bound with range-checked offsets, and responses are page- and byte-capped. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-07", "coverage": "second-look, read in full; delta 3ad918b66..0d6df2937 within slice is test-only", "status": "DONE" } ],
+  "inputs_unreadable": []
+}
+```
+KERYX_USAGE {"tokens_in":152069,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

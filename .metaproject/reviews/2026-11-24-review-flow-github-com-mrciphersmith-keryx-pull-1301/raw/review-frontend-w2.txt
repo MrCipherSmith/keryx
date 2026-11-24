@@ -1,0 +1,82 @@
+STATUS: DONE
+
+## Frontend Review (round 2, delta 9f4ec475b..f43a13c3f)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b (fix round 1)
+- Scope mode: explicit-hash-range, diff mode; slices slice-02 (new) and slice-03 (new), both read in full
+- Frontend files in the slices: MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectView.tsx, platform/metaproject.ts, and their dom/unit tests; the rest of the slices (flow package JSON, journal, docs, core contract/v2/tree test) was read for context only
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+The fix-round frontend changes hold up when traced through the code:
+- **Focus restore:** one stable `status:<parent>` key per parent for its loading, error and more rows means React reuses the same `<li>` (and the same `role="status"` span, so the text change is announced). The layout effect moves focus to the row now at the old index only when the remembered element is disconnected and focus is on body or detached, so focus outside the tree is never taken. `onBlur` only forgets focus that has left the tree while the element is still connected.
+- **Home/End:** `moveTo` now focuses the row directly and leaves no pending request, so the round-1 logic finding is fixed.
+- **Bounded reads:** `limit` caps reads at `MAX_TREE_READS = 3`. A queued task checks `current()` before it sends. The catch exists only to keep the slot count right.
+- **Stale snapshots:** a `stale-snapshot` refusal or a page from another snapshot calls `onStale` and its rows are never shown.
+- **Load more:** `loadMoreSearch` maps `stale-snapshot` to the Refresh catalog banner.
+- **Landmark name:** the `nav` is now named by its visible `<h2>` through `useId`.
+- **Module label:** module folder rows show the `Module` kind label.
+- **Keyboard and double retry:** keyboard Enter/Space on the error row calls `preventDefault`, so the tabIndex=-1 Retry button cannot fire a second retry.
+
+### Findings
+
+### [F-001] A stale-snapshot tree read also leaves a "Could not load." row whose Retry can only be refused again
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts
+- **Problem**: After `onStale()` the catch falls through to `setFolder(... status: "failed" ...)`. The folder then shows "Could not load. Project knowledge changed while loading." with a Retry. `retry` calls `read`, which pins `state.current[scope].snapshot`. That snapshot does not change until Refresh catalog loads a new catalog, so Retry sends the same stale `expectedSnapshotId` and is refused again.
+- **Why it matters**: There is no data harm: the banner is shown and no rows from the stale answer appear. The cost is a Retry control that cannot succeed and duplicates the banner's message. Operator decision (UX) on whether the row should stay, read as "Refresh catalog", or be suppressed while the banner is up.
+- **Fix**: Optional. Return after `onStale()` and leave the folder in loading, or reword the row to point at Refresh catalog.
+
+### Clean Areas
+- Component patterns: no API/IO added to components; reads go through the `useMetaprojectTree` model. Effects: the reveal effect and the focus layout effect have no cleanup needs. Keys are stable.
+- Accessibility: treeitem roles, the status live region on the error row, and the `aria-labelledby` landmark.
+- TypeScript: no `any` and no non-null assertions in production code; `!` appears only in the tests' `document.activeElement!`. The `FocusEvent<HTMLUListElement>` / `FocusEvent<HTMLLIElement>` targets are really the row or the Retry button at runtime, but only `isConnected`/`closest` are used, so this is harmless.
+- MobX: not applicable. This code has no MobX stores or observers (React state and refs only), so the MobX laws have nothing to apply to.
+- Error handling: the `catch` in `limit` is documented as a slot-count guard, and the read reports its own failure on the folder row.
+
+### Notes on inputs
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`, named by the skill, does not exist in this checkout (the T7 journal already noted this). Rows were rated by the canonical rubric and `.metaproject/rules/activity/review.mdc`.
+- No commands were run beyond read-only `keryx ctx read` / `keryx ctx rg`. No tests were run (exec_budget_s = 0); the supplied test output reports exit 0.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round-2 delta (fix round 1) frontend review of slice-02 and slice-03. The focus restore (stable status:<parent> row key plus layout-effect handoff only when focus was lost to body), the Home/End fix with no pending request, the bounded tree reads (3 in flight, queued reads of a retired generation never start), the stale-snapshot path to the Refresh catalog banner, aria-labelledby on the list landmark and the Module label on module folders are correct. No blocker, major or minor; one info about the folder error row left after a stale-snapshot refusal.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();",
+      "problem": "After onStale() the catch falls through to setFolder(... status: \"failed\" ...). The folder shows 'Could not load. Project knowledge changed while loading.' with a Retry. retry -> read pins state.current[scope].snapshot, which stays the same until Refresh catalog loads a new catalog, so Retry re-sends the stale expectedSnapshotId and is refused again.",
+      "impact": "No data harm: the stale banner shows and no stale rows appear. The Retry control cannot succeed until Refresh catalog and repeats the banner's message.",
+      "suggested_fix": "Optional: return after onStale() and leave the folder in loading (the snapshot change re-reads it), or word the row to point at Refresh catalog. This is an operator UX decision.",
+      "evidence": "useMetaprojectTree.ts read(): `const pinned = state.current[scope].snapshot`, catch -> onStale() then setFolder failed; retry() -> setFolder loading + read(scope, parent) with the same pinned snapshot; the snapshot changes only when the hook's `snapshot` prop (catalog.snapshotId) changes.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "publication": "question",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [
+    {"id": "slice-02", "status": "DONE", "coverage": "read in full (2271 lines)"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (the payload's layers block was used instead), wiki_used: not-relevant (the delta's behaviour is stated in the flow plan and the fix context), ctx_used: yes (keryx ctx read / rg), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":171428,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,116 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98d..3ad918b66 (round 4 delta, fix round 3); head 3ad918b66
+- Scope mode: explicit-hash-range, supplied slices only (slice-02 new, slice-03 new), both read in full
+- Changed code files reviewed: useMetaprojectTree.ts, MetaprojectTree.tsx, MetaprojectView.tsx (hook call), platform/metaproject.ts, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts; flow bookkeeping files (T14 dispatch, flow.json, journal, resolved context) read, no frontend content
+- Stack note: this is plain React hooks (useRef/useReducer), no MobX in these files, so MobX laws 1, 4, 5 have no site; law 2 (observer) does not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 2
+
+### Findings
+
+### [F-001] `reload` is optional, so a caller that omits it gets the round-3 dead `Loading…` state back
+- Severity: minor
+- File: apps/desktop/src/metaproject/useMetaprojectTree.ts (`reload?: unknown;`)
+- Rule: TypeScript safety / canonical rubric (no row; the defect is reachable only by a future caller)
+- Problem: The fix parks a stale-snapshot read as `status: "stale"` (or `more: { status: "stale" }`), and the only thing that ever moves it out of that state is a change of `reload` (the useEffect comparing `loadedCatalog.current` to `reload`). `reload` is declared optional. A caller that leaves it out (it stays `undefined`, never changes) has no way out of a parked row: `ensure` skips it (folder present), `more` refuses it (`more` set and not failed), `retry` acts only on `failed`. That is exactly the dead state r3-regression-w1-F-001 described. Today the one production caller (MetaprojectView.tsx) passes `reload: catalog`; the DOM-test Harness in MetaprojectTree.dom.test.tsx omits it, so the tree-level tests run the hook in the configuration that cannot recover.
+- Impact: No user-visible defect at this head. The type does not encode the contract the fix depends on, so a second consumer (or a refactor of the view's call) can silently reintroduce the permanent Loading row with no type error.
+- Suggested fix: Make `reload` required (`reload: unknown`, documented as "pass the catalog object"), and pass a value from the test Harness (e.g. a `reload` prop defaulting to a constant). Alternatively keep it optional but, when it is `undefined`, fall back to treating `stale` like `failed` (show Retry) so the hook never has a state with no exit.
+- Evidence: useMetaprojectTree.ts: `reload?: unknown;` in the hook's input type; the effect `if (loadedCatalog.current === reload) return;` is the sole caller of `reread(scope, parent, "stale")`. Callers enumerated with `keryx ctx rg 'useMetaprojectTree\(|useTree\('`-shaped reading of the slices: MetaprojectView.tsx (passes `reload: catalog`) and the Harness in MetaprojectTree.dom.test.tsx (`useTree({ cwd, snapshot, request, onStale, ...wait })`, no reload).
+- Confidence: high
+
+### [F-002] Hand-off rows kept in a ref written during render
+- Severity: info
+- File: apps/desktop/src/metaproject/MetaprojectTree.tsx (`shown.current = rows;`)
+- Problem: The delta adds `shown` and assigns `shown.current = rows` in the render body; `remember()` (called from the blur microtask and the layout effect) computes `handOff(shown.current, index)` from it. React's guidance is not to write refs during render: under concurrent rendering a render that is discarded still leaves its rows in the ref, so a blur microtask in that window computes the anchor over rows that never committed. The hook already uses the same pattern (`latest.current = …`), and this Desktop tree is not rendered in a transition, so no concrete failure is reachable today.
+- Impact: Observation only; no bug at this head.
+- Suggested fix: If it is touched again, assign `shown.current = rows` inside the existing `useLayoutEffect` (before `remember(document.activeElement)`), which runs only for committed renders.
+- Evidence: MetaprojectTree.tsx render body: `const shown = useRef(rows); shown.current = rows;`; `remember()` reads `shown.current`.
+- Confidence: medium
+
+### [F-003] slice-03 shows two removals that the real diff does not contain
+- Severity: info
+- File: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/slices/slice-03.diff
+- Problem: slice-03 presents `-  if (isMetaprojectV2Response(response, "capabilities")) return 2;` and the removal of the `expectedSnapshotId` check from `matchesRequest` as changes in apps/desktop/src/platform/metaproject.ts. `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` has only one hunk (the added METAPROJECT_PERMIT_REFUSAL / isMetaprojectPermitRefusal block, which slice-02 also carries). At the head the stale-snapshot check lives in requestMetaprojectV2 (lines ~315-319) and the capabilities branch returns `{ protocol: 2, supportsTree }`; both are earlier-round changes. Nothing is wrong in the code; the slice content looks like a slicer artifact and was reviewed against the real file.
+- Impact: Reviewers given only slice-03 could report a regression that does not exist.
+- Suggested fix: Check how slice-03 was cut for this round (it appears to carry a pre-b2043b98d hunk inverted).
+- Evidence: git diff output for the file in the reviewed range; head file lines 298-334.
+- Confidence: high
+- publication: question
+
+### Clean Areas
+- Stale-snapshot recovery (r3-regression-w1-F-001): `settleFailure` parks first reads and pages as `stale`; `flatten` renders both as Loading with no Retry and does not push them to `unread`; the reveal effect waits on `stale`; the reload effect iterates an immutable Map snapshot while `reread` replaces state (safe); a catalog load that also changes the snapshot finds nothing parked because the render already dropped the folders; quiet catalog reads with an unchanged snapshot do not replace `catalog` (MetaprojectView.tsx:410-413), so they do not trigger re-reads. Both view tests (folder and Show more page) assert the second `s1` call and no remaining Loading row.
+- Focus hand-off (r3-logic-w5-F-002): `handOff` anchors a status row to `d:<parent>` and a next-page row to the parent's last entry, then picks the first later row with the same parent; falls back to the anchor itself, then to the old index (root status row has no `d:` row, correctly falls back). Error rows share the status/more ids and take the same branches. Test covers the both-in-one-commit case.
+- Permit refusal classification (r3-architecture-w1-F-001): `isMetaprojectPermitRefusal` lives in the transport, excludes typed `MetaprojectRequestError` (and "unavailable" is not in METAPROJECT_ERROR_CODES, so the refusal reaches callers untyped as documented); hook and DOM test import it; platform test feeds the exact Rust message.
+- `withPermitRetry` at module scope with both `live()` guards; two new tests cover a snapshot retired during the wait and a refusal arriving after retirement.
+- Hook callbacks: `read`/`reread`/`settleFailure` dependency lists are complete and stable; `useMemo` model identity changes with `scopes`.
+- No `any`, no non-null assertions added outside tests, no API calls in components (transport injected via `request`).
+- Not run: no commands executed (exec_budget_s 0); relied on research-evidence/verify-tests-to-run-1.txt (Desktop tsc and full suite exit 0 at 3ad918b66). `.metaproject/rules/stacks/react/code-style-patterns.mdc` is absent in this checkout (as the journal notes), so severities come from the canonical rubric.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 4 delta (fix round 3) is sound from the React side: stale reads park and recover on every catalog load, focus hand-off anchors to the row's own parent, permit refusal is classified in the transport. One minor: the recovery input `reload` is optional, so a caller omitting it reintroduces the dead Loading state. Two info notes (ref written during render; slice-03 carries hunks not in the real diff).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "  reload?: unknown;",
+      "problem": "A stale-snapshot read is parked as status 'stale' (or more: {status: 'stale'}) and only a change of `reload` re-reads it (the useEffect comparing loadedCatalog.current to reload is the sole caller of reread(scope, parent, 'stale')). `reload` is optional: a caller that omits it has no exit from a parked row, since ensure skips present folders, more refuses a set non-failed page, and retry acts only on 'failed'. The DOM-test Harness in MetaprojectTree.dom.test.tsx omits it; MetaprojectView passes reload: catalog.",
+      "impact": "No user-visible defect at this head. The type does not encode the contract the round-3 major fix depends on, so a new caller or a refactor of the view's call can silently bring back the permanent Loading row.",
+      "suggested_fix": "Make `reload` required and pass a value from the test Harness; or, when reload is undefined, treat 'stale' like 'failed' (offer Retry) so no state lacks an exit.",
+      "evidence": "useMetaprojectTree.ts hook input type `reload?: unknown;`; effect `if (loadedCatalog.current === reload) return;` then reread(..., 'stale'). Callers: MetaprojectView.tsx (reload: catalog), MetaprojectTree.dom.test.tsx Harness (no reload).",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "  shown.current = rows;",
+      "problem": "The delta writes `shown.current = rows` in the render body; remember() (blur microtask, layout effect) computes handOff from it. Under concurrent rendering a discarded render would leave uncommitted rows in the ref. Same pattern as the hook's existing `latest.current = ...`; no transition renders this tree, so nothing is reachable today.",
+      "impact": "Observation only; no bug at this head.",
+      "suggested_fix": "Assign shown.current inside the existing useLayoutEffect before remember(document.activeElement), so it only reflects committed renders.",
+      "evidence": "MetaprojectTree.tsx: `const shown = useRef(rows); shown.current = rows;`; remember() reads shown.current.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/slices/slice-03.diff",
+      "line": null,
+      "quote": null,
+      "problem": "slice-03 shows two removals in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` line and the expectedSnapshotId check in matchesRequest) that `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` does not contain; the real diff has one added hunk (permit refusal classifier). At the head the snapshot check is in requestMetaprojectV2 and the code is correct.",
+      "impact": "A reviewer reading only slice-03 could report a non-existent regression.",
+      "suggested_fix": "Check how slice-03 was cut for this round.",
+      "evidence": "git diff of the file over the reviewed range; head file lines 298-334.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "pr-process",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (payload layers block used; delta confined to known files), wiki_used: not-relevant (fix-round delta, intent stated in fix_context), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no. One raw `git diff` of a single file (keryx:raw marker) to check slice-03 against the real range.
+KERYX_USAGE {"tokens_in":148150,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

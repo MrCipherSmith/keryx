@@ -1,0 +1,142 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Code-mode review of slice-01 (PR 1301, head 9f4ec475b): the new Metaproject sidebar tree (MetaprojectTree.tsx, its CSS, the MetaprojectView mount). Surface: app screen (Desktop explorer sidebar); primary task: browse the project's indexed files by folder (Graph) or wiki pages by page type (Wiki) and select one. No blocker or major. The tree has sound WAI-ARIA semantics, roving tabindex, a visible focus ring (inherits the global `:focus-visible` outline in styles/components.css:11), and the loading / error+Retry / Show more / empty states the plan asks for, all with existing tokens. Four minor findings: keyboard focus is dropped to <body> whenever the focused status row is replaced (Retry, the last Show more page, a Loading row resolving); a failed folder read is not announced to assistive technology; the sidebar landmark is still named \"Search results\" while it holds the file tree; module folders look identical to plain folders though their name click selects instead of expanding. Two info items (unlabelled counts, a kind label repeated on every row). Slop score 0 (app screen; no tells counted). No render was supplied, so every live check is listed as not run.",
+  "slices": [{"id": "slice-01", "coverage": "read in full, lines 1-2534", "status": "DONE"}],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (row.type === \"error\") model.retry(scope, row.parent);\n    else if (row.type === \"more\") model.more(scope, row.parent);",
+      "problem": "Criterion WCAG 2.4.3 Focus Order / Nielsen #3. Status rows are focusable treeitems (operator choice: they stay in keyboard navigation), but activating them replaces the focused <li> with a row of a different React key, so the focused element is unmounted and document.activeElement falls to <body>. Paths: (a) Enter/Space on a folder error row -> retry() sets the folder to loading -> row `error:<parent>` becomes `loading:<parent>`; (b) Enter on a failed-next-page error row -> `error:<parent>` becomes `more:<parent>`; (c) Enter on Show more when the answer has no nextCursor -> `more:<parent>` is removed; (d) a keyboard user arrows onto a `loading:<parent>` row and the data arrives -> that row is removed. Nothing restores focus: `focusRequest` is set only by `moveTo`, and `focusId` keeps pointing at the removed id, so `tabbable` falls back to the selected row or rows[0].",
+      "impact": "A keyboard or screen-reader user who presses Retry or pages through a large folder (any folder with more than 100 entries) loses their place: arrow keys stop working (the keydown handler is on the <ul>, which no longer contains focus), and Tab re-enters the tree at the selected row or the first row, possibly hundreds of rows away from where they were.",
+      "suggested_fix": "When the focused row's id disappears from `rows`, move focus to its successor in the same parent: on retry/more keep focus on the row that replaces it (e.g. give the error, loading and more rows of one parent a shared stable key/`data-row` such as `status:<parent>`), and when the more row is removed after the last page focus the first newly appended entry (or the last entry of the parent). Set `focusRequest.current = true` only when DOM focus was inside the tree, so data arriving still never steals focus from elsewhere. Add a dom test: focus the error row, press Enter, assert document.activeElement is still a treeitem.",
+      "evidence": "Read MetaprojectTree.tsx in the diff: flatten() emits ids `loading:${parent}`, `error:${parent}`, `more:${parent}` and the <li key={row.id}>; activate() calls model.retry/model.more; useLayoutEffect focuses only when focusRequest.current is set (only moveTo sets it). useMetaprojectTree.retry() sets status \"loading\" (folder path) or more.status \"loading\" (page path). MetaprojectTree.dom.test.tsx Retry/Show more tests (lines ~138-169, ~315-326) click via .click() and assert rows, never document.activeElement after activation. Not observed on a render: no build was supplied.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: activate() error branch (folder Retry)",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: activate() error branch (failed next page Retry)",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: activate() more branch (last page removes the row)",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx: flatten() loading row replaced when data arrives"
+        ],
+        "enumeration_method": "Enumerated every row type flatten() emits whose id is not an entry id (loading, error, more) and every transition in useMetaprojectTree (ensure, retry, more, read resolve/reject) that changes that row's id or removes it."
+      },
+      "dedupe_key": "metaproject-tree-focus-lost-on-status-row-replace"
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "<span>Could not load. {row.message}</span>",
+      "problem": "Criterion WCAG 4.1.3 Status Messages / State: error. The Loading row carries role=\"status\", but when a read fails that row is replaced by an error row with no live region (no role=\"alert\"/\"status\", no aria-live), so the failure is never announced. Same for a failed next page (the \"Loading…\" status inside the more row is replaced by the silent error row).",
+      "impact": "A screen-reader user who expanded a folder hears \"Loading…\" and then nothing; the folder silently shows an error they discover only by navigating to it.",
+      "suggested_fix": "Put the error text in a live region: e.g. <span role=\"status\">Could not load. {message}</span> (polite, matching the loading row) or keep one persistent visually-hidden role=\"status\" region in the tree that announces load failures.",
+      "evidence": "Diff of MetaprojectTree.tsx: loading row renders <span role=\"status\">Loading…</span>; more row renders <span role=\"status\">Loading…</span> while loading; error row renders a plain <span> and a <button>. Not verified with a screen reader (no render supplied).",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-error-not-announced"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "line": null,
+      "quote": "<nav className=\"metaproject-list\" aria-label=\"Search results\" ref={list}>",
+      "problem": "Criterion WCAG 2.4.6 Headings and Labels / 1.3.1. The landmark name is pre-existing, but this change puts the file/wiki tree inside it exactly when there is no search query, and changes the visible heading to \"Files · N\" / \"Wiki · N\". The landmark is still announced as \"Search results navigation\" while it holds the \"Project files\" tree.",
+      "impact": "Screen-reader users navigating by landmark are told the sidebar holds search results when no search was made; the accessible name disagrees with the visible heading.",
+      "suggested_fix": "Name the landmark from its visible heading (give the <h2> an id and use aria-labelledby), or derive aria-label from the same state as listHeading (\"Search results\" with a query, \"Project files\"/\"Wiki pages\" with the tree, \"Catalog\" otherwise).",
+      "evidence": "MetaprojectView.tsx:918 (current head) keeps aria-label=\"Search results\"; the diff adds the treeScope branch inside this <nav> and the listHeading cases \"Files · ...\" / \"Wiki · ...\". Located with `keryx ctx rg 'aria-label=\"Search results\"' apps/desktop/src` (one site).",
+      "confidence": "high",
+      "dedupe_key": "metaproject-list-landmark-name"
+    },
+    {
+      "id": "UX-004",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "<span className=\"metaproject-tree-name\" {...(module && { onClick: onRowClick(row) })}>{entry.name}</span>",
+      "problem": "Criterion Nielsen #4 Consistency and standards / #6 Recognition over recall. A module folder and a plain folder render identically (chevron, name, count), but a click on the name, or Enter, of a module folder selects the module and re-centres the graph, while the same gesture on a plain folder expands it. The behaviour itself is an operator decision (journal: module folder keys \"Оставить\"); the defect is that nothing on the row tells the user which behaviour they will get.",
+      "impact": "Users who click a folder name to open it sometimes get a graph navigation instead and the folder stays closed; they have to learn per folder which ones are modules.",
+      "suggested_fix": "Keep the behaviour, add a cue: a small \"Module\" kind label (NODE_KIND_LABELS.module, as node rows already show their kind) or the module icon on module folder rows, and a title/aria-description such as \"Select module; use the arrow to expand\".",
+      "evidence": "Diff: folder rows render chevron + name + count for both cases; only `module` switches the click handlers and adds aria-selected. journal.md records the operator decision on keys, not on visual distinction. Not observed on a render.",
+      "confidence": "medium",
+      "dedupe_key": "metaproject-tree-module-folder-no-cue"
+    },
+    {
+      "id": "UX-005",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "<span className=\"count-label\">{entry.type === \"folder\" ? entry.files : entry.pages}</span>",
+      "problem": "Folder and group counts are bare numbers. In the accessible name of the treeitem they read as e.g. \"src 1234\" with no unit; sighted users must infer that the number is indexed files (not direct children).",
+      "impact": "Minor ambiguity; unverified with a screen reader.",
+      "suggested_fix": "Add a visually hidden unit or an aria-label on the count (\"1234 files\" / \"12 pages\"), or a title on the count.",
+      "evidence": "Diff of MetaprojectTree.tsx folder/group row. Unverified: no render or screen-reader run; settled by reading the accessibility tree of a rendered row.",
+      "confidence": "medium",
+      "publication": "finding",
+      "dedupe_key": "metaproject-tree-count-unlabelled"
+    },
+    {
+      "id": "UX-006",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "<span className=\"metaproject-meta\">{NODE_KIND_LABELS[entry.node.kind]}</span>",
+      "problem": "Restraint. The tree's node rows are always files in Graph and always wiki pages in Wiki (validTreeEntry enforces this), so the kind label repeats the same word on every leaf row and takes width from the already-truncated name.",
+      "impact": "Visual noise and less room for file names in a narrow sidebar; no information is conveyed.",
+      "suggested_fix": "Drop the kind label on tree node rows (keep it in search results, where kinds are mixed), or replace it with something that varies, e.g. the wiki page status.",
+      "evidence": "platform/metaproject.ts validTreeEntry: `value.node.kind === (scope === \"graph\" ? \"file\" : \"wiki\")`. Visual effect not measured.",
+      "confidence": "medium",
+      "publication": "finding",
+      "dedupe_key": "metaproject-tree-redundant-kind-label"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 2},
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Report
+
+**Verdict:** DONE: no blocker or major findings. 4 minor, 2 info.
+
+**Context:** Keryx Desktop, Metaproject explorer sidebar. Audience: developers browsing their project's knowledge graph and wiki. Primary task: browse indexed files by folder (Graph) or wiki pages by page type (Wiki) without typing a search, and select one. Surface type: app screen, so only the Behavioral, Components & surfaces and Motion rows of the tell catalog and the craft thresholds apply. Mode: code only (no URL or screenshots supplied). No DESIGN.md in the repo or in apps/desktop. Job context: flow 518 plan.md and journal.md.
+
+**Scores:**
+- Slop score 0 (T1 0, T2 0, T3 0), band 0-3. The change adds no new colours and uses existing tokens (--bg-hover, --bg-selected, --accent, --accent-text, --fg-muted, --sp-*, --fs-sm). It adds no shadows or new radii, and no motion. Loading, error and empty states exist. No exemptions were needed.
+- WCAG 2.2 AA floor (code reading): pass with minor gaps (UX-001 focus loss, UX-002 status message, UX-003 landmark name). Focus ring: the treeitems inherit the global `:focus-visible { outline: 2px solid var(--focus) }` (styles/components.css:11), with offset -3px in metaproject.css. There is no `outline: none`. Row min height is 28px, above the 24px floor. Selection is shown by background plus accent border plus aria-selected, so it is not colour only.
+- Viewports checked: not run.
+
+**Top 3 changes:**
+1. Keep keyboard focus on the tree when Retry or Show more replaces or removes the focused row (UX-001).
+2. Announce a failed folder read (UX-002).
+3. Name the sidebar landmark from its visible heading (UX-003).
+
+**What works (keep):** WAI-ARIA tree semantics: level, posinset, and setsize -1 while more pages exist. Roving tabindex. Data arriving never takes focus. Inline per-folder error with Retry. The specific not-built empty state ("Rebuild the graph to browse its files."). The status rows reuse the row look. The tree uses tokens, not new colours.
+
+**Restraint (the one element to remove):** the repeated kind label on tree leaf rows (UX-006).
+
+**Checks not run:**
+- No render was supplied, so none of these ran: live Tab-through and focus-ring visibility; computed contrast of --accent-text ("Show more") and --fg-muted (status rows, counts) against the sidebar background in each of the themes in styles/themes.css; measured target sizes; 1440/768/390 px renders; light/dark; grayscale read; screen-reader output for UX-002/UX-005. A preview URL, or screenshots of the Graph tree with an expanded folder, an error row and a Show more row (light and dark), would close these.
+- Reduced motion: not applicable. The diff adds no transition or animation.
+- Overflow and truncation of long names (`.metaproject-tree-name` nowrap plus ellipsis) and the indentation at narrow widths belong to review-layout and are not rated here.
+- Rust (metaproject.rs) and transport (platform/metaproject.ts) hunks in this slice have no UI surface. Read for context, not rated.
+
+**Notes:**
+- `.metaproject/index.md` was not read. The dispatch scoped this reviewer to the payload, the slice and the named rule files.
+- Routing audit: graph_used: no (not-relevant: a bounded single-slice review with the files named in the payload); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg` for focus-visible, tokens, the landmark label, NODE_KIND_LABELS and test assertions); raw_rg_used: no.

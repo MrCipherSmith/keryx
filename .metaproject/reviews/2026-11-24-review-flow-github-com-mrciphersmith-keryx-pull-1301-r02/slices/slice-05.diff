@@ -1,0 +1,2663 @@
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 25,89 @@
+ #[derive(Deserialize)]
+ #[serde(tag = "action", rename_all = "lowercase", deny_unknown_fields)]
+ enum Request {
+     Catalog {},
+     Detail { id: String },
+     Search { query: String },
+     Neighbors { id: String, depth: u8, direction: Direction, kinds: Vec<Kind> },
+ }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Direction { Both, Incoming, Outgoing }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "kebab-case")]
+ enum Kind { Imports, Asset, Describes, Links, Contains, Defines, Calls, ChangesSpec, SpecContext }
+ #[derive(Clone, Copy, Eq, PartialEq, Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Scope { Graph, Wiki, Spec, Change, Archive }
+ #[derive(Deserialize)]
+ #[serde(rename_all = "lowercase")]
+ enum Collection { Spec, Change, Archive }
++#[derive(Clone, Copy, Deserialize)]
++#[serde(rename_all = "lowercase")]
++enum TreeScope { Graph, Wiki }
+ 
+ #[derive(Deserialize)]
+ #[serde(tag = "action", rename_all = "kebab-case", rename_all_fields = "camelCase", deny_unknown_fields)]
+ enum RequestV2 {
+     Capabilities {},
+     Catalog { expected_snapshot_id: Option<String> },
+     Detail {
+         id: String, artifact: Option<String>, section: Option<String>, digest: Option<String>,
+         expected_snapshot_id: Option<String>,
+     },
+     Search {
+         query: String, scopes: Option<Vec<Scope>>, cursor: Option<String>,
+         expected_snapshot_id: Option<String>,
+     },
+     Neighbors {
+         id: String, depth: u8, direction: Direction, kinds: Vec<Kind>, include_archive: Option<bool>,
+         expected_snapshot_id: Option<String>,
+     },
+     OpenspecList { collection: Collection, cursor: Option<String>, expected_snapshot_id: Option<String> },
+     OpenspecHistory { id: String, cursor: Option<String>, expected_snapshot_id: Option<String> },
++    /// Optional: sent only to a CLI whose capabilities list `tree`, so it is not in `ACTIONS`.
++    Tree { scope: TreeScope, parent: Option<String>, cursor: Option<String>, expected_snapshot_id: Option<String> },
+ }
+ 
+ fn digest(s: &str) -> bool {
+     s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+ }
+ 
+ fn valid_text(s: &str) -> bool {
+     !s.is_empty() && s.encode_utf16().count() <= 4096
+ }
+ 
+ fn relative_path(s: &str) -> bool {
+     valid_text(s) && !s.contains('\\') && !s.chars().any(|ch| ch.is_ascii_control())
+         && !matches!(s.as_bytes(), [first, b':', ..] if first.is_ascii_alphabetic())
+         && s.split('/').all(|part| !matches!(part, "" | "." | ".."))
+ }
+ 
+ fn valid_v1(request: Request) -> bool {
+     match request {
+         Request::Catalog {} => true,
+         Request::Detail { id } => !id.is_empty() && id.len() <= 4096,
+
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 106,153 @@
+             expected_snapshot_id,
+         ),
+         RequestV2::Search { query, scopes, cursor, expected_snapshot_id } => (
+             query.encode_utf16().count() <= 4096
+                 && scopes.map_or(true, |choices| !choices.is_empty() && choices.len() <= 5
+                     && choices.iter().enumerate().all(|(i, scope)| !choices[..i].contains(scope)))
+                 && cursor.as_deref().map_or(true, valid_text),
+             expected_snapshot_id,
+         ),
+         RequestV2::Neighbors { id, depth, direction, kinds, include_archive, expected_snapshot_id } => {
+             let _ = (direction, include_archive);
+             (valid_text(&id) && (1..=2).contains(&depth) && kinds.len() <= 9, expected_snapshot_id)
+         }
+         RequestV2::OpenspecList { collection, cursor, expected_snapshot_id } => {
+             let _ = collection;
+             (cursor.as_deref().map_or(true, valid_text), expected_snapshot_id)
+         }
+         RequestV2::OpenspecHistory { id, cursor, expected_snapshot_id } => (
+             valid_text(&id) && cursor.as_deref().map_or(true, valid_text), expected_snapshot_id,
+         ),
++        // A graph parent is a checkout-relative folder; a wiki parent is a page-type group key.
++        RequestV2::Tree { scope, parent, cursor, expected_snapshot_id } => (
++            parent.as_deref().map_or(true, |parent| match scope {
++                TreeScope::Graph => relative_path(parent),
++                TreeScope::Wiki => valid_text(parent),
++            }) && cursor.as_deref().map_or(true, valid_text),
++            expected_snapshot_id,
++        ),
+     };
+     valid && pin.as_deref().map_or(true, digest)
+ }
+ 
+ fn metaproject_args(request: &Value) -> Result<Vec<String>, String> {
+     let payload = request.to_string();
+     if payload.len() > 16 * 1024 { return Err("configuration: Metaproject request is too large.".into()); }
+     let valid = if request.get("version").is_some() {
+         let Some(mut body) = request.as_object().cloned() else { return Err(INVALID.into()); };
+         body.remove("version") == Some(Value::from(2)) && !body.values().any(Value::is_null)
+             && serde_json::from_value::<RequestV2>(Value::Object(body)).is_ok_and(valid_v2)
+     } else {
+         serde_json::from_value::<Request>(request.clone()).is_ok_and(valid_v1)
+     };
+     if !valid { return Err(INVALID.into()); }
+     Ok(vec!["metaproject-explorer".into(), "--request".into(), payload])
+ }
+ 
+ #[derive(Eq, PartialEq)]
+ struct ProbeKey {
+
+--- apps/desktop/src-tauri/src/metaproject.rs
+@@ 369,422 @@
+     fn capabilities_accept_a_cli_that_lists_more_actions() {
+         let capabilities = |actions: Vec<Value>| json!({"schemaVersion": 2, "actions": actions});
+         let needed: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
+         assert!(capability_response(&capabilities(needed.clone())));
+ 
+         // A newer CLI adds an action and may list them in another order.
+         let mut newer = needed.clone();
+         newer.insert(0, Value::from("openspec-diff"));
+         newer.reverse();
+         assert!(capability_response(&capabilities(newer)));
+ 
+         // Every action Desktop sends must still be there, and every entry must be a name.
+         assert!(!capability_response(&capabilities(needed[1..].to_vec())));
+         assert!(!capability_response(&capabilities(Vec::new())));
+         let mut malformed = needed.clone();
+         malformed.push(Value::from(1));
+         assert!(!capability_response(&capabilities(malformed)));
+         assert!(!capability_response(&json!({"schemaVersion": 1, "actions": needed})));
+         assert!(!capability_response(&json!({"schemaVersion": 2, "actions": "catalog"})));
+     }
++
++    #[test]
++    fn validates_tree_requests() {
++        let pin = "a".repeat(64);
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph"})).is_ok());
++        assert!(metaproject_args(&json!({
++            "version":2, "action":"tree", "scope":"graph", "parent":"src/lib", "cursor":"next", "expectedSnapshotId": &pin
++        })).is_ok());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki"})).is_ok());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":"other"})).is_ok());
++
++        assert!(metaproject_args(&json!({"version":2, "action":"tree"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"spec"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"../escape"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"/src"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":"src\\lib"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"wiki", "parent":""})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "parent":null})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "cursor":""})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "expectedSnapshotId":"snapshot"})).is_err());
++        assert!(metaproject_args(&json!({"version":2, "action":"tree", "scope":"graph", "depth":1})).is_err());
++        assert!(metaproject_args(&json!({"action":"tree", "scope":"graph"})).is_err());
++    }
++
++    #[test]
++    fn tree_stays_optional_for_a_cli() {
++        assert_eq!(ACTIONS, ["catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history"]);
++        let required: Vec<Value> = ACTIONS.iter().map(|action| Value::from(*action)).collect();
++        assert!(capability_response(&json!({"schemaVersion": 2, "actions": required.clone()})));
++        let mut with_tree = required;
++        with_tree.push(Value::from("tree"));
++        assert!(capability_response(&json!({"schemaVersion": 2, "actions": with_tree})));
++    }
+ }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 1,26 @@
++import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
++import {
++  metaprojectWikiGroupKey,
++  type MetaprojectNode,
++  type MetaprojectTreeEntry,
++  type MetaprojectTreeScope,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { Icon } from "../components/Icon";
++import { NODE_KIND_LABELS } from "./labels";
++import { TREE_ROOT, entryKey, type MetaprojectTreeModel, type ScopeTree } from "./useMetaprojectTree";
++
++type ContainerEntry = Exclude<MetaprojectTreeEntry, { type: "node" }>;
++
++/** One visible row of the flattened tree. Status rows (loading, error, more) belong to `parent`. */
++type Row =
++  | { type: "entry"; id: string; level: number; posinset: number; setsize: number; parent: string; entry: MetaprojectTreeEntry }
++  | { type: "loading"; id: string; level: number; parent: string }
++  | { type: "error"; id: string; level: number; parent: string; message: string }
++  | { type: "more"; id: string; level: number; parent: string; loading: boolean };
++
++const isContainer = (entry: MetaprojectTreeEntry): entry is ContainerEntry => entry.type !== "node";
++const rowId = (entry: MetaprojectTreeEntry) => `${isContainer(entry) ? "d" : "n"}:${entryKey(entry)}`;
++const nodeOf = (entry: MetaprojectTreeEntry): MetaprojectNode | undefined =>
++  entry.type === "node" ? entry.node : entry.type === "folder" ? entry.module : undefined;
++
++/**
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 31,32 @@
++ */
++const statusId = (parent: string) => `status:${parent}`;
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 34,56 @@
++
++/** The visible rows, depth first, and the parents shown as loading that nobody has asked for yet. */
++function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
++  const rows: Row[] = [];
++  const unread: string[] = [];
++  const visit = (parent: string, level: number) => {
++    const folder = tree.folders.get(parent);
++    const id = statusId(parent);
++    if (!folder || folder.status === "loading") {
++      if (!folder) unread.push(parent);
++      rows.push({ type: "loading", id, level, parent });
++      return;
++    }
++    if (folder.status === "failed") {
++      rows.push({ type: "error", id, level, parent, message: folder.error ?? "The read failed." });
++      return;
++    }
++    // More pages: the set's size is not known yet (ARIA's -1).
++    const setsize = folder.nextCursor ? -1 : folder.entries.length;
++    folder.entries.forEach((entry, index) => {
++      rows.push({ type: "entry", id: rowId(entry), level, posinset: index + 1, setsize, parent, entry });
++      if (isContainer(entry) && tree.expanded.has(entryKey(entry))) visit(entryKey(entry), level + 1);
++    });
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 59,86 @@
++  };
++  visit(TREE_ROOT, 1);
++  return { rows, unread };
++}
++
++/** The tree steps from the root to `node`: each names the parent to read and the child to find in it. */
++type Step = { parent: string; container: string } | { parent: string; node: string };
++function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[] {
++  if (scope === "wiki") {
++    if (node.kind !== "wiki") return [];
++    const group = metaprojectWikiGroupKey(node);
++    return [{ parent: TREE_ROOT, container: group }, { parent: group, node: node.id }];
++  }
++  if (node.kind !== "file" && node.kind !== "module" && node.kind !== "symbol") return [];
++  if (node.path === "." || !node.path) return [];
++  const parts = node.path.split("/");
++  // A module is its folder's row; a symbol lives in its file, which the tree does not key by path.
++  const folders = node.kind === "file" || node.kind === "symbol" ? parts.slice(0, -1) : parts;
++  const steps: Step[] = folders.map((_, index) => ({
++    parent: folders.slice(0, index).join("/"), container: folders.slice(0, index + 1).join("/"),
++  }));
++  if (node.kind === "file") steps.push({ parent: folders.join("/"), node: node.id });
++  return steps;
++}
++
++/**
++ * The explorer sidebar as a WAI-ARIA tree: graph folders and files, or wiki page-type groups and
++ * pages. Data lives in `model` (the explorer's), so this component can come and go with the search.
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 90,105 @@
++ */
++export function MetaprojectTree({ scope, label, model, selection, selected, onSelect }: {
++  scope: MetaprojectTreeScope;
++  /** The tree's accessible name. */
++  label: string;
++  model: MetaprojectTreeModel;
++  /** The explorer's selected node id. */
++  selection: string;
++  /** The selected node, when the explorer knows it: revealed when the selection came from elsewhere. */
++  selected?: MetaprojectNode;
++  onSelect: (node: MetaprojectNode) => void;
++}) {
++  const tree = model.get(scope);
++  const { rows, unread } = flatten(tree);
++  const [focusId, setFocusId] = useState("");
++  const list = useRef<HTMLUListElement>(null);
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 111,150 @@
++  const scrollRequest = useRef("");
++  const rowElements = () => [...list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []];
++
++  useEffect(() => {
++    for (const parent of unread) model.ensure(scope, parent);
++  }, [model, scope, unread.join("\n")]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  // Reveal a selection made elsewhere: expand its ancestors, reading and paging as needed; stop at a failure.
++  useEffect(() => {
++    if (!selected || selected.id !== selection || tree.handled === selection) return;
++    for (const step of revealSteps(scope, selected)) {
++      const folder = tree.folders.get(step.parent);
++      if (!folder) { model.ensure(scope, step.parent); return; }
++      if (folder.status === "loading") return;
++      if (folder.status === "failed") { model.setHandled(scope, selection); return; }
++      const found = folder.entries.some(entry => "container" in step
++        ? isContainer(entry) && entryKey(entry) === step.container
++        : entry.type === "node" && entry.node.id === step.node);
++      if (!found) {
++        if (folder.nextCursor && folder.more?.status !== "failed") { model.more(scope, step.parent); return; }
++        model.setHandled(scope, selection);
++        return;
++      }
++      if ("container" in step && !(selected.kind === "module" && step.container === selected.path)) {
++        model.setExpanded(scope, step.container, true);
++      }
++    }
++    scrollRequest.current = selected.kind === "module" ? `d:${selected.path}` : `n:${selected.id}`;
++    model.setHandled(scope, selection);
++  });
++
++  useLayoutEffect(() => {
++    const root = list.current;
++    if (!root) return;
++    const elements = rowElements();
++    if (scrollRequest.current) {
++      const row = elements.find(item => item.dataset.row === scrollRequest.current);
++      if (row) { row.scrollIntoView?.({ block: "nearest" }); scrollRequest.current = ""; }
++    }
++    // The focused row left (its folder's children or last page arrived, a new snapshot): focus the row
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 153,155 @@
++    const lost = focused.current;
++    const active = document.activeElement;
++    if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 159,159 @@
++    }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 161,163 @@
++  });
++
++  /** Records where focus is when it is inside the tree, and forgets it otherwise. */
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 165,165 @@
++    const row = element instanceof HTMLElement && list.current?.contains(element) ? element.closest<HTMLElement>("[data-row]") : null;
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 168,172 @@
++  }
++  // Focus moving out of the tree is forgotten; a row removed while focused is not, so it can hand focus on.
++  const onBlur = (event: FocusEvent<HTMLUListElement>) => {
++    const element = event.target;
++    queueMicrotask(() => {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 174,257 @@
++    });
++  };
++
++  const selectedRow = rows.find(row => row.type === "entry" && nodeOf(row.entry)?.id === selection);
++  const tabbable = rows.find(row => row.id === focusId) ?? selectedRow ?? rows[0];
++
++  const choose = (node: MetaprojectNode) => {
++    model.setHandled(scope, node.id);
++    onSelect(node);
++  };
++  const toggle = (key: string) => model.setExpanded(scope, key, !tree.expanded.has(key));
++  const activate = (row: Row, key: "Enter" | " " | "click") => {
++    if (row.type === "error") model.retry(scope, row.parent);
++    else if (row.type === "more") model.more(scope, row.parent);
++    else if (row.type === "entry") {
++      const { entry } = row;
++      if (entry.type === "node") choose(entry.node);
++      else if (entry.type === "folder" && entry.module && key !== " ") choose(entry.module);
++      else toggle(entryKey(entry));
++    }
++  };
++  // Focus moves now, to a row already shown; nothing is left pending for a later render.
++  const moveTo = (row: Row | undefined) => {
++    if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();
++  };
++
++  const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
++    const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-row]")?.dataset.row : undefined;
++    const current = rows.find(row => row.id === target) ?? tabbable;
++    if (!current) return;
++    const index = rows.indexOf(current);
++    const container = current.type === "entry" && isContainer(current.entry) ? entryKey(current.entry) : null;
++    const open = container !== null && tree.expanded.has(container);
++    switch (event.key) {
++      case "ArrowDown": moveTo(rows[index + 1]); break;
++      case "ArrowUp": moveTo(rows[index - 1]); break;
++      case "Home": moveTo(rows[0]); break;
++      case "End": moveTo(rows.at(-1)); break;
++      case "ArrowRight":
++        if (container === null) break;
++        if (!open) model.setExpanded(scope, container, true);
++        else if (rows[index + 1]?.level === current.level + 1) moveTo(rows[index + 1]);
++        break;
++      case "ArrowLeft":
++        if (open && container !== null) model.setExpanded(scope, container, false);
++        else moveTo(rows.slice(0, index).reverse().find(row => row.level === current.level - 1));
++        break;
++      case "Enter":
++      case " ":
++        activate(current, event.key);
++        break;
++      default:
++        return;
++    }
++    event.preventDefault();
++  };
++
++  const onRowClick = (row: Row) => (event: MouseEvent) => {
++    event.stopPropagation();
++    setFocusId(row.id);
++    activate(row, "click");
++  };
++  const onChevron = (row: Row, key: string) => (event: MouseEvent) => {
++    event.stopPropagation();
++    setFocusId(row.id);
++    toggle(key);
++  };
++
++  const root = tree.folders.get(TREE_ROOT);
++  if (root?.status === "ready" && root.entries.length === 0 && !root.nextCursor) {
++    return <p className="metaproject-meta" role="status">{scope === "graph"
++      ? root.partial ? "The graph is not built yet. Rebuild the graph to browse its files." : "No indexed files."
++      : "No Wiki pages."}</p>;
++  }
++
++  return (
++    <ul ref={list} role="tree" aria-label={label} className="metaproject-tree" onKeyDown={onKeyDown} onBlur={onBlur}>
++      {rows.map(row => {
++        const common = {
++          "data-row": row.id,
++          role: "treeitem",
++          "aria-level": row.level,
++          tabIndex: row === tabbable ? 0 : -1,
++          style: { paddingInlineStart: `calc(var(--sp-3) + ${row.level - 1} * var(--sp-4))` },
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 264,314 @@
++        };
++        if (row.type === "loading") {
++          return <li key={row.id} {...common} aria-disabled="true" className="metaproject-tree-status"><span role="status">Loading…</span></li>;
++        }
++        if (row.type === "error") {
++          // The same live region as the loading row it replaces, so the failure is announced.
++          return (
++            <li key={row.id} {...common} className="metaproject-tree-status metaproject-tree-error" onClick={onRowClick(row)}>
++              <span role="status">Could not load. {row.message}</span>
++              <button type="button" className="btn btn-sm" tabIndex={-1} onClick={onRowClick(row)}>Retry</button>
++            </li>
++          );
++        }
++        if (row.type === "more") {
++          return (
++            <li key={row.id} {...common} aria-busy={row.loading || undefined} className="metaproject-row metaproject-tree-more" onClick={onRowClick(row)}>
++              {row.loading ? <span role="status">Loading…</span> : "Show more"}
++            </li>
++          );
++        }
++        const { entry } = row;
++        const position = { "aria-posinset": row.posinset, "aria-setsize": row.setsize };
++        if (entry.type === "node") {
++          return (
++            <li key={row.id} {...common} {...position} aria-selected={entry.node.id === selection} className="metaproject-row metaproject-tree-row"
++              onClick={onRowClick(row)}>
++              <span className="metaproject-tree-chevron" aria-hidden="true" />
++              <span className="metaproject-tree-name">{entry.node.title}</span>
++              <span className="metaproject-meta">{NODE_KIND_LABELS[entry.node.kind]}</span>
++            </li>
++          );
++        }
++        const key = entryKey(entry);
++        const open = tree.expanded.has(key);
++        const module = entry.type === "folder" ? entry.module : undefined;
++        return (
++          <li key={row.id} {...common} {...position} aria-expanded={open} {...(module && { "aria-selected": module.id === selection })}
++            className="metaproject-row metaproject-tree-row" onClick={module ? onChevron(row, key) : onRowClick(row)}>
++            <span className="metaproject-tree-chevron" aria-hidden="true" onClick={onChevron(row, key)}>
++              <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
++            </span>
++            <span className="metaproject-tree-name" {...(module && { onClick: onRowClick(row) })}>{entry.name}</span>
++            {/* A module folder's name selects the module, so it carries the kind label node rows show. */}
++            {module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}
++            <span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>
++          </li>
++        );
++      })}
++    </ul>
++  );
++}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 1,58 @@
+ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import {
+   rankMetaprojectSearchHits,
+   METAPROJECT_EDGE_KINDS,
+   METAPROJECT_EDGE_KINDS_V2,
++  MetaprojectRequestError,
+   type MetaprojectCatalog,
+   type MetaprojectDetail,
+   type MetaprojectDirection,
+   type MetaprojectEdgeKind,
+   type MetaprojectHit,
+   type MetaprojectHitV2,
+   type MetaprojectSearchV2,
+   type MetaprojectRequestV2,
+   type MetaprojectV2Response,
+   type MetaprojectNeighbors,
+   type MetaprojectNode,
+   type MetaprojectRequest,
+   type MetaprojectResponse,
+   type MetaprojectSearch,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { indexMetaprojectGraph, projectMetaprojectGraph } from "../../../../src/integrations/metaproject-projection";
+ import { Icon } from "../components/Icon";
+ import { renderRepositoryMarkdown } from "../components/Markdown";
+ import { EmptyState, useEscape } from "../components/ui";
+ import { errMessage } from "../lib/format";
+ import { openExternal } from "../platform/commands";
+-import { negotiateMetaproject, requestMetaproject, requestMetaprojectV2 } from "../platform/metaproject";
++import {
++  negotiateMetaprojectExplorer, requestMetaproject, requestMetaprojectTree, requestMetaprojectV2, type MetaprojectNegotiation,
++} from "../platform/metaproject";
++import { MetaprojectTree } from "./MetaprojectTree";
+ import { OpenSpecView, type OpenSpecLocation } from "./OpenSpecView";
+ import { NodeDetailsPanel } from "./NodeDetailsPanel";
+ import { RelationshipGraph, type CytoscapeFactory } from "./RelationshipGraph";
+ import { RelationshipList, summarizeRelationships } from "./RelationshipList";
+ import { RELATIONSHIP_KIND_LABELS } from "./labels";
+ import { useExplorerNavigation } from "./useExplorerNavigation";
++import { useMetaprojectTree, type RequestTree } from "./useMetaprojectTree";
+ import "./metaproject.css";
+ 
+ type Request = (
+   cwd: string,
+   request: MetaprojectRequest,
+ ) => Promise<MetaprojectResponse>;
+ const EMPTY_HITS: readonly MetaprojectHit[] = [];
+ const DOCUMENT_EDGES = ["describes", "links"] as const;
+ const sameLocation = (left: OpenSpecLocation | null, right: OpenSpecLocation | null) =>
+   left === right || (left !== null && right !== null && left.id === right.id && left.collection === right.collection &&
+     left.artifact === right.artifact && left.section === right.section && left.digest === right.digest && left.fragment === right.fragment);
+ 
+ /**
+  * The repository path a Markdown link in `source` points at: percent-decoded, relative to the
+  * page's folder, or to the repository root when it starts with "/". Null when it cannot be decoded.
+  */
+ function resolveRepositoryPath(source: string, href: string): string | null {
+   let path: string;
+   try { path = decodeURIComponent(href); } catch { return null; }
+   const base = path.startsWith("/") ? "" : source.slice(0, source.lastIndexOf("/") + 1);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 124,179 @@
+             const count = seen.get(base) ?? 0;
+             seen.set(base, count + 1);
+             if ((count ? `${base}-${count}` : base) === fragment) {
+               heading.scrollIntoView();
+               break;
+             }
+           }
+           return;
+         }
+         if (!path) return;
+         const resolved = resolveRepositoryPath(source, path);
+         openPath(resolved ?? path, targetFragment, resolved !== null);
+       }}
+       onAuxClick={(event) => {
+         if ((event.target as Element).closest("a")) event.preventDefault();
+       }}
+     />
+   );
+ }
+ 
+-type Negotiate = (cwd: string) => Promise<1 | 2>;
++/** Protocol negotiation; a bare protocol number means the CLI offers no optional action (no `tree`). */
++type Negotiate = (cwd: string) => Promise<1 | 2 | MetaprojectNegotiation>;
+ 
+ export function MetaprojectView(props: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+   /** Protocol negotiation; given, it runs even when `request`/`requestV2` are injected. */
+   negotiate?: Negotiate;
++  /**
++   * Reads one page of the sidebar tree. Used when the negotiation reports `tree`; injected without
++   * a negotiation, it alone turns the tree on.
++   */
++  requestTree?: RequestTree;
+   /** Test seam for the graph canvas (happy-dom has none); the app passes nothing. */
+   createCytoscape?: CytoscapeFactory;
+   /**
+    * Whether the explorer's view is shown (the app keeps it mounted, hidden, after its first visit).
+    * Hidden, it holds no overlay; shown again, it re-reads the catalog quietly. Defaults to true.
+    */
+   visible?: boolean;
+ }) {
+   return <Explorer key={props.cwd} {...props} />;
+ }
+ 
+ /** Every relationship kind except the symbol layer (`defines`, `calls`). */
+ const SYMBOL_KINDS: readonly MetaprojectEdgeKind[] = ["defines", "calls"];
+ const withoutSymbolKinds = (kinds: readonly MetaprojectEdgeKind[]) => kinds.filter(kind => !SYMBOL_KINDS.includes(kind));
+ const WIKI_KINDS_V1 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS);
+ const WIKI_KINDS_V2 = withoutSymbolKinds(METAPROJECT_EDGE_KINDS_V2);
+ const NO_SYMBOL_LAYER = "Not available: this project's graph has no symbol layer.";
+ const sameKinds = (left: readonly MetaprojectEdgeKind[], right: readonly MetaprojectEdgeKind[]) =>
+   left.length === right.length && left.every(kind => right.includes(kind));
+ 
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 232,306 @@
+       close.current();
+     };
+     window.addEventListener("mousedown", onDown, true);
+     return () => window.removeEventListener("mousedown", onDown, true);
+   }, [anchor]);
+   return (
+     <div ref={panel} id={id} className="menu metaproject-filters-pop" role="dialog" aria-label="Graph filters"
+       style={{ ...position, width: POPOVER_WIDTH }}>
+       {children}
+     </div>
+   );
+ }
+ 
+ function Explorer({
+   cwd,
+   onRebuild,
+   onDraft,
+   request = requestMetaproject,
+   requestV2,
+   negotiate,
++  requestTree,
+   createCytoscape,
+   visible = true,
+ }: {
+   cwd: string;
+   onRebuild: () => Promise<boolean>;
+   onDraft?: (task: string) => Promise<void>;
+   request?: Request;
+   requestV2?: (cwd: string, request: MetaprojectRequestV2) => Promise<MetaprojectV2Response>;
+   negotiate?: Negotiate;
++  requestTree?: RequestTree;
+   createCytoscape?: CytoscapeFactory;
+   visible?: boolean;
+ }) {
+   const symbolReasonId = useId();
++  const listHeadingId = useId();
+   const [catalog, setCatalog] = useState<MetaprojectCatalog | null>(null);
+   const { route, setRoute, visit, navigate, switchView, back, canGoBack, root } = useExplorerNavigation();
+   const { mode, query } = route;
+   const [panelWidth, setPanelWidth] = useState(380);
+   const negotiates = Boolean(negotiate) || (!requestV2 && request === requestMetaproject);
+   const [protocol, setProtocol] = useState<1 | 2 | null>(negotiates ? null : requestV2 ? 2 : 1);
++  const [supportsTree, setSupportsTree] = useState(!negotiates && Boolean(requestTree));
+   const archiveSelection = useRef(false);
+   const [protocolError, setProtocolError] = useState("");
+   const [negotiation, setNegotiation] = useState(0);
+   useEffect(() => {
+     if (!negotiates) return;
+     let active = true;
+-    void (negotiate ?? negotiateMetaproject)(cwd).then(value => {
++    void (negotiate ?? negotiateMetaprojectExplorer)(cwd).then(value => {
+       if (!active) return;
++      const settled = typeof value === "number" ? { protocol: value, supportsTree: false } : value;
+       setProtocolError("");
+-      setProtocol(value);
++      setProtocol(settled.protocol);
++      setSupportsTree(settled.supportsTree);
+     }).catch(cause => { if (active) setProtocolError(errMessage(cause)); });
+     return () => { active = false; };
+   }, [cwd, negotiate, negotiates, negotiation]);
+   const read: Request = useMemo(() => protocol === 2
+     ? ((root, input) => (requestV2 ?? requestMetaprojectV2)(root, { ...input, version: 2, ...(input.action === "neighbors" && archiveSelection.current ? { includeArchive: true } : {}) }) as unknown as Promise<MetaprojectResponse>)
+     : request, [protocol, request, requestV2]);
+   // The first Wiki page stands in for a missing selection only while nothing is searched.
+   const selection = route.mode === "graph" ? route.selection || catalog?.nodes[0]?.id || ""
+     : route.mode === "wiki" ? route.selection || (route.query.trim() ? "" : catalog?.nodes.find(node => node.kind === "wiki")?.id || "") : "";
+   const shownSelection = useRef(selection);
+   shownSelection.current = selection;
+   archiveSelection.current = route.mode === "graph" && Boolean(route.archive);
+   const [direction, setDirection] = useState<MetaprojectDirection>("both");
+   const [depth, setDepth] = useState<1 | 2>(1);
+   const [kinds, setKinds] = useState<MetaprojectEdgeKind[]>(WIKI_KINDS_V1);
+   useEffect(() => {
+     if (protocol === 2) setKinds(current => [...new Set<MetaprojectEdgeKind>([...current, "changes-spec", "spec-context"])]);
+   }, [protocol]);
+   const defaultKinds = protocol === 2 ? WIKI_KINDS_V2 : WIKI_KINDS_V1;
+   const filtersChanged = direction !== "both" || depth !== 1 || !sameKinds(kinds, defaultKinds);
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 661,704 @@
+     } else select(hit.node.id);
+   };
+   const loadMoreSearch = async () => {
+     if (protocol !== 2 || !resolvedSearch?.nextCursor || pageInFlight.current) return;
+     const cursor = resolvedSearch.nextCursor;
+     const generation = latestSearch.current.generation;
+     const projectGeneration = project.current;
+     const searchMode = resolvedSearch.mode;
+     pageInFlight.current = true;
+     try {
+       const page = await (requestV2 ?? requestMetaprojectV2)(cwd, {
+         version: 2, action: "search", query: searchQuery, cursor, expectedSnapshotId: resolvedSearch.snapshotId,
+         ...(searchMode === "wiki" && { scopes: ["wiki"] }),
+       });
+       if (!("hits" in page) || generation !== latestSearch.current.generation || projectGeneration !== project.current || searchMode !== activeMode.current) return;
+       if (page.snapshotId !== resolvedSearch.snapshotId) { setSnapshotMismatch(true); return; }
+       setSearchResult(current => current?.nextCursor === cursor && current.snapshotId === page.snapshotId
+         ? { mode: searchMode, query: current.query, snapshotId: current.snapshotId, hits: [...current.hits, ...page.hits], ...(page.nextCursor && { nextCursor: page.nextCursor }) }
+         : current);
+     } catch (cause) {
+-      if (generation === latestSearch.current.generation && projectGeneration === project.current)
+-        setSearchError({ query: searchQuery, message: errMessage(cause) });
++      if (generation !== latestSearch.current.generation || projectGeneration !== project.current) return;
++      // The CLI answered for another snapshot: offer Refresh catalog, as every other stale read does.
++      if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") setSnapshotMismatch(true);
++      else setSearchError({ query: searchQuery, message: errMessage(cause) });
+     } finally { pageInFlight.current = false; }
+   };
+   // A rebuild outlives catalog reloads; only leaving the explorer (unmount, or a project
+   // change, which remounts it) stops it from writing state.
+   const mounted = useRef(true);
+   useEffect(() => {
+     mounted.current = true;
+     return () => { mounted.current = false; };
+   }, []);
+   const rebuild = async () => {
+     setRebuilding(true);
+     setError(null);
+     try {
+       if ((await onRebuild()) && mounted.current) setRevision((value) => value + 1);
+     } catch (cause) {
+       if (mounted.current) setError({ source: "rebuild", message: errMessage(cause) });
+     } finally {
+       if (mounted.current) setRebuilding(false);
+     }
+   };
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 735,782 @@
+   const wikiRelationships = useMemo(
+     () => mode === "wiki" && currentProjection ? summarizeRelationships(currentProjection) : null,
+     [mode, currentProjection],
+   );
+   const wikiRelationshipRows = wikiRelationships ? wikiRelationships.incoming + wikiRelationships.outgoing + wikiRelationships.secondStep : 0;
+   // While the next selection's relationships load, the last graph stays on screen, marked busy;
+   // a failed read or leaving Graph drops it.
+   const lastGraph = useRef<MetaprojectNeighbors | null>(null);
+   if (mode !== "graph" || relationshipError) lastGraph.current = null;
+   else if (currentProjection) lastGraph.current = currentProjection;
+   // A projection for another root means the read for this selection has not started yet.
+   const relationshipsLoading = loadingRelationships || (projection !== null && projection.root !== selection);
+   const graphProjection = mode !== "graph" ? null : currentProjection ?? (relationshipsLoading ? lastGraph.current : null);
+   const graphBusy = graphProjection !== null && graphProjection !== currentProjection;
+   const showGraph = graphState !== null && (graphState.graph !== "missing" || protocol === 2);
+   const list = useRef<HTMLElement>(null);
+   useEffect(() => {
+     list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+   }, [selection, mode]);
+   const shownTotal = catalog ? mode === "wiki" ? catalog.counts.wiki : catalog.counts.files + catalog.counts.wiki + catalog.counts.modules : 0;
+-  const listHeading = searchQuery ? `Results · ${results.length}` : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
++  // Without a query, a CLI that offers `tree` browses Graph by folder and Wiki by page type; otherwise the flat list.
++  const treeScope = protocol === 2 && supportsTree && !searchQuery && (mode === "graph" || mode === "wiki") ? mode : null;
++  const markStale = useCallback(() => setSnapshotMismatch(true), []);
++  const tree = useMetaprojectTree({ cwd, snapshot: catalog?.snapshotId ?? "", request: requestTree ?? requestMetaprojectTree, onStale: markStale });
++  const listHeading = searchQuery ? `Results · ${results.length}`
++    : treeScope === "graph" ? `Files · ${catalog?.counts.files ?? 0}`
++    : treeScope === "wiki" ? `Wiki · ${catalog?.counts.wiki ?? 0}`
++    : `Catalog · ${results.length} of ${Math.max(shownTotal, results.length)}`;
+   const showHidden = useCallback(() => {
+     setRoute(current => current.mode === "graph" && !current.panelOpen ? { ...current, panelOpen: true } : current);
+     setRevealRelationships(value => value + 1);
+   }, [setRoute]);
+   const detailPanel = detail?.node.id === selection && detail.node.kind === "wiki" && (
+     <article className="metaproject-article">
+       <header className="metaproject-article-header">
+         <h2>{detail.node.title}</h2>
+         <p className="metaproject-meta">
+           {[detail.node.pageType, detail.node.status, detail.node.path].filter(Boolean).join(" · ")}
+         </p>
+         <button className="btn btn-sm" onClick={() => viewInGraph(detail.node.id, detail.node)}><Icon name="branch" size={14} />View in Graph</button>
+       </header>
+       {unresolvedLink?.selection === selection && (
+         <p className="metaproject-meta" role="status">{unresolvedLink.message}</p>
+       )}
+       {detail.markdown && (
+         <RepositoryMarkdown text={detail.markdown} source={detail.node.path} openPath={openPath}
+           fragment={route.mode === "wiki" ? route.fragment : undefined} />
+       )}
+
+--- apps/desktop/src/metaproject/MetaprojectView.tsx
+@@ 902,975 @@
+         : "Checking OpenSpec support…"}</p>}
+       {mode !== "openspec" && loading && !protocolError && <div className="inline-banner tone-neutral" role="status">Loading project knowledge…</div>}
+       {mode !== "openspec" && catalog && graphState && (
+         <>
+           {graphState.graph !== "ready" && (
+             <div className="inline-banner tone-warn metaproject-freshness" role="status">
+               <span className="metaproject-freshness-state">Graph is {graphState.graph}.</span>
+               {graphState.graphReason && (
+                 <button type="button" className="btn btn-ghost btn-sm metaproject-freshness-toggle" aria-expanded={freshnessOpen}
+                   aria-controls={freshnessReasonId} onClick={() => setFreshnessReason(freshnessOpen ? null : graphState.graphReason ?? null)}>
+                   Details<Icon name={freshnessOpen ? "chevronUp" : "chevronDown"} size={12} />
+                 </button>
+               )}
+               {freshnessOpen && <p id={freshnessReasonId} className="metaproject-freshness-reason">{graphState.graphReason}</p>}
+               <button className="btn metaproject-rebuild" disabled={rebuilding} onClick={() => void rebuild()}>
+                 {rebuilding ? "Rebuilding…" : "Rebuild graph"}
+               </button>
+             </div>
+           )}
+           <div className={`metaproject-panes${mode === "graph" ? " metaproject-graph-panes" : ""}`}>
+-            <nav className="metaproject-list" aria-label="Search results" ref={list}>
+-              <h2>{listHeading}</h2>
++            <nav className="metaproject-list" aria-labelledby={listHeadingId} ref={list}>
++              <h2 id={listHeadingId}>{listHeading}</h2>
+               {searchFailure && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>Search failed. {searchFailure}</span>
+                   <button className="btn btn-sm" onClick={() => setSearchAttempt(value => value + 1)}>Retry search</button>
+                 </div>
+               )}
++              {treeScope ? (
++                <MetaprojectTree key={treeScope} scope={treeScope} label={treeScope === "graph" ? "Project files" : "Wiki pages"}
++                  // Only a selection the user made is revealed; the fallback shown without one expands nothing.
++                  model={tree} selection={selection} selected={route.selection ? activeNode : undefined}
++                  onSelect={node => { remember(node); openHit({ node }); }} />
++              ) : <>
+               <ul>
+                 {results.map(hit => (
+                   <li key={`${hit.node.id}-${hit.section ?? ""}`}>
+                     <button className="metaproject-row" aria-current={selection === hit.node.id ? "true" : undefined} onClick={() => openHit(hit)}>
+                       <strong>{hit.node.title}</strong>
+                       <span className="metaproject-meta">{hit.node.kind} · {hit.node.path}</span>
+                       {hit.snippet && (
+                         <small className="metaproject-snippet">{hit.section ? `${hit.section}: ` : ""}{hit.snippet}</small>
+                       )}
+                     </button>
+                   </li>
+                 ))}
+               </ul>
+               {resolvedSearch?.nextCursor && <button className="btn" onClick={() => void loadMoreSearch()}>Load more results</button>}
+               {!results.length && (
+                 searching
+                   ? <p role="status">Searching project knowledge…</p>
+                   : !searchFailure && !snapshotMismatch && <p>{searchQuery ? "No results." : "No indexed project knowledge."}</p>
+               )}
++              </>}
+             </nav>
+             <section className="metaproject-content" ref={content} aria-label={mode === "wiki" ? "Wiki article" : "Relationship graph"}>
+               {(detailError || (mode === "wiki" && relationshipError)) && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>{[detailError, mode === "wiki" ? relationshipError : ""].filter(Boolean).join(" · ")}</span>
+                   <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "wiki" && detailPanel}
+               {mode === "wiki" && loadingDetail && <p role="status">Loading item…</p>}
+               {mode === "graph" && !(graphProjection && showGraph) && <div className="metaproject-filter-strip">{filtersButton}</div>}
+               {mode === "graph" && filters}
+               {mode === "graph" && relationshipError && !panelOpen && (
+                 <div className="inline-banner tone-warn" role="alert">
+                   <span>{relationshipError}</span>
+                   <button className="btn btn-sm" onClick={() => setRevision(value => value + 1)}>Retry</button>
+                 </div>
+               )}
+               {mode === "graph" && relationshipsLoading && !graphProjection && <p role="status">Loading relationships…</p>}
+               {graphProjection && showGraph && (
+
+--- apps/desktop/src/metaproject/metaproject.css
+@@ 40,90 @@
+ .metaproject-row {
+   display: grid;
+   gap: var(--sp-1);
+   inline-size: 100%;
+   min-block-size: 28px;
+   padding: var(--sp-2) var(--sp-3);
+   border: 1px solid transparent;
+   border-radius: var(--r-md);
+   background: transparent;
+   color: inherit;
+   font: inherit;
+   text-align: start;
+   overflow-wrap: anywhere;
+ }
+ button.metaproject-row:hover { background: var(--bg-hover); }
+ button.metaproject-row:focus-visible { outline-offset: -3px; }
+ button.metaproject-row[aria-current="true"] {
+   background: var(--bg-selected);
+   border-color: var(--accent);
+ }
++/* Sidebar tree: flat treeitem rows indented by level (inline style), the list's row look. */
++.metaproject-list .metaproject-tree { gap: 0; }
++.metaproject-tree .metaproject-tree-row { display: flex; align-items: center; gap: var(--sp-1); padding-block: var(--sp-1); }
++.metaproject-tree [role="treeitem"]:not([aria-disabled="true"]):hover { background: var(--bg-hover); }
++.metaproject-tree [role="treeitem"]:focus-visible { outline-offset: -3px; }
++.metaproject-tree [role="treeitem"][aria-selected="true"] { background: var(--bg-selected); border-color: var(--accent); }
++.metaproject-tree-chevron { flex: none; display: inline-flex; inline-size: 12px; color: var(--fg-muted); }
++.metaproject-tree-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.metaproject-tree-row > .metaproject-meta, .metaproject-tree-row > .count-label { flex: none; }
++.metaproject-tree-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-block-size: 28px; padding-block: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); }
++.metaproject-tree-more { min-block-size: 28px; padding-block: var(--sp-1); color: var(--accent-text); font-size: var(--fs-sm); }
+ .metaproject-meta, .metaproject-snippet {
+   margin: 0;
+   color: var(--fg-muted);
+   font-size: var(--fs-sm);
+   overflow-wrap: anywhere;
+ }
+ .metaproject-snippet {
+   display: -webkit-box;
+   -webkit-box-orient: vertical;
+   -webkit-line-clamp: 2;
+   overflow: hidden;
+ }
+ 
+ .metaproject-controls {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: flex-start;
+   gap: var(--sp-2) var(--sp-3);
+   padding: var(--sp-3);
+   border: 1px solid var(--border);
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 1,13 @@
++import { useCallback, useMemo, useReducer, useRef } from "react";
++import {
++  MetaprojectRequestError,
++  type MetaprojectTreeEntry,
++  type MetaprojectTreeScope,
++  type MetaprojectTreeV2,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import { errMessage } from "../lib/format";
++import type { MetaprojectTreeRequest } from "../platform/metaproject";
++
++/** The key of a tree's root; graph folder paths and wiki group keys are never empty. */
++export const TREE_ROOT = "";
++
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 18,19 @@
++export const MAX_TREE_READS = 3;
++
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 27,82 @@
++export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
++
++/** The loaded children of one tree parent (the root, a graph folder or a wiki group). */
++export interface TreeFolder {
++  status: "loading" | "ready" | "failed";
++  entries: readonly MetaprojectTreeEntry[];
++  error?: string;
++  nextCursor?: string;
++  /** The source behind the scope is missing or incomplete (a graph that is not built). */
++  partial: boolean;
++  /** The next page: being read, or its read failed. */
++  more?: { status: "loading" } | { status: "failed"; error: string };
++}
++
++/** One scope's tree: kept by the explorer, so it survives leaving the view and switching Graph/Wiki. */
++export interface ScopeTree {
++  snapshot: string;
++  expanded: ReadonlySet<string>;
++  folders: ReadonlyMap<string, TreeFolder>;
++  /** The last selection the tree revealed or chose itself; a different one is revealed. */
++  handled: string;
++}
++
++export interface MetaprojectTreeModel {
++  get(scope: MetaprojectTreeScope): ScopeTree;
++  /** Reads `parent`'s first page unless it is loaded, being read, or failed. */
++  ensure(scope: MetaprojectTreeScope, parent: string): void;
++  setExpanded(scope: MetaprojectTreeScope, key: string, expanded: boolean): void;
++  /** Re-reads one failed parent, or its failed next page. */
++  retry(scope: MetaprojectTreeScope, parent: string): void;
++  /** Appends `parent`'s next page; a page already being read is not asked for again. */
++  more(scope: MetaprojectTreeScope, parent: string): void;
++  setHandled(scope: MetaprojectTreeScope, selection: string): void;
++}
++
++/** A container's key: a graph folder's path or a wiki group's key. A node is keyed by its id. */
++export const entryKey = (entry: MetaprojectTreeEntry) =>
++  entry.type === "folder" ? entry.path : entry.type === "group" ? entry.key : entry.node.id;
++
++/** The parent of an expandable key: wiki groups sit at the root, graph folders under their directory. */
++export function parentOf(scope: MetaprojectTreeScope, key: string): string {
++  if (scope === "wiki") return TREE_ROOT;
++  const slash = key.lastIndexOf("/");
++  return slash < 0 ? TREE_ROOT : key.slice(0, slash);
++}
++
++const emptyScope = (snapshot: string): ScopeTree => ({ snapshot, expanded: new Set(), folders: new Map(), handled: "" });
++
++/**
++ * The explorer's tree data: per scope, the expanded folders, the loaded pages of each parent and
++ * what the tree last revealed. A new snapshot drops loaded children and every pending answer and
++ * keeps the expanded set; the tree re-reads what it shows. A cursor is only ever sent for the
++ * snapshot that issued it. At most `MAX_TREE_READS` reads run at once. `onStale` is told when a read
++ * answers `stale-snapshot` (the transport's answer to a reply for another snapshot) or, from a
++ * `request` that does not check, a page of another snapshot; that page is never shown.
++ */
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 84,87 @@
++  cwd: string;
++  snapshot: string;
++  request: RequestTree;
++  onStale: () => void;
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 90,99 @@
++}): MetaprojectTreeModel {
++  const [, render] = useReducer((value: number) => value + 1, 0);
++  const state = useRef<Record<MetaprojectTreeScope, ScopeTree>>({ graph: emptyScope(snapshot), wiki: emptyScope(snapshot) });
++  // Every snapshot change retires the answers still in flight; a read keeps the generation it started in.
++  const generation = useRef(0);
++  if (state.current.graph.snapshot !== snapshot) {
++    generation.current++;
++    const keep = (scope: ScopeTree): ScopeTree => ({ ...emptyScope(snapshot), expanded: scope.expanded, handled: scope.handled });
++    state.current = { graph: keep(state.current.graph), wiki: keep(state.current.wiki) };
++  }
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 102,137 @@
++
++  const update = useCallback((scope: MetaprojectTreeScope, change: (tree: ScopeTree) => ScopeTree) => {
++    const next = change(state.current[scope]);
++    if (next === state.current[scope]) return;
++    state.current = { ...state.current, [scope]: next };
++    render();
++  }, []);
++
++  const setFolder = useCallback((scope: MetaprojectTreeScope, parent: string, change: (folder: TreeFolder | undefined) => TreeFolder) => {
++    update(scope, tree => {
++      const folders = new Map(tree.folders);
++      folders.set(parent, change(tree.folders.get(parent)));
++      return { ...tree, folders };
++    });
++  }, [update]);
++
++  /** Once every page of `parent` is read, its expanded children that are gone are forgotten, with their descendants. */
++  const forgetVanished = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    update(scope, tree => {
++      const folder = tree.folders.get(parent);
++      if (!folder || folder.status !== "ready" || folder.nextCursor) return tree;
++      const present = new Set(folder.entries.map(entryKey));
++      const gone = [...tree.expanded].filter(key => parentOf(scope, key) === parent && !present.has(key));
++      if (!gone.length) return tree;
++      const expanded = new Set([...tree.expanded].filter(key => !gone.some(vanished => key === vanished || key.startsWith(`${vanished}/`))));
++      return { ...tree, expanded };
++    });
++  }, [update]);
++
++  // Reads wait in order for a free slot, so re-reading many expanded folders never exhausts the
++  // read permits Desktop shares with the explorer's own reads.
++  const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });
++  const limit = useCallback((task: () => unknown) => {
++    const pool = slots.current;
++    const start = () => {
++      pool.active++;
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 143,154 @@
++        pool.active--;
++        pool.queue.shift()?.();
++      });
++    };
++    if (pool.active < MAX_TREE_READS) start();
++    else pool.queue.push(start);
++  }, []);
++
++  const read = useCallback((scope: MetaprojectTreeScope, parent: string, cursor?: string) => {
++    const issued = generation.current;
++    const pinned = state.current[scope].snapshot;
++    const current = () => issued === generation.current;
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 156,158 @@
++    const input: MetaprojectTreeRequest = {
++      scope, expectedSnapshotId: pinned, ...(parent !== TREE_ROOT && { parent }), ...(cursor && { cursor }),
++    };
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 170,170 @@
++    // A read queued under a snapshot that has since been retired never starts.
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 172,184 @@
++      if (!current()) return;
++      if (page.snapshotId !== pinned) throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
++      setFolder(scope, parent, folder => {
++        if (!cursor) return { status: "ready", entries: page.entries, partial: page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
++        // A page appends to the one that asked for it, in order, without repeating a row.
++        const base = folder ?? { status: "ready" as const, entries: [], partial: page.partial };
++        const seen = new Set(base.entries.map(entryKey));
++        const entries = [...base.entries, ...page.entries.filter(entry => !seen.has(entryKey(entry)))];
++        return { status: "ready", entries, partial: base.partial || page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
++      });
++      forgetVanished(scope, parent);
++    }).catch(cause => {
++      if (!current()) return;
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 191,251 @@
++      // A folder that no longer exists is forgotten quietly; the next read of its parent drops its row.
++      if (!cursor && parent !== TREE_ROOT && cause instanceof MetaprojectRequestError && cause.code === "not-found") {
++        update(scope, tree => {
++          const folders = new Map(tree.folders);
++          folders.delete(parent);
++          const expanded = new Set([...tree.expanded].filter(key => key !== parent && !key.startsWith(`${parent}/`)));
++          return { ...tree, folders, expanded };
++        });
++        return;
++      }
++      const error = errMessage(cause);
++      setFolder(scope, parent, folder => cursor && folder
++        ? { ...folder, more: { status: "failed", error } }
++        : { status: "failed", entries: [], partial: false, error });
++    }));
++  }, [forgetVanished, limit, setFolder, update]);
++
++  const ensure = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    if (state.current[scope].folders.has(parent)) return;
++    setFolder(scope, parent, () => ({ status: "loading", entries: [], partial: false }));
++    read(scope, parent);
++  }, [read, setFolder]);
++
++  const more = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    const folder = state.current[scope].folders.get(parent);
++    if (!folder || folder.status !== "ready" || !folder.nextCursor || folder.more?.status === "loading") return;
++    const cursor = folder.nextCursor;
++    setFolder(scope, parent, current => ({ ...(current ?? folder), more: { status: "loading" } }));
++    read(scope, parent, cursor);
++  }, [read, setFolder]);
++
++  const retry = useCallback((scope: MetaprojectTreeScope, parent: string) => {
++    const folder = state.current[scope].folders.get(parent);
++    if (folder?.status === "failed") {
++      setFolder(scope, parent, () => ({ status: "loading", entries: [], partial: false }));
++      read(scope, parent);
++    } else if (folder?.more?.status === "failed" && folder.nextCursor) {
++      setFolder(scope, parent, current => ({ ...(current ?? folder), more: { status: "loading" } }));
++      read(scope, parent, folder.nextCursor);
++    }
++  }, [read, setFolder]);
++
++  const setExpanded = useCallback((scope: MetaprojectTreeScope, key: string, open: boolean) => {
++    update(scope, tree => {
++      if (tree.expanded.has(key) === open) return tree;
++      const expanded = new Set(tree.expanded);
++      if (open) expanded.add(key); else expanded.delete(key);
++      return { ...tree, expanded };
++    });
++  }, [update]);
++
++  const setHandled = useCallback((scope: MetaprojectTreeScope, selection: string) => {
++    update(scope, tree => tree.handled === selection ? tree : { ...tree, handled: selection });
++  }, [update]);
++
++  const get = useCallback((scope: MetaprojectTreeScope) => state.current[scope], []);
++  const scopes = state.current;
++  // A new object whenever a scope changes, so the tree re-renders with it.
++  return useMemo(() => ({ get, ensure, setExpanded, retry, more, setHandled, scopes }),
++    [get, ensure, setExpanded, retry, more, setHandled, scopes]);
++}
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 1,25 @@
+ import {
+-  METAPROJECT_CAPABILITIES, METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
+-  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectV2EdgeKind,
+-  isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectResponse,
+-  type MetaprojectV2Response,
++  METAPROJECT_ERROR_CODES, METAPROJECT_PAGE_SIZE_V2, METAPROJECT_RESPONSE_BYTES_V2,
++  MetaprojectRequestError, isMetaprojectEdgeKind, isMetaprojectRelativePath, isMetaprojectScope, isMetaprojectTreeScope,
++  isMetaprojectV2EdgeKind, isOpenSpecKind, isSha256, type MetaprojectRequest, type MetaprojectRequestV2,
++  type MetaprojectResponse, type MetaprojectTreeScope, type MetaprojectTreeV2, type MetaprojectV2Response,
+ } from "../../../../src/integrations/metaproject-explorer-contract";
+ import { errMessage } from "../lib/format";
+ import { invoke, isTauri } from "./backend";
+ 
+ type RecordValue = Record<string, unknown>;
+ const object = (value: unknown): value is RecordValue => value !== null && typeof value === "object" && !Array.isArray(value);
+ const optionalString = (value: unknown) => value === undefined || typeof value === "string";
+ const nonnegativeInteger = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+ 
+ function validNode(value: unknown): boolean {
+   return object(value) && typeof value.id === "string" && typeof value.title === "string" && typeof value.path === "string"
+     && typeof value.kind === "string" && ["wiki", "module", "file", "symbol"].includes(value.kind)
+     && optionalString(value.module) && optionalString(value.pageType) && optionalString(value.status)
+     && (value.line === undefined || nonnegativeInteger(value.line));
+ }
+ 
+ function validEdge(value: unknown): boolean {
+   return object(value) && typeof value.from === "string" && typeof value.to === "string"
+     && isMetaprojectEdgeKind(value.kind)
+     && (value.evidence === undefined || (Array.isArray(value.evidence) && value.evidence.length <= 400 && value.evidence.every((item: unknown) => typeof item === "string")))
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 147,270 @@
+       && isMetaprojectRelativePath(item.specPath) && validSource(item.source)
+       && list(item.requirements, 10_000, validRequirement))
+     && typeof value.partial === "boolean"
+     && (value.artifact === undefined || (object(value.artifact) && validSource(value.artifact.source)
+       && typeof value.artifact.markdown === "string" && optionalString(value.artifact.section)
+       && list(value.artifact.requirements, 10_000, validRequirement)));
+ }
+ 
+ function validV2Hit(value: unknown): boolean {
+   if (!object(value) || !object(value.node) || !validV2Node(value.node) || !isMetaprojectScope(value.scope)
+     || !optionalString(value.snippet) || !optionalString(value.section)) return false;
+   if (value.scope === "graph") return value.node.kind === "module" || value.node.kind === "file" || value.node.kind === "symbol";
+   if (value.scope === "wiki") return value.node.kind === "wiki";
+   const matches = value.matchType === "title" || value.matchType === "path" || value.matchType === "heading" || value.matchType === "body";
+   return value.node.kind === value.scope && matches
+     && (value.source === undefined
+       ? value.section === undefined && (value.matchType === "title" || value.matchType === "path")
+       : validSource(value.source));
+ }
+ 
+-/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop sends. */
++/**
++ * The actions Desktop sends to every protocol-2 CLI; a CLI must offer all of them. Optional actions
++ * (`tree`) are used only when the answering CLI lists them, so an older CLI still negotiates.
++ */
++export const METAPROJECT_REQUIRED_ACTIONS = [
++  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history",
++] as const;
++
++/** A CLI may list more actions than this Desktop uses; it has to cover every action Desktop always sends. */
+ function validCapabilities(value: RecordValue): boolean {
+   const { actions } = value;
+   return Object.keys(value).length === 2 && value.schemaVersion === 2
+     && Array.isArray(actions) && actions.every((action: unknown) => typeof action === "string")
+-    && METAPROJECT_CAPABILITIES.every((action) => actions.includes(action));
++    && METAPROJECT_REQUIRED_ACTIONS.every((action) => actions.includes(action));
++}
++
++/** Graph pages hold folders and file nodes; wiki roots hold page-type groups, a group holds wiki nodes. */
++function validTreeEntry(value: unknown, scope: MetaprojectTreeScope, parent: string | null): boolean {
++  if (!object(value)) return false;
++  switch (value.type) {
++    case "folder":
++      return scope === "graph" && isMetaprojectRelativePath(value.path) && typeof value.name === "string"
++        && value.name.length > 0 && positiveInteger(value.files)
++        && (value.module === undefined || (validV2Node(value.module) && object(value.module)
++          && value.module.kind === "module" && value.module.path === value.path));
++    case "group":
++      return scope === "wiki" && parent === null && typeof value.key === "string" && value.key.length > 0
++        && typeof value.name === "string" && positiveInteger(value.pages);
++    case "node":
++      return validV2Node(value.node) && object(value.node) && value.node.kind === (scope === "graph" ? "file" : "wiki");
++    default:
++      return false;
++  }
++}
++
++function validTree(value: RecordValue): boolean {
++  const { scope, parent } = value;
++  const parentKey = typeof parent === "string" && parent.length > 0 ? parent : parent === null ? null : undefined;
++  return isMetaprojectTreeScope(scope) && parentKey !== undefined
++    && typeof value.partial === "boolean" && optionalString(value.nextCursor)
++    && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (entry) => validTreeEntry(entry, scope, parentKey));
+ }
+ 
+ export function isMetaprojectV2Response(value: unknown, action: MetaprojectRequestV2["action"]): value is MetaprojectV2Response {
+   if (!object(value) || value.schemaVersion !== 2) return false;
+   if (action === "capabilities") return validCapabilities(value);
+   if (!isSha256(value.snapshotId)) return false;
+   switch (action) {
+     case "catalog":
+       return validV2Projection(value) && typeof value.graph === "string" && ["ready", "stale", "missing", "unknown"].includes(value.graph)
+         && optionalString(value.graphReason) && typeof value.hasWikiLayer === "boolean" && typeof value.hasSymbolLayer === "boolean"
+         && object(value.counts) && nonnegativeInteger(value.counts.files) && nonnegativeInteger(value.counts.wiki)
+         && nonnegativeInteger(value.counts.modules) && validOpenSpecState(value.openSpec);
+     case "neighbors":
+       return typeof value.root === "string" && validV2Projection(value) && validOpenSpecState(value.openSpec);
+     case "detail":
+       return validV2Node(value.node) && optionalString(value.markdown)
+         && (value.openSpec === undefined || (validOpenSpecDetail(value.openSpec) && object(value.openSpec)
+           && value.openSpec.snapshotId === value.snapshotId && object(value.openSpec.entry) && object(value.node)
+           && value.openSpec.entry.id === value.node.id))
+         && (value.relationships === undefined || list(value.relationships, 40, (row) =>
+           object(row) && validV2Node(row.node) && validV2Edge(row.edge)));
+     case "search":
+       return typeof value.partial === "boolean" && optionalString(value.nextCursor)
+         && list(value.hits, METAPROJECT_PAGE_SIZE_V2, validV2Hit);
+     case "openspec-list":
+       return entryKind(value.collection) && validOpenSpecState(value.openSpec) && typeof value.partial === "boolean"
+         && optionalString(value.nextCursor) && list(value.entries, METAPROJECT_PAGE_SIZE_V2,
+           (entry) => object(entry) && validEntry(entry) && entry.kind === value.collection);
+     case "openspec-history":
+       return typeof value.id === "string" && typeof value.partial === "boolean" && optionalString(value.nextCursor)
+         && list(value.entries, METAPROJECT_PAGE_SIZE_V2, (row) => object(row) && object(row.entry)
+           && row.entry.kind === "archive" && validEntry(row.entry) && validSource(row.source)
+           && list(row.requirements, 10_000, validRequirement));
++    case "tree":
++      return validTree(value);
+   }
+ }
+ 
+ type InvokeExplorer = (request: MetaprojectRequest | MetaprojectRequestV2) => Promise<unknown>;
+ const invokeFor = (cwd: string): InvokeExplorer => (request) => invoke("metaproject_request", { cwd, request });
+ 
++/** What the capability probe settled: the protocol, and the optional actions the answering CLI offers. */
++export interface MetaprojectNegotiation {
++  protocol: 1 | 2;
++  /** The CLI lists `tree`; without it the explorer shows the flat list. */
++  supportsTree: boolean;
++}
++
+ /** A legacy handshake can occur only after this fixed probe. */
+-export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
++export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<MetaprojectNegotiation> {
+   let response: unknown;
+   try {
+     response = await call({ version: 2, action: "capabilities" });
+   } catch (error) {
+     const reason = errMessage(error);
+     if (reason !== "Invalid request" && !/^unsupported-version: .+$/.test(reason)) throw error;
+     const legacy = await call({ action: "catalog" });
+     if (!isMetaprojectResponse(legacy, "catalog")) throw new Error("The selected CLI returned an incompatible legacy Metaproject catalog.");
+-    return 1;
++    return { protocol: 1, supportsTree: false };
++  }
++  if (isMetaprojectV2Response(response, "capabilities") && "actions" in response) {
++    return { protocol: 2, supportsTree: response.actions.includes("tree") };
+   }
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 272,309 @@
+   if (isTauri() && object(response) && Object.keys(response).length === 2 && response.schemaVersion === 1
+-    && response.legacyHandshake === true) return 1;
++    && response.legacyHandshake === true) return { protocol: 1, supportsTree: false };
+   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
+ }
+ 
++export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
++
++/** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
++export function requestMetaprojectTree(
++  cwd: string, request: MetaprojectTreeRequest, call: InvokeExplorer = invokeFor(cwd),
++): Promise<MetaprojectTreeV2> {
++  return requestMetaprojectV2<MetaprojectTreeV2>(cwd, { ...request, version: 2, action: "tree" }, call);
++}
++
+ export async function requestMetaprojectV2<T extends MetaprojectV2Response = MetaprojectV2Response>(
+   cwd: string, request: MetaprojectRequestV2, call: InvokeExplorer = invokeFor(cwd),
+ ): Promise<T> {
+   let response: unknown;
+   try {
+     response = await call(request);
+   } catch (error) {
+     const reason = errMessage(error);
+     const code = METAPROJECT_ERROR_CODES.find((candidate) => reason.startsWith(`${candidate}: `));
+     if (code) throw new MetaprojectRequestError(code, reason.slice(code.length + 2));
+     throw error;
+   }
+   if (!isMetaprojectV2Response(response, request.action)
+     || !matchesRequest(response, request)
+     || new TextEncoder().encode(JSON.stringify(response)).length > METAPROJECT_RESPONSE_BYTES_V2) {
+     throw new Error("Incompatible Metaproject v2 response. Choose the bundled CLI in Desktop Settings.");
+   }
++  // A well-formed answer for another snapshot than the one pinned is the CLI having moved on.
++  if ("expectedSnapshotId" in request && request.expectedSnapshotId !== undefined
++    && (!("snapshotId" in response) || response.snapshotId !== request.expectedSnapshotId)) {
++    throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
++  }
+   return response as T;
+ }
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 315,322 @@
+     case "openspec-list": return "collection" in response && response.collection === request.collection;
+     case "openspec-history": return "id" in response && response.id === request.id;
++    case "tree": return "scope" in response && "entries" in response
++      && response.scope === request.scope && response.parent === (request.parent ?? null);
+     case "search": return "hits" in response && response.hits.every((hit) => !request.scopes || request.scopes.includes(hit.scope));
+     default: return true;
+   }
+ }
+
+--- apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+@@ 1,61 @@
++import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import type { Root } from "react-dom/client";
++import type {
++  MetaprojectNode,
++  MetaprojectTreeEntry,
++  MetaprojectTreeScope,
++  MetaprojectTreeV2,
++} from "../../../../src/integrations/metaproject-explorer-contract";
++import type { MetaprojectTreeRequest } from "../platform/metaproject";
++import { registerDom, unregisterDom } from "../test/dom";
++
++let createElement: typeof import("react").createElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let Tree: typeof import("./MetaprojectTree").MetaprojectTree;
++let useTree: typeof import("./useMetaprojectTree").useMetaprojectTree;
++let MAX_TREE_READS: number;
++let root: Root;
++let host: HTMLElement;
++
++const SNAPSHOT = "a".repeat(64);
++const node = (id: string, path: string, kind: MetaprojectNode["kind"] = "file", extra: Partial<MetaprojectNode> = {}): MetaprojectNode =>
++  ({ id, kind, title: path.split("/").at(-1) ?? path, path, ...extra });
++const folder = (path: string, files: number, module?: MetaprojectNode): MetaprojectTreeEntry =>
++  ({ type: "folder", path, name: path.split("/").at(-1) ?? path, files, ...(module && { module }) });
++const leaf = (item: MetaprojectNode): MetaprojectTreeEntry => ({ type: "node", node: item });
++
++const readme = node("readme", "README.md");
++const client = node("client", "src/client.ts");
++const server = node("server", "src/server.ts");
++const docsGuide = node("guide", "docs/guide.md");
++const srcModule = node("module:src", "src", "module", { title: "src" });
++
++type Answer = Omit<MetaprojectTreeV2, "schemaVersion" | "snapshotId" | "scope" | "parent"> | Error;
++
++/** A tree reader whose answers are keyed by `parent|cursor`; a held key answers only when released. */
++function reader(answers: Record<string, Answer>, scope: MetaprojectTreeScope = "graph") {
++  const calls: MetaprojectTreeRequest[] = [];
++  const held = new Map<string, () => void>();
++  const hold = new Set<string>();
++  const request = (_cwd: string, input: MetaprojectTreeRequest): Promise<MetaprojectTreeV2> => {
++    calls.push(input);
++    const key = `${input.parent ?? ""}|${input.cursor ?? ""}`;
++    const settle = () => {
++      const answer = answers[key];
++      if (!answer) return Promise.reject(new Error(`No answer for ${key}`));
++      if (answer instanceof Error) return Promise.reject(answer);
++      return Promise.resolve({ schemaVersion: 2 as const, snapshotId: input.expectedSnapshotId ?? SNAPSHOT, scope, parent: input.parent ?? null, ...answer });
++    };
++    if (!hold.has(key)) return settle();
++    return new Promise((resolve, reject) => { held.set(key, () => { void settle().then(resolve, reject); }); });
++  };
++  return { request, calls, answers, hold, release: (key: string) => held.get(key)?.() };
++}
++
++function Harness(props: {
++  snapshot?: string;
++  request: (cwd: string, input: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
++  scope?: MetaprojectTreeScope;
++  selection?: string;
++  selected?: MetaprojectNode;
++  onSelect?: (node: MetaprojectNode) => void;
+
+--- apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+@@ 64,64 @@
++}) {
+
+--- apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+@@ 69,422 @@
++  return createElement(Tree, {
++    scope: props.scope ?? "graph", label: "Project files", model,
++    selection: props.selection ?? "", selected: props.selected, onSelect: props.onSelect ?? (() => {}),
++  });
++}
++
++beforeAll(async () => {
++  registerDom();
++  const react = await import("react"); createElement = react.createElement; act = react.act as typeof act;
++  Tree = (await import("./MetaprojectTree")).MetaprojectTree;
++  ({ useMetaprojectTree: useTree, MAX_TREE_READS } = await import("./useMetaprojectTree"));
++  host = document.createElement("div"); document.body.append(host); root = (await import("react-dom/client")).createRoot(host);
++});
++beforeEach(async () => { await act(() => root.render(null)); });
++afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
++
++const items = () => [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
++function item(text: string) {
++  const found = items().find(row => row.querySelector(".metaproject-tree-name")?.textContent === text || row.textContent?.startsWith(text));
++  if (!found) throw new Error(`Missing tree row ${text}; rows: ${items().map(row => row.textContent).join(" | ")}`);
++  return found;
++}
++const key = (target: Element, name: string) => act(async () => {
++  target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
++});
++const focused = () => (document.activeElement as HTMLElement | null)?.querySelector(".metaproject-tree-name")?.textContent
++  ?? document.activeElement?.textContent;
++
++const ROOT_PAGE: Answer = { entries: [folder("docs", 1), folder("src", 2, srcModule), leaf(readme)], partial: false };
++const SRC_PAGE: Answer = { entries: [leaf(client), leaf(server)], partial: false };
++const DOCS_PAGE: Answer = { entries: [leaf(docsGuide)], partial: false };
++
++test("renders a named WAI-ARIA tree with levels, positions, expansion, selection and one tab stop", async () => {
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: readme.id })); });
++  const list = host.querySelector('[role="tree"]');
++  expect(list?.getAttribute("aria-label")).toBe("Project files");
++  const docs = item("docs");
++  expect(docs.getAttribute("aria-level")).toBe("1");
++  expect(docs.getAttribute("aria-posinset")).toBe("1");
++  expect(docs.getAttribute("aria-setsize")).toBe("3");
++  expect(docs.getAttribute("aria-expanded")).toBe("false");
++  expect(docs.textContent).toContain("1");
++  const file = item("README.md");
++  expect(file.getAttribute("aria-selected")).toBe("true");
++  expect(file.getAttribute("aria-expanded")).toBeNull();
++  expect(file.textContent).toContain("File");
++  expect(items().filter(row => row.tabIndex === 0)).toEqual([file]);
++  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++  expect(item("src").getAttribute("aria-expanded")).toBe("true");
++  expect(item("client.ts").getAttribute("aria-level")).toBe("2");
++  expect(item("server.ts").getAttribute("aria-posinset")).toBe("2");
++});
++
++test("expanding reads a folder once and shows one loading row until it arrives", async () => {
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
++  tree.hold.add("src|");
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  const chevron = () => item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")!;
++  await act(async () => { chevron().click(); });
++  expect(items().filter(row => row.textContent === "Loading…")).toHaveLength(1);
++  // Collapse and expand again while the read is pending: no second read.
++  await act(async () => { chevron().click(); });
++  await act(async () => { chevron().click(); });
++  expect(tree.calls.filter(call => call.parent === "src")).toHaveLength(1);
++  expect(tree.calls.find(call => call.parent === "src")?.expectedSnapshotId).toBe(SNAPSHOT);
++  await act(async () => { tree.release("src|"); });
++  expect(items().some(row => row.textContent === "Loading…")).toBe(false);
++  expect(item("client.ts")).not.toBeNull();
++  // Loaded children are kept: collapsing and expanding reads nothing.
++  await act(async () => { chevron().click(); });
++  await act(async () => { chevron().click(); });
++  expect(tree.calls.filter(call => call.parent === "src")).toHaveLength(1);
++});
++
++test("a failed folder read shows an inline error whose Retry re-reads only that folder", async () => {
++  const tree = reader({ "|": ROOT_PAGE, "src|": new Error("source-unavailable: graph read failed"), "docs|": DOCS_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  await act(async () => { item("docs").click(); });
++  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++  const error = item("Could not load.");
++  expect(error.textContent).toContain("graph read failed");
++  expect(error.getAttribute("aria-level")).toBe("2");
++  // The failure is announced like the loading row it replaced.
++  expect(error.querySelector('[role="status"]')?.textContent).toBe("Could not load. source-unavailable: graph read failed");
++  expect(item("guide.md")).not.toBeNull();
++  tree.answers["src|"] = SRC_PAGE;
++  const before = tree.calls.length;
++  await act(async () => { [...error.querySelectorAll("button")].find(button => button.textContent === "Retry")?.click(); });
++  expect(tree.calls.slice(before)).toEqual([{ scope: "graph", parent: "src", expectedSnapshotId: SNAPSHOT }]);
++  expect(item("client.ts")).not.toBeNull();
++  expect(item("guide.md")).not.toBeNull();
++});
++
++test("Show more appends the next page in order without duplicates", async () => {
++  const extra = node("z", "zeta.md");
++  const tree = reader({
++    "|": { entries: [leaf(readme), leaf(client)], nextCursor: "next-1", partial: false },
++    "|next-1": { entries: [leaf(client), leaf(server)], nextCursor: "next-2", partial: false },
++    "|next-2": { entries: [leaf(extra)], partial: false },
++  });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  expect(item("README.md").getAttribute("aria-setsize")).toBe("-1");
++  await act(async () => { item("Show more").click(); });
++  await act(async () => { item("Show more").click(); });
++  const titles = items().map(row => row.querySelector(".metaproject-tree-name")?.textContent);
++  expect(titles).toEqual(["README.md", "client.ts", "server.ts", "zeta.md"]);
++  expect(tree.calls.map(call => call.cursor)).toEqual([undefined, "next-1", "next-2"]);
++  expect(items().some(row => row.textContent === "Show more")).toBe(false);
++  expect(item("zeta.md").getAttribute("aria-setsize")).toBe("4");
++});
++
++test("selecting a node row calls the selection callback; a module folder selects on its name and toggles on its chevron", async () => {
++  const chosen: string[] = [];
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, onSelect: picked => chosen.push(picked.id) })); });
++  // A module folder carries the Module kind label; a plain folder does not.
++  expect(item("src").querySelector(".metaproject-meta")?.textContent).toBe("Module");
++  expect(item("docs").querySelector(".metaproject-meta")).toBeNull();
++  await act(async () => { item("README.md").click(); });
++  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-name")?.click(); });
++  expect(chosen).toEqual([readme.id, srcModule.id]);
++  expect(item("src").getAttribute("aria-expanded")).toBe("false");
++  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++  expect(item("src").getAttribute("aria-expanded")).toBe("true");
++  await key(item("client.ts"), "Enter");
++  expect(chosen).toEqual([readme.id, srcModule.id, client.id]);
++});
++
++test("keys move, expand, collapse and select as a WAI-ARIA tree", async () => {
++  const chosen: string[] = [];
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE, "docs|": DOCS_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, onSelect: picked => chosen.push(picked.id) })); });
++  const first = item("docs");
++  expect(first.tabIndex).toBe(0);
++  await act(async () => { first.focus(); });
++  // Up on the first row stays there.
++  await key(first, "ArrowUp");
++  expect(focused()).toBe("docs");
++  await key(first, "ArrowDown");
++  expect(focused()).toBe("src");
++  await key(document.activeElement!, "ArrowUp");
++  expect(focused()).toBe("docs");
++  await key(document.activeElement!, "ArrowDown");
++  expect(focused()).toBe("src");
++  await key(document.activeElement!, "ArrowRight");
++  expect(item("src").getAttribute("aria-expanded")).toBe("true");
++  expect(focused()).toBe("src");
++  await key(document.activeElement!, "ArrowRight");
++  expect(focused()).toBe("client.ts");
++  await key(document.activeElement!, "ArrowDown");
++  expect(focused()).toBe("server.ts");
++  await key(document.activeElement!, "ArrowUp");
++  expect(focused()).toBe("client.ts");
++  await key(document.activeElement!, "ArrowDown");
++  expect(focused()).toBe("server.ts");
++  await key(document.activeElement!, " ");
++  expect(chosen).toEqual([server.id]);
++  await key(document.activeElement!, "ArrowLeft");
++  expect(focused()).toBe("src");
++  await key(document.activeElement!, "ArrowLeft");
++  expect(item("src").getAttribute("aria-expanded")).toBe("false");
++  await key(document.activeElement!, "End");
++  expect(focused()).toBe("README.md");
++  await key(document.activeElement!, "Home");
++  expect(focused()).toBe("docs");
++  await key(document.activeElement!, "Enter");
++  expect(item("docs").getAttribute("aria-expanded")).toBe("true");
++  await key(document.activeElement!, " ");
++  expect(item("docs").getAttribute("aria-expanded")).toBe("false");
++  // Space on a module folder toggles it; Enter selects its module.
++  await key(document.activeElement!, "ArrowDown");
++  await key(document.activeElement!, " ");
++  expect(item("src").getAttribute("aria-expanded")).toBe("true");
++  await key(document.activeElement!, "Enter");
++  expect(chosen).toEqual([server.id, srcModule.id]);
++  expect(items().filter(row => row.tabIndex === 0)).toHaveLength(1);
++});
++
++test("data arriving never moves focus", async () => {
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
++  tree.hold.add("src|");
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  const outside = document.createElement("button");
++  document.body.append(outside);
++  try {
++    await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++    outside.focus();
++    await act(async () => { tree.release("src|"); });
++    // The data did arrive, and focus stayed where it was.
++    expect(item("client.ts")).not.toBeNull();
++    expect(items().some(row => row.textContent === "Loading…")).toBe(false);
++    expect(document.activeElement === outside).toBe(true);
++  } finally { outside.remove(); }
++});
++
++test("a graph that is not built shows an empty-state line", async () => {
++  const tree = reader({ "|": { entries: [], partial: true } });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  expect(host.querySelector('[role="tree"]')).toBeNull();
++  expect(host.textContent).toContain("The graph is not built yet.");
++});
++
++test("a built graph without files and a wiki without pages show their own empty-state lines", async () => {
++  const graph = reader({ "|": { entries: [], partial: false } });
++  await act(async () => { root.render(createElement(Harness, { request: graph.request })); });
++  expect(host.querySelector('[role="tree"]')).toBeNull();
++  expect(host.querySelector('[role="status"]')?.textContent).toBe("No indexed files.");
++  await act(async () => { root.render(null); });
++  const wiki = reader({ "|": { entries: [], partial: false } }, "wiki");
++  await act(async () => { root.render(createElement(Harness, { request: wiki.request, scope: "wiki" })); });
++  expect(host.querySelector('[role="tree"]')).toBeNull();
++  expect(host.querySelector('[role="status"]')?.textContent).toBe("No Wiki pages.");
++});
++
++test("wiki groups show their page counts and hold their pages", async () => {
++  const page = node("page", "wiki/flows/login.md", "wiki", { title: "Login flow", pageType: "flow" });
++  const tree = reader({
++    "|": { entries: [{ type: "group", key: "flow", name: "Flow", pages: 1 }], partial: false },
++    "flow|": { entries: [leaf(page)], partial: false },
++  }, "wiki");
++  const chosen: string[] = [];
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, scope: "wiki", onSelect: picked => chosen.push(picked.id) })); });
++  expect(item("Flow").textContent).toContain("1");
++  await act(async () => { item("Flow").click(); });
++  expect(item("Login flow").textContent).toContain("Wiki page");
++  await act(async () => { item("Login flow").click(); });
++  expect(chosen).toEqual(["page"]);
++});
++
++test("a selection made elsewhere expands its ancestors, pages until found and scrolls without focus", async () => {
++  const deep = node("deep", "src/lib/deep.ts");
++  const tree = reader({
++    "|": { entries: [folder("docs", 1)], nextCursor: "root-2", partial: false },
++    "|root-2": { entries: [folder("src", 2)], partial: false },
++    "src|": { entries: [folder("src/lib", 1)], partial: false },
++    "src/lib|": { entries: [leaf(deep)], partial: false },
++  });
++  const scrolled: string[] = [];
++  const original = HTMLElement.prototype.scrollIntoView;
++  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this.textContent ?? ""); };
++  const outside = document.createElement("button");
++  document.body.append(outside);
++  try {
++    await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++    outside.focus();
++    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: deep.id, selected: deep })); });
++    expect(item("src").getAttribute("aria-expanded")).toBe("true");
++    expect(item("lib").getAttribute("aria-expanded")).toBe("true");
++    expect(item("deep.ts").getAttribute("aria-selected")).toBe("true");
++    expect(scrolled.some(text => text.startsWith("deep.ts"))).toBe(true);
++    expect(document.activeElement).toBe(outside);
++  } finally { HTMLElement.prototype.scrollIntoView = original; outside.remove(); }
++});
++
++test("reveal stops at a failed folder without reading it again", async () => {
++  const deep = node("deep", "src/deep.ts");
++  const tree = reader({ "|": { entries: [folder("src", 1)], partial: false }, "src|": new Error("read failed") });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: deep.id, selected: deep })); });
++  await act(async () => {});
++  expect(item("Could not load.")).not.toBeNull();
++  expect(tree.calls.filter(call => call.parent === "src")).toHaveLength(1);
++});
++
++test("a module selected elsewhere is revealed as its own folder row, which stays collapsed", async () => {
++  const lib = node("module:src/lib", "src/lib", "module", { title: "lib" });
++  const tree = reader({
++    "|": { entries: [folder("src", 2)], partial: false },
++    "src|": { entries: [folder("src/lib", 1, lib)], partial: false },
++  });
++  const scrolled: string[] = [];
++  const original = HTMLElement.prototype.scrollIntoView;
++  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this.dataset.row ?? ""); };
++  try {
++    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: lib.id, selected: lib })); });
++    expect(item("src").getAttribute("aria-expanded")).toBe("true");
++    expect(item("lib").getAttribute("aria-expanded")).toBe("false");
++    expect(item("lib").getAttribute("aria-selected")).toBe("true");
++    expect(scrolled).toEqual(["d:src/lib"]);
++    expect(tree.calls.filter(call => call.parent === "src/lib")).toHaveLength(0);
++  } finally { HTMLElement.prototype.scrollIntoView = original; }
++});
++
++test("a failed next page shows an inline error whose Retry asks for the same page again", async () => {
++  const tree = reader({
++    "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
++    "|next": new Error("source-unavailable: page read failed"),
++  });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  await act(async () => { item("Show more").click(); });
++  const error = item("Could not load.");
++  expect(error.textContent).toContain("page read failed");
++  expect(item("README.md")).not.toBeNull();
++  tree.answers["|next"] = { entries: [leaf(client)], partial: false };
++  await act(async () => { [...error.querySelectorAll("button")].find(button => button.textContent === "Retry")?.click(); });
++  expect(tree.calls.map(call => call.cursor)).toEqual([undefined, "next", "next"]);
++  expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["README.md", "client.ts"]);
++});
++
++test("Home on the first row and End on the last leave nothing that a later render could act on", async () => {
++  const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  const outside = document.createElement("button");
++  document.body.append(outside);
++  try {
++    await act(async () => { item("docs").focus(); });
++    await key(item("docs"), "Home");
++    expect(focused()).toBe("docs");
++    await act(async () => { outside.focus(); });
++    // A selection made elsewhere re-renders the tree with no keyboard input.
++    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: client.id, selected: client })); });
++    expect(item("client.ts").getAttribute("aria-selected")).toBe("true");
++    expect(document.activeElement === outside).toBe(true);
++    await act(async () => { item("README.md").focus(); });
++    await key(item("README.md"), "End");
++    expect(focused()).toBe("README.md");
++    await act(async () => { outside.focus(); });
++    await act(async () => { root.render(createElement(Harness, { request: tree.request, selection: server.id, selected: server })); });
++    expect(item("server.ts").getAttribute("aria-selected")).toBe("true");
++    expect(document.activeElement === outside).toBe(true);
++  } finally { outside.remove(); }
++});
++
++test("a keyboard Retry keeps focus on the folder's status row, then on the first row read", async () => {
++  const tree = reader({ "|": { entries: [folder("src", 2)], partial: false }, "src|": new Error("source-unavailable: graph read failed") });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++  await act(async () => { item("Could not load.").focus(); });
++  tree.answers["src|"] = SRC_PAGE;
++  tree.hold.add("src|");
++  await key(item("Could not load."), "Enter");
++  expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
++  expect(document.activeElement?.textContent).toBe("Loading…");
++  await act(async () => { tree.release("src|"); });
++  expect(item("client.ts")).not.toBeNull();
++  expect(focused()).toBe("client.ts");
++});
++
++test("a keyboard Show more keeps focus in the tree: on the row while it loads, then on the first row appended", async () => {
++  const tree = reader({
++    "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },
++    "|next": { entries: [leaf(client), leaf(server)], partial: false },
++  });
++  tree.hold.add("|next");
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  await act(async () => { item("Show more").focus(); });
++  await key(item("Show more"), "Enter");
++  expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
++  expect(document.activeElement?.textContent).toBe("Loading…");
++  await act(async () => { tree.release("|next"); });
++  expect(items().some(row => row.textContent === "Show more")).toBe(false);
++  expect(focused()).toBe("client.ts");
++});
++
+
+--- apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+@@ 560,620 @@
++test("tree reads run at most three at a time, and queued reads of a retired snapshot never start", async () => {
++  const names = ["a", "b", "c", "d", "e", "f"];
++  const answers: Record<string, Answer> = {
++    "|": { entries: names.map(name => folder(name, 1)), partial: false },
++    ...Object.fromEntries(names.map(name => [name, { entries: [leaf(node(`${name}-file`, `${name}/${name}.ts`))], partial: false }])),
++  };
++  const calls: MetaprojectTreeRequest[] = [];
++  const waiting: (() => void)[] = [];
++  let holdAll = false;
++  let inFlight = 0;
++  let peak = 0;
++  const request = (_cwd: string, input: MetaprojectTreeRequest): Promise<MetaprojectTreeV2> => {
++    calls.push(input);
++    peak = Math.max(peak, ++inFlight);
++    const settle = (): MetaprojectTreeV2 => {
++      inFlight--;
++      const answer = answers[input.parent ?? "|"];
++      if (!answer || answer instanceof Error) throw new Error(`No answer for ${input.parent}`);
++      return { schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? SNAPSHOT, scope: "graph", parent: input.parent ?? null, ...answer };
++    };
++    if (!holdAll) return Promise.resolve().then(settle);
++    return new Promise(resolve => { waiting.push(() => resolve(settle())); });
++  };
++  const releaseAll = async () => {
++    while (waiting.length) await act(async () => { for (const release of waiting.splice(0)) release(); });
++  };
++  await act(async () => { root.render(createElement(Harness, { request })); });
++  for (const name of names) await act(async () => { item(name).click(); });
++  expect(names.every(name => item(name).getAttribute("aria-expanded") === "true")).toBe(true);
++  peak = 0;
++  holdAll = true;
++  const second = "b".repeat(64);
++  await act(async () => { root.render(createElement(Harness, { request, snapshot: second })); });
++  await act(async () => { waiting.shift()?.(); });
++  expect(peak <= MAX_TREE_READS).toBe(true);
++  expect(calls.filter(call => call.expectedSnapshotId === second && call.parent)).toHaveLength(3);
++  // The snapshot changes again before those reads answer: the three still queued never start.
++  const third = "c".repeat(64);
++  await act(async () => { root.render(createElement(Harness, { request, snapshot: third })); });
++  await releaseAll();
++  expect(peak <= MAX_TREE_READS).toBe(true);
++  expect(calls.filter(call => call.expectedSnapshotId === second && call.parent)).toHaveLength(3);
++  expect(calls.filter(call => call.expectedSnapshotId === third && call.parent).map(call => call.parent).sort()).toEqual(names);
++  for (const name of names) expect(item(`${name}.ts`)).not.toBeNull();
++});
++
++test("an expanded folder that is not found after a new snapshot is forgotten quietly", async () => {
++  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
++  const tree = reader({ "|": ROOT_PAGE, "docs|": DOCS_PAGE });
++  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
++  await act(async () => { item("docs").click(); });
++  expect(item("guide.md")).not.toBeNull();
++  tree.answers["docs|"] = new MetaprojectRequestError("not-found", "docs");
++  const next = "b".repeat(64);
++  await act(async () => { root.render(createElement(Harness, { request: tree.request, snapshot: next })); });
++  await act(async () => {});
++  expect(tree.calls.filter(call => call.parent === "docs" && call.expectedSnapshotId === next)).toHaveLength(1);
++  expect(item("docs").getAttribute("aria-expanded")).toBe("false");
++  expect(items().some(row => row.textContent?.startsWith("Could not load."))).toBe(false);
++  expect(items().some(row => row.textContent === "Loading…")).toBe(false);
++});
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 1376,1452 @@
+       if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
+       return new Promise(resolve => { releasePage = () => resolve({ schemaVersion: 2, snapshotId: "one", hits: [{ node: { ...page, id: "second-page", title: "Second Wiki page" }, scope: "wiki" }], partial: false }); });
+     }
+     if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
+     return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
+   };
+   const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild, createCytoscape: await headlessCytoscape() };
+   try {
+     await showView(props, true);
+     await act(async () => { button("Wiki").click(); });
+     await typeQuery("query");
+     await debounce.run();
+     await act(async () => { button("Load more results").click(); });
+     await showView(props, false);
+     await showView(props, true);
+     await act(async () => { releasePage(); });
+     expect(host.querySelector(".metaproject-list")?.textContent).toContain("Second Wiki page");
+   } finally { debounce.restore(); }
+ });
+ 
++test("a next page refused as stale-snapshot shows the Refresh catalog banner; another failure stays an inline search failure", async () => {
++  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
++  const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
++  const searchFailure = () => [...host.querySelectorAll('[role="alert"]')].find(alert => alert.textContent?.startsWith("Search failed."))?.textContent;
++  for (const failure of [
++    new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading."),
++    new MetaprojectRequestError("source-unavailable", "The wiki could not be read."),
++  ]) {
++    const debounce = holdDebounce();
++    const read = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
++      if (input.action === "catalog") return { ...catalog, schemaVersion: 2 };
++      if (input.action === "search") {
++        if (!input.cursor) return { schemaVersion: 2, snapshotId: "one", hits: [{ node: page, scope: "wiki" }], nextCursor: "next", partial: false };
++        throw failure;
++      }
++      if (input.action === "detail") return { ...snapshot, schemaVersion: 2, node: page };
++      return { ...snapshot, schemaVersion: 2, root: page.id, nodes: [page], edges: [], truncated: false };
++    };
++    const props: ViewProps = { cwd: "/project", requestV2: read as unknown as NonNullable<ViewProps["requestV2"]>, onRebuild: noRebuild, createCytoscape: await headlessCytoscape() };
++    try {
++      await act(async () => { root.render(null); });
++      await showView(props, true);
++      await act(async () => { button("Wiki").click(); });
++      await typeQuery("query");
++      await debounce.run();
++      await act(async () => { button("Load more results").click(); });
++      if (failure.code === "stale-snapshot") {
++        expect(staleBanner()).toBe(true);
++        expect(searchFailure()).toBeUndefined();
++      } else {
++        expect(staleBanner()).toBe(false);
++        expect(searchFailure()).toContain("The wiki could not be read.");
++      }
++    } finally { debounce.restore(); }
++  }
++});
++
+ test("a failed quiet re-read on return shows no error and leaves the explorer as it was", async () => {
+   let catalogReads = 0;
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+     if (input.action === "catalog") {
+       catalogReads++;
+       return catalogReads === 1 ? Promise.resolve(catalog) : Promise.reject(new Error("The CLI is busy."));
+     }
+     return request(cwd, input);
+   };
+   const props: ViewProps = { cwd: "/project", request: read, onRebuild: noRebuild };
+   await showView(props, true);
+   await act(async () => { listRow("Client").click(); });
+   await showView(props, false);
+   await showView(props, true);
+   expect(catalogReads).toBe(2);
+   expect(host.textContent).not.toContain("The CLI is busy.");
+   expect(catalogErrorBanner()).toBeUndefined();
+   expect(freshnessBanner()?.textContent).toContain("Graph is missing.");
+   expect(listRow("Client").getAttribute("aria-current")).toBe("true");
+   expect(panelTitle()).toBe("Client");
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 1911,2148 @@
+ test("a rebuild reload that a later one superseded shows no banner when it fails after the later one succeeded", async () => {
+   let catalogReads = 0;
+   let failFirstReload: () => void = () => {};
+   const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => {
+     if (input.action === "catalog") {
+       catalogReads++;
+       // The first rebuild's reload is held; the second rebuild's reload succeeds at once.
+       if (catalogReads === 2) return new Promise((_resolve, reject) => { failFirstReload = () => reject(new Error("The index is being written.")); });
+     }
+     return request(cwd, input);
+   };
+   await act(async () => { root.render(createElement(View, { cwd: "/project", request: read, onRebuild: async () => true })); });
+   await act(async () => { button("Rebuild graph").click(); });
+   expect(catalogReads).toBe(2);
+   await act(async () => { button("Rebuild graph").click(); });
+   expect(catalogReads).toBe(3);
+   await act(async () => { failFirstReload(); });
+   expect(catalogErrorBanner()?.textContent).toBeUndefined();
+   expect(listRow("Client").textContent).toContain("src/client.ts");
+ });
++
++/* ---- Sidebar tree (flow 518) ---- */
++
++type TreeInput = import("../platform/metaproject").MetaprojectTreeRequest;
++type TreeV2 = import("../../../../src/integrations/metaproject-explorer-contract").MetaprojectTreeV2;
++type TreeAnswer = { entries: unknown[]; nextCursor?: string; partial?: boolean; snapshotId?: string } | Error;
++
++/**
++ * A protocol-2 explorer whose CLI offers `tree`. Catalog and tree answers follow `state.snapshot`;
++ * tree answers are keyed `snapshot|scope|parent|cursor`, and a key in `hold` answers when released.
++ */
++function treeExplorer(trees: Record<string, TreeAnswer>, nodes: MetaprojectCatalog["nodes"] = catalog.nodes) {
++  const state = { snapshot: "s1" };
++  const treeCalls: TreeInput[] = [];
++  const hold = new Set<string>();
++  const held = new Map<string, () => void>();
++  const requestV2 = async (_cwd: string, input: Record<string, unknown>): Promise<unknown> => {
++    const base = { schemaVersion: 2, snapshotId: state.snapshot };
++    if (input.action === "catalog") return { ...catalog, ...base, nodes, graph: "stale", counts: { files: 3, wiki: 1, modules: 0 } };
++    if (input.action === "search") return { ...base, hits: [{ node: file, scope: "graph" }], partial: false };
++    if (input.action === "detail") return { ...base, node: input.id === page.id ? page : file, markdown: input.id === page.id ? "# Readable guide" : undefined };
++    return { ...base, root: input.id, nodes: [page, file], edges: [], truncated: false };
++  };
++  const requestTree = (_cwd: string, input: TreeInput): Promise<TreeV2> => {
++    treeCalls.push(input);
++    const key = `${input.expectedSnapshotId}|${input.scope}|${input.parent ?? ""}|${input.cursor ?? ""}`;
++    const answer = () => {
++      const found = trees[key];
++      if (found instanceof Error) return Promise.reject(found);
++      return found
++        ? Promise.resolve({ schemaVersion: 2, snapshotId: input.expectedSnapshotId ?? "", scope: input.scope, parent: input.parent ?? null, partial: false, ...found } as TreeV2)
++        : Promise.reject(new Error(`No tree answer for ${key}`));
++    };
++    if (!hold.has(key)) return answer();
++    return new Promise<TreeV2>((resolve, reject) => { held.set(key, () => { void answer().then(resolve, reject); }); });
++  };
++  return {
++    state, treeCalls, hold, release: (key: string) => held.get(key)?.(),
++    props: {
++      requestV2: requestV2 as unknown as NonNullable<ViewProps["requestV2"]>,
++      requestTree,
++      negotiate: async () => ({ protocol: 2 as const, supportsTree: true }),
++    },
++  };
++}
++const GRAPH_ROOT: TreeAnswer = { entries: [{ type: "folder", path: "src", name: "src", files: 1 }] };
++const SRC_CHILDREN: TreeAnswer = { entries: [{ type: "node", node: file }] };
++const WIKI_ROOT: TreeAnswer = { entries: [{ type: "group", key: "other", name: "Other", pages: 1 }] };
++const WIKI_OTHER: TreeAnswer = { entries: [{ type: "node", node: page }] };
++const STANDARD_TREES = { "s1|graph||": GRAPH_ROOT, "s1|graph|src|": SRC_CHILDREN, "s1|wiki||": WIKI_ROOT, "s1|wiki|other|": WIKI_OTHER };
++
++const treeRows = () => [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')];
++const treeRow = (name: string) => {
++  const found = treeRows().find(row => row.querySelector(".metaproject-tree-name")?.textContent === name);
++  if (!found) throw new Error(`Missing tree row ${name}`);
++  return found;
++};
++const treeHeading = () => host.querySelector(".metaproject-list h2")?.textContent;
++const expandFolder = (name: string) => act(async () => { treeRow(name).querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
++async function typeTreeQuery(value: string) {
++  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search project knowledge"]')!;
++  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value); search.dispatchEvent(new Event("input", { bubbles: true })); });
++  return search;
++}
++/** The search's debounce runs when the test says so. */
++function manualTimer() {
++  const original = window.setTimeout;
++  let run: () => void = () => {};
++  window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") run = () => callback(); return 1; }) as typeof window.setTimeout;
++  return { run: () => run(), restore: () => { window.setTimeout = original; } };
++}
++
++test("a CLI without tree negotiates and keeps the flat list, with no error", async () => {
++  const { negotiateMetaprojectExplorer, METAPROJECT_REQUIRED_ACTIONS } = await import("../platform/metaproject");
++  const explorer = treeExplorer(STANDARD_TREES);
++  const negotiate = (cwd: string) => negotiateMetaprojectExplorer(cwd, async () => ({ schemaVersion: 2, actions: [...METAPROJECT_REQUIRED_ACTIONS] }));
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, negotiate, createCytoscape, onRebuild: async () => false })); });
++  expect(host.querySelector('[role="tree"]')).toBeNull();
++  expect(treeHeading()?.startsWith("Catalog ·")).toBe(true);
++  expect(listRow("Client").textContent).toContain("src/client.ts");
++  expect(host.querySelector('[role="alert"]')).toBeNull();
++  await act(async () => { button("Wiki").click(); });
++  expect(host.querySelector('[role="tree"]')).toBeNull();
++  expect(explorer.treeCalls).toHaveLength(0);
++});
++
++test("the tree shows without a query and flat results with one; clearing it brings back the same folders", async () => {
++  const timer = manualTimer();
++  try {
++    const explorer = treeExplorer(STANDARD_TREES);
++    const createCytoscape = await headlessCytoscape();
++    await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
++    expect(host.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Project files");
++    expect(treeHeading()).toBe("Files · 3");
++    // The list landmark is named by its visible heading, with or without a query.
++    const landmarkName = () => document.getElementById(host.querySelector("nav.metaproject-list")?.getAttribute("aria-labelledby") ?? "")?.textContent;
++    expect(landmarkName()).toBe("Files · 3");
++    await expandFolder("src");
++    expect(treeRow("Client")).not.toBeNull();
++    await typeTreeQuery("client");
++    await act(async () => { timer.run(); });
++    expect(host.querySelector('[role="tree"]')).toBeNull();
++    expect(treeHeading()).toBe("Results · 1");
++    expect(landmarkName()).toBe("Results · 1");
++    expect(listRow("Client")).not.toBeNull();
++    await typeTreeQuery("");
++    expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
++    expect(treeRow("Client")).not.toBeNull();
++    expect(explorer.treeCalls.filter(call => call.parent === "src")).toHaveLength(1);
++    await act(async () => { button("Wiki").click(); });
++    expect(host.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Wiki pages");
++    expect(treeHeading()).toBe("Wiki · 1");
++  } finally { timer.restore(); }
++});
++
++test("expanded folders and the selection survive switching Graph and Wiki and leaving the view", async () => {
++  const explorer = treeExplorer(STANDARD_TREES);
++  const createCytoscape = await headlessCytoscape();
++  const show = (visible: boolean) => act(async () => {
++    root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false, visible }));
++  });
++  await show(true);
++  await expandFolder("src");
++  await act(async () => { treeRow("Client").click(); });
++  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
++  expect(host.querySelector('[aria-label="Graph node details"]')?.textContent).toContain("src/client.ts");
++  await act(async () => { button("Wiki").click(); });
++  // The Wiki's fallback page expands nothing; the user opens its group and picks it.
++  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("false");
++  await expandFolder("Other");
++  await act(async () => { treeRow("Guide").click(); });
++  expect(treeRow("Guide").getAttribute("aria-selected")).toBe("true");
++  await act(async () => { button("Graph").click(); });
++  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
++  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
++  await show(false);
++  await show(true);
++  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
++  expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
++  await act(async () => { button("Wiki").click(); });
++  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("true");
++  // Every parent was read once in all of this.
++  const reads = explorer.treeCalls.map(call => `${call.scope}|${call.parent ?? ""}`);
++  expect(reads.sort()).toEqual(["graph|", "graph|src", "wiki|", "wiki|other"]);
++});
++
++test("a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus", async () => {
++  const timer = manualTimer();
++  const scrolled: HTMLElement[] = [];
++  const original = HTMLElement.prototype.scrollIntoView;
++  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
++  try {
++    const explorer = treeExplorer(STANDARD_TREES);
++    const createCytoscape = await headlessCytoscape();
++    await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
++    expect(treeRow("src").getAttribute("aria-expanded")).toBe("false");
++    await typeTreeQuery("client");
++    await act(async () => { timer.run(); });
++    await act(async () => { listRow("Client").click(); });
++    const search = await typeTreeQuery("");
++    search.focus();
++    await act(async () => {});
++    expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
++    expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
++    expect(scrolled).toContain(treeRow("Client"));
++    expect(document.activeElement).toBe(search);
++  } finally {
++    timer.restore();
++    HTMLElement.prototype.scrollIntoView = original;
++  }
++});
++
++test("a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old cursor", async () => {
++  const server = { id: "server", kind: "file" as const, title: "Server", path: "src/server.ts" };
++  const explorer = treeExplorer({
++    "s1|graph||": { entries: [{ type: "folder", path: "gone", name: "gone", files: 1 }, { type: "folder", path: "src", name: "src", files: 1 }], nextCursor: "s1-page-2" },
++    "s1|graph|gone|": { entries: [{ type: "node", node: { ...file, id: "gone-file", title: "Gone", path: "gone/file.ts" } }] },
++    "s1|graph|src|": SRC_CHILDREN,
++    "s1|graph||s1-page-2": { entries: [{ type: "node", node: { ...file, id: "late", title: "Late", path: "late.ts" } }] },
++    "s2|graph||": { entries: [{ type: "folder", path: "src", name: "src", files: 1 }] },
++    "s2|graph|src|": { entries: [{ type: "node", node: server }] },
++  });
++  const onRebuild = async () => { explorer.state.snapshot = "s2"; return true; };
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild })); });
++  await expandFolder("gone");
++  expect(treeRow("Gone")).not.toBeNull();
++  explorer.hold.add("s1|graph|src|");
++  explorer.hold.add("s1|graph||s1-page-2");
++  await expandFolder("src");
++  await act(async () => { treeRows().find(row => row.textContent === "Show more")?.click(); });
++  const before = explorer.treeCalls.length;
++  await act(async () => { button("Rebuild graph").click(); });
++  // The answers the old snapshot still owed arrive late and are dropped.
++  await act(async () => { explorer.release("s1|graph|src|"); explorer.release("s1|graph||s1-page-2"); });
++  const after = explorer.treeCalls.slice(before);
++  expect(after.length).toBeGreaterThan(0);
++  expect(after.every(call => call.expectedSnapshotId === "s2" && call.cursor === undefined)).toBe(true);
++  expect(after.map(call => call.parent ?? "")).toEqual(["", "src"]);
++  expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
++  expect(treeRow("Server")).not.toBeNull();
++  expect(() => treeRow("Client")).toThrow();
++  expect(() => treeRow("Late")).toThrow();
++  expect(() => treeRow("gone")).toThrow();
++  expect(treeRows().some(row => row.textContent === "Show more")).toBe(false);
++});
++
++test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows", async () => {
++  const { MetaprojectRequestError } = await import("../../../../src/integrations/metaproject-explorer-contract");
++  const explorer = treeExplorer({
++    ...STANDARD_TREES,
++    "s1|graph|src|": { entries: [{ type: "node", node: file }], snapshotId: "s2" },
++    "s1|wiki|other|": new MetaprojectRequestError("stale-snapshot", "Metaproject changed. Refresh and retry."),
++  });
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
++  const staleBanner = () => [...host.querySelectorAll('[role="alert"]')].some(alert => alert.textContent?.includes("Refresh catalog"));
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 2151,2152 @@
++  await expandFolder("src");
++  expect(staleBanner()).toBe(true);
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 2154,2159 @@
++  expect(() => treeRow("Client")).toThrow();
++  await act(async () => { button("Refresh catalog").click(); });
++  expect(staleBanner()).toBe(false);
++  await act(async () => { button("Wiki").click(); });
++  await expandFolder("Other");
++  expect(staleBanner()).toBe(true);
+
+--- apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx
+@@ 2161,2178 @@
++  expect(() => treeRow("Guide")).toThrow();
++});
++
++test("the selection shown by default reveals nothing: only a selection the user made expands folders", async () => {
++  // The Graph falls back to the catalog's first node (a file in src), the Wiki to its first page.
++  const explorer = treeExplorer(STANDARD_TREES, [file, page]);
++  const createCytoscape = await headlessCytoscape();
++  await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
++  await act(async () => {});
++  // The fallback is selected and shown, yet its folder stays collapsed.
++  expect(host.querySelector(".metaproject-content")?.textContent).toContain("Client");
++  expect(treeRow("src").getAttribute("aria-expanded")).toBe("false");
++  await act(async () => { button("Wiki").click(); });
++  await act(async () => {});
++  expect(host.querySelector(".metaproject-article h2")?.textContent).toBe("Guide");
++  expect(treeRow("Other").getAttribute("aria-expanded")).toBe("false");
++  expect(explorer.treeCalls.map(call => `${call.scope}|${call.parent ?? ""}`).sort()).toEqual(["graph|", "wiki|"]);
++});
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 1,26 @@
+ import { describe, expect, test } from "bun:test";
+ import { METAPROJECT_CAPABILITIES, MetaprojectRequestError, parseExplorerRequestV1 } from "../../../../src/integrations/metaproject-explorer-contract";
+-import { isMetaprojectResponse, isMetaprojectV2Response, negotiateMetaproject, requestMetaprojectV2 } from "./metaproject";
++import {
++  METAPROJECT_REQUIRED_ACTIONS, isMetaprojectResponse, isMetaprojectV2Response,
++  negotiateMetaprojectExplorer, requestMetaprojectTree, requestMetaprojectV2,
++} from "./metaproject";
+ 
+ const base = { schemaVersion: 1, snapshotId: "snapshot" };
+ const node = { id: "file:x", kind: "file", title: "x", path: "x" };
+ 
+ describe("Metaproject response validation", () => {
+   test("accepts a detail and rejects malformed action-specific data", () => {
+     expect(isMetaprojectResponse({ ...base, node }, "detail")).toBe(true);
+     expect(isMetaprojectResponse({ ...base, node: { ...node, path: 1 } }, "detail")).toBe(false);
+     expect(isMetaprojectResponse({ ...base, hits: [{ node, snippet: 1 }] }, "search")).toBe(false);
+     expect(isMetaprojectResponse({ ...base, root: "x", nodes: [node], edges: [{ from: "x", to: "y", kind: "write" }], truncated: false }, "neighbors")).toBe(false);
+   });
+ 
+   test("rejects oversized result arrays and incomplete catalogs", () => {
+     expect(isMetaprojectResponse({ ...base, hits: Array(201).fill({ node }) }, "search")).toBe(false);
+     expect(isMetaprojectResponse({ ...base, nodes: [], edges: [], truncated: false }, "catalog")).toBe(false);
+   });
+ });
+ 
+ async function readError(read: Promise<unknown>): Promise<unknown> {
+   try {
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 30,211 @@
+   }
+   throw new Error("Expected the read to fail.");
+ }
+ 
+ const v1Catalog = {
+   ...base, graph: "missing", hasWikiLayer: false, hasSymbolLayer: false,
+   nodes: [], edges: [], truncated: false, counts: { files: 0, wiki: 0, modules: 0 },
+ };
+ const probe = { version: 2, action: "capabilities" };
+ const capabilities = { schemaVersion: 2, actions: METAPROJECT_CAPABILITIES };
+ 
+ describe("Metaproject capability negotiation", () => {
+   test("uses the actual unversioned parser and requires a valid legacy catalog", async () => {
+     const calls: unknown[] = [];
+     const fakeLegacyReader = async (request: unknown): Promise<unknown> => {
+       calls.push(request);
+       const parsed = parseExplorerRequestV1(JSON.parse(JSON.stringify(request)));
+       if (parsed.action !== "catalog") throw new Error("Expected catalog handshake");
+       return v1Catalog;
+     };
+-    expect(await negotiateMetaproject("/checkout", fakeLegacyReader)).toBe(1);
++    expect((await negotiateMetaprojectExplorer("/checkout", fakeLegacyReader)).protocol).toBe(1);
+     expect(calls).toEqual([probe, { action: "catalog" }]);
+-    const error = await readError(negotiateMetaproject("/checkout", async (request) => {
++    const error = await readError(negotiateMetaprojectExplorer("/checkout", async (request) => {
+       parseExplorerRequestV1(request);
+       return { ...v1Catalog, counts: undefined };
+     }));
+     expect(String(error)).toContain("incompatible legacy");
+   });
+ 
+   test("accepts the typed unsupported version only after the handshake", async () => {
+-    expect(await negotiateMetaproject("/checkout", async (request) => {
++    expect((await negotiateMetaprojectExplorer("/checkout", async (request) => {
+       if (request.action === "capabilities") throw new Error("unsupported-version: Try an earlier protocol.");
+       return v1Catalog;
+-    })).toBe(1);
+-    expect(await negotiateMetaproject("/checkout", async () => capabilities)).toBe(2);
++    })).protocol).toBe(1);
++    expect((await negotiateMetaprojectExplorer("/checkout", async () => capabilities)).protocol).toBe(2);
+   });
+ 
+   test("negotiates protocol 2 with a CLI that lists more actions than Desktop uses", async () => {
+     const newer = { schemaVersion: 2, actions: ["openspec-diff", ...[...METAPROJECT_CAPABILITIES].reverse()] };
+-    expect(await negotiateMetaproject("/checkout", async () => newer)).toBe(2);
++    expect((await negotiateMetaprojectExplorer("/checkout", async () => newer)).protocol).toBe(2);
+     for (const actions of [METAPROJECT_CAPABILITIES.slice(1), [...METAPROJECT_CAPABILITIES, 1], "catalog"]) {
+-      const lacking = await readError(negotiateMetaproject("/checkout", async () => ({ schemaVersion: 2, actions })));
++      const lacking = await readError(negotiateMetaprojectExplorer("/checkout", async () => ({ schemaVersion: 2, actions })));
+       expect(String(lacking)).toContain("invalid Metaproject capabilities");
+     }
+   });
+ 
+   test("does not downgrade transport errors, invalid responses or a later data error", async () => {
+     for (const error of ["Could not run the selected CLI", "Timed out"]) {
+       const calls: unknown[] = [];
+-      const failure = await readError(negotiateMetaproject("/checkout", async (request) => {
++      const failure = await readError(negotiateMetaprojectExplorer("/checkout", async (request) => {
+         calls.push(request);
+         throw new Error(error);
+       }));
+       expect(String(failure)).toContain(error);
+       expect(calls).toEqual([probe]);
+     }
+-    const invalid = await readError(negotiateMetaproject("/checkout", async () => ({ ...capabilities, actions: [] })));
++    const invalid = await readError(negotiateMetaprojectExplorer("/checkout", async () => ({ ...capabilities, actions: [] })));
+     expect(String(invalid)).toContain("invalid Metaproject capabilities");
+     const calls: unknown[] = [];
+     const reader = async (request: { action: string }) => {
+       calls.push(request);
+       if (request.action === "capabilities") return capabilities;
+       throw new Error("unsupported-version: Try an earlier protocol.");
+     };
+-    await negotiateMetaproject("/checkout", reader);
++    await negotiateMetaprojectExplorer("/checkout", reader);
+     const error = await readError(requestMetaprojectV2("/checkout", { action: "catalog", version: 2 }, reader));
+     expect(error instanceof MetaprojectRequestError && error.code).toBe("unsupported-version");
+     expect(calls).toEqual([probe, { action: "catalog", version: 2 }]);
+   });
+ 
+   test("validates v2 source evidence and rejects an unrelated detail", async () => {
+     const digest = "a".repeat(64);
+     const file = "openspec/specs/review/spec.md";
+     const node = { id: "spec-id", kind: "spec", title: "Review", path: file };
+     const hit = { node, scope: "spec", source: { path: file, digest, startLine: 2, endLine: 3 }, matchType: "heading" };
+     const search = { schemaVersion: 2, snapshotId: digest, hits: [hit], partial: false };
+     expect(isMetaprojectV2Response(search, "search")).toBe(true);
+     expect(isMetaprojectV2Response({ ...search, hits: [{ ...hit, source: { ...hit.source, path: "../escape" } }] }, "search")).toBe(false);
+     expect(isMetaprojectV2Response({ ...search, hits: Array(101).fill(hit) }, "search")).toBe(false);
+     const unrelated = await readError(requestMetaprojectV2("/checkout", { action: "detail", version: 2, id: "other" },
+       async () => ({ schemaVersion: 2, snapshotId: digest, node })));
+     expect(String(unrelated)).toContain("Incompatible Metaproject v2 response");
+   });
+ });
++
++describe("Metaproject tree capability", () => {
++  test("a CLI offering only the six actions Desktop always sends negotiates and reports no tree", async () => {
++    expect([...METAPROJECT_REQUIRED_ACTIONS]).toEqual(["catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history"]);
++    const older = async () => ({ schemaVersion: 2, actions: [...METAPROJECT_REQUIRED_ACTIONS] });
++    expect((await negotiateMetaprojectExplorer("/checkout", older)).protocol).toBe(2);
++    expect(await negotiateMetaprojectExplorer("/checkout", older)).toEqual({ protocol: 2, supportsTree: false });
++  });
++
++  test("a CLI offering tree reports it supported", async () => {
++    const newer = async () => ({ schemaVersion: 2, actions: [...METAPROJECT_CAPABILITIES] });
++    expect(await negotiateMetaprojectExplorer("/checkout", newer)).toEqual({ protocol: 2, supportsTree: true });
++  });
++
++  test("a legacy handshake reports no tree, and a CLI lacking a required action is still refused", async () => {
++    const legacy = async (request: { action: string }) => {
++      if (request.action === "capabilities") throw new Error("Invalid request");
++      return v1Catalog;
++    };
++    expect(await negotiateMetaprojectExplorer("/checkout", legacy)).toEqual({ protocol: 1, supportsTree: false });
++    const lacking = await readError(negotiateMetaprojectExplorer("/checkout", async () =>
++      ({ schemaVersion: 2, actions: ["tree", ...METAPROJECT_REQUIRED_ACTIONS.slice(1)] })));
++    expect(String(lacking)).toContain("invalid Metaproject capabilities");
++  });
++});
++
++describe("Metaproject tree responses", () => {
++  const digest = "b".repeat(64);
++  const file = { id: "file:src/a.ts", kind: "file", title: "a.ts", path: "src/a.ts" };
++  const module = { id: "module:src", kind: "module", title: "src", path: "src" };
++  const page = { id: "wiki:guide", kind: "wiki", title: "Guide", path: ".metaproject/wiki/guide.md", pageType: "guide" };
++  const graphRoot = {
++    schemaVersion: 2, snapshotId: digest, scope: "graph", parent: null, partial: false,
++    entries: [{ type: "folder", path: "src", name: "src", files: 2, module }, { type: "node", node: { ...file, path: "a.ts" } }],
++  };
++  const wikiRoot = {
++    schemaVersion: 2, snapshotId: digest, scope: "wiki", parent: null, partial: false,
++    entries: [{ type: "group", key: "guide", name: "Guide", pages: 1 }],
++  };
++
++  test("accepts well-formed graph and wiki pages", () => {
++    expect(isMetaprojectV2Response(graphRoot, "tree")).toBe(true);
++    expect(isMetaprojectV2Response({ ...graphRoot, parent: "src", nextCursor: "next", entries: [{ type: "node", node: file }] }, "tree")).toBe(true);
++    expect(isMetaprojectV2Response({ ...graphRoot, entries: [], partial: true }, "tree")).toBe(true);
++    expect(isMetaprojectV2Response(wikiRoot, "tree")).toBe(true);
++    expect(isMetaprojectV2Response({ ...wikiRoot, parent: "guide", entries: [{ type: "node", node: page }] }, "tree")).toBe(true);
++  });
++
++  test("rejects malformed tree pages", () => {
++    const malformed: unknown[] = [
++      { ...graphRoot, scope: "spec" },
++      { ...graphRoot, parent: 1 },
++      { ...graphRoot, partial: undefined },
++      { ...graphRoot, nextCursor: 1 },
++      { ...graphRoot, snapshotId: "snapshot" },
++      { ...graphRoot, entries: Array(101).fill({ type: "node", node: file }) },
++      { ...graphRoot, entries: [{ type: "folder", path: "../escape", name: "escape", files: 1 }] },
++      { ...graphRoot, entries: [{ type: "folder", path: "src", name: "src", files: -1 }] },
++      { ...graphRoot, entries: [{ type: "folder", path: "src", name: "src", files: 1, module: file }] },
++      { ...graphRoot, entries: [{ type: "folder", path: "src", name: "src", files: 1, module: { ...module, path: "lib" } }] },
++      { ...graphRoot, entries: [{ type: "group", key: "guide", name: "Guide", pages: 1 }] },
++      { ...graphRoot, entries: [{ type: "node", node: page }] },
++      { ...graphRoot, entries: [{ type: "symlink", path: "src" }] },
++      { ...wikiRoot, entries: [{ type: "folder", path: "src", name: "src", files: 1 }] },
++      { ...wikiRoot, entries: [{ type: "group", key: "", name: "Guide", pages: 1 }] },
++      { ...wikiRoot, entries: [{ type: "node", node: file }] },
++    ];
++    for (const value of malformed) expect(isMetaprojectV2Response(value, "tree")).toBe(false);
++  });
++
++  test("requests a tree page and refuses an answer for another parent or scope", async () => {
++    const calls: unknown[] = [];
++    const reader = async (request: unknown) => {
++      calls.push(request);
++      return { ...graphRoot, parent: "src", entries: [{ type: "node", node: file }] };
++    };
++    const tree = await requestMetaprojectTree("/checkout", { scope: "graph", parent: "src", expectedSnapshotId: digest }, reader);
++    expect(tree.entries).toEqual([{ type: "node", node: file }]);
++    expect(calls).toEqual([{ version: 2, action: "tree", scope: "graph", parent: "src", expectedSnapshotId: digest }]);
++    expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "lib" }, reader))))
++      .toContain("Incompatible Metaproject v2 response");
++    expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "wiki", parent: "src" }, reader))))
++      .toContain("Incompatible Metaproject v2 response");
++    expect(String(await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, reader))))
++      .toContain("Incompatible Metaproject v2 response");
++    const malformed = await readError(requestMetaprojectTree("/checkout", { scope: "graph" }, async () => ({ ...graphRoot, entries: "src" })));
++    expect(String(malformed)).toContain("Incompatible Metaproject v2 response");
++  });
++
++  test("a typed CLI error on a tree read keeps its code", async () => {
++    const error = await readError(requestMetaprojectTree("/checkout", { scope: "graph", parent: "gone" }, async () => {
++      throw new Error("not-found: Unknown Metaproject tree parent.");
++    }));
++    expect(error instanceof MetaprojectRequestError && error.code).toBe("not-found");
++  });
++
++  test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {
++    const other = "c".repeat(64);
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 213,213 @@
++      async () => ({ ...graphRoot, snapshotId: other, parent: "src", entries: [{ type: "node", node: file }] })));
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 216,216 @@
++      async () => ({ schemaVersion: 2, snapshotId: other, hits: [], partial: false })));
+
+--- apps/desktop/src/platform/metaproject.test.ts
+@@ 218,219 @@
++  });
++});
+
+--- docs/docs/cli-reference.md
+@@ 8281,8301 @@
+ ```
+ 
+ Use a repository-relative entry path returned by `list` or `search`. For a section, pass its ID and source digest from the search result. Use the returned cursor to continue a list or search against the same snapshot. JSON output carries `schemaVersion: 2`. Exit code 1 indicates invalid input, a missing entry, or a stale section or snapshot. Exit code 2 indicates the source could not be read.
+ 
+ ## metaproject-explorer
+ 
+ Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph. Its snapshot ID is a change detector, not an atomic snapshot while graph or wiki files are being written.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"action":"catalog"}'
+ ```
+ 
+ The snapshot ID covers the graph, wiki and OpenSpec data a response is read from. Graph freshness is separate. Only a `catalog` response checks it and reports it as `graph` and `graphReason`; `detail`, `search` and `neighbors` skip the check. An untracked or edited file can therefore turn `graph` to `stale` while the snapshot ID, pinned requests and cursors stay valid.
+ 
+ A version 2 client starts with the `capabilities` probe, which lists the actions this CLI serves without reading the checkout.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"version":2,"action":"capabilities"}'
+ ```
+ 
+-Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses.
++Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the actions it requires, and uses an optional action such as `tree` only when the CLI lists it.
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 67,167 @@
+    [wiki module](../modules.md#gdwiki) for page types and lifecycle.
+ 
+ ### Enable symbol and call relationships
+ 
+ Files, modules, wiki pages and import relationships work with the file
+ graph. For symbol search and the **Defines** and **Calls** relationship types,
+ which stay disabled in the Graph **Filters** popover until the symbol layer is
+ on, enable the optional symbol layer per checkout and rebuild it.
+ 
+ ```bash
+ keryx gdgraph symbols enable
+ keryx gdgraph build
+ keryx gdgraph symbols status
+ ```
+ 
+ See the [symbol-layer setup](../complete-setup-and-agent-workflows.md#8-configure-the-optional-symbol-layer)
+ for the pinned grammar assets used by supported languages.
+ 
+ ## Find a page, file, module or symbol
+ 
++Browse the tree in the list on the left, or search when you know a name.
++
++### Browse the tree
++
++Without a search, the list is a tree:
++
++- In **Graph**, it shows the folders and files of the checkout. The header
++  reads **Files** with the number of indexed files. In each folder, its
++  folders come first, then its files, in name order. Only folders that hold
++  indexed files appear, and each shows how many files it holds, counting its
++  subfolders. A folder that is also a module can be selected as that module:
++  click its name or press **Enter** to select it, and click the chevron or
++  press **Space** to expand or collapse it. Click any other folder to expand
++  or collapse it.
++- In **Wiki**, it groups the pages by page type, such as **Component** or
++  **Domain model** for `domain-model` pages, with the number of pages in each
++  group. Pages without a page type are under **Other**. The header reads
++  **Wiki** with the number of pages.
++
++Click a file or page to select it, as you would a search result. A folder
++loads its contents when you first expand it and shows **Loading…** until
++they arrive. A large folder shows its first entries and a **Show more** row
++that loads the next ones. If a folder fails to load, its row reads **Could
++not load.** with the reason and a **Retry** button.
++
++Use the keyboard once the tree has focus:
++
++| Key | Action |
++| --- | --- |
++| **Up** / **Down** | Move to the previous or next row. |
++| **Home** / **End** | Move to the first or last row. |
++| **Right** | Expand a closed folder or group, or move to its first entry when it is open. |
++| **Left** | Collapse an open folder or group, or move to its parent. |
++| **Enter** | Select a file, page or module folder. On another folder or a group it expands or collapses it. On a **Show more** or **Retry** row it runs that action. |
++| **Space** | Expand or collapse a folder or group, or select a file or page. |
++
++Expanded folders and groups stay open when you leave the Metaproject tab and
++return, and when you switch between **Graph** and **Wiki**. When you select an
++item from somewhere else, such as a node in the graph or a link in an
++article, the tree expands the folders on its path and scrolls to it. The item
++shown when you first open the explorer does not expand the tree.
++
++If the graph is not built, the **Graph** tree reads **The graph is not built
++yet. Rebuild the graph to browse its files.** The **Wiki** tree still works.
++
++The tree needs a Keryx CLI that serves it. With an older CLI, the list stays
++the flat catalog list described below and everything else works as before.
++
++### Search
++
+ Type a name, path, or phrase from a wiki page into **Search names, paths and
+ wiki text**. Use a repository-relative path such as `src/wiki/service.ts`
+ when several files share a name. Wiki body matches show a snippet so you can
+ see why a page matched. For example, searching for `inode-aware cursor` in
+ the Keryx repository finds the **Agent Bus** page.
+ 
+-The list header shows how many catalog items are shown out of the total, as
+-**Catalog · shown of total**. While you search it reads **Results** with
+-the number of matches instead.
++While you search, the list shows flat results instead of the tree, and the
++header reads **Results** with the number of matches. Clear the search to
++return to the tree. With a CLI that does not serve the tree, the header of
++the list without a search shows how many catalog items are shown out of the
++total, as **Catalog · shown of total**.
+ 
+ Select a result to inspect it. In **Graph**, the selected item becomes the
+ center of the graph, with the nodes related to it by the current graph
+ filters around it. In **Wiki**, a page opens as a readable
+ article with its repository path. File and symbol results display their
+ identity and path. To inspect or edit their
+ source, open that path in your editor.
+ 
+ If the check of the selected CLI fails, the explorer shows the error with a
+ **Retry** button.
+ 
+ ## Trace relationships in Graph
+ 
+ ![Graph view with the file src/bus/leases.ts selected: twelve importing files, the Agent Bus wiki page that describes it and its module bus on the left, the four files it imports on the right, group captions, a legend under the graph, and the details panel open on its Relationships tab](../images/desktop-metaproject/graph.jpg)
+ 
+ The graph shows a local neighborhood of the selected item in columns. What
+ points at the selected item is on its left, and what it points at is on its
+ right. In the picture, `src/bus/leases.ts` is selected: the files that import
+ it, the Agent Bus page that describes it and its module are on the left, and
+ the four files it imports are on the right. With **2 steps**, items one step
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 289,337 @@
+ 
+ ## Inspect the module from the CLI
+ 
+ Run the same read command the app uses from the open checkout to isolate a
+ graph or wiki problem from a rendering problem.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"action":"search","query":"Agent Bus"}'
+ keryx metaproject-explorer --request '{"action":"detail","id":"wiki:architecture/agent-bus.md"}'
+ ```
+ 
+ Copy the `node.id` from a search or catalog result when requesting detail or
+ neighbors. IDs identify a node in the current checkout. Each response carries
+ a `schemaVersion` and `snapshotId`. Desktop compares them before mixing
+ results from separate reads and asks to refresh if the underlying data changes.
+ The snapshot covers the graph, wiki and OpenSpec data. Graph freshness is not
+ part of it: creating or editing another file in the checkout can mark the
+ graph stale, and the results already loaded stay valid.
+ 
+ Before its first read, Desktop asks the selected CLI which read actions it
+-serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
+-than Desktop keeps working when it adds actions.
++serves. Desktop accepts a CLI that lists every action it requires, so a CLI newer
++than Desktop keeps working when it adds actions. Desktop uses an optional action,
++such as `tree`, only when the CLI lists it; without it, the list stays flat.
+ 
+ Desktop can calculate a file or wiki neighborhood from a complete catalog.
+ It asks the CLI for a neighborhood when the catalog is limited or the
+ selection or filters require symbol relationships. Modules represent
+ directories. A module-level import groups the imports between their files
+ and can carry example file pairs. See the
+ [CLI response contract](../cli-reference.md#metaproject-explorer).
+ 
+ ## Recover from common problems
+ 
+ | What you see | What to do |
+ | --- | --- |
+ | **Graph missing** | Open existing wiki pages in **Wiki**, or select **Rebuild graph** to add code relationships. |
+ | **Graph stale** after switching branches or changing code | Rebuild from the open checkout. The stale graph can still show results from its last build. |
+ | **Graph unknown** or a layer fails to load | Rebuild and check the terminal output. For `defines` or `calls`, also check `keryx gdgraph symbols status`. |
+ | **Project knowledge changed while loading** | The graph was rebuilt, or a wiki page or OpenSpec file changed, between two reads. Select **Refresh catalog** to load a consistent snapshot. |
+ | **Search failed** | Select **Retry search** to repeat the current query. |
++| A tree row reads **Could not load.** | Select **Retry** on that row to read the folder or group again. |
++| The **Graph** tree reads **The graph is not built yet.** | Select **Rebuild graph**, or run `keryx gdgraph build` from the open checkout. |
++| The list shows **Catalog · shown of total** instead of a tree | The selected CLI does not serve the tree. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. Search and the flat list keep working. |
+ | The CLI does not support Metaproject Explorer | Choose the bundled CLI in **Settings → Desktop**, or update the CLI and Desktop together. |
+-| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop uses. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
++| The selected CLI returned invalid Metaproject capabilities | The CLI lacks a read action this Desktop requires. Choose the bundled CLI in **Settings → Desktop**, or update the CLI. |
+ | A page has no **Relationships** section | Confirm the page links to other wiki pages or declares the code it covers, then rebuild the graph and check the filters in **Graph**. |
+ 
+ For maintenance of wiki references and freshness, see
+ [Keep the wiki current](keep-the-wiki-current.md).

@@ -1,0 +1,91 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "518",
+  "dispatch_id": "518-T14",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Fix round 3: review round 3 findings of PR 1301 (1 major, 6 minor)",
+    "intent": "fix",
+    "description": "Fix exactly the 7 upheld findings of review round 3 listed in fix_context.review_feedback (dispatch/T14.fix_context.json) and nothing else. Full finding objects are in .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02/report.md (json keryx:findings), premise notes in its research-evidence/premises.json, the verifier repro of the major in research-evidence/verify-regression-w1-F-001.txt. Operator decisions to keep: a stale snapshot shows only the Refresh catalog banner; focus goes to the row now at the same place; a retired in-flight read keeps its limiter slot; names limit/slots/pool and sleep/wait/pause stay (dismissed r2-style-w2-F-001 and r3-style-w1-F-001); silent 2x permit retry stays. For every behaviour fix write the failing test first (red), then fix (green): the major (stale row recovers after Refresh catalog with an unchanged snapshotId, folder and Show more page), the focus anchor fallback (r3-logic-w5-F-002: focused Show more of P whose preceding row is P's last child's Loading row, both answering in one commit, focus lands on P's first appended row), the retry snapshot guards (r3-testing-practices-w2-F1). Check every behaviour against the flow plan's state x event matrix. Report each finding's outcome by id."
+  },
+  "acceptance_criteria": [
+    "- AC1: A v2 `tree` request with `scope: \"graph\"` returns, for the root and for any folder, the folders containing indexed files (sorted, with file counts, a module folder carrying its module node) followed by that folder's file nodes (sorted), never symbols; pages of at most 100 entries chain by `nextCursor` to the full child list with no duplicate or missing entry; `scope: \"wiki\"` returns page-type groups at the root and a group's pages under it. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts`]",
+    "- AC2: Malformed `tree` requests (unknown keys, bad scope, absolute or `..` parent, bad cursor) answer `invalid-input`; an unknown parent answers `not-found`; a cursor or `expectedSnapshotId` from another snapshot answers `stale-snapshot`; `capabilities` lists `tree`; v1 requests parse and answer exactly as before. [verify: exec `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts` · sensitive: failure-scenario]",
+    "- AC3: The Desktop Rust command accepts a well-formed `tree` request, refuses a malformed one, and still requires of a CLI only the six existing actions. [verify: exec `cd apps/desktop/src-tauri && cargo test --locked metaproject`]",
+    "- AC4: Desktop learns from the capability probe whether the CLI offers `tree`; against a CLI that does not, the explorer negotiates successfully and the sidebar shows today's flat list with no error. [verify: exec `cd apps/desktop && bun test src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` · sensitive: failure-scenario]",
+    "- AC5: The tree component renders folders, groups and node rows with WAI-ARIA tree semantics and roving focus; Up/Down/Left/Right/Home/End/Enter/Space behave as the plan states; expanding reads a folder once and shows a loading row; a failed folder read shows an inline error whose Retry re-reads only that folder; \"Show more\" appends the next page in order; selecting a node row calls the selection callback with that node; a graph that is not built shows an empty-state line. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx` · sensitive: failure-scenario]",
+    "- AC6: In the explorer, the tree shows without a query and flat results with one; expanded folders and the selection survive leaving and returning to the view and switching between Graph and Wiki; a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus; a new snapshot keeps the expanded set, drops stale children and answers, and never sends an old-snapshot cursor. [verify: exec `cd apps/desktop && bun test src/metaproject/MetaprojectView.dom.test.tsx`]",
+    "- AC7: The Desktop package type-checks and its whole test suite passes. [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+    "- AC8: The core package lints and type-checks. [verify: exec `bun run lint && bun run typecheck`]",
+    "- AC9: The Desktop Metaproject guide describes the tree (Graph folders, Wiki groups, keyboard, behaviour with an older CLI) and the docs checks pass. [verify: exec `bun run docs:check`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T14.implement.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.fix_context.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/platform/metaproject.ts",
+    "apps/desktop/src/platform/metaproject.test.ts",
+    ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02/report.md",
+    ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02/research-evidence/verify-regression-w1-F-001.txt"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T14.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "Scope: apps/desktop/src/metaproject/** and apps/desktop/src/platform/metaproject.ts with its test. Scope freeze: fix the listed findings only; anything else you would change goes back as a question in behavior_changes.",
+    "Code search goes through `keryx ctx rg`, never bare rg/grep. Run long commands through `keryx ctx run -- <cmd>`.",
+    "FIX_CONTEXT: .metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T14.fix_context.json holds fix_context.review_feedback (id + suggested_fix per finding); treat each suggested_fix as a hypothesis (task-implementer 1.3)."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command",
+    "git"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-24T08:30:00Z",
+    "created_by": "flow-orchestrator"
+  }
+}

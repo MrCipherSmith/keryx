@@ -1,0 +1,42 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 5 (delta 3ad918b66..0d6df2937, fix round 4), slice-01 (fix) read in full. The slice changes no markup, stylesheet, visible string, ARIA attribute or interaction. It rewords the MetaprojectTree component doc, makes the hook's `reload` input required, amends plan.md (focus rule and a stale-snapshot row in the state matrix), and adds flow bookkeeping (T15 dispatch, resolved context, flow.json, journal). No new UI/UX finding. The plan now states the stale-row UX as the operator decided it: a parked row reads 'Loading…' with no Retry, and the Refresh catalog banner is the recovery. That is an agreed decision, so it is an exemption and not re-raised here. Prior dispositions: r4-clean-code-w2-F-001 closed (doc at MetaprojectTree.tsx defers to handOff, matching handOff at :72 and handOffTarget at :86/:191); r4-frontend-w2-F-001 closed (`reload: unknown` required in useMetaprojectTree.ts; MetaprojectView.tsx:761 passes `reload: catalog`; the DOM Harness passes `reload: props.reload ?? 0` at MetaprojectTree.dom.test.tsx:71; Desktop tsc exit 0 per verify-tests-to-run-1.txt); r4-logic-w2-F-001 closed (plan.md focus sentence now gives the hand-off rule and the matrix has a stale-snapshot row citing the operator decisions); r4-degradation-w2-F-002 open (unreported this round; the `reload` doc still reads 'Changes whenever the explorer loads its catalog (Refresh catalog included)', and the new plan.md matrix row repeats the over-claim 'every catalog load re-reads parked reads', while the quiet re-read on return to the explorer with an unchanged snapshot does not change `reload`; still info, no user impact because the banner stays up). Mode: code only; no URL or screenshots supplied, so no live checks.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "r4-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r4-degradation-w2-F-002", "disposition": "open" },
+    { "id": "r4-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r4-logic-w2-F-001", "disposition": "closed" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Summary
+
+- **Verdict:** DONE. No blocker, major, minor or info finding in the round-5 delta.
+- **Context:** Keryx Desktop, Metaproject explorer sidebar tree (app screen). Users are developers browsing a project's indexed files and wiki pages. The primary task is to find a file or page by folder or group and select it. Mode: code only.
+- **Scope read:** slice-01 (fix), in full. The delta has no UI-bearing change: no `*.tsx` markup, no CSS, no visible strings. It changes a doc comment, one prop type (`reload` made required), plan.md, and flow records.
+- **Scores:** Slop score not applicable: no rendered surface changed and no tells were introduced. WCAG 2.2 AA floor: nothing in the delta touches it. Viewports: not run.
+- **Prior findings:**
+  - r4-clean-code-w2-F-001: closed.
+  - r4-frontend-w2-F-001: closed.
+  - r4-logic-w2-F-001: closed.
+  - r4-degradation-w2-F-002: open. It is info and the fix round did not report it. The `reload` doc in useMetaprojectTree.ts is unchanged, and the new plan.md matrix row says the same thing ("every catalog load re-reads parked reads, same snapshot id included"). The quiet re-read with an unchanged snapshot is the exception.
+- **What works (keep):** The plan now records the operator-agreed stale-row behaviour: the row reads "Loading…", there is no dead Retry, and the Refresh catalog banner is the recovery. It also records the focus hand-off rule, so later fix rounds will not "correct" either one back.
+
+## Checks not run
+
+- All live-mode checks: focus ring visibility, computed contrast, target sizes, reduced motion and zoom at 1440/768/390 px in light and dark. No URL or screenshots were supplied. Screenshots of the Metaproject sidebar tree with a parked stale row and the Refresh catalog banner would close this gap.
+- No tests were executed (exec_budget_s = 0). The tsc and suite results come from research-evidence/verify-tests-to-run-1.txt (exit 0, 1021 pass).
+
+Routing audit: graph_used: no (not-relevant: a one-slice fix delta with known files); wiki_used: no (not-relevant: no domain question); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`/`show` for the schema); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":109523,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

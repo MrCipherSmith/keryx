@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.tsx",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts",
+    "apps/desktop/src/platform/metaproject.ts",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/desktop-metaproject.md",
+    "src/integrations/metaproject-explorer-contract.ts",
+    "src/integrations/metaproject-explorer-tree.test.ts",
+    "src/integrations/metaproject-explorer-v2.ts"
+  ],
+  "changedLines": 809
+}

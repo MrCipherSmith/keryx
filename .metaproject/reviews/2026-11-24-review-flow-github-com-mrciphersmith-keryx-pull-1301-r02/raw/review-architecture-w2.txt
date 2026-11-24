@@ -1,0 +1,77 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 3 delta f43a13c3f..b2043b98d (fix round 2). slice-02 changes MetaprojectTree.tsx (separate status/more row ids, focus hand-off anchored to the row before), useMetaprojectTree.ts (stale-snapshot leaves the row loading, a retry with jittered backoff when Desktop refuses a read permit, an injectable `wait`, the limiter reports unexpected throws), tests and flow bookkeeping. The layering is mostly unchanged and sound. The clock is injected (`wait`), not created inline, and the view still talks to the transport only through `request`. One minor boundary leak: the tree hook recognises Desktop's permit refusal by matching the Rust error text itself. Elsewhere that classification belongs to the platform transport layer. slice-03 (apps/desktop/src/platform/metaproject.ts) contains no change in this range: `git diff --stat f43a13c3f..b2043b98d -- apps/` does not list the file. The slice's removed lines are round-1 changes (commit 6c83eb7fb). I read the file at the head (lines 255-322): the stale-snapshot check now runs after matchesRequest, for every action. Nothing new to report there.",
+  "findings": [
+    {
+      "id": "architecture-w2-F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "problem": "This round's permit retry puts knowledge of the wire format of the Rust command's error (metaproject.rs:199, `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\")`) into the tree's state hook. The platform transport layer is the boundary that maps those errors to types: `requestMetaprojectV2` in platform/metaproject.ts turns `<code>: ...` strings into `MetaprojectRequestError`, and the other prefix match on a Rust message in Desktop lives in platform (githubAccounts.ts:28). `useMetaprojectTree` sits above that boundary. It now parses an untyped infrastructure string that its own transport passes through unmapped, because `unavailable` is not in METAPROJECT_ERROR_CODES.",
+      "impact": "Nothing ties the hook's text to the Rust producer. If the Rust message is reworded, or the transport starts mapping `unavailable` to a typed error with the prefix stripped (as it already does for the eight known codes), `isPermitRefusal` silently stops matching. A refused permit then becomes a terminal folder error again, with no failing test: the DOM tests feed the literal string straight into a fake `request` and never go through `requestMetaprojectTree`. The code is correct today. The cost falls on whoever next changes the transport's error mapping.",
+      "suggested_fix": "Classify the refusal in the transport. Either export `isMetaprojectPermitRefusal(cause)` from apps/desktop/src/platform/metaproject.ts, next to `requestMetaprojectV2`, and import it in useMetaprojectTree.ts, or have the transport throw a typed error for it. Add a platform test that feeds the exact metaproject.rs message through `requestMetaprojectTree` and asserts that the classifier matches it.",
+      "evidence": "Read useMetaprojectTree.ts:20-25 and 159-169 at the head. platform/metaproject.ts:286-297: only METAPROJECT_ERROR_CODES prefixes are mapped, and anything else is rethrown raw. contract.ts:329-331: `unavailable` is absent from the codes. `keryx ctx rg 'Too many Metaproject|startsWith(\"unavailable'` over apps/desktop/src finds one producer-side text (metaproject.rs:199), one consumer in the view-model layer (useMetaprojectTree.ts:24), two test literals, and the platform-layer precedent githubAccounts.ts:28.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["apps/desktop/src/metaproject/useMetaprojectTree.ts:24"],
+        "enumeration_method": "keryx ctx rg 'Too many Metaproject|startsWith(\"unavailable' apps/desktop/src: the only match outside the platform layer and tests"
+      }
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "status": "DONE" },
+    { "id": "slice-03", "status": "DONE", "coverage": "No change to this file in f43a13c3f..b2043b98d. The slice shows round-1 hunks (6c83eb7fb). Read the head version, lines 255-322." }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `f43a13c3f..b2043b98d` (round 3 delta, fix round 2)
+- Scope mode: explicit-hash-range, slices slice-02 and slice-03 (both new)
+- Stack detected: React (hooks, no MobX) plus a TS platform transport
+
+### Summary
+Fix round 2 changes Desktop only: focus hand-off in `MetaprojectTree`, plus the stale-snapshot path, a permit-refusal retry and limiter error reporting in `useMetaprojectTree`. Dependency direction is unchanged (view → hook → injected `request`). The new `wait` is a proper injected clock. One minor boundary leak: the hook matches Desktop's Rust permit-refusal text instead of getting that classification from the platform transport.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+- [architecture-w2-F-001] minor: `useMetaprojectTree.ts` `isPermitRefusal` matches the Rust error text `"unavailable: Too many Metaproject reads"`. That parsing belongs in `platform/metaproject.ts`, the layer that already maps Desktop error strings to types. Fix: export the classifier from the transport and add a platform test against the exact Rust message.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. `wait` defaults to `sleep` and is injectable, so the hook creates no clock dependency inline.
+
+### Framework-Specific (NestJS / React+MobX)
+None detected. NestJS and MobX are not used here.
+
+### Notes
+- slice-03 is labelled new, but `apps/desktop/src/platform/metaproject.ts` is not changed in this range. Its hunks come from round 1 (6c83eb7fb). I read the head version and found nothing new.
+- Read-only commands only: `git diff --stat`, `git log`, `keryx ctx rg|read`. No tests run (exec_budget_s 0).
+
+Routing audit: graph_used: no (the payload layers block covered the affected files); wiki_used: not-relevant; ctx_used: yes; raw_rg_used: no.
+KERYX_USAGE {"tokens_in":131572,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

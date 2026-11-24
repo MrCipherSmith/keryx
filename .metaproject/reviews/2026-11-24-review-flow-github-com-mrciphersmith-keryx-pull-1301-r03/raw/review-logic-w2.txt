@@ -1,0 +1,102 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a` (round 4 delta, fix round 3)
+- Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a` (main merge-base a5d1ab236)
+- Scope mode: explicit-hash-range, slice-04 (second-look: flow 518 package: acceptance-criteria, context, description, journal, plan, tasks, dispatch T5-T8/T12/T13, flow.json, resolved T5-T7/T12/T13)
+- Spec compliance gate: ran against plan.md and acceptance-criteria.md
+
+### Summary
+Slice-04 is the flow record, not code. I read it in full and checked its claims against the head (3ad918b66). This delta added the T14 task, history and journal lines, and the T14 dispatch files. Those sit outside this slice's hunks, but I read them for context with `git diff b2043b98d..3ad918b66` on the flow folder. flow.json and journal.md agree on T12-T14 (added, started, done, with matching timestamps). T10 and T11 are still `todo`, which is correct while CI and review are open. The criteria are unchanged (checksum-frozen). One point is wrong now. plan.md, which every fix dispatch tells the implementer to check behaviour against ("Check every behaviour against the flow plan's state x event matrix"), still states the original focus rule and has no row for the stale-snapshot parking that rounds 1-3 introduced under operator decisions. The plan now contradicts the code and the decisions recorded in the dispatch files and journal. No blocker or major.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Spec Gaps (blocker)
+None detected. Every AC1-AC9 is unchanged and mapped to a task. AC3 still waits on CI (T10 todo), as the journal records.
+
+### Logic Bugs
+[F-001] (minor) plan.md still says data never moves focus and has no stale-snapshot state. See REVIEW_RESULT.
+
+### Async & Concurrency
+None detected in this slice.
+
+### Error Handling
+None detected in this slice.
+
+### Null / Undefined Safety
+Not applicable (no code in this slice).
+
+### Type Contract Violations
+Not applicable (no code in this slice).
+
+### Edge Cases
+[F-002] (info) The journal's T14 shorthand "Loading row -> parent row" reads as focus landing on the parent row. See REVIEW_RESULT.
+
+### Suggested Patches
+```diff
+- ... Home/End go to the first/last visible row. Focus is never moved by data arriving.
++ ... Home/End go to the first/last visible row. Data arriving never takes focus from outside the tree; when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place (operator decision, fix round 1).
+```
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-04 (flow 518 record) at 3ad918b66: flow.json, journal and dispatch files agree on T12-T14; one minor: plan.md, which every fix dispatch names as the behaviour reference, still states the pre-review focus rule and lacks the stale-snapshot parked state; one info on ambiguous journal shorthand.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "line": null,
+      "quote": "Focus is never moved by data arriving.",
+      "problem": "plan.md (Desktop UI, WAI-ARIA bullet) still says focus is never moved by data arriving. Its state x event matrix has no row for a read answered stale-snapshot. Both behaviours have changed under recorded operator decisions. (1) Fix round 1, journal 2026-11-24 'focus goes to the row now at the same place': when the focused Loading, Show more or error row is replaced, focus moves to its successor. MetaprojectTree.tsx:104 now documents this ('Data arriving never takes focus from outside the tree'), and handOff() at MetaprojectTree.tsx:72 implements it. (2) Fix rounds 2-3: a stale-snapshot answer shows only the Refresh catalog banner and parks the folder or page as `stale`, and every catalog load re-reads it (journal T14 entry). The matrix's 'folder read failed' and 'new snapshot' cells describe neither.",
+      "impact": "Every fix dispatch (T12.json, T13.json, T14.json) tells the implementer to 'Check every behaviour against the flow plan's state x event matrix', and the flow-complete verifier reads the plan as the spec. Measured against the current plan, the shipped focus hand-off is a deviation. A later worker or verifier can 'fix' it back and regress the operator decision, or flag correct code as a spec gap. No runtime defect.",
+      "suggested_fix": "Amend plan.md. Reword the focus sentence to the rule the code and the operator decision follow: data arriving never takes focus from outside the tree; when the focused row is replaced, focus goes to the row now at its place (the first child, or the first appended entry). Add a matrix row or cell for a stale-snapshot answer: banner only, no Retry, the folder or page is parked and re-read on the next catalog load even when the snapshot id is unchanged. Cite the operator decisions recorded in the journal.",
+      "evidence": "plan.md Desktop UI bullet, read at head 3ad918b66 (`keryx ctx rg -n 'Focus is never|stale' plan.md` returns only the line-19 contract text and the line-49 focus sentence; there is no stale-state row). MetaprojectTree.tsx:65-79 handOff and :104 doc comment. T12.json, T13.json and T14.json descriptions carry the 'Check every behaviour against the flow plan's state x event matrix' instruction. Journal entries for T12 ('На то же место'), T13 and T14 (stale parking). Rounds 1-3 findings (r02 findings.json and the earlier reports) were searched for plan.md, 'never moved' and 'Focus is never'. None raises this plan drift.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md:49",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md:59-66"
+        ],
+        "enumeration_method": "Read plan.md in full (slice-04 lines 167-239). Searched it for 'Focus is never' and 'stale' with keryx ctx rg. The only focus rule is the line-49 sentence, and the only matrix touching stale or failed reads is the state x event table."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+      "line": null,
+      "quote": null,
+      "problem": "The T14 journal entry summarises the hand-off as 'status rows anchor focus hand-off to their own parent (Loading row -> parent row, Show more -> parent last entry)'. Read alone, 'Loading row -> parent row' says focus lands on the parent folder row. That would contradict the operator decision recorded in T13.fix_context.json: after a Loading row is replaced by children, focus must land on the first child. The code is right. handOff() makes the parent row the anchor, and focus goes to the first row of that parent after it (MetaprojectTree.tsx:66-76).",
+      "impact": "Wording only. A reader auditing the flow from the journal may think the operator decision was reversed.",
+      "suggested_fix": "Optional. In a later journal line, say 'Loading row anchored to the parent row (focus to its first child)'. The journal is append-only, so do not rewrite the existing line.",
+      "evidence": "Journal T14 line (git diff b2043b98d..3ad918b66 on journal.md). MetaprojectTree.tsx:65-79. T13.fix_context.json r2-frontend-w1-F-001 operator decision.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes on honesty and scope:
+- This slice carries no code. I ran no tests. I relied on the supplied verify-tests-to-run-1.txt (exit 0 at 3ad918b66) and did not re-run it.
+- The hunks in slice-04 stop at T13. The T14 additions to flow.json and journal.md, and dispatch/T14*, resolved/T14*, are outside its hunks. I read them through `git diff b2043b98d..3ad918b66` as context only.
+- Round-3 findings were not re-reported. r3-pr-contract-w1-PC-001 (PR body) is known open and not repeated.
+
+Routing audit: graph_used: no (no code symbols to trace; the payload's layers came back empty for this slice). wiki_used: not-relevant (the flow record is self-describing). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no. I ran one raw `git diff` with a keryx:raw marker, for the exact delta of the two flow files.
+KERYX_USAGE {"tokens_in":168126,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

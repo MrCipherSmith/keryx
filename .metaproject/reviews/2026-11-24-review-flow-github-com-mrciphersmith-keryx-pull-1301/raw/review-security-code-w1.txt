@@ -1,0 +1,52 @@
+STATUS: DONE
+
+## Security Review (round 2, second look)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`, PR #1301 (flow 518)
+- Range: 9f4ec475b..f43a13c3f (fix round 1); head f43a13c3f
+- Scope mode: diff, second-look slice
+- Slice read in full: slice-04 (2546 lines: flow package files, apps/desktop/src-tauri/src/metaproject.rs, MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, platform/metaproject.ts)
+- Standards read: .metaproject/rules/core/security-baseline.mdc, .metaproject/rules/activity/review.mdc (no project override at rules/project/activity/review.mdc)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+Nothing in the slice is wrong now under the security lens. Round 1's only security finding (security-code-w1-F-001, info: validTreeEntry does not check a folder is a direct child of the requested parent or bound a group key) is context and is not re-reported; it is unchanged and remains defence-in-depth only.
+
+### What was checked
+- Boundary validation (baseline Rule 3): the Rust `RequestV2::Tree` arm validates a graph `parent` with `relative_path` (rejects empty, `.`/`..` segments, absolute, backslash, drive-letter, control chars), a wiki `parent` and `cursor` with `valid_text`, and `expectedSnapshotId` with `digest`; nulls and unknown keys are refused (`deny_unknown_fields`, null-value check); the payload is capped at 16 KiB and passed as one argv element to the CLI (no shell). Tests `validates_tree_requests` cover `../escape`, `/src`, `src\\lib`, empty, null and unknown-key cases; CI's `cargo test` passed at f43a13c3f.
+- Values echoed from a CLI response back into a request (folder paths, group keys, cursors) pass through the same Rust validation before reaching argv; the Desktop side has no filesystem or shell sink for them.
+- Capability handshake: `METAPROJECT_REQUIRED_ACTIONS` keeps the required set at the six actions; `tree` is optional and only sent when the probe lists it. No privilege or trust change.
+- Response guards: `validTree`/`validTreeEntry` type-check every entry, bound the page at `METAPROJECT_PAGE_SIZE_V2`, and the response matcher requires `scope` and `parent` to equal the request's. The fix round's new `stale-snapshot` throw when `page.snapshotId !== pinned` only tightens this.
+- Rendering (XSS): tree rows render `entry.name`, `node.title`, counts and kind labels as React text children; no `dangerouslySetInnerHTML`, `eval`, `innerHTML`, or URL/href built from response data in the slice. Inline style uses only `row.level` (a number computed locally).
+- Secrets/logging/crypto/storage: none introduced; no `localStorage`/`sessionStorage`, no `postMessage`, no logging of request payloads.
+- CSRF, open redirect, auth/IDOR, injection into queries: not applicable to this local Tauri command and React state code.
+
+### Clean Areas
+Injection (command, XSS, eval), path traversal, input validation at the Tauri boundary, secrets and logging, insecure crypto, React-specific patterns, capability/trust negotiation.
+
+### Not verified
+- No command was run beyond read-only `git diff --stat` and `keryx ctx` reads (exec budget 0); Rust behaviour rests on the source read and the CI result stated in the brief.
+- Lines hidden between the slice's hunks (e.g. MetaprojectTree.tsx 26-31, 54-55, 101-104, 139-147; useMetaprojectTree.ts 119-135, 144-145) were not opened; nothing in the visible code suggests a sink there.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second-look read of slice-04 (fix round 9f4ec475b..f43a13c3f). No security defect in the current code: the Rust tree request is validated at the boundary (relative_path / valid_text / digest, deny_unknown_fields, no nulls, 16 KiB cap, argv without a shell), CLI-supplied values echoed back are re-validated there, the response guard bounds and type-checks tree pages and now also rejects a page from another snapshot, and tree rows render response text only as React text. Round-1 info finding security-code-w1-F-001 is unchanged and not re-reported.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-04", "coverage": "read in full (lines 1-2546), second-look", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+KERYX_USAGE {"tokens_in":163367,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

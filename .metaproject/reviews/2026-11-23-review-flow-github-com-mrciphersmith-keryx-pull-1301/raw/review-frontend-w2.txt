@@ -1,0 +1,112 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`)
+- Scope mode: diff (supplied slice `slice-02`, read in full: 1612 lines)
+- Changed files reviewed: 7 (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, docs/docs/guides/desktop-metaproject.md, metaproject-explorer-contract.ts, metaproject-explorer-v2.ts, metaproject-explorer-tree.test.ts)
+- Context read (not reviewed, other slices): apps/desktop/src/metaproject/MetaprojectTree.tsx (to check the guide's keyboard table and what the DOM tests exercise), src/integrations/metaproject-explorer.ts:60-84 (where wiki `pageType` is set).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 2
+
+### Findings
+
+### [F-001] The keyboard test never presses ArrowUp, which AC5 names
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+- **Rule**: canonical rubric (test gap on an AC-listed behaviour; no defect shown)
+- **Problem**: "keys move, expand, collapse and select as a WAI-ARIA tree" exercises ArrowDown, ArrowRight, ArrowLeft, Home, End, Enter and Space. No test in the slice (nor in MetaprojectView.dom.test.tsx) dispatches `ArrowUp`. AC5 lists Up/Down/Left/Right/Home/End/Enter/Space.
+- **Why it matters**: the `ArrowUp` branch (`moveTo(rows[index - 1])` in MetaprojectTree.tsx) could break or be dropped with the AC5 verify command still green.
+- **Fix**: add one `await key(document.activeElement!, "ArrowUp"); expect(focused()).toBe(...)` step to the existing keyboard test (for example after the ArrowDown to `server.ts`, expect `client.ts`).
+
+### [F-002] The guide documents an "Other" wiki group that the reader never produces
+- **Severity**: info
+- **File**: docs/docs/guides/desktop-metaproject.md
+- **Problem**: the guide says pages without a page type are under **Other**, and `wikiTree` groups `node.pageType ?? "other"`. But every wiki node the explorer builds sets `pageType: type` from the fixed `WIKI_PAGE_TYPES` folder list (src/integrations/metaproject-explorer.ts:78), so no page reaches that group today. Not a bug; the sentence describes a fallback that is currently unreachable.
+- **Fix**: none required; drop the sentence or keep it as forward-compatible wording.
+
+### [F-003] "Name order" in the guide is code-unit order
+- **Severity**: info
+- **File**: docs/docs/guides/desktop-metaproject.md
+- **Problem**: folders and files are sorted with `compareText` (`a < b`), so `Zeta/` sorts before `alpha/` and accented names after ASCII. The guide says "in name order".
+- **Fix**: optional; say "in name order, capitals first", or sort with a locale compare if the UI should match a file manager.
+
+### Clean Areas
+- Tree DOM tests: WAI-ARIA roles, `aria-level`/`posinset`/`setsize` (including -1 while more pages exist), single tab stop, roving focus, "data arriving never moves focus", reveal without focus, retry-only-that-folder, Show more ordering, snapshot change dropping late answers and never sending an old cursor are all asserted against observable DOM, not internals.
+- View DOM tests: older-CLI fallback to the flat list with no tree calls and no alert; tree/flat switching on query; expanded set and selection surviving Graph/Wiki and visibility changes with each parent read once; default selection does not reveal.
+- Platform tests: `supportsTree` negotiation, required-actions refusal, tree response validation (scope/parent/entry shapes, path escape, size cap), typed CLI error code preserved.
+- TypeScript in contract/v2: no `any`, no `!` in production code; discriminated `MetaprojectTreeEntry` union; request parsing exact-keys, parent validated per scope; `offsetPage` extraction keeps search behaviour identical.
+- Guide: keyboard table matches the component's `onKeyDown`/`activate` (Enter selects a module folder, Space toggles it; Enter/Space run Retry and Show more); older-CLI behaviour and recovery rows match the negotiation.
+- MobX checklist (Part B): not applicable; the Desktop explorer uses React hooks, no MobX store in the slice. Storybook (Part C): no stories in the slice. Project rules for React/MobX stacks (`.metaproject/rules/stacks/react|mobx`) do not exist in this project; only `ts-js-node` rules applied.
+
+### Not verified
+- No commands run (exec_budget_s 0); test results taken from the supplied evidence. The Rust transport is outside this slice and was not reviewed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "slice-02 (tree DOM tests, view DOM tests, platform tests, Desktop guide, core tree contract and reader): no blocker or major. One minor test gap (ArrowUp, named in AC5, is never pressed) and two info notes on guide wording.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "line": null,
+      "quote": "test(\"keys move, expand, collapse and select as a WAI-ARIA tree\", async () => {",
+      "problem": "No test dispatches ArrowUp; the keyboard test covers ArrowDown, ArrowRight, ArrowLeft, Home, End, Enter and Space only, while AC5 lists Up as well.",
+      "impact": "The ArrowUp branch of MetaprojectTree's onKeyDown can regress with the AC5 verify command still passing.",
+      "suggested_fix": "Add an ArrowUp step to the existing keyboard test, e.g. after moving to server.ts press ArrowUp and expect focus on client.ts.",
+      "evidence": "slice-02 MetaprojectTree.dom.test.tsx keyboard test; keryx ctx rg 'ArrowUp' over MetaprojectTree.dom.test.tsx and MetaprojectView.dom.test.tsx returns no match; acceptance criterion AC5 in the payload.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": null,
+      "quote": "Pages without a page type are under **Other**.",
+      "problem": "The 'Other' wiki group is unreachable today: every wiki node is built with pageType from the fixed WIKI_PAGE_TYPES list (src/integrations/metaproject-explorer.ts:78), so wikiTree's '?? \"other\"' fallback never fires.",
+      "impact": "None at runtime; the guide describes a fallback users will not see.",
+      "suggested_fix": "Optional: drop the sentence, or keep it as forward-compatible wording.",
+      "evidence": "src/integrations/metaproject-explorer.ts:78 sets pageType: type for every page; metaproject-explorer-v2.ts wikiTree uses node.pageType ?? WIKI_UNTYPED_GROUP.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": null,
+      "quote": "indexed files. In each folder, its",
+      "problem": "Folders and files are ordered with compareText (code-unit comparison), so upper-case names sort before lower-case ones; the guide calls this 'name order'.",
+      "impact": "Cosmetic: order can differ from what a user expects from a file manager.",
+      "suggested_fix": "Optional: word it as code-point order, or sort with a locale-aware compare.",
+      "evidence": "metaproject-explorer-v2.ts graphTree: [...folders].sort(([a], [b]) => compareText(a, b)) with compareText = a < b ? -1 : Number(a > b).",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (payload layers block used instead; slice was self-contained), wiki_used: no (not-relevant: intent stated in plan/AC payload), ctx_used: yes (keryx ctx rg for ArrowUp/setTimeout/pageType and rule tables), raw_rg_used: no.

@@ -1,0 +1,106 @@
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 17,42 @@
+  */
+ export const MAX_TREE_READS = 3;
+ 
+ /** Retries of a read refused a read permit, each after a short jittered wait. */
+ export const PERMIT_RETRIES = 2;
+ const PERMIT_WAIT_MS = 150;
+-/** Desktop's answer when every read permit is taken (`metaproject.rs`); it says to retry shortly. */
+-const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith("unavailable: Too many Metaproject reads");
+ const sleep = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
+ 
++/**
++ * Runs `run`, and again after a short jittered wait each time Desktop refuses it a read permit, up to
++ * `retries` times. A run whose caller is no longer `live` (its snapshot was retired) is not repeated.
++ */
++async function withPermitRetry<T>(
++  run: () => Promise<T>, { wait, live }: { wait: (ms: number) => Promise<void>; live: () => boolean }, retries = PERMIT_RETRIES,
++): Promise<T> {
++  try {
++    return await run();
++  } catch (cause) {
++    if (retries <= 0 || !isMetaprojectPermitRefusal(cause) || !live()) throw cause;
++    await wait(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);
++    if (!live()) throw cause;
++    return withPermitRetry(run, { wait, live }, retries - 1);
++  }
++}
++
+ export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Promise<MetaprojectTreeV2>;
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 138,208 @@
+     update(scope, tree => {
+       const folders = new Map(tree.folders);
+       folders.set(parent, change(tree.folders.get(parent)));
+       return { ...tree, folders };
+     });
+   }, [update]);
+ 
+   /** Once every page of `parent` is read, its expanded children that are gone are forgotten, with their descendants. */
+   const forgetVanished = useCallback((scope: MetaprojectTreeScope, parent: string) => {
+     update(scope, tree => {
+       const folder = tree.folders.get(parent);
+       if (!folder || folder.status !== "ready" || folder.nextCursor) return tree;
+       const present = new Set(folder.entries.map(entryKey));
+       const gone = [...tree.expanded].filter(key => parentOf(scope, key) === parent && !present.has(key));
+       if (!gone.length) return tree;
+       const expanded = new Set([...tree.expanded].filter(key => !gone.some(vanished => key === vanished || key.startsWith(`${vanished}/`))));
+       return { ...tree, expanded };
+     });
+   }, [update]);
+ 
+-  // Reads wait in order for a free slot, so re-reading many expanded folders never exhausts the
+-  // read permits Desktop shares with the explorer's own reads.
++  // Reads wait in order for a free slot, so this tree holds at most MAX_TREE_READS of Desktop's read
++  // permits; a refusal while other reads or windows hold the rest is retried (withPermitRetry).
+   const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });
+   const limit = useCallback((task: () => unknown) => {
+     const pool = slots.current;
+     const start = () => {
+       pool.active++;
+       // read() handles every request failure itself; this only stops an unexpected throw in that
+       // handling from becoming an unhandled rejection, and reports it.
+       void Promise.resolve().then(task).catch(error => {
+         console.error("Metaproject tree read failed unexpectedly", error);
+       }).finally(() => {
+         pool.active--;
+         pool.queue.shift()?.();
+       });
+     };
+     if (pool.active < MAX_TREE_READS) start();
+     else pool.queue.push(start);
+   }, []);
+ 
++  /** Records how a read of `parent` (its next page, with `cursor`) failed, as tree state. */
++  const settleFailure = useCallback((scope: MetaprojectTreeScope, parent: string, cursor: string | undefined, cause: unknown) => {
++    // Another snapshot answered: the explorer offers Refresh catalog. The row shows as loading with no
++    // Retry, which would only send the retired snapshot again; the next catalog load re-reads it.
++    if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") {
++      setFolder(scope, parent, folder => cursor && folder
++        ? { ...folder, more: { status: "stale" } }
++        : { status: "stale", entries: [], partial: false });
++      latest.current.onStale();
++      return;
++    }
++    // A folder that no longer exists is forgotten quietly; the next read of its parent drops its row.
++    if (!cursor && parent !== TREE_ROOT && cause instanceof MetaprojectRequestError && cause.code === "not-found") {
++      update(scope, tree => {
++        const folders = new Map(tree.folders);
++        folders.delete(parent);
++        const expanded = new Set([...tree.expanded].filter(key => key !== parent && !key.startsWith(`${parent}/`)));
++        return { ...tree, folders, expanded };
++      });
++      return;
++    }
++    const error = errMessage(cause);
++    setFolder(scope, parent, folder => cursor && folder
++      ? { ...folder, more: { status: "failed", error } }
++      : { status: "failed", entries: [], partial: false, error });
++  }, [setFolder, update]);
++
+   const read = useCallback((scope: MetaprojectTreeScope, parent: string, cursor?: string) => {
+     const issued = generation.current;
+     const pinned = state.current[scope].snapshot;
+     const current = () => issued === generation.current;

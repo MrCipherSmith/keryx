@@ -1,0 +1,105 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a` (round-2 delta base)
+- Merge-base: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a` (PR merge-base with main: a5d1ab236fe85dee62a758a19390049dde4eb7f9)
+- Scope mode: `explicit-hash-range` 9f4ec475b..f43a13c3f (fix round 1, commit 6c83eb7fb)
+- Stack detected: fullstack (React hook/component without MobX, TS core contract module, Rust transport read for context only)
+
+### Summary
+The fix round moves the wiki group-key rule into the shared contract module (`metaprojectWikiGroupKey`, `METAPROJECT_WIKI_UNTYPED_GROUP`) and uses it from both core (`wikiTree`) and Desktop (`revealSteps`). That direction is correct: the client depends on the contract, not the other way round. The snapshot-mismatch policy moves into the transport (`requestMetaprojectV2` now throws `stale-snapshot`), so every v2 caller gets the same typed error instead of the generic "Choose the bundled CLI" one. The leftover `negotiateMetaproject` wrapper is gone. The fix adds one new cross-layer coupling: the tree hook's `MAX_TREE_READS = 3` is sized against the Rust permit pool (`MAX_ACTIVE = 8`), and only a comment links them. It is reported as info. No blocker, major or minor findings.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. `apps/desktop/src/metaproject/MetaprojectTree.tsx` and `src/integrations/metaproject-explorer-v2.ts` both import `metaprojectWikiGroupKey` from `src/integrations/metaproject-explorer-contract.ts`, so the dependency points from the client and the core toward the contract. The contract module already exported runtime helpers (`isMetaprojectRelativePath`, `isOpenSpecKind`), so adding a pure function there is consistent with that pattern.
+
+### Module Boundary Violations
+[F-001] (info) The client-side read budget depends on the backend permit pool, and only a comment links them. See REVIEW_RESULT.
+
+### Design Pattern Misuse
+None detected. The stale-snapshot check now lives in one place, the transport. The hook's own `page.snapshotId !== pinned` guard is kept only for an injected `request` that does not check, and the rewritten doc comment says so.
+
+### Dependency Inversion
+None detected. `request` is still injected into `useMetaprojectTree`, and the new limiter wraps it without new I/O construction.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS and MobX. On the React side: the per-hook `limit` queue is held in a `useRef`, and `useCallback` deps were updated (`limit` added). Focus handling moved from a deferred `focusRequest` flag to direct `.focus()` plus a layout-effect restore. That is a correct use of `useLayoutEffect` for DOM focus.
+
+### Prior findings (fix round)
+- frontend-w1-F-001: closed. All status rows of a parent share `statusId(parent)` (MetaprojectTree.tsx flatten), so loading/error/more update the same `<li>` in place. The layout effect refocuses the row at the lost index when the focused element was disconnected and focus fell to body.
+- logic-w1-F-001: closed. `moveTo` focuses the rendered row element directly, and no pending flag is left for a later commit (`focusRequest` was removed).
+- architecture-w2-F-001: closed. The rule is exported from the contract and used by both `wikiTree` and `revealSteps`. The `??` vs `||` split is gone, because both sides now use the helper's `||`.
+- degradation-w1-F-001: closed. `negotiateMetaproject` was deleted. `keryx ctx rg` over apps/desktop/src finds no remaining reference.
+- degradation-w1-F-002: closed. `matchesRequest` no longer swallows a snapshot mismatch. `requestMetaprojectV2` throws `MetaprojectRequestError("stale-snapshot")`, so the hook's catch calls `onStale`, and the doc comment was reworded.
+- performance-w2-F-001: closed. Groups are now pushed in place.
+- pr-contract-w2-PC-001: closed. All three sites were reworded: guide :309 and :333 (troubleshooting row), and cli-reference :8301.
+- testing-practices-w1-F1: closed. A new test injects symbol nodes into the loaded graph model, proves they are loaded, and asserts that listings, counts and the not-found parent exclude them.
+- testing-practices-w1-F3: closed. MetaprojectView.dom.test.tsx:2139 covers a tree answer for another snapshot and a stale-snapshot refusal. platform/metaproject.test.ts:210 covers the transport mapping.
+- testing-practices-w1-F6: closed. The test now asserts that `client.ts` rendered and that no Loading row remains before it checks focus.
+- ui-ux-w1-UX-004: closed. Module folder rows now render the `NODE_KIND_LABELS.module` label.
+- logic-w2-F-002: open. The fallback is kept, as suggested, but the guide still says "Pages without a page type are under **Other**" (docs/docs/guides/desktop-metaproject.md:103), and the CLI cannot produce that group. The fix was optional, so this stays info.
+- pr-contract-w1-PC-001: closed. cli-reference.md:8301 now names `tree` as optional.
+- testing-practices-w1-I2: closed. The key now comes from one exported helper used on both sides.
+- ui-ux-w1-UX-005: open. The count is still a bare number (`<span className="count-label">`, MetaprojectTree.tsx:291) with no unit or aria label.
+
+### Suggested Patches
+None warranted.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Fix round 9f4ec475b..f43a13c3f: the wiki group-key rule now lives in the shared contract and both core and Desktop import it; the snapshot-mismatch policy moved into the transport as a typed stale-snapshot error; the dead negotiateMetaproject wrapper is gone. No structural violation. One info: the new client read limiter (MAX_TREE_READS = 3) is sized against the Rust permit pool (MAX_ACTIVE = 8) only by a comment. Prior findings: 13 closed, 2 open (logic-w2-F-002 guide sentence, ui-ux-w1-UX-005 count label), both info.",
+  "slices": [{ "id": "slice-01", "coverage": "read in full (fix slice); full fix hunks of MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts, metaproject-explorer-contract.ts, metaproject-explorer-v2.ts and the docs read with git diff 9f4ec475b..f43a13c3f for context" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */\nexport const MAX_TREE_READS = 3;",
+      "problem": "The fix round added a client-side read limiter to useMetaprojectTree, with no prior finding behind it. Its budget is stated relative to a backend constant: 'the rest of Desktop's eight read permits'. That constant is `MAX_ACTIVE = 8` in apps/desktop/src-tauri/src/metaproject.rs:192, a process-global AtomicUsize. ReadPermit::acquire fails fast with 'unavailable: Too many Metaproject reads' rather than waiting. Only a comment links the two values. The limiter is per hook instance, while the permit pool is shared by every window and project in the process.",
+      "impact": "No defect today: 3 is below 8. If MAX_ACTIVE is lowered, or more tree hooks or windows run at once, the client budget can exceed the real pool. Tree reads would then fail with 'unavailable' on folder rows even though the limiter exists to prevent that, and nothing turns red.",
+      "suggested_fix": "Optional. Name the relation where both sides can see it: a comment at MAX_ACTIVE in metaproject.rs that points to MAX_TREE_READS, or a Rust test or constant check documenting that the UI reserves 3 of the permits. Alternatively, treat 'unavailable' from the transport as a retryable back-off in the limiter instead of a fixed budget.",
+      "evidence": "Fix-round hunk in useMetaprojectTree.ts adds MAX_TREE_READS and limit(). `keryx ctx rg 'READ_PERMITS|MAX_READS|struct ReadPermit|const .*: usize = 8' apps/desktop/src-tauri/src` finds metaproject.rs:186-189 (MAX_ACTIVE = 8, struct ReadPermit). In metaproject.rs, acquire() returns Err when ACTIVE >= MAX_ACTIVE, and ACTIVE is a static, so the pool is process-wide.",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-read-budget-coupled-to-rust-permits",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+Not verified: no tests were run (exec_budget_s = 0). The focus-restore behaviour for frontend-w1-F-001 is judged from the code shape (shared React key, layout-effect restore), not from a DOM run. The dispositions of non-architecture findings (UX, testing, performance) are code checks, not lens-specific deep reviews.
+
+Routing audit: graph_used: no (the payload's layers block, built at the PR head, supplied the affected and related files; no further graph query was needed for a 9-file delta). wiki_used: not-relevant (no domain question; the contract module and plan settled intent). ctx_used: yes (keryx ctx rg/read for every search and file read). raw_rg_used: no. One raw `git diff` with a keryx:raw marker, to read the fix hunks in full.
+KERYX_USAGE {"tokens_in":139599,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

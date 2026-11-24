@@ -150,7 +150,7 @@ export const METAPROJECT_SCHEMA_V2 = 2;
 export const METAPROJECT_RESPONSE_BYTES_V2 = 1024 * 1024;
 export const METAPROJECT_PAGE_SIZE_V2 = 100;
 export const METAPROJECT_CAPABILITIES = [
-  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history",
+  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history", "tree",
 ] as const;
 export const METAPROJECT_SCOPES = ["graph", "wiki", "spec", "change", "archive"] as const;
 export type MetaprojectScope = typeof METAPROJECT_SCOPES[number];
@@ -276,6 +276,33 @@ export interface MetaprojectOpenSpecHistory extends SnapshotV2 {
   partial: boolean;
 }
 
+export const METAPROJECT_TREE_SCOPES = ["graph", "wiki"] as const;
+export type MetaprojectTreeScope = typeof METAPROJECT_TREE_SCOPES[number];
+
+/** The wiki tree group of pages without a page type. */
+export const METAPROJECT_WIKI_UNTYPED_GROUP = "other";
+
+/** The key of the wiki tree group that holds `node`: its page type, or the untyped group. */
+export function metaprojectWikiGroupKey(node: Pick<MetaprojectNode, "pageType">): string {
+  return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP;
+}
+
+/** One child of a tree parent: a graph folder, a wiki page-type group, or a node. */
+export type MetaprojectTreeEntry =
+  | { type: "folder"; path: string; name: string; files: number; module?: MetaprojectNode }
+  | { type: "group"; key: string; name: string; pages: number }
+  | { type: "node"; node: MetaprojectNode };
+
+export interface MetaprojectTreeV2 extends SnapshotV2 {
+  scope: MetaprojectTreeScope;
+  parent: string | null;
+  entries: MetaprojectTreeEntry[];
+  /** More entries of this parent. */
+  nextCursor?: string;
+  /** The source behind the scope is missing or incomplete. */
+  partial: boolean;
+}
+
 export interface MetaprojectCapabilities {
   schemaVersion: 2;
   /** Every action the answering reader serves. A client requires the ones it sends and ignores the rest. */
@@ -284,7 +311,7 @@ export interface MetaprojectCapabilities {
 
 export type MetaprojectV2Response =
   | MetaprojectCapabilities | MetaprojectCatalogV2 | MetaprojectDetailV2 | MetaprojectSearchV2
-  | MetaprojectNeighborsV2 | MetaprojectOpenSpecList | MetaprojectOpenSpecHistory;
+  | MetaprojectNeighborsV2 | MetaprojectOpenSpecList | MetaprojectOpenSpecHistory | MetaprojectTreeV2;
 
 type V2Data<T> = T & { version: 2; expectedSnapshotId?: string };
 export type MetaprojectRequestV2 =
@@ -294,7 +321,8 @@ export type MetaprojectRequestV2 =
   | V2Data<{ action: "search"; query: string; scopes?: MetaprojectScope[]; cursor?: string }>
   | V2Data<Extract<MetaprojectRequest, { action: "neighbors" }> & { includeArchive?: boolean }>
   | V2Data<{ action: "openspec-list"; collection: MetaprojectOpenSpecKind; cursor?: string }>
-  | V2Data<{ action: "openspec-history"; id: string; cursor?: string }>;
+  | V2Data<{ action: "openspec-history"; id: string; cursor?: string }>
+  | V2Data<{ action: "tree"; scope: MetaprojectTreeScope; parent?: string; cursor?: string }>;
 
 export type MetaprojectAnyRequest = MetaprojectRequest | MetaprojectRequestV2;
 
@@ -312,6 +340,10 @@ export class MetaprojectRequestError extends Error {
 
 export function isMetaprojectScope(value: unknown): value is MetaprojectScope {
   return METAPROJECT_SCOPES.some((scope) => scope === value);
+}
+
+export function isMetaprojectTreeScope(value: unknown): value is MetaprojectTreeScope {
+  return METAPROJECT_TREE_SCOPES.some((scope) => scope === value);
 }
 
 export function isMetaprojectV2EdgeKind(value: unknown): value is MetaprojectEdgeKind {
@@ -340,6 +372,11 @@ function validDirection(value: unknown): value is MetaprojectDirection {
   return value === "both" || value === "incoming" || value === "outgoing";
 }
 
+/** A graph parent is a checkout-relative folder; a wiki parent is a page-type group key. */
+function validTreeParent(scope: MetaprojectTreeScope, value: unknown): value is string {
+  return scope === "graph" ? isMetaprojectRelativePath(value) : validId(value);
+}
+
 function parseV2(input: Record<string, unknown>): MetaprojectRequestV2 {
   const keys = Object.keys(input);
   const exact = (...allowed: string[]): boolean => keys.every((key) => allowed.includes(key));
@@ -349,7 +386,7 @@ function parseV2(input: Record<string, unknown>): MetaprojectRequestV2 {
   const invalid = () => new MetaprojectRequestError("invalid-input", "Invalid Metaproject v2 request.");
   if (input.expectedSnapshotId !== undefined && !isSha256(input.expectedSnapshotId)) throw invalid();
   const base = { version: 2 as const, ...(input.expectedSnapshotId !== undefined && { expectedSnapshotId: input.expectedSnapshotId }) };
-  const { action, id, artifact, section, digest, scopes, query, collection, cursor, depth, kinds, direction, includeArchive } = input;
+  const { action, id, artifact, section, digest, scopes, query, collection, cursor, depth, kinds, direction, includeArchive, scope, parent } = input;
   switch (action) {
     case "catalog":
       if (allowed()) return { ...base, action };
@@ -387,6 +424,13 @@ function parseV2(input: Record<string, unknown>): MetaprojectRequestV2 {
     case "openspec-history":
       if (allowed("id", "cursor") && validId(id) && (cursor === undefined || validId(cursor))) {
         return { ...base, action, id, ...(cursor !== undefined && { cursor }) };
+      }
+      break;
+    case "tree":
+      if (allowed("scope", "parent", "cursor") && isMetaprojectTreeScope(scope)
+        && (parent === undefined || validTreeParent(scope, parent))
+        && (cursor === undefined || validId(cursor))) {
+        return { ...base, action, scope, ...(parent !== undefined && { parent }), ...(cursor !== undefined && { cursor }) };
       }
       break;
   }

@@ -1,0 +1,73 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Second look at slice-06 (core v2 `tree` action: contract types and parser, graphTree/wikiTree, offsetPage, V2Read.tree, and its tests). The delta f43a13c3f..b2043b98d changes no file in this slice (git diff --stat over src/ is empty), so this is a re-read of code earlier rounds covered. No blocker, major or minor defect found now: parent validation (graph: checkout-relative path; wiki: non-empty id), cursor keyed by hash([tree, scope, parent]) and bound to the snapshot and checked before the parent, offset range and response-limit handling in offsetPage, not-found for unknown/file parents, symbols excluded by the kind === file filter, unsafe node paths removed upstream by safeGraphNode (metaproject-explorer-v2.ts metaprojectExplorerV2), and the search refactor onto offsetPage preserves the previous error codes and cursor shape. One info note on the `partial` doc comment versus the wiki scope.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "line": null,
+      "quote": "const { entries, partial } = scope === \"graph\" ? graphTree(this.model, parent) : { entries: wikiTree(this.model.nodes, parent), partial: false };",
+      "problem": "MetaprojectTreeV2.partial is documented as 'The source behind the scope is missing or incomplete', but the wiki scope always answers partial: false, including when the wiki layer is absent (model.hasWikiLayer === false).",
+      "impact": "No observable defect today: Desktop reads `partial` only for the graph empty-state (MetaprojectTree.tsx: 'The graph is not built yet' vs 'No indexed files') and shows 'No Wiki pages.' for an empty wiki root either way. The doc comment overstates what the field means for wiki, which a later client could rely on.",
+      "suggested_fix": "Either answer `partial: !this.model.hasWikiLayer` for scope wiki, or narrow the doc comment to say `partial` reports a graph that is not built.",
+      "evidence": "metaproject-explorer-contract.ts MetaprojectTreeV2 doc comment on `partial`; metaproject-explorer-v2.ts V2Read.tree hard-codes partial: false for wiki; apps/desktop/src/metaproject/MetaprojectTree.tsx empty-state branch uses root.partial only when scope === graph.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "slices": [
+    { "id": "slice-06", "coverage": "read in full (second-look); no file in it changed in f43a13c3f..b2043b98d", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `f43a13c3f` (round-3 delta base); PR merge-base with main `a5d1ab236`
+- Head: `b2043b98d`
+- Scope mode: explicit-hash-range, slice-06 (second-look)
+- Spec compliance gate: ran against AC1/AC2 for the core tree action. Both are implemented in the code and covered by metaproject-explorer-tree.test.ts, which passed at the head (per verify-tests-to-run-1.txt).
+
+### Summary
+Round 3 changed no core file. A second read of the v2 `tree` contract, parser and reader found no correctness defect. Pagination, cursor binding, snapshot checks, not-found handling and the exclusion of symbols and unsafe paths all hold.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+- [F-001] info: the `partial` doc comment says it covers a missing source for any scope, but wiki always answers `partial: false`. No consumer is affected.
+
+### Edge Cases
+None detected.
+
+### Notes
+- Not run: no command executed (exec_budget_s = 0). I relied on the recorded test output at the head.
+- Layers: the graph-affected list was used only as context. Wiki and memory were not consulted because the slice is self-contained core code. I used `keryx ctx rg` for searches; raw rg was not used.
+KERYX_USAGE {"tokens_in":114917,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

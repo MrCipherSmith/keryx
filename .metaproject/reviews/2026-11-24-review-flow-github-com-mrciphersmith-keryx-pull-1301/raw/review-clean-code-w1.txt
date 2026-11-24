@@ -1,0 +1,119 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 2 (fix delta 9f4ec475b..f43a13c3f). The fix round is clean at function/class level: the pending focusRequest is gone (moveTo focuses directly), status rows share one statusId, the wiki group rule is one exported helper used by core and Desktop, the dead negotiateMetaproject wrapper is deleted, the snapshot mismatch is a typed stale-snapshot error at the transport, and wikiTree pushes in place. One minor: the new read limiter's catch is documented as 'only keeps the slot count right', but .finally already does that; the catch actually swallows, silently, any error thrown by read()'s own failure handler. 13 of 15 prior findings closed; logic-w2-F-002 (guide still promises an 'Other' group) and ui-ux-w1-UX-005 (count still a bare number) were not changed and stay open, both info.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      // A read reports its own failure on its folder's row; this catch only keeps the slot count right.\n      void Promise.resolve().then(task).catch(() => undefined).finally(() => {",
+      "problem": "New in the fix round (the read limiter added with the stale-snapshot / concurrency changes). The comment misstates what the catch does: `.finally` releases the slot whether or not the chain rejects, so the catch is not what 'keeps the slot count right'. What it does is turn every rejection of the task into a silent success. read()'s task already ends in its own `.catch(cause => ...)`, so the only errors that reach this catch are ones thrown by that handler itself (latest.current.onStale() i.e. MetaprojectView's markStale, update(), setFolder(), errMessage()). Those are programming errors, and they are dropped with no log and no rethrow (error-handling.mdc Rule 3 / Iron Law 1 shape, but with no caller proceeding on a wrong result).",
+      "impact": "A future defect in read()'s failure path (e.g. a throwing onStale or state updater) leaves the folder stuck on 'Loading…' with nothing in the console to explain it, and a reader trusting the comment will believe removing the catch is harmless when it would surface as an unhandled rejection (Rule 4).",
+      "suggested_fix": "Reword the comment to what the catch is for, e.g. '// read() handles every request failure itself; this only stops an unexpected throw in that handling from becoming an unhandled rejection.' and report it rather than drop it: `.catch(error => console.error(\"Metaproject tree read failed unexpectedly\", error))`.",
+      "evidence": "Read useMetaprojectTree.ts:119-175 at f43a13c3f. limit() start(): `Promise.resolve().then(task).catch(() => undefined).finally(...)`; the only caller is read() (:145), whose task is `current() && Promise.resolve().then(() => send(...)).then(...).catch(cause => {...})` (:145-174), so request failures never reach the limiter's catch. `.finally` runs on both fulfilment and rejection.",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-limiter-silent-catch",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */",
+      "problem": "The comment hard-codes a number owned by another module in another language: 'eight read permits' is `MAX_ACTIVE: usize = 8` in apps/desktop/src-tauri/src/metaproject.rs:186. It is correct today, but nothing ties the two, and MAX_TREE_READS = 3 is sized against it.",
+      "impact": "If the Rust permit count changes, this comment (and the reasoning behind 3) goes stale silently. No runtime effect.",
+      "suggested_fix": "Name the source instead of the number: 'the rest of the read permits the Tauri command allows (MAX_ACTIVE in src-tauri/src/metaproject.rs) stay free for the explorer.'",
+      "evidence": "keryx ctx rg 'semaphore|concurren|in.flight|permit' apps/desktop/src-tauri/src: metaproject.rs:186 `const MAX_ACTIVE: usize = 8;` guarding ReadPermit::acquire.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "frontend-w1-F-001", "disposition": "closed"},
+    {"id": "logic-w1-F-001", "disposition": "closed"},
+    {"id": "architecture-w2-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-002", "disposition": "closed"},
+    {"id": "performance-w2-F-001", "disposition": "closed"},
+    {"id": "pr-contract-w2-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-F1", "disposition": "closed"},
+    {"id": "testing-practices-w1-F3", "disposition": "closed"},
+    {"id": "testing-practices-w1-F6", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-004", "disposition": "closed"},
+    {"id": "logic-w2-F-002", "disposition": "open"},
+    {"id": "pr-contract-w1-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-I2", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-005", "disposition": "open"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `9f4ec475b` | Merge-base (round): `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`
+- Scope mode: `explicit-hash-range` (9f4ec475b..f43a13c3f, fix round) | Slice read in full: slice-01 (fix). For context I also read the full fix-round hunks of MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts(+test), metaproject-explorer-contract.ts, metaproject-explorer-v2.ts, MetaprojectView.tsx(+dom test) and the two docs, because the slice file trims some of them.
+
+### Summary
+The fix hunks are small and well-factored: one helper per rule (`statusId`, `metaprojectWikiGroupKey`), direct focus instead of a deferred flag, a typed error at the transport boundary instead of a generic one. One minor documentation/error-handling issue in the new read limiter; one info on a cross-language number in a comment.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+
+#### Functions
+No function issues found. `limit` (13 lines) and the focus-restore logic (`remember`, `onBlur`, layout effect) stay under the solid-principles thresholds; the component and hook were already over length before this round, and the fix does not cross a new threshold.
+
+#### Comments
+- [F-001] minor — useMetaprojectTree.ts limiter: the comment says the catch "only keeps the slot count right"; `.finally` does that, and the catch silently swallows errors thrown by read()'s own failure handler. Fix: reword and log instead of dropping.
+- [F-002] info — useMetaprojectTree.ts `MAX_TREE_READS` doc hard-codes "eight read permits" from Rust `MAX_ACTIVE` (src-tauri/src/metaproject.rs:186). Fix: name the source constant.
+
+Checked against their statements and found accurate: `statusId` doc (flatten emits at most one of loading/error/more per parent), the layout-effect focus-restore comment, the `moveTo` comment, the useMetaprojectTree hook doc (stale-snapshot from the transport, or a mismatched page from a non-checking `request`), the transport comment in requestMetaprojectV2, and the module-label JSX comment.
+
+#### Error Handling
+See F-001. The new transport check throws a typed `MetaprojectRequestError("stale-snapshot", ...)` rather than a generic Error; MetaprojectView's loadMoreSearch catch now distinguishes it. No lost `cause` (no rethrow of a caught error is introduced).
+
+#### DRY
+No DRY issues found. "Project knowledge changed while loading." is now thrown in two production sites (platform/metaproject.ts:306, useMetaprojectTree.ts:147) — under the 3-copy threshold. The wiki group rule is now a single exported helper.
+
+#### SOLID
+No SOLID issues found.
+
+### Prior findings (fix round)
+- frontend-w1-F-001 closed — all status rows of a parent share `status:${parent}` (MetaprojectTree.tsx statusId), and the layout effect refocuses the row at the lost index when the focused element disconnected and focus fell to body; DOM tests for keyboard Retry and Show more assert focus stays on a treeitem.
+- logic-w1-F-001 closed — `focusRequest` is removed; `moveTo` focuses the rendered element directly, so nothing is left pending; a Home/End-then-render test was added.
+- architecture-w2-F-001 closed — `METAPROJECT_WIKI_UNTYPED_GROUP` and `metaprojectWikiGroupKey` exported from the contract and used in wikiTree and revealSteps (both now `||`).
+- degradation-w1-F-001 closed — `negotiateMetaproject` deleted; tests call `negotiateMetaprojectExplorer(...).protocol`.
+- degradation-w1-F-002 closed — the snapshot mismatch moved out of matchesRequest into a typed stale-snapshot throw; the hook doc now describes both paths accurately and the hook check covers a non-checking `request`.
+- performance-w2-F-001 closed — push in place.
+- pr-contract-w2-PC-001 closed — all three sites (guide :309, :332-row, cli-reference :8301) say "requires".
+- testing-practices-w1-F1 closed — new test injects symbol nodes into the loaded model, proves they were loaded, and asserts listings, counts and a symbol-only folder's not-found.
+- testing-practices-w1-F3 closed — MetaprojectView.dom.test adds a tree answer for another snapshot and a stale-snapshot refusal asserting the stale banner and no rows, plus the search next-page path.
+- testing-practices-w1-F6 closed — the test now asserts client.ts rendered and no Loading row before the focus assertion.
+- ui-ux-w1-UX-004 closed — module folder rows show the `Module` kind label.
+- logic-w2-F-002 open (info) — the fallback was kept as suggested, but docs/docs/guides/desktop-metaproject.md:103 still says "Pages without a page type are under **Other**", a group the loader cannot emit; the fix round did not touch it (the suggestion was optional).
+- pr-contract-w1-PC-001 closed — cli-reference now says Desktop uses an optional action such as `tree` only when the CLI lists it.
+- testing-practices-w1-I2 closed — the constant is exported and both sides use the shared helper.
+- ui-ux-w1-UX-005 open (info) — MetaprojectTree.tsx count span is unchanged (`<span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>`); no unit, aria-label or title was added.
+
+### Clean Areas
+Function size and argument counts of new helpers; constant extraction (`MAX_TREE_READS`, `METAPROJECT_WIKI_UNTYPED_GROUP`); removal of dead wrapper; typed error signalling at the transport boundary; test helper changes in MetaprojectView.dom.test (TreeAnswer | Error).
+
+### Not verified
+No tests were run (exec_budget_s = 0); relied on the supplied test evidence (exit 0) and CI status from the brief. History (git blame) was not consulted; the before-state was read from the 9f4ec475b..f43a13c3f diff.
+
+### Routing audit
+graph_used: no (not-relevant: bounded fix-round slice with named files) | wiki_used: no (not-relevant) | ctx_used: yes (keryx ctx rg / read) | raw_rg_used: no. Raw `git diff` was used with a keryx:raw marker to read the untrimmed fix hunks.
+KERYX_USAGE {"tokens_in":141033,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,29 @@
+STATUS: DONE
+
+review-logic, wave 4, round 5 (delta 3ad918b66..0d6df2937, second-look of slice-06). No new logic defect found.
+
+What I checked, against the head:
+- handOffTarget (MetaprojectTree.tsx), extracted from the layout effect. It is the same algorithm as before, with nothing changed. For a parent's Loading row (anchor `d:<parent>`, parent set), `after.find(row => row.parent === parent)` can only match that parent's own children, because a deeper expanded folder's rows carry their own parent key. So focus lands on the first child, or on the anchor when the folder came back empty. For a next-page row (anchor = the parent's last entry), the scan skips the last entry's expanded subtree and lands on the first appended entry, the re-created Show more or error row (same `moreId`), or the anchor itself. The new test (the page appends nothing, focus goes to `src`) follows from this. A root status row (`d:` is never shown) and a vanished anchor fall back to the old index, as the doc says.
+- Component doc now defers to handOff. This closes r4-clean-code-w2-F-001.
+- `reload` is now required (useMetaprojectTree.ts). MetaprojectView passes `reload: catalog`. The tree DOM-test Harness passes `props.reload ?? 0`. tsc passed at the head (verify-tests-to-run-1.txt). This closes r4-frontend-w2-F-001. No caller can now omit the only exit from a parked stale read.
+- Stale parking paths: a parked first read (`status: "stale"`) renders as the Loading row with the same `statusId`. `activate` ignores a loading row, `ensure` skips a present folder, and `retry` acts only on `failed`. A parked page (`more: {status:"stale"}`) renders as a loading Show more row, and `more()` refuses a non-failed `more`. The new View tests (a parked click or Enter sends no second `page-2` call, and the Wiki parked read is re-read with `s1`) match the code. The reload effect copies the folders Map on each `setFolder`, so iterating `state.current[scope].folders.keys()` while rereading is safe.
+- Reveal while parked: the reveal effect returns on `stale` without setHandled, so the same reveal resumes after Refresh catalog re-reads the folder. This holds whether the snapshot is unchanged (reread) or new (the folders are dropped, `handled` is kept, and ensure re-reads). The new test covers the same-snapshot case.
+- Rust `Tree` request validation and `tree_stays_optional_for_a_cli`, the platform permit-refusal classifier (the new test: a typed `MetaprojectRequestError` is never a permit refusal), and the transport stale-snapshot check in requestMetaprojectV2: unchanged in this delta and still correct.
+
+Not verified: I ran no tests (exec_budget_s = 0). I rely on the supplied run at 0d6df2937 (exit 0, 1021 pass). Rust is not re-run (no Rust change in the delta).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 5 delta (3ad918b66..0d6df2937), slice-06 second-look: the handOffTarget extraction does exactly what the inline code did and is correct for status rows, next-page rows, root rows and vanished anchors. `reload` is now required, so every caller has an exit from a parked stale read. The stale-parked rows ignore activation, and a reveal waits through a parked read and resumes after Refresh catalog. No new findings. r4-clean-code-w2-F-001 and r4-frontend-w2-F-001 are addressed at the head.",
+  "findings": [],
+  "slices": [{"id": "slice-06", "coverage": "read in full (1484 lines); fix-round delta also read via git diff 3ad918b66 0d6df2937 for apps/desktop/src/metaproject, platform and src-tauri metaproject.rs", "status": "DONE"}],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+routing audit: graph_used: no (not-relevant: bounded delta review over a supplied slice); wiki_used: no (not-relevant: the flow plan and findings were supplied); ctx_used: yes (keryx ctx read/run); raw_rg_used: no. I read one raw `git diff` with a keryx:raw marker, to see the exact fix-round hunks.
+KERYX_USAGE {"tokens_in":130580,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 3 delta (f43a13c3f..b2043b98d), slice-02 (new), code mode only. No render was supplied, so no live checks ran. Focus hand-off: a Loading row and the Show more row now have separate ids (status:/more:), focus is anchored to the row that came before the focused one, and focus is never taken from outside the tree. Each case has a DOM test, and the code is consistent with the operator's 'focus goes to the row now at the same place' decision. The permit-refusal retry (2 retries, jittered 150-450 ms) keeps the row as 'Loading…' while it waits, which is the right state. The stale-snapshot fix removes the dead Retry, but it adds a new stuck state. The row stays 'Loading…' and only a change of snapshot id re-reads it. When Refresh catalog returns the same snapshot id, the banner goes away and the folder or Show more row shows 'Loading…' with no way to recover. The PR's own view-test fixture reproduces this: the fixture's snapshot stays s1 through Refresh catalog. One minor finding. Slop score: not applicable (app screen; the delta changes no visual tokens, copy or styles; 0 tells). WCAG 2.2 AA floor: no regression found in code (the tree roles and live regions are unchanged; no measurements taken).",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "Introduced by the fix for r2-ui-ux-w2-UX-001. After a stale-snapshot answer, the folder stays in status 'loading' (a first read), or its `more` stays {status:'loading'} (a next page), and nothing else in the hook re-reads it. `ensure` returns early because `folders.has(parent)`. `more` returns early on `more.status === 'loading'`. `retry` acts only on 'failed'. Only a change of the `snapshot` prop clears the folders, and MetaprojectView passes `snapshot: catalog?.snapshotId ?? \"\"`. Refresh catalog (MetaprojectView `setRevision`) clears `snapshotMismatch` on any non-quiet catalog answer, even one with the same snapshotId. That happens when the project went back to the earlier snapshot, or when the stale answer was transient. In that case the banner goes away, the tree is not reset, and the row keeps showing 'Loading…' (role=status, and aria-busy on Show more) with no control that can clear it. Collapsing and re-expanding the folder does not re-read it either.",
+      "impact": "Nielsen #1 (visibility of system status) and #9 (error recovery). The user sees a spinner row that never resolves and has no Retry or banner to act on. The folder's files, or its next page, cannot be reached until the snapshot id changes or the window reloads. Before this delta, the failed row's Retry recovered in this case. The view test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' runs this path: treeExplorer's state.snapshot stays 's1' through the Refresh catalog click. The test then switches to Wiki and never asserts that src recovers.",
+      "suggested_fix": "Keep the banner as the only way out, and make it actually recover the tree. Mark the folder (or its page) as stale instead of leaving it 'loading', for example status 'stale' that flatten() renders as the Loading row, or drop the folder entry without re-ensuring it until a refresh. Then make the explorer's Refresh catalog reset the tree even when the snapshot id is unchanged. One way is to pass the view's `revision` (or a refresh counter) into useMetaprojectTree and bump `generation`/drop loaded folders when it changes, the same as a snapshot change; another is to have `ensure`/`more` re-read stale entries after the banner clears. Extend the view test: after `button(\"Refresh catalog\").click()` with the fixture still at s1, assert that `src` shows `Client` and that no 'Loading…' row remains. Add the twin for a stale Show more page.",
+      "evidence": "useMetaprojectTree.ts: the stale-snapshot branch in read()'s catch returns after onStale() and leaves the folder or page loading; `ensure` checks `if (state.current[scope].folders.has(parent)) return;`; `more` checks `folder.more?.status === \"loading\") return;`; `retry` handles only `failed`. The reset runs only in `if (state.current.graph.snapshot !== snapshot)`. MetaprojectView.tsx:758 `useMetaprojectTree({ cwd, snapshot: catalog?.snapshotId ?? \"\", ... })`; MetaprojectView.tsx:414-416 `setCatalog(result); setFreshness(null); setSnapshotMismatch(false);` on a non-quiet read regardless of snapshotId; :881 Refresh catalog -> `setRevision(value => value + 1)`. The test fixture MetaprojectView.dom.test.tsx:1943 `const state = { snapshot: \"s1\" }` is unchanged by the test at :2139. Traced in code, not run.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": [ { "id": "slice-02", "status": "DONE", "coverage": "read in full (1181 lines); context read from MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectView.tsx (catalog read, banner, tree mount), MetaprojectView.dom.test.tsx treeExplorer fixture" } ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+## Summary
+
+- **Verdict:** DONE, with 1 minor finding.
+- **Context:** Keryx Desktop's Metaproject explorer sidebar tree (app screen, secondary navigation). Audience: developers browsing project knowledge. Primary task: reach any indexed file or wiki page by expanding folders. Mode: code only (no URL or screenshots supplied).
+- **Scores:** slop score 0 (no visual, token or copy changes in the delta; app screen, so the marketing rows do not apply). WCAG 2.2 AA floor: no regression found in code. Viewports: not run.
+- **Top change:** after a stale-snapshot answer, make Refresh catalog always re-read the stale folders or pages, even when the snapshot id comes back unchanged.
+
+### [UX-001] Stale-snapshot row can stay "Loading…" forever after Refresh catalog
+- **Severity:** minor (missing error/recovery state on a secondary view, and only when the snapshot id does not change)
+- **Criterion:** Nielsen #1, #9
+- **File:** apps/desktop/src/metaproject/useMetaprojectTree.ts, the stale-snapshot branch in read()'s catch
+- **Evidence:** the branch returns with the folder or page still "loading". `ensure`, `more` and `retry` all skip a loading entry, and only a change of snapshot id resets the tree. Refresh catalog clears the banner even when it gets the same snapshot id back. The PR's view-test fixture keeps snapshot s1 through Refresh and never checks that src recovers.
+- **Fix:** reset or re-read the stale entries when Refresh catalog runs, whether or not the id changed, and assert that recovery in the view test.
+
+### What works (keep)
+- Separate `status:` and `more:` ids, plus the anchor on the row before the focused one: focus lands on the first child, in the right folder, when two folders answer in one commit. A DOM test covers each case.
+- Focus that has left the tree is never pulled back. Both the Show more and Loading variants are tested.
+- A permit refusal is retried quietly with a short jittered wait. The row stays "Loading…" during the wait, and only a refusal that outlasts the retries shows the inline error.
+- The stale banner is the only error surface, with no Retry that cannot succeed, which matches search Load more.
+
+### Checks not run
+- Live mode (focus ring visibility, contrast, target sizes, reduced motion, screen-reader announcement of the status rows): no URL or screenshots were supplied, and this reviewer starts no app. Screenshots of the Metaproject sidebar tree at 1440/768/390 px, light and dark, with a folder loading, a folder that failed and a Show more row, would close the gap.
+- The UX-001 path was traced in code and not executed (exec_budget_s = 0).
+
+Routing audit: graph_used: no (payload layers supplied the affected set: MetaprojectView.tsx, App.tsx); wiki_used: no (not-relevant, the delta is a component fix); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":140054,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

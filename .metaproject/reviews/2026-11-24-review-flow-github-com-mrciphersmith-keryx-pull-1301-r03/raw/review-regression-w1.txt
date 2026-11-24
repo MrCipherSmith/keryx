@@ -1,0 +1,66 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "wave": 1,
+  "round": 4,
+  "slices": ["slice-01"],
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "summary": "No regression found in the blast radius of the fix-round-3 delta (b2043b98d..3ad918b66). Radius (layers, graph at 3ad918b66, depth 2, nothing truncated): App.tsx, MetaprojectTree.tsx, MetaprojectView.tsx and the two DOM test files. Not executed (exec budget 0); the brief's test evidence at head reports Desktop tsc and the whole Desktop suite at exit 0."
+}
+
+## Summary
+
+Slice read in full: slice-01 (fix; useMetaprojectTree.ts). For context I read the rest of the delta in the dependents and the transport: useMetaprojectTree.ts (head), MetaprojectTree.tsx (flatten, reveal, the more row, the activate and keyboard paths), MetaprojectView.tsx (the catalog effect at :390-437 and the hook mount at :758-762), platform/metaproject.ts (:277-321), and the MetaprojectView.dom.test.tsx delta.
+
+### What moved and who consumes it
+
+1. The `TreeFolder.status` union gained `"stale"`, and so did `more`. Every reader in the radius handles it. `keryx ctx rg --all` over MetaprojectTree.tsx and MetaprojectView.tsx found these readers:
+   - `flatten` renders stale as a loading row (:43).
+   - Reveal stops on it (:144).
+   - A stale `more` renders as the busy "Loading…" more row (`loading: Boolean(folder.more)`). A failed `more` is caught by the error branch just before it.
+   - The empty-state check reads only `root.status === "ready"`.
+   - `ensure` skips any parent already in `folders`, stale included.
+   - `more()` now refuses any `more` that is not `failed`. That is the old behaviour (it refused `loading` and allowed `failed`), plus `stale`.
+   - `retry()` acts only on `failed`, as before.
+   - No consumer of the hook outside src/metaproject reads `TreeFolder`. App.tsx reaches it only through MetaprojectView.
+2. New `reload` effect. Its trigger is the `catalog` object identity, and MetaprojectView changes that only at `setCatalog(result)` (:414). A quiet re-read with an unchanged snapshot returns before that line (:410-413), so freshness polls do not re-read anything.
+   - Refresh catalog or a rebuild with the same snapshotId gives a new object. The effect then re-reads stale folders and pages under the pinned snapshot, so their cursors are still valid.
+   - A new snapshotId resets `state.current` during render (:122-126), before the effect runs, so the effect finds nothing parked.
+   - A failed Refresh (the catch at :422) leaves `catalog` and the stale banner as they were, so the banner's Refresh is still the way out.
+   - No path re-sends a retired-snapshot cursor.
+3. The permit retry was lifted to module scope as `withPermitRetry`. It keeps the same count, delay formula and liveness checks as the old inline `attempt`. `isMetaprojectPermitRefusal` now excludes `MetaprojectRequestError`. This changes nothing today: `unavailable` is not in METAPROJECT_ERROR_CODES (contract.ts:329), so `requestMetaprojectV2` rethrows the raw error (platform/metaproject.ts:305-308).
+4. The `settleFailure` extraction keeps the old branch order and conditions: stale-snapshot, then not-found for a non-root first page, then failed. Its call is still gated by `current()`.
+
+### Prior dispositions (judged against the code at 3ad918b66)
+
+- **r3-regression-w1-F-001 — closed.** A stale-snapshot answer now parks the folder or page as `stale`, and every catalog load re-reads it, including Refresh catalog that finds the same snapshotId (useMetaprojectTree.ts reload effect; MetaprojectView.tsx:761). Two view tests assert that both variants (a folder and a Show more page) end with their children shown, no "Loading…" row, and two reads under `s1`. I read the tests; I did not run them. One gap remains by design: collapsing and re-expanding a stale folder still does not re-read it. Only a catalog load does, and the stale banner offers that.
+- **r3-clean-code-w2-F-001 — closed.** The state now has its own name, `stale`. The TreeFolder, `more`, ensure and more docs all describe it.
+- **r3-clean-code-w1-F-002 — closed.** `withPermitRetry` sits at module scope with the suggested signature, and read() calls it.
+- **r3-architecture-w1-F-001 — closed.** The refusal is classified once, in the transport (`isMetaprojectPermitRefusal` and `METAPROJECT_PERMIT_REFUSAL` in platform/metaproject.ts). The hook imports the predicate, and MetaprojectTree.dom.test.tsx:82 imports the constant. The suggested comment at metaproject.rs:199 was not added; I count it under the drift findings below.
+- **r3-clean-code-w1-F-003, r3-clean-code-w2-F-002, r3-highload-w2-F-001 — partial.** The TypeScript side now holds one copy of the literal, and the tests import it. The Rust producer (metaproject.rs:199) still has no reference to its Desktop consumer and no test of the exact text. A rewording on the Rust side would still turn the retry off with every test green.
+- **r3-style-w1-F-002, r3-style-w2-F-001 — open.** `PERMIT_RETRIES` is still exported and has no importer: `keryx ctx rg --all PERMIT_RETRIES apps/desktop/src` gives 3 matches, all in useMetaprojectTree.ts.
+- **r3-pr-contract-w1-PC-001 — open.** The PR body's round-2 line still says a stale read "shows only the banner", but a stale folder still renders "Loading…" (MetaprojectTree.tsx:43). The new round-3 line describes the re-read correctly but does not correct the round-2 one. As the brief says, the body was not edited this round.
+
+### Limits
+
+- Coverage: the layers record dropped no files. The radius is a code graph with no runtime edges; the only runtime edge here, the Rust permit-refusal string, is covered above by hand.
+- Not verified: I executed nothing (exec budget 0). The behaviour claims rest on reading the code, plus the brief's report that the whole Desktop suite passed at head. That suite includes the two new view tests.
+- Not reviewed: the MetaprojectTree.tsx `handOff` focus change is in the delta but outside my slice. I read it only to confirm it reads no TreeFolder status.
+
+Routing audit: graph_used: yes (payload layers.affected, graph built at 3ad918b66); wiki_used: not-relevant (a delta regression check of one hook and its two consumers; wiki/memory layers came back empty); ctx_used: yes (keryx ctx rg); raw_rg_used: no. Two raw `git diff` calls were made with a keryx:raw marker, to read the small fix-round hunks in full.
+KERYX_USAGE {"tokens_in":132417,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

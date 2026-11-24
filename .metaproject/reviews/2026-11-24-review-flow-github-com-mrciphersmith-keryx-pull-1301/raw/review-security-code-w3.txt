@@ -1,0 +1,43 @@
+STATUS: DONE
+
+## Security Review (round 2, delta 9f4ec475b..f43a13c3f, wave 3)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`, head f43a13c3f
+- Range: 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b (fix round 1)
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Code files in the slices: apps/desktop/src/metaproject/{MetaprojectTree.tsx, MetaprojectView.tsx, useMetaprojectTree.ts, *.dom.test.tsx}, apps/desktop/src/platform/metaproject.ts (+ test), src/integrations/metaproject-explorer-contract.ts, src/integrations/metaproject-explorer-v2.ts, src/integrations/metaproject-explorer-tree.test.ts, docs/docs/guides/desktop-metaproject.md; flow bookkeeping JSON/markdown (no executable code).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No new security finding in the delta. Round-1 security-code-w1-F-001 (info, validTreeEntry defence-in-depth) is in code this delta does not touch; not re-reported.
+
+### Clean areas (checked)
+- Injection / XSS: the new error live region (`<span role="status">Could not load. {row.message}</span>`) and the Module label render CLI-derived text as React text children; no dangerouslySetInnerHTML, eval or HTML string building added. Row lookup for focus/scroll compares `dataset.row` values in JS (`elements.find(item => item.dataset.row === ...)`), not an interpolated CSS selector, so a CLI-supplied folder path or group key cannot inject a selector.
+- Response validation (platform/metaproject.ts): the snapshot comparison moved out of `matchesRequest` and now runs after `isMetaprojectV2Response`, `matchesRequest` and the byte cap, so a reply is still shape- and size-validated before it can be reported as `stale-snapshot`; a malformed reply still yields the generic "Incompatible" error. No validation was removed: every reply that previously failed now still throws, only the error code for a well-formed other-snapshot reply changed. The hook (useMetaprojectTree.read) also re-checks `page.snapshotId !== pinned` and never shows such a page.
+- Resource bounds: the new FIFO limiter caps tree reads at MAX_TREE_READS = 3; queued reads re-check the generation before sending (`current() && ...`), the slot is released in `finally` on success or failure, and synchronous throws are captured by `Promise.resolve().then(task)`. The queue grows only with user-expanded folders.
+- Wiki group key helper (`metaprojectWikiGroupKey`): pure key derivation from `pageType`, used for display/reveal; no path or filesystem use.
+- Stale-snapshot handling in loadMoreSearch: only a typed MetaprojectRequestError with code stale-snapshot sets the banner; other errors keep the existing inline message path.
+- Secrets/PII, crypto, auth, CSRF, path traversal, open redirect: nothing in the delta touches these; no new IPC/argv sink (Rust file unchanged in this delta).
+- Docs/flow JSON: no secrets or credentials.
+
+### Not verified
+- No commands executed (exec_budget_s = 0); relied on the supplied test output (verify-tests-to-run-1.txt, exit 0) and CI status as stated in the brief.
+- Layers: graph/tests lists from the payload used as leads only; wiki and memory layers empty in the payload.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 2 delta (fix round 1) reviewed for code-level security across slice-02 and slice-03: no new findings. Snapshot check moved after shape/size validation (no validation lost), new error live region renders text only, row lookup avoids selector interpolation, tree reads bounded to 3 with generation re-check.",
+  "findings": [],
+  "slices": ["slice-02", "slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":152593,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

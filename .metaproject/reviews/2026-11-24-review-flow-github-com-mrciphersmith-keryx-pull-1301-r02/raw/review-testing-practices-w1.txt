@@ -1,0 +1,120 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-testing-practices, wave 1, round 3 (delta f43a13c3f..b2043b98d, fix round 2). Slice read in full: slice-01 (fix). Because the slice file is fragmentary, I also read the full fix delta for the five apps/ files with `git diff f43a13c3f b2043b98d -- apps/`.
+
+## Mutation pass: NOT RUN
+
+The payload allows `run-tests`, but this dispatch's command allowlist (brief item 8) does not include `keryx review mutate`. It also forbids writing any file except this result, so I could not build a scratch copy. No mutation was executed. The table below lists candidates only, with no result. Per the skill, I report no survival as a finding. Not reached: 12 of 12. They are listed in `mutant_candidates` for the main session to run.
+
+What I did run: `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/platform/metaproject.test.ts` at b2043b98d gave 42 pass, 0 fail, 203 expect() calls. This is the unmutated baseline only.
+
+| id | mutation | result |
+|---|---|---|
+| M1 | layout effect: drop the anchor, always use `elements[Math.min(lost.index, …)]` | not run |
+| M2 | `elements[anchor + 1] ?? elements[anchor]` -> `elements[anchor + 1]` | not run |
+| M3 | `moreId` -> `statusId` (rejoin first-read and next-page status ids) | not run |
+| M4 | onBlur microtask never forgets | not run |
+| M5 | `active` guard -> `true` | not run |
+| M6 | attempt(): drop `\|\| !current()` before the pause | not run |
+| M7 | attempt(): drop `if (!current()) throw cause;` after the pause | not run |
+| M8 | `!isPermitRefusal(cause)` -> `false` | not run |
+| M9 | stale-snapshot catch: drop the `return` after onStale() | not run |
+| M10 | limiter catch: `console.error(…)` -> swallow | not run |
+| M11 | onFocus: `before: rows[index - 1]?.id` -> `before: undefined` | not run |
+| M12 | layout effect: `remember(document.activeElement, elements)` -> `remember(document.activeElement, [])` | not run |
+
+Notes from reading only. These are NOT findings, because the mutants were not run.
+- M4 and M5 are redundant for both new "focus that left the tree stays outside" tests. Either one alone keeps focus outside. Each single deletion may survive, while deleting both should go red. Run them separately and together.
+- M6 and M7: no test changes the snapshot during a permit retry.
+- M2: no test empties the last folder or page under a focused trailing row.
+- The `lost.before === undefined ?` check looks equivalent to `findIndex` returning -1, because `dataset.row` is always set on `[data-row]` elements.
+
+## Prior findings, judged against the code at b2043b98d
+
+- r2-testing-practices-w2-F1: **closed**. MetaprojectTree.dom.test.tsx adds "focus that left the tree stays outside when the focused Show more row's page arrives" and "…when the focused Loading row is replaced by children". Each focuses a row first, moves focus outside, then releases the held read. Each asserts a positive artifact (`server.ts` or `client.ts` is present, Show more is gone) and `document.activeElement === outside`. That is the exact path the finding asked for. Whether each guard is pinned on its own is still unrun (M4/M5 above).
+- r2-ui-ux-w2-UX-001: **closed**. useMetaprojectTree.ts returns after `latest.current.onStale()`. MetaprojectView.dom.test.tsx adds `deadRetry()` next to the positive `staleBanner()` assertion for both a Graph folder and a Wiki group. The Tree test "a next page refused as stale-snapshot…" pins the page path with `stale === 1` as its positive artifact.
+- r2-frontend-w2-F-001: **closed**. This is the same code change as UX-001.
+- r2-performance-w2-F-001: **closed**. `remember(document.activeElement, elements)` reuses the effect's array. onFocus takes the index from `rows.findIndex`, and `rows` are the rendered rows: each `li` carries `"data-row": row.id`.
+- r2-style-w2-F-002: **closed**. Renamed to `treeError` / `searchError` (metaproject.test.ts:212-216).
+- r2-architecture-w1-F-001: **closed**. The comment now says the permits are shared by every project window. A permit refusal is retried with a jittered back-off (PERMIT_RETRIES = 2), which is the finding's alternative fix.
+- r2-architecture-w2-F-001: **closed**. A permit shortage no longer fails a folder outright, so the headroom that only a comment promised is now backed by the retry. The comment still states "eight" (see the clean-code item).
+- r2-clean-code-w1-F-002: **open**. The new comment still hard-codes the number ("Desktop's eight read permits are shared…"). It does not name `MAX_ACTIVE` in src-tauri/src/metaproject.rs as the source, which is what the finding suggested.
+- r2-logic-w2-F-001: **open**. The slot is still released only in `.finally` of the task. An in-flight `send` of a retired generation still holds its slot. The new attempt() stops retrying once `!current()`, which shortens the hold only for the permit-retry wait.
+
+## Findings
+
+### [F-001] The permit-retry trigger is pinned only against a hand-copied string injected below the transport (minor)
+
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx (`PERMIT_REFUSAL`) and apps/desktop/src/metaproject/useMetaprojectTree.ts (`isPermitRefusal`)
+- **Problem**: Fixture shape vs producer. The retry fires only when `errMessage(cause)` starts with "unavailable: Too many Metaproject reads".
+  - The producer is metaproject.rs:199. In the real app, its error reaches the hook through `requestMetaprojectTree` -> `requestMetaprojectV2`, which passes it on unchanged only because "unavailable" is not in `METAPROJECT_ERROR_CODES` (contract.ts:329-331).
+  - The new tests inject `PERMIT_REFUSAL`, a literal copy of the Rust string, straight into the hook's `request`, so they bypass the transport.
+  - No test sends the Rust refusal through `requestMetaprojectTree` and checks that the hook's predicate still matches.
+- **Why it matters**: Two plausible edits would each silently turn the retry off, with every test green: rewording the Rust message, or adding "unavailable" to the typed codes, which would make the transport strip the prefix into a `MetaprojectRequestError` message. The suite would then pin a shape the producer no longer emits.
+- **Fix**: Export `isPermitRefusal` (or move it next to `requestMetaprojectV2`). In platform/metaproject.test.ts, add a test where a reader throws the exact metaproject.rs:199 string, and assert that `isPermitRefusal(await readError(requestMetaprojectTree(…)))` is true. Optionally add a comment at metaproject.rs:199 naming the TS matcher.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 3 delta (fix round 2). The fix tests are well shaped. Holds and injected waits make them deterministic, and each negative assertion has a positive artifact. They close the round-2 testing gap (outside-focus path) and the stale-snapshot dead-Retry finding. One minor finding: the permit-retry trigger is pinned only against a hand-copied Rust string injected below the transport. The mutation pass was NOT run: the dispatch's command allowlist excludes `keryx review mutate` and forbids writing a scratch copy. All 12 candidates are listed and unrun. Baseline: the nearest suites are green at b2043b98d (42 pass).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "problem": "Fixture shape vs producer. The new permit retry (fix round 2) triggers on a message prefix of the Rust refusal (src-tauri/src/metaproject.rs:199). That error reaches the hook through requestMetaprojectTree -> requestMetaprojectV2, which passes it unchanged only because 'unavailable' is not in METAPROJECT_ERROR_CODES. The new tests inject PERMIT_REFUSAL, a literal copy of the Rust string, directly into the hook's request and bypass the transport. No test ties the TS predicate to what the transport actually delivers.",
+      "impact": "Two plausible edits would each disable the retry with every test green: rewording the Rust message, or adding 'unavailable' to the typed error codes (the transport would then strip the prefix). Coverage gap only; no defect today.",
+      "suggested_fix": "Export isPermitRefusal, or colocate it with requestMetaprojectV2. In apps/desktop/src/platform/metaproject.test.ts, add a test whose reader throws the exact metaproject.rs:199 string, and assert that isPermitRefusal(await readError(requestMetaprojectTree(...))) is true. Optionally add a comment at metaproject.rs:199 naming the TS matcher.",
+      "evidence": "keryx ctx rg 'Too many Metaproject reads' apps/ src/ --all: 4 matches. metaproject.rs:199 is the producer, useMetaprojectTree.ts:24 is the matcher, and MetaprojectTree.dom.test.tsx:503 and :535 are the hand copy and an assertion. No match in platform/metaproject.test.ts. platform/metaproject.ts:292-296 rethrows a non-coded error unchanged. contract.ts:329-331 lists the codes without 'unavailable'. The Harness passes request directly to useMetaprojectTree (MetaprojectTree.dom.test.tsx:65-68).",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-permit-refusal-fixture-bypasses-transport",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r2-architecture-w2-F-001", "disposition": "closed"},
+    {"id": "r2-clean-code-w1-F-002", "disposition": "open"},
+    {"id": "r2-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r2-logic-w2-F-001", "disposition": "open"},
+    {"id": "r2-performance-w2-F-001", "disposition": "closed"},
+    {"id": "r2-style-w2-F-002", "disposition": "closed"},
+    {"id": "r2-testing-practices-w2-F1", "disposition": "closed"},
+    {"id": "r2-ui-ux-w2-UX-001", "disposition": "closed"}
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];", "replacement": "const next = elements[Math.min(lost.index, elements.length - 1)];", "kind": "behavior"},
+    {"id": "M2", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "elements[anchor + 1] ?? elements[anchor];", "replacement": "elements[anchor + 1];", "kind": "behavior"},
+    {"id": "M3", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const moreId = (parent: string) => `more:${parent}`;", "replacement": "const moreId = statusId;", "kind": "behavior"},
+    {"id": "M4", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (element.isConnected && focused.current?.element === element) remember(document.activeElement, rowElements());", "replacement": "if (false) remember(document.activeElement, rowElements());", "kind": "behavior"},
+    {"id": "M5", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {", "replacement": "if (lost && !lost.element.isConnected) {", "kind": "behavior"},
+    {"id": "M6", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;", "replacement": "if (retries <= 0 || !isPermitRefusal(cause)) throw cause;", "kind": "behavior"},
+    {"id": "M7", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        if (!current()) throw cause;\n        return attempt(retries - 1);", "replacement": "        return attempt(retries - 1);", "kind": "behavior"},
+    {"id": "M8", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;", "replacement": "if (retries <= 0 || !current()) throw cause;", "kind": "behavior"},
+    {"id": "M9", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        latest.current.onStale();\n        return;", "replacement": "        latest.current.onStale();", "kind": "behavior"},
+    {"id": "M10", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "console.error(\"Metaproject tree read failed unexpectedly\", error);", "replacement": "void error;", "kind": "behavior"},
+    {"id": "M11", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "focused.current = { element: event.target, index, before: rows[index - 1]?.id };", "replacement": "focused.current = { element: event.target, index };", "kind": "behavior"},
+    {"id": "M12", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "remember(document.activeElement, elements);", "replacement": "remember(document.activeElement, []);", "kind": "behavior"}
+  ],
+  "mutation_pass": {
+    "ran": false,
+    "reason": "The dispatch's command allowlist (brief item 8) excludes `keryx review mutate` and forbids writing any file but this result, so no scratch copy was possible.",
+    "candidates": 12,
+    "not_reached": 12,
+    "baseline": "bun test src/metaproject/MetaprojectTree.dom.test.tsx src/platform/metaproject.test.ts at b2043b98d: 42 pass, 0 fail"
+  },
+  "follow_ups": [
+    "Run mutant_candidates M1-M12 through `keryx review mutate` against the nearest suites (MetaprojectTree.dom.test.tsx, plus MetaprojectView.dom.test.tsx for M9). Run M4 and M5 both separately and together: from reading, they look mutually redundant in the two new outside-focus tests."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (the payload layers block already listed affected files and related tests; not re-queried). wiki_used: not-relevant (test-practice delta review). ctx_used: yes (keryx ctx rg, keryx ctx read). raw_rg_used: no. Raw `git diff` was used once, with a keryx:raw marker, to read the full fix delta.
+KERYX_USAGE {"tokens_in":136801,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

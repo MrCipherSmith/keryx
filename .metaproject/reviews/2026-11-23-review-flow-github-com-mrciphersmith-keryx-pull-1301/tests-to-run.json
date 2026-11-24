@@ -1,0 +1,39 @@
+[
+  {
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/metaproject/NodeDetailsPanel.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/metaproject/RelationshipGraph.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/metaproject/RelationshipList.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/integrations/metaproject-explorer.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "METAPROJECT_CAPABILITIES",
+      "MetaprojectAnyRequest",
+      "MetaprojectRequestV2"
+    ]
+  }
+]

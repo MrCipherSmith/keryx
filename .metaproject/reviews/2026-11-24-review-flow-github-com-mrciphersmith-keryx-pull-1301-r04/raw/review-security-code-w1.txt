@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: 3ad918b66a990c7f0b04180e17d9fb74fb82713a..0d6df293794f (round 5, delta after fix round 4); head 0d6df2937
+- Scope mode: explicit-hash-range, supplied slice only
+- Slice read in full: slice-04 (second-look)
+- Files in slice: flow 518 package documents only: acceptance-criteria.md, context.md, description.md, journal.md, plan.md (three hunks), tasks.md
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+
+None. slice-04 holds only Markdown flow documents (criteria, context, description, journal, plan, tasks). None of it executes, so there is no injection, auth, IDOR, input validation, crypto, CSRF, path traversal, open redirect or React/NestJS surface in the slice. The one security-relevant thing to check in prose is secrets and personal data. I checked for it: the slice has no credentials, tokens, keys or private personal data. It names a public GitHub handle (`MrCipherSmith`, the repository owner) in memory provenance, a repo-relative workspace evidence path with its sha256 content hash, and PR/commit references. None of these is a secret. The security-relevant claims in plan.md are consistent with the contract they describe: exact key sets, `invalid-input` for absolute or `..` parents, a relative-path check for the graph `parent`, and snapshot-bound cursors. In this second look I did not re-verify them against code in other slices; those slices are out of my assignment.
+
+### Clean Areas
+- Injection (SQL/XSS/command/SSTI/eval): no code in slice
+- AuthN/AuthZ, IDOR, privilege escalation: no code in slice
+- Input validation: no code in slice; plan text matches the stated validation rules
+- Secrets and credentials / personal data: checked the prose; none found
+- Cryptography, CSRF, path traversal, open redirect, React/NestJS patterns: no code in slice
+
+### Not verified
+- Code outside slice-04 was not reviewed (not assigned).
+- No commands were run (exec_budget_s = 0); I did not query the layers (graph, tests, wiki, memory), because a docs-only slice gives them nothing to answer.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-security-code",
+    "summary": "Round 5 second look at slice-04 (flow 518 Markdown documents only). No executable code; no secrets or private personal data in the prose. No findings.",
+    "findings": [],
+    "needs_context": [],
+    "inputs_unreadable": [],
+    "follow_ups": [],
+    "slices": ["slice-04"],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
+KERYX_USAGE {"tokens_in":97468,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

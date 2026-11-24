@@ -1,0 +1,74 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-02", "slice-03"],
+  "summary": "Delta b2043b98d..3ad918b66 (fix round 3) reviewed as round 1 for slices 02 and 03. I found no logic defect. The stale-snapshot park (`status`/`more` = `stale`) is now re-read by the `reload` effect on every catalog object change. In MetaprojectView every `setSnapshotMismatch(false)` comes with `setCatalog(result)` (MetaprojectView.tsx:414-416), so the banner never clears without `reload` changing. A quiet same-snapshot read sets neither. A new snapshot resets the folders during render, before the effect runs, so `reread(…, 'stale')` never sends a retired cursor. `ensure`, `more` and the reveal effect all refuse or wait on `stale`, so no automatic re-read loop exists: only a user-started catalog load re-sends. `handOff` anchors a status row to `d:<parent>` and a Show more row to the parent's last entry. It then filters by `parent`. This closes r3-logic-w5-F-002, and it falls back sensibly when there is no matching row: a collapse, an empty page, not-found, or the root's `d:` anchor that does not exist. `withPermitRetry` keeps both generation guards. `isMetaprojectPermitRefusal` cannot be masked by the code mapping, because `unavailable` is not in METAPROJECT_ERROR_CODES (contract.ts:329-331), and its prefix matches metaproject.rs:199 verbatim. One info: the component's JSDoc still describes the old hand-off rule. Note on slice-03: its two hunks show removals in platform/metaproject.ts (the capabilities early return, and the snapshot check inside matchesRequest) that are not in this range. `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` shows only the new permit-refusal block. At head the snapshot check sits in requestMetaprojectV2 (:315-319) and capabilities needs `actions` (:270). So the slice looks stale relative to the range. I reviewed the file at head instead and found nothing wrong there.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its\n * place: the one after the row that preceded it, when that row is still shown.",
+      "problem": "The component's JSDoc still states the round-2 hand-off rule: the focused row goes to the row after the row that preceded it. This delta changed that rule in `handOff`. A status row now anchors to its own parent's row and takes the first following row of that parent. A Show more row anchors to the parent's last entry. The new `handOff` doc and the layout-effect comment describe this correctly. The component-level doc does not.",
+      "impact": "No runtime effect. The next editor reads two descriptions of the focus hand-off that disagree on the status-row case.",
+      "suggested_fix": "Reword the component doc to point at `handOff`, for example: '...focus goes to the row now at its place (`handOff`): a status row's first following row of its own parent, any other row's successor.'",
+      "evidence": "MetaprojectTree.tsx component JSDoc (context lines in slice-02 @@ 104) compared with the new `handOff` (slice-02 @@ 22,100) and the layout-effect comment rewritten in the same delta.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `b2043b98d..3ad918b66` (delta, round 4); merge-base with main `a5d1ab236`
+- Scope mode: explicit-hash-range, slices slice-02 (new) and slice-03 (new)
+- Spec compliance gate: ran against the flow 518 ACs and the T14 fix context. The fixes for r3-regression-w1-F-001 (park, then re-read on catalog load), r3-logic-w5-F-002 (parent-anchored hand-off) and r3-testing-practices-w2-F1 (tests for the retry snapshot guards) are present. No AC is regressed by this delta.
+
+### Summary
+The fix round's state machine holds. `stale` is entered only from `settleFailure`. It leaves only through `reread(…, "stale")`, which runs on a catalog object change, or through a snapshot reset. Every path that clears the stale banner changes the catalog object. Focus hand-off and permit retry are correct for the cases traced: two rows answering in one commit, a collapse, not-found, an empty page, the root row, a retired generation during the wait, and a refusal arriving after retirement.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. The `reload` effect iterates the keys of the old Map, while `reread` replaces `state.current` with a new Map, so the iteration is safe. A read answered stale after the reload effect has run parks again and raises the banner again; it does not loop.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+F-001 (info, doc drift) only.
+
+### Not verified
+- I did not run the tests myself (read-only, exec_budget_s 0). I relied on research-evidence/verify-tests-to-run-1.txt (exit 0 at 3ad918b66), as the brief states.
+- slice-03 looks inconsistent with the range (see summary). I read the file at head instead.
+
+### Routing audit
+- graph_used: no. The payload's layers block (affected files at the PR head) was used instead.
+- wiki_used: not-relevant (narrow delta review).
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`).
+- raw_rg_used: no. One raw `git diff` of a single file, with a keryx:raw marker, to check slice-03 against the range.
+KERYX_USAGE {"tokens_in":153421,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

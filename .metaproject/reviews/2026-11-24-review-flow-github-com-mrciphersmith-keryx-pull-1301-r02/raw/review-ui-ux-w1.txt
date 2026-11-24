@@ -1,0 +1,74 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 3, fix-round delta f43a13c3f..b2043b98d, code mode only (no render supplied). Surface: an app screen, the Desktop Metaproject explorer sidebar tree. Primary task: browse and select indexed files or wiki pages. The fix round removes the dead Retry after a stale-snapshot tree read: the row stays Loading and only the Refresh catalog banner shows. Focus now goes to the row after the one that preceded the replaced row. A permit refusal is retried twice with a jittered wait before the folder fails. All three read correctly. One new minor issue comes from the UX-001 fix. The parked Loading row is re-read only when the snapshot id changes. If Refresh catalog returns the pinned id again, the row keeps saying Loading… forever and offers no way out. No blocker or major findings. Prior dispositions: 7 closed, 1 partial, 1 open.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "reviewer": "review-ui-ux",
+      "severity": "minor",
+      "problem": "This defect comes from the fix for r2-ui-ux-w2-UX-001. Criteria: State: loading, Nielsen #1 (status visibility) and #9 (error recovery). On stale-snapshot, the read catch now calls onStale() and returns. The folder is left in `status: \"loading\"`, or its next page in `more: { status: \"loading\" }`, and no read is in flight. Only a new snapshot re-reads it. The hook resets `folders` only when `state.current.graph.snapshot !== snapshot`, which bumps the generation. The banner's Refresh catalog runs a non-quiet catalog read: it calls setCatalog(result) and setSnapshotMismatch(false) even when result.snapshotId is unchanged. In that case the banner goes away and the tree keeps the parked row. Nothing can then move that row. ensure() skips a parent already in `folders`. more() returns while `more.status === \"loading\"`. retry() acts only on `failed`.",
+      "impact": "Most of the time Refresh catalog returns a new snapshot id and the tree re-reads, which is the intended path. It fails only when the CLI's snapshot is back to the pinned id by the time the user refreshes: an edit undone, a branch switched back, or a rebuild that converged. Then the folder or Show more row says 'Loading…' through its role=status indefinitely. There is no banner, no error and no Retry, and collapsing and re-expanding the folder does not re-read it. Before this fix, the failed row's Retry would have worked in this exact case, because the pinned snapshot matched the CLI again. Rare, but it is a dead end with a status message that is not true.",
+      "suggested_fix": "Have Refresh catalog re-read the parked parents even when the snapshot id does not change. Option 1: mark a stale-refused parent with its own status (for example `stale`) and, once the snapshot is current again, re-read every `stale` parent. Trigger it from the hook on its next render after the explorer clears snapshotMismatch, or from a `reload()` the view calls in its Refresh catalog handler. Option 2: key the tree's reset on the catalog read revision as well as the snapshot id. Extend the MetaprojectView test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' with a case where Refresh catalog returns the same snapshot id, and assert that the folder's children appear.",
+      "evidence": "useMetaprojectTree.ts at b2043b98d. The catch has `if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") { latest.current.onStale(); return; }` and leaves the folder in the state set by ensure() or more(). The snapshot-change reset is `if (state.current.graph.snapshot !== snapshot) { generation.current++; ... }`. ensure: `if (state.current[scope].folders.has(parent)) return;`. more: `if (!folder || folder.status !== \"ready\" || !folder.nextCursor || folder.more?.status === \"loading\") return;`. retry acts only on `status === \"failed\"` or `more?.status === \"failed\"`. In MetaprojectView.tsx, the Refresh catalog button runs `setRevision(value => value + 1)`. The catalog effect (non-quiet) then calls `setCatalog(result); setFreshness(null); setSnapshotMismatch(false);` without comparing snapshot ids. Only the quiet path returns early on an equal id. The hook gets `snapshot: catalog?.snapshotId`. The new view test checks only that the banner clears after Refresh catalog. It does not check that the parked folder loads. This is a code reading. It was not run, and I did not confirm whether the core's snapshot id can return to an earlier value.",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      // Another snapshot answered: the explorer offers Refresh catalog, which re-reads the tree. The row\n      // stays loading; a Retry here would only send the retired snapshot again.",
+      "dedupe_key": "metaproject-tree-stale-row-parked-loading-without-snapshot-change",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r2-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r2-architecture-w2-F-001", "disposition": "closed" },
+    { "id": "r2-clean-code-w1-F-002", "disposition": "partial" },
+    { "id": "r2-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r2-logic-w2-F-001", "disposition": "open" },
+    { "id": "r2-performance-w2-F-001", "disposition": "closed" },
+    { "id": "r2-style-w2-F-002", "disposition": "closed" },
+    { "id": "r2-testing-practices-w2-F1", "disposition": "closed" },
+    { "id": "r2-ui-ux-w2-UX-001", "disposition": "closed" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Summary
+
+- **Verdict:** DONE. No blocker or major findings; one minor issue introduced by a fix.
+- **Context:** Keryx Desktop, Metaproject explorer sidebar tree (an app screen, so the marketing slop rows do not apply). Users are developers browsing project knowledge. Primary task: reach and select a file or wiki page. Mode: code only.
+- **Scores:** Slop score 0. The delta changes no markup, CSS or copy beyond comments. WCAG 2.2 AA floor: nothing in the delta regresses it; this round's focus fix improves 2.4.3 focus order. Viewports: not run.
+
+### Prior dispositions (checked against the code at b2043b98d)
+
+| Prior finding | Disposition | Basis |
+|---|---|---|
+| r2-architecture-w1-F-001 | closed | The comment now says the permits are shared across windows. A refusal ("unavailable: Too many Metaproject reads") is retried twice (`attempt`, `isPermitRefusal`), which is the back-off the finding suggested. |
+| r2-architecture-w2-F-001 | closed | The comment no longer promises headroom that could go stale. A refused permit is retried instead of failing outright. |
+| r2-clean-code-w1-F-002 | partial | The comment still hard-codes "eight read permits" instead of naming `MAX_ACTIVE`. `isPermitRefusal` names `metaproject.rs`, which points at the source. |
+| r2-frontend-w2-F-001 | closed | After onStale the catch returns before the failed branch, so there is no Retry for a retired snapshot. |
+| r2-logic-w2-F-001 | open | Optional, unchanged. A slot is still freed only when the read settles. The retry loop now stops for a retired generation, but a retired read in flight still holds its slot. |
+| r2-performance-w2-F-001 | closed | `remember(element, elements)` reuses the layout effect's array. onFocus uses `rows.findIndex` with no DOM query. |
+| r2-style-w2-F-002 | closed | The variables are renamed to `treeError` / `searchError`. |
+| r2-testing-practices-w2-F1 | closed | Two new DOM tests cover the case: focus leaves the tree, and then the focused Show more or Loading row is replaced. Both assert that `activeElement === outside`. |
+| r2-ui-ux-w2-UX-001 | closed | The dead Retry is gone, and the view test asserts that no row reads "Could not load." while the banner shows. Its fix introduced UX-001 above (the edge case where the snapshot is unchanged). |
+
+### What works (keep)
+- Focus hand-off now anchors on the preceding row's id. A Loading row replaced by children moves focus to the first child, and Show more moves it to the first new entry. Two folders answering in the same commit no longer pull focus into the wrong folder.
+- A permit refusal is retried quietly before it becomes an inline error, so a burst from another window no longer flashes a Retry row.
+- The stale path and search Load more now agree: both show the banner only.
+
+### Checks not run
+- Live render at 1440, 768 and 390 px, light and dark: no URL or screenshots were supplied. Screenshots of the explorer with an expanded Graph tree, a stale banner and an error row would close this gap.
+- Keyboard and screen-reader walkthrough in the packaged app. Focus behaviour was judged from code and the DOM tests (verify-tests-to-run-1.txt, exit 0), not observed.
+- Whether the core snapshot id can return to an earlier value. This decides how often UX-001 can happen; I did not trace it.
+
+Routing audit: graph_used: no (not-relevant: the payload's layers already listed the affected files); wiki_used: no (not-relevant: a narrow fix delta); ctx_used: yes (keryx ctx rg); raw_rg_used: no. Raw git diff was used with a keryx:raw marker to read the full fix hunks.
+KERYX_USAGE {"tokens_in":121326,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

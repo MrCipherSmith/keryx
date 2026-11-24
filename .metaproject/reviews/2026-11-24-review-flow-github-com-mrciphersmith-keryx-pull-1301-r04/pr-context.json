@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1301,
+  "headSha": "0d6df293794fe1b4582463544f9ad21f5ce202d2",
+  "collectedAt": "2026-11-24T09:41:22.091Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "feat(desktop): browse Metaproject files and wiki pages as a tree",
+    "body": "## Summary\n\nFlow 518. Without a search, the Metaproject sidebar is now a tree instead of a flat list of the catalog's first 200 nodes: in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module node); in **Wiki**, pages grouped by page type. Folders load on demand, so the whole project is reachable.\n\n- **Core:** new read-only v2 action `tree` (`scope: graph | wiki`, optional `parent`, paged with snapshot-bound cursors, `not-found` / `stale-snapshot` / `invalid-input` like the other actions). Listed in `capabilities`; v1 unchanged.\n- **Transport:** Rust `RequestV2::Tree` with validation and tests. The handshake still requires only the six existing actions, so an older CLI keeps working; Desktop learns `supportsTree` from the probe.\n- **Desktop:** `MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space), `useMetaprojectTree` (per-scope expanded set and pages, retry per folder, Show more, snapshot changes), mounted in `MetaprojectView` only with no query and a CLI that offers `tree`. A selection made elsewhere reveals its path; the item shown by default on first open does not.\n- **Docs:** the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour.\n\n## Review fixes\n\nFour managed review rounds; their fixes are in this PR.\n\n- Round 1 fixes: focus stays in the tree when a focused status row changes or leaves; tree reads are bounded to 3 in flight (Desktop's 8 read permits are shared); a v2 answer for another snapshot is refused as `stale-snapshot` in the transport for every action, so search Load more shows the Refresh catalog banner instead of \"Incompatible … Choose the bundled CLI\"; module folders show a **Module** label; the untyped wiki group key is one helper shared by core and Desktop.\n- Round 2 fixes: focus moves to the right row when a page or two folders' answers land together; a stale-snapshot tree read shows the Refresh catalog banner and no Retry that cannot succeed (the row stays Loading… until a catalog load re-reads it, see round 3); a read refused because every permit is busy is retried twice with a short jittered wait before the folder shows the error.\n- Round 3 fixes: a tree read refused as stale-snapshot is parked and every catalog load re-reads it, so Refresh catalog recovers it even when the snapshot id comes back unchanged; the read-permit refusal is classified once in the platform transport; a replaced status row hands focus within its own parent.\n- Round 4 fixes: the tree's `reload` input is required (it is the only way out of a parked stale read); the focus hand-off target moved into a helper and the component doc matches it; tests pin the parked stale row, the refused Show more, a reveal through a stale folder, the Wiki re-read, the permit classifier ignoring typed CLI errors and the empty-page focus fallback; the flow plan states the current focus rule and the stale-snapshot state.\n\n## Verification\n\n- At the head: `cd apps/desktop && bunx tsc --noEmit && bun test src` exit 0, 1021 pass. Core tree and explorer tests pass; `bun run lint`, `bun run typecheck`, `bun run docs:check` exit 0 (re-run after round 1; rounds 2-4 touched only Desktop).\n- CI on the round-1 head ran the Rust `cargo test --locked metaproject` and passed.\n- Not run: no native walkthrough of the packaged app; focus behaviour is checked in the DOM test environment only.\n\nFlow package: `.metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/`.\n\n\n\n"
+  },
+  "ci": {
+    "state": "failing",
+    "checks": [
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "AC8 remaining tests",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "failing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "desktop check",
+        "state": "pending"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "Issues board, Projects and session-to-Flow acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (1/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "Core tests (2/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (3/4, offline)",
+        "state": "pending"
+      },
+      {
+        "name": "Desktop Metaproject graph and wiki acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (4/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "Lint and typecheck",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "team-hub-distribution",
+        "state": "pending"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "pending"
+      }
+    ],
+    "failing": [
+      "opentui native (darwin-arm64)"
+    ]
+  },
+  "backendPins": [],
+  "comments": []
+}

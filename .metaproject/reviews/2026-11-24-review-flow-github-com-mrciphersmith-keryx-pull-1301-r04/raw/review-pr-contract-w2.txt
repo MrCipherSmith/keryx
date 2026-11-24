@@ -1,0 +1,72 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, wave 2, round 5 (delta 3ad918b66..0d6df2937). I read both slices in full: slice-02 (new) and slice-03 (new). For context I also read pr-context.md, the payload, apps/desktop/src/platform/metaproject.ts:255-334 at the head, docs/docs/guides/desktop-metaproject.md:95-134, the reload lines of useMetaprojectTree.ts, the verify-tests evidence and the wave-1 pr-contract result for this round. The `.metaproject/index.md` gate was skipped because the brief scoped this lane narrowly.
+
+Note on slice-03: `git log a5d1ab236..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` lists only 2bdba196c, 6c83eb7fb and b5c8d5fe8, and `git diff --stat 3ad918b66 0d6df2937` does not list metaproject.ts. Slice-03's two removed hunks therefore come from the PR's earlier commits, not from fix round 4. I reviewed them against the PR body as they stand.
+
+## Claims of the PR body, worked as rows
+
+The PR body has no checkbox checklist. Each stated claim that my slices bear on is one row:
+
+| Claim (quoted) | State | What the diff / head shows | Result |
+|---|---|---|---|
+| "tests pin the parked stale row" | claim | MetaprojectView.dom.test.tsx (slice-02 +135-136) `expect(treeRows().map(row => row.textContent)).toEqual(["src1", "Loading…"]);` | holds |
+| "… the refused Show more" | claim | MetaprojectView.dom.test.tsx (slice-02 +203-208): the parked row reads "Loading…"; click and Enter on it; `treeCalls.filter(call => call.cursor === "page-2")).toHaveLength(1)` | holds |
+| "… a reveal through a stale folder" | claim | new test "a selection made elsewhere whose folder read is parked stale is revealed once Refresh catalog reads it" (slice-02 +160-187) asserts aria-selected and scrollIntoView after Refresh catalog | holds |
+| "… the Wiki re-read" | claim | slice-02 +150-157: Refresh catalog re-reads `other`, Guide shown, `expectedSnapshotId` `["s1","s1"]` | holds |
+| "… the permit classifier ignoring typed CLI errors" | claim | metaproject.test.ts (slice-02 +252-253) `isMetaprojectPermitRefusal(new MetaprojectRequestError("not-found", METAPROJECT_PERMIT_REFUSAL))).toBe(false)`; code metaproject.ts:286 `!(error instanceof MetaprojectRequestError) && …` | holds |
+| "… the empty-page focus fallback" | claim | MetaprojectTree.dom.test.tsx (slice-02 +74-90): an empty next page, focus ends on `src` | holds |
+| "the focus hand-off target moved into a helper and the component doc matches it" | claim | MetaprojectTree.tsx (slice-02) `+function handOffTarget(...)` and `+const target = handOffTarget(rows, lost.anchor, lost.parent);`; the inline comment at the call site ("focus the row now at its place, found from its hand-off anchor") matches | holds |
+| "the tree's `reload` input is required" | claim | the test Harness (slice-02) now passes `reload: props.reload ?? 0`; useMetaprojectTree.ts:115 `reload: unknown;` | holds (also closed by wave 1) |
+| "Desktop learns `supportsTree` from the probe" | claim | slice-03 removes `if (isMetaprojectV2Response(response, "capabilities")) return 2;`; head metaproject.ts:268-269 returns `{ protocol: 2, supportsTree: response.actions.includes("tree") }` | holds |
+| "a v2 answer for another snapshot is refused as `stale-snapshot` in the transport for every action, so search Load more shows the Refresh catalog banner instead of 'Incompatible …'" | claim | slice-03 removes the snapshot check from `matchesRequest`, so an answer for another snapshot no longer reaches the "Incompatible" throw. Head :315-319 checks after shape validation for any request carrying `expectedSnapshotId` and throws `MetaprojectRequestError("stale-snapshot", …)`. metaproject.test.ts (slice-02 context) covers both tree and search | holds |
+| "Docs: the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour" | claim | the guide's tree section does not describe the parked stale-snapshot row that slice-02 now pins | partly; PC-001 |
+| "`bunx tsc --noEmit && bun test src` exit 0, 1021 pass" | claim | verify-tests-to-run-1.txt :6 `exit: 0`, :720 `1021 pass` | holds |
+
+## Findings
+
+### [PC-001] The guide says a folder that fails to load shows Retry; a stale-snapshot read instead stays Loading… with no Retry
+
+- **Severity**: minor
+- **File**: docs/docs/guides/desktop-metaproject.md:109
+- **Problem**: The guide, at :107-110, says a folder "shows **Loading…** until they arrive … If a folder fails to load, its row reads **Could not load.** with the reason and a **Retry** button." The behaviour slice-02 pins is different. When a tree read is refused as stale-snapshot, the row never reads "Could not load." and offers no Retry: `const deadRetry = () => treeRows().some(row => row.textContent?.startsWith("Could not load."));` … `expect(deadRetry()).toBe(false);`. The row stays `["src1", "Loading…"]` (+135-136), and activating a parked Show more asks for nothing (+203-208) until **Refresh catalog**. The guide's tree section never says this. Only the generic troubleshooting row at :327 ("Project knowledge changed while loading … Select Refresh catalog") names the remedy, and it does not say that tree rows wait on it.
+- **Why it matters**: A reader of the guide who sees a folder stuck on Loading… expects either data or a Retry row. It is not clear that the Refresh catalog banner is the only way out. This costs a reader, not correctness: the banner is visible and the troubleshooting row names the action.
+- **Fix**: Add one sentence after :110: "If the project knowledge changed while the folder was loading, the row stays **Loading…** and the explorer shows the **Refresh catalog** banner; select it to load the folder again."
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 5 contract check of slice-02 (new) and slice-03 (new) against the PR body. All six round-4 test-pinning claims hold, as do the handOffTarget helper claim, supportsTree from the probe and the transport-level stale-snapshot refusal. One minor documentation gap: the Desktop Metaproject guide's tree section still promises a 'Could not load.' row with Retry for a failed folder, and says nothing of the parked stale-snapshot row (Loading…, no Retry, Refresh catalog banner) that slice-02 pins. Slice-03's hunks are not part of the round-4 delta (metaproject.ts is unchanged in 3ad918b66..0d6df2937); they come from earlier PR commits.",
+  "slices": ["slice-02", "slice-03"],
+  "prior_dispositions": [],
+  "findings": [
+    {
+      "id": "PC-001",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "line": 109,
+      "quote": "If a folder fails to load, its row reads **Could",
+      "problem": "Guide :107-110: 'shows **Loading…** until they arrive … If a folder fails to load, its row reads **Could not load.** with the reason and a **Retry** button.' slice-02 pins different behaviour for a stale-snapshot refusal. MetaprojectView.dom.test.tsx asserts `expect(deadRetry()).toBe(false)` (no 'Could not load.' row). The row stays `[\"src1\", \"Loading…\"]` (+135-136), and a parked Show more sends nothing (+203-208) until Refresh catalog. The guide's tree section does not describe this state. Only the generic troubleshooting row at :327 names Refresh catalog.",
+      "impact": "A guide reader whose folder sits on Loading… expects either data or a Retry row. It is not clear that the Refresh catalog banner is the only way out. No wrong data or runtime defect: the banner is visible and the troubleshooting row names the action.",
+      "suggested_fix": "After guide :110 add: 'If the project knowledge changed while the folder was loading, the row stays **Loading…** and the explorer shows the **Refresh catalog** banner; select it to load the folder again.'",
+      "evidence": "Document side: docs/docs/guides/desktop-metaproject.md:107-110 and :327, read at head 0d6df2937. Code/test side: slice-02 MetaprojectView.dom.test.tsx hunk @@ 2136,2249 @@ (deadRetry false, +135-136 parked 'Loading…', +203-208 parked Show more sends no request). Guide located with `keryx ctx rg -n -i --all \"refresh catalog|changed|stale|snapshot\" docs/docs/guides/desktop-metaproject.md` (6 hits, none in the tree section). Prior rounds checked with `keryx ctx rg` over r02/r03 findings and the r04 prior_findings.json: no earlier finding names this guide gap.",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description",
+      "location_class": "out-of-diff"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Slice-03 holds hunks of apps/desktop/src/platform/metaproject.ts that are not in the round-4 delta (git log a5d1ab236..0d6df2937 for that file lists 2bdba196c, 6c83eb7fb, b5c8d5fe8; git diff --stat 3ad918b66 0d6df2937 does not list it). The slicer may have labelled earlier PR changes as 'new'.",
+    "Wave 1's open PC-001 / r4-degradation-w2-F-002 (the 'every catalog load re-reads' overclaim in the PR body round-3 line) is not restated here."
+  ],
+  "stats": {"findings": 1, "blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the claims could be settled from the slices, the head file and one targeted guide search); wiki_used: no (not-relevant: the PR names its one guide and I read it directly); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no. Not done: no tests run (exec_budget_s 0); the guide was read at :95-134 and searched with ctx rg, not read in full.
+KERYX_USAGE {"tokens_in":130282,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

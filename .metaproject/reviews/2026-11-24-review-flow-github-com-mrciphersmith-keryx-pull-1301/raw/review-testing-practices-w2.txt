@@ -1,0 +1,104 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, wave 2, round 2 (delta 9f4ec475b..f43a13c3f), slices slice-02 (new) and slice-03 (new), both read in full.
+
+Concern: the mutation pass was NOT run. `keryx review mutate` is not in this dispatch's allowed command list, and it writes `mutation-<n>.json/.md` into research-evidence/, while the brief lets me write only this result file. No mutation result below is observed; every mutant is listed in `mutant_candidates` for the main session to run (0 of 15 run, 15 not reached). Nothing here reports a predicted mutation result as a finding.
+
+What did run: the baseline suites at the head, both exit 0.
+- `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts`: 133 pass, 0 fail
+- `bun test src/integrations/metaproject-explorer-tree.test.ts`: 12 pass, 0 fail
+I ran them through `keryx ctx run` / `keryx ctx rg`, which write their raw logs under `.metaproject/data/gdctx/` as a tooling side effect. No project source file was written.
+
+Round-1 testing-practices requests in these slices, checked by reading:
+- F2: wiki titles now run against file order and nodes.jsonl is written in reverse. Addressed.
+- F3: the View test covers a tree answer for another snapshot and a stale-snapshot refusal, and asserts the Refresh catalog banner with no rows. The platform test pins the transport's new stale-snapshot throw for tree and search. Addressed.
+- F4: ArrowUp steps were added, including on the first row. Addressed.
+- F5: the Desktop half has the "No indexed files." and "No Wiki pages." test. Addressed. The core half is in a hunk outside my slices.
+- F6: `item("client.ts")` is now asserted after the release. Addressed.
+- F7: the selected fallback is asserted in both Graph and Wiki. Addressed.
+- F1 (the symbol test) is in a hunk outside my slices and was not reviewed here.
+
+The new tests carry positive artifacts and do not pass on a path that never ran:
+- concurrency test: an exact `toHaveLength(3)` beside the peak check
+- Home/End test: `aria-selected` before the focus assertion
+- stale tests: the banner text
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round-2 delta, slices 02 and 03. The fix round's new tests are well formed and carry positive artifacts. The baseline is green (133 Desktop and 12 core tests pass at f43a13c3f). Round-1 test requests F2-F7 are addressed in these slices. Two coverage observations, from reading only. (1) The new guard against taking focus from outside the tree, together with the onBlur forget path, has no test in which focus leaves the tree before the focused row is removed. (2) The keyboard-Retry test cannot tell the stable status-row key from the index-based focus fallback. The mutation pass was not run: keryx review mutate is outside this dispatch's allowed commands and would write into research-evidence/. All 15 mutants are listed for the main session.",
+  "slices": [
+    {"id": "slice-02", "coverage": "read in full (2270 lines)", "status": "DONE"},
+    {"id": "slice-03", "coverage": "read in full (153 lines)", "status": "DONE"}
+  ],
+  "findings": [
+    {
+      "id": "testing-practices-r2-F1",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {",
+      "problem": "Fix round 1 (frontend-w1-F-001 / ui-ux-w1-UX-001) added two mechanisms so that focus is never taken from outside the tree. The first is the `onBlur` microtask that forgets the focused row when focus moves out. The second is the `active` guard in the layout effect. No test drives the case they exist for: a tree row holds focus, focus then moves outside, and only after that does the focused row leave (Show more's last page arrives, or a loading or error row turns into children). Every test that focuses `outside` keeps it outside without ever focusing a row first, or leaves the focused row in place: 'data arriving never moves focus' (a mouse click on the chevron, so no row was ever focused), the reveal test and the Home/End test (the rows stay). The two keyboard tests (Retry, Show more) keep focus inside the tree.",
+      "impact": "These two branches are the only code that stops a late page from pulling focus out of a field the user moved to. The plan forbids that (\"data arriving never takes it\"). Either branch can be deleted or broken with the suite staying green, so the next edit to this effect is unprotected. Coverage gap only: no defect is claimed.",
+      "suggested_fix": "In MetaprojectTree.dom.test.tsx, add a test. Hold `|next`. Focus the Show more row and press Enter, so the row is focused and loading. Focus an `outside` button inside act(). Release `|next`. Assert that `document.activeElement === outside`, that the appended rows are present (positive artifact) and that 'Show more' is gone. Add a twin with a held folder read, where the focused loading row is replaced by children.",
+      "evidence": "Read MetaprojectTree.tsx (the layout effect and onBlur) and MetaprojectTree.dom.test.tsx lines 243-258, 294-317 and 366-384: the only tests that move focus to `outside`. Searched with `keryx ctx rg \"outside|activeElement|\\.blur\\(\"` over both DOM test files. Mutants M7 and M8 (below) are the gates in question. They were NOT run, so this rests on reading, not on an observed green.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "testing-practices-r2-F2",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "line": null,
+      "quote": "await key(item(\"Could not load.\"), \"Enter\");",
+      "problem": "The keyboard-Retry test asserts that the focused element is a treeitem reading 'Loading…'. The shared `statusId` exists so that Retry updates the focused row in place instead of replacing it (its doc comment says so). The index-based fallback in the layout effect gives the same observable result when the keys differ: the error row is removed and the loading row at the same index gets focus. So the assertion does not tell the two mechanisms apart.",
+      "impact": "If the per-parent status key regresses to per-type ids, focus is dropped and re-applied to a new element (a second focus event for assistive technology), and the test stays green. Low cost; no defect today.",
+      "suggested_fix": "Capture `const row = item(\"Could not load.\")` before Enter, then assert `document.activeElement === row` (the same element) while it reads 'Loading…'. Do the same for the Show more row while it loads.",
+      "evidence": "Read flatten() and statusId in MetaprojectTree.tsx, the layout-effect fallback `elements[Math.min(lost.index, elements.length - 1)]?.focus()`, and the test at MetaprojectTree.dom.test.tsx ~386-397. Mutant M6 targets this. It was not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "publication": "finding"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "    throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");", "replacement": "    void 0;", "kind": "behavior"},
+    {"id": "M2", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") setSnapshotMismatch(true);", "replacement": "if (false) setSnapshotMismatch(true);", "kind": "behavior"},
+    {"id": "M3", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (pool.active < MAX_TREE_READS) start();", "replacement": "if (true) start();", "kind": "behavior"},
+    {"id": "M4", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        pool.queue.shift()?.();", "replacement": "        void pool.queue;", "kind": "behavior"},
+    {"id": "M5", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "limit(() => current() && Promise.resolve()", "replacement": "limit(() => Promise.resolve()", "kind": "behavior"},
+    {"id": "M6", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "rows.push({ type: \"loading\", id, level, parent });", "replacement": "rows.push({ type: \"loading\", id: `loading:${parent}`, level, parent });", "kind": "behavior"},
+    {"id": "M7", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "(!active || active === document.body || !active.isConnected)", "replacement": "(true)", "kind": "behavior"},
+    {"id": "M8", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (element.isConnected && focused.current?.element === element) remember(document.activeElement);", "replacement": "void element;", "kind": "behavior"},
+    {"id": "M9", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "elements[Math.min(lost.index, elements.length - 1)]?.focus();", "replacement": "elements[lost.index]?.focus();", "kind": "behavior"},
+    {"id": "M10", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (lost && !lost.element.isConnected && ", "replacement": "if (lost && ", "kind": "behavior"},
+    {"id": "M11", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();", "replacement": "void row;", "kind": "behavior"},
+    {"id": "M12", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "<span role=\"status\">Could not load. {row.message}</span>", "replacement": "<span>Could not load. {row.message}</span>", "kind": "presentation"},
+    {"id": "M13", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "<nav className=\"metaproject-list\" aria-labelledby={listHeadingId} ref={list}>", "replacement": "<nav className=\"metaproject-list\" aria-label=\"Search results\" ref={list}>", "kind": "presentation"},
+    {"id": "M14", "file": "src/integrations/metaproject-explorer-contract.ts", "anchor": "return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP;", "replacement": "return node.pageType ?? METAPROJECT_WIKI_UNTYPED_GROUP;", "kind": "behavior"},
+    {"id": "M15", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "? root.partial ? \"The graph is not built yet.", "replacement": "? !root.partial ? \"The graph is not built yet.", "kind": "presentation"}
+  ],
+  "mutant_notes": {
+    "nearest_suites": "Desktop: `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts`. Core (M14): `bun test src/integrations/metaproject-explorer-tree.test.ts src/integrations/metaproject-explorer.test.ts`.",
+    "run": 0,
+    "not_reached": 15,
+    "why_not_run": "keryx review mutate is not in this dispatch's allowed commands, and it writes into research-evidence/",
+    "M14": "Probably an equivalent mutant. The only wiki-node producer (src/integrations/metaproject-explorer.ts:78) always sets `pageType` from WIKI_PAGE_TYPES, so neither an empty nor a missing pageType reaches `metaprojectWikiGroupKey` from the CLI. Running it is still useful to confirm.",
+    "previous_round_gates_first": "M1 and M2 (degradation-w1-F-002 / testing-practices-w1-F3), M3-M5 (highload-w1-F-001), M6-M10 (frontend-w1-F-001 / ui-ux-w1-UX-001), M11 (logic-w1-F-001)"
+  },
+  "follow_ups": [
+    "Run the 15 mutant_candidates of review-testing-practices-w2 through `keryx review mutate` against the nearest suites in mutant_notes, previous-round gates first. A survivor among M6-M10 settles or extends testing-practices-r2-F1 and testing-practices-r2-F2."
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+Summary
+- 0 blocker, 0 major, 1 minor, 1 info.
+- r2-F1 (minor): the fix round's guard against taking focus from outside the tree (the `active` check in the layout effect, plus the onBlur forget) has no test in which focus leaves before the focused row is removed.
+- r2-F2 (info): the keyboard-Retry test does not tell the stable status-row key from the index fallback. Asserting the same element would.
+- Mutation pass: not run, 0 of 15. Handed to the main session as a follow-up.
+- Routing audit: graph_used: no (the payload's layers block already gave the affected files and related tests); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`, `keryx ctx run`); raw_rg_used: no. `cat`, `sed` and `git diff` were used with keryx:raw markers to read the skill, the schema, exact code ranges and the delta hunks, plus one `grep` over an already-routed gdctx raw log.
+KERYX_USAGE {"tokens_in":187116,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

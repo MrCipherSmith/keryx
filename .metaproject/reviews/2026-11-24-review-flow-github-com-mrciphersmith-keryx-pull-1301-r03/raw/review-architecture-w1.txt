@@ -1,0 +1,75 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Fix-round delta b2043b98d..3ad918b66, slice-01 (useMetaprojectTree.ts: module-scope withPermitRetry, settleFailure extracted from read()). The permit-refusal classification now lives in the platform transport (platform/metaproject.ts isMetaprojectPermitRefusal + METAPROJECT_PERMIT_REFUSAL), and the view-model hook imports it, so the dependency runs view-model -> platform, the right direction. withPermitRetry is a module-level function that takes its clock (wait) and liveness (live) as parameters, so it can be substituted. settleFailure keeps failure-to-state mapping inside the hook, its own layer. No new architectural violation in slice-01. Dispositions: the architecture finding, the SRP lift, the doc drift and the stuck-loading regression are closed. The three info findings on Rust-text drift are partial: the TS side has one source now, but nothing on the Rust side (no comment or test at metaproject.rs:199) ties it to the TS constant. The PERMIT_RETRIES export and the PR-body wording are still open.",
+  "slices": [{"id": "slice-01", "status": "DONE", "coverage": "read in full; useMetaprojectTree.ts at head, platform/metaproject.ts, MetaprojectView.tsx catalog effect (398-422) and the view-test delta were read for context and dispositions only"}],
+  "findings": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+  "prior_dispositions": [
+    {"id": "r3-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r3-clean-code-w1-F-002", "disposition": "closed"},
+    {"id": "r3-clean-code-w1-F-003", "disposition": "partial"},
+    {"id": "r3-clean-code-w2-F-001", "disposition": "closed"},
+    {"id": "r3-clean-code-w2-F-002", "disposition": "partial"},
+    {"id": "r3-highload-w2-F-001", "disposition": "partial"},
+    {"id": "r3-regression-w1-F-001", "disposition": "closed"},
+    {"id": "r3-style-w1-F-002", "disposition": "open"},
+    {"id": "r3-style-w2-F-001", "disposition": "open"},
+    {"id": "r3-pr-contract-w1-PC-001", "disposition": "open"}
+  ],
+  "unread_inputs": []
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `b2043b98d..3ad918b66` (fix round 3), slice-01 only
+- Scope mode: explicit-hash-range (diff)
+- Stack detected: React (hook view-model + platform transport), generic TS
+
+### Summary
+slice-01 moves the permit back-off out of read() into a module-scope `withPermitRetry`, with the clock and liveness passed in. It also extracts `settleFailure`, which records stale-snapshot, not-found and failed outcomes as tree state. The refusal predicate is now imported from `platform/metaproject.ts`, which is the transport layer. No layer, direction or boundary violation was introduced.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Prior dispositions (checked against the code at 3ad918b66)
+- **r3-architecture-w1-F-001: closed.** `platform/metaproject.ts:276-288` exports `METAPROJECT_PERMIT_REFUSAL` and `isMetaprojectPermitRefusal`. The hook imports it (`useMetaprojectTree.ts:9`, used at :35), and so does the DOM test (`MetaprojectTree.dom.test.tsx:82`). The hook has no Rust literal left. The Rust-side comment from the suggested fix was not added (metaproject.rs is unchanged), but the classification now sits at the transport boundary.
+- **r3-clean-code-w1-F-002: closed.** `withPermitRetry<T>` is at module scope (`useMetaprojectTree.ts:29-40`). read() calls `withPermitRetry(() => send(root, input), { wait: pause, live: current })` (:214) and is now about 25 lines.
+- **r3-clean-code-w1-F-003: partial.** The TS side has one definition now (platform), plus `platform/metaproject.test.ts:213`, which deliberately pins the exact Rust text. `metaproject.rs:199` still has no comment or test naming the Desktop consumer, so a Rust rewording would still go unnoticed by every test.
+- **r3-clean-code-w2-F-001: closed.** `TreeFolder` now has a separate `stale` status (:49, :56), and its docs (:44-46, :55) and the `ensure`/`more` docs (:70-73, :78) describe it. "loading" again means a read is in flight.
+- **r3-clean-code-w2-F-002: partial.** The TS constant is shared and imported by the test. The comment at metaproject.rs:199 was not added.
+- **r3-highload-w2-F-001: partial.** There is one TS constant, but no Rust-side assertion or stable code. The drift risk is unchanged on the Rust side.
+- **r3-regression-w1-F-001: closed.** A stale answer now parks the folder or page as `stale` (`settleFailure`, :182-187). The `reload` effect (:261-268) re-reads every parked parent when `reload` changes. MetaprojectView passes `reload: catalog` (MetaprojectView.tsx:758-762). Its only `setCatalog(result)` (:414) runs in the same branch as `setSnapshotMismatch(false)` (:416). So every load that clears the banner also triggers the re-read, including one that returns the same snapshotId. New view tests cover both the folder case and the next-page case, asserting the row's children and two `s1` reads (MetaprojectView.dom.test.tsx, stale-snapshot test and "a next tree page answered for another snapshot is read again ...").
+- **r3-style-w1-F-002 / r3-style-w2-F-001: open.** `export const PERMIT_RETRIES = 2;` is still at :21. `keryx ctx rg "PERMIT_RETRIES" apps/desktop` finds it only in useMetaprojectTree.ts, with no importer.
+- **r3-pr-contract-w1-PC-001: open.** The PR body's round-2 line still reads "a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)". The row still renders as loading (now `stale`) until the next catalog load. The brief says the body could not be edited this round.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. The hook depends on `platform/metaproject.ts`, view-model to transport. The platform layer does not import the hook.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. `withPermitRetry` gets its clock (`wait`) and liveness (`live`) as parameters. `wait` reaches the hook as an injectable prop (tests pass one that does not use the clock).
+
+### Framework-Specific (NestJS / React+MobX)
+N/A. No MobX or NestJS code in the slice.
+
+### Notes (honest reporting)
+- Only slice-01 was reviewed. The `reload` effect and the `TreeFolder` docs fall outside its hunks; I read them only to judge prior dispositions.
+- Nothing was executed (exec_budget_s 0). I relied on the supplied test evidence (verify-tests-to-run-1.txt, exit 0), which I did not open.
+- Routing: graph (payload layers block, affected files), ctx (`keryx ctx rg`, `keryx ctx diff`, `keryx ctx read`), wiki and memory not relevant (the payload layers had none), raw_rg_used: no. One raw `git diff` ran with a `keryx:raw` marker on a 34-line diff.
+KERYX_USAGE {"tokens_in":119732,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

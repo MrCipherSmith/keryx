@@ -1,0 +1,49 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta 3ad918b66..0d6df2937 (fix round 4), diff mode, slice-01 (kind: fix) read in full. Load profile: not provided; concrete triggers considered: concurrent in-flight tree reads (MAX_TREE_READS limiter, shared read permits), snapshot-generation retirement of in-flight answers, the reload-driven re-read of parked stale reads. Files in the slice: flow metadata (dispatch/T15*.json, flow.json, resolved/T15.implement.json, journal.md, plan.md), apps/desktop/src/metaproject/MetaprojectTree.tsx (component doc only), apps/desktop/src/metaproject/useMetaprojectTree.ts (`reload` made required, its doc).
+Summary: The code in this slice changes one type (`reload?: unknown` -> `reload: unknown`) and two doc comments. It adds no concurrency, I/O, retry, cache or fan-out path, so this lens has nothing new to report. Both callers pass `reload`: MetaprojectView.tsx:761 (`reload: catalog`) and the DOM-test Harness at MetaprojectTree.dom.test.tsx:71 (`reload: props.reload ?? 0`). Stats: 0 blocker | 0 major | 0 minor | 0 info.
+
+Prior findings (judged against the code at 0d6df2937):
+- r4-clean-code-w2-F-001: closed. MetaprojectTree.tsx component doc now defers to `handOff`: a status row goes to its own parent's next row, any other row to the row after its predecessor.
+- r4-frontend-w2-F-001: closed. useMetaprojectTree.ts:115 `reload: unknown` is required, and the doc says why. Every caller passes it (MetaprojectView.tsx:761, Harness MetaprojectTree.dom.test.tsx:71). The judge's first fix was taken, and no Retry was added for a stale park.
+- r4-logic-w2-F-001: closed. plan.md's WAI-ARIA bullet states the current focus rule and cites fix rounds 1 and 3. The state x event matrix has a new row for a folder or page read answered stale-snapshot: parked, banner only, no Retry, re-read on a catalog load.
+- r4-degradation-w2-F-002 (info, unreported): open. The `reload` doc at useMetaprojectTree.ts:111-113 still says the value changes "whenever the explorer loads its catalog (Refresh catalog included)". The new plan.md matrix row says "every catalog load re-reads parked reads". The quiet re-read on view return finds the same snapshot and does not replace the catalog, so it does not re-read them. The wording is still broader than the behaviour. There is no runtime effect because the banner stays up. I am not raising a new finding for it, since it is the same defect and outside this lens.
+
+Findings:
+- CLI / Multi-Session: None detected.
+- Concurrency & Races: None detected.
+- Resources: None detected.
+- Caching: None detected.
+- Lock Contention: None detected.
+- Async / Queues: None detected.
+- Retry / Timeout / Circuit Breaker: None detected.
+- Idempotency & Distributed Invariants: None detected.
+
+Clean Areas: Part 0 through Part G were all reviewed against the slice. The changed code is a required-type change and doc text. It does not alter the read limiter, permit retry, generation retirement or the reload effect.
+
+Not verified: I ran no tests (exec_budget_s 0). I relied on the supplied test evidence (verify-tests-to-run-1.txt: tsc and the Desktop suite exit 0, 1021 pass), and I did not re-read it. I reviewed slice-01 only. The handOffTarget helper and the new tests named in the journal are not in this slice and were not reviewed here.
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Fix round 4 (slice-01) changes only the `reload` input's optionality and two doc comments in code, plus flow metadata and plan.md. No concurrency, resource, retry, cache or idempotency path changed; no findings. Prior: r4-clean-code-w2-F-001, r4-frontend-w2-F-001, r4-logic-w2-F-001 closed; r4-degradation-w2-F-002 (info, unreported) still open: the reload doc and the new plan.md matrix row still say every catalog load re-reads parked reads, but the quiet same-snapshot re-read does not.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-01", "coverage": "full" } ],
+  "prior_dispositions": [
+    { "id": "r4-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r4-degradation-w2-F-002", "disposition": "open" },
+    { "id": "r4-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r4-logic-w2-F-001", "disposition": "closed" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice supplied, two caller lookups only); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":112368,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

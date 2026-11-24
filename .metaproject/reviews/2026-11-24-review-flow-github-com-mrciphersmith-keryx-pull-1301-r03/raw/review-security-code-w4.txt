@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a..3ad918b66a990c7f0b04180e17d9fb74fb82713a (fix round 3, delta)
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Files with code changes reviewed: apps/desktop/src/metaproject/useMetaprojectTree.ts, MetaprojectTree.tsx, MetaprojectView.tsx, apps/desktop/src/platform/metaproject.ts, plus the two DOM test files and platform/metaproject.test.ts; flow bookkeeping files (T14 dispatch/fix_context/resolved, flow.json, journal.md) checked for secrets/personal data.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No security finding in this delta. The changes are client-side state handling (a `stale` folder/page status parked until the next catalog load, a hand-off anchor for focus, a module-level `withPermitRetry`, and a permit-refusal classifier moved to the platform transport). None of them builds a query, shell command, path or HTML from untrusted input, handles credentials, or widens what the Tauri command accepts.
+
+Points checked:
+- `isMetaprojectPermitRefusal` (platform/metaproject.ts:284-286) classifies by prefix only for errors that are not `MetaprojectRequestError`, so a typed CLI error carrying the same text is not treated as a permit refusal (covered by the new platform test). The worst a spoofed message could do is cause at most 2 bounded, jittered retries per read; no privilege or data impact.
+- `withPermitRetry` (useMetaprojectTree.ts:29-40): bounded at PERMIT_RETRIES = 2, checks `live()` before and after the wait, so a retired snapshot's `expectedSnapshotId` is not re-sent. `Math.random()` is used only for back-off jitter, not for a token or nonce.
+- The `reload` re-read (useMetaprojectTree.ts, the `loadedCatalog` effect) fires only when the catalog object changes. MetaprojectView.tsx:410-414 returns before `setCatalog` on a quiet read with an unchanged snapshotId, so a quiet poll does not re-send parked reads and `onStale` (which only sets `snapshotMismatch`) does not start a catalog read. There is no unbounded request loop. Re-reads still go through the 3-slot limiter.
+- Rendering: error messages and entry names are rendered as React text (`{row.message}`, no `dangerouslySetInnerHTML`). The delta adds no new sink.
+- Bookkeeping files: no secrets, tokens or personal data beyond the owner handle already recorded in flow.json.
+
+Review-package note (not a code finding): slice-03 shows two `-` hunks in apps/desktop/src/platform/metaproject.ts (the `isMetaprojectV2Response(response, "capabilities")` line and the `expectedSnapshotId` check in `matchesRequest`) that are not in this range. `git diff b2043b98d..3ad918b66 -- apps/desktop/src/platform/metaproject.ts` shows only the added permit-refusal block, and at head both lines are still present (metaproject.ts:268 and :316). The transport's stale-snapshot check for every action is intact. The slicer appears to have emitted context lines as deletions. Other reviewers of slice-03 should not read it as a removal.
+
+### Clean Areas
+Injection (SQL/XSS/command/SSTI/eval): none in the delta. Auth/authz and IDOR: not applicable, since no Tauri command or validation changed. Input validation: no boundary parser changed. Secrets/logging: `console.error` in the limiter predates this round and logs only the error. Crypto: `Math.random` is used only for jitter. CSRF, path traversal and open redirect: not applicable. React-specific: no `dangerouslySetInnerHTML`, `eval`, storage or `postMessage`.
+
+Not verified: no tests were run (exec_budget_s = 0); I relied on research-evidence/verify-tests-to-run-1.txt as the dispatch states. The Rust side was not changed in this range and was not re-read beyond the metaproject.rs:199 refusal string.
+
+Routing audit: graph_used: no (the payload layers block was used; the delta is 4 known files), wiki_used: not-relevant (no domain question), ctx_used: yes (keryx ctx rg), raw_rg_used: no. One raw `git diff` was run with a keryx:raw marker to verify the slice-03 hunks.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 4 delta (b2043b98d..3ad918b66): no security finding. The changes are client-side tree state (stale parking re-read on catalog load), the focus hand-off anchor, a bounded permit retry with a snapshot-liveness guard, and a permit-refusal classifier in the transport that excludes typed CLI errors. No new sink, boundary or secret. Package note: slice-03 shows two '-' lines in platform/metaproject.ts that are not in this range; both lines are present at head (:268, :316).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "needs_context": []
+}
+```
+KERYX_USAGE {"tokens_in":139998,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

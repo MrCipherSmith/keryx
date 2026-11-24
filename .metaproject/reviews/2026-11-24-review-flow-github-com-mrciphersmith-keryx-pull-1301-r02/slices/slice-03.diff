@@ -1,0 +1,14 @@
+--- apps/desktop/src/platform/metaproject.ts
+@@ 271,271 @@
+-  if (isMetaprojectV2Response(response, "capabilities")) return 2;
+   // Tauri validates and caches the handshake against the authorized checkout and actual executable.
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 310,314 @@
+ 
+ function matchesRequest(response: MetaprojectV2Response, request: MetaprojectRequestV2): boolean {
+-  if ("expectedSnapshotId" in request && request.expectedSnapshotId !== undefined
+-    && (!("snapshotId" in response) || response.snapshotId !== request.expectedSnapshotId)) return false;
+   switch (request.action) {
+     case "detail": return "node" in response && response.node.id === request.id;
+     case "neighbors": return "root" in response && response.root === request.id;

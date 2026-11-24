@@ -1,0 +1,53 @@
+{
+ "review_feedback": [
+  {
+   "id": "r3-regression-w1-F-001",
+   "severity": "major",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "Regression introduced by the fix for r2-ui-ux-w2-UX-001 / r2-frontend-w2-F-001. useMetaprojectTree.read() now returns right after onStale() on a stale-snapshot error. The folder stays {status: 'loading'}, or for a page read keeps more: {status: 'loading'}. Nothing in the hook moves a folder out of that state except a change of the `snapshot` prop, which bumps the generation and clears folders. ensure() skips any parent already in `folders`, so collapsing and re-expanding does not re-read it. more() refuses while more.status is 'loading'. retry() acts only on 'failed'. The comment says Refresh catalog 're-reads the tree', but that holds only when the refreshed catalog has a different snapshotId. MetaprojectView's catalog effect (non-quiet read) calls setCatalog(result) and setSnapshotMismatch(false) whatever the snapshotId is. When the refreshed catalog has the pinned snapshotId, the stale banner disappears, useMetaprojectTree receives the same `snapshot`, and the row stays 'Loading…' with no banner, no Retry and no way out until a later snapshot change or a remount. Before this fix the same path ended in 'failed' with a Retry, which in that case would have succeeded.",
+   "suggested_fix": "Keep the banner-only behaviour, but do not leave a dead state. Choose one. (a) On stale-snapshot, delete the folder's entry, or for a page read clear `more`, so the parent counts as unread or Show more again. Then the next render or expand re-reads it under whatever snapshot is current. (b) Have the hook drop every non-ready folder when onStale's banner is cleared, for example by exposing a reset() that MetaprojectView calls in the Refresh-catalog path when the snapshotId is unchanged. (c) Make Refresh catalog always bump the tree's generation. Extend the view test: after Refresh catalog with an unchanged snapshot, assert that 'src' re-reads and shows its children, or at least is not 'Loading…'. Verified by execution: research-evidence/verify-regression-w1-F-001.txt in the round-3 package (repro: stale answer for src, Refresh catalog with the catalog still at s1, src stays 'Loading…', Client never appears). Keep the operator's decisions: a stale snapshot shows ONLY the Refresh catalog banner (no Retry row); do not delete the folder in the catch (that loops on the retired snapshot). Make Refresh catalog re-read the stale-parked folders and pages even when the snapshotId comes back unchanged (e.g. a reload()/refresh revision passed into useMetaprojectTree, or a 'stale' state re-read once the mismatch is cleared). Red test first: extend the MetaprojectView stale test so that after Refresh catalog with the fixture still at s1, src shows its children and no Loading row remains; add the twin for a stale Show more page."
+  },
+  {
+   "id": "r3-architecture-w1-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "This answers r2-architecture-w1-F-001, which suggested treating the transport's 'unavailable' as a retryable back-off. The fix puts that classification in the view-model hook (useMetaprojectTree.ts), which matches the raw Rust error text 'unavailable: Too many Metaproject reads'. The transport layer is the one that maps Rust error strings to typed errors: requestMetaprojectV2 matches METAPROJECT_ERROR_CODES prefixes and throws MetaprojectRequestError. Here the hook reaches past that boundary to a string owned by apps/desktop/src-tauri/src/metaproject.rs:199. Nothing ties the two: the Rust side has no reference to the TS consumer, and the DOM test defines its own copy of the literal (MetaprojectTree.dom.test.tsx:503 PERMIT_REFUSAL).",
+   "suggested_fix": "Classify the refusal once, in the transport. For example, in platform/metaproject.ts, export an isMetaprojectPermitRefusal(error) helper (or a typed 'busy' error) next to the existing code mapping in requestMetaprojectV2. Have the hook and the test import it. Add a comment at metaproject.rs:199 naming the Desktop consumer so the Rust side sees the contract. Classify the permit refusal once in apps/desktop/src/platform/metaproject.ts (export e.g. isMetaprojectPermitRefusal next to requestMetaprojectV2, or a typed error) and import it in the hook; add a platform test that feeds the exact metaproject.rs:199 message through requestMetaprojectTree and asserts the classifier matches; the DOM tests should use the same exported classifier or message, not a private copy. Do not edit the Rust file (no Rust toolchain on this machine)."
+  },
+  {
+   "id": "r3-clean-code-w1-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "Documentation drift introduced by the fix for r2-architecture-w1-F-001 and r2-clean-code-w1-F-002. The rewritten MAX_TREE_READS doc (:14-17) now says the permits are shared by every project window, that the cap 'only bounds this tree's share', and that a read refused a permit is retried. The new attempt() retry (:159-169) exists because exhaustion can still happen. The comment above limit() (:131-132), whose body this delta edited, still promises the opposite: the limiter 'never exhausts the read permits'. Two comments describe one behaviour in opposite ways.",
+   "suggested_fix": "Reword :131-132 to match :14-17, for example: '// Reads wait in order for a free slot, so this tree holds at most MAX_TREE_READS of the read permits; a refusal while other windows hold the rest is retried in read().'"
+  },
+  {
+   "id": "r3-clean-code-w1-F-002",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "SRP, two change drivers in one function. read() was about 40 lines before this delta and is 56 now, past the 40-line threshold. It builds the request, schedules through the limiter, checks the snapshot, merges pages and classifies failures into tree state. The delta adds a third concern inside it: the transport's permit-contention back-off. That covers recognising the refusal, a linear-plus-jitter delay formula, a retry count and the generation check between attempts. The two concerns change for different reasons: Rust permit semantics on one side, and the tree's folder model on the other. The back-off captures only `send`, `root`, `input`, `pause` and `current` from read(), so it does not belong there.",
+   "suggested_fix": "Lift it to module scope next to isPermitRefusal, for example `async function withPermitRetry<T>(run: () => Promise<T>, { wait, live }: { wait: (ms: number) => Promise<void>; live: () => boolean }, retries = PERMIT_RETRIES): Promise<T>`. read() then calls `withPermitRetry(() => send(root, input), { wait: pause, live: current })`."
+  },
+  {
+   "id": "r3-clean-code-w2-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "Documentation drift in a symbol the delta changed. The new stale-snapshot branch in read() returns after onStale(). Its comment says: 'The row stays loading; a Retry here would only send the retired snapshot again'. So a folder whose first read answers stale-snapshot keeps `status: \"loading\"`, and a stale next page keeps `more: { status: \"loading\" }`, with no request in flight. The field docs that define those states still describe the old rule. TreeFolder.more reads 'The next page: being read, or its read failed.' MetaprojectTreeModel.ensure reads 'Reads `parent`'s first page unless it is loaded, being read, or failed.' MetaprojectTreeModel.more reads 'a page already being read is not asked for again'. The same state is now documented two ways: the catch comment says the row waits for Refresh catalog, and the type docs say a read is in progress.",
+   "suggested_fix": "Extend the three docs with the stale case. For example, TreeFolder.more: '/** The next page: being read, waiting for Refresh catalog after a stale-snapshot answer, or its read failed. */'. On ensure and more, add: 'loading also covers a read answered stale-snapshot; Refresh catalog (a new snapshot) re-reads it'. Alternatively, give the state its own name (for example `status: \"stale\"`) and render it as a loading row, so the type says what the comment says."
+  },
+  {
+   "id": "r3-logic-w5-F-002",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "The hand-off anchors to the row just before the focused one. For a focused more:P row whose parent's last entry C is an expanded folder still loading, that anchor is status:C. If C's children and P's next page arrive in one commit, both rows leave, anchor < 0, and focus goes to the old index, now one of C's new children, instead of P's first appended entry.",
+   "suggested_fix": "Anchor status rows to an entry of their own parent: for more:P record P's last entry row id and focus the next entry row with parent === P after it; for status:P use d:P. Fall back to the index only when that entry is gone."
+  },
+  {
+   "id": "r3-testing-practices-w2-F1",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). The permit retry added in this round has two snapshot-generation guards: `|| !current()` before the wait and `if (!current()) throw cause;` after it, so a read whose snapshot was retired during the jittered wait is not re-sent with the retired expectedSnapshotId. Neither retry test changes the snapshot: 'a read refused for want of a read permit is retried after a short wait' and 'a permit refusal that outlasts the retries, or another unavailable answer, marks the folder failed' both render one Harness with the default SNAPSHOT and a `wait` that resolves at once.",
+   "suggested_fix": "In MetaprojectTree.dom.test.tsx add one test with `refusing(1)` and a `wait` that returns a held promise: expand src, re-render the Harness with `snapshot: \"s2\"` while the wait is pending, then resolve the wait; assert the src calls made with expectedSnapshotId SNAPSHOT number exactly 1 (no retry under the retired snapshot) and that the s2 re-read of src lands (client.ts present) as the positive artifact."
+  }
+ ]
+}

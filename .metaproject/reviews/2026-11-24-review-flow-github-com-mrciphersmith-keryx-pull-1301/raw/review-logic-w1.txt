@@ -1,0 +1,129 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: fix-round delta
+- Merge-base: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a` (range 9f4ec475b..f43a13c3f)
+- Scope mode: `explicit-hash-range`, slice-01 (kind: fix)
+- Spec compliance gate: ran against flow 518 acceptance criteria for the fix hunks; no criterion regressed.
+
+### Summary
+The fix round closes both logic majors. `moveTo` now focuses the target row's element directly, so Home on the first row or End on the last row leaves nothing pending. Status rows share the id `status:${parent}`, so a Retry or Show more updates the focused `<li>` in place. Snapshot mismatches now surface as `stale-snapshot` from `requestMetaprojectV2`, and the wiki group key is one exported helper.
+
+One new minor defect comes from the focus hand-off that answered frontend-w1-F-001. The hand-off picks the replacement row by its old index. When answers for two folders commit together, focus can land on a row in another folder. Two info-level prior findings are still open: logic-w2-F-002 (the guide still promises an **Other** group) and ui-ux-w1-UX-005 (the counts still have no unit).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+[F-001] The focus hand-off uses the lost row's old index, which goes stale when rows above it change in the same commit (minor). See REVIEW_RESULT.
+
+### Async & Concurrency
+None detected. Checked `limit()` in useMetaprojectTree.ts:
+- Slots are released in `finally`.
+- A task queued under a retired generation returns `false` and frees its slot.
+- The Rust side bounds every read at 150 s (`run_bounded(..., Duration::from_secs(150))`), so a hung read cannot hold a slot forever.
+
+### Error Handling
+None detected. The stale check now sits after the shape check in `requestMetaprojectV2`. A malformed answer still reads "Incompatible"; a well-formed answer for another snapshot now raises `MetaprojectRequestError("stale-snapshot")`.
+
+Every caller that sends `expectedSnapshotId` was enumerated:
+- tree reads, which call `onStale`
+- `loadMoreSearch`, which calls `setSnapshotMismatch`
+- the OpenSpecView reads, which show the error text inline, as they already did for the CLI's own `stale-snapshot` code
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. `metaprojectWikiGroupKey` takes `Pick<MetaprojectNode, "pageType">` and uses `||` on both sides. An empty `pageType` can no longer form a group keyed `""`, which would collide with `TREE_ROOT`.
+
+### Edge Cases
+See F-001.
+
+### Prior findings (checked against the code at f43a13c3f)
+- **frontend-w1-F-001: closed.**
+  - `flatten()` gives the loading, error and more rows one id, `statusId(parent)` (MetaprojectTree.tsx:30-56).
+  - When the focused row is removed (last page, children arriving, snapshot reset), the layout effect at :142-149 focuses the row now at the lost index.
+  - Tests cover the keyboard paths at MetaprojectTree.dom.test.tsx:387 and :402.
+- **logic-w1-F-001: closed.** `focusRequest` is gone; `moveTo` (:184-186) calls `.focus()` on the element at once. Test at :363.
+- **architecture-w2-F-001: closed.** `metaprojectWikiGroupKey` and `METAPROJECT_WIKI_UNTYPED_GROUP` are exported from the contract and used by `wikiTree` and `revealSteps`.
+- **degradation-w1-F-001: closed.** `negotiateMetaproject` is deleted. `keryx ctx rg 'negotiateMetaproject[^E]'` over `apps` and `src` finds 0 matches.
+- **degradation-w1-F-002: closed.**
+  - The mismatch moved out of `matchesRequest` into a `stale-snapshot` throw (platform/metaproject.ts:303-307).
+  - The hook's doc comment now describes that path.
+  - The hook's own check (:147) stays, documented as the guard for an injected `request` that does not check.
+- **performance-w2-F-001: closed.** The group array is pushed in place.
+- **pr-contract-w2-PC-001: closed.** `keryx ctx rg` finds none of the three old phrasings in `docs` or `README.md`.
+- **testing-practices-w1-F1: closed.** The new test injects symbol nodes into the loaded model, proves they were loaded, and asserts the listings and folder counts (src:4) and `not-found` for a symbol-only path.
+- **testing-practices-w1-F3: closed.**
+  - MetaprojectView.dom.test.tsx:2139 covers a tree answer for another snapshot and a `stale-snapshot` refusal.
+  - platform/metaproject.test.ts:210 pins the transport.
+- **testing-practices-w1-F6: closed.** The test now asserts that `client.ts` rendered and no Loading row remains before checking focus.
+- **ui-ux-w1-UX-004: closed.** Module folder rows render a `NODE_KIND_LABELS.module` kind label.
+- **logic-w2-F-002: open.** The fallback is kept as suggested. docs/docs/guides/desktop-metaproject.md:103 still says "Pages without a page type are under **Other**", a group the loader cannot produce.
+- **pr-contract-w1-PC-001: closed.** cli-reference.md now says Desktop uses an optional action such as `tree` only when the CLI lists it.
+- **testing-practices-w1-I2: closed.** One exported constant and helper serve both sides.
+- **ui-ux-w1-UX-005: open.** MetaprojectTree.tsx:291 still renders the bare count with no unit, aria-label or title.
+
+### Suggested Patches
+See F-001's suggested_fix.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "The fix round closes the two logic majors. Home and End leave no focus request pending, and status rows keep one key per parent. Transport snapshot mismatches are typed stale-snapshot, and the wiki group key is one exported helper. One new minor: the focus hand-off that answered frontend-w1-F-001 picks the replacement row by a stale index when two folders' answers commit together. Two info-level prior findings remain open: logic-w2-F-002 and ui-ux-w1-UX-005.",
+  "slices": [{"id": "slice-01", "coverage": "read in full; the touched files (MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts, contract, guide) read at head for context", "status": "DONE"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "elements[Math.min(lost.index, elements.length - 1)]?.focus();",
+      "problem": "This is new code from the fix for frontend-w1-F-001. When the focused row is removed, the layout effect focuses the element at `lost.index`. That index was recorded at the previous commit or focus event. If rows above the focused row are added or removed in the same commit that removes it, the index no longer points at the removed row's place. Focus then lands on an unrelated row, possibly in another folder.\n\nRepro: expand folders A and B (A above B) with both reads pending. Arrow onto B's Loading row. Both answers then arrive before React flushes, so one batched DefaultLane commit inserts A's children above and replaces B's Loading row. Focus goes to one of A's children at B's old index, not to B's first child. The same happens when a reveal or a Show more above commits in the same batch as the focused row's removal.",
+      "impact": "Keyboard focus jumps to a row in another folder. The user loses their place and must arrow back. Focus stays inside the tree, so keyboard navigation keeps working; that is why this is minor. It needs two answers to land in one render batch, which is likely with MAX_TREE_READS = 3 concurrent reads.",
+      "suggested_fix": "Anchor the hand-off to a surviving neighbour instead of a raw index. In `remember`, also record the `data-row` id of the row just before the focused one; for a status row that is its parent folder row `d:<parent>`. In the layout effect, if that row is still rendered, focus the element after it; otherwise fall back to the clamped index. Add a DOM test that holds two folder reads, focuses the lower folder's Loading row, releases both in one `act`, and expects focus on the lower folder's first child.",
+      "evidence": "Code read at head f43a13c3f.\n- MetaprojectTree.tsx:153-156: `remember` stores `{ element, index: rowElements().indexOf(row) }`, refreshed only by `onFocus` and at the end of each layout effect.\n- :144-148: the hand-off focuses `elements[Math.min(lost.index, elements.length - 1)]` using the index from before the commit.\n- useMetaprojectTree.ts:91-96: each answer calls `render()` via `update`, so answers that arrive before the scheduled render are flushed in one commit.\n- :119-134: up to 3 tree reads are in flight at once.\n- Not executed: no test run is permitted for this reviewer, so the batched-arrival repro is reasoned from the code, not observed.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "metaproject-tree-focus-handoff-stale-index",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "frontend-w1-F-001", "disposition": "closed"},
+    {"id": "logic-w1-F-001", "disposition": "closed"},
+    {"id": "architecture-w2-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-002", "disposition": "closed"},
+    {"id": "performance-w2-F-001", "disposition": "closed"},
+    {"id": "pr-contract-w2-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-F1", "disposition": "closed"},
+    {"id": "testing-practices-w1-F3", "disposition": "closed"},
+    {"id": "testing-practices-w1-F6", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-004", "disposition": "closed"},
+    {"id": "logic-w2-F-002", "disposition": "open"},
+    {"id": "pr-contract-w1-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-I2", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-005", "disposition": "open"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "inputs_unreadable": []
+}
+```
+
+Not verified:
+- No tests were run (exec_budget_s = 0). Dispositions rest on code reads and on the test names and assertions found with `keryx ctx rg`.
+- F-001's batched-commit interleaving is reasoned from the code, not reproduced.
+- The browser's blur-on-removal behaviour in WKWebView was not checked. The hand-off handles both behaviours: the `onBlur` microtask ignores disconnected elements.
+
+Routing audit: graph_used: no, payload layers used instead (not-relevant for a bounded fix slice). wiki_used: no (not-relevant: intent came from plan.md, acceptance-criteria.md and the payload). ctx_used: yes (`keryx ctx rg` and `keryx ctx read`). raw_rg_used: no. Raw `git diff` was used twice, with a `keryx:raw` marker, to read the exact fix hunks.
+KERYX_USAGE {"tokens_in":179278,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

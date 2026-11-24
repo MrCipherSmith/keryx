@@ -1,0 +1,61 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r3-regression-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The operator chose 'stale snapshot shows the Refresh catalog banner only' (journal, fix round 1), and round 2 accepted leaving the row loading on the stated premise that Refresh catalog changes the snapshot and the tree then re-reads it (T13.fix_context.json, r2-ui-ux-w2-UX-001 suggested_fix; comment at useMetaprojectTree.ts:185-186). That premise fails when Refresh returns the pinned snapshotId: MetaprojectView.tsx:414-416 clears the banner without changing the tree's snapshot prop, and useMetaprojectTree.ts:209/:216/:222-230 never leave 'loading' again. The verifier reproduced the permanent 'Loading…' row by execution. The operator accepted a loading row that Refresh resolves, not one with no exit, and the suggested fixes keep the banner-only behaviour, so the finding is consistent with the operator's decision. No intent signal or practice source shrinks it; a stuck spinner with no recovery control stays major."
+    },
+    {
+      "finding_id": "r3-architecture-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The hook re-parses a Rust message (useMetaprojectTree.ts:24) although the transport already maps error prefixes (platform/metaproject.ts:294), and the test keeps its own copy of the literal (MetaprojectTree.dom.test.tsx:503). Desktop siblings are mixed: platform/review.ts:35 and platform/githubAccounts.ts:28 classify 'unavailable' answers in the platform layer, as the fix suggests, while review/runPolling.ts:28 matches the prefix in a consumer. The code was added by this branch, so it is no prior choice, and the round-2 instruction to retry the refusal named the message but not where to classify it. The suggested fix moves the site toward the platform-layer siblings."
+    },
+    {
+      "finding_id": "r3-clean-code-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "useMetaprojectTree.ts:131-132 says the limiter 'never exhausts the read permits', while :14-17 and the retry at :159-169 say permits are shared by every window and a refusal is retried. Two comments state opposite guarantees for one behaviour; no intent signal keeps the old wording."
+    },
+    {
+      "finding_id": "r3-clean-code-w1-F-002",
+      "verdict": "upheld",
+      "reasoning": "read() spans useMetaprojectTree.ts:151-206 (56 lines) and now also holds the permit back-off policy (:159-169), a second job that changes for a different reason. The project rule (rules/core/solid-principles.mdc:20) flags length over 40 lines only when the function also does two separable jobs; that condition holds. The round-2 note asked for the retry 'inside read', which a module-scope helper called from read() still satisfies, so it is no intent signal against the lift."
+    },
+    {
+      "finding_id": "r3-clean-code-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "After the stale-snapshot branch (useMetaprojectTree.ts:185-190) a 'loading' folder or page can have no read in flight, while TreeFolder.more (:37) and the ensure/more docs (:52, :57) still say 'being read'. No intent signal covers the drift. It is tied to r3-regression-w1-F-001: if that fix drops the stale entry instead of leaving it loading, the docs become true again and this finding resolves with it."
+    },
+    {
+      "finding_id": "r3-logic-w5-F-002",
+      "verdict": "upheld",
+      "reasoning": "The anchor to the previous row (MetaprojectTree.tsx:156-157, recorded at :167 and :262) and its clamped-index fallback were added by this branch in fix round 2, so they are no prior choice. The operator's 'На то же место' was read in round 2 as the focused row's place among its neighbours, not its raw index (round-2 premise on r2-logic-w1-F-001). The finding shows a rare case where the anchor itself leaves and the fallback lands on an unrelated, deeper row. No practice source favours that outcome."
+    },
+    {
+      "finding_id": "r3-style-w1-F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md:38-39",
+          "says": "operator decisions d-mwudknqg-240e95 / d-mwudknxr-dc2683 (review decide-premise): chose dismiss on round 2, including r2-style-w2-F-001, a 'one thing named twice' finding (slots/pool/limit) in this same file"
+        },
+        {
+          "ref": "apps/desktop/src/metaproject/useMetaprojectTree.ts:155",
+          "says": "the same destructuring already aliases the other latest.current fields (cwd: root, request: send); 'wait: pause' follows that local pattern"
+        }
+      ],
+      "reasoning": "The fact is true: sleep, wait and pause name one injected function. The operator dismissed the same kind of finding in this file in round 2, keeping limit/slots/pool, and the reviewer states there is no behavioural effect. Renaming only the wait alias would make it the one unaliased field in a destructuring whose siblings are aliased. Both signals came in with this branch, so neither proves an earlier choice, but the operator decision is a direct precedent for naming findings of this kind.",
+      "question": "The retry wait has three names (sleep, wait, pause). In round 2 you kept two names for one thing (slots/pool) in this file. Keep these names as well, or unify them?",
+      "options": [
+        "dismiss — keep sleep/wait/pause, as the slots/pool names were kept in round 2",
+        "uphold — use one name (destructure wait without an alias)"
+      ]
+    },
+    {
+      "finding_id": "r3-testing-practices-w2-F1",
+      "verdict": "upheld",
+      "reasoning": "The two generation guards in attempt() (useMetaprojectTree.ts:164 and :166) are new branches. Neither retry test changes the snapshot during the wait. The round-2 acceptance of a silent two-try permit retry covers behaviour, not test coverage, and no intent signal exempts these branches from the project's new-branch-needs-a-test rule."
+    }
+  ]
+}

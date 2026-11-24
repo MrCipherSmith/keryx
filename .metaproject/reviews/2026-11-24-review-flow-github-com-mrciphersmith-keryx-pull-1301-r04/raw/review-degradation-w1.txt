@@ -1,0 +1,48 @@
+STATUS: DONE
+
+review-degradation, wave 1, round 5 (delta 3ad918b66..0d6df2937, fix round 4). Slice read in full: slice-01 (fix). Nothing in the delta is worse than at 3ad918b66: the only code changes in slice-01 are a doc reword and `reload` becoming required. One info finding: the plan.md stale-snapshot row added by this fix round repeats the over-broad "every catalog load" wording of the still-open r4-degradation-w2-F-002.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Delta 3ad918b66..0d6df2937 (fix round 4), slice-01 (fix) read in full. Base = 3ad918b66. No behaviour, default, speed or structure is worse than base. No acceptance-criteria change: AC1-AC9 come from the payload and acceptance-criteria.md is untouched. Graph consumers listed in the payload layers (App.tsx, MetaprojectView.tsx, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx; cap dropped none, truncated=[]) were traced for the one changed signature, `reload`. Verified clean: (1) useMetaprojectTree `reload?: unknown` -> `reload: unknown` (useMetaprojectTree.ts:115). Its callers are MetaprojectView (passes `reload: catalog`, unchanged) and the MetaprojectTree.dom.test.tsx Harness (now `reload: props.reload ?? 0`, :71). No runtime behaviour moved, and Desktop tsc exit 0 at the head (verify-tests-to-run-1.txt). (2) The component doc above MetaprojectTree (MetaprojectTree.tsx:115-121) now defers to handOff and matches handOff (:72-79) and handOffTarget (:86-92). It omits only the 'anchor itself when the parent gained none' fallback, which the handOffTarget doc states, so this is not drift. (3) handOffTarget is outside my slice, but I read it as context: it is a pure extraction of the removed nested ternary. The no-anchor case gives undefined, the no-parent case after[0], the parent case after.find(...) ?? rows[at], all identical to base (git diff 3ad918b66..0d6df2937 -- MetaprojectTree.tsx), so the focus behaviour is unchanged. (4) plan.md focus sentence and the new matrix row: checked against handOff/handOffTarget, the stale `|| folder.status === \"stale\"` reveal wait, and emptyScope on a new snapshot. They agree, except for the 'every catalog load' wording (F-001). (5) The PR body's round-4 line matches the diff. Flow metadata (flow.json, journal.md, dispatch/T15*, resolved/T15.implement.json) are records with no runtime effect. Not run: no probe, read-only budget (exec_budget_s=0); tests taken from verify-tests-to-run-1.txt (Desktop tsc + bun test src exit 0, 1021 pass). Routing: graph_used=payload layers (graph at head 0d6df2937); wiki_used=not-relevant (wiki layer empty for these files); ctx_used=yes (keryx ctx rg/read); raw_rg_used=no; raw git diff used once with a keryx:raw marker for exact hunks.",
+  "findings": [
+    {
+      "id": "r5-degradation-w1-F-001",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace",
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+      "line": 66,
+      "quote": "every catalog load re-reads parked reads, same snapshot id included (fix round 3)",
+      "problem": "This fix round answered r4-logic-w2-F-001 by adding a stale-snapshot row to the plan's state x event matrix. The new row repeats the over-broad claim of the still-open r4-degradation-w2-F-002: 'every catalog load re-reads parked reads'. The quiet catalog re-read that runs when the explorer is shown again does not. MetaprojectView.tsx:353-354 says an unchanged snapshot 'updates only the graph's freshness, so nothing that hangs on the catalog reloads'. So `reload` (the catalog object) does not change on that path, and the parked rows stay Loading. The plan is now the third place with this wording, after the `reload` doc (useMetaprojectTree.ts:111) and the PR body's round-3 line.",
+      "impact": "No user-facing defect. The quiet path does not clear the stale banner either, so Refresh catalog still recovers the rows. But the flow plan is the spec that fix workers and the flow-complete verifier check against (flow-orchestrator). A later worker reading 'every catalog load' could treat the quiet re-read's behaviour as a bug and make it replace the catalog, which would re-run everything that depends on the catalog on each show.",
+      "suggested_fix": "In the plan row, the `reload` doc and the PR body, say 'every catalog load that replaces the catalog (Refresh catalog, Rebuild, a new snapshot), same snapshot id included'.",
+      "evidence": "consumer-trace, read only. plan.md stale-snapshot row (added by 0d6df2937). MetaprojectView.tsx:353-354: the quiet re-read on an unchanged snapshot sets no new catalog. useMetaprojectTree.ts:111 doc unchanged ('Changes whenever the explorer loads its catalog'). The reload effect re-reads only on `loadedCatalog.current !== reload`. Refute attempt: does the quiet path call setCatalog? Per the comment at :353-354, it does not on an unchanged snapshot, which matches the round-4 trace of :410-412.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r4-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r4-degradation-w2-F-002", "disposition": "open" },
+    { "id": "r4-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r4-logic-w2-F-001", "disposition": "closed" }
+  ],
+  "prior_disposition_notes": {
+    "r4-clean-code-w2-F-001": "MetaprojectTree.tsx:115-121 now names handOff and states the status-row rule (own parent's next row) and the entry-row rule. It agrees with handOff :72-79 and handOffTarget :86-92.",
+    "r4-degradation-w2-F-002": "Unreported and unfixed. useMetaprojectTree.ts:111 still says 'Changes whenever the explorer loads its catalog', and the PR body's round-3 line still says 'every catalog load re-reads it'. The new plan.md row repeats the claim; see r5-degradation-w1-F-001.",
+    "r4-frontend-w2-F-001": "`reload: unknown` is required (useMetaprojectTree.ts:115). The Harness passes `reload: props.reload ?? 0` (MetaprojectTree.dom.test.tsx:71), MetaprojectView passes the catalog, and Desktop tsc is exit 0. Retry was not added for stale, in line with the operator decision.",
+    "r4-logic-w2-F-001": "plan.md focus sentence replaced with the decided rule (it cites fix rounds 1 and 3), and a stale-snapshot matrix row was added: banner only, no Retry, reveal waits, a new snapshot drops it. The row's 'every catalog load' wording is filed separately as r5-degradation-w1-F-001."
+  },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+KERYX_USAGE {"tokens_in":128860,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,107 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `f43a13c3f..b2043b98d` (fix round 2), round 3 delta
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Spec compliance gate: ran against plan.md / AC1-AC9. Nothing in this delta removes an AC; AC5/AC6 behaviours are still covered by tests, and the recorded run at the head passes (verify-tests-to-run-1.txt, exit 0).
+
+### Summary
+Fix round 2 splits the first-read and next-page status row ids, anchors the focus hand-off to the row before the focused one, leaves a stale-snapshot read showing only the banner, retries a read refused for a permit, and reports unexpected throws in the limiter. I checked the permit-refusal match end to end: Rust's `Err("unavailable: Too many Metaproject reads. Retry shortly.")` (metaproject.rs:199) reaches `isPermitRefusal` as a raw string, because `unavailable` is not in `METAPROJECT_ERROR_CODES`, so the retry works in production as well as in tests. The focus anchor is correct for the cases the round-2 findings named. The fixes have no blocker or major problems. I found two minor edge cases: one regression introduced by the stale-snapshot change, and one leftover case of the anchor fix.
+
+slice-03 note: the hunks in slice-03 (the `capabilities` early return removed, and the snapshot check moved out of `matchesRequest`) are not in f43a13c3f..b2043b98d. `git diff --stat` for the range does not list apps/desktop/src/platform/metaproject.ts. I read the current file (lines 256-322). The snapshot check now throws `stale-snapshot` after the shape check, and negotiation requires `actions`. Both are consistent, so there is no finding on that slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Logic Bugs
+
+#### [F-001] A folder refused as stale-snapshot stays "Loading…" forever when Refresh catalog returns the same snapshot id
+- Severity: minor
+- File: apps/desktop/src/metaproject/useMetaprojectTree.ts
+- Problem: After this round's change, a stale-snapshot answer calls `onStale()` and returns. The folder keeps `status: "loading"`, or its `more` stays `{status:"loading"}`. Only a change of the `snapshot` prop clears it (the generation bump in `useMetaprojectTree`). Snapshot ids are content hashes (`src/integrations/metaproject-explorer.ts:174`, sha256 of nodes/edges/pages/layerStats). Refresh catalog does a non-quiet read that calls `setCatalog(result)` and `setSnapshotMismatch(false)` even when the id is unchanged (MetaprojectView.tsx:410-416). If the project's content goes A→B→A between the tree read and the Refresh click, the tree's snapshot stays the same, so nothing is reset. The banner disappears and the row stays "Loading…". `ensure` will not re-read because `folders.has(parent)`, `more()` refuses because `more.status === "loading"`, and no Retry is offered. Repro: expand a folder at s1. Save a wiki page (s2) before the folder answers, so the read is refused as stale-snapshot and the banner shows. Undo the save (back to s1). Click Refresh catalog. The folder (or its Show more) stays "Loading…" until some other content change. Before this round the folder showed an error with a Retry, which would have succeeded here.
+- Impact: The UI is stuck with no way to recover for that folder or page until another project change happens. The tree state outlives leaving the view, so leaving and returning does not clear it. No data is lost.
+- Suggested fix: Record the parents and pages that ended stale (for example a `stalled` set on the ScopeTree). When the explorer finishes a catalog load, re-issue them even if the snapshot id did not change. For example, give `useMetaprojectTree` a `revision` input bumped by `setCatalog` and treat a new revision like a new snapshot for the stalled entries only. Do not delete the folder on stale: that would make `flatten` report it unread and re-read it in a loop while the CLI is still at another snapshot. Add a view test: stale refusal, then Refresh catalog returning the same snapshotId, then the folder is read again.
+- Evidence: useMetaprojectTree.ts catch branch (quoted below); generation reset only on `state.current.graph.snapshot !== snapshot`; MetaprojectView.tsx:410-416 and :881; explorer.ts:174 content-hash id.
+- Quote: `if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") {\n        latest.current.onStale();\n        return;\n      }`
+- Confidence: medium (the A→B→A trigger is rare but reachable; I traced the code path and did not run it)
+
+#### [F-002] Focus anchor that is itself a status row replaced in the same commit falls back to the raw index
+- Severity: minor
+- File: apps/desktop/src/metaproject/MetaprojectTree.tsx
+- Problem: The hand-off anchors to `lost.before`, the row just before the focused one. For a `more:P` row, that is the last row of P's subtree. When P's last entry C is an expanded folder still loading, the anchor is `status:C`. If C's children and P's next page arrive in one commit, `status:C` and `more:P` are both removed. `anchor < 0` then sends focus to `elements[lost.index]`, which now holds one of C's newly inserted children, not P's first appended entry. This is the same class as r2-logic-w1-F-001, narrowed to the case where the anchor itself leaves.
+- Impact: In this concurrent case, keyboard focus lands on an unrelated row one level deeper. The case is rare: it needs Show more focused, the last entry expanded and still loading, and both answers in one commit.
+- Suggested fix: Anchor a status row to an entry of its own parent rather than to whatever row precedes it. For `more:P`, record the id of P's last entry row (an `entry` row with `parent === P`) and focus the next `entry` row with `parent === P` after it. For `status:P`, anchor to `d:P`, which is already the preceding row. Fall back to the index only when that entry is gone.
+- Evidence: MetaprojectTree.tsx layout effect (quoted below); `before` is set in onFocus as `rows[index - 1]?.id` and in `remember` as `elements[index - 1]?.dataset.row`.
+- Quote: `const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];`
+- Confidence: medium
+
+### Async & Concurrency
+None detected. A permit retry checks `current()` before and after the wait. A retired read throws its cause, and the catch drops it via `!current()`. The slot is held during the wait, so concurrency stays bounded.
+
+### Error Handling
+None detected. The limiter catch now reports the error via console.error. The covering test exists.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+See F-001 and F-002.
+
+### Not verified
+- No tests run (exec_budget_s = 0). I relied on the recorded run at b2043b98d.
+- The F-001 trigger (identical snapshot id after Refresh) was traced in code, not reproduced.
+- The history of choices was not read beyond `git diff --stat` for the range.
+
+Routing audit: graph_used: no (payload layers block used instead; the scope was the slices); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Fix round 2 is sound: the permit-refusal retry matches the Rust message end to end, the status-row id split and the before-row anchor fix the round-2 focus findings, and the limiter reports unexpected throws. Two minor edge cases: a stale-snapshot folder can stay Loading forever when Refresh catalog returns the same content-hash snapshot id (a regression of this round's no-Retry change), and the focus anchor falls back to the raw index when the anchor is itself a status row replaced in the same commit. slice-03 hunks are not in the f43a13c3f..b2043b98d range; the current transport code is consistent.",
+  "slices": [
+    {"id": "slice-02", "status": "DONE"},
+    {"id": "slice-03", "status": "DONE", "coverage": "hunks not in the f43..b20 range (platform/metaproject.ts unchanged per git diff --stat); current file lines 256-322 read and found consistent"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "A stale-snapshot answer now leaves the folder (or its next page) in loading and relies on Refresh catalog changing the snapshot prop to reset the tree. Snapshot ids are content hashes (src/integrations/metaproject-explorer.ts:174), and a non-quiet Refresh catalog sets the catalog and clears the banner even when the id is unchanged (MetaprojectView.tsx:410-416). After an A->B->A content change (save a wiki page while a folder read is in flight, then undo, then click Refresh catalog), the tree's snapshot is unchanged, so nothing resets. The banner goes and the row stays 'Loading…' with no Retry: ensure() skips it because folders.has(parent), and more() refuses because more.status === 'loading'.",
+      "impact": "The folder or its Show more is stuck with no way to recover until another content change. The tree state survives leaving the view. No data loss. Before this round the row offered a Retry that would have succeeded here.",
+      "suggested_fix": "Track parents/pages that ended stale (e.g. a stalled set on ScopeTree) and re-issue them when the explorer completes a catalog load even with the same snapshotId (e.g. pass a catalog revision into useMetaprojectTree). Do not delete the folder on stale: flatten() would then report it unread and re-read it in a loop while the CLI is on another snapshot. Add a view test: stale refusal, then Refresh catalog returning the same snapshotId, then the folder is read again.",
+      "evidence": "useMetaprojectTree.ts read() catch; generation reset only when state.current.graph.snapshot !== snapshot; MetaprojectView.tsx:410-416 (setCatalog + setSnapshotMismatch(false) on non-quiet read) and :881 (Refresh catalog = setRevision); metaproject-explorer.ts:174 content-hash snapshotId.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];",
+      "problem": "The hand-off anchors to the row just before the focused one. For a focused more:P row whose parent's last entry C is an expanded folder still loading, that anchor is status:C. If C's children and P's next page arrive in one commit, both rows leave, anchor < 0, and focus goes to the old index, now one of C's new children, instead of P's first appended entry.",
+      "impact": "In this rare concurrent case, keyboard focus lands on an unrelated, deeper row. It is the r2-logic-w1-F-001 class narrowed to an anchor that itself leaves.",
+      "suggested_fix": "Anchor status rows to an entry of their own parent: for more:P record P's last entry row id and focus the next entry row with parent === P after it; for status:P use d:P. Fall back to the index only when that entry is gone.",
+      "evidence": "MetaprojectTree.tsx layout effect; `before` recorded as rows[index - 1]?.id in onFocus and elements[index - 1]?.dataset.row in remember().",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0},
+  "inputs_unreadable": []
+}
+```
+KERYX_USAGE {"tokens_in":147109,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

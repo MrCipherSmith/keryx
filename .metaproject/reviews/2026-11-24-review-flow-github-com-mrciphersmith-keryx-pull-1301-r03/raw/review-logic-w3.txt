@@ -1,0 +1,61 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 4, wave 3, slice-05 (second-look; delta b2043b98d..3ad918b66, fix round 3). The fix round's logic holds in the code this slice carries. (1) Stale-snapshot recovery (r3-regression-w1-F-001): a stale answer parks the folder (`status: \"stale\"`) or its next page (`more: {status: \"stale\"}`); flatten renders both as loading with no Retry; reveal, ensure and more() all treat stale as pending and issue nothing. MetaprojectView passes `reload: catalog`. setCatalog runs on every non-quiet catalog load and on a quiet one with a new snapshot (MetaprojectView.tsx:410-416), so Refresh catalog, Retry and Rebuild each produce a new object, and the effect re-reads every parked parent under the pinned snapshot. When the snapshot changed, the render-time reset (useMetaprojectTree.ts:122-126) has already dropped the folders before the effect runs. So nothing parked is re-sent under a retired snapshot. setSnapshotMismatch(false) runs only on that same setCatalog branch, so a parked row can no longer outlive its banner. A quiet same-snapshot re-read neither clears the banner nor re-reads, so the banner stays the way out. A re-read that answers stale again parks again and re-raises the banner. No automatic loop: only a user-started catalog load re-reads. (2) Focus hand-off (r3-logic-w5-F-002): handOff anchors a parent's status row to `d:<parent>` and its next-page row to the parent's last direct entry, then picks the first later row whose `parent` is that parent. Rows of other folders landing in the same commit, including the last entry's own expanded children, are therefore skipped. A next-page row that turns into an error keeps its id and element, so focus is not lost. Empty pages fall back to the anchor row. The old-index fallback is left only for the root's status row and for anchors that leave themselves (a new snapshot, or a not-found ancestor). (3) Permit refusal: isMetaprojectPermitRefusal excludes MetaprojectRequestError. `unavailable` is not in METAPROJECT_ERROR_CODES (metaproject-explorer-contract.ts:329-331), so Desktop's refusal (metaproject.rs:199) reaches withPermitRetry as a plain Error and is recognised. Other `unavailable:` answers are not. The retry behaviour is unchanged. No blocker, major, minor or info logic defect found in the slice. Not verified by me: no tests run (exec_budget_s = 0); I relied on the supplied verify-tests-to-run-1.txt (exit 0 at 3ad918b66). Rust was not re-checked beyond reading the unchanged Tree validation.",
+  "slices": ["slice-05"],
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `b2043b98d` (round-3 head)
+- Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a`
+- Scope mode: `explicit-hash-range` (b2043b98d..3ad918b66), slice-05 (second-look)
+- Spec compliance gate: ran against the flow's AC1-AC9. The delta changes AC5/AC6 behaviour (stale rows, focus) and keeps them met. AC7 is evidenced by the supplied test output (exit 0).
+
+### Summary
+Fix round 3 closes the round-3 logic findings in this slice:
+- **Stale dead end:** a stale-snapshot read is parked, and every user-started catalog load re-reads it, including when the snapshot comes back the same.
+- **Focus hand-off:** a status row hands focus within its own parent, so another folder's rows that land in the same commit cannot take it.
+- **Permit refusal:** it is classified once in the transport and still recognised.
+
+No new defect found.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. A stale answer that arrives after a refreshed catalog parks again and raises the banner again; it needs another Refresh and leaves no dead state.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. The old-index focus fallback remains only where the anchor row leaves itself (a new snapshot, a not-found ancestor, the root's status row). There the previous behaviour applies, which is acceptable.
+
+### Routing audit
+- graph_used: no. The payload's layers block, built at head 3ad918b66, supplied the affected files; the change is contained to the files read.
+- wiki_used: not-relevant. The behaviour is fully stated in the diff and the flow plan.
+- ctx_used: yes (`keryx ctx rg` for the snapshotMismatch, permit-refusal and error-code sites).
+- raw_rg_used: no. One raw `git diff` of the four delta source files was run with a keryx:raw marker, to read the exact delta lines.
+KERYX_USAGE {"tokens_in":195512,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}
