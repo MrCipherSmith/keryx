@@ -1,0 +1,167 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: a5d1ab236fe85dee62a758a19390049dde4eb7f9..20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (diff mode)
+- Slice read in full: slice-02 (dev/reviewBoard.ts, src-tauri/src/review.rs, App.tsx, platform/review.ts, review/ReviewBoard.tsx, review/ReviewDetail.tsx, review/ReviewResults.tsx, review/ReviewWorkspace.tsx, review/model.ts, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx, styles/review.css)
+- Context read: plan.md (T7, T8, state x event matrix), ReviewBoard.tsx (polling and tab-deactivation effects), ReviewRuns.tsx `launchAction`, ReviewLifecycle.tsx `reviewIsArchived`.
+
+### Notes on inputs
+- The desktop app uses React state and hooks only; it has no MobX dependency, so the MobX laws (1, 2, 4, 5 of this skill) have nothing to apply to. No project/module CLAUDE.md under apps/desktop.
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`, listed in the payload's rules, does not exist in this tree (`.metaproject/rules/stacks/` holds only `ts-js-node`). Severities below therefore come from the canonical rubric (trigger + observable outcome), not a React rule table.
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present when this review ran; no tests were run (read-only, exec_budget_s 0).
+
+### Summary
+- Blockers: 0
+- Major: 2
+- Minor: 1
+- Info: 2
+
+### [F-001] A consumed "answer" intent stays in the Reviews selection and reopens the answer dialog on every return to the tab
+- Severity: major
+- File: apps/desktop/src/reviews/ReviewsView.tsx
+- Problem: "Open in Reviews" stores the card's intent in `selected` (`setSelected({ id: found.id, intent: pending.intent })`). Nothing ever clears `intent` after `ReviewWorkspace` consumes it: `ReviewWorkspace` only clears its own `initialLaunch` ref. The panel is rendered only while the tab is active (`{active && review && target && <ReviewPanel ...>}`), so leaving the tab unmounts it. Coming back remounts `ReviewPanel` and `ReviewWorkspace` with `reviewIntent={selected?.intent}`, and the replay effect runs the intent again. The selection is kept on purpose (matrix: "list and selection kept"), but its intent is not.
+- Trigger: on the Pull requests board, click "Answer question" on a card. Reviews opens and shows the run dialog. Close the dialog without answering, switch to any other tab, then press ⌘3.
+- Outcome: the answer dialog opens again by itself, and it does so on every return while the question is pending. ReviewBoard avoids this because it calls `setSelected(null)` when its tab goes inactive.
+- Fix: drop the intent once it has been handed over. For example, `ReviewPanel`/`ReviewWorkspace` can take an `onIntentConsumed` callback that runs `setSelected(s => s && { id: s.id })`. Or clear `intent` in a ReviewsView effect when `active` turns false. Add a DOM test: answer intent → close dialog → active false → active true → no dialog.
+
+### [F-002] A cross-tab focus request replays whenever RepositoryReviews remounts (base-repository switch or account change)
+- Severity: major
+- File: apps/desktop/src/reviews/ReviewsView.tsx
+- Problem: `RepositoryReviews` is keyed by `[cwd, viewer, repo]`, and `ReviewsView` is keyed by `reviewViewer` in App. The focus effect `useEffect(() => { if (focusNonce !== undefined && focusRef.current) setPending({ ...focusRef.current }); }, [focusNonce])` runs on every mount. App's `reviewsFocus` is never reset to null, so every remount re-applies the last "Open in Reviews" request.
+- Trigger: use "Open in Reviews" for PR #N (App now holds `reviewsFocus = {number: N, ...}`). Then pick another entry in the Reviews tab's "Base repository" select, or change the account.
+- Outcome: in the new repository the view selects that repository's #N Review if one exists, opening a panel for a PR the user never asked for. If none exists, it forces an extra list reload and shows "Pull request #N has no Keryx review in this list."
+- Fix: treat a focus as consumed. App can clear `reviewsFocus` once ReviewsView acknowledges it through an `onFocusHandled` callback. Or the child can remember the last handled nonce in state that outlives the keyed child, for example lifted into `ReviewsView` next to `repo`, and ignore a nonce it has already handled.
+
+### [F-003] The Reviews card's aria-label hides the card's state and facts from assistive technology
+- Severity: minor
+- File: apps/desktop/src/reviews/ReviewsView.tsx
+- Problem: the card button carries `aria-label={`Open review of #${review.number} ${reviewTitle(review)}`}`. That label replaces the accessible name computed from the content, so the state badge, author, round, reviewed commit, freshness ("behind 3"), findings, publication and source inside the button are not announced. The sibling PR board card (`review/ReviewResults.tsx` ReviewTile) has no aria-label, so its content is read.
+- Trigger: a screen-reader user tabs through the Reviews board.
+- Outcome: only "Open review of #N title" is heard. Which Reviews wait on the user or are behind cannot be told apart.
+- Fix: remove the aria-label and let the content name the button, as on the PR board. Or include state and freshness in the label.
+
+### [F-004] info: the Reviews indicator only updates on mount, activation and Refresh, though App's comment says it "stays current on every tab"
+- Severity: info
+- File: apps/desktop/src/App.tsx
+- Observation: the list reloads on mount, on activation and on Refresh, plus every 60 s, but the 60 s reload runs only while the tab is active (`if (!active || !running) return;`). There is no `subscribeSessionReview` subscription like ReviewBoard has. A review that reaches `needs_answer` while the user is on another tab does not light the Reviews dot until the user visits the tab. This matches plan T7's stated reload cadence, which is a deliberate choice. Before this PR the PR board's badge polling also ran only while that board was active. So this is not a new regression, but the comment `{/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}` overstates it. To settle it, decide whether the indicator should poll while hidden (AC8 wording), and either add a hidden-tab reload or word the comment as "reflects the last load".
+
+### [F-005] info: `ReviewDetail` keeps an unused `onOpenReviewSession` prop
+- Severity: info
+- File: apps/desktop/src/review/ReviewDetail.tsx
+- Observation: the prop is still declared (`/** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */`), and ReviewBoard still passes it. `ReviewDetailSheet` no longer destructures or uses it. It is dead API surface. Remove it from Props and from the ReviewBoard call site, or leave it until the stage 1 merge settles this file.
+
+### Clean Areas
+- Effects and cleanup: load sequence guard with unmount bump, interval cleanup, keydown listener cleanup, indicator reset on unmount (ReviewsView); mounted ref in ReviewWorkspace.
+- Keys: lanes, tiles, rows, rounds and attempts are keyed by stable ids.
+- The ReviewWorkspace extraction keeps the moved block's behaviour (subject memo by fields, lifecycle/delete, Sessions hand-off now via onLeave). ReviewDetail's start-only intent and its disabled-while-open launch button are consistent with `launchAction`.
+- AppShell: `projectViewForKey` follows `PROJECT_VIEWS`, and the per-tab notice and sr-only text are correct for both indicators.
+- reviews/model.ts: column order (closed → running → needs_answer → behind → by state) and the filter/search helpers are pure functions, typed against review-entity.
+- TypeScript: no `any` or non-null `!` added in slice-02 frontend files except the existing `keys[event.key]!` that was already in ReviewDetail.
+- dev/reviewBoard.ts and the Rust `board_read_args` refuse the same combinations (Rust reviewed only by reading; no local toolchain).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-frontend",
+  "slices": ["slice-02"],
+  "summary": "slice-02 frontend: 2 major (an answer intent replays on every return to the Reviews tab; the cross-tab focus replays when RepositoryReviews remounts on a repo or account change), 1 minor (aria-label on Review cards hides state from AT), 2 info. No MobX in apps/desktop; the React rule file named in the payload is absent, so the canonical rubric was applied. Test output file not available; no tests run.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "setSelected({ id: found.id, intent: pending.intent });",
+      "problem": "The Open-in-Reviews intent is stored in `selected` and never cleared after ReviewWorkspace consumes it. The panel renders only while the tab is active, so each return to the tab remounts ReviewPanel/ReviewWorkspace with the same reviewIntent, and the replay effect runs it again.",
+      "impact": "Trigger: click 'Answer question' on a PR card, close the run dialog without answering, switch tabs and return to Reviews (⌘3). Outcome: the answer dialog reopens by itself on every return while the question is pending.",
+      "suggested_fix": "Clear the intent once handed over (onIntentConsumed callback → setSelected(s => s && { id: s.id })), or strip `intent` from `selected` when `active` turns false. Add a DOM test: answer intent, close dialog, deactivate, reactivate, assert no dialog.",
+      "evidence": "ReviewsView.tsx renders `{active && review && target && <ReviewPanel key={review.id} ... reviewIntent={selected?.intent}`. ReviewWorkspace.tsx `const initialLaunch = useRef(reviewIntent);` and its replay effect calls `setSessionId(action.sessionId)` for kind 'answer' with pending questions. ReviewsView never clears selected.intent; ReviewBoard by contrast calls setSelected(null) when !tabActive (ReviewBoard.tsx ~line 314).",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "reviews-view-intent-replay",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["apps/desktop/src/reviews/ReviewsView.tsx (selected.intent set from pending focus)", "apps/desktop/src/review/ReviewWorkspace.tsx (initialLaunch = useRef(reviewIntent))"],
+        "enumeration_method": "keryx ctx rg 'initialLaunch|reviewIntent' over apps/desktop/src: three intent consumers. ReviewDetail only accepts 'start', and ReviewBoard clears selected on tab deactivation; ReviewWorkspace via ReviewsView is the only consumer whose source keeps the intent across remounts."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "if (focusNonce !== undefined && focusRef.current) setPending({ ...focusRef.current });",
+      "problem": "The focus effect runs on every mount. RepositoryReviews is keyed by [cwd, viewer, repo], ReviewsView is keyed by reviewViewer in App, and App never resets reviewsFocus, so any remount re-applies the last Open-in-Reviews request.",
+      "impact": "Trigger: use 'Open in Reviews' for PR #N, then change the Reviews tab's Base repository select (or the account). Outcome: the new repository's #N Review is selected and its panel opened unasked; if none exists, an extra reload runs and 'Pull request #N has no Keryx review in this list.' is shown.",
+      "suggested_fix": "Make the focus one-shot: App clears reviewsFocus once ReviewsView reports it handled (onFocusHandled), or track the last handled nonce in state outside the keyed child (for example in ReviewsView next to `repo`) and ignore a nonce already handled.",
+      "evidence": "ReviewsView.tsx: `return <RepositoryReviews key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase(), repo])} ...`, the focusNonce effect, and the pending effect's not-found branch setting the notice. App.tsx: `setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }))`; it is never reset to null.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "reviews-view-focus-replay-on-remount",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["apps/desktop/src/reviews/ReviewsView.tsx (focusNonce mount effect)", "apps/desktop/src/App.tsx (reviewsFocus never reset)"],
+        "enumeration_method": "Read every producer and consumer of reviewsFocus/focus in slice-02 (App.tsx openInReviews, ReviewsView focus/pending effects). There is one producer and one consumer; both remount keys (RepositoryReviews key, App's ReviewsView key) lead to the same effect."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "<button className=\"review-card\" onClick={() => onOpen(review.id)} aria-label={`Open review of #${review.number} ${reviewTitle(review)}`}>",
+      "problem": "The aria-label replaces the content-derived accessible name, so state, round, reviewed commit, freshness, findings, publication and source inside the card are not announced. The PR board's card has no aria-label.",
+      "impact": "A screen-reader user moving through the Reviews board hears only '#N title' and cannot tell which Reviews wait on them or are behind.",
+      "suggested_fix": "Remove the aria-label so the button content names it, as on the PR board, or include state and freshness in the label.",
+      "evidence": "ReviewsView.tsx ReviewTile vs ReviewResults.tsx ReviewTile (`<button className=\"review-card\" onClick={() => onOpen(card.number)}>`, no aria-label).",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "reviews-card-aria-label",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "{/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}",
+      "problem": "The Reviews list (and so the indicator) reloads only on mount, activation, Refresh and every 60 s while the tab is active. It has no hidden-tab reload and no subscribeSessionReview, so a review that reaches needs_answer while the user is elsewhere does not light the dot until the tab is visited. This follows plan T7's stated cadence and matches the PR board's active-only polling, so it is not a regression; the comment overstates it.",
+      "impact": "No change requested by default. To settle it, decide whether AC8's indicator must update while hidden; if so, add a hidden-tab reload or session-review subscription, otherwise reword the comment.",
+      "suggested_fix": "Either reword the comment to 'reflects the last load', or add a low-frequency reload / subscribeSessionReview hook while hidden.",
+      "evidence": "ReviewsView.tsx: `if (!active || !running) return;` in the 60 s interval effect; load effect deps [cwd, repo, expectedViewer, attempt, load, ...]. plan.md T7 Indicator bullet.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "reviews-indicator-hidden-staleness",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": null,
+      "quote": "/** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */",
+      "problem": "onOpenReviewSession stays in ReviewDetail Props, and ReviewBoard still passes it, but ReviewDetailSheet no longer reads it.",
+      "impact": "Dead prop; no runtime effect.",
+      "suggested_fix": "Remove it from Props and from the ReviewBoard call site, or leave it until the stage 1 merge settles this file.",
+      "evidence": "ReviewDetailSheet destructuring in slice-02 omits onOpenReviewSession; ReviewBoard.tsx passes `{...(onOpenReviewSession && { onOpenReviewSession })}`.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "review-detail-dead-prop",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 1, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice and named neighbours were read directly); wiki_used: no (not-relevant: plan.md gave the design intent); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.

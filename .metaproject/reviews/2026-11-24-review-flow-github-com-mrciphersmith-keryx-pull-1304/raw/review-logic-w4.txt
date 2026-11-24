@@ -1,0 +1,118 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range, supplied slice text (slice-04, read in full: 1414 lines)
+- Spec compliance gate: ran against the payload's AC1-AC12, for the criteria this slice touches (AC1, AC2, AC3, AC4, plus the docs for AC10/AC11)
+
+### Summary
+Slice-04 holds the new `keryx review reviews` command (`src/commands/review-reviews.ts`), its wiring into `review.ts` and `group-subcommands.ts`, the `writeJson` export, the store, badge and entity tests (AC1-AC4), and the CLI reference, plan and spec updates. To judge the command I read the helpers it calls at head: `readReviewRows`/`reviewRows` (desk-run-store.ts:570-610, 903-907), `listActiveReviewCards` (board.ts:201-228), `reviewState`/`freshness`/`referenceHead`/`summarizeReview` (review-entity.ts:90-170), `requestAttempt` (desk-run-store.ts:670-700), and the Desktop indicator and column code (ReviewsView.tsx:134, reviews/model.ts:37). The compare direction, the 40-hex guard, the cap, the access-error rethrow, the sort and the AC1-AC4 tests are correct. I found no blocker or major. There are two minor findings. First, one failed card batch throws away every card already read, and Reviews of merged PRs then leave Closed and light the Reviews indicator. Second, `stopped` is taken from the latest attempt alone, which the spec table conditions on the round having no accepted findings, and a test in this slice pins that reading. I did not re-file earlier waves' findings: the compare-cap ordering (degradation w2 F-003, highload w2 F-001), the docs' unknown freshness (degradation w2 F-001), the stale spec protocol note (degradation w2 F-002), the import round order (degradation w3 F-001), the card-read cost (performance w2 F-001, highload w2 F-002), the publication-null indicator (logic w1), and `stopped` including the user's own cancel (logic w1 F-005).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Spec Gaps (blocker)
+None detected. AC1 (migration of main's DDL fixture, case-variant viewer, continuation round, previous link, idempotent second open), AC2 (three ranges give rounds 1-3; start, retry, import, continuation and new head are placed when recorded), AC3 (read-only open of an unmigrated copy, attachBadges equal to localBadge with `outdated.round`) and AC4 (missing store, state, freshness, rounds, findings, no reports) each have tests in this slice that can fail.
+
+### Logic Bugs
+### [F-001] One failed card batch discards every card already read, and Reviews of merged PRs then leave Closed and light the Reviews indicator
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:44-49 (the `listActiveReviewCards` try/catch in `readReviews`)
+- **Problem**: `listActiveReviewCards` (board.ts:201) reads PR cards in sequential batches of 20 and returns one array only after every batch succeeds. If any batch throws a non-access error (for example `unavailable:` on a rate limit or a 502), `readReviews` catches it, adds a warning, and leaves `cards` empty. The batches that already succeeded are dropped. With `card === null`, `reviewClosed` (review-entity.ts:127) sees only `closedAt`. Every Review whose PR was merged or closed on GitHub, but that the user did not close locally, then gets its attempt state (`ready`, `stopped`) instead of `closed`. That state moves it from Closed into "Waiting on you", and `reviewNeedsViewer` lights the Reviews indicator (ReviewsView.tsx:134 counts every Review in the snapshot, whatever the filters).
+- **Why it matters**: Trigger: a stored history with a merged-PR Review whose last round is `ready` with an undecided publication, or `stopped`. This is the common end state of a reviewed PR. One transient GitHub error on any card batch then lights the Reviews indicator, and those Reviews show up in an active column until the next good refresh. AC8 says the indicator stays off otherwise. A warning is shown, so the result is not silent. With more than 20 Reviews, an error in a later batch also discards the cards of the batches that succeeded.
+- **Fix**: Keep the cards each batch returns, either by reading the batches here or by letting `listActiveReviewCards` return partial results together with a failure flag. For a Review whose card could not be read, do not take its attention from attempt state that depends on the PR still being open: let only `needs_answer` light the indicator when `card === null`, or carry a `cardUnread` flag that the Desktop excludes from the indicator.
+
+### [F-002] `stopped` is taken from the latest attempt alone, although the spec ties it to the round having no accepted findings; this slice's test pins that reading
+- **Severity**: minor
+- **File**: src/review/review-entity.test.ts:103-107 (`summarizeReview` "groups attempts into rounds" expects `state: "stopped"`); behaviour in src/review/review-entity.ts `reviewState` (called with `latestAttempt(row)` only)
+- **Problem**: The specification's state table defines `stopped` as the last attempt ending `failed`/`cancelled`/`blocked`/`budget`/`skipped` "и у раунда нет принятых находок" (and the round has no accepted findings). `ready` and `published` are defined from the last round. `reviewState` looks only at the newest attempt. Round 2 can hold a completed (even published) attempt followed by a failed or cancelled attempt on the same range. The Review then reads `stopped`, while `findings` and `publication` (taken from `latestReviewed`) still show round 2's accepted result. The test fixture in this slice is exactly that case (`second` completed and published, then `retry` failed in round 2), and it asserts `stopped`.
+- **Why it matters**: This is reachable. `requestAttempt` (desk-run-store.ts:690-700) reuses a completed range only under the same options, so a manual start with different options on an already-reviewed range creates a new attempt in the same round. A continuation of a `partial` attempt also joins the same round. If that attempt is cancelled or fails, a Review that was `published` becomes `stopped`. It moves from Published to "Waiting on you" and lights the Reviews indicator, even though the round's accepted, published result is unchanged. The spec sentence can also be read so that its last clause attaches to `skipped` only, so the intent is ambiguous.
+- **Fix**: Confirm the reading with the spec owner. If the clause covers the whole row, derive the state from the latest round: when the latest attempt is a non-live failure but an earlier attempt of the same round has a reviewed result, report that attempt's `ready`/`published`. Optionally add a `lastAttemptFailed` mark for the panel. Then update the test at review-entity.test.ts:103-107. If the reading that only `skipped` needs no accepted findings is intended, note it in the spec table.
+
+### Async & Concurrency
+None detected. `failed` is written only inside the `mapPool` callbacks and read after the pool resolves. Each compare error is caught per item, so one refused compare never rejects the pool.
+
+### Error Handling
+None detected beyond F-001. `parseCompare` throws a SyntaxError on malformed JSON, and the per-item catch handles it. Errors from the identity query propagate unchanged. `access:`/`configuration:` errors from the card read are rethrown, so the Desktop's account-change handling keeps working.
+
+### Null / Undefined Safety
+None detected. `summarizeReview` throws on an empty attempts list, but `reviewRows` builds each row from at least one joined attempt, so that throw cannot fire from this command.
+
+### Type Contract Violations
+None detected. The `repo.split("/") as [string, string]` cast is safe because `selectRepository` returns a configured `owner/name`.
+
+### Edge Cases
+None detected. Compare direction: `compare/{reviewed}...{prHead}`. `ahead` means the PR head descends from the reviewed head, and `behind`/`diverged` mean a rewrite. This matches `freshness`. `identical` maps to `current`. ISO `createdAt` strings sort correctly as strings.
+
+### Suggested Patches
+None. Both fixes need a design choice (F-001: the partial-cards contract; F-002: confirming the spec reading).
+
+### Verified clean (refutation attempts)
+- The missing-store path returns before any card read or store creation (`readReviewRows` checks `existsSync` first). The test pins one query and no `runs.sqlite`.
+- The read path opens the store writable and migrates a pre-Reviews database (`readReviewRows` docstring). The "predates Reviews" test covers this, so it is intended.
+- `--help` only as the sole argument, `--json` required, `strict: true` refuses `--state` and positionals before any GitHub or store access. All of this is pinned.
+- `REVIEW_SUBCOMMAND_HELP`, `group-subcommands.ts` and `reviewHelpText` each gained the `reviews` entry. The dispatcher route is present.
+- The SQL placement in `reviewRows` maps `recoverable` to `failed` and excludes archive/delete per attempt, consistent with the CLI reference text.
+- The badge parity tests now expect `outdated.round` in both the SQL and `localBadge` paths, and the unmigrated read-only path omits `round` (board-badges.test.ts new test, desk-run-store.test.ts migration test).
+
+### Not verified
+- No tests were run (exec_budget_s 0, read-only). I did not consult the test log `research-evidence/verify-tests-to-run-1.txt`.
+- `boardGh` behaviour with `--jq` on a non-2xx compare was not read. I assumed it throws, which the per-item catch handles either way.
+- Git history (`git log`/`blame`) was not consulted.
+- I did not check whether the Desktop shows `card === null` Reviews differently from open ones beyond the indicator and the column code (ReviewsView.tsx:134, reviews/model.ts:37).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-04 (review reviews command, CLI wiring, store/badge/entity tests, docs) read in full and checked against the helpers it calls at head. AC1-AC4 are pinned by tests that can fail. No blocker or major. Two minor findings: (1) one failed card batch discards all cards read so far, and merged-PR Reviews then leave Closed and light the Reviews indicator; (2) stopped is derived from the latest attempt only, though the spec table conditions it on the round having no accepted findings, and a test in this slice pins that. Earlier waves' findings were not re-filed.",
+  "slices": ["slice-04"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 45,
+      "quote": "for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);",
+      "problem": "listActiveReviewCards returns only after all sequential 20-PR batches succeed. A non-access error in any batch is caught here and leaves `cards` empty, which discards batches that already succeeded. With card === null, reviewClosed sees only closedAt, so Reviews of PRs merged or closed on GitHub get their attempt state (ready/stopped) instead of closed.",
+      "impact": "Trigger: a stored merged-PR Review whose last round is ready with an undecided publication, or stopped, plus one transient GitHub error on any card batch. Those Reviews move from Closed to 'Waiting on you', and the Reviews indicator lights (ReviewsView.tsx:134 counts all Reviews), contrary to AC8's 'stays off otherwise'. A warning is shown, so this is not silent.",
+      "suggested_fix": "Keep per-batch results (read batches in readReviews, or return partial cards plus a failure flag). For card === null, let only needs_answer light the indicator, or carry a cardUnread flag that the Desktop excludes from the indicator.",
+      "evidence": "board.ts:201-228 (single return after the loop; throws mid-loop); review-reviews.ts:44-49 (catch pushes a warning, cards stay empty); review-entity.ts:127 reviewClosed; review-entity.ts:111 reviewNeedsViewer; ReviewsView.tsx:134; reviews/model.ts:37.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "review-reviews-card-batch-failure-drops-closed-state",
+      "evidence_kind": "code-trace"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/review-entity.test.ts",
+      "line": 103,
+      "quote": "id: \"review-1\", number: 12, state: \"stopped\", latestRound: 2, source: \"scheduled\", flowId: \"519\", tokens: 150,",
+      "problem": "reviewState is called with the latest attempt only. The spec state table defines stopped as a failed/cancelled/blocked/budget/skipped last attempt 'и у раунда нет принятых находок', and ready/published from the last round. A round whose completed (even published) attempt is followed by a failed/cancelled attempt on the same range reads 'stopped'. This slice's test fixture is that exact case and asserts 'stopped'.",
+      "impact": "Reachable: requestAttempt reuses a completed range only under the same options (desk-run-store.ts:690-700), so a manual start with other options, or a continuation of a partial attempt, joins the same round. Cancelling or failing it turns a published Review into stopped, which moves it to 'Waiting on you' and lights the Reviews indicator while the round's published result is unchanged. The spec clause is ambiguous: it may attach only to skipped.",
+      "suggested_fix": "Confirm the reading with the spec owner. If the clause covers the row, derive the state from the latest round: a non-live failed latest attempt with an earlier reviewed attempt in the same round reports that attempt's ready/published, and the test is updated. Otherwise state the narrower reading in the spec table.",
+      "evidence": "specification.md state table (`stopped` row); review-entity.ts reviewState/summarizeReview (state from latestAttempt, findings/publication from latestReviewed); review-entity.test.ts:96-107; desk-run-store.ts:690-700.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "question",
+      "dedupe_key": "review-state-stopped-ignores-round-accepted-findings",
+      "evidence_kind": "code-trace"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0},
+  "not_verified": [
+    "No tests run (exec_budget_s 0); test log not consulted",
+    "boardGh behaviour on a non-2xx compare with --jq not read",
+    "Git history not consulted"
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the helpers were located from the slice's imports with `keryx ctx rg`) · wiki_used: no (not-relevant: behaviour was taken from the spec text in the slice and from the code) · ctx_used: yes (`keryx ctx rg`) · raw_rg_used: no (raw `grep`/`sed`/`cat` was used only on review-package files and on exact line ranges of the four helper files, marked keryx:raw).

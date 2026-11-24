@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T09:57:38.725Z",
+  "updatedAt": "2026-11-24T11:04:41.923Z",
   "source": {
     "type": "description",
     "ref": null
@@ -207,7 +207,7 @@
       "id": "T10",
       "title": "Test suites, typecheck and lint",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -217,7 +217,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -335,6 +336,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix F-048: Review panel Open pull request link does nothing",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T11:04:41.923Z",
+            "outcome": "started",
+            "detail": "519-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -520,6 +541,21 @@
       "at": "2026-11-24T09:57:38.725Z",
       "event": "task-done",
       "detail": "T16: Fix round 1 Desktop (FB-1..FB-12)"
+    },
+    {
+      "at": "2026-11-24T10:53:29.483Z",
+      "event": "task-done",
+      "detail": "T10: Test suites, typecheck and lint"
+    },
+    {
+      "at": "2026-11-24T11:04:41.731Z",
+      "event": "task-added",
+      "detail": "T17: Fix F-048: Review panel Open pull request link does nothing"
+    },
+    {
+      "at": "2026-11-24T11:04:41.923Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 519-T17"
     }
   ],
   "acKinds": {

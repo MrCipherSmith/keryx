@@ -1,0 +1,141 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit slice (slice-02, read in full: 2402 lines / 140271 bytes)
+- Spec compliance gate: ran against plan.md T6/T7 (the payload's acceptance criteria point there). No unimplemented criterion was found in this slice beyond what wave 1 already filed.
+
+### Summary
+Slice-02 adds the Reviews tab (ReviewsView, ReviewPanel, reviews/model.ts), moves the Keryx review interface out of the PR panel into review/ReviewWorkspace.tsx, sends the PR board's view and answer actions to the Reviews tab, and adds a `reviews_only` read to the Rust bridge and the dev mirror. The Rust and dev argument builders refuse the same combinations. The ReviewWorkspace lift matches the deleted ReviewDetail block. One new major: the desktop `latestReviewed` / `reviewedCommit` treats any attempt with `result.reviewed` as "reviewed". The domain entity counts only finished attempts. So after a stopped round, the card shows the stopped round's head next to a freshness, findings and publication taken from an earlier round. There are also two minors. Wave-1 findings were not re-filed: cross-repo focus, focus replay on remount, intent replay on tab return, hidden-tab indicator staleness, dead `onOpenReviewSession`, and archived history access.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 2  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [F-001] The reviewed commit on Reviews cards, rows and panel comes from a stopped attempt, while freshness, findings and publication come from the last finished one
+- **Severity**: major
+- **File**: apps/desktop/src/reviews/model.ts (latestReviewed / reviewedCommit)
+- **Problem**: `latestReviewed` picks the newest attempt whose `reviewed !== null`. `reviewedCommit` shows that attempt's `reviewed.headSha`. The domain read model, `src/review/review-entity.ts`, defines the reviewed attempt as `FINISHED.has(a.state) && a.reviewed !== null`, where FINISHED is completed, partial or budget. From that attempt it derives `freshness` (via `referenceHead`), `findings` and `publication`. Attempts in other states also carry `reviewed`. `finishExecution` (desk-run-service.ts) sets `result.reviewed` from `checkedBase`/`checkedHead` for every outcome. The executor (desk-run-executor.ts:373-374, 445) fills those from the package manifest even when the outcome is `cancelled` or `blocked`. `reviewRows` copies `result.reviewed` regardless of state.
+- **Trigger**: Round 1 completes on head A. The PR moves to head B. Round 2 starts on B, and the user stops it after the package exists, or it ends `blocked`. That attempt is `cancelled` with `reviewed = {.., headSha: B}`. The entity gives state `stopped`, freshness `behind` (reference A versus PR head B), and round 1's findings and publication. The desktop card, list row and panel header show commit `B` followed by "· behind 1".
+- **Why it matters**: The result is silently wrong. The card says the PR's current head is the reviewed commit and that it is behind. Findings and publication refer to A, but the commit label says B, so the user cannot tell which revision the findings belong to.
+- **Fix**: Use the entity's rule. Pick the newest attempt with `reviewed !== null` and a finished state (`completed`, `partial`, `budget`). Better still, have the CLI put the reference head on `ReviewSummary`, e.g. `reviewedHead: referenceHead(row)`, and render that, so the desktop and the domain cannot diverge. Add a model test with a cancelled attempt that has `reviewed` set and comes after a completed one.
+- **Patch**:
+  ```diff
+  -    const attempt = round.attempts.find(item => item.reviewed !== null);
+  +    const attempt = round.attempts.find(item => item.reviewed !== null && (item.state === "completed" || item.state === "partial" || item.state === "budget"));
+  ```
+
+### [F-002] A digits-only search never matches PR titles in the Reviews tab
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/model.ts (matchesSearch)
+- **Problem**: `if (/^\d+$/.test(number)) return String(review.number).startsWith(number);` returns before the title check. The placeholder says "Search by title or #number", and plan T7 says "search by title/#number". The PR board's `filterReviews` matches title OR number. Here, a query such as `404` hides "Fix 404 page" (#1290), and `2` hides "Desktop review v2 stage 2" unless its number starts with 2. The number match is also prefix-only, while the board uses substring, so `04` finds #1304 on the PR board but not in Reviews.
+- **Fix**: Match the title as well when the query is all digits: `return String(review.number).startsWith(number) || reviewTitle(review).toLowerCase().includes(text);`. Alternatively, treat only a `#`-prefixed query as number-only.
+
+### Async & Concurrency
+
+### [F-003] A focus request whose re-read fails with an access error stays pending and fires on a later manual retry
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx (accessLost / pending focus effect)
+- **Problem**: When the Review is not in the list, the pending effect records `after = sequence.current` and refreshes. It settles only when `read.request > pending.after`. `accessLost` writes `request: old.request`, which is the request of the previous good read, not the failed one. So an access or configuration failure of that re-read never satisfies the check, and `pending` is never cleared. Also, when the very first load fails with an access error, the guard lets the effect through (`read.error` is set), and it fires one automatic extra read against a failing account.
+- **Trigger**: "Open in Reviews" for #N while the list lacks #N, then the re-read returns `access:`. Later the user clicks "Try again" or switches account and back without remounting. The next good read then selects #N and opens its panel, resetting filters and search, or it posts "Pull request #N has no Keryx review in this list.", long after the user asked.
+- **Fix**: Clear `pending` in `accessLost` (call `setPending(null)` there, or move pending into a ref that accessLost resets). Alternatively, have accessLost write the failed request number so `read.request > pending.after` holds.
+
+### Error Handling
+None detected beyond F-003.
+
+### Null / Undefined Safety
+None detected. `review.card` null is handled in ReviewPanel (no ReviewWorkspace, warning banner), in `reviewTitle`, and in author fallbacks. `rounds[0]?.headSha` is guarded.
+
+### Type Contract Violations
+None detected. `ReviewIntent` moved to ReviewWorkspace and is re-exported type-only. Rust `board_read_args` gained the trailing `reviews_only` argument at every call site in the slice, tests included.
+
+### Edge Cases
+None detected beyond F-002.
+
+### Verified clean (refute attempts)
+- Rust `board_read_args(reviews_only)` against dev `reviewsArgs`: both refuse state, number, repositoriesOnly, paged, cursor and badges. `updated_since` is refused in the Rust caller (`reviews_only ||`) and in dev `reviewsArgs`. Repository validation is the same in both.
+- `reviewColumn` follows plan T7's order: closed, then running, then needs_answer, then behind, then by state. `ready` and `stopped` land in "Waiting on you", as the plan says.
+- `reviewNeedsViewer` drives the indicator. The App binding gate (`reviewsNotice?.binding === reviewViewer`) and the unmount reset to null are consistent with the PR indicator.
+- The ReviewDetail start path consumes `initialLaunch` only for `start` and only once. The "Open in Reviews" button replaces the primary action only when a non-archived run exists. Deleted runs are absent from the status history (desk-run-store.ts:431), so `hasReview` and the Reviews list agree on deleted runs.
+- The ReviewsView load sequence guard: unmount and accessLost bump `sequence`, so a superseded read never overwrites a newer one.
+
+### Not verified
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not available (the directory holds only ingest-screened.json). No tests were run (exec budget 0).
+- I did not read the base-branch ReviewDetail beyond the deleted lines in the slice. The graph layers were not queried; consumer enumeration used `keryx ctx rg`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-02 read in full. 1 major: the Reviews card, row and panel show the reviewed commit of the newest attempt with result.reviewed, including cancelled or blocked attempts. The domain entity derives freshness, findings and publication from the newest finished attempt, so after a stopped round the shown commit and the 'behind' label contradict each other. 2 minor: a digits-only search never matches titles; a pending cross-tab focus is not cleared when its re-read fails with an access error. Wave-1 findings were not re-filed.",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "const attempt = round.attempts.find(item => item.reviewed !== null);",
+      "problem": "latestReviewed/reviewedCommit pick the newest attempt with reviewed !== null, in any state. review-entity.ts picks the reviewed attempt only among FINISHED states (completed, partial, budget) and derives freshness (referenceHead), findings and publication from it. Cancelled and blocked attempts carry result.reviewed: finishExecution sets it from checkedBase/checkedHead for every outcome, and the executor reads those from the package manifest before deciding the outcome. So the desktop's 'reviewed commit' can come from a different attempt than every other fact on the card.",
+      "impact": "Trigger: round 1 completes on head A; the PR moves to B; round 2 on B is stopped by the user after its package exists (state cancelled, reviewed.headSha = B). The entity reports state stopped, freshness behind (A vs B), round-1 findings. The card, list row and panel show commit B followed by '· behind 1'. The PR's current head is labelled as the reviewed commit and as behind, and the findings shown are not for the commit shown.",
+      "suggested_fix": "Apply the entity's rule in latestReviewed: require state completed, partial or budget as well as reviewed !== null. Better, emit the reference head on ReviewSummary from the CLI (referenceHead(row)) and render it, so desktop and domain cannot diverge. Add a model test with a cancelled attempt that has reviewed set and comes after a completed one.",
+      "evidence": "apps/desktop/src/reviews/model.ts latestReviewed (slice-02 lines 2118-2130); src/review/review-entity.ts: `const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);` and referenceHead/summarizeReview use it; src/review/desk-run-service.ts finishExecution: `reviewed: out.checkedBase && out.checkedHead ? {...} : null` for every outcome; src/review/desk-run-executor.ts:373-374 checkedBase/checkedHead from the manifest, 437-440 outcome becomes 'cancelled' on abort, 445 returns them; src/review/desk-run-store.ts reviewRows maps result.reviewed for every state.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "reviews-reviewed-commit-ignores-finished-state",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/reviews/model.ts:latestReviewed (wrong: no state check)",
+          "apps/desktop/src/reviews/ReviewsView.tsx:ReviewFacts reviewedCommit (consumer)",
+          "apps/desktop/src/reviews/ReviewsView.tsx:ReviewList list row reviewedCommit (consumer)",
+          "apps/desktop/src/reviews/ReviewPanel.tsx:header reviewedCommit (consumer)",
+          "src/review/review-entity.ts:latestReviewed (correct: FINISHED check)"
+        ],
+        "enumeration_method": "keryx ctx rg --all 'latestReviewed|reviewedCommit|reviewed !== null' over apps/desktop/src and src/review: two definitions of 'latest reviewed attempt' (desktop model, domain entity), three render consumers of the desktop one; complete-head-gate.ts's match is unrelated (PR head move check)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "if (/^\\d+$/.test(number)) return String(review.number).startsWith(number);",
+      "problem": "matchesSearch returns the number-prefix result for any all-digit query and never checks the title. The placeholder and plan T7 say 'Search by title or #number'. The PR board's filterReviews matches title OR number, and matches the number by substring rather than prefix.",
+      "impact": "A query such as '404' hides 'Fix 404 page' (#1290); '04' finds #1304 on the Pull requests board but not on Reviews.",
+      "suggested_fix": "return String(review.number).startsWith(number) || reviewTitle(review).toLowerCase().includes(text); or make only a '#'-prefixed query number-only.",
+      "evidence": "slice-02 lines 2164-2170 (reviews/model.ts matchesSearch) versus lines 1560-1563 (review/model.ts filterReviews title-or-number); ReviewsView placeholder 'Search by title or #number' (line 1937).",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "reviews-search-digits-skip-title"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "setRead(old => ({ snapshot: null, error: message, loading: false, request: old.request }));",
+      "problem": "The pending cross-tab focus settles only when read.request > pending.after. accessLost keeps the previous good request number, so when the focus's re-read fails with access: or configuration:, pending is never cleared. When the first load fails that way, the effect also fires one automatic extra read against the failing account.",
+      "impact": "After 'Open in Reviews' for #N hits an access failure, a later manual 'Try again' unexpectedly selects #N, opens its panel and resets filters and search. If #N is absent, it posts 'Pull request #N has no Keryx review in this list.' long after the request.",
+      "suggested_fix": "Clear pending in accessLost (setPending(null)), or record the failed request number in the access-lost state so the pending check settles.",
+      "evidence": "slice-02 lines 1820-1825 (accessLost keeps old.request), 1890-1909 (pending effect: guard passes on read.error; after = sequence.current; settles only on read.request > pending.after).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "reviews-focus-pending-stuck-after-access-error"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 0 },
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (consumer enumeration via keryx ctx rg; package layers not queried). wiki_used: not-relevant (the domain rule was read directly in review-entity.ts). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no (two bounded raw greps over the package's raw/*.txt and the slice headers, for dedupe and navigation only, marked keryx:raw).

@@ -1,0 +1,112 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range. I reviewed the supplied slice text (slice-05, read in full, 922 lines).
+- Stack detected: generic TS (Bun SQLite store, a pure read model and the board protocol types)
+
+### Summary
+Slice-05 adds the Review persistence and read model. It adds a `reviews` table and the `review_id`/`round`/`previous_run_id` columns on `runs`, an in-place migration, and round assignment after every insert (`assignReviews`/`roundFor`). It also adds `DeskRunStore.reviewRows` and `readReviewRows`, the pure read model `src/review/review-entity.ts`, and the stale run's round on the board's `outdated` badge. The dependency direction is sound. The store imports only types from review-entity (`ReviewRow`, `ReviewAttemptSummary`). review-entity imports only protocol and run types (board-types, desk-run-types, desk-publication-types), not the store, so there is no cycle. The callers of review-entity are the CLI command and Desktop. Desktop imports types from `src/review/*` through relative paths, as `apps/desktop/src/platform/review.ts` already did at base. No blocker, major or minor findings. There are three info notes.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 3
+
+### Layer Violations
+[F-001] (info) `src/review/desk-run-store.ts` `roundFor` (around diff line 288) holds the domain rule that places an attempt in a round. A continuation joins its predecessor's round, a known range is a retry in its round, and any other range opens the next round. The rule is written as SQL over `details` JSON inside the persistence class. The "pure" read model `review-entity.ts` then only groups by the stored `round`. Under clean-architecture.mdc, business rules belong in the domain, so this would normally be a minor. Plan T5 places the rule in the store on purpose ("one function, used both for the migration ... and after every insert"), and I name no defect. I record it as info: the rule can be tested only through a real SQLite store. Optional fix: move the decision into a pure `assignRound(candidate, priorAttemptsOfReview)` in review-entity.ts. The store would then only fetch the prior attempts and write the result.
+
+### Dependency Direction
+None detected. The store imports review-entity types only (`import type`). review-entity imports no store or infrastructure module. board-badges/board-types gain an optional `round` with no new imports.
+
+### Module Boundary Violations
+None detected. All callers of `requestAttempt` (desk-run-service.ts:226-227 and 275-277, through `requestManual`/`requestContinuation`) run inside `store.atomic`, as the new comment at the `assignReviews()` call in `requestAttempt` requires.
+
+### Design Pattern Misuse
+[F-002] (info) The invariant "an attempt's Review placement lives in these columns only; `details` never carries it" (desk-run-store.ts, the `reviewColumns`/`storedDetails` block) is enforced at two of the three writers of `runs.details`. `save` and `recordExisting` go through `storedDetails`. `requestAttempt` still writes `JSON.stringify(run)` (slice line 658). That is correct today, because the run is built fresh in that method and has no placement fields. But the invariant holds there only by circumstance, not by construction. Enumeration: `keryx ctx rg "UPDATE runs SET|INSERT INTO runs|details="` over src and apps. The non-test writers of `details` are desk-run-store.ts:346 (save), :383 (recordExisting) and :730 (requestAttempt). :170 and :801 write other columns only. Optional fix: use `storedDetails(run)` in `requestAttempt` as well, so every writer strips placement.
+
+[F-003] (info) Transaction ownership is now split. `requestAttempt` relies on the caller's transaction ("Inside the caller's dispatch transaction: no transaction of its own"). `recordExisting` now opens its own `this.atomic(...)`, but its only caller, desk-run-service.ts:260, already wraps it in `store.atomic(...)`. The inner transaction therefore runs nested, which bun:sqlite handles as a savepoint. I see no defect. The two insert paths that both end in `assignReviews()` just follow different conventions. Optional fix: pick one convention. Either both rely on the caller, or both own their transaction and the service stops wrapping `recordExisting`.
+
+### Dependency Inversion
+None detected. The store is a single concrete SQLite implementation with no substitution boundary that needs an interface. The read model is pure and receives rows plus an optional compare result.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A. Not detected in this slice.
+
+### Not re-filed (earlier waves)
+- The writable open in `readReviewRows`, which takes a write lock and migrates on the read path, is highload-w2 F-004 (`reviews-read-lane-write-lock`). Security-code w2 also noted it. I did not re-file it.
+- Architecture w2 F-001 (`reviews-behind-rule-in-command`) touches review-entity's `freshness`. I did not repeat it.
+
+### Not verified / inputs
+- Test output: `research-evidence/verify-tests-to-run-1.txt` is not present. The directory holds only `ingest-screened.json`, so no test result informs this review.
+- I did not read git history (log/blame). It was not needed.
+- I did not check against the bun:sqlite source that a nested `transaction().immediate()` becomes a savepoint. That is from my knowledge of its better-sqlite3-compatible API. F-003 is info either way.
+- I did not read the Desktop Rust side. A search for `runs.sqlite` found no writer outside `src/review/desk-run-store.ts`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-05 adds the Review table, the placement columns and migration, round assignment, reviewRows/readReviewRows, and the pure review-entity read model. The dependency direction is sound: the store imports read-model types only, and review-entity imports no store. No blocker/major/minor. Three info notes: the round rule lives in the store by plan decision, the no-placement-in-details invariant is not applied by construction at requestAttempt, and transaction ownership is split between requestAttempt and recordExisting.",
+  "slices": ["slice-05"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "/** A continuation joins its predecessor's round; a known range is a retry in its round; any other range opens the next round. */",
+      "problem": "The domain rule for placing an attempt in a round is written as SQL in the persistence class (roundFor). review-entity, the read model, only groups by the stored round.",
+      "impact": "The rule can be tested only through a real SQLite store. No defect is named. Plan T5 places the rule in the store on purpose, so this is recorded as info, not as a layer violation.",
+      "suggested_fix": "Optional: add a pure assignRound(candidate, priorAttempts) in review-entity.ts. The store would only fetch the prior attempts of the Review and write the result.",
+      "evidence": "slice-05 desk-run-store.ts roundFor/assignReviews hunk; plan.md T5 line 20: 'Assignment rule — one function, used both for the migration ... and after every insert'.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "review-round-rule-in-store",
+      "publication": "omit"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "// An attempt's Review placement lives in these columns only; `details` never carries it.",
+      "problem": "save and recordExisting write details through storedDetails, which strips reviewId/round/previousRunId. requestAttempt still writes JSON.stringify(run). That is correct only because its run is freshly built without placement.",
+      "impact": "The invariant holds at requestAttempt by circumstance, not by construction. A later change that builds the queued run from a decoded attempt would leak placement into details. No defect today.",
+      "suggested_fix": "Optional: use storedDetails(run) in requestAttempt's INSERT too.",
+      "evidence": "keryx ctx rg 'UPDATE runs SET|INSERT INTO runs|details=' over src and apps: the non-test details writers are desk-run-store.ts:346 (save, storedDetails), :383 (recordExisting, storedDetails) and :730 (requestAttempt, JSON.stringify(run)).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "placement-strip-not-at-every-writer",
+      "publication": "omit"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "// Inside the caller's dispatch transaction: no transaction of its own.",
+      "problem": "requestAttempt relies on the caller's transaction before it calls assignReviews(). recordExisting now opens its own atomic(), although its only caller (desk-run-service.ts:260) already wraps it in store.atomic, so the inner one runs as a nested savepoint.",
+      "impact": "Two insert paths that both end in assignReviews follow different transaction conventions. No defect is named.",
+      "suggested_fix": "Optional: use one convention. Either drop the inner atomic in recordExisting, or drop the service-level wrap.",
+      "evidence": "keryx ctx rg 'requestAttempt\\(|requestContinuation\\(|\\.atomic\\(' over src: desk-run-service.ts:226-227 and 275-277 wrap every requestAttempt path; :260 wraps recordExisting, which now wraps itself (slice-05 recordExisting hunk).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "split-transaction-ownership-assign-reviews",
+      "publication": "omit"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 3},
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: keryx ctx rg enumerated the importers of review-entity, the runs writers and the requestAttempt callers directly). wiki_used: no (not-relevant: plan.md T5 carried the design decision). ctx_used: yes (keryx ctx rg for the importers, writers, callers and earlier dedupe keys; bounded raw sed/git show excerpts marked keryx:raw). raw_rg_used: no. memory: searched ("review round assignment store"), no relevant entry.

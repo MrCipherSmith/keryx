@@ -1,0 +1,43 @@
+STATUS: DONE
+
+review-regression, round 1, wave 2, scope B (blast radius). I read slice-04 in full (1415 lines).
+
+Short summary: I found no regression in existing behaviour from the slice-04 changes. The code changes in this slice are small and additive:
+- `src/commands/review-board.ts`: `writeJson` is now exported. Its body did not change.
+- `src/commands/review-reviews.ts` (new): the `keryx review reviews` command.
+- `src/commands/review.ts`: one new dispatch branch, one help-table entry and one usage line.
+- `src/lib/group-subcommands.ts`: `"reviews"` is added to the review vocabulary.
+
+The rest of the slice is docs and tests.
+
+How each dependency path reaches existing code, and what I checked:
+- group-subcommands.ts → src/cli-registry.ts (in set): `knownSubcommandsFor` / `groupsWithKnownSubcommands` only add the new verb to the "known" vocabulary. The cli.test.ts unknown-subcommand test iterates over groups, not verbs, so it does not change. No other existing verb was renamed or removed.
+- review.ts → src/commands/operator-confirm-review.ts (in set): it imports only the type `CommentsReplyRun`, which did not change. In `reviewCommand`, the new `reviews` branch sits between `board` and `attach`. Before this change, `reviews` matched no branch, so no existing argv changes route. `--help` interception by cli-registry still reaches `printReviewHelpFor`, which now has a `reviews` entry. review-help.test.ts pins only the `comments` usage, which did not change.
+- review-board.ts: the only edit is the `export` keyword. Its importers are review.ts, board.test.ts and the new review-reviews.ts. src/review/board.ts, board-github.ts and lib/map-pool.ts are unchanged between base and head (`git diff --stat`).
+- src/lib/command-risk.ts (`touchesReviewPublish`, operator verb sets) does not list `reviews`. A read-only listing needs no entry there, and no existing classification moved.
+
+Coverage and limits:
+- The blast-radius record is capped. Counts: droppedByCap 86, droppedTestConsumer 114, droppedTextHub 799, droppedByPreFilter 1, droppedUnrelatedSymbol 15. The retained set is 40 files at hop 1.
+- For this slice's files, the cap dropped src/cli.ts, scripts/verify-native-coverage.ts, src/commands/operator-confirm-tools.ts and src/commands/help.ts (all hop 2). It also dropped 88 test consumers. I spot-checked src/cli.ts and src/cli-registry.ts usage, and verify-native-coverage.ts has no subcommand references. I did not sweep the other dropped files.
+- The changed docs (cli-reference.md, implementation-plan.md, specification.md) are not graph nodes. For them the radius could not answer the question; it is unresolved, not clean.
+- Runtime edges the graph cannot see:
+  - The Desktop invokes `review reviews --json` through the Tauri `review_board` bridge. That is slice-02/Rust, CI-only, and was not read here.
+  - `readReviewRows` (src/review/desk-run-store.ts, slice-05) opens the store for writing. Every writable open now runs an immediate transaction (column check plus `assignReviews`), so the new command takes a short write lock on each Desktop refresh. Both sides set `busy_timeout=8000`. I found no trigger that turns this into a failure of an existing writer, so I filed nothing. It is noted here for the slice-05 reviewers.
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not available: research-evidence holds only ingest-screened.json. No tests were run (exec_budget_s 0).
+- Known wave-1 findings RR-001 and RR-002 (slice-02) were not re-filed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression in existing behaviour from slice-04. The writeJson export does not change the function's body. The new `reviews` dispatch branch, help entry and GROUP_SUBCOMMANDS entry are additive and change no existing argv route. Dependents in the set (src/cli-registry.ts, src/commands/operator-confirm-review.ts) consume nothing that moved. The blast-radius set is capped: 86 dropped by cap, including src/cli.ts, scripts/verify-native-coverage.ts, src/commands/operator-confirm-tools.ts and src/commands/help.ts at hop 2 via this slice's files; only the first two were spot-checked. The changed docs are unresolved by the graph. The Tauri bridge runtime edge was not read in this slice. The test output file was not available.",
+  "slices": ["slice-04"],
+  "inputs_unreadable": [],
+  "findings": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: yes (blast-radius.json from the package, computed from the code graph at head); wiki_used: not-relevant (I answered the regression question from the code and the dependency paths); ctx_used: yes (keryx ctx rg / keryx ctx run); raw_rg_used: no.

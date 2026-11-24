@@ -1,0 +1,386 @@
+STATUS: DONE
+
+Wave D, review round 1, PR #1304. Judged 48 canonical findings of severity >= minor (F-001..F-048) against reviewed commit 20e4281a2; the 12 below minor were left alone.
+Counts: upheld 45, downgraded 0, challenged 2 (F-016, F-036), owner-decision 1 (F-027).
+
+Per finding:
+- F-001: upheld
+- F-002: upheld
+- F-003: upheld
+- F-004: upheld
+- F-005: upheld
+- F-006: upheld
+- F-007: upheld
+- F-008: upheld
+- F-009: upheld
+- F-010: upheld
+- F-011: upheld
+- F-012: upheld
+- F-013: upheld
+- F-014: upheld
+- F-015: upheld
+- F-016: challenged
+- F-017: upheld
+- F-018: upheld
+- F-019: upheld
+- F-020: upheld
+- F-021: upheld
+- F-022: upheld
+- F-023: upheld
+- F-024: upheld
+- F-025: upheld
+- F-026: upheld
+- F-027: owner-decision
+- F-028: upheld
+- F-029: upheld
+- F-030: upheld
+- F-031: upheld
+- F-032: upheld
+- F-033: upheld
+- F-034: upheld
+- F-035: upheld
+- F-036: challenged
+- F-037: upheld
+- F-038: upheld
+- F-039: upheld
+- F-040: upheld
+- F-041: upheld
+- F-042: upheld
+- F-043: upheld
+- F-044: upheld
+- F-045: upheld
+- F-046: upheld
+- F-047: upheld
+- F-048: upheld
+
+Held findings (ask the operator at the tail, after `review ingest --premises`):
+
+F-016 (challenged)
+  Question: F-016: importing writeJson from the sibling command review-board follows a pattern the review-* commands already use (review-layers helpers in review-chunks, review-next, review-slice, review-operator). Keep it as a defect, or dismiss it as accepted project practice? The move to board-github (FA-6) is already done either way.
+  Option: dismiss — sibling-command helper imports are accepted practice here; keep the FA-6 move as a tidy-up
+  Option: uphold — record it as an architecture defect
+  Signal: src/commands/review-chunks.ts:20 — at 20e4281a2: imports resolvePackageDir and wantsHelp from the sibling command ./review-layers
+  Signal: src/commands/review-next.ts:5 — at 20e4281a2: imports resolvePackageDir and wantsHelp from the sibling command ./review-layers
+  Signal: src/commands/review-slice.ts:10 — at 20e4281a2: imports ensurePackageLayers and resolvePackageDir from the sibling command ./review-layers
+  Signal: src/commands/review-operator.ts:33 — at 20e4281a2: imports resolvePackageDir from the sibling command ./review-layers
+  Signal: src/commands/flow-completion-confirm.ts:4 — at 20e4281a2: imports completionHostAnswer from the sibling command ./review-operator
+  Signal: src/commands/dashboard.ts:3 — at 20e4281a2: imports buildDashboard from the sibling command ./update
+  Reasoning: The finding rests on review-reviews being 'the only command-to-sibling-command helper import under src/commands'. At 20e4281a2 that is false: helper imports between sibling command modules are an established pattern here, including among the review-* commands. Moving writeJson beside withCurrentGithubBinding is a reasonable tidy-up (already applied as FA-6), but the dependency is not an architecture defect by this project's practice.
+
+F-027 (owner-decision)
+  Question: F-027: a CLI package imported after newer Desktop attempts gets the next round number (plan T5 keeps this as a known limitation so shown numbers never change), so the rounds timeline can show an older review as the newest round. D-R1 aimed at rounds in time order. Keep the documented limitation, or place late imports by createdAt?
+  Option: dismiss — keep the documented limitation (round numbers never change once shown); FA-17's pinning test stays
+  Option: uphold — place late imports by createdAt (join the round of the newest older attempt on that range) and align AC1, the docstring and the spec
+  Reasoning: The behaviour the finding names is the plan's documented limitation (plan.md:29 at 20e4281a2: a package imported later with an older createdAt gets the next round number, so shown round numbers never change; 'recorded as a known limitation'), with a reason the finding does not address. But the operator's later D-R1 was justified by 'round numbers stay in time order for every consumer', which a late import breaks. Two operator-level statements pull in different directions and the code cannot settle which wins. Fix round 1 (FA-17) kept the limitation and pinned it with a test without an operator answer.
+
+F-036 (challenged)
+  Question: F-036: T10 is still marked todo while the review ran, but CI on 20e4281 (including the Lint and typecheck job) is green and the T10 run is journalled. Treat this as a defect, or dismiss it as bookkeeping closed by marking T10 done?
+  Option: dismiss — bookkeeping only; mark T10 done with the journalled run and CI as evidence
+  Option: uphold — re-run T10 (suites, typecheck, lint) and record it before closing T12
+  Signal: .github/workflows/ci.yml:154 — at 20e4281a2: CI job 'Lint and typecheck' (static-checks) runs `bun run check:static` on the PR
+  Signal: .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md:111 — working tree, written after the reviewed commit: T10 local root run 13158 pass / 18 fail (explained as load); CI on the PR head 20e4281: 29 pass, 0 fail, 1 skipped
+  Reasoning: The fact is true: T10 is still `todo` in flow.json at 20e4281a2 while T12 runs. The claimed impact, that a lint or suite failure would arrive only after the review, does not hold: CI on the reviewed head, which includes the lint and typecheck job, is green, and the T10 run is journalled. What remains is a stale task status, which is flow bookkeeping rather than a defect in the change.
+
+Operator decisions already in journal.md, treated as settled (upheld, not re-asked): D-R1 A,B,A rounds (F-008, F-044's expectation), freshness `unknown` (F-019), no-card Reviews light only for needs_answer (F-024), closed Reviews read cards only with Show closed (F-023), archived never lights (F-006), hidden 60 s reload + watcher/session events (F-007, F-011), drop waiting Open-in-Reviews on repo change (F-001), protocol version 1 kept (F-021).
+
+Not verified / limits: read-only judgement, no tests run. Code read at 20e4281a2 via git show/git grep; per-finding reads were targeted at the cited sites and the verifier's site traces, not a full re-read of every file. The fixes already on the working tree (85fa985c1, 98c7b37a1) were not judged. journal.md:111 (cited for F-036) was written after the reviewed commit. The claims object was not written to research-evidence/premises.json; the orchestrator saves it per the Wave D contract.
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "reasoning": "Verified site; no prior intent for a repository-less focus (plan T7 is the branch's own plan). The operator already answered the related behaviour (journal: a waiting Open-in-Reviews request is dropped when another base repository is picked)."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "reasoning": "Verified: the intent kept in `selected` replays on remount. Sibling ReviewBoard clears its selection on deactivation, so the fix makes the two tabs more consistent."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "reasoning": "Verified: the focus is never reset and is re-applied on a keyed remount. No signal that a replay is intended."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "upheld",
+      "reasoning": "Plan T6's 'pending or unknown' is a branch-introduced signal, and the finding shows its reason wrong: 'unknown' is permanent for partial, budget and existing attempts with nothing to act on. The old board rule lit only on 'pending'."
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "reasoning": "Verified: Desktop picks the reviewed attempt without the domain's FINISHED filter, so two definitions of one fact diverge. No signal for the divergence."
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "reasoning": "Verified: an archive the UI calls reversible ('It remains available in History') becomes unreachable. The operator answered the indicator side (an archived Review never lights)."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "upheld",
+      "reasoning": "Verified regression of hidden-tab updates; the App comment states the opposite intent. The operator answered: hidden 60 s reload plus watcher/session events kept."
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "upheld",
+      "reasoning": "The plan's A,B,A rule was a deliberate choice, but the operator has already decided this finding (D-R1, journal 2026-11-24T09:20: a return to an earlier range opens a new round). Not a premise question."
+    },
+    {
+      "finding_id": "F-009",
+      "verdict": "upheld",
+      "reasoning": "No signal that a pending focus should survive an access failure; a stale request firing on a later manual retry is a defect."
+    },
+    {
+      "finding_id": "F-010",
+      "verdict": "upheld",
+      "reasoning": "The spec state table (specification.md:65) attaches 'и у раунда нет принятых находок' to the whole list of failed/cancelled/blocked/budget/skipped outcomes, so the spec supports the finding. The plan's 'reviewState(latest attempt)' narrowed it without a recorded decision (the journal's spec/plan decision covers only budget)."
+    },
+    {
+      "finding_id": "F-011",
+      "verdict": "upheld",
+      "reasoning": "Sibling useReviewRuns skips its poll when the document is hidden; the fix aligns the new poller with it. The operator's 'hidden 60 s reload kept' does not contradict a visibility check."
+    },
+    {
+      "finding_id": "F-012",
+      "verdict": "upheld",
+      "reasoning": "Recorded only as a T7 concern, not as a decision: a duplicate CLI spawn per window open with no reason given."
+    },
+    {
+      "finding_id": "F-013",
+      "verdict": "upheld",
+      "reasoning": "The sibling PR tab declares its indicator type in the feature module and the shell imports it; the fix restores that direction."
+    },
+    {
+      "finding_id": "F-014",
+      "verdict": "upheld",
+      "reasoning": "No signal that the optional callback and the dead view/answer fallback are intended; App always passes the callback."
+    },
+    {
+      "finding_id": "F-015",
+      "verdict": "upheld",
+      "reasoning": "The same rule lives in two layers; no signal that this is deliberate."
+    },
+    {
+      "finding_id": "F-016",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/commands/review-chunks.ts:20",
+          "says": "at 20e4281a2: imports resolvePackageDir and wantsHelp from the sibling command ./review-layers"
+        },
+        {
+          "ref": "src/commands/review-next.ts:5",
+          "says": "at 20e4281a2: imports resolvePackageDir and wantsHelp from the sibling command ./review-layers"
+        },
+        {
+          "ref": "src/commands/review-slice.ts:10",
+          "says": "at 20e4281a2: imports ensurePackageLayers and resolvePackageDir from the sibling command ./review-layers"
+        },
+        {
+          "ref": "src/commands/review-operator.ts:33",
+          "says": "at 20e4281a2: imports resolvePackageDir from the sibling command ./review-layers"
+        },
+        {
+          "ref": "src/commands/flow-completion-confirm.ts:4",
+          "says": "at 20e4281a2: imports completionHostAnswer from the sibling command ./review-operator"
+        },
+        {
+          "ref": "src/commands/dashboard.ts:3",
+          "says": "at 20e4281a2: imports buildDashboard from the sibling command ./update"
+        }
+      ],
+      "reasoning": "The finding rests on review-reviews being 'the only command-to-sibling-command helper import under src/commands'. At 20e4281a2 that is false: helper imports between sibling command modules are an established pattern here, including among the review-* commands. Moving writeJson beside withCurrentGithubBinding is a reasonable tidy-up (already applied as FA-6), but the dependency is not an architecture defect by this project's practice.",
+      "question": "F-016: importing writeJson from the sibling command review-board follows a pattern the review-* commands already use (review-layers helpers in review-chunks, review-next, review-slice, review-operator). Keep it as a defect, or dismiss it as accepted project practice? The move to board-github (FA-6) is already done either way.",
+      "options": [
+        "dismiss — sibling-command helper imports are accepted practice here; keep the FA-6 move as a tidy-up",
+        "uphold — record it as an architecture defect"
+      ]
+    },
+    {
+      "finding_id": "F-017",
+      "verdict": "upheld",
+      "reasoning": "No signal that losing Review rules on a failed list read is intended; base reached them from the board snapshot."
+    },
+    {
+      "finding_id": "F-018",
+      "verdict": "upheld",
+      "reasoning": "User docs left at base wording after the tab renumbering; plain drift."
+    },
+    {
+      "finding_id": "F-019",
+      "verdict": "upheld",
+      "reasoning": "The `unknown` kind is an operator decision (journal, T14); the CLI reference not listing it is a documentation gap that follows the decision."
+    },
+    {
+      "finding_id": "F-020",
+      "verdict": "upheld",
+      "reasoning": "The writable open is deliberate (journal T5 concern), but the finding is that the docs and the header comment call the read read-only; the pinning test is branch-introduced and cannot ratify itself."
+    },
+    {
+      "finding_id": "F-021",
+      "verdict": "upheld",
+      "reasoning": "Journal T6 records the decision to keep version 1; the finding asks the spec to say so, which follows the decision rather than contesting it."
+    },
+    {
+      "finding_id": "F-022",
+      "verdict": "upheld",
+      "reasoning": "The cap picks by PR number rather than by list order, and a refresh can never reach the rest. No signal of intent."
+    },
+    {
+      "finding_id": "F-023",
+      "verdict": "upheld",
+      "reasoning": "The operator already answered (journal: locally closed Reviews fetch their cards only while Show closed is on)."
+    },
+    {
+      "finding_id": "F-024",
+      "verdict": "upheld",
+      "reasoning": "The operator already answered (journal: a Review with no PR card lights only for needs_answer)."
+    },
+    {
+      "finding_id": "F-025",
+      "verdict": "upheld",
+      "reasoning": "No overall deadline against the host's 150 s bound; the project's own verifyScheduledSubject uses one, so the fix is consistent with sibling code."
+    },
+    {
+      "finding_id": "F-026",
+      "verdict": "upheld",
+      "reasoning": "Estimated cost, not measured, but no intent or practice signal against it."
+    },
+    {
+      "finding_id": "F-027",
+      "verdict": "owner-decision",
+      "reasoning": "The behaviour the finding names is the plan's documented limitation (plan.md:29 at 20e4281a2: a package imported later with an older createdAt gets the next round number, so shown round numbers never change; 'recorded as a known limitation'), with a reason the finding does not address. But the operator's later D-R1 was justified by 'round numbers stay in time order for every consumer', which a late import breaks. Two operator-level statements pull in different directions and the code cannot settle which wins. Fix round 1 (FA-17) kept the limitation and pinned it with a test without an operator answer.",
+      "question": "F-027: a CLI package imported after newer Desktop attempts gets the next round number (plan T5 keeps this as a known limitation so shown numbers never change), so the rounds timeline can show an older review as the newest round. D-R1 aimed at rounds in time order. Keep the documented limitation, or place late imports by createdAt?",
+      "options": [
+        "dismiss — keep the documented limitation (round numbers never change once shown); FA-17's pinning test stays",
+        "uphold — place late imports by createdAt (join the round of the newest older attempt on that range) and align AC1, the docstring and the spec"
+      ]
+    },
+    {
+      "finding_id": "F-028",
+      "verdict": "upheld",
+      "reasoning": "previousAttempt in the same store already excludes never-started superseded rows and roundFor does not; the fix makes the store consistent with itself."
+    },
+    {
+      "finding_id": "F-029",
+      "verdict": "upheld",
+      "reasoning": "The sibling PR-board card has no aria-label; the override hides state and freshness from screen readers. The fix increases consistency."
+    },
+    {
+      "finding_id": "F-030",
+      "verdict": "upheld",
+      "reasoning": "The error banner sits far from the control it explains; the sibling revision-changed banner sits before the tab content."
+    },
+    {
+      "finding_id": "F-031",
+      "verdict": "upheld",
+      "reasoning": "WCAG 2.2 SC 2.5.3 Label in Name supports the finding: the accessible name does not contain the visible 'after <id>'."
+    },
+    {
+      "finding_id": "F-032",
+      "verdict": "upheld",
+      "reasoning": "Decision (d) renamed the outdated action to 'New review round'; the moved panel still says 'Review again'. The fix applies the decision consistently."
+    },
+    {
+      "finding_id": "F-033",
+      "verdict": "upheld",
+      "reasoning": "The digit-only branch is new in this PR (no prior intent); the sibling PR board matches title OR number substring and the placeholder says 'title or #number'."
+    },
+    {
+      "finding_id": "F-034",
+      "verdict": "upheld",
+      "reasoning": "The PR body claims the rest of R4 and the plan's own stage-2 row promises round and behind on the link. Contract gap, no signal against."
+    },
+    {
+      "finding_id": "F-035",
+      "verdict": "upheld",
+      "reasoning": "git merge-tree reports a content conflict in a file the overlap list omits; factual."
+    },
+    {
+      "finding_id": "F-036",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".github/workflows/ci.yml:154",
+          "says": "at 20e4281a2: CI job 'Lint and typecheck' (static-checks) runs `bun run check:static` on the PR"
+        },
+        {
+          "ref": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md:111",
+          "says": "working tree, written after the reviewed commit: T10 local root run 13158 pass / 18 fail (explained as load); CI on the PR head 20e4281: 29 pass, 0 fail, 1 skipped"
+        }
+      ],
+      "reasoning": "The fact is true: T10 is still `todo` in flow.json at 20e4281a2 while T12 runs. The claimed impact, that a lint or suite failure would arrive only after the review, does not hold: CI on the reviewed head, which includes the lint and typecheck job, is green, and the T10 run is journalled. What remains is a stale task status, which is flow bookkeeping rather than a defect in the change.",
+      "question": "F-036: T10 is still marked todo while the review ran, but CI on 20e4281 (including the Lint and typecheck job) is green and the T10 run is journalled. Treat this as a defect, or dismiss it as bookkeeping closed by marking T10 done?",
+      "options": [
+        "dismiss — bookkeeping only; mark T10 done with the journalled run and CI as evidence",
+        "uphold — re-run T10 (suites, typecheck, lint) and record it before closing T12"
+      ]
+    },
+    {
+      "finding_id": "F-037",
+      "verdict": "upheld",
+      "reasoning": "The Round assertion is satisfied by another cell of the same row, so it cannot fail."
+    },
+    {
+      "finding_id": "F-038",
+      "verdict": "upheld",
+      "reasoning": "One-sided coverage of new routing logic; no signal against."
+    },
+    {
+      "finding_id": "F-039",
+      "verdict": "upheld",
+      "reasoning": "The App-level handoff is untested end to end; no signal against."
+    },
+    {
+      "finding_id": "F-040",
+      "verdict": "upheld",
+      "reasoning": "observeRuns re-read and the focus branches are unpinned; no signal against."
+    },
+    {
+      "finding_id": "F-041",
+      "verdict": "upheld",
+      "reasoning": "Nothing records a deliberate removal of the focus check; the finding itself asks for that decision, and fix round 1 chose to restore it."
+    },
+    {
+      "finding_id": "F-042",
+      "verdict": "upheld",
+      "reasoning": "The fixture cannot separate the fallback from its absence; no signal against."
+    },
+    {
+      "finding_id": "F-043",
+      "verdict": "upheld",
+      "reasoning": "Documented behaviour (deleted hidden, recoverable read as failed) without a fixture; no signal against."
+    },
+    {
+      "finding_id": "F-044",
+      "verdict": "upheld",
+      "reasoning": "The premise (the A,B,A rule has no fixture) stands. The operator has since reversed the rule (D-R1), so the fixture's expected round follows D-R1 (a new round), not the plan text the finding quotes; that is already the operator's decision, not a premise question."
+    },
+    {
+      "finding_id": "F-045",
+      "verdict": "upheld",
+      "reasoning": "A safety guard with a stated reason and no separating fixture; no signal against."
+    },
+    {
+      "finding_id": "F-046",
+      "verdict": "upheld",
+      "reasoning": "The verifier's evidence on F-005 shows non-finished attempts do carry result.reviewed, so the unseparated term matters."
+    },
+    {
+      "finding_id": "F-047",
+      "verdict": "upheld",
+      "reasoning": "rejects.toThrow() with no matcher accepts the downstream configuration error; the sibling --state case matches its message."
+    },
+    {
+      "finding_id": "F-048",
+      "verdict": "upheld",
+      "reasoning": "Security-code finding: may only be upheld or held. ReviewBrowserLink (apps/desktop/src/review/ReviewBrowserLink.tsx:13-18) renders a plain anchor with no click handler; ReviewDetail routes the same link through followLink (ReviewDetail.tsx:155-163, :254); ReviewPanel has no equivalent. No signal against."
+    }
+  ]
+}
+```

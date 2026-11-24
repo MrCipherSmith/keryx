@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281",
+  "command": "bun test src/commands/review-reviews.test.ts src/review/desk-run-store.test.ts src/review/board-badges.test.ts src/review/review-entity.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 6037
+  },
+  "mutants": [
+    {
+      "id": "S03",
+      "file": "src/review/desk-run-store.ts",
+      "anchor": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')",
+      "replacement": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive')",
+      "command": "bun test --bail src/commands/review-reviews.test.ts src/review/desk-run-store.test.ts src/review/board-badges.test.ts src/review/review-entity.test.ts",
+      "kind": "behavior",
+      "line": 586,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3072
+    },
+    {
+      "id": "S04",
+      "file": "src/review/desk-run-store.ts",
+      "anchor": "${placement.previousRunId} AS previousRunId,\n        CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,",
+      "replacement": "${placement.previousRunId} AS previousRunId,\n        r.state AS state,",
+      "command": "bun test --bail src/commands/review-reviews.test.ts src/review/desk-run-store.test.ts src/review/board-badges.test.ts src/review/review-entity.test.ts",
+      "kind": "behavior",
+      "line": 574,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3213
+    }
+  ],
+  "totals": {
+    "killed": 0,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "bail": true,
+  "startedAt": "2026-11-24T10:57:38.009Z",
+  "head": "20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b",
+  "treeHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "loadavg": [
+    12.0166015625,
+    10.19873046875,
+    11.2939453125
+  ],
+  "provenanceMs": 478,
+  "copyMs": 55213,
+  "mutantsMs": 6285
+}

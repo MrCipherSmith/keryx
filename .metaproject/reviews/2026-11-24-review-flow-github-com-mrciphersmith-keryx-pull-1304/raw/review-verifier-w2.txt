@@ -1,0 +1,100 @@
+STATUS: DONE
+
+Verifier: review-verifier (round 1, Wave C, second pass). Head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, base a5d1ab236, read-only.
+Method note: the dispatch forbade running tests, so no `execution` method was available. Every verdict below is a
+`site-check` extended by a line-by-line trace of the trigger path at head (and at base where the finding is a
+regression claim). Nothing was reproduced by running code; the red probes below are what would do that.
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "3 major findings checked by site-check + code trace (no execution allowed): 3 confirmed. review-regression RR-002 and review-degradation F-001 are confirmed with narrower trigger sets (recorded in evidence and prose); review-logic F-001 (wave 2) confirmed as stated. No severity change is expressible in this schema.",
+  "verifications": [
+    {
+      "finding": "review-regression#RR-002",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Head: apps/desktop/src/review/model.ts:38-43 needsViewerAttention no longer has `|| !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending` (base model.ts:42, via git show a5d1ab236). ReviewsView.tsx:133 indicator = snapshot.reviews.some(reviewNeedsViewer). Every reload trigger of that snapshot enumerated (keryx ctx rg 'refresh\\b|setAttempt' ReviewsView.tsx, complete): load effect deps [cwd, repo, expectedViewer, attempt, ...] :96-117; :122 refresh only on inactive->active transition; :128-132 interval returns early `if (!active || !running)`; :172 focus effect (fired by Open in Reviews, which also switches to the tab); :185 observeRuns (only the panel, rendered only when active, :263); :233/:248 buttons. ReviewsView has no subscribeSessionReview and no watcher hook. App.tsx:624-631 keeps it mounted hidden with the comment 'so the Reviews indicator stays current on every tab', which the code does not do. Base comparison: base ReviewWatcher.tsx:73-82 60 s interval not gated on `active` -> request status -> :48-50 onPollCompleted when lastSuccessAt changes -> base ReviewBoard.tsx:477 onPollCompleted={refresh} -> board read carries localReview (src/review/board-badges.ts:51-52 awaitingAnswer/publicationPending) -> base ReviewBoard.tsx:391-395/431-434 indicator via needsViewerAttention. Base ReviewBoard.tsx:164 subscribeSessionReview also updated badges on every tab. NARROWER: on base the hidden-tab update needed an enabled, installed watcher whose background poll completed, or a session-review snapshot; with neither, base was stale while hidden too. The regression is real for projects using the watcher or session-started reviews."
+    },
+    {
+      "finding": "review-degradation#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Base ReviewDetail.tsx:290 (git show a5d1ab236) rendered `<ReviewRunHistory runs={local.runs} onSelect={setSessionId} />` in the PR panel header unconditionally. Head ReviewDetail.tsx:240-262 has no ReviewRunHistory; :181 hasReview = local.runs.some(run => !reviewIsArchived(run)); :255 shows Open in Reviews only when hasReview, else Start/Review again only for card.state === 'open'. keryx ctx rg '<ReviewRunHistory|<ReviewWorkspace|<ReviewPanel' over apps/desktop/src (complete): only ReviewWorkspace.tsx:158 <- ReviewPanel.tsx:117 <- ReviewsView.tsx:263. The Reviews list comes from desk-run-store.ts:561-605 reviewRows whose WHERE at :586 drops decision.action IN ('archive','delete'), so a Review whose attempts are all archived yields no row (doc comment :561-562). ReviewLifecycle.tsx:54-55 offers restore/delete only from a dialog reached through those routes; :20 archive text promises 'It remains available in History.' The existing test ReviewsView.dom.test.tsx:387-388 pins the head behaviour (archived-only run -> no 'Open in Reviews'), and :390 asserts no .review-run-history in the PR panel. NARROWER: an attempt started from a Session stays reachable — SessionReviewActivity.tsx:243-252 renders ReviewRunDialog with onLifecycle for its linked run, the links persist (App.tsx:523 readSessionReviewLinks), and :149-157 keeps showing the run after an archive decision because the status read excludes only 'delete'. Attempts started from the PR board, the Reviews tab or automation have no such route."
+    },
+    {
+      "finding": "review-logic#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Desktop apps/desktop/src/reviews/model.ts:53-58 latestReviewed = first attempt with `reviewed !== null`, no state filter; :62-64 reviewedCommit renders its headSha; consumers ReviewsView.tsx:276 (card), :322 (row), ReviewPanel.tsx:107 (panel header). Domain src/review/review-entity.ts:90 FINISHED = completed|partial|budget; :120 latestReviewed requires FINISHED.has(state); :123-125 referenceHead -> :155 freshness, :160-161 findings/publication. Do non-finished attempts carry result.reviewed? Yes: desk-run-executor.ts:373-374 checkedBase/checkedHead come from the moved package manifest whenever the attempt owns a package; :376 floor -> outcome 'blocked'; :435-438 signal.aborted -> outcome 'cancelled' without clearing them; :445 returns them. desk-run-service.ts:65-82 finishExecution maps cancelled/blocked/failed states and sets result.reviewed from checkedBase/checkedHead for every outcome. desk-run-store.ts:578 reads $.result.reviewed regardless of state and :596/:600 copies it onto the attempt. Trigger path holds as stated: completed round on head A, then a cancelled or blocked round on head B after its package exists -> card shows B with entity freshness 'behind' computed from A. Limit: an attempt cancelled before a package exists has reviewed = null and is not affected."
+    }
+  ],
+  "stats": { "confirmed": 3, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
+```
+
+# Verification Report
+
+## Method mix
+- execution: 0 (dispatch forbade running tests)
+- site-check with code trace: 3
+- reasoning (capped to unverifiable): 0
+- not checked: 0
+
+## Per-finding claims
+
+### review-regression RR-002 — confirmed (narrower), severity after verification: major (unchanged; verifier cannot change it)
+Head path: watcher-scheduled or session-started review reaches ready / needs_answer / stopped while the user is on
+another tab -> ReviewsView snapshot is not re-read (no reload trigger runs while `active` is false: ReviewsView.tsx:122,
+:128-132, :172, :185) -> ReviewsView.tsx:133 indicator unchanged -> no tab dot. The PR board still refreshes on the
+watcher poll and session snapshots, but head model.ts:38-43 no longer counts awaitingAnswer/publicationPending, so the
+Pull requests dot does not light either.
+Base path: ReviewWatcher.tsx:73-82 (60 s, not gated on active) -> :48-50 onPollCompleted -> ReviewBoard refresh ->
+board-badges.ts:51-52 badges -> needsViewerAttention base :42 -> PR dot lit; plus base ReviewBoard.tsx:164
+subscribeSessionReview on every tab.
+Narrowing: base was also stale while hidden when neither channel fired (no installed/enabled watcher, no
+session-linked review). Note for the merge: review-degradation F-003 says base was also stale on Sessions; that is
+true only for projects without the watcher poll or a session snapshot, so the two findings agree on the narrowed set.
+Red probe: ReviewsView DOM test with fake timers. `load` first returns one Review in state "running"; render with
+active=false and capture onIndicatorChange. Switch `load` to return the same Review as "ready" with publication null
+(reviewNeedsViewer true); fire publishSessionReview for it and advance timers past 60 s. Assert the last indicator is
+"attention". Fails today (stays null until active flips to true).
+
+### review-degradation F-001 — confirmed (narrower), severity after verification: major (unchanged)
+Path: user archives the only attempt of PR #N (started from the PR board, the Reviews tab or a rule) in the Reviews
+panel -> reviewRows WHERE (desk-run-store.ts:586) drops it, the Review leaves the list -> PR panel: hasReview false
+(ReviewDetail.tsx:181), no History (removed from base :290), so only Start/Review again for an open PR and nothing for
+a closed/merged PR -> restore/delete/report unreachable in Desktop, contradicting ReviewLifecycle.tsx:20.
+Narrowing: a Session-started attempt keeps a route via SessionReviewActivity.tsx:243-252 (ReviewRunDialog with
+lifecycle; restore offered at ReviewLifecycle.tsx:55). Not verified: whether that session card survives every session
+switch; I only confirmed the links are persisted (App.tsx:523) and filtered per session (:548).
+Red probe: ReviewDetail DOM test, runCommand returns one completed run with decision {action:"archive"}; card state
+"open" and again "merged". Assert a control exists that opens the run and offers "Restore" (e.g. a .review-run-history
+button, or Open in Reviews leading to a panel with History). Fails today; the existing assertions at
+ReviewsView.dom.test.tsx:387-390 pin the current behaviour and would change with the fix. Store probe: reviewRows for
+a Review whose only attempt is archived returns [] today.
+
+### review-logic F-001 (wave 2) — confirmed, severity after verification: major (unchanged)
+Path: desk-run-executor.ts:373-374 (manifest SHAs) -> :435-438 cancelled / :376 blocked, SHAs kept -> :445 ->
+desk-run-service.ts:81-82 result.reviewed -> desk-run-store.ts:578/:596 attempt.reviewed -> apps/desktop/src/reviews/
+model.ts:55 picks it -> :63 reviewedCommit B, while review-entity.ts:120/:155 compute freshness from finished A.
+Limit: only when the stopped attempt got as far as owning a package; earlier cancels carry reviewed = null.
+Red probe: apps/desktop/src/reviews/model.test.ts: rounds = [{number:2, attempts:[{state:"cancelled",
+reviewed:{baseSha:"base", headSha:"bbbbbbbbbb"}}]}, {number:1, attempts:[{state:"completed", reviewed:{baseSha:"base",
+headSha:"aaaaaaaaaa"}}]}]; expect(reviewedCommit(review)).toBe("aaaaaaa") and latestReviewed(review).state ===
+"completed". Fails today ("bbbbbbb"). Cross-check probe: the same row through summarizeReview gives freshness from A,
+so a parity test `reviewedCommit(summary) === referenceHead(row).slice(0,7)` pins the two together.
+
+## Refuted
+None.
+
+## Not verified
+- Nothing was executed; all three verdicts rest on reading the trigger paths at head and base.
+- RR-002: I did not confirm at runtime that the watcher's background poll advances lastSuccessAt in a typical setup;
+  the base hidden-tab refresh depends on it.
+- degradation F-001: whether the session-linked route covers every session-started attempt was not traced further.
+
+Routing audit: graph_used: no (not-relevant: all sites were named with file/line by the findings); wiki_used: no
+(not-relevant: verification of named code paths); ctx_used: yes (keryx ctx rg for enumerations and raw files);
+raw_rg_used: no (sed/grep over `git show` base objects and exact line ranges, each marked `keryx:raw` with reason).

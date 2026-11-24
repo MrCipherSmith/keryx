@@ -1,0 +1,70 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, diff mode, round 1 wave 3. Load profile: not provided. Concrete triggers used: N processes on one runs.sqlite (Desktop windows running `review reviews`, `desk-run` status/start, detached workers, the watcher), each opening a writable DeskRunStore; old-binary workers on a store a new binary migrates.
+Slice read in full: slice-05 (923 lines): src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts (schema, migration, assignReviews/reviewFor/roundFor, save, recordExisting, history, attachBadges, reviewRows, readReviewRows, requestAttempt insert), src/review/desk-run-types.ts, src/review/review-entity.ts.
+Context read outside the slice (read-only): src/review/desk-run-service.ts:154-300, 315-370, 425-450 (every production `store.atomic` body, dispatchNext, spawnWorker); src/review/desk-run-store.ts:820-860 (reconcile); src/lib/hub-machine/process-identity.ts:30 (ps call bound). Production callers of requestAttempt/request/requestManual/requestContinuation/recordExisting enumerated with `keryx ctx rg` over src.
+Earlier waves checked to avoid duplicates: raw/*-w1.txt, raw/*-w2.txt, raw/review-security-code-w3.txt, raw/review-frontend-w3.txt. The writable open + IMMEDIATE transaction per `review reviews` read is already review-highload-w2 F-004 (info); PC-002 covers the undocumented in-place migration. Not re-filed.
+Test output: research-evidence/verify-tests-to-run-1.txt is not present (only ingest-screened.json); no test output was read. Git history: not read (no finding depends on it).
+
+Summary: slice-05's new store code is correct under concurrent processes. The migration (ADD COLUMN + assignReviews) runs inside one BEGIN IMMEDIATE transaction, every production path that inserts a run (requestAttempt via the service's `store.atomic` at desk-run-service.ts:226 and :275; recordExisting, now itself atomic and also wrapped by the caller at :260) assigns its Review inside the same write transaction, so the SELECT-then-INSERT in reviewFor and the max(round)+1 in roundFor cannot interleave across processes. Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+Wave-2 follow-up resolved ("confirm no writer holds a transaction near busy_timeout 8000"): every `store.atomic` body in desk-run-service.ts and DeskRunStore.reconcile is synchronous (bun:sqlite transaction functions cannot await). The longest body is dispatchNext: one detached `spawn` plus readProcessIdentity's `Bun.spawnSync('/bin/ps', …, { timeout: 1500 })`, both pre-existing and unchanged by this PR, so the worst-case lock hold is about 1.5 s, well inside the 8 s busy_timeout. The new constructor transaction adds only a pragma_table_info read and an indexed empty `review_id IS NULL` query on a migrated store. F-004 stays info.
+
+### CLI / Multi-Session
+None detected.
+- Two windows opening a pre-Reviews database: the column check and ALTER TABLE run in one IMMEDIATE transaction, so only the first adds the columns; the second sees them present.
+- The `reviews` CREATE TABLE IF NOT EXISTS runs outside the transaction but is idempotent under SQLite's own write lock.
+- An older-binary worker that later saves a decoded run writes no placement (its decode does not know it); a new-binary save strips `reviewId/round/previousRunId` via storedDetails, so placement lives only in the columns and a concurrent save cannot overwrite it.
+- Rows inserted by an older binary stay unassigned (invisible in reviewRows, no round on badges) until the next writable open of a new binary assigns them; no lost or duplicated Review results.
+
+### Concurrency & Races
+None detected.
+- reviewFor (SELECT then INSERT) and roundFor (max(round)+1) are check-then-act, but every production caller runs them under BEGIN IMMEDIATE; the reviews UNIQUE(repo, pr, viewer) with NOCASE viewer is the backstop. The only calls outside a transaction are in tests (review-rules.test.ts:325, :400; desk-run-store.test.ts:359).
+- recordExisting becomes a savepoint when nested in the service's atomic call (bun:sqlite nests transaction functions as savepoints).
+- `placed` is memoised per store instance; every store is short-lived per command, and a stale `false` on a read-only store only reads placement as NULL.
+
+### Resources
+None detected beyond wave-2 findings. Per-attempt `publication()` file reads in reviewRows grow with stored history; that cost is the performance lens's (performance-w2 F-001 covers list cost growing with history).
+
+### Caching
+None detected (no cache added).
+
+### Lock Contention
+None new. See the wave-2 follow-up resolution above; F-004 (info) already covers the RESERVED lock per list read.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+None detected.
+
+### Idempotency & Distributed Invariants
+None detected. assignReviews touches only `review_id IS NULL` rows and its UPDATE re-checks `review_id IS NULL`, so re-running the migration never renumbers a round. Ordering uses createdAt from one machine's clock per store, not across nodes.
+
+Clean Areas: Part 0, A, B, C, D, E, F, G reviewed for slice-05.
+
+Not verified: no tests run (read-only, exec_budget_s 0); bun:sqlite's nested-transaction-as-savepoint behaviour is taken from its documented better-sqlite3-compatible API, not executed here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "slice-05 store code holds under concurrent processes: the Review migration and every production run insert assign Reviews and rounds inside one BEGIN IMMEDIATE transaction, and placement is kept only in columns. The wave-2 follow-up is resolved: all store.atomic bodies are synchronous, the longest (dispatchNext with a 1.5 s-bounded ps call, pre-existing) stays well inside busy_timeout 8000. No new findings.",
+  "slices": ["slice-05"],
+  "inputs_unreadable": [],
+  "findings": [],
+  "needs_context": [],
+  "follow_ups": [],
+  "not_verified": [
+    "No tests run (read-only, exec_budget_s 0); research-evidence/verify-tests-to-run-1.txt absent.",
+    "bun:sqlite nested transaction (savepoint) behaviour for recordExisting inside the service's atomic call taken from the API contract, not executed.",
+    "Git history not read."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; slice text supplied and targets known), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg for caller enumeration and earlier-wave dedup), raw_rg_used: no.

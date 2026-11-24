@@ -1,0 +1,1224 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The feature module reviews/ imports its indicator type from the app shell (shell/AppShell.tsx). The ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-013 / canonical-findings.json F-013; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-013.",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The PR panel's review interface moved to the Reviews tab, so the PR feature now depends on the Revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-014 / canonical-findings.json F-014; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-014.",
+      "finding": "F-014"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (ReviewDetail keeps the onOpenReviewSession prop but no longer reads it, and ReviewBoard.tsx still fo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-049 / canonical-findings.json F-049; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-049.",
+      "finding": "F-049"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (The shared review interface, now also rendered inside reviews/ReviewPanel, depends on the PR detail ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w1.txt F-004 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: ReviewWorkspace depending on the PR panel stylesheet is a structure note with no user-visible defect."
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (The extraction is partial. ReviewDetail keeps its own start callback, initialLaunch consume-once eff) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w1.txt F-005 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: the partial extraction of ReviewDetail is a structure note; the reviewer names no failing behaviour."
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (The command layer decides which Reviews are behind (reviewed head differs from the PR head, and the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-015 / canonical-findings.json F-015; fix row FA-5 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-015.",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (A command module imports a helper from a sibling command module, and review-board.ts exported a prev) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-016 / canonical-findings.json F-016; fix row FA-6 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-016.",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (A ReviewsSnapshot is passed where listActiveReviewCards expects Pick<ReviewBoardSnapshot, \"repo\"|\"re) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w2.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: structural typing of ReviewsSnapshot works as written; a typing note, no defect."
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (The domain rule for placing an attempt in a round is written as SQL in the persistence class (roundF) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w3.txt F-001 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: the round rule written as SQL in the store is a placement note; journal.md T5 records moving assignment logic as a follow-up."
+    },
+    {
+      "id": "review-architecture-w3:F-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-002 (save and recordExisting write details through storedDetails, which strips reviewId/round/previousRun) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w3.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: the reviewer states the requestAttempt details write is correct; consistency note only."
+    },
+    {
+      "id": "review-architecture-w3:F-003",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-003 (requestAttempt relies on the caller's transaction before it calls assignReviews(). recordExisting no) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-w3.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: transaction-ownership note; the reviewer names no failing caller."
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (When every attempt of a PR is archived, the user can no longer view, restore or delete those attempt) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-006 / canonical-findings.json F-006; fix row FA-4 (85fa985c1), FB-5 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-006.",
+      "finding": "F-006"
+    },
+    {
+      "id": "review-degradation-w1:F-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-002 (Board actions now hand the Review to the Reviews tab by PR number only: 'View review', 'View review ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001).",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-degradation-w1:F-003",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-003 (The awaiting-answer and publication-pending signal moved from the Pull requests indicator to the Rev) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-007 (merged at consolidation; primary review-regression-w1:RR-002).",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-degradation-w1:F-004",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-004 (On base, the Review rules button showed once the PR board snapshot loaded (`tabActive && watcherTarg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-017 / canonical-findings.json F-017; fix row FB-10 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-017.",
+      "finding": "F-017"
+    },
+    {
+      "id": "review-degradation-w1:F-005",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-005 (The change renumbers the project tabs (⌘3 Reviews, ⌘4 Pull requests, ⌘5 Issues, ⌘6 Metaproject), mov) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-018 / canonical-findings.json F-018; fix row FA-15 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-018.",
+      "finding": "F-018"
+    },
+    {
+      "id": "review-degradation-w2:F-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-001 (The CLI reference describes freshness as `current` or `behind` (with a null count when unknown). It ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-019.",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-degradation-w2:F-002",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-002 (The PR edits specification.md (0.1.3) but leaves two sentences: that the CLI protocol version is rai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-021 / canonical-findings.json F-021; fix row FA-14 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-021.",
+      "finding": "F-021"
+    },
+    {
+      "id": "review-degradation-w2:F-003",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-003 (Compare candidates keep readReviewRows order (ORDER BY v.pr DESC, desk-run-store.ts:587), and the fi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-022 (merged at consolidation; primary review-highload-w2:F-001).",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-degradation-w3:F-001",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding F-001 (Rounds are numbered in creation order only within one assignReviews batch. recordExisting imports CL) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-027 / canonical-findings.json F-027; fix row FA-17 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-027.",
+      "finding": "F-027"
+    },
+    {
+      "id": "review-degradation-w3:F-002",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding F-002 (Each new attempt runs roundFor, whose retry query and newest() json_extract `details` (which embeds ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-026 / canonical-findings.json F-026; fix row FA-10 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-026 (merged at consolidation; primary review-performance-w3:F-001).",
+      "finding": "F-026"
+    },
+    {
+      "id": "review-degradation-w4:F-001",
+      "source": "raw/review-degradation-w4.txt",
+      "question": "Is review-degradation finding F-001 (The CLI reference describes freshness as `current` or `behind` (with a null count when unknown). It ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1)",
+      "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-001 unchanged on the slice-04 retry (same defect); canonical F-019.",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-degradation-w4:F-002",
+      "source": "raw/review-degradation-w4.txt",
+      "question": "Is review-degradation finding F-002 (The PR edits specification.md (hunks at lines 2, 70 and 210) but leaves two sentences: :226 says the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-021 / canonical-findings.json F-021; fix row FA-14 (85fa985c1)",
+      "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-002 unchanged on the slice-04 retry (same defect); canonical F-021.",
+      "finding": "F-021"
+    },
+    {
+      "id": "review-degradation-w4:F-003",
+      "source": "raw/review-degradation-w4.txt",
+      "question": "Is review-degradation finding F-003 (Compare candidates keep readReviewRows order (ORDER BY v.pr DESC, desk-run-store.ts:587), and only t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1)",
+      "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-003 unchanged on the slice-04 retry (same defect); canonical F-022.",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (The Open-in-Reviews intent is stored in `selected` and never cleared after ReviewWorkspace consumes ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-002 / canonical-findings.json F-002; fix row FB-2 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-002.",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-frontend-w1:F-002",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-002 (The focus effect runs on every mount. RepositoryReviews is keyed by [cwd, viewer, repo], ReviewsView) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-003 / canonical-findings.json F-003; fix row FB-3 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-003.",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-frontend-w1:F-003",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-003 (The aria-label replaces the content-derived accessible name, so state, round, reviewed commit, fresh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-029.",
+      "finding": "F-029"
+    },
+    {
+      "id": "review-frontend-w1:F-004",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-004 (The Reviews list (and so the indicator) reloads only on mount, activation, Refresh and every 60 s wh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-007 (merged at consolidation; primary review-regression-w1:RR-002).",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-frontend-w1:F-005",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-005 (onOpenReviewSession stays in ReviewDetail Props, and ReviewBoard still passes it, but ReviewDetailSh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-049 / canonical-findings.json F-049; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-049 (merged at consolidation; primary review-architecture-w1:F-003).",
+      "finding": "F-049"
+    },
+    {
+      "id": "review-frontend-w2:F-001",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-001 (The helper meant for the Pull requests dot also matches the Reviews dot (class \"review-tab-dot revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-050 / canonical-findings.json F-050; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-050.",
+      "finding": "F-050"
+    },
+    {
+      "id": "review-frontend-w2:F-002",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-002 (Four ReviewsView tests find the card through its aria-label, which review-frontend w1 F-003 proposes) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-029 (merged at consolidation; primary review-frontend-w1:F-003).",
+      "finding": "F-029"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (While the Reviews tab is the work view and any Review is queued or running, the list is reloaded eve) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-011 / canonical-findings.json F-011; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-011.",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (ReviewsView is mounted unconditionally in every project window (by design, to keep the tab indicator) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-w1.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: one list read per project window at open is by design (keeps the indicator current); no defect claimed."
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (`behind` is built in `rows` order, and readReviewRows returns rows `ORDER BY v.pr DESC` (desk-run-st) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-022.",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-002 (Every call reads a PR card for every Review the account has ever stored in the repository, including) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-023 / canonical-findings.json F-023; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-023.",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-003 (Each GitHub call relies only on boardGh's per-call 18 s timeout; readReviews has no overall deadline) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-025 / canonical-findings.json F-025; fix row FA-9 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-025.",
+      "finding": "F-025"
+    },
+    {
+      "id": "review-highload-w2:F-004",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-004 (The read-only `review reviews` command goes through readReviewRows, which opens runs.sqlite writable) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-020 / canonical-findings.json F-020; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-020 (merged at consolidation; primary review-pr-contract-w1:PC-002).",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-highload-w2:fu1",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is the parent follow-up from review-highload done or ruled out, and where is that recorded? If highload or logic reviews slice-05 in a later wave: desk-run-store.ts constructor runs an IMMEDIATE transaction on every writable open (see F-004); confirm no writer holds a transaction near busy_t",
+      "status": "finding",
+      "evidence": "report.md F-020; fix row FA-13 (85fa985c1) documents the writable open in docs/docs/cli-reference.md",
+      "reason": "The follow-up is the busy-timeout side of the writable store open on the read lane, recorded as canonical F-020; the race itself was not probed and stays with F-020 for the delta round.",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (UNVERIFIED (no measurement). ReviewWorkspace wraps its actions row, the associated-Flow link, the re) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-054 / canonical-findings.json F-054; fix row FB-9 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-054.",
+      "finding": "F-054"
+    },
+    {
+      "id": "review-layout-w1:LY-002",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-002 (UNVERIFIED (arithmetic, not a measurement). `.select-compact` has `padding: 0 24px 0 8px`, a 1px bor) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-055 / canonical-findings.json F-055; fix row FB-9 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-055.",
+      "finding": "F-055"
+    },
+    {
+      "id": "review-layout-w1:LY-003",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-003 (UNVERIFIED (no measurement). The Review panel is a `.review-detail-panel` with a fixed inline width ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-layout-w1.txt LY-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: the fixed 560 px Review panel (no resize separator) is a design gap the reviewer marks UNVERIFIED; not acted on."
+    },
+    {
+      "id": "review-layout-w1:fu1",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Render a non-empty Reviews list in a real engine (bun run dev:browser against a repository that has local Reviews) and measure the Review panel spacing (LY-001), the selected-filter text at 760/700/56",
+      "status": "narrowed",
+      "evidence": "journal.md T11 (toolbar measured live at 340-1380 px, empty list); fix rows FB-9 (98c7b37a1) for LY-001/LY-002; journal.md T16 concern \"no live render of the FB-9 CSS\"",
+      "reason": "The toolbar half was measured live in T11; LY-001/LY-002 were acted on in FB-9 (canonical F-054, F-055); LY-003 is recorded as an info not acted on.",
+      "remains": "No live render of a non-empty Reviews list was made: Review panel spacing, selected-filter text at 760/700/560 px and the board at 280 px with the panel open are still unmeasured, before and after FB-9."
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (Plan T7 specifies the cross-tab focus as `reviewsFocus {number, nonce}` and the code implements exac) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-001.",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (Plan T6 defines the indicator as `ready` with publication 'pending or unknown', and the code lights ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-004 / canonical-findings.json F-004; fix row FA-2 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-004.",
+      "finding": "F-004"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (T12 (review-orchestrator, this run) dependsOn T10 (test suites, typecheck and lint), and T10 is stil) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-036 / canonical-findings.json F-036; no fix row in fix-round-1.md; open for the delta round",
+      "reason": "Primary record of canonical F-036.",
+      "finding": "F-036"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (plan.md is stale against decisions the journal records: T6 still defines `freshness` as `current | b) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-058 / canonical-findings.json F-058; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-058.",
+      "finding": "F-058"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (Per the spec table, `stopped` includes `cancelled`, so a review the user stopped themselves lights t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-w1.txt F-005 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: a cancelled Review lighting the indicator follows the spec table (stopped includes cancelled); spec-conformant observation."
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (latestReviewed/reviewedCommit pick the newest attempt with reviewed !== null, in any state. review-e) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-005 / canonical-findings.json F-005; fix row FA-3 (85fa985c1), FB-6 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-005.",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (matchesSearch returns the number-prefix result for any all-digit query and never checks the title. T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-033 / canonical-findings.json F-033; fix row FB-11 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-033.",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-logic-w2:F-003",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-003 (The pending cross-tab focus settles only when read.request > pending.after. accessLost keeps the pre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-009 / canonical-findings.json F-009; fix row FB-3 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-009.",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (With onOpenInReviews passed, the answer action no longer mounts ReviewDetail (ReviewBoard.tsx:456). ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-051 / canonical-findings.json F-051; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-051.",
+      "finding": "F-051"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (listActiveReviewCards returns only after all sequential 20-PR batches succeed. A non-access error in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-024 / canonical-findings.json F-024; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-024.",
+      "finding": "F-024"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (reviewState is called with the latest attempt only. The spec state table defines stopped as a failed) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-010 / canonical-findings.json F-010; fix row FA-2 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-010.",
+      "finding": "F-010"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (A retry on a range already seen joins that range's round even when higher rounds exist, so round num) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-008 / canonical-findings.json F-008; fix row FA-1 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-008.",
+      "finding": "F-008"
+    },
+    {
+      "id": "review-logic-w5:F-002",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-002 (Rows are placed at insert. A queued request on a new range opens round N+1. When a newer request sup) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-028 / canonical-findings.json F-028; fix row FA-11 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-028.",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (githubAccount starts null and resolves asynchronously, so the always-mounted ReviewsView first mount) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-012 / canonical-findings.json F-012; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-012.",
+      "finding": "F-012"
+    },
+    {
+      "id": "review-performance-w1:F-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-002 (Each Reviews tab show and each observed run-state transition triggers a full list re-read, with no m) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-w1.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: full re-read per tab show is a cost note with no measured impact; not acted on."
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (Every `keryx review reviews` read requests GitHub cards for every PR the account ever reviewed local) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-023 / canonical-findings.json F-023; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-023 (merged at consolidation; primary review-highload-w2:F-002).",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-performance-w2:F-002",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-002 (The comparison of two full object IDs is immutable, yet it is re-fetched (one gh child process each,) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-w2.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: re-fetching immutable compares (max 25 per read) is a cost note; not acted on."
+    },
+    {
+      "id": "review-performance-w2:F-003",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-003 (The sort key flattens all attempts of both Reviews on every comparator call instead of once per Revi) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-w2.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: comparator flattening is a micro-cost note; not acted on."
+    },
+    {
+      "id": "review-performance-w3:F-001",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding F-001 (For each unassigned row, roundFor's retry query JSON-parses the full details of every attempt of the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-026 / canonical-findings.json F-026; fix row FA-10 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-026.",
+      "finding": "F-026"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (PR body: \"Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head canno) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-019 (merged at consolidation; primary review-degradation-w2:F-001).",
+      "finding": "F-019"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (PR body: \"Existing databases are migrated in place when opened for writing\" and \"Read-only badge rea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-020 / canonical-findings.json F-020; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-020.",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (PR body: \"relabelled 'New review round'. Its title names the round it follows (decision d).\" The tit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-060 / canonical-findings.json F-060; no fix row in fix-round-1.md; open for the delta round",
+      "reason": "Primary record of canonical F-060.",
+      "finding": "F-060"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-004",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-004 (PR body: the outdated-review action is \"relabelled 'New review round'\". The implementation plan this) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-059 / canonical-findings.json F-059; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-059.",
+      "finding": "F-059"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-005",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-005 (PR body, 'Expected overlap with stage 1': \"Expect conflicts in:\" names apps/desktop/src/review/model) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-035 / canonical-findings.json F-035; no fix row in fix-round-1.md; open for the delta round",
+      "reason": "Primary record of canonical F-035.",
+      "finding": "F-035"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-006",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-006 (The PR body claims the rest of R4. R4 (prd.md:40) asks for a review link on the PR card and panel wi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-034 / canonical-findings.json F-034; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-034.",
+      "finding": "F-034"
+    },
+    {
+      "id": "review-regression-w1:RR-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding RR-001 (The changed ReviewBoard.openReview / ReviewDetail 'Open in Reviews' now route view and answer action) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001).",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-regression-w1:RR-002",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding RR-002 (The change removes awaitingAnswer and publicationPending from needsViewerAttention (apps/desktop/src) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-007.",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-security-code-w1:fu1",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? review-logic/UX: apps/desktop/src/reviews/ReviewPanel.tsx header 'Open pull request' ReviewBrowserLink has no click handler (ReviewDetail routes the same link through followLink -> openPullRequest); w",
+      "status": "finding",
+      "evidence": "report.md F-048 / canonical-findings.json F-048; no fix row in fix-round-1.md; open for the delta round",
+      "reason": "Primary record of canonical F-048.",
+      "finding": "F-048"
+    },
+    {
+      "id": "review-security-code-w2:fu1",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is the parent follow-up from review-security-code done or ruled out, and where is that recorded? review-logic/degradation: src/review/desk-run-store.ts:903-907 readReviewRows opens an existing store writable and migrates it from the read-only `review reviews` command; check that a migration on th",
+      "status": "finding",
+      "evidence": "report.md F-020; fix row FA-13 (85fa985c1)",
+      "reason": "Same concern as review-highload-w2:fu1 (migration on the read lane racing a writer), carried by canonical F-020; not probed.",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The list-view half of the AC6 card/list parity test checks the Round column with `toContain(\"2\")` on) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-037 / canonical-findings.json F-037; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-037.",
+      "finding": "F-037"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (Rule 3 (new logic gets a test): the new routing by intent kind is tested only on one side. (a) Revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-038 / canonical-findings.json F-038; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-038.",
+      "finding": "F-038"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (Rule 3: the App-level handoff from Pull requests to Reviews has no test. That covers `openInReviews`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-039 / canonical-findings.json F-039; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-039.",
+      "finding": "F-039"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (Rule 3: ReviewsView re-reads the list when a mutation in the panel (start, cancel, answer, decision,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-040 / canonical-findings.json F-040; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-040.",
+      "finding": "F-040"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (The account-change test used to prove that focus returns to search from both portaled dialogs, PR wa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-041 / canonical-findings.json F-041; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-041.",
+      "finding": "F-041"
+    },
+    {
+      "id": "review-testing-practices-w1:F-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-006 (Removing the `await click(\"Keryx review\")` lines left over-indented statements (this one and `      ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-052 / canonical-findings.json F-052; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-052.",
+      "finding": "F-052"
+    },
+    {
+      "id": "review-testing-practices-w1:F-007",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-007 (No test renders three of the new label branches: \"history rewritten\" (freshness.rewritten), \"No find) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-w1.txt F-007 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: three untested label branches are a coverage note; not in fix round 1."
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run the 29 mutant_candidates through `keryx review mutate` (read-only dispatch could not); AC8 and AC9 are mutation-sensitive and their verdict depends on M03-M05 and M15-M17/M22.",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-2.json/.md (mutants-desktop.json; head 20e4281a2; baseline exit 0; supersedes the refused mutation-baseline-1/2): killed 17, survived 12",
+      "reason": "The 29 proposed Desktop mutants were run. Survivors mapped to the findings they evidence: M08 -> F-038; M09 -> F-038; M26 -> F-040; M28 -> F-039; M29 -> F-039; M18 evidences the info observation review-testing-practices-w1:F-007 (untested label branches, not acted on). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured.",
+      "remains": "Survivors with no matching finding: M11, M12 (ReviewDetail launch-button disabled/visibility conditions), M13 (outdated round title only for New review round), M20 (Show closed filter), M24 (filters cleared before opening a hidden Review), M25 (no notice on a read error). Re-running survivors at the fix head is open for the delta round."
+    },
+    {
+      "id": "review-testing-practices-w1:fu2",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? verify-tests-to-run-1.txt was absent when this reviewer ran; confirm the slice's suites are green at head.",
+      "status": "refuted",
+      "evidence": "CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry)",
+      "reason": "The follow-up asked to confirm the slice suites are green at head; CI at the reviewed head ran the full core and Desktop suites green, so the absent file left no open doubt about them."
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (Branch under test: the name says freshness compares the requested head, but the fixture's requested ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-042 / canonical-findings.json F-042; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-042.",
+      "finding": "F-042"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (tdd-workflow rule (new logic gets a test): reviewRows leaves out deleted attempts and maps `recovera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-043 / canonical-findings.json F-043; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-043.",
+      "finding": "F-043"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (The plan's assignment rule, \"Диапазон, вернувшийся после других (A, B, A), присоединяется к своему п) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-044 / canonical-findings.json F-044; fix row FA-1 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-044.",
+      "finding": "F-044"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 (The behind filter keeps a pair only when `OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)`.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-045 / canonical-findings.json F-045; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-045.",
+      "finding": "F-045"
+    },
+    {
+      "id": "review-testing-practices-w2:F-005",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-005 (latestReviewed requires both a finished state and a reviewed range, but every summarizeReview fixtur) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-046 / canonical-findings.json F-046; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-046.",
+      "finding": "F-046"
+    },
+    {
+      "id": "review-testing-practices-w2:F-006",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-006 (This assertion cannot fail. `root` is a fresh tmpdir, not a Git checkout. If parseArgs accepted the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-047 / canonical-findings.json F-047; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-047.",
+      "finding": "F-047"
+    },
+    {
+      "id": "review-testing-practices-w2:F-007",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-007 (Small edges have no fixture. (a) The cap boundary: only 27 is tested, so `>` versus `>=` at exactly ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-053 / canonical-findings.json F-053; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-053.",
+      "finding": "F-053"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run the 31 mutant_candidates through `keryx review mutate`; this read-only dispatch could not run them. Previous-round gates: none (round 1).",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-1.json/.md (mutants-root.json from research-evidence/mutants.json; head 20e4281a2; baseline exit 0): killed 17, survived 12, invalid 2 (S03, S04); research-evidence/mutation-3.json/.md (S03, S04 re-run with exact anchors from research-evidence/mutants-root-exact.json, head 20e4281a2): survived 2",
+      "reason": "The 31 proposed root mutants were run. Survivors mapped to the findings they evidence: B02 -> F-045; B09 -> F-047; B05 -> F-053; B07 -> F-053; B08 -> F-053; E05 -> F-004; S05 -> F-004; E06 -> F-046; E07 -> F-042; S02 -> F-044; S03 -> F-043, S04 -> F-043 (re-run in mutation-3 with exact anchors after mutation-1 refused them as ambiguous). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured.",
+      "remains": "Survivors with no matching finding: B01 (empty-rows early return), S01 (previous-round lookup not scoped by review_id). Re-running all survivors at the fix head is open for the delta round."
+    },
+    {
+      "id": "review-testing-practices-w2:fu2",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? verify-tests-to-run-1.txt was absent; confirm src/commands/review-reviews.test.ts, src/review/review-entity.test.ts, src/review/desk-run-store.test.ts and src/review/board-badges.test.ts are green at ",
+      "status": "refuted",
+      "evidence": "CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry). The four named suites are not in the tests-to-run command; they ran in the CI core shards.",
+      "reason": "The named suites (review-reviews, review-entity, desk-run-store, board-badges tests) are green at the reviewed head per CI."
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (Cross-tab 'Open in Reviews' finds the target only by PR number. ReviewsFocus is {number, nonce, inte) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001).",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (The run-status error is a new banner rendered as the last child of the PR panel body. It comes after) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-030 / canonical-findings.json F-030; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-030.",
+      "finding": "F-030"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-003 (WCAG 2.5.3 Label in Name: the visible label is 'after <8-char run id>', but the accessible name 'Go ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-031 / canonical-findings.json F-031; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-031.",
+      "finding": "F-031"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-004",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-004 (The Reviews board card is a single button that holds the state badge, author, round, reviewed commit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Same defect as canonical F-029 (merged at consolidation; primary review-frontend-w1:F-003).",
+      "finding": "F-029"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-005",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-005 (The outdated-review action was renamed to 'New review round' on the PR card (decision d). The same a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-032 / canonical-findings.json F-032; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-032.",
+      "finding": "F-032"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-006",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-006 (The Review panel has a fixed width of 560. The PR panel, which has the same side-panel look, has a k) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-ui-ux-w1.txt UX-006 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: same observation as LY-003: the Review panel has no resizable separator; design note, not acted on."
+    },
+    {
+      "id": "review-ui-ux-w1:UX-007",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-007 (When review.card is null, the panel gives the remedy 'Refresh to try again' but has no Refresh contr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-056 / canonical-findings.json F-056; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-056.",
+      "finding": "F-056"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-008",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-008 (The banner and its 'Refresh board' button came from the PR panel. In the Reviews tab, onRefreshBoard) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md F-057 / canonical-findings.json F-057; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "reason": "Primary record of canonical F-057.",
+      "finding": "F-057"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-009",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-009 (Unverified: after a mouse click, programmatic focus on the tabIndex=-1 attempt row may not match :fo) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-ui-ux-w1.txt UX-009 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: the reviewer marks it unverified (:focus-visible after a mouse click); no defect established."
+    },
+    {
+      "id": "review-ui-ux-w1:UX-010",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-010 (The number of hidden closed Reviews appears only in the hover tooltip. It is not in the visible labe) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-ui-ux-w1.txt UX-010 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+      "reason": "Info observation not acted on in round 1: hidden-count visibility in the closed toggle is a UX suggestion; not acted on."
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:8a231f4ef5cd",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:8a231f4ef5cd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:196c2aa4b25a",
+        "rawEvidence": "raw/review-degradation-w4.txt#sha256:196c2aa4b25a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:f74ad27879e0",
+        "rawEvidence": "raw/review-frontend-w4.txt#sha256:f74ad27879e0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:36b30c89849b",
+        "rawEvidence": "raw/review-highload-w3.txt#sha256:36b30c89849b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:8f1bb10203a3",
+        "rawEvidence": "raw/review-layout-w1.txt#sha256:8f1bb10203a3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:6f418e9609f1",
+        "rawEvidence": "raw/review-logic-w5.txt#sha256:6f418e9609f1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:87b3f2139bb3",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:87b3f2139bb3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:2f8458dc4f0b",
+        "rawEvidence": "raw/review-pr-contract-w5.txt#sha256:2f8458dc4f0b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:9651077ec35d",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:9651077ec35d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:12105a77ed0f",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:12105a77ed0f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-04",
+          "slice-05"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:967078896af4",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:967078896af4",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:da4babccd8c6",
+        "rawEvidence": "raw/review-ui-ux-w1.txt#sha256:da4babccd8c6",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 37,
+    "known": 0,
+    "unknown": 37,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise-w1.txt",
+    "raw/review-verifier-w1.txt",
+    "raw/review-verifier-w2.txt"
+  ]
+}

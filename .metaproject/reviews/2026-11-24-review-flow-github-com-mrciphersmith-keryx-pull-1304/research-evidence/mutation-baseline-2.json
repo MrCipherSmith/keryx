@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281",
+  "command": "sh -c 'cd apps/desktop && bun test src/review src/reviews src/shell src/platform src/test'",
+  "baseline": {
+    "exitCode": 1,
+    "ms": 394,
+    "timedOut": false,
+    "cwd": "/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281/.metaproject/data/review/mutate-scratch/keryx-mutate-pVuqde/tree",
+    "tail": "      at <anonymous> (/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281/.metaproject/data/review/mutate-scratch/keryx-mutate-pVuqde/tree/apps/desktop/src/shell/SettingsView.dom.test.tsx:7:3)\n(fail) Settings tabs, drafts, closure and independent mode palettes work through the project UI [17.72ms]\n\nsrc/shell/UpdateBanner.test.ts:\n\n# Unhandled error between tests\n-------------------------------\nerror: Cannot find module 'react/jsx-runtime' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281/.metaproject/data/review/mutate-scratch/keryx-mutate-pVuqde/tree/apps/desktop/src/shell/UpdateBanner.tsx'\n-------------------------------\n\n\nsrc/shell/ProjectNavigation.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\nerror: Cannot find module 'react/jsx-runtime' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281/.metaproject/data/review/mutate-scratch/keryx-mutate-pVuqde/tree/apps/desktop/src/shell/ProjectNavigation.dom.test.tsx'\n-------------------------------\n\n\nsrc/review/ReviewDetail.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\nerror: Cannot find module '@happy-dom/global-registrator' from '/private/tmp/claude-502/-Users-tsaitler-aleksandr-work-sandbox-keryx--claude-worktrees-desktop-review-v2-stage2-dce093/c5d83144-e435-4811-952e-d8fae0f8a370/scratchpad/head-20e4281/.metaproject/data/review/mutate-scratch/keryx-mutate-pVuqde/tree/apps/desktop/src/test/dom.ts'\n-------------------------------\n\n\nsrc/review/ReviewBoard.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/review/ReviewLaunchDialog.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/reviews/ReviewPanel.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\nsrc/reviews/ReviewsView.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\n 41 pass\n 8 fail\n 7 errors\n 188 expect() calls\nRan 49 tests across 17 files. [92.00ms]"
+  },
+  "mutants": [],
+  "totals": {
+    "killed": 0,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-24T10:16:13.313Z",
+  "head": "20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b",
+  "treeHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "loadavg": [
+    22.54443359375,
+    16.8818359375,
+    13.7861328125
+  ],
+  "provenanceMs": 1282,
+  "copyMs": 35445
+}

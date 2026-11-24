@@ -1,0 +1,1414 @@
+--- docs/docs/cli-reference.md
+@@ 5173,5224 @@
+ Browse GitHub issues across repositories using an account connected in Settings → Integrations.
+ Use `viewer` with an empty request object to verify the account identity. List, detail and comments read as the explicitly selected account. The current directory does not restrict the personal queue.
+ 
+ ```bash
+ keryx issues list --login LOGIN --request '{"source":"assigned","state":"open"}' --json
+ ```
+ 
+ Use `assigned`, `created`, `mentioned` or `subscribed` for the source. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
+ 
+ Use `origin` to resolve an existing Flow or session’s issue as the selected viewer. Use `workspace` to inspect an issue’s local checkout, session and Flow. `open-session` and `prepare-flow` resume or create the linked work in the matching checkout. A failed access check means the selected account or its permissions need attention. Reconnect the account and refresh. If the Desktop reports an incompatible CLI, choose the bundled Keryx CLI in Settings.
+ 
+ ## review
+ 
+ The Desktop Review board reads the current project’s GitHub pull requests with
+ `keryx review board --json`. Select a connected remote using `--repo owner/name`,
+ filter history with `--state open|closed|merged|all`, or read one pull request’s
+ discussion and checks with `--number N`. A partial list includes warnings.
+ `keryx review board --json --repositories` lists the configured GitHub.com fetch
+ remotes without contacting GitHub, with the origin repository first.
+ 
++`keryx review reviews --json [--repo owner/name]` lists the selected account's local
++Reviews of a connected repository: one per pull request, newest activity first. Each
++Review carries its pull request card, its state (`queued`, `running`, `needs_answer`,
++`stopped`, `ready`, `published` or `closed`), its freshness (`current`, or `behind` with
++the number of new commits, `null` when unknown, and whether the branch was rewritten),
++its rounds newest first with their attempts, the findings of the latest reviewed round,
++the publication outcome, the source, the linked Flow and the total tokens. Reports and
++reviewer sessions are not included. Archived and deleted attempts are left out. Commit
++counts are read for up to 25 Reviews per call; the rest, and any comparison GitHub
++refuses, show an unknown count and a warning. Without a local review store the list is
++empty and no store is created.
++
+ `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
+ `keryx review accounts project --json` shows the current project's selection.
+ Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
+ for the project and its linked worktrees. Add `--repo owner/name` to check a connected
+ remote other than the default. The board, private review fetch and local watcher
+ use the selected account. The credentials stay in GitHub CLI.
+ Use `keryx review accounts bind --skip --json` to continue without a connection.
+ Changing or removing a connection pauses the project's watchers. Enable the
+ watcher manually after choosing an account.
+ 
+ `keryx review desk-run start --json --repo owner/name --repository-id ID --viewer LOGIN --number N --base SHA --head SHA`
+ requests review of a card’s displayed revision. With the same repository, viewer and PR flags, use
+ `status` to read progress and history, or `cancel --id UUID` to stop a specific attempt.
+ Manual reviews start without a token limit. For scheduled reviews, omit `budgetTokens` or set it to `null` for unlimited tokens. A positive integer sets the per-run cap, including values above 250,000. Saved rules retain their explicit limits. The time limit is configured independently.
+ 
+ Load a deferred report with `status --id UUID`. A retry creates a fresh attempt after an interrupted review. Keryx stores results locally. A later review can send excerpts from earlier reports and linked Flow evidence to the configured model provider as context.
+ 
+ `keryx review desk-publish --json --repo owner/name --repository-id ID --viewer LOGIN --number N --request <JSON>`
+ prepares the publication form for a local review attempt. Use `kind: preview` with
+ the attempt UUID to read the draft, or `kind: save` with settings to keep the draft
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 1,105 @@
+ # План реализации · Review v2
+-Version: 0.1.3
++Version: 0.1.4
+ 
+-Статус: этап 0 реализован и влит в main (Flow 516, PR #1294); этапы 1–4 — draft, готовы к запуску по разделу «Передача следующим этапам». Этапы упорядочены так, чтобы каждый можно было выпустить отдельно. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md).
++Статус: этап 0 реализован и влит в main (Flow 516, PR #1294); этап 2 реализован в Flow 519 на ветке `feat/desktop-review-v2-stage2` (Draft PR, не влит); этапы 1, 3, 4 — draft, готовы к запуску по разделу «Передача следующим этапам». Этапы упорядочены так, чтобы каждый можно было выпустить отдельно. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md).
+ 
+ ## Этапы
+ 
+ | Этап | Что делается | Требования | Что показать на выходе |
+ |---|---|---|---|
+ | 0. Исправления текущей доски | Убрать обход фильтров для активного ревью. Убрать подъём активных наверх. Скрывать пустую колонку «Done». Показывать на карточке доски результат прошлого head с пометкой «устарел» (R5 v1 это обещает; сегодня он виден только в истории внутри панели PR). Сузить индикатор вкладки до событий, адресованных пользователю. Убрать перенос панели инструментов (наблюдение при осмотре приложения) | часть R1, R2, R12 | На PR с активным ревью фильтр по другому автору скрывает карточку; после нового коммита карточка на доске показывает прошлый результат как устаревший |
+ | 1. GitHub-срез и ссылки | Колонки Pull requests и Issues только по GitHub. Строка работы Keryx на карточке. «Открыть в сессии» с привязкой Subject и заголовком сессии. Создание ревью и Flow из привязанной сессии. Подписанные действия, кроме «Исправить замечания» | R1–R3, R5, R6, часть R4 (ссылка ревью без номера раунда и отставания), часть R7 | Сценарий «PR без Flow и ревью → сессия → `/review` → ссылка на карточке» |
+ | 2. Сущность Review | Таблица `reviews`, миграция запусков в раунды и попытки. Вкладка Reviews: доска, список, панель. Перенос интерфейса ревью, истории, публикации и правил из панели PR. Ссылка ревью на карточке PR с раундом и отставанием. Индикатор Reviews | R8, остаток R4, R12 | Один PR с тремя историческими запусками виден как один Review с раундами |
+ | 3. Смена head | Проверка head на границе волны. `on_head_move`. Команда раунда обновления и новые правила выбора прошлого раунда. Варианты в диалоге публикации. Перенос ответов по находкам. События `push` вотчера обновляют Review | R9, R10 | Сценарии «коммит после завершения» и «коммит во время раунда» из критериев выпуска |
+ | 4. Единый реестр | Регистрация пакетов сессии как попыток. Общий код публикации. Процедура «Head сдвинулся» в review-orchestrator. Действие «Исправить замечания» как Flow | остаток R7, R11 | Ревью из сессии агента опубликовано из Desktop |
+ 
+ ## Состояние этапа 0
+ 
+ Этап 0 реализован в Flow 516 и влит в main через PR #1294. Ревью: раунд по ветке и пять раундов по PR; после первого раунда ни один не нашёл blocker или major. Пакеты раундов — `.metaproject/reviews/2026-11-23-review-flow-*-pull-1294*`, журнал решений — `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md`.
+ 
+ Три отклонения от PRD сделаны сознательно и записаны здесь:
+ 
+ - (a) R12 говорит, что индикатор вкладки Pull requests загорается для запроса ревью на пользователя «или его команду». На этапе 0 сопоставляется только логин пользователя; запросы на команды не сопоставляются, пока не появится членство в командах (планируется вместе с этапом 1).
+-- (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации).
++- (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации). Закрыто этапом 2: локальное ревью больше не зажигает этот индикатор.
+ - (c) Панель инструментов доски не гарантированно остаётся в одну строку, и меню для второстепенных элементов нет. Вместо этого подписи кнопок скрываются, когда внутренняя ширина панели (без отступов) не больше 1100px — это панель шириной около 1140px; текст состояния вотчера скрывается при внутренней ширине не больше 760px — панель около 800px, а счётчик pull request'ов остаётся голым числом, и поле поиска сужается до 80px; счётчик активных фильтров остаётся видимым. Измерено на разметке панели с реальными стилями и заглушками вместо данных: одна строка без выхода за край при ширине панели 560, 620, 700, 760, 820, 1101, 1180 и 1380px; при 340px — две строки. Когда показана подсказка о скрытых фильтрами запросах (d) («Show N waiting on you», уже 1100px — «N hidden»), панель переходит на вторую строку при ширине 340–646, 810–908 и 1150–1290px, то есть и при панели 560px в окне по умолчанию с открытой панелью PR; ничего не обрезается. В приложении с реальными данными не измерялось.
+-- (d) Решения оператора от 2026-11-23: кнопка на карточке с устаревшим ревью называется «Review again», пока этап 2 не свяжет раунды между собой; индикатор вкладки считает каждый pull request, которому нужен пользователь, а если часть из них скрыта фильтрами, на панели инструментов показывается подсказка с числом скрытых и кнопкой, которая сбрасывает фильтры и поиск.
++- (d) Решения оператора от 2026-11-23: кнопка на карточке с устаревшим ревью называется «Review again», пока этап 2 не свяжет раунды между собой (на этапе 2 подпись — «New review round»); индикатор вкладки считает каждый pull request, которому нужен пользователь, а если часть из них скрыта фильтрами, на панели инструментов показывается подсказка с числом скрытых и кнопкой, которая сбрасывает фильтры и поиск.
+ 
+ Решение оператора от 2026-11-23: закрытый или слитый pull request с идущим ревью скрывается при фильтре по умолчанию «Open + Draft».
+ 
++## Состояние этапа 2
++
++Этап 2 реализован в Flow 519 на ветке `feat/desktop-review-v2-stage2` (Draft PR, не влит). Журнал решений — `.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md`.
++
++Что сделано:
++
++- **Хранилище.** Таблица `reviews` с ключом (репозиторий, PR, аккаунт ревьюера без учёта регистра, D3); в `runs` добавлены `review_id`, `round`, `previous_run_id`. Миграция в `src/review/desk-run-store.ts` выполняется при открытии на запись и после каждой новой попытки одним правилом: продолжение попадает в раунд предыдущей попытки; повтор того же диапазона `base..head` — в раунд, где этот диапазон уже был; иначе — новый раунд. Диапазон, вернувшийся после других (A, B, A), присоединяется к своему первому раунду как повтор. Правило трогает только строки без `review_id` и не перенумеровывает раунды: пакет, импортированный позже с более старым `createdAt`, получает следующий номер раунда. Хранилища только для чтения старую базу не мигрируют.
++- **CLI.** `keryx review reviews --json [--repo owner/name]` — список Review с состоянием, freshness, раундами, находками последнего проверенного раунда, публикацией и источником. Desktop читает его через `review_board` с флагом `reviews_only`.
++- **Вкладка Reviews** (порядок вкладок по D4). Колонки: Выполняется · Ждёт вас · Отстаёт · Опубликовано · Закрыто (только при «Show closed»); есть вид списком. Фильтры: состояние, freshness, источник, поиск по заголовку и номеру, «Show closed». Фильтры по публикации, автору PR, Flow и периоду из спецификации не сделаны. Панель Review показывает раунды и интерфейс ревью, перенесённый из панели PR: история, отчёт, ответ, отмена, продолжение, публикация. Кнопка Review rules перенесена сюда с панели инструментов Pull requests. В панели PR без Review остаются прежние кнопки запуска, с Review — «Open in Reviews».
++- **Индикаторы.** У вкладки Reviews свой индикатор: Review ждёт ответа, готов с нерешённой публикацией или остановлен. Индикатор Pull requests больше не зажигается от локального ревью (закрыто отклонение (b)).
++
++Решения, принятые на этапе:
++
++- Freshness `unknown`, когда head PR неизвестен (карточка не прочитана или PR не найден): карточка показывает «head unknown», Review не попадает в «Отстаёт». Решение оператора от 2026-11-24; отклонение от двух видов freshness в спецификации, спецификация дополнена.
++- `budget` с проверенным диапазоном считается `ready` или `published`, а не `stopped`.
++- Ответ `review reviews` сохраняет `version: 1`, как у доски; версия протокола не повышалась.
++
++Миграция проверена на копии рабочей базы (`runs.sqlite`, копия не закоммичена): попыток до и после — 17, Review — 13 (равно числу ключей), раундов 1 — 13, раундов 2 — 4; повторное открытие ничего не меняет.
++
++Что не проверено:
++
++- Собранное приложение не запускалось. В браузерной сборке для разработки вкладка Reviews открыта на реальном GitHub (этот репозиторий, копия рабочей базы): список пуст, потому что все Review копии относятся к другому репозиторию; карточки Review с реальными данными не видели. Остальное покрытие — модульные и DOM-тесты.
++- Rust-часть (`review_board`, `reviews_only`) проверяется только в CI.
++- Панель инструментов Reviews измерялась только в браузерной сборке для разработки, с пустым списком: одна строка без выхода за край при ширине панели 760, 800, 820, 900, 1000, 1100, 1101, 1180 и 1380px; при 700px и уже — две строки (при 340px — три), ничего не обрезается. При 560px (окно по умолчанию с открытой панелью) нужно 648px даже при минимальной ширине всех элементов, поэтому одна строка там невозможна без скрытия элемента.
++
+ ## Передача следующим этапам
+ 
+ Раздел для агента, который начинает этап 1, 2, 3 или 4. Всё, что ниже названо «сейчас», проверено по коду после слияния этапа 0.
+ 
+ ### Как запускать
+ 
+ - Один этап — один Flow через flow-orchestrator (`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`), ветка от свежего `main`, свой PR. Критерии приёмки замораживаются из строки этапа в таблице «Этапы» и из требований PRD, которые она называет.
+ - Входные документы: [PRD](prd.md) (R1–R12), [спецификация](specification.md), этот план, решения D1–D6 выше. Раздел спецификации «Основания» описывает код на коммите `1b994df18`, то есть до этапа 0; где этап 0 его изменил, верен раздел «Состояние этапа 0» этого плана.
+ - Ревью — review-orchestrator по PR. Составы раундов 3–5 этапа 0 были сокращены решением оператора, и такие пакеты не проходят гейт завершения инструмента; если нужен полный пакет, запускайте полный состав.
+ - Rust-часть Desktop (`apps/desktop/src-tauri`) локально не собирается — проверяется только в CI.
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+ - **Этап 2.** Начать с миграции запусков (`src/review/desk-run-store.ts`) в раунды и попытки на копии рабочей базы. После появления вкладки Reviews индикатор вкладки Pull requests перестаёт загораться от локального ревью — это снимает отклонение (b). Подпись «Review again» из решения (d) меняется вместе со связью раундов.
+ - **Этап 3.** Действие «Review again» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).
+ - **Этап 4.** Процедура «Head сдвинулся» добавляется в `review-orchestrator`; публикация из Desktop и из сессии использует общий код.
+ 
+ ### Что этап 0 оставил в коде и что нельзя сломать
+ 
+ - **Набор внимания вкладки Pull requests** (`carriedAttention`, `seeded`, `seedFor`, загрузка «seed», `attentionPrs`, обратная запись, флаг `stale` в `apps/desktop/src/review/ReviewBoard.tsx`). Его правили шесть раз, и три правки внесли новый дефект, который нашёл только следующий раунд ревью. Сейчас каждая защитная строка закреплена DOM-тестом: шестнадцать однострочных мутаций, каждая валит хотя бы один тест `ReviewBoard.dom.test.tsx`. Правило для следующих этапов: любое изменение этой логики сопровождается мутационной проверкой собственных строк, а не только зелёным набором тестов. На этапе 1 колонки перестают зависеть от Keryx, но индикатор остаётся — переносите его вместе с тестами.
+ - **Устаревший результат на карточке** (`localReview.outdated`, `reviewNote` и `laneReason` в `apps/desktop/src/review/model.ts`). SQL в `attachBadges` (`src/review/desk-run-store.ts`) обязан давать тот же результат, что `localBadge` (`src/review/board-badges.ts`); store-тест сравнивает их на фикстуре для каждого условия запроса.
+ - **Тулбар доски** (`apps/desktop/src/styles/review.css`): контейнерные запросы на 1100 и 760px, подсказка о скрытых запросах, голое число. Замеры — в отклонении (c); при добавлении элементов в тулбар перемеряйте.
+ 
+ ### Открытые заметки ревью этапа 0
+ 
+-- F-024 (info): вторая строка об устаревшем ревью отбрасывается сравнением текста с причиной (`secondaryNote` в `apps/desktop/src/review/ReviewResults.tsx`). Не исправлено сознательно; уйдёт вместе с переносом интерфейса ревью на этапе 2.
++- F-024 (info): вторая строка об устаревшем ревью отбрасывается сравнением текста с причиной (`secondaryNote` в `apps/desktop/src/review/ReviewResults.tsx`). Не исправлено сознательно; уйдёт вместе с переносом интерфейса ревью на этапе 2. Закрыто этапом 2: `secondaryNote` удалён, заметка об устаревшем ревью выводится одной отдельной строкой.
+ - Ни один сценарий этапа 0 не воспроизводился в приложении с реальными данными GitHub и не проверялся скринридером: покрытие — DOM-тесты, мутации и замеры разметки.
+ 
+ ## Зависимости
+ 
+ - Этап 0 независим и не меняет модель данных.
+ - Этап 1 не требует этапа 2: ссылка ревью на карточке на этом этапе строится из существующего `localReview` и открывает текущую панель ревью.
+ - Этап 3 требует этапа 2: раунд обновления принадлежит Review.
+ - Этап 4 требует этапов 2 и 3: сессия использует ту же команду обновления.
+ 
+ ## Проверка
+ 
+ - Этапы 0–1: модульные тесты функций колонки и фильтра (`apps/desktop/src/review/model.test.ts`, `apps/desktop/src/issues`), DOM-тесты доски.
+ - Этап 2: тест миграции на копии рабочей базы; DOM-тесты вкладки Reviews.
+ - Этап 3: тесты `prior-round` на частичный прошлый раунд и на смену настроек; сценарий на реальном PR с коммитом во время раунда. Rust-часть Desktop проверяется только в CI.
+ - Этап 4: сценарий на реальном PR — ревью в сессии, публикация из Desktop.
+ 
+ ## Решения владельца
+ 
+ | № | Вопрос | Решение |
+ |---|---|---|
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 1,22 @@
+ # Спецификация · Review v2
+-Version: 0.1.2
++Version: 0.1.3
+ 
+ Статус: этап 0 реализован и влит в main (Flow 516, PR #1294), остальное — draft. Раздел «Основания» описывает код на коммите `1b994df18`. Все остальные разделы — планируемое поведение, кроме этапа 0 (см. [план реализации](implementation-plan.md), «Состояние этапа 0»); имена новых команд, полей и таблиц предварительные.
+ 
+ ## Идентичность модуля
+ 
+ Изменение затрагивает Desktop (`apps/desktop/src/review`, `apps/desktop/src/issues`, оболочку вкладок), бэкенд ревью (`src/review/desk-run-*`, `src/review/board*`, `src/review/desk-publication.ts`, `src/review/prior-round.ts`) и скилл `review-orchestrator`. Состав ревьюеров и устройство волн не меняются; исполнитель получает только сверку head между волнами. Формат пакета раунда не меняется: идентификаторы находок и запись раунда (`round.json`) уже существуют. Машинных схем в черновике нет; они добавляются на этапе 2 вместе с повышением версии протокола.
+ 
+ Смежные спецификации: [Review v1](../keryx-desktop-review/specification.md), [пакеты управляемого ревью](../managed-review-feedback-loop/specification.md).
+ 
+ ## Основания
+ 
+ | № | Наблюдение | Где в коде |
+ |---|---|---|
+ | O1 | Колонка карточки считается из состояния GitHub и локального ревью вместе | `apps/desktop/src/review/model.ts:50-65` |
+ | O2 | PR с активным ревью проходит все фильтры, кроме поиска | `apps/desktop/src/review/model.ts:40` |
+ | O3 | Активные ревью поднимаются в начало списка | `apps/desktop/src/review/ReviewBoard.tsx:323` |
+ | O4 | Фильтр по умолчанию — open и draft; в «Done» попадают только не открытые PR, а все четыре колонки рисуются всегда, поэтому «Done» по умолчанию пуста | `apps/desktop/src/review/model.ts:18-20`, `:63`, `apps/desktop/src/review/ReviewResults.tsx:95-98` |
+ | O5 | Индикатор вкладки загорается от любого открытого PR, у которого есть запрос ревью на кого угодно или решение `CHANGES_REQUESTED`, независимо от того, чей это PR | `apps/desktop/src/review/ReviewBoard.tsx:203`, `:354` |
+ | O6 | Завершённый запуск попадает в бейдж карточки, только если его диапазон равен base..head карточки; завершённый запуск на прошлом head на карточку не попадает. Активный запуск на другом диапазоне виден как `other-revision` без прогресса | `src/review/desk-run-store.ts:416-423`, `src/review/board-badges.ts:28-50` |
+ | O7 | Запуск привязан к одной паре base..head; промпт Desktop: «New commits belong to a separate request» | `src/review/desk-run-executor.ts:547`, `src/review/autonomous-profile.ts:199` |
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 50,90 @@
+ - **Review** — ревью одного PR одним аккаунтом. Ключ: `{repositoryId, number, viewer}`; `repo` (имя) хранится рядом для отображения. Аккаунт входит в ключ по решению D3 плана.
+ - **Round** — проверка одной пары base..head внутри Review. Режим: `first`, `delta`, `fallback-first` (значения из существующего `round.json`).
+ - **Attempt** — один запуск раунда. Сегодняшний `DeskRun` становится Attempt без изменения формата; повтор и `continue` — новые Attempt того же Round.
+ - **Finding** — находка с постоянным идентификатором в пределах Review и статусом по раундам: `open`, `closed`, `partial`, `regressed`, `withdrawn` (существующие dispositions). Находка, которую раунд не перепроверял, помечается перенесённой и сохраняет прежний статус (существующий список `carried` в записи раунда).
+ 
+ ### Состояние Review
+ 
+ Состояние выводится из последнего раунда и публикаций; отдельного ручного поля нет.
+ 
+ | Состояние | Условие |
+ |---|---|
+ | `queued` | последний Attempt в очереди |
+ | `running` | последний Attempt выполняется |
+ | `needs_answer` | выполняющийся Attempt ждёт ответа пользователя |
+ | `running` | также `cancelling` — до фактической остановки |
+ | `stopped` | последний Attempt закончился как `failed` (включая прерванный, `recoverable`), `cancelled`, `blocked`, `budget`, `skipped` и у раунда нет принятых находок |
+ | `ready` | последний раунд дал принятые находки (`completed` или `partial`), решение о публикации не принято; частичное покрытие показывается пометкой |
+ | `published` | последний раунд опубликован |
+ | `closed` | PR слит или закрыт, либо пользователь закрыл Review |
+ 
+-Отдельный признак **freshness**: `current`, если head последнего проверенного раунда равен head PR, иначе `behind` с числом коммитов и признаком `rewritten` при force-push. Freshness не зависит от состояния: Review может быть `running` и `behind` одновременно.
++Отдельный признак **freshness**: `current`, если head последнего проверенного раунда равен head PR, иначе `behind` с числом коммитов и признаком `rewritten` при force-push. Freshness не зависит от состояния: Review может быть `running` и `behind` одновременно. Если head PR неизвестен (карточку PR не удалось прочитать или PR не найден), freshness — `unknown`: карточка показывает «head unknown», и Review не попадает в колонку «Отстаёт» (решение оператора от 2026-11-24, этап 2).
+ 
+ ## Хранение
+ 
+ - `runs.sqlite`: к таблице `runs` добавляются `review_id`, `round` (порядковый номер), `previous_run_id`. Новая таблица `reviews` (`id`, `repo`, `pr`, `viewer`, `closed_at`, `on_head_move`).
+ - Миграция: существующие строки группируются по `(repo, pr, viewer)` в один Review; раунды нумеруются по первой встрече пары base..head в порядке `createdAt`; запуски с `continuation.previousId` попадают в раунд предшественника.
+ - Публикации остаются файлами в каталоге Attempt; Review читает их как историю.
+ - Привязка сессии к Subject хранится вместе с сессией. Предпочтительный вариант — метаданные сессии рядом с существующей привязкой к Flow (O17), поле `_meta.keryx.subject`; окончательный выбор делается в начале этапа 1 (см. ниже).
+ - Реестр сессионных ревью: при `keryx review start` для PR пакет в `.metaproject/reviews/<id>` регистрируется как Attempt соответствующего Review (см. «Единый реестр»).
+ 
+ Как хранится связь Issue с сессией и Flow сегодня (`issues-contract`, операция `workspace`), при подготовке пакета подробно не читалось; этап 1 начинается с её проверки и выбора: расширить её на PR или ввести `_meta.keryx.subject` для обоих.
+ 
+ ## Конфигурация
+ 
+ - Параметр Review `on_head_move`: `ask` (по умолчанию для ручных), `follow` (по умолчанию для запусков по правилу), `ignore`.
+ - Параметры запуска раунда — существующие `DeskReviewOptions`. Смена параметров между раундами не разрывает связь с прошлым раундом.
+ 
+ ## Поведение при смене head
+ 
+ ### Обнаружение
+ 
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 190,230 @@
+ | `keryx review reviews --json` (новая) | Список Review с состоянием, freshness, раундами |
+ | `keryx review advance` (новая) | Раунд обновления на текущем head |
+ | `keryx review desk-run start` | Создаёт Attempt в существующем или новом Review; принимает прошлый раунд по новым правилам |
+ | `keryx review desk-publish` | Возвращает варианты при сдвинутом head вместо одного запрета |
+ | `keryx review publish` | Использует общий код публикации |
+ | `review-orchestrator` | Процедура «Head сдвинулся»; регистрация пакета сессии в реестре |
+ 
+ ## Контракты данных
+ 
+ ```ts
+ interface WorkLinks {
+   review?: { id: string; state: Review["state"]; round: number; behind?: number | null };  // null — отстаёт, число коммитов неизвестно
+   flows: { id: string; dir: string; stage: string }[];
+   sessions: { id: string; title: string; updatedAt: string | null }[];
+ }
+ 
+ interface Review {
+   id: string;
+   key: { repositoryId: string; repo: string; number: number; viewer: string };
+   state: "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
+-  freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean };
++  freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean } | { kind: "unknown" };
+   onHeadMove: "ask" | "follow" | "ignore";
+   rounds: Round[];
+ }
+ 
+ interface Round {
+   number: number;
+   baseSha: string;
+   headSha: string;
+   mode: "first" | "delta" | "fallback-first";
+   previousRound?: number;
+   attempts: DeskRun[];           // существующий тип
+   publication?: "pending" | "published" | "skipped";
+ }
+ ```
+ 
+ Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).
+ 
+ ## Интеграции
+ 
+ - **GitHub** — без новых прав: чтение PR, Issue, обсуждений; публикация ревью как сегодня.
+
+--- src/commands/review-board.ts
+@@ 90,123 @@
+         result.warnings.push("Some active Keryx reviews could not be loaded. Refresh to retry.");
+       }
+     }
+     // Check the notification feed once per refresh, including unread candidates beyond page one.
+     if (!values["cards-only"] && !page?.cursor && !continuation.part && (state === "open" || state === "all"))
+       await attachAddressedReplies(result, async (endpoint, timeoutMs) =>
+         JSON.parse(await boardGh(cwd, ["api", "--hostname", "github.com", endpoint], auth, timeoutMs)), !!result.nextCursor);
+     const json = JSON.stringify(result);
+     if (!continuation.part && (!page || Buffer.byteLength(json) <= 30 * 1024 * 1024)) {
+       await writeSerialized(json, auth);
+       return;
+     }
+     if (size === 1) {
+       await writeJson(splitBoardCard(result, continuation), auth);
+       return;
+     }
+     size = Math.ceil(size / 2);
+   }
+ }
+ 
+-function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
++export function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
+ 
+ async function writeSerialized(json: string, auth: GithubConnection) {
+   // The desktop hosts read through a pipe. Wait until even a large history or
+   // discussion snapshot has been flushed before returning from the command.
+   await new Promise<void>((resolve, reject) => {
+     // Optional API reads can convert their errors into warnings. Check again
+     // at the publication boundary, excluding concurrent writers until the
+     // complete payload is handed to the pipe.
+     withCurrentGithubBinding(auth, () => {
+       process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
+     });
+   });
+ }
+
+--- src/commands/review-reviews.ts
+@@ 1,104 @@
++// Read-only list of local Reviews for the Desktop Reviews tab: `keryx review reviews --json`.
++import { parseArgs } from "node:util";
++import { mapPool } from "../lib/map-pool";
++import { listActiveReviewCards } from "../review/board";
++import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository } from "../review/board-github";
++import type { ReviewCard } from "../review/board-types";
++import { deskRunRoot, readReviewRows } from "../review/desk-run-store";
++import { referenceHead, reviewClosed, summarizeReview, type ReviewCompare, type ReviewsSnapshot } from "../review/review-entity";
++import { writeJson } from "./review-board";
++
++export const REVIEWS_USAGE = "keryx review reviews --json [--repo owner/name]";
++/** Head comparisons per call; the rest are reported behind with an unknown commit count. */
++export const MAX_REVIEW_COMPARES = 25;
++const COMPARE_PARALLEL = 4;
++// Both heads go into a GitHub API path: only full object IDs are compared.
++const OBJECT_ID = /^[0-9a-f]{40}$/;
++
++type Query = <T>(query: string, variables: Record<string, string | number>) => Promise<T>;
++/** Compare the reviewed head (base) with the PR head. */
++export type CompareHeads = (base: string, head: string) => Promise<ReviewCompare>;
++export interface ReviewsSource {
++  repo: string;
++  repositories: string[];
++  query: Query;
++  compare: CompareHeads;
++  /** The attempt store directory; defaults to the Desktop review store. */
++  root?: string;
++}
++
++const identityQuery = `query ReviewIdentity($owner:String!, $name:String!) { viewer { login } repository(owner:$owner,name:$name) { id } }`;
++const cannotRetainData = (error: unknown) => error instanceof Error && /^(access|configuration):/.test(error.message);
++
++export async function readReviews({ repo, repositories, query, compare, root = deskRunRoot() }: ReviewsSource): Promise<ReviewsSnapshot> {
++  const [owner, name] = repo.split("/") as [string, string];
++  const identity = await query<{ viewer: { login: string } | null; repository: { id: string } | null }>(identityQuery, { owner, name });
++  const viewer = identity.viewer?.login;
++  const repositoryId = identity.repository?.id;
++  if (!viewer || !repositoryId) throw new Error("access: GitHub repository or account is unavailable.");
++  const snapshot: ReviewsSnapshot = { version: 1, repo, repositories, repositoryId, viewer, fetchedAt: new Date().toISOString(), reviews: [], warnings: [] };
++  const rows = readReviewRows(repositoryId, viewer, root);
++  if (!rows.length) return snapshot;
++
++  const cards = new Map<number, ReviewCard>();
++  try {
++    for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);
++  } catch (error) {
++    if (cannotRetainData(error)) throw error;
++    snapshot.warnings.push("Some pull requests could not be loaded. Refresh to retry.");
++  }
++  const behind = rows.flatMap(row => {
++    const card = cards.get(row.number) ?? null;
++    const reviewed = referenceHead(row);
++    return card && reviewed && reviewed !== card.headSha && !reviewClosed(row, card) && OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)
++      ? [{ id: row.id, reviewed, head: card.headSha }] : [];
++  });
++  if (behind.length > MAX_REVIEW_COMPARES) snapshot.warnings.push(`Commit counts are shown for ${MAX_REVIEW_COMPARES} Reviews behind their pull request. Refresh to read more.`);
++  let failed = false;
++  const compared = await mapPool(behind.slice(0, MAX_REVIEW_COMPARES), COMPARE_PARALLEL, async ({ id, reviewed, head }) => {
++    try { return [id, await compare(reviewed, head)] as const; }
++    catch {
++      // Freshness stays "behind" with an unknown count; the warning tells the viewer to refresh.
++      failed = true;
++      return [id, null] as const;
++    }
++  });
++  if (failed) snapshot.warnings.push("Some commit counts could not be read. Refresh to retry.");
++  const comparisons = new Map(compared);
++  snapshot.reviews = rows
++    .map(row => summarizeReview(row, cards.get(row.number) ?? null, comparisons.get(row.id)))
++    .sort((a, b) => latestCreated(b).localeCompare(latestCreated(a)) || b.number - a.number);
++  return snapshot;
++}
++
++const latestCreated = (review: ReviewsSnapshot["reviews"][number]) =>
++  review.rounds.flatMap(round => round.attempts.map(a => a.createdAt)).reduce((max, at) => at > max ? at : max, "");
++
++const compareStates = new Set(["ahead", "behind", "diverged", "identical"]);
++export function parseCompare(raw: string): ReviewCompare {
++  const value = JSON.parse(raw) as { status?: unknown; ahead_by?: unknown };
++  if (typeof value?.status !== "string" || !compareStates.has(value.status) || !Number.isSafeInteger(value.ahead_by) || (value.ahead_by as number) < 0) {
++    throw new Error("unavailable: GitHub returned an unreadable comparison.");
++  }
++  return { status: value.status as ReviewCompare["status"], aheadBy: value.ahead_by as number };
++}
++
++export async function runReviewReviews(args: string[], cwd = process.cwd()): Promise<void> {
++  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
++    console.log(REVIEWS_USAGE);
++    return;
++  }
++  const { values } = parseArgs({ args, strict: true, allowPositionals: false, options: { json: { type: "boolean" }, repo: { type: "string" } } });
++  if (!values.json) throw new Error(REVIEWS_USAGE);
++  const repositories = await reviewRepositories(cwd);
++  const repo = selectRepository(repositories, values.repo);
++  const auth = await projectGithubConnection(cwd);
++  const result = await readReviews({
++    repo, repositories,
++    query: (text, params) => boardGraphql(cwd, text, params, auth),
++    // Only the status and count leave gh; the commit and file lists of the comparison are dropped.
++    compare: async (base, head) => parseCompare(await boardGh(cwd,
++      ["api", "--hostname", "github.com", `repos/${repo}/compare/${base}...${head}?per_page=1`, "--jq", "{status, ahead_by}"], auth)),
++  });
++  await writeJson(result, auth);
++}
+
+--- src/commands/review.ts
+@@ 1,30 @@
+ import type { DeskReviewModel } from "../review/desk-run-options";
+ import { deskReviewRoutingRoot, deskReviewOptions } from "../review/autonomous-profile";
+ import { ACCOUNTS_USAGE, runReviewAccounts } from "./review-accounts";
+ import { RULES_USAGE, runReviewRules } from "./review-rules";
+ import { runReviewWatch, WATCH_USAGE } from "./review-watch";
+ import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
+ import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
+ import { DESK_PUBLISH_USAGE, runReviewDeskPublish } from "./review-desk-publish";
+ import { BOARD_USAGE, runReviewBoard } from "./review-board";
++import { REVIEWS_USAGE, runReviewReviews } from "./review-reviews";
+ import { reviewCompletionHostAnswer } from "./review-operator";
+ import { spawn } from "node:child_process";
+ import { randomUUID } from "node:crypto";
+ import { closeSync, openSync } from "node:fs";
+ import { mkdir, readdir, readFile } from "node:fs/promises";
+ import path, { join } from "node:path";
+ import { optionValue, optionValues, rejectUnknownFlags } from "../lib/args";
+ import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+ import { assertGitRevision, revisionOperand } from "../lib/git-revision";
+ // Through the security facade, not `security/redact` directly — same
+ // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+ import { redactSensitiveText } from "../security/service";
+ import { learnProjectSkill } from "../gdskills/learn";
+ import { applyReviewerProfile, parseLearnArgs } from "../learning/service";
+ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import {
+   learningRecordPath,
+   learningSourcePath,
+   loadReviewLearningConfig,
+   renderLearningRecord,
+
+--- src/commands/review.ts
+@@ 795,838 @@
+     if (command === "pr-context") {
+       await runPrContext(args.slice(1));
+       return;
+     }
+     if (command === "desk-run") {
+       await runReviewDesk(args.slice(1));
+       return;
+     }
+     if (command === "desk-publish") {
+       await runReviewDeskPublish(args.slice(1));
+       return;
+     }
+     if (command === "accounts") {
+       await runReviewAccounts(args.slice(1));
+       return;
+     }
+     if (command === "board") {
+       await runReviewBoard(args.slice(1));
+       return;
+     }
++    if (command === "reviews") {
++      await runReviewReviews(args.slice(1));
++      return;
++    }
+     if (command === "attach") {
+       await runCreate("attach-review", args.slice(1), seams);
+       return;
+     }
+     if (command === "start") {
+       await runCreate("review-flow", args.slice(1), seams);
+       return;
+     }
+     if (command === "ingest") {
+       await runCreate("ingest", args.slice(1), seams);
+       return;
+     }
+     if (command === "scope") {
+       await runScope(args.slice(1));
+       return;
+     }
+     if (command === "floor") {
+       await runFloor(args.slice(1));
+       return;
+     }
+
+--- src/commands/review.ts
+@@ 5356,5396 @@
+ Unix-socket connection handshake; export exactly the three KERYX_REVIEW_AGENTS_ROOT_* values into the controlling
+ harness. The bearer grants the host ceiling selected by these startup flags, so keep it out of logs and child-agent
+ environments. Root commands fail closed without that complete environment. Descendant agents use their separate,
+ run-scoped bridge grant and cannot combine it with the root environment.
+ `);
+ }
+ 
+ /**
+  * The help a `keryx review <subcommand> --help` question is answered with.
+  *
+  * A TABLE OF PRINTERS, not a route: `cli-registry.ts` keeps intercepting
+  * `--help` in front of every review subcommand (most of them — `ingest`,
+  * `complete`, `comments reply`, `lightweight` — do not look for `--help` and
+  * would simply run), and asks {@link printReviewHelpFor} for the text instead.
+  * Nothing in here can execute a subcommand, so an entry is safe to add for any
+  * subcommand, mutating or not; a subcommand with no entry gets the group help.
+  */
+ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+   ["accounts", () => console.log(ACCOUNTS_USAGE)],
+   ["board", () => console.log(BOARD_USAGE)],
++  ["reviews", () => console.log(REVIEWS_USAGE)],
+   ["rules", () => console.log(RULES_USAGE)],
+   ["watch", () => console.log(WATCH_USAGE)],
+   ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
+   ["desk-run", () => console.log(DESK_USAGE)],
+   ["desk-publish", () => console.log(DESK_PUBLISH_USAGE)],
+   ["agents", printReviewAgentHelp],
+   ["start", printStartHelp],
+   ["ingest", printIngestHelp],
+   ["mutate", printMutateHelp],
+   ["blast-radius", printBlastRadiusHelp],
+   ["complete", printCompleteHelp],
+   ["status", printStatusHelp],
+   ["estimate", printEstimateHelp],
+   ["plan", printPlanHelp],
+   ["plan-eval", printPlanEvalHelp],
+   ["required", printRequiredHelp],
+   ["scope", printScopeHelp],
+   ["slice", printSliceHelp],
+   ["dispatch-check", printDispatchCheckHelp],
+   ["retry-plan", printRetryPlanHelp],
+
+--- src/commands/review.ts
+@@ 5525,5566 @@
+ reviewer) for at most 5 files and 300 changed lines outside the risk class; --all, --gating and --depth full keep the full set.
+ --depth light is honoured only when those same checks pass; otherwise the round is full and the reason is printed.
+ Changed lines: --diff-lines, else --scope's changedLinesRetained, else the count start/ingest stored in the package
+ (scope-files.json); with none the round stays full ("no line count"). --package (confined to the project) writes
+ round-depth.json tied to the head, file list and line count it was decided for, and supplies the scope-A file list,
+ blast-radius.json and pr-context.md when the matching flag is not given. ledger build and complete re-check a light round.`);
+ }
+ 
+ function printHelp(): void {
+   console.log(reviewHelpText());
+ }
+ 
+ function reviewHelpText(): string {
+   return `keryx review
+ 
+ Usage:
+   ${ACCOUNTS_USAGE}
+                         Chooses the local project GitHub account.
+   ${BOARD_USAGE}
+                         Reads pull requests and discussions of a connected GitHub repository.
++  ${REVIEWS_USAGE}
++                        Lists this account's local Reviews of a connected repository with state, freshness and rounds.
+   ${WATCH_USAGE}
+   ${RULES_USAGE}
+                         Manages the local macOS pull request watcher.
+   ${DESK_USAGE}
+                         Starts, inspects or cancels a local review of a pull request revision.
+   ${DESK_PUBLISH_USAGE}
+                         Previews, saves or submits a Desktop pull request review.
+   ${PR_CONTEXT_USAGE}
+                         Reads linked Flow evidence and review history for one pull request.
+   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                         --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+   keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
+   keryx review attach --flow <id> --target <kind> --target-ref <ref> [--head <sha>]
+                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                       [--automatic] [--no-prior-round | --prior <package|reviewId>]
+   keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
+                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                      [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
+   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+
+--- src/commands/review-reviews.test.ts
+@@ 1,215 @@
++import { Database } from "bun:sqlite";
++import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
++import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { PUBLICATION_RECEIPT } from "../review/desk-publication-types";
++import { DeskRunStore } from "../review/desk-run-store";
++import type { DeskFinish, DeskRunKey } from "../review/desk-run-types";
++import type { ReviewCompare } from "../review/review-entity";
++import { MAX_REVIEW_COMPARES, parseCompare, readReviews, REVIEWS_USAGE, runReviewReviews, type CompareHeads } from "./review-reviews";
++
++const sha = (c: string) => c.repeat(40);
++const key: DeskRunKey = { repo: "org/repo", repositoryId: "gid", viewer: "user", number: 12 };
++const first = { baseSha: sha("a"), headSha: sha("b") };
++const second = { baseSha: sha("a"), headSha: sha("c") };
++const done = (reviewed: typeof first, findings = { blocker: 0, major: 1, minor: 0, info: 0 }): DeskFinish => ({
++  state: "completed", phase: "Complete", reason: "Done",
++  result: { reviewed, coverage: "complete", verdict: "COMMENT", report: "private report body", findings },
++  usage: { total: { totalTokens: 120 }, coordinator: {}, reviewers: [], partial: false },
++});
++
++let root: string;
++beforeEach(() => { root = mkdtempSync(path.join(tmpdir(), "keryx-reviews-")); });
++afterEach(() => rmSync(root, { recursive: true, force: true }));
++
++function withStore<T>(fn: (store: DeskRunStore) => T): T {
++  const store = new DeskRunStore(root);
++  try { return fn(store); } finally { store.close(); }
++}
++/** Request, start and optionally finish one attempt. */
++function attempt(store: DeskRunStore, k: DeskRunKey, revision: typeof first, finish?: DeskFinish) {
++  const id = store.atomic(() => store.request("/project", k, revision))!;
++  const a = store.byId(id)!;
++  a.run.state = "running";
++  a.pid = null;
++  store.save(a);
++  if (finish) store.end(a, finish);
++  return id;
++}
++
++function prCard(number: number, headSha: string, state = "OPEN") {
++  const none = { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] };
++  return { number, title: `PR ${number}`, state, isDraft: false, author: { login: "author" }, headRefOid: headSha, baseRefOid: sha("a"),
++    updatedAt: "2026-11-20T00:00:00Z", reviewDecision: null, assignees: none, reviewRequests: none,
++    commits: { nodes: [{ commit: { oid: headSha, statusCheckRollup: null } }] } };
++}
++/** A GitHub double: identity, then PR cards by number. Records every query. */
++function github(heads: Record<number, { head: string; state?: string }>, viewer = "user") {
++  const queries: string[] = [];
++  const query = async <T>(text: string): Promise<T> => {
++    queries.push(text);
++    if (text.includes("ReviewIdentity")) return { viewer: { login: viewer }, repository: { id: "gid" } } as T;
++    if (text.includes("ReviewActivePulls")) {
++      const repository: Record<string, unknown> = { id: "gid" };
++      for (const [, n] of text.matchAll(/p(\d+):pullRequest/g)) {
++        const pr = heads[Number(n)];
++        repository[`p${n}`] = pr ? prCard(Number(n), pr.head, pr.state) : null;
++      }
++      return { viewer: { login: viewer }, repository } as T;
++    }
++    throw new Error(`unexpected query ${text.slice(0, 40)}`);
++  };
++  return { query, queries };
++}
++const comparing = (result: ReviewCompare | Error = { status: "ahead", aheadBy: 2 }) => {
++  const calls: [string, string][] = [];
++  const compare: CompareHeads = async (base, head) => {
++    calls.push([base, head]);
++    if (result instanceof Error) throw result;
++    return result;
++  };
++  return { compare, calls };
++};
++const source = (gh: ReturnType<typeof github>, compare: CompareHeads) =>
++  ({ repo: "org/repo", repositories: ["org/repo"], query: gh.query, compare, root });
++
++test("a missing store returns an empty list without creating one or reading PRs", async () => {
++  const gh = github({});
++  const cmp = comparing();
++  const result = await readReviews(source(gh, cmp.compare));
++  expect(result).toMatchObject({ version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "gid", viewer: "user", reviews: [], warnings: [] });
++  expect(Object.keys(result)).toEqual(["version", "repo", "repositories", "repositoryId", "viewer", "fetchedAt", "reviews", "warnings"]);
++  expect(existsSync(path.join(root, "runs.sqlite"))).toBe(false);
++  expect(gh.queries).toHaveLength(1);
++  expect(cmp.calls).toHaveLength(0);
++});
++
++test("one summary per Review with state, freshness, rounds and latest findings; no reports", async () => {
++  const ids = withStore(store => {
++    const r1 = attempt(store, key, first, done(first, { blocker: 1, major: 0, minor: 0, info: 0 }));
++    const r2 = attempt(store, key, second, done(second));
++    mkdirSync(store.directory(r2), { recursive: true });
++    writeFileSync(path.join(store.directory(r2), PUBLICATION_RECEIPT), JSON.stringify({ url: "https://github.com/org/repo/pull/12#r" }));
++    // Another viewer's Review and an archived attempt stay out of this account's list.
++    attempt(store, { ...key, viewer: "colleague", number: 13 }, first, done(first));
++    const archived = attempt(store, { ...key, number: 14 }, first, done(first));
++    const a = store.byId(archived)!;
++    a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
++    store.save(a);
++    const running = attempt(store, { ...key, number: 15 }, first);
++    store.openQuestion(running, { id: "q1", question: "Which?", options: [{ id: "a", label: "A", description: "" }], allowFreeform: false });
++    return { r1, r2, running };
++  });
++  const gh = github({ 12: { head: sha("d") }, 15: { head: sha("b") } });
++  const cmp = comparing({ status: "ahead", aheadBy: 3 });
++  const result = await readReviews(source(gh, cmp.compare));
++
++  expect(result.reviews.map(r => r.number)).toEqual([15, 12]);
++  const [waiting, published] = result.reviews;
++  expect(waiting).toMatchObject({ state: "needs_answer", freshness: { kind: "current" }, latestRound: 1, findings: null });
++  expect(published).toMatchObject({
++    state: "published", latestRound: 2, tokens: 240, source: "manual", onHeadMove: "ask", closedAt: null,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 }, publication: "published",
++    freshness: { kind: "behind", commits: 3, rewritten: false },
++  });
++  expect(published!.card?.headSha).toBe(sha("d"));
++  expect(published!.rounds.map(r => [r.number, r.headSha, r.previousRunId])).toEqual([[2, sha("c"), ids.r1], [1, sha("b"), null]]);
++  expect(published!.rounds[0]!.attempts.map(a => a.id)).toEqual([ids.r2]);
++  expect(cmp.calls).toEqual([[sha("c"), sha("d")]]);
++  expect(JSON.stringify(result)).not.toContain("private report body");
++  expect(JSON.stringify(result)).not.toContain("reviewerProgress");
++});
++
++test("a failed comparison leaves the count unknown and warns; a closed PR is not compared", async () => {
++  withStore(store => {
++    attempt(store, key, first, done(first));
++    attempt(store, { ...key, number: 20 }, first, done(first));
++  });
++  const cmp = comparing(new Error("unavailable: rate limit"));
++  const result = await readReviews(source(github({ 12: { head: sha("d") }, 20: { head: sha("e"), state: "MERGED" } }), cmp.compare));
++  const byNumber = new Map(result.reviews.map(r => [r.number, r]));
++  expect(byNumber.get(12)).toMatchObject({ state: "ready", freshness: { kind: "behind", commits: null, rewritten: false } });
++  expect(byNumber.get(20)).toMatchObject({ state: "closed", freshness: { kind: "behind", commits: null } });
++  expect(cmp.calls).toHaveLength(1);
++  expect(result.warnings).toEqual(["Some commit counts could not be read. Refresh to retry."]);
++});
++
++test(`at most ${MAX_REVIEW_COMPARES} comparisons per call`, async () => {
++  const heads: Record<number, { head: string }> = {};
++  withStore(store => {
++    for (let n = 1; n <= MAX_REVIEW_COMPARES + 2; n++) {
++      attempt(store, { ...key, number: n }, first, done(first));
++      heads[n] = { head: sha("d") };
++    }
++  });
++  const cmp = comparing();
++  const result = await readReviews(source(github(heads), cmp.compare));
++  expect(result.reviews).toHaveLength(MAX_REVIEW_COMPARES + 2);
++  expect(cmp.calls).toHaveLength(MAX_REVIEW_COMPARES);
++  expect(result.reviews.filter(r => r.freshness.kind === "behind" && r.freshness.commits === null)).toHaveLength(2);
++  expect(result.warnings).toHaveLength(1);
++});
++
++test("PRs that cannot be read leave cards empty with a warning; an access failure is not retained", async () => {
++  withStore(store => attempt(store, key, first, done(first)));
++  const failing = (message: string) => ({ ...github({}), query: async <T>(text: string): Promise<T> => {
++    if (text.includes("ReviewIdentity")) return { viewer: { login: "user" }, repository: { id: "gid" } } as T;
++    throw new Error(message);
++  } });
++  const result = await readReviews(source(failing("unavailable: GitHub is down"), comparing().compare));
++  expect(result.reviews[0]).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
++  expect(result.warnings).toEqual(["Some pull requests could not be loaded. Refresh to retry."]);
++  await expect(readReviews(source(failing("access: account changed"), comparing().compare))).rejects.toThrow("access:");
++});
++
++test("a PR GitHub does not return leaves its head unknown and is not compared", async () => {
++  withStore(store => {
++    attempt(store, key, first, done(first));
++    attempt(store, { ...key, number: 21 }, first, done(first));
++  });
++  const cmp = comparing();
++  const result = await readReviews(source(github({ 12: { head: sha("b") } }), cmp.compare));
++  const byNumber = new Map(result.reviews.map(r => [r.number, r]));
++  expect(byNumber.get(21)).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
++  expect(byNumber.get(12)).toMatchObject({ state: "ready", freshness: { kind: "current" } });
++  expect(cmp.calls).toHaveLength(0);
++});
++
++test("an unidentified account or repository is refused", async () => {
++  const query = async <T>(): Promise<T> => ({ viewer: null, repository: null }) as T;
++  await expect(readReviews({ repo: "org/repo", repositories: [], query, compare: comparing().compare, root })).rejects.toThrow("access:");
++});
++
++test("a store that predates Reviews is migrated when it is read", async () => {
++  mkdirSync(root, { recursive: true });
++  const db = new Database(path.join(root, "runs.sqlite"));
++  db.exec(`CREATE TABLE runs (id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
++    state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL)`);
++  const details = { id: "old-run", source: "manual", ...first, state: "failed", phase: "Failed", reason: "x",
++    createdAt: "2026-10-01T00:00:00.000Z", startedAt: null, finishedAt: null, result: null };
++  db.run("INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)",
++    ["old-run", "gid", 12, "USER", "failed", "/p", JSON.stringify(key), JSON.stringify(details)]);
++  db.close();
++  const result = await readReviews(source(github({ 12: { head: sha("b") } }), comparing().compare));
++  expect(result.reviews).toHaveLength(1);
++  expect(result.reviews[0]).toMatchObject({ number: 12, state: "stopped", latestRound: 1 });
++  expect(result.reviews[0]!.rounds[0]!.attempts.map(a => a.id)).toEqual(["old-run"]);
++});
++
++test("parseCompare reads only a known status and a non-negative count", () => {
++  expect(parseCompare('{"status":"diverged","ahead_by":2}')).toEqual({ status: "diverged", aheadBy: 2 });
++  expect(() => parseCompare('{"status":"weird","ahead_by":2}')).toThrow("unavailable:");
++  expect(() => parseCompare('{"status":"ahead","ahead_by":-1}')).toThrow("unavailable:");
++});
++
++test("the command needs --json, refuses unknown flags and prints its usage on --help", async () => {
++  const log = spyOn(console, "log").mockImplementation(() => {});
++  try {
++    await runReviewReviews(["--help"], root);
++    expect(log).toHaveBeenLastCalledWith(REVIEWS_USAGE);
++  } finally { log.mockRestore(); }
++  await expect(runReviewReviews([], root)).rejects.toThrow(REVIEWS_USAGE);
++  await expect(runReviewReviews(["--json", "--state", "open"], root)).rejects.toThrow("--state");
++  await expect(runReviewReviews(["--json", "extra"], root)).rejects.toThrow();
++});
+
+--- src/lib/group-subcommands.ts
+@@ 139,179 @@
+       "agents",
+       "start",
+       "ingest",
+       "scope",
+       "floor",
+       "blast-radius",
+       "layers",
+       "chunks",
+       "coverage",
+       "slice",
+       "dispatch-check",
+       "retry-plan",
+       "next",
+       "run",
+       "ledger",
+       "budget",
+       "tier",
+       "comments",
+       "ci-triage",
+       "board",
++      "reviews",
+       "rules",
+       "watch",
+       "desk-run",
+       "desk-publish",
+       "accounts",
+       "pr-context",
+       "conform",
+       "bot",
+       "metrics",
+       "jev-rules",
+       "jev-edit-guard",
+       "jev-risk",
+       "jev-scenarios",
+       "jev-docs",
+       "jev-comments",
+       "jev-contract",
+       "jev-triage",
+       "jev-select",
+       "jev-profile",
+       "learn",
+
+--- src/review/board-badges.test.ts
+@@ 34,69 @@
+ test("an active run on any range takes precedence over an outdated result", () => {
+   expect(localBadge([run(older, "running"), run(old, "completed")], current))
+     .toEqual({ active: true, ready: false, runState: "other-revision" });
+   expect(localBadge([run(current, "queued"), run(old, "completed")], current))
+     .toEqual({ active: true, ready: false, runState: "queued" });
+ });
+ 
+ test("archived, deleted, imported, unfinished and resultless runs never become outdated", () => {
+   const decision = (action: "archive" | "delete") => ({ decision: { action, reason: "", at: "" } });
+   expect(localBadge([
+     run(old, "completed", decision("archive")),
+     run(old, "completed", decision("delete")),
+     run(old, "completed", { source: "existing" }),
+     run(old, "failed"),
+     run(old, "cancelled"),
+     run(old, "partial", { result: null }),
+     run(old, "budget", { result: { reviewed: null } }),
+   ], current)).toEqual({ active: false, ready: false });
+ });
+ 
++test("an outdated result names its round when the run carries one", () => {
++  expect(localBadge([run(old, "completed", { round: 2 })], current).outdated)
++    .toEqual({ headSha: old.headSha, state: "completed", round: 2 });
++  // Rows read from a store that predates rounds carry null or nothing: the badge stays as before.
++  expect(localBadge([run(old, "completed", { round: null })], current).outdated)
++    .toEqual({ headSha: old.headSha, state: "completed" });
++  expect(localBadge([run(old, "completed")], current).outdated).not.toHaveProperty("round");
++});
++
+ test("the newest of several outdated results wins", () => {
+   expect(localBadge([run(old, "budget"), run(older, "completed")], current).outdated)
+     .toEqual({ headSha: old.headSha, state: "budget" });
+   // History is newest first; a skipped newer run does not hide an older finished one.
+   expect(localBadge([run(old, "completed", { source: "existing" }), run(older, "partial")], current).outdated)
+     .toEqual({ headSha: older.headSha, state: "partial" });
+ });
+
+--- src/review/desk-run-store.test.ts
+@@ 1,23 @@
++import { Database } from "bun:sqlite";
+ import { afterEach, beforeEach, expect, test } from "bun:test";
+-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
++import { copyFileSync, existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { readProcessIdentity } from "../lib/hub-machine/process-identity";
+ import { deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
+ import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
+ import type { DeskFinish } from "./desk-run-types";
+ import { applyDeskLifecycle } from "./desk-run-lifecycle";
+ 
+ const key = {
+   repo: "org/repo",
+   repositoryId: "gid",
+   viewer: "user",
+   number: 12,
+ };
+ const other = { ...key, viewer: "colleague" };
+ const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+ const next = { ...revision, headSha: "c".repeat(40) };
+ let directory: string;
+ let store: DeskRunStore;
+ beforeEach(() => {
+
+--- src/review/desk-run-store.test.ts
+@@ 455,586 @@
+ 
+ test("a finished review of an earlier head reaches the board as outdated until a run covers the new head", async () => {
+   const { localBadge } = await import("./board-badges");
+   const badge = (range = next) => {
+     const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
+     store.attachBadges({ ...key, cards });
+     expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, range));
+     return cards[0]?.localReview;
+   };
+   const finishAt = (range: typeof revision, state: DeskFinish["state"]) => {
+     store.request("/project", key, range);
+     const a = store.queued(key)!;
+     store.end(a, { ...finish, state, result: { ...finish.result!, reviewed: range } });
+     return a;
+   };
+   finishAt({ ...revision, headSha: "d".repeat(40) }, "partial");
+   finishAt(revision, "completed");
+   const archived = finishAt({ ...revision, headSha: "e".repeat(40) }, "budget");
+   archived.run.decision = { action: "archive", reason: "", at: "" };
+   store.save(archived);
+-  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
++  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 2 } });
+   expect(badge(revision)).toMatchObject({ active: false, ready: true, runState: "completed" });
+   expect(badge(revision)?.outdated).toBeUndefined();
+   // Another account's history stays out.
+   const colleague: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+   store.attachBadges({ ...other, cards: colleague });
+   expect(colleague[0]?.localReview).toBeUndefined();
+   // An active run on the new head takes precedence; once it fails, the current-range run still wins.
+   store.request("/project", key, next);
+   expect(badge()).toEqual({ active: true, ready: false, runState: "queued" });
+   const current = store.queued(key)!;
+   store.end(current, { ...finish, state: "failed", result: null });
+   expect(badge()).toEqual({ active: false, ready: false, runState: "failed" });
+ });
+ 
+ test("the outdated lookup ignores newer finished runs of another PR, another viewer, hidden runs and runs without a result", async () => {
+   const { localBadge } = await import("./board-badges");
+   const finishFor = (k: typeof key, head: string, state: DeskFinish["state"] = "completed", recorded = true) => {
+     const range = { ...revision, headSha: head.repeat(40) };
+     store.request("/project", k, range);
+     const a = store.queued(k)!;
+     store.end(a, { ...finish, state, result: recorded ? { ...finish.result!, reviewed: range } : null });
+     return a;
+   };
+   const wanted = finishFor(key, "b");
+   // Each of these is newer than the wanted run and would win the lookup if its own predicate were dropped.
+   finishFor({ ...key, number: key.number + 1 }, "d");
+   finishFor(other, "e");
+   const deleted = finishFor(key, "f");
+   deleted.run.decision = { action: "delete", reason: "", at: "" };
+   store.save(deleted);
+   const imported = finishFor(key, "1");
+   imported.run.source = "existing";
+   store.save(imported);
+   finishFor(key, "2", "completed", false);
+   const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+   store.attachBadges({ ...key, cards });
+-  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed" } });
++  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed", round: 1 } });
+   expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, next));
+   expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
+ });
+ 
+ test("each term of the outdated lookup is pinned by its own fixture", async () => {
+   const { localBadge } = await import("./board-badges");
+   const run = (k: typeof key, requested: typeof revision, state: DeskFinish["state"], reviewed: typeof revision | null) => {
+     store.request("/project", k, requested);
+     store.end(store.queued(k)!, { ...finish, state, result: reviewed ? { ...finish.result!, reviewed } : null });
+   };
+   const badge = (k: typeof key, range: typeof revision) => {
+     const cards: import("./board-badges").BadgeCard[] = [{ number: k.number, ...range }];
+     store.attachBadges({ ...k, cards });
+     expect(cards[0]?.localReview).toEqual(localBadge(store.history(k).runs, range));
+     return cards[0]?.localReview;
+   };
+   const d = { ...revision, headSha: "d".repeat(40) };
+   // `requested`: a failed or cancelled run on the card's range wins over an older finished run of another range.
+   run(key, revision, "completed", revision);
+   run(key, next, "failed", null);
+   expect(badge(key, next)).toEqual({ active: false, ready: false, runState: "failed" });
+   run(key, next, "cancelled", null);
+   expect(badge(key, next)).toEqual({ active: false, ready: false, runState: "cancelled" });
+   // Finished-state filter: a newer failed run with a recorded result is not the outdated candidate.
+   const filtered = { ...key, number: key.number + 1 };
+   run(filtered, revision, "completed", revision);
+   run(filtered, d, "failed", d);
+-  expect(badge(filtered, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
++  expect(badge(filtered, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } });
+   // `reviewed` without `requested`: requested on one range, reviewed the card's range; a newer finished run of a third range must not displace it.
+   const reviewed = { ...key, number: key.number + 2 };
+   run(reviewed, revision, "completed", next);
+   run(reviewed, d, "completed", d);
+   expect(badge(reviewed, next)).toEqual({ active: false, ready: true });
+   // Repository predicate: a newer finished run of the same number and viewer in another repository does not win.
+   const sameNumber = { ...key, number: key.number + 3 }, elsewhere = { ...sameNumber, repositoryId: "other-gid" };
+   run(sameNumber, revision, "completed", revision);
+   run(elsewhere, d, "completed", d);
+-  expect(badge(sameNumber, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
++  expect(badge(sameNumber, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } });
+ });
+ 
+ test("in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card", async () => {
+   const { localBadge } = await import("./board-badges");
+   const ranOn = (k: typeof key, range: typeof revision) => {
+     store.request("/project", k, range);
+     store.end(store.queued(k)!, { ...finish, result: { ...finish.result!, reviewed: range } });
+   };
+   const busy = { ...key, number: key.number + 1 }, done = { ...key, number: key.number + 2 };
+   for (const k of [key, busy, done]) ranOn(k, revision);
+   store.request("/project", busy, next);
+   ranOn(done, next);
+   const cards: import("./board-badges").BadgeCard[] = [key, busy, done].map(({ number }) => ({ number, ...next }));
+   store.attachBadges({ ...key, cards });
+   expect(cards.map(card => card.localReview)).toEqual([
+-    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } },
++    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } },
+     { active: true, ready: false, runState: "queued" },
+     { active: false, ready: true, runState: "completed", publicationPending: true },
+   ]);
+   for (const [i, k] of [key, busy, done].entries()) expect(cards[i]?.localReview).toEqual(localBadge(store.history(k).runs, next));
+ });
+ 
+ test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
+   started();
+   store.request("/fixture", key, next);
+   const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+   store.attachBadges({ ...key, cards });
+   expect(cards[0]?.localReview).toMatchObject({ active: true, runState: "queued" });
+ });
+ 
+ test("question and activity badges follow the account, pinned range, answer and cancellation", () => {
+   const { run } = started();
+   const badge = (viewer = key.viewer, range = revision) => {
+     const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
+     store.attachBadges({ ...key, viewer, cards });
+     return cards[0]?.localReview;
+
+--- src/review/desk-run-store.test.ts
+@@ 744,957 @@
+     applyDeskLifecycle(store, "/project", subject, { action: "decide", id, decision: action, reason: "Operator recorded an outcome" }, undefined);
+   await expect(decide("delete")).rejects.toThrow("Stop the running review");
+   store.end(attempt, { ...finish, state: "partial", result: { ...finish.result!, coverage: "partial" } });
+   mkdirSync(store.directory(id), { recursive: true });
+   const artifact = path.join(store.directory(id), "report.md");
+   writeFileSync(artifact, "Review evidence");
+   await expect(decide("delete", other)).rejects.toThrow("unavailable");
+   await decide("close");
+   expect(store.history(key).runs[0]?.closure).toBe("closed");
+   expect(store.history(key).runs[0]?.result?.coverage).toBe("partial");
+   await decide("archive");
+   expect(store.history(key).runs[0]?.decision?.action).toBe("archive");
+   expect(existsSync(artifact)).toBe(true);
+   await decide("restore");
+   expect(store.history(key).runs[0]?.closure).toBe("closed");
+   await decide("delete");
+   expect(store.history(key).runs).toEqual([]);
+   expect(store.byId(id)?.run.decision?.action).toBe("delete");
+   expect(existsSync(artifact)).toBe(false);
+ });
++
++// main's runs.sqlite schema before Reviews (a5d1ab236), copied verbatim with its constants expanded.
++const MAIN_DDL = `CREATE TABLE IF NOT EXISTS runs (
++      id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
++      state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL
++    );
++    CREATE TABLE IF NOT EXISTS review_questions (
++      run_id TEXT PRIMARY KEY, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT
++    );
++    CREATE TABLE IF NOT EXISTS reviewer_questions (
++      run_id TEXT NOT NULL, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT,
++      PRIMARY KEY(run_id, question_id)
++    );
++    CREATE TRIGGER IF NOT EXISTS clear_stopped_reviewer_questions AFTER UPDATE OF state ON runs
++      WHEN OLD.state='running' AND NEW.state!='running' BEGIN
++        DELETE FROM reviewer_questions WHERE run_id=NEW.id;
++      END;
++    CREATE TABLE IF NOT EXISTS history_scans (
++      cwd TEXT NOT NULL, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
++      scanned INTEGER NOT NULL, PRIMARY KEY(cwd,repo,pr,viewer)
++    );
++    CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
++    CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled';
++    CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ('running', 'cancelling');
++    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`;
++
++const range = (head: string) => ({ baseSha: "a".repeat(40), headSha: head.repeat(40) });
++type Placement = { id: string; review: string; round: number; previous: string | null };
++
++/** Two PRs, two viewers with a case variant, three ranges on one PR in shuffled insert order. */
++function writeMainFixture(file: string) {
++  const db = new Database(file);
++  db.exec(MAIN_DDL);
++  const row = (id: string, viewer: string, pr: number, head: string, state: string, second: number, extra: Record<string, unknown> = {}) => {
++    const reviewed = ["completed", "partial"].includes(state) ? range(head) : null;
++    db.run("INSERT INTO runs (id,repo,pr,viewer,state,pid,cwd,request,details) VALUES (?,?,?,?,?,?,?,?,?)", [
++      id, "gid", pr, viewer, state, null, "/project", JSON.stringify({ ...key, viewer, number: pr }),
++      JSON.stringify({ id, source: "manual", ...range(head), state, phase: state, reason: "", startedAt: null, finishedAt: null,
++        createdAt: `2026-01-01T00:00:0${second}.000Z`,
++        result: reviewed && { reviewed, verdict: null, coverage: "complete", findings: { blocker: 0, major: 0, minor: 0, info: 0 }, report: "" },
++        ...extra }),
++    ]);
++  };
++  const decision = (action: string) => ({ decision: { action, reason: "", at: "" } });
++  row("a5", "user", 12, "3", "completed", 5, { source: "existing" });
++  row("c1", "colleague", 12, "1", "completed", 1);
++  row("a1", "user", 12, "1", "completed", 1);
++  row("a8", "user", 12, "5", "queued", 8);
++  row("a3", "user", 12, "2", "partial", 3, decision("archive"));
++  row("p1", "user", 13, "1", "failed", 2);
++  row("a2", "User", 12, "1", "failed", 2);
++  row("a7", "user", 12, "4", "running", 7);
++  row("a4", "user", 12, "2", "completed", 4, { continuation: { previousId: "a3" } });
++  row("a6", "user", 12, "3", "cancelled", 6, decision("delete"));
++  db.close();
++}
++
++function placements(file: string) {
++  const db = new Database(file, { readonly: true });
++  try {
++    return {
++      runs: db.query<Placement, []>("SELECT id, review_id AS review, round, previous_run_id AS previous FROM runs ORDER BY id").all(),
++      reviews: db.query<{ id: string; repo: string; pr: number; viewer: string }, []>("SELECT id, repo, pr, viewer FROM reviews ORDER BY id").all(),
++      orphans: db.query<{ n: number }, []>("SELECT count(*) AS n FROM runs WHERE review_id IS NULL OR review_id NOT IN (SELECT id FROM reviews)").get()?.n,
++    };
++  } finally { db.close(); }
++}
++
++test("opening a copy of main's database migrates it in place into Reviews and rounds, once", async () => {
++  const { localBadge } = await import("./board-badges");
++  const fixture = mkdtempSync(path.join(tmpdir(), "keryx-review-main-"));
++  const unmigrated = mkdtempSync(path.join(tmpdir(), "keryx-review-copy-"));
++  try {
++    writeMainFixture(path.join(fixture, "runs.sqlite"));
++    copyFileSync(path.join(fixture, "runs.sqlite"), path.join(unmigrated, "runs.sqlite"));
++
++    // The read-only path keeps working on the unmigrated copy and never migrates it.
++    const reader = new DeskRunStore(unmigrated, true);
++    try {
++      const cards: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("4") }];
++      reader.attachBadges({ repositoryId: "gid", viewer: "user", cards });
++      expect(cards[0]?.localReview).toEqual({ active: true, ready: false, runState: "running" });
++      const colleague: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("2") }];
++      reader.attachBadges({ repositoryId: "gid", viewer: "colleague", cards: colleague });
++      expect(colleague[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: range("1").headSha, state: "completed" } });
++      expect(reader.activeReviewNumbers({ repositoryId: "gid", viewer: "USER" })).toEqual([12]);
++      expect(reader.byId("a4")?.run).not.toHaveProperty("round");
++      expect(reader.history({ ...key, repositoryId: "gid" }).runs.map(run => run.round)).toEqual(Array(7).fill(undefined));
++    } finally { reader.close(); }
++    const raw = new Database(path.join(unmigrated, "runs.sqlite"), { readonly: true });
++    try {
++      expect(raw.query("SELECT name FROM pragma_table_info('runs') WHERE name='review_id'").get()).toBeNull();
++      expect(raw.query("SELECT name FROM sqlite_schema WHERE name='reviews'").get()).toBeNull();
++    } finally { raw.close(); }
++
++    const file = path.join(fixture, "runs.sqlite");
++    new DeskRunStore(fixture).close();
++    const first = placements(file);
++    expect(first.runs).toHaveLength(10);
++    expect(first.orphans).toBe(0);
++    expect(first.reviews).toHaveLength(3);
++    const reviewOf = (id: string) => first.runs.find(run => run.id === id)?.review;
++    const user = reviewOf("a1");
++    expect(first.reviews.filter(review => review.pr === 12 && review.viewer.toLowerCase() === "user").map(r => r.id)).toEqual([user!]);
++    expect(new Set(["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"].map(reviewOf))).toEqual(new Set([user]));
++    expect(new Set([user, reviewOf("c1"), reviewOf("p1")]).size).toBe(3);
++    expect(Object.fromEntries(first.runs.map(({ id, round, previous }) => [id, [round, previous]]))).toEqual({
++      a1: [1, null], a2: [1, "a1"], // a retry on the first range, recorded under the case-variant viewer
++      a3: [2, "a2"], a4: [2, "a3"], // a continuation joins its predecessor's round
++      a5: [3, "a4"], a6: [3, "a5"], a7: [4, "a6"], a8: [5, "a7"],
++      c1: [1, null], p1: [1, null],
++    });
++
++    const reopened = new DeskRunStore(fixture);
++    try {
++      expect(placements(file)).toEqual(first);
++      const history = reopened.history({ ...key, repositoryId: "gid" }).runs;
++      expect(history.map(run => [run.id, run.round, run.previousRunId])).toEqual([
++        ["a8", 5, "a7"], ["a7", 4, "a6"], ["a5", 3, "a4"], ["a4", 2, "a3"], ["a3", 2, "a2"], ["a2", 1, "a1"], ["a1", 1, null],
++      ]);
++      expect(new Set(history.map(run => run.reviewId))).toEqual(new Set([user]));
++      const colleague: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("2") }];
++      reopened.attachBadges({ repositoryId: "gid", viewer: "colleague", cards: colleague });
++      expect(colleague[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: range("1").headSha, state: "completed", round: 1 } });
++      expect(colleague[0]?.localReview).toEqual(localBadge(reopened.history({ ...other, repositoryId: "gid" }).runs, range("2")));
++    } finally { reopened.close(); }
++  } finally {
++    rmSync(fixture, { recursive: true, force: true });
++    rmSync(unmigrated, { recursive: true, force: true });
++  }
++});
++
++test("one PR with three historical runs is one Review with rounds", () => {
++  const ids = ["1", "2", "3"].map(head => {
++    const id = store.request("/project", key, range(head))!;
++    store.end(store.byId(id)!, { ...finish, result: { ...finish.result!, reviewed: range(head) } });
++    return id;
++  });
++  const runs = store.history(key).runs;
++  expect(new Set(runs.map(run => run.reviewId)).size).toBe(1);
++  expect(runs[0]?.reviewId).toBeString();
++  expect(runs.map(run => [run.id, run.round, run.previousRunId])).toEqual([
++    [ids[2], 3, ids[1]], [ids[1], 2, ids[0]], [ids[0], 1, null],
++  ]);
++});
++
++test("a new attempt is assigned its Review and round when it is recorded: start, retry, continuation and new head", () => {
++  const place = (id: string) => {
++    const run = store.byId(id)?.run;
++    return [run?.reviewId, run?.round, run?.previousRunId];
++  };
++  const first = store.request("/project", key, revision)!;
++  const review = store.byId(first)?.run.reviewId;
++  expect(review).toBeString();
++  expect(place(first)).toEqual([review, 1, null]);
++  store.end(store.byId(first)!, { ...finish, state: "failed", result: null });
++
++  const retry = store.atomic(() => store.request("/project", key, revision))!;
++  expect(place(retry)).toEqual([review, 1, first]);
++  const retried = store.byId(retry)!;
++  store.end(retried, { ...finish, state: "partial", result: null });
++
++  // An imported package on the same range joins the round; projected fields it carries are ignored.
++  store.recordExisting("/project", key, [{ ...retried.run, id: "imported", source: "existing", reviewId: "forged", round: 9, previousRunId: "x" }]);
++  expect(place("imported")).toEqual([review, 1, retry]);
++
++  // A continuation links to the attempt it continues, not to the newest attempt of the round.
++  const continued = store.atomic(() => store.requestContinuation("/project", key, retry))!;
++  expect(place(continued)).toEqual([review, 1, retry]);
++  store.end(store.byId(continued)!, finish);
++
++  const moved = store.atomic(() => store.request("/project", key, next))!;
++  expect(place(moved)).toEqual([review, 2, continued]);
++  store.end(store.byId(moved)!, finish);
++
++  // The account is part of the key, case-insensitively.
++  const upper = store.request("/project", { ...key, viewer: "USER" }, { ...next, headSha: "d".repeat(40) })!;
++  expect(place(upper)).toEqual([review, 3, moved]);
++  const colleague = store.request("/project", other, revision)!;
++  expect(store.byId(colleague)?.run.reviewId).not.toBe(review);
++  expect(place(colleague).slice(1)).toEqual([1, null]);
++
++  // The projection is read from the columns and never written back into details.
++  const saved = store.byId(moved)!;
++  saved.run.reason = "saved again";
++  store.save(saved);
++  expect(place(moved)).toEqual([review, 2, continued]);
++  const db = new Database(path.join(directory, "runs.sqlite"), { readonly: true });
++  try {
++    const details = db.query<{ details: string }, []>("SELECT details FROM runs").all().map(row => JSON.parse(row.details) as object);
++    expect(details).toHaveLength(7);
++    for (const stored of details) for (const field of ["reviewId", "round", "previousRunId"]) expect(stored).not.toHaveProperty(field);
++  } finally { db.close(); }
++});
+
+--- src/review/review-entity.test.ts
+@@ 1,129 @@
++import { describe, expect, test } from "bun:test";
++import type { ReviewCard } from "./board-types";
++import { freshness, reviewNeedsViewer, reviewState, summarizeReview, type ReviewAttemptSummary, type ReviewRow } from "./review-entity";
++
++const sha = (c: string) => c.repeat(40);
++let seq = 0;
++function attempt(overrides: Partial<ReviewAttemptSummary> = {}): ReviewAttemptSummary {
++  seq++;
++  return {
++    id: `run-${seq}`, round: 1, previousRunId: null, state: "completed", source: "manual",
++    baseSha: sha("a"), headSha: sha("b"), reviewed: { baseSha: sha("a"), headSha: sha("b") },
++    coverage: "complete", findings: { blocker: 0, major: 1, minor: 2, info: 0 }, verdict: "COMMENT",
++    publication: "pending", decision: null, flowId: null, tokens: null, awaitingAnswer: false,
++    createdAt: `2026-11-2${seq % 10}T00:00:00.000Z`, finishedAt: null,
++    ...overrides,
++  };
++}
++function row(attempts: ReviewAttemptSummary[], overrides: Partial<ReviewRow> = {}): ReviewRow {
++  return { id: "review-1", repositoryId: "gid", number: 12, viewer: "me", closedAt: null, onHeadMove: "ask", attempts, ...overrides };
++}
++const card = (overrides: Partial<ReviewCard> = {}): ReviewCard => ({
++  number: 12, title: "PR", url: "https://github.com/org/repo/pull/12", state: "open", draft: false, author: "a",
++  assignees: [], reviewers: [], decision: null, ci: "none", baseSha: sha("a"), headSha: sha("b"), updatedAt: "now", ...overrides,
++});
++
++describe("reviewState follows the specification table", () => {
++  test("closed wins over every attempt state", () => {
++    expect(reviewState(attempt({ state: "running" }), true)).toBe("closed");
++    expect(reviewState(attempt(), true)).toBe("closed");
++  });
++  test("queued, running and cancelling", () => {
++    expect(reviewState(attempt({ state: "queued", reviewed: null }), false)).toBe("queued");
++    expect(reviewState(attempt({ state: "running", reviewed: null }), false)).toBe("running");
++    expect(reviewState(attempt({ state: "cancelling", reviewed: null }), false)).toBe("running");
++  });
++  test("needs_answer only for a running manual attempt with a pending question", () => {
++    expect(reviewState(attempt({ state: "running", awaitingAnswer: true }), false)).toBe("needs_answer");
++    expect(reviewState(attempt({ state: "running", awaitingAnswer: true, source: "scheduled" }), false)).toBe("running");
++    expect(reviewState(attempt({ state: "cancelling", awaitingAnswer: true }), false)).toBe("running");
++  });
++  test("published needs a reviewed range and a published outcome", () => {
++    expect(reviewState(attempt({ publication: "published" }), false)).toBe("published");
++    expect(reviewState(attempt({ publication: "published", reviewed: null }), false)).toBe("stopped");
++  });
++  test("ready for every finished state with a reviewed range", () => {
++    for (const state of ["completed", "partial", "budget"] as const) {
++      expect(reviewState(attempt({ state, publication: null }), false)).toBe("ready");
++    }
++    expect(reviewState(attempt({ publication: "skipped" }), false)).toBe("ready");
++  });
++  test("stopped for failures, cancellations, refusals and finishes without a reviewed range", () => {
++    for (const state of ["failed", "cancelled", "blocked", "skipped"] as const) {
++      expect(reviewState(attempt({ state }), false)).toBe("stopped");
++    }
++    for (const state of ["completed", "partial", "budget"] as const) {
++      expect(reviewState(attempt({ state, reviewed: null }), false)).toBe("stopped");
++    }
++  });
++});
++
++describe("freshness", () => {
++  test("current when the reviewed head is the PR head or the reviewed head is unknown", () => {
++    expect(freshness(sha("b"), sha("b"))).toEqual({ kind: "current" });
++    expect(freshness(null, sha("b"))).toEqual({ kind: "current" });
++  });
++  test("unknown when the PR head is unknown, whatever the comparison says", () => {
++    expect(freshness(sha("b"), null)).toEqual({ kind: "unknown" });
++    expect(freshness(null, null)).toEqual({ kind: "unknown" });
++    expect(freshness(sha("b"), null, { status: "ahead", aheadBy: 3 })).toEqual({ kind: "unknown" });
++  });
++  test("behind with the commit count when the PR head descends from the reviewed head", () => {
++    expect(freshness(sha("b"), sha("c"), { status: "ahead", aheadBy: 3 })).toEqual({ kind: "behind", commits: 3, rewritten: false });
++  });
++  test("rewritten when the reviewed head is no longer an ancestor", () => {
++    expect(freshness(sha("b"), sha("c"), { status: "diverged", aheadBy: 2 })).toEqual({ kind: "behind", commits: 2, rewritten: true });
++    expect(freshness(sha("b"), sha("c"), { status: "behind", aheadBy: 0 })).toEqual({ kind: "behind", commits: 0, rewritten: true });
++  });
++  test("an unknown count without a comparison", () => {
++    expect(freshness(sha("b"), sha("c"))).toEqual({ kind: "behind", commits: null, rewritten: false });
++    expect(freshness(sha("b"), sha("c"), null)).toEqual({ kind: "behind", commits: null, rewritten: false });
++    expect(freshness(sha("b"), sha("c"), { status: "identical", aheadBy: 0 })).toEqual({ kind: "current" });
++  });
++});
++
++test("reviewNeedsViewer: needs_answer, undecided ready and stopped", () => {
++  expect(reviewNeedsViewer({ state: "needs_answer", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ state: "stopped", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ state: "ready", publication: "pending" })).toBe(true);
++  expect(reviewNeedsViewer({ state: "ready", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ state: "ready", publication: "skipped" })).toBe(false);
++  for (const state of ["queued", "running", "published", "closed"] as const) {
++    expect(reviewNeedsViewer({ state, publication: "pending" })).toBe(false);
++  }
++});
++
++describe("summarizeReview", () => {
++  test("groups attempts into rounds, newest first, and reports the latest reviewed round", () => {
++    const first = attempt({ round: 1, findings: { blocker: 1, major: 0, minor: 0, info: 0 }, tokens: 100, createdAt: "2026-11-01T00:00:00.000Z" });
++    const second = attempt({ round: 2, previousRunId: first.id, headSha: sha("c"), reviewed: { baseSha: sha("a"), headSha: sha("c") },
++      findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", tokens: 50, flowId: "519", createdAt: "2026-11-02T00:00:00.000Z" });
++    const retry = attempt({ round: 2, previousRunId: second.id, headSha: sha("c"), state: "failed", reviewed: null, findings: null,
++      publication: null, source: "scheduled", createdAt: "2026-11-03T00:00:00.000Z" });
++    const summary = summarizeReview(row([first, second, retry]), card({ headSha: sha("d") }), { status: "ahead", aheadBy: 4 });
++    expect(summary).toMatchObject({
++      id: "review-1", number: 12, state: "stopped", latestRound: 2, source: "scheduled", flowId: "519", tokens: 150,
++      findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", onHeadMove: "ask", closedAt: null,
++      freshness: { kind: "behind", commits: 4, rewritten: false },
++    });
++    expect(summary.card?.number).toBe(12);
++    expect(summary.rounds.map(r => r.number)).toEqual([2, 1]);
++    expect(summary.rounds[0]).toMatchObject({ baseSha: sha("a"), headSha: sha("c"), previousRunId: first.id });
++    expect(summary.rounds[0]!.attempts.map(a => a.id)).toEqual([retry.id, second.id]);
++    expect(summary.rounds[1]!.previousRunId).toBeNull();
++  });
++
++  test("a Review closed locally or by its PR is closed; an unread PR leaves it open", () => {
++    expect(summarizeReview(row([attempt()], { closedAt: "2026-11-05T00:00:00Z" }), card()).state).toBe("closed");
++    expect(summarizeReview(row([attempt()]), card({ state: "merged" })).state).toBe("closed");
++    expect(summarizeReview(row([attempt()]), card({ state: "closed" })).state).toBe("closed");
++    const unread = summarizeReview(row([attempt()]), null);
++    expect(unread).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
++  });
++
++  test("without a reviewed round freshness compares the requested head and findings stay unknown", () => {
++    const running = attempt({ state: "running", reviewed: null, findings: null, publication: null, headSha: sha("b") });
++    const summary = summarizeReview(row([running]), card({ headSha: sha("b") }));
++    expect(summary).toMatchObject({ state: "running", findings: null, publication: null, tokens: null, freshness: { kind: "current" } });
++  });
++});

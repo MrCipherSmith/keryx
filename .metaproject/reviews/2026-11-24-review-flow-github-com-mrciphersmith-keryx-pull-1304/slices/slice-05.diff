@@ -1,0 +1,923 @@
+--- src/review/board-badges.ts
+@@ 6,58 @@
+ export interface BadgeSnapshot {
+   version: 1;
+   repositoryId: string;
+   viewer: string;
+   cards: BadgeCard[];
+ }
+ 
+ export const runActive = (run: Pick<DeskRun, "state">) => run.state === "running" || run.state === "queued" || run.state === "cancelling";
+ export const sameRange = (a: DeskRevision | null, b: DeskRevision) => a?.baseSha === b.baseSha && a.headSha === b.headSha;
+ export const runFinished = (run: Pick<DeskRun, "state">) => run.state === "completed" || run.state === "partial" || run.state === "budget";
+ 
+ type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
+   decision?: DeskRun["decision"];
+   result: { reviewed: DeskRevision | null } | null;
+   reviewerProgress?: LocalBadge["progress"];
+   pendingQuestion?: DeskRun["pendingQuestion"];
+   pendingQuestions?: DeskRun["pendingQuestions"];
+   publication?: DeskRun["publication"];
+   awaitingAnswer?: boolean;
+   lastActivityAt?: string | undefined;
++  /** Null when SQL reads a store that predates rounds. */
++  round?: number | null;
+ };
+ 
+ /** Both Desktop's live history and SQLite's projected rows use the same ordering and revision rules. */
+ export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): LocalBadge {
+   runs = runs.filter(run => run.source !== "existing" && run.decision?.action !== "archive" && run.decision?.action !== "delete");
+   const active = runs.filter(runActive);
+   const current = active.find(run => sameRange(run, revision)) ?? active[0];
+   // History is newest first. A review on an older range belongs in the lane but
+   // its percentage must not be attributed to the current PR revision.
+   const latest = current ?? runs.find(run => sameRange(run, revision));
+   const same = !!latest && sameRange(latest, revision);
+   const awaiting = latest?.awaitingAnswer ?? (latest?.pendingQuestions ? latest.pendingQuestions.length > 0 : !!latest?.pendingQuestion);
+   const roster = same ? latest.reviewerProgress : undefined;
+   const ready = runs.some(run => runFinished(run) && !!run.result && sameRange(run.result.reviewed, revision));
+   // Outdated is a fallback only: any run on this range, or any active run, says more about the card.
+   const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);
+-  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state } : undefined;
++  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state,
++    ...(typeof stale.round === "number" && { round: stale.round }) } : undefined;
+   return {
+     active: !!current,
+     ready,
+     ...(latest ? { runState: same ? latest.state : "other-revision" } : {}),
+     ...(outdated && { outdated }),
+     ...(same && latest.state === "running" && latest.source === "manual" && awaiting && { awaitingAnswer: true }),
+     ...(same && latest.publication === "pending" && sameRange(latest.result?.reviewed ?? null, revision) && { publicationPending: true }),
+     ...(same && latest.state === "running" && latest.lastActivityAt && { lastActivityAt: latest.lastActivityAt }),
+     ...(roster ? { progress: { planned: roster.planned, finished: roster.finished, wave: roster.wave,
+       ...(roster.completed !== undefined && { completed: roster.completed }),
+     } } : {}),
+   };
+ }
+
+--- src/review/board-types.ts
+@@ 1,38 @@
+ // Read-only Review board protocol shared by the CLI and the Desktop hosts.
+ import type { DeskReviewerProgress, DeskRunState } from "./desk-run-types";
+ 
+ export type ReviewBoardState = "open" | "closed" | "merged" | "all";
+ export type ReviewCi = "passed" | "failed" | "pending" | "none" | "unknown";
+ 
+ export interface ReviewCard {
+   localReview?: {
+     active: boolean;
+     ready: boolean;
+     awaitingAnswer?: true;
+     publicationPending?: true;
+     lastActivityAt?: string;
+     runState?: DeskRunState | "other-revision";
+     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;
+     /** Newest finished result for another range. Present only when no run covers this range and none is active;
+      * `runState` is then absent, because a finished `runState` means a result for this revision exists. */
+-    outdated?: { headSha: string; state: DeskRunState };
++    outdated?: { headSha: string; state: DeskRunState; /** The stale run's Review round, when the store records one. */ round?: number };
+   };
+   /** GitHub message node IDs addressed to this snapshot’s viewer. */
+   addressedReplyIds?: string[];
+   number: number;
+   title: string;
+   changeStats?: { files: number; additions: number; deletions: number };
+   url: string;
+   state: Exclude<ReviewBoardState, "all">;
+   draft: boolean;
+   author: string;
+   assignees: string[];
+   assigneesComplete?: boolean;
+   reviewersComplete?: boolean;
+   /** Logins for users and organization/slug for teams. */
+   reviewers: string[];
+   /** Present on watcher polls to recognize a re-request between two observations. */
+   reviewRequestIds?: Record<string, string>;
+   watcherMergeState?: string;
+   watcherReviews?: { id: string; login: string; state: string }[];
+   decision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+
+--- src/review/desk-run-store.ts
+@@ 1,219 @@
+ import { Database } from "bun:sqlite";
+ import { randomUUID } from "node:crypto";
+ import { existsSync, lstatSync, realpathSync } from "node:fs";
+ import { rm } from "node:fs/promises";
+ import path from "node:path";
+ import { localBadge, type BadgeCard } from "./board-badges";
+ import type { ReviewBoardSnapshot } from "./board-types";
+ import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
+ import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
+ import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
+ import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
+ import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
+ import { summarizeReviewerAssignments } from "./reviewer-activity";
++import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
+ import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
+ 
+ export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
+ export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
+ const maxScheduledWorkers = 4;
+ const liveStates = "('running', 'cancelling')";
+ const unsettledStates = "('running', 'cancelling', 'recoverable')";
+ // Keep the coordinator slot intact for workers running an older binary.
+ const questionRows = `SELECT run_id, question_id, question, answer, 0 AS reviewer, rowid AS seq FROM review_questions
+   UNION ALL SELECT run_id, question_id, question, answer, 1 AS reviewer, rowid AS seq FROM reviewer_questions`;
+ const scheduledReservation = "state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled'";
+ type ScheduledLink = { project: string; runId: string };
+ const linkedUnsettledRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
+   AND state IN ${unsettledStates} AND json_extract(details,'$.source')='scheduled'
+   AND json_extract(details,'$.schedule.project')=?`;
+ const linkParams = (key: DeskRunKey, link: ScheduledLink): [string, string, number, string, string] =>
+   [link.runId, key.repositoryId, key.number, key.viewer, link.project];
+ export interface Attempt {
+   key: DeskRunKey;
+   cwd: string;
+   run: DeskRun;
+   pid: number | null;
+   workerIdentity?: ProcessIdentity | undefined;
+ }
++// An attempt's Review placement lives in these columns only; `details` never carries it.
++const reviewColumns = [["review_id", "TEXT"], ["round", "INTEGER"], ["previous_run_id", "TEXT"]] as const;
++const storedDetails = (run: DeskRun, extra?: object) =>
++  JSON.stringify({ ...run, ...extra, reviewId: undefined, round: undefined, previousRunId: undefined });
++type Placement = { reviewId?: string | null | undefined; round?: number | null | undefined; previousRunId?: string | null | undefined };
++/** A row read from a store that predates Reviews has no placement and the run stays as it was. */
++function place(run: DeskRun, { reviewId, round, previousRunId }: Placement) {
++  if (typeof reviewId !== "string") return;
++  run.reviewId = reviewId;
++  if (typeof round === "number") run.round = round;
++  run.previousRunId = previousRunId ?? null;
++}
+ interface Row {
+   request: string;
+   details: string;
+   pid: number | null;
+   cwd: string;
++  review_id?: string | null;
++  round?: number | null;
++  previous_run_id?: string | null;
+ }
+ const decode = (row: Row): Attempt => {
+   const { workerIdentity, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity };
++  place(run, { reviewId: row.review_id, round: row.round, previousRunId: row.previous_run_id });
+   return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity };
+ };
+ const alive = (pid: number) => {
+   try {
+     process.kill(pid, 0);
+     return true;
+   } catch (error) {
+     return (error as NodeJS.ErrnoException).code === "EPERM";
+   }
+ };
+ function processMayRemain(pid: number, identity?: ProcessIdentity): boolean {
+   if (identity?.pid === pid && Number.isSafeInteger(identity.pgid) && identity.pgid > 0 &&
+       typeof identity.startedAt === "string" && identity.startedAt) return processPresence(identity) !== "absent";
+   // Checkpoints from prior versions and platforms without identity support
+   // retain the conservative numeric check.
+   return alive(pid) || (process.platform !== "win32" && alive(-pid));
+ }
+ 
+ // A dead worker can leave its last session checkpoints in both current and older history rows.
+ function finalizeReviewerProgress(run: DeskRun) {
+   const progress = run.reviewerProgress;
+   if (!progress) return;
+   if (["running", "cancelling", "queued"].includes(run.state)) {
+     if (progress.completed === undefined && progress.sessions.length) progress.completed = summarizeReviewerAssignments(progress.sessions).completed;
+     return;
+   }
+   for (const session of progress.sessions) {
+     if (session.state === "running" || session.state === "planned") session.state = "unknown";
+   }
+   const summary = summarizeReviewerAssignments(progress.sessions);
+   // Only the verified queue knows which observed sessions belong to the plan.
+   Object.assign(progress, summary, { completed: progress.completed ?? summary.completed });
+ }
+ 
+ export class DeskRunStore {
+   private readonly db: Database;
++  private placed?: boolean;
+   constructor(readonly root = deskRunRoot(), readOnly = false) {
+     if (readOnly) {
+       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
+       this.db.exec("PRAGMA busy_timeout=8000");
+       return;
+     }
+     ensureKeryxConfigDir(root);
+     this.db = new Database(path.join(root, "runs.sqlite"));
+     this.db.exec("PRAGMA busy_timeout=8000");
+     this.db.exec(`CREATE TABLE IF NOT EXISTS runs (
+       id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+       state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL
+     );
+     CREATE TABLE IF NOT EXISTS review_questions (
+       run_id TEXT PRIMARY KEY, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT
+     );
+     CREATE TABLE IF NOT EXISTS reviewer_questions (
+       run_id TEXT NOT NULL, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT,
+       PRIMARY KEY(run_id, question_id)
+     );
+     CREATE TRIGGER IF NOT EXISTS clear_stopped_reviewer_questions AFTER UPDATE OF state ON runs
+       WHEN OLD.state='running' AND NEW.state!='running' BEGIN
+         DELETE FROM reviewer_questions WHERE run_id=NEW.id;
+       END;
+     CREATE TABLE IF NOT EXISTS history_scans (
+       cwd TEXT NOT NULL, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+       scanned INTEGER NOT NULL, PRIMARY KEY(cwd,repo,pr,viewer)
+     );
+     CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
+     CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE ${scheduledReservation};
+     CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ${liveStates};
+-    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`);
++    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';
++    CREATE TABLE IF NOT EXISTS reviews (
++      id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
++      closed_at TEXT, on_head_move TEXT NOT NULL DEFAULT 'ask' CHECK (on_head_move IN ('ask','follow','ignore')),
++      UNIQUE (repo, pr, viewer)
++    );`);
++    // One immediate transaction, so two windows opening an older database cannot both add the columns.
++    this.atomic(() => {
++      const present = this.runColumns();
++      for (const [name, type] of reviewColumns) if (!present.has(name)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${name} ${type}`);
++      this.db.exec("CREATE INDEX IF NOT EXISTS review_rounds ON runs(review_id, round)");
++      this.assignReviews();
++    });
+   }
+ 
+   close() {
+     this.db.close();
+   }
++  private runColumns() {
++    return new Set(this.db.query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')").all().map(c => c.name));
++  }
++  /** A read-only store may open a database that predates Reviews; it reads absent columns as NULL and never migrates. */
++  private placement(alias = "") {
++    this.placed ??= reviewColumns.every(([name]) => this.runColumns().has(name));
++    const column = (name: string) => (this.placed ? alias + name : "NULL");
++    return { reviewId: column("review_id"), round: column("round"), previousRunId: column("previous_run_id") };
++  }
++
++  /** Place every attempt without a Review, in creation order. Runs inside the caller's transaction and
++   * touches only unassigned rows, so a round number once shown is never renumbered. */
++  private assignReviews() {
++    type Pending = { seq: number; repo: string; pr: number; viewer: string; base: string | null; head: string | null; previousId: string | null };
++    const pending = this.db.query<Pending, []>(`SELECT rowid AS seq, repo, pr, viewer,
++        json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head,
++        json_extract(details,'$.continuation.previousId') AS previousId
++      FROM runs WHERE review_id IS NULL ORDER BY json_extract(details,'$.createdAt'), rowid`).all();
++    for (const row of pending) {
++      const reviewId = this.reviewFor(row.repo, row.pr, row.viewer);
++      const { round, previous } = this.roundFor(reviewId, row);
++      this.db.run("UPDATE runs SET review_id=?, round=?, previous_run_id=? WHERE rowid=? AND review_id IS NULL",
++        [reviewId, round, previous, row.seq]);
++    }
++  }
++
++  /** The account is part of the key: the viewer column compares case-insensitively. */
++  private reviewFor(repo: string, pr: number, viewer: string): string {
++    const existing = this.db.query<{ id: string }, [string, number, string]>(
++      "SELECT id FROM reviews WHERE repo=? AND pr=? AND viewer=?").get(repo, pr, viewer);
++    if (existing) return existing.id;
++    const id = randomUUID();
++    this.db.run("INSERT INTO reviews (id,repo,pr,viewer) VALUES (?,?,?,?)", [id, repo, pr, viewer]);
++    return id;
++  }
++
++  /** A continuation joins its predecessor's round; a known range is a retry in its round; any other range opens the next round. */
++  private roundFor(reviewId: string, run: { base: string | null; head: string | null; previousId: string | null }) {
++    const newest = (round: number) => this.db.query<{ id: string }, [string, number]>(`SELECT id FROM runs
++      WHERE review_id=? AND round=? ORDER BY json_extract(details,'$.createdAt') DESC, rowid DESC LIMIT 1`).get(reviewId, round)?.id ?? null;
++    const linked = run.previousId === null ? null : this.db.query<{ round: number }, [string, string]>(
++      "SELECT round FROM runs WHERE id=? AND review_id=? AND round IS NOT NULL").get(run.previousId, reviewId);
++    if (linked) return { round: linked.round, previous: run.previousId };
++    const retry = this.db.query<{ round: number }, [string, string | null, string | null]>(`SELECT round FROM runs
++      WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?
++      ORDER BY round DESC LIMIT 1`).get(reviewId, run.base, run.head);
++    if (retry) return { round: retry.round, previous: newest(retry.round) };
++    const last = this.db.query<{ round: number | null }, [string]>(
++      "SELECT max(round) AS round FROM runs WHERE review_id=?").get(reviewId)?.round ?? null;
++    return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };
++  }
+   atomic<T>(fn: () => T) {
+     return this.db.transaction(fn).immediate();
+   }
+   directory(id: string) {
+     return path.join(this.root, "attempts", id);
+   }
+ 
+   private transcriptUpdatedAt(id: string): string | undefined {
+     if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) return;
+     const directory = this.directory(id);
+     const run = path.join(directory, "run");
+     try {
+       if (!lstatSync(directory).isDirectory() || !lstatSync(run).isDirectory()) return;
+       const log = lstatSync(path.join(run, "events.ndjson"));
+       if (log.isFile() && log.size > 0) return log.mtime.toISOString();
+     } catch { /* The transcript may not exist yet. */ }
+   }
+ 
+   byId(id: string): Attempt | undefined {
+     const row = this.db.query<Row, [string]>("SELECT * FROM runs WHERE id=?").get(id);
+
+--- src/review/desk-run-store.ts
+@@ 329,496 @@
+         attempt.key.viewer.toLowerCase() !== key.viewer.toLowerCase()) {
+       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
+     }
+     if (!canContinueDeskRun(attempt.run) || this.latestAdmission(key) !== id || this.active(key) || this.queued(key)) {
+       throw new Error("stale: Another review is active or this attempt is out of date. Refresh the review.");
+     }
+     return attempt;
+   }
+ 
+   requestContinuation(cwd: string, key: DeskRunKey, id: string, guidance?: string) {
+     const { run } = this.continuationSource(key, id);
+     const result = this.requestAttempt(cwd, key, { baseSha: run.baseSha, headSha: run.headSha }, undefined, run.options,
+       { previousId: id, ...(guidance && { guidance }) });
+     return result?.id ?? null;
+   }
+ 
+   save(a: Attempt) {
+     this.db.run("UPDATE runs SET state=?, pid=?, details=? WHERE id=?", [
+       a.run.state,
+       a.pid,
+-      JSON.stringify({ ...a.run, workerIdentity: a.workerIdentity }),
++      storedDetails(a.run, { workerIdentity: a.workerIdentity }),
+       a.run.id,
+     ]);
+   }
+ 
+   end(a: Attempt, finish: DeskFinish) {
+     const retryable =
+       finish.retryableBeforeSpend &&
+       a.run.source === "scheduled" &&
+       a.run.state !== "cancelling" &&
+       (a.run.preflightAttempt ?? 1) < MAX_SCHEDULED_PREFLIGHT_ATTEMPTS;
+     Object.assign(a.run, finish, { finishedAt: new Date().toISOString() });
+     finalizeReviewerProgress(a.run);
+     if (!retryable) delete a.run.retryableBeforeSpend;
+     this.db.run("DELETE FROM review_questions WHERE run_id=?", [a.run.id]);
+     a.pid = null;
+     delete a.workerIdentity;
+     this.save(a);
+   }
+ 
+   claimHistoryScan(cwd: string, key: DeskRunKey): boolean {
+     const now = Date.now();
+     return (
+       this.db.run(
+         `INSERT INTO history_scans (cwd,repo,pr,viewer,scanned) VALUES (?,?,?,?,?)
+       ON CONFLICT(cwd,repo,pr,viewer) DO UPDATE SET scanned=excluded.scanned WHERE scanned < ?`,
+         [cwd, key.repositoryId, key.number, key.viewer, now, now - 300_000],
+       ).changes > 0
+     );
+   }
+ 
+   recordExisting(cwd: string, key: DeskRunKey, runs: DeskRun[]) {
+-    for (const run of runs) {
+-      this.db.run(
++    this.atomic(() => {
++      for (const run of runs) this.db.run(
+         `INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET details=excluded.details
+         WHERE json_extract(runs.details,'$.source')='existing' AND json_extract(runs.details,'$.decision') IS NULL`,
+         [
+           run.id,
+           key.repositoryId,
+           key.number,
+           key.viewer,
+           run.state,
+           cwd,
+           JSON.stringify(key),
+-          JSON.stringify(run),
++          storedDetails(run),
+         ],
+       );
+-    }
++      this.assignReviews();
++    });
+   }
+ 
+   reportForSearch(key: DeskRunKey, id: string): string | undefined {
+     return this.db.query<{ report: string | null }, [string, number, string, string]>(
+       "SELECT json_extract(details,'$.result.report') AS report FROM runs WHERE repo=? AND pr=? AND viewer=? AND id=?",
+     ).get(key.repositoryId, key.number, key.viewer, id)?.report ?? undefined;
+   }
+ 
+   private publication(id: string, state: DeskRun["state"], coverage: string | null | undefined): PublicationOutcome | undefined {
+     if (state !== "completed" || coverage !== "complete" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+     const directory = this.directory(id);
+     const receipt = readConfigFile(path.join(directory, PUBLICATION_RECEIPT));
+     if (receipt.ok) {
+       try { if (typeof JSON.parse(receipt.text)?.url === "string") return "published"; }
+       catch { /* Receipt without a confirmed URL needs operator attention. */ }
+     }
+     return existsSync(path.join(directory, PUBLICATION_SKIPPED)) ? "skipped" : "pending";
+   }
+ 
+   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
+     // Keep periodic IPC responses bounded. The database retains full reports.
+     // Return small recent reports inline and load the rest by attempt id.
+     const reportSelect =
+       id === undefined ? "CASE WHEN cumulative <= 131072 THEN report ELSE '' END" : "substr(report,1,524288)";
+-    type Item = { details: string; state: string; bytes: number; chars: number; report: string };
++    type Item = Placement & { details: string; state: string; bytes: number; chars: number; report: string };
+     const selected = id === undefined ? "" : " AND id=?";
++    const placement = this.placement();
+     const sql = `WITH scoped AS (
+         SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
++          ${placement.reviewId} AS reviewId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+           coalesce(json_extract(details,'$.result.report'),'') AS report
+         FROM runs WHERE repo=? AND pr=? AND viewer=?
+           AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'${selected}
+       ), measured AS (
+         SELECT *,length(CAST(report AS BLOB)) AS bytes,
+           sum(length(CAST(report AS BLOB))) OVER (ORDER BY created DESC,seq DESC) AS cumulative
+         FROM scoped
+-      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report
++      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report,reviewId,round,previousRunId
+         FROM measured ORDER BY created DESC,seq DESC`;
+     const params = [key.repositoryId, key.number, key.viewer];
+     if (id !== undefined) params.push(id);
+     const rows = this.db.query<Item, (string | number)[]>(sql).all(...params);
+     if (id !== undefined && !rows.length)
+       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
+     const runs = rows.map((row) => {
+       const run = JSON.parse(row.details) as DeskRun;
++      place(run, row);
+       if (row.state === "recoverable") {
+         run.state = "failed";
+         run.phase = "Interrupted";
+         run.reason = "The worker stopped. Saved review evidence is awaiting recovery.";
+       }
+       finalizeReviewerProgress(run);
+       if (run.state === "running") {
+         const updatedAt = this.transcriptUpdatedAt(run.id);
+         if (updatedAt) run.lastActivityAt = updatedAt;
+       }
+       if (run.result) {
+         const publication = run.result.reviewed && run.source !== "existing" && run.decision?.action !== "archive" &&
+           this.publication(run.id, run.state, run.result.coverage);
+         if (publication) run.publication = publication;
+         run.result.report = row.report;
+         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
+         if (id !== undefined && row.chars > 524288) {
+           run.result.report +=
+             "\n\nPreview truncated. Full result: " +
+             path.join(this.directory(run.id), "execution-result.json");
+         }
+       }
+       return run;
+     });
+     return { version: 1, runs };
+   }
+ 
+   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
+-      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
++      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null;
++      round: number | null };
+     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
+     // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
+     // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
+     // Older read-only stores predate interactive review questions.
+     const tables = this.db.query<{ name: string }, []>(
+       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
+     ).all();
+     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
+     const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
+         AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
+     // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
+     // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
+     // The outdated row is kept only when no row makes localBadge ignore it: an active run, a run
+     // requested for the card's range, or a finished run that reviewed it.
+     const query = this.db.query<Row, [string, string, string]>(`
+       WITH scoped AS MATERIALIZED (
+         SELECT w.key AS card, r.rowid AS seq, json_extract(r.details,'$.createdAt') AS created,
+           r.state IN ('running','cancelling','queued') AS active, r.state IN ('completed','partial','budget') AS done,
+           json_extract(r.details,'$.baseSha')=w.wb AND json_extract(r.details,'$.headSha')=w.wh AS requested,
+           json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+
+--- src/review/desk-run-store.ts
+@@ 499,539 @@
+           FROM json_each(?1)) w CROSS JOIN runs r
+         WHERE r.repo=?2 AND r.viewer=?3 AND r.pr=w.n AND ${visible("r")}
+       ), flagged AS (
+         SELECT seq, created, card, coalesce(active OR requested,0) AS live, done, coalesce(base=wb AND head=wh,0) AS reviewed,
+           done AND base IS NOT NULL AND head IS NOT NULL AS finished
+         FROM scoped
+       ), picked AS (
+         SELECT seq, created, live OR reviewed AS kept, finished, live OR (done AND reviewed) AS supersedes, card
+         FROM flagged
+       ), ranked AS (
+         SELECT seq, created, kept OR (finished AND NOT max(supersedes) OVER (PARTITION BY card) AND
+           row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
+         FROM picked
+       )
+       SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
+         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+         json_extract(r.details,'$.source') AS source,
+         json_extract(r.details,'$.result.coverage') AS coverage,
+         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
++        ${this.placement("r.").round} AS round,
+         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
+         json_extract(r.details,'$.reviewerProgress.finished') AS finished,
+         json_extract(r.details,'$.reviewerProgress.wave') AS wave,
+         coalesce(json_extract(r.details,'$.reviewerProgress.completed'),
+           CASE WHEN json_array_length(r.details,'$.reviewerProgress.sessions')>0 THEN (
+             SELECT count(*) FROM (
+               SELECT json_extract(s.value,'$.state') AS outcome,
+                 row_number() OVER (PARTITION BY json_extract(s.value,'$.reviewer'),json_extract(s.value,'$.wave') ORDER BY s.key DESC) AS retry
+               FROM json_each(r.details,'$.reviewerProgress.sessions') s
+             ) WHERE retry=1 AND outcome='completed'
+           ) END) AS completed
+       FROM ranked p JOIN runs r ON r.rowid=p.seq
+       WHERE p.wanted
+       ORDER BY p.created DESC,p.seq DESC`);
+     for (let i = 0; i < snapshot.cards.length; i += 200) {
+       const cards = snapshot.cards.slice(i, i + 200);
+       const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
+       const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+       const cardByPr = new Map(cards.map(card => [card.number, card]));
+       for (const row of rows) {
+
+--- src/review/desk-run-store.ts
+@@ 541,629 @@
+         if (!runs.length) byPr.set(row.pr, runs);
+         // localBadge reads a publication only for a run that reviewed the card's own range.
+         const card = cardByPr.get(row.pr);
+         const publication = row.base && row.head && card?.baseSha === row.base && card.headSha === row.head &&
+           this.publication(row.id, row.state, row.coverage);
+         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
+           ...(publication && { publication }),
+           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
+           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
+           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,
+             ...(row.completed !== null && { completed: row.completed }),
+           } });
+       }
+       for (const card of cards) {
+         const runs = byPr.get(card.number);
+         if (runs) card.localReview = localBadge(runs, card);
+       }
+     }
+   }
+ 
++  /** Every Review of one account in one repository with its visible attempts, oldest first. Archived and deleted
++   * attempts are left out, and so is a Review with no other attempt. No reports or reviewer sessions are read. */
++  reviewRows(repositoryId: string, viewer: string): ReviewRow[] {
++    type Item = {
++      reviewId: string; number: number; viewer: string; closedAt: string | null; onHeadMove: ReviewOnHeadMove;
++      id: string; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
++      baseSha: string; headSha: string; reviewedBase: string | null; reviewedHead: string | null;
++      coverage: ReviewAttemptSummary["coverage"]; findings: string | null; verdict: string | null; decision: ReviewAttemptSummary["decision"];
++      flowId: string | null; tokens: number | null; awaitingAnswer: number; createdAt: string; finishedAt: string | null;
++    };
++    const placement = this.placement("r.");
++    const rows = this.db.query<Item, [string, string]>(`
++      SELECT v.id AS reviewId, v.pr AS number, v.viewer AS viewer, v.closed_at AS closedAt, v.on_head_move AS onHeadMove,
++        r.id, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
++        CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
++        json_extract(r.details,'$.source') AS source,
++        json_extract(r.details,'$.baseSha') AS baseSha, json_extract(r.details,'$.headSha') AS headSha,
++        json_extract(r.details,'$.result.reviewed.baseSha') AS reviewedBase, json_extract(r.details,'$.result.reviewed.headSha') AS reviewedHead,
++        json_extract(r.details,'$.result.coverage') AS coverage, json_extract(r.details,'$.result.findings') AS findings,
++        json_extract(r.details,'$.result.verdict') AS verdict, json_extract(r.details,'$.decision.action') AS decision,
++        json_extract(r.details,'$.options.flowId') AS flowId, json_extract(r.details,'$.usage.total.totalTokens') AS tokens,
++        CASE WHEN r.state='running' AND json_extract(r.details,'$.source')='manual'
++          THEN EXISTS(SELECT 1 FROM (${questionRows}) q WHERE q.run_id=r.id AND q.answer IS NULL) ELSE 0 END AS awaitingAnswer,
++        json_extract(r.details,'$.createdAt') AS createdAt, json_extract(r.details,'$.finishedAt') AS finishedAt
++      FROM reviews v JOIN runs r ON ${placement.reviewId}=v.id
++      WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')
++      ORDER BY v.pr DESC, v.id, json_extract(r.details,'$.createdAt'), r.rowid`).all(repositoryId, viewer);
++    const reviews = new Map<string, ReviewRow>();
++    for (const item of rows) {
++      let review = reviews.get(item.reviewId);
++      if (!review) {
++        review = { id: item.reviewId, repositoryId, number: item.number, viewer: item.viewer, closedAt: item.closedAt,
++          onHeadMove: item.onHeadMove, attempts: [] };
++        reviews.set(item.reviewId, review);
++      }
++      const reviewed = item.reviewedBase && item.reviewedHead ? { baseSha: item.reviewedBase, headSha: item.reviewedHead } : null;
++      const publication = reviewed && item.source !== "existing" ? this.publication(item.id, item.state, item.coverage) : undefined;
++      review.attempts.push({
++        id: item.id, round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
++        baseSha: item.baseSha, headSha: item.headSha, reviewed, coverage: item.coverage,
++        findings: item.findings === null ? null : JSON.parse(item.findings) as ReviewAttemptSummary["findings"],
++        verdict: item.verdict, publication: publication ?? null, decision: item.decision, flowId: item.flowId,
++        tokens: Number.isSafeInteger(item.tokens) ? item.tokens : null, awaitingAnswer: !!item.awaitingAnswer,
++        createdAt: item.createdAt, finishedAt: item.finishedAt,
++      });
++    }
++    return [...reviews.values()];
++  }
++
+   activeReviewNumbers({ repositoryId, viewer }: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
+     return this.db.query<{ pr: number }, [string, string]>(`
+       SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
+         AND state IN ('queued','running','cancelling')
+         AND json_extract(details,'$.source') IN ('manual','scheduled')
+         AND coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete')
+       ORDER BY pr DESC
+     `).all(repositoryId, viewer).map(({ pr }) => pr);
+   }
+ 
+   private matchesManualOptions(run: DeskRun, options?: DeskReviewOptions, effectiveOptionsKey?: string): boolean {
+     return effectiveOptionsKey === undefined
+       ? deskOptionsKey(run.options) === deskOptionsKey(options)
+       : (run.effectiveOptionsKey ?? deskOptionsKey(run.options)) === effectiveOptionsKey;
+   }
+ 
+   private previousAttempt(key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, anyOptions = false, effectiveOptionsKey?: string) {
+     const storedKey = effectiveOptionsKey === undefined
+       ? "coalesce(json_extract(details,'$.options'),'')"
+       : "coalesce(json_extract(details,'$.effectiveOptionsKey'),json_extract(details,'$.options'),'')";
+
+--- src/review/desk-run-store.ts
+@@ 720,761 @@
+       scope: DESK_RUN_SCOPE,
+       ...revision,
+       state: "queued",
+       phase: "Queued",
+       createdAt: new Date().toISOString(),
+       startedAt: null,
+       finishedAt: null,
+       reason: "Waiting to start.",
+       result: null,
+     };
+     this.db.run("INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)", [
+       run.id,
+       key.repositoryId,
+       key.number,
+       key.viewer,
+       run.state,
+       cwd,
+       JSON.stringify(key),
+       JSON.stringify(run),
+     ]);
++    // Inside the caller's dispatch transaction: no transaction of its own.
++    this.assignReviews();
+     return { id: run.id, reused: false };
+   }
+ 
+   cancel(key: DeskRunKey, id: string) {
+     const a = this.byId(id);
+     if (
+       !a ||
+       a.key.repositoryId !== key.repositoryId ||
+       a.key.number !== key.number ||
+       a.key.viewer.toLowerCase() !== key.viewer.toLowerCase()
+     ) {
+       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
+     }
+     if (a.run.state === "queued")
+       this.end(a, {
+         state: "cancelled",
+         phase: "Cancelled",
+         reason: "Cancelled before dispatch.",
+         result: null,
+       });
+
+--- src/review/desk-run-store.ts
+@@ 881,912 @@
+       ).all(...batch);
+       for (const row of rows) (row.retryable ? result.retryable : result.terminal).add(row.id);
+     }
+     return result;
+   } finally { db.close(); }
+ }
+ 
+ // Reading badges must neither create a new store nor change a run or dispatch a worker.
+ export function readLocalBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+   if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return;
+   const store = new DeskRunStore(deskRunRoot(), true);
+   try { store.attachBadges(snapshot); } finally { store.close(); }
+ }
+ 
+ export function readLocalActiveReviewNumbers(key: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
+   if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return [];
+   const store = new DeskRunStore(deskRunRoot(), true);
+   try { return store.activeReviewNumbers(key); } finally { store.close(); }
+ }
+ 
++/** A missing store has no Reviews and is not created. An existing store is opened writable, so a database
++ * that predates Reviews is migrated before it is read. */
++export function readReviewRows(repositoryId: string, viewer: string, root = deskRunRoot()): ReviewRow[] {
++  if (!existsSync(path.join(root, "runs.sqlite"))) return [];
++  const store = new DeskRunStore(root);
++  try { return store.reviewRows(repositoryId, viewer); } finally { store.close(); }
++}
++
+ export function attachDeskRunBadges(snapshot: ReviewBoardSnapshot) {
+   try { readLocalBadges(snapshot); } catch { snapshot.warnings.push("Local review progress could not be read."); }
+   return snapshot;
+ }
+
+--- src/review/desk-run-types.ts
+@@ 121,154 @@
+   id: string;
+   source: "manual" | "scheduled" | "existing";
+   schedule?: DeskSchedule;
+   options?: DeskReviewOptions;
+   /** Effective options used to produce this run’s evidence. */
+   effectiveOptionsKey?: string;
+   /** Counts automatic dispatches of this range, including confirmed pre-spend failures. */
+   preflightAttempt?: number;
+   usage?: ReviewRunUsage;
+   reviewerProgress?: DeskReviewerProgress;
+   retryableBeforeSpend?: boolean;
+   /** A completed run is reusable only with the same execution profile and coverage contract. */
+   scope?: string;
+   state: DeskRunState;
+   phase: string;
+   reason: string;
+   createdAt: string;
+   startedAt: string | null;
+   finishedAt: string | null;
+   result: DeskResult | null;
++  /** The Review this attempt belongs to. Projected from the store's columns, never kept in its details;
++   * absent when read from a store that predates Reviews. */
++  reviewId?: string;
++  round?: number;
++  /** The attempt this one follows; null for the first attempt of a Review. */
++  previousRunId?: string | null;
+ }
+ export interface DeskRunSnapshot {
+   completion?: { checks: DeskReviewCheck[] };
+   startedRunId?: string;
+   version: 1;
+   runs: DeskRun[]; // newest request first, including any queued revision
+ }
+ export type DeskFinish = Pick<DeskRun, "state" | "phase" | "reason" | "result" | "usage" | "retryableBeforeSpend" | "reviewerProgress">;
+
+--- src/review/review-entity.ts
+@@ 1,167 @@
++// The Review read model: one Review per (repository, PR, viewer), its rounds and attempts.
++// Pure: the store supplies rows, GitHub supplies the PR card and the head comparison.
++import type { ReviewCard } from "./board-types";
++import type { PublicationOutcome } from "./desk-publication-types";
++import type { DeskResult, DeskReviewAction, DeskRevision, DeskRunState } from "./desk-run-types";
++
++export type ReviewState = "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
++export type ReviewOnHeadMove = "ask" | "follow" | "ignore";
++export type ReviewSource = "manual" | "scheduled" | "existing";
++/** `unknown`: the PR head could not be read (the PR card is unreadable or the PR is missing). */
++export type ReviewFreshness = { kind: "current" } | { kind: "unknown" } | { kind: "behind"; commits: number | null; rewritten: boolean };
++/** GitHub's comparison of the reviewed head (base) with the PR head. */
++export interface ReviewCompare { status: "ahead" | "behind" | "diverged" | "identical"; aheadBy: number }
++
++/** One attempt as the Reviews list reads it: no report and no reviewer session history. */
++export interface ReviewAttemptSummary {
++  id: string;
++  round: number;
++  previousRunId: string | null;
++  /** An interrupted attempt awaiting recovery reads as `failed`, as in the attempt history. */
++  state: DeskRunState;
++  source: ReviewSource;
++  baseSha: string;
++  headSha: string;
++  reviewed: DeskRevision | null;
++  coverage: DeskResult["coverage"] | null;
++  findings: DeskResult["findings"] | null;
++  verdict: string | null;
++  publication: PublicationOutcome | null;
++  decision: DeskReviewAction | null;
++  flowId: string | null;
++  /** Total tokens the attempt reported, when known. */
++  tokens: number | null;
++  awaitingAnswer: boolean;
++  createdAt: string;
++  finishedAt: string | null;
++}
++
++/** A stored Review with its visible attempts, oldest first. */
++export interface ReviewRow {
++  id: string;
++  repositoryId: string;
++  number: number;
++  viewer: string;
++  closedAt: string | null;
++  onHeadMove: ReviewOnHeadMove;
++  attempts: ReviewAttemptSummary[];
++}
++
++export interface ReviewRound {
++  number: number;
++  baseSha: string;
++  headSha: string;
++  /** The attempt the round's first attempt follows; null for round 1. */
++  previousRunId: string | null;
++  /** Newest first. */
++  attempts: ReviewAttemptSummary[];
++}
++
++export interface ReviewSummary {
++  id: string;
++  number: number;
++  card: ReviewCard | null;
++  state: ReviewState;
++  freshness: ReviewFreshness;
++  onHeadMove: ReviewOnHeadMove;
++  closedAt: string | null;
++  /** Newest round first. */
++  rounds: ReviewRound[];
++  latestRound: number;
++  /** Findings of the latest round that produced a reviewed result. */
++  findings: DeskResult["findings"] | null;
++  publication: PublicationOutcome | null;
++  source: ReviewSource;
++  flowId: string | null;
++  tokens: number | null;
++}
++
++export interface ReviewsSnapshot {
++  version: 1;
++  repo: string;
++  repositories: string[];
++  repositoryId: string;
++  viewer: string;
++  fetchedAt: string;
++  reviews: ReviewSummary[];
++  warnings: string[];
++}
++
++const FINISHED: ReadonlySet<DeskRunState> = new Set(["completed", "partial", "budget"]);
++
++/** The state of a Review, derived from its latest attempt. */
++export function reviewState(latest: ReviewAttemptSummary, closed: boolean): ReviewState {
++  if (closed) return "closed";
++  if (latest.state === "queued") return "queued";
++  if (latest.state === "running" || latest.state === "cancelling") {
++    return latest.state === "running" && latest.source === "manual" && latest.awaitingAnswer ? "needs_answer" : "running";
++  }
++  if (FINISHED.has(latest.state) && latest.reviewed) return latest.publication === "published" ? "published" : "ready";
++  return "stopped";
++}
++
++/** Whether the PR head moved past the reviewed head. An unknown PR head is `unknown`; an unknown reviewed head cannot be behind. */
++export function freshness(reviewedHead: string | null, prHead: string | null, compare?: ReviewCompare | null): ReviewFreshness {
++  if (!prHead) return { kind: "unknown" };
++  if (!reviewedHead || reviewedHead === prHead || compare?.status === "identical") return { kind: "current" };
++  if (!compare) return { kind: "behind", commits: null, rewritten: false };
++  return { kind: "behind", commits: compare.aheadBy, rewritten: compare.status !== "ahead" };
++}
++
++export function reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication">): boolean {
++  return review.state === "needs_answer" || review.state === "stopped" ||
++    (review.state === "ready" && review.publication !== "skipped" && review.publication !== "published");
++}
++
++const latestAttempt = (row: ReviewRow) => row.attempts[row.attempts.length - 1];
++function newest(attempts: ReviewAttemptSummary[], wanted: (attempt: ReviewAttemptSummary) => boolean) {
++  for (let i = attempts.length - 1; i >= 0; i--) if (wanted(attempts[i]!)) return attempts[i];
++}
++const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);
++
++/** The head a Review last checked: the newest reviewed result, else the newest requested range. */
++export function referenceHead(row: ReviewRow): string | null {
++  return latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null;
++}
++
++export function reviewClosed(row: ReviewRow, card: ReviewCard | null): boolean {
++  return row.closedAt !== null || card?.state === "merged" || card?.state === "closed";
++}
++
++function roundsOf(attempts: ReviewAttemptSummary[]): ReviewRound[] {
++  const byNumber = new Map<number, ReviewAttemptSummary[]>();
++  for (const attempt of attempts) {
++    const list = byNumber.get(attempt.round) ?? [];
++    if (!list.length) byNumber.set(attempt.round, list);
++    list.push(attempt);
++  }
++  return [...byNumber].sort(([a], [b]) => b - a).map(([number, list]) => {
++    const first = list[0]!; // Every map entry holds at least the attempt that created it.
++    return { number, baseSha: first.baseSha, headSha: first.headSha, previousRunId: first.previousRunId, attempts: [...list].reverse() };
++  });
++}
++
++/** Summarize one stored Review. `row.attempts` must be non-empty and oldest first. */
++export function summarizeReview(row: ReviewRow, card: ReviewCard | null, compare?: ReviewCompare | null): ReviewSummary {
++  const latest = latestAttempt(row);
++  if (!latest) throw new Error(`invalid: Review ${row.id} has no visible attempts.`);
++  const reviewed = latestReviewed(row);
++  const tokens = row.attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
++  return {
++    id: row.id,
++    number: row.number,
++    card,
++    state: reviewState(latest, reviewClosed(row, card)),
++    freshness: freshness(referenceHead(row), card?.headSha ?? null, compare),
++    onHeadMove: row.onHeadMove,
++    closedAt: row.closedAt,
++    rounds: roundsOf(row.attempts),
++    latestRound: latest.round,
++    findings: reviewed?.findings ?? null,
++    publication: reviewed?.publication ?? null,
++    source: latest.source,
++    flowId: newest(row.attempts, a => a.flowId !== null)?.flowId ?? null,
++    tokens,
++  };
++}
+

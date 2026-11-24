@@ -1,0 +1,65 @@
+STATUS: DONE
+
+## review-pr-contract · round 1 · wave 5
+
+### Scope
+- Read in full: the skill, the driver, `pr-context.md`, my wave-4 result, and slice-05 (all 923 lines). Slice-05 holds board-badges.ts, board-types.ts, desk-run-store.ts (schema, migration, `assignReviews`/`roundFor`, `history`, `attachBadges`, `reviewRows`, `readReviewRows`), desk-run-types.ts and the new review-entity.ts.
+- To check documents that describe this slice's behaviour, I ran `keryx ctx rg "runs\.sqlite|previous_run_id|review_id|outdated\?" docs README.md`. It found 3 hits: specification.md:74 and implementation-plan.md:35 and :46, all in this PR's diff. I read spec lines 70-76 and plan lines 35-36 at head 20e4281a2 with `git show`, read-only.
+- Earlier findings I did not file again (titles from `keryx ctx rg` over `raw/`):
+  - logic w1: `ready` with a null publication (partial or budget coverage) lights the indicator. This is the only gap I found against the body's "ready with publication undecided".
+  - logic w5 F-001 and F-002: a retry on an earlier range, and a superseded queued attempt that opens a round.
+  - degradation w3 F-001 and F-002: late imports, and `details` read per pending row.
+  - logic w2 F-001: the reviewed commit comes from a stopped attempt.
+  - logic w4 F-002: `stopped` comes from the latest attempt alone.
+  - my PC-001 to PC-006, including PC-002, the read path that migrates through `readReviewRows`.
+- No command was executed beyond read-only `git show`/`git diff --stat` and `keryx ctx rg`. No test was run (exec budget 0).
+
+### Checklist form (claims that touch slice-05)
+The PR body has no checkbox checklist, so each claim is a row.
+
+| Claim (quoted) | State | What the slice shows | Verdict |
+|---|---|---|---|
+| "a new `reviews` table keyed by repository id, PR number and reviewer account (D3, case-insensitive)" | stated | desk-run-store.ts constructor: `viewer TEXT COLLATE NOCASE NOT NULL ... UNIQUE (repo, pr, viewer)`; `reviewFor` looks the key up and inserts | consistent |
+| "`runs` gains `review_id`, `round` and `previous_run_id`" | stated | `reviewColumns = [["review_id","TEXT"],["round","INTEGER"],["previous_run_id","TEXT"]]`, added by `ALTER TABLE` when absent; `storedDetails` keeps them out of `details` | consistent |
+| "Existing databases are migrated in place when opened for writing, and new attempts are assigned when they are recorded. One rule covers both" | stated | The writable constructor runs `this.atomic(() => { ...ALTER...; this.assignReviews(); })`. `requestAttempt` and `recordExisting` both call `assignReviews()`. That is one function for every path. | consistent (that the listing also migrates is PC-002, already filed) |
+| "a continuation joins its predecessor's round" | stated | `roundFor`: `linked` = the round of `continuation.previousId` in the same Review → `{ round: linked.round, previous: run.previousId }` | consistent |
+| "the same base..head joins its existing round as a retry" | stated | `retry` query on `baseSha`/`headSha` `IS ?` → `{ round: retry.round, previous: newest(retry.round) }` | consistent (retry ordering: logic w5 F-001, already filed) |
+| "any other range opens the next round" | stated | `{ round: (last ?? 0) + 1, previous: last === null ? null : newest(last) }` | consistent |
+| "`previous_run_id` links each attempt to the one it follows" | stated | Every branch of `roundFor` sets `previous`, which is null only for a Review's first attempt. The `DeskRun.previousRunId` and `ReviewRound.previousRunId` docs say the same. | consistent |
+| "Read-only badge reads still work on an unmigrated database" | stated | `placement()` returns `NULL` for each column when `pragma_table_info('runs')` lacks it. `attachBadges` and `history` use it. `place()` leaves the run as it was when `reviewId` is not a string. The read-only constructor returns before any migration. | consistent |
+| "SQL `attachBadges` stays in parity with `localBadge`, now including `outdated.round`" | stated | `attachBadges` selects `${this.placement("r.").round} AS round` into `BadgeRun.round`. `localBadge` spreads `round` only when `typeof stale.round === "number"`. `ReviewCard.localReview.outdated.round?` is optional in board-types.ts. On both paths, an unmigrated store gives no `round`. | consistent |
+| "lists Reviews with state, freshness, rounds, latest findings, publication, source, Flow and tokens" | stated | `ReviewSummary` has `state`, `freshness`, `rounds`/`latestRound`, `findings` (latest reviewed), `publication`, `source`, `flowId` and `tokens` | consistent |
+| "A missing store gives an empty list and creates nothing" | stated | `readReviewRows`: `if (!existsSync(path.join(root, "runs.sqlite"))) return [];` before any `new DeskRunStore` | consistent |
+| "Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head cannot be read" | stated | `freshness()`: `!prHead` → unknown. The same head, or `identical` → current. Otherwise behind, with `commits: compare.aheadBy` (or null) and `rewritten: status !== "ahead"`. | consistent |
+| "The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`" | stated | `reviewNeedsViewer` lights `needs_answer`, `stopped`, and `ready` unless publication is `skipped` or `published`. So a `ready` Review with a null publication lights too. | disagreement already filed (logic w1); not re-filed |
+| Spec "Хранение" (specification.md:74-75) and plan "Хранилище" (implementation-plan.md:35): table columns, migration grouped by (repo, pr, viewer), rounds by first appearance of base..head, continuation into the predecessor's round, "Хранилища только для чтения старую базу не мигрируют" | stated (docs in diff) | DDL columns `id, repo, pr, viewer, closed_at, on_head_move` match. In `roundFor`, each range lives in exactly one round: a continuation keeps its predecessor's range, and a repeat range joins as a retry. So "joins its first round" and the code's `ORDER BY round DESC` pick the same round. The read-only constructor never migrates. | consistent |
+
+### Findings
+None new in this wave. Every disagreement this slice touches was filed in an earlier wave, by me or by another lane.
+
+### Not covered
+- Desktop suite count (989) and `bun run lint`: no output in the package (already in not_verified in earlier waves).
+- The migration run on "a scratch copy of a real working database" (17 attempts, 13 Reviews): the copy is not in the package and was not re-checked.
+- Graph and wiki layers were not consulted. The documents that describe the store (spec, plan) are in the diff, and `ctx rg` over docs and README found no other document naming the changed columns or `outdated`.
+
+### Routing audit
+graph_used: no (not-relevant; this lane needed documents naming the changed schema, found by text search), wiki_used: no (not-relevant; the spec and plan are in the diff and were read directly), ctx_used: yes (`keryx ctx rg` ×3), raw_rg_used: no. One raw `git show | sed` for two small line ranges, with an escape marker.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "round": 1,
+  "wave": 5,
+  "slices": ["slice-05"],
+  "summary": "Checked slice-05 (store schema and migration, round assignment, badge round, review-entity read model) against every PR-body claim it touches and against the spec and plan store sections. All are consistent: the reviews key with case-insensitive viewer, the three run columns, one assignment rule for migration and new attempts, the continuation/retry/new-round rule, previous_run_id, read-only badges on an unmigrated store, attachBadges/localBadge round parity, the listing fields, a missing store giving an empty list, and the three freshness kinds. The only disagreement here is the indicator lighting on a ready Review with a null publication, which logic w1 already filed. No new findings.",
+  "findings": [],
+  "not_verified": [
+    "Desktop 'bun test src passes 989 tests' and 'bun run lint is clean': no output in the package",
+    "Migration run on a scratch copy of a real database (17 attempts, 13 Reviews): the copy is not in the package"
+  ]
+}
+```
+
+Summary: slice-05's store and read-model code matches the PR body and the spec and plan store sections on every claim it touches. The one disagreement in scope (`ready` with a null publication lights the indicator) was already filed by review-logic w1. No new findings.

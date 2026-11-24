@@ -1,0 +1,204 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 1, wave 1. Slice read in full: slice-03 (all Desktop test hunks of PR #1304). Production code read for the gates those tests pin: apps/desktop/dev/reviewBoard.ts, apps/desktop/src/review/model.ts, ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx (diff base a5d1ab236..head 20e4281a2), apps/desktop/src/reviews/model.ts and ReviewsView.tsx (full), App.tsx openInReviews wiring, and the app-navigation fixture around the Reviews hunks.
+
+Concerns:
+- Mutation pass NOT run. allowed_tools is read-only with exec_budget_s 0, so per the skill no mutant was executed; the 29 candidates below are proposals for `keryx review mutate`, none has a result. 0 of 29 run, 29 not reached. AC8 and AC9 are tagged `sensitive: mutation`; their verdicts depend on that run.
+- research-evidence/verify-tests-to-run-1.txt was not present when this review ran (the directory held only ingest-screened.json), so I saw no test output for this round.
+- The Rust bridge (src-tauri/src/review.rs, AC5) is not in this slice and its tests only run in CI; I checked only the TS dev mirror `reviewBoardArgs`.
+
+## Mutation table
+
+Not run (read-only dispatch). Every row's result column says "not run".
+
+| id | file | mutation | nearest suite | result |
+|---|---|---|---|---|
+| M01 | apps/desktop/dev/reviewBoard.ts | delete `if (args.reviewsOnly === true) return reviewsArgs(args);` | src/platform/reviewPages.test.ts | not run |
+| M02 | apps/desktop/dev/reviewBoard.ts | `args.updatedSince != null` -> `false` | src/platform/reviewPages.test.ts | not run |
+| M03 | apps/desktop/src/review/model.ts | `unreadReplies > 0;` -> `unreadReplies > 0 \|\| !!c.localReview?.awaitingAnswer;` | src/review/model.test.ts | not run |
+| M04 | apps/desktop/src/review/model.ts | `unreadReplies > 0;` -> `unreadReplies > 0 \|\| !!c.localReview?.publicationPending;` | src/review/model.test.ts | not run |
+| M05 | apps/desktop/src/review/model.ts | `unreadReplies > 0;` -> `unreadReplies >= 0;` | src/review/model.test.ts | not run |
+| M06 | apps/desktop/src/review/model.ts | re-insert the reviewNote fallback after `if (attention) return attention;` | src/review/model.test.ts | not run |
+| M07 | apps/desktop/src/review/ReviewBoard.tsx | drop `&& a?.outdated?.round === b?.outdated?.round` | src/review/ReviewBoard.dom.test.tsx | not run |
+| M08 | apps/desktop/src/review/ReviewBoard.tsx | `if (kind !== "start" && onOpenInReviews)` -> `if (onOpenInReviews)` | src/review/ReviewBoard.dom.test.tsx | not run |
+| M09 | apps/desktop/src/review/ReviewDetail.tsx | `reviewIntent?.kind === "start" ? reviewIntent : undefined` -> `reviewIntent` | src/review/ReviewBoard.dom.test.tsx, src/reviews/ReviewsView.dom.test.tsx | not run |
+| M10 | apps/desktop/src/review/ReviewDetail.tsx | `local.runs.some(run => !reviewIsArchived(run))` -> `local.runs.length > 0` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M11 | apps/desktop/src/review/ReviewDetail.tsx | drop `action.open \|\| ` from the start button's `disabled` | src/review/ReviewBoard.dom.test.tsx | not run |
+| M12 | apps/desktop/src/review/ReviewDetail.tsx | drop `card.state !== "open" \|\| ` from the initial-launch effect guard | src/review/ReviewBoard.dom.test.tsx | not run |
+| M13 | apps/desktop/src/review/ReviewResults.tsx | `label === "New review round" ? card.localReview?.outdated : undefined` -> `card.localReview?.outdated` (presentation) | src/review/ReviewBoard.dom.test.tsx | not run |
+| M14 | apps/desktop/src/review/ReviewResults.tsx | round title -> always `"Reviewed"` (presentation) | src/review/ReviewBoard.dom.test.tsx | not run |
+| M15 | apps/desktop/src/reviews/model.ts | delete `if (state === "needs_answer") return "waiting";` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M16 | apps/desktop/src/reviews/model.ts | delete `if (isBehind(review.freshness)) return "behind";` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M17 | apps/desktop/src/reviews/model.ts | `freshness.kind === "behind"` -> `freshness.kind !== "current"` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M18 | apps/desktop/src/reviews/model.ts | `freshness.rewritten ? ... : amount` -> `amount` (presentation) | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M19 | apps/desktop/src/reviews/model.ts | `String(review.number).startsWith(number)` -> `String(review.number) === number` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M20 | apps/desktop/src/reviews/model.ts | delete `(showClosed \|\| review.state !== "closed") &&` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M21 | apps/desktop/src/reviews/ReviewsView.tsx | delete `if (active && !wasActive.current) refresh();` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M22 | apps/desktop/src/reviews/ReviewsView.tsx | `if (!active \|\| !running) return;` -> `if (!running) return;` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M23 | apps/desktop/src/reviews/ReviewsView.tsx | `if (identity.current && identity.current !== next) resetView();` -> delete | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M24 | apps/desktop/src/reviews/ReviewsView.tsx | `if (!filterReviewList([found], filters, q, true).length) {` -> `if (true) {` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M25 | apps/desktop/src/reviews/ReviewsView.tsx | `if (!read.error) setNotice(` -> `setNotice(` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M26 | apps/desktop/src/reviews/ReviewsView.tsx | delete `if (previous !== undefined && previous !== signature) refresh();` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M27 | apps/desktop/src/reviews/ReviewsView.tsx | delete `if (found.state === "closed") setShowClosed(true);` | src/reviews/ReviewsView.dom.test.tsx | not run |
+| M28 | apps/desktop/src/App.tsx | delete `setView("reviews");` in openInReviews | src/shell/ProjectNavigation.dom.test.tsx (app-navigation fixture) | not run |
+| M29 | apps/desktop/src/App.tsx | `reviewsNotice?.binding === reviewViewer` -> `true` | src/shell/ProjectNavigation.dom.test.tsx (app-navigation fixture) | not run |
+
+Which tests appear to pin which gates. This comes from reading the tests, it is a lead and not a mutation result: M01-M07, M10, M15-M17, M19-M23 and M27 each have an assertion that reads as targeting them. Examples: the reviewsOnly loop over seven extras, the needsViewerAttention matrix in model.test.ts, the badgesEqual round pair, the AC6 column test with the unknown-kind #10, the reload-timer test, and the focus test with closed #5. I found no fixture that reaches M08, M09, M12, M13, M18, M24, M25, M26, M28 or M29 (see F-002, F-003, F-004, F-007).
+
+AC9 (needsViewerAttention), by reading only: the one changed line drops the awaitingAnswer and publicationPending clauses. Both are asserted `false` in model.test.ts and ReviewBoard.dom.test.tsx, so re-adding either clause (M03, M04) should fail. Every remaining clause has both a true and a false case. That still needs the mutate run to confirm.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Desktop test hunks of PR #1304 (slice-03) are behaviour-level, boundary-mocked (commands injected as props, no real network) and use a faked interval rather than sleeps. The moved Review-interface tests now drive ReviewPanel directly. The mutation pass was not run (read-only dispatch); 29 candidates are listed with 0 run. Five minor and two info findings: a list-row Round assertion that cannot fail, intent-routing branches with no fixture on the alternate side, an untested App-level handoff to the Reviews tab, untested refresh-on-mutation in ReviewsView, and a focus-return assertion dropped when the rules dialog moved.",
+  "slices": [{"id": "slice-03", "coverage": "read in full; production gates read from base..head diff and current files", "status": "DONE"}],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": [
+    "Run the 29 mutant_candidates through `keryx review mutate` (read-only dispatch could not); AC8 and AC9 are mutation-sensitive and their verdict depends on M03-M05 and M15-M17/M22.",
+    "verify-tests-to-run-1.txt was absent when this reviewer ran; confirm the slice's suites are green at head."
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": null,
+      "quote": "for (const text of [\"lee\", \"Ready\", \"2\", \"abcdef0\", \"behind 3\", \"1 blocker · 2 minor\", \"Not published\", \"Scheduled\", \"#488\", (15000).toLocaleString()]) {",
+      "problem": "The list-view half of the AC6 card/list parity test checks the Round column with `toContain(\"2\")` on the whole row. The same row always contains \"1 blocker · 2 minor\" (checked in the same loop), so the round check passes whatever the Round cell says.",
+      "impact": "The list's Round column (`<td>{review.latestRound}</td>` in ReviewsView.tsx) is effectively unpinned. A regression that shows the wrong round or no round leaves the test green while it reads as coverage of AC6 \"list shows the same\".",
+      "suggested_fix": "Assert the Round cell itself, for example by header index: `const cols = [...document.querySelectorAll('thead th')].map(th => th.textContent); expect(row.children[cols.indexOf('Round')]!.textContent).toBe('2');`. Alternatively use a round that does not appear elsewhere in the row (latestRound 7).",
+      "evidence": "ReviewsView.tsx renders `<th>Round</th>` and `<td>{review.latestRound}</td>`. The fixture's findings are { blocker: 1, minor: 2 }, rendered as \"1 blocker · 2 minor\" in the same row, so the substring \"2\" is always present.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (kind !== \"start\" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);",
+      "problem": "Rule 3 (new logic gets a test): the new routing by intent kind is tested only on one side. (a) ReviewBoard.openReview: no test renders the board with `onOpenInReviews` and clicks a start action (\"Run review\" / \"New review round\"). The two tests that pass `onOpenInReviews` click only view and answer actions, and the start tests pass no `extra`. So nothing shows that a start stays in the PR panel when the App wiring is present. (b) ReviewDetail now keeps only a start intent (`reviewIntent?.kind === \"start\" ? reviewIntent : undefined`), and no test hands ReviewDetail a view or answer intent. This is a reading-based coverage gap, not a mutation result (M08, M09 not run).",
+      "impact": "In the real app `onOpenInReviews` is always wired. A later edit that sends every card action to the Reviews tab, or that lets a view intent start a review in the PR panel, would not turn any test red.",
+      "suggested_fix": "In ReviewBoard.dom.test.tsx, render with `{ onOpenInReviews }` and click \"Run review for #101\" / \"New review round for #101\": assert `opened` stays empty and the start reaches `runCommand`. In ReviewsView.dom.test.tsx (the ReviewDetail AC7 test), render ReviewDetail with `reviewIntent: { kind: 'view', ... }` and a non-open action, then assert no `start` action is sent.",
+      "evidence": "ReviewBoard.dom.test.tsx: the tests \"opening a running review from its badge action...\" and \"a merged PR awaiting a Keryx answer...\" pass onOpenInReviews and click View/Answer. The tests \"Run review for #105\" (renders with `run` only) and \"an outdated review ... New review round\" (no extra) leave onOpenInReviews undefined. ReviewsView.dom.test.tsx renders ReviewDetail without reviewIntent.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));",
+      "problem": "Rule 3: the App-level handoff from Pull requests to Reviews has no test. That covers `openInReviews` (switching to the Reviews view and incrementing the focus nonce) and the reviewsIndicator account-binding gate (`reviewsNotice?.binding === reviewViewer`). Each component is tested alone: ReviewBoard calls a stub, ReviewsView receives a hand-built `focus`, AppShell receives `reviewsIndicator` directly. The app-navigation fixture reaches the Reviews tab only through Cmd+3 and never clicks a card action or \"Open in Reviews\".",
+      "impact": "If the App stops switching the view, repeats a nonce, or shows the previous account's Reviews dot after an account change, every test stays green. AC7's \"offers Open in Reviews\" is pinned up to the callback, not up to the Reviews panel opening.",
+      "suggested_fix": "In app-navigation.fixture.tsx, give the `review_board` reviewsOnly mock a Review for PR #12 and an active run. Click the card's \"View review for #12\" (or \"Open in Reviews\" in the PR panel), then assert `main nav button[aria-current=page]` reads \"Reviews\" and `aside[aria-label=\"Review of pull request #12\"]` is present. Clicking a second time should still open it (nonce). Add one assertion that `.reviews-tab-dot` clears after an account switch.",
+      "evidence": "A ctx rg over app-navigation.fixture.tsx for Run review / Open in Reviews / onOpenInReviews matches only the session-composer \"Run review\" dialog (line ~233). ProjectNavigation.dom.test.tsx's AC6 test renders AppShell with `reviewsIndicator` set by hand.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "if (previous !== undefined && previous !== signature) refresh();",
+      "problem": "Rule 3: ReviewsView re-reads the list when a mutation in the panel (start, cancel, answer, decision, publication) changes a run's signature (`observeRuns`), but no test checks it. No ReviewsView test performs a panel action and then checks `reads` or the Review's new column. The same applies to the focus effect's `if (!read.error) setNotice(...)` gate and its filter-preserving branch (`if (!filterReviewList([found], filters, q, true).length)`): no fixture focuses a Review that the current filters already show, or fails the re-read.",
+      "impact": "After a start or cancel in the Review panel the list and the tab indicator can go stale until the next minute or tab switch, and no test would notice. The first-observation guard (`previous !== undefined`) that prevents a refresh loop on open is also unpinned.",
+      "suggested_fix": "Add a ReviewsView test with a counting `load` and a `runCommand` whose snapshot changes after a `start` or `cancel`. Open the Review, click the action, and assert `reads` grew by exactly one; opening alone must not re-read. Add a focus case whose Review matches an active filter (filters kept) and one where the re-read fails (no \"has no Keryx review\" notice).",
+      "evidence": "A ctx rg for onRunSnapshot across src/reviews/*.dom.test.tsx finds no match. The ReviewsView tests that count `reads` are the reload, focus and timer tests, and none of them drives a panel mutation.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": null,
+      "quote": "for (const opener of [\"PR watcher · Off\"]) {",
+      "problem": "The account-change test used to prove that focus returns to search from both portaled dialogs, PR watcher and Review rules. It now covers only the watcher. When the Review rules dialog moved to the Reviews toolbar, the moved test (\"a rules dialog pending for a previous account cannot expose that account's rules\") kept the dialog-closes check and dropped the focus check. ReviewsView has no focus restoration on an identity change (the identity branch only calls `resetView()`, which sets state).",
+      "impact": "The pinned behaviour (focus lands on search, not <body>, when the account changes under an open rules dialog) disappeared without a test. Keyboard and screen-reader users lose their place. The tdd-workflow table treats a weakened assertion as no finding only when the behaviour was removed deliberately, and nothing in the PR says this one was.",
+      "suggested_fix": "Decide whether ReviewsView should restore focus to \"Search reviews\" when the account or repository changes. If yes, add the focus assertion to the moved rules-dialog test in ReviewsView.dom.test.tsx and implement it, mirroring ReviewBoard. If no, record the decision. In both cases drop the single-element loop and the `opener.length` suffix in the ReviewBoard test.",
+      "evidence": "Base test: `for (const opener of [\"PR watcher · Off\", \"Review rules\"])` asserting `document.activeElement` aria-label \"Search pull requests\". Head: the opener list is reduced to the watcher. In ReviewsView.dom.test.tsx, the rules account-change test has no activeElement assertion. In ReviewsView.tsx, `if (identity.current && identity.current !== next) resetView();` is followed by no focus call.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "line": null,
+      "quote": "      expect(document.querySelector('[role=\"progressbar\"]')?.getAttribute(\"aria-valuenow\") ?? null).toBe(percent);",
+      "problem": "Removing the `await click(\"Keryx review\")` lines left over-indented statements (this one and `      await click(\"Refresh runs\");` in the polling test). The ReviewBoard watcher-focus test still loops over a one-element array.",
+      "impact": "Readability only; no effect on what the tests pin.",
+      "suggested_fix": "Re-indent the two lines; unroll the one-element loop.",
+      "evidence": "slice-03 hunks @@ 1,136 @@ and @@ 705,745 @@ of ReviewPanel.dom.test.tsx; ReviewBoard.dom.test.tsx @@ 198,239 @@.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "publication": "omit"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "return freshness.rewritten ? `${amount} · history rewritten` : amount;",
+      "problem": "No test renders three of the new label branches: \"history rewritten\" (freshness.rewritten), \"No findings\" (findingsLabel with all-zero findings) and \"Publication skipped\" (publicationLabel). The skipped case appears only in the indicator matrix, which does not read the label.",
+      "impact": "Presentation only; the copy can change or break silently.",
+      "suggested_fix": "Add a small model.test.ts beside reviews/model.ts with these label cases, or extend the AC6 card test with a rewritten, zero-findings, skipped Review.",
+      "evidence": "A ctx rg for 'history rewritten|rewritten: true|No findings' in src/reviews tests finds no match. 'skipped' appears only at ReviewsView.dom.test.tsx line ~193, in the indicator cases.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M01", "file": "apps/desktop/dev/reviewBoard.ts", "anchor": "  if (args.reviewsOnly === true) return reviewsArgs(args);\n", "replacement": "", "kind": "behavior"},
+    {"id": "M02", "file": "apps/desktop/dev/reviewBoard.ts", "anchor": "args.cursor != null || args.updatedSince != null)", "replacement": "args.cursor != null || false)", "kind": "behavior"},
+    {"id": "M03", "file": "apps/desktop/src/review/model.ts", "anchor": "    unreadReplies > 0;", "replacement": "    unreadReplies > 0 || !!c.localReview?.awaitingAnswer;", "kind": "behavior"},
+    {"id": "M04", "file": "apps/desktop/src/review/model.ts", "anchor": "    unreadReplies > 0;", "replacement": "    unreadReplies > 0 || !!c.localReview?.publicationPending;", "kind": "behavior"},
+    {"id": "M05", "file": "apps/desktop/src/review/model.ts", "anchor": "    unreadReplies > 0;", "replacement": "    unreadReplies >= 0;", "kind": "behavior"},
+    {"id": "M06", "file": "apps/desktop/src/review/model.ts", "anchor": "  if (attention) return attention;\n  if (c.decision) return DECISION_LABEL[c.decision];", "replacement": "  if (attention) return attention;\n  { const note = reviewNote(c); if (note) return note; }\n  if (c.decision) return DECISION_LABEL[c.decision];", "kind": "behavior"},
+    {"id": "M07", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": " && a?.outdated?.round === b?.outdated?.round", "replacement": "", "kind": "behavior"},
+    {"id": "M08", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (kind !== \"start\" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);", "replacement": "if (onOpenInReviews) onOpenInReviews(card.number, reviewIntent);", "kind": "behavior"},
+    {"id": "M09", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "reviewIntent?.kind === \"start\" ? reviewIntent : undefined", "replacement": "reviewIntent", "kind": "behavior"},
+    {"id": "M10", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "const hasReview = local.runs.some(run => !reviewIsArchived(run));", "replacement": "const hasReview = local.runs.length > 0;", "kind": "behavior"},
+    {"id": "M11", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "disabled={local.working || !local.loaded || action.open || !!revisionChanged}", "replacement": "disabled={local.working || !local.loaded || !!revisionChanged}", "kind": "behavior"},
+    {"id": "M12", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "if (local.error || card.state !== \"open\" || revisionChanged ||", "replacement": "if (local.error || revisionChanged ||", "kind": "behavior"},
+    {"id": "M13", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "const outdated = label === \"New review round\" ? card.localReview?.outdated : undefined;", "replacement": "const outdated = card.localReview?.outdated;", "kind": "presentation"},
+    {"id": "M14", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "${outdated.round ? `Round ${outdated.round} reviewed` : \"Reviewed\"}", "replacement": "${\"Reviewed\"}", "kind": "presentation"},
+    {"id": "M15", "file": "apps/desktop/src/reviews/model.ts", "anchor": "  if (state === \"needs_answer\") return \"waiting\";\n", "replacement": "", "kind": "behavior"},
+    {"id": "M16", "file": "apps/desktop/src/reviews/model.ts", "anchor": "  if (isBehind(review.freshness)) return \"behind\";\n", "replacement": "", "kind": "behavior"},
+    {"id": "M17", "file": "apps/desktop/src/reviews/model.ts", "anchor": "  return freshness.kind === \"behind\";", "replacement": "  return freshness.kind !== \"current\";", "kind": "behavior"},
+    {"id": "M18", "file": "apps/desktop/src/reviews/model.ts", "anchor": "return freshness.rewritten ? `${amount} · history rewritten` : amount;", "replacement": "return amount;", "kind": "presentation"},
+    {"id": "M19", "file": "apps/desktop/src/reviews/model.ts", "anchor": "return String(review.number).startsWith(number);", "replacement": "return String(review.number) === number;", "kind": "behavior"},
+    {"id": "M20", "file": "apps/desktop/src/reviews/model.ts", "anchor": "    (showClosed || review.state !== \"closed\") &&\n", "replacement": "", "kind": "behavior"},
+    {"id": "M21", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "    if (active && !wasActive.current) refresh();\n", "replacement": "", "kind": "behavior"},
+    {"id": "M22", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "    if (!active || !running) return;", "replacement": "    if (!running) return;", "kind": "behavior"},
+    {"id": "M23", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "      if (identity.current && identity.current !== next) resetView();\n", "replacement": "", "kind": "behavior"},
+    {"id": "M24", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "      if (!filterReviewList([found], filters, q, true).length) {", "replacement": "      if (true) {", "kind": "behavior"},
+    {"id": "M25", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "      if (!read.error) setNotice(", "replacement": "      setNotice(", "kind": "behavior"},
+    {"id": "M26", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "    if (previous !== undefined && previous !== signature) refresh();\n", "replacement": "", "kind": "behavior"},
+    {"id": "M27", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "      if (found.state === \"closed\") setShowClosed(true);\n", "replacement": "", "kind": "behavior"},
+    {"id": "M28", "file": "apps/desktop/src/App.tsx", "anchor": "    setView(\"reviews\");\n  }, []);", "replacement": "  }, []);", "kind": "behavior"},
+    {"id": "M29", "file": "apps/desktop/src/App.tsx", "anchor": "reviewsNotice?.binding === reviewViewer", "replacement": "true", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 5, "info": 2}
+}
+```
+
+## Summary
+
+- No blocker or major findings. The suites inject commands as props, so the boundary is mocked and there is no real network. Timers are faked through a setInterval shim rather than sleeps, and the assertions read user-visible DOM, callbacks and recorded actions. The moved Review-interface tests now render ReviewPanel directly.
+- F-001 (minor): in the AC6 list check, `toContain("2")` for the Round column cannot fail, because the row always contains "2 minor".
+- F-002 (minor): intent routing is tested on one side only. No test covers a start with onOpenInReviews wired, or a view/answer intent reaching ReviewDetail.
+- F-003 (minor): the App-level handoff (openInReviews switching to the Reviews tab, focus nonce, Reviews dot bound to the account) has no test.
+- F-004 (minor): ReviewsView's refresh after a panel mutation, and two branches of the focus effect, have no test.
+- F-005 (minor): the account-change focus-return assertion for the Review rules dialog was dropped in the move, and ReviewsView does not restore focus.
+- F-006 and F-007 (info): leftover indentation and a one-element loop; label branches that no test renders.
+- Mutation pass: not run (read-only dispatch). 29 candidates, 0 run, 29 not reached.
+- Test output: research-evidence/verify-tests-to-run-1.txt was not present when this review ran.
+
+Routing audit: graph_used: no (not-relevant: the dispatch handed a bounded slice and named the files). wiki_used: no (not-relevant: testing-practice review of named test files). ctx_used: yes (`keryx ctx rg` and `keryx ctx read`; raw `git diff` and `cat` ran once each with a `keryx:raw` marker to get the exact gate lines for mutant anchors). raw_rg_used: no.

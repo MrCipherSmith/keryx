@@ -1,0 +1,16 @@
+[
+ {
+  "id": "S03",
+  "file": "src/review/desk-run-store.ts",
+  "anchor": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')",
+  "replacement": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive')",
+  "kind": "behavior"
+ },
+ {
+  "id": "S04",
+  "file": "src/review/desk-run-store.ts",
+  "anchor": "${placement.previousRunId} AS previousRunId,\n        CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,",
+  "replacement": "${placement.previousRunId} AS previousRunId,\n        r.state AS state,",
+  "kind": "behavior"
+ }
+]

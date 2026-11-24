@@ -1,0 +1,151 @@
+STATUS: DONE_WITH_CONCERNS
+
+## review-pr-contract · round 1 · wave 1
+
+### Scope
+- Read in full: `pr-context.md`, driver, slice-01 (the flow package: acceptance-criteria, context, description, journal, plan, tasks, flow.json, resolved/T5-T8).
+- slice-01 holds no code. To settle the PR body's claims, the code was read at head 20e4281a2 with read-only `git show`/`git diff` against base a5d1ab236: review.rs, ReviewBoard.tsx, ReviewResults.tsx, model.ts, AppShell.tsx, review-board.ts, review.ts, group-subcommands.ts, review-reviews.ts, the freshness section of review-entity.ts, readReviewRows in desk-run-store.ts, test names in desk-run-store.test.ts, review-reviews.test.ts and ReviewBoard.dom.test.tsx, docs/docs/cli-reference.md, specification.md and implementation-plan.md.
+- Docs outside the diff: `keryx ctx rg --all` over docs, README.md, apps/desktop/README.md and .metaproject/wiki for the strings this change replaced ("Review again", "Keryx review", ⌘3, secondaryNote, `review board --json`).
+- Test output: `research-evidence/verify-tests-to-run-1.txt` is not in the package, so no test run was available. Nothing was executed.
+- Known findings that are not filed again: degradation F-005 (docs/docs/desktop-app.md still lists the old shortcuts and the "Keryx review" tab), logic F-003 (T10 is todo and no lint run is recorded, so the body's "bun run lint is clean" is unsupported), logic F-004 (plan.md is stale), UX-005 (the moved review interface still labels the action "Review again").
+
+### Checklist form
+The PR body has no checkbox checklist. Each claim it makes is one row below.
+
+| Claim (quoted) | State | What the diff shows | Verdict |
+|---|---|---|---|
+| "Existing databases are migrated in place when opened for writing" | stated | `readReviewRows` opens `new DeskRunStore(root)` (writable), and the test "a store that predates Reviews is migrated when it is read" covers it | true, but the read command `review reviews` also migrates. See PC-002 |
+| "Read-only badge reads still work on an unmigrated database." | stated | desk-run-store.test.ts: "The read-only path keeps working on the unmigrated copy and never migrates it." | consistent |
+| "SQL `attachBadges` stays in parity with `localBadge`, now including `outdated.round`" | stated | board-badges.ts and the test are changed; the parity test is extended (not run here) | consistent (not executed) |
+| "Freshness is `current`, `behind {commits, rewritten}`, or `unknown`" | stated | review-entity.ts:11 adds `{ kind: "unknown" }`, and specification.md adds it. cli-reference.md lists only `current` and `behind` | **PC-001** |
+| "one compare call per Review that is behind, capped at 25" | stated | `MAX_REVIEW_COMPARES = 25`; `behind.slice(0, MAX_REVIEW_COMPARES)` | consistent |
+| "A missing store gives an empty list and creates nothing." | stated | `if (!existsSync(...runs.sqlite)) return [];` plus a test | consistent |
+| "`review_board` gains `reviews_only` ... refused in combination with any other board mode" | stated | review.rs refuses state, number, repositories, paged, cursor and badges, plus `updated_since`; Rust tests cover each | consistent (Rust is CI-only, as the body says) |
+| "Sessions, Flows, Reviews, Pull requests, Issues, Metaproject, on ⌘1–⌘6 (D4)" | stated | AppShell.tsx `PROJECT_VIEWS` puts reviews at MOD3 and metaproject at MOD6 | consistent; user docs stale (degradation F-005) |
+| "The Review rules button moved here." | stated | ReviewBoard.tsx removes `<ProjectReviewRules ...>` | consistent |
+| "the 'Keryx review' tab is gone ... 'Open in Reviews'" | stated | ReviewBoard passes `onOpenInReviews` to ReviewDetail | consistent; docs/docs/desktop-app.md:168 still says "Under **Keryx review**" (degradation F-005) |
+| "The Pull requests tab no longer lights from a local review." | stated | model.ts removes `!!c.localReview?.awaitingAnswer \|\| !!c.localReview?.publicationPending` | consistent |
+| "relabelled 'New review round'. Its title names the round it follows" | stated | ReviewResults.tsx names the round only when `outdated.round` is set and otherwise falls back to "Reviewed <sha>" | **PC-003** (info) |
+| "F-024: `secondaryNote` and its text comparison are removed, and the outdated note shows once" | stated | `secondaryNote` is deleted; `laneReason` drops the `reviewNote` fallback | consistent; implementation-plan.md:85 is marked closed |
+| "`bun run typecheck` and `bun run lint` are clean" | stated | journal records typecheck re-runs but no lint run | already filed (logic F-003) |
+| "Desktop: `bun test src` passes 989 tests" | stated | journal: "re-ran apps/desktop `bun test src` (989 pass, 0 fail)" | consistent with the journal (not executed) |
+| "Migration test on a fixture built with main's exact old DDL ... 17 attempts ... 13 Reviews ... round 1 × 13 and round 2 × 4" | stated | desk-run-store.test.ts:832 test; journal T9 has the same numbers | consistent |
+| "13 one-line mutations ... The attention-set code in `ReviewBoard.tsx` is unchanged." | stated | ReviewBoard.tsx diff touches `badgesEqual`, `openReview`, props and the toolbar, not the attention-set identifiers | consistent |
+| Toolbar "one row ... 760 to 1380 px ... two rows at 700 and below, three at 340 ... 648 px at 560" | stated | journal T11 and implementation-plan.md:52 have the same numbers | consistent |
+| "Not verified: ... publication, PR author, Flow, period" | stated | implementation-plan.md:37 says the same | consistent |
+| Overlap: "`ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` from the toolbar, and adds `outdated.round` to `badgesEqual`" | stated | matches the diff | consistent |
+| Overlap: "`ReviewBoard.dom.test.tsx`: ... three assertions now go to `onOpenInReviews`" | stated | two tests assert on `opened`; the second checks two calls (`[0, 1].map`), so three calls are asserted | consistent |
+| implementation-plan.md (in diff) stage hand-off for stage 3 | doc | implementation-plan.md:74 still names the action «Review again» | **PC-004** (info) |
+
+### Findings
+
+### [PC-001] cli-reference omits the `unknown` freshness kind that the PR body and spec add
+- **Severity**: minor
+- **File**: docs/docs/cli-reference.md
+- **Problem**: The PR body says: "Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head cannot be read; `unknown` is an operator decision recorded in the spec." The CLI reference the diff adds for the same command says: "its freshness (`current`, or `behind` with the number of new commits, `null` when unknown, and whether the branch was rewritten)". The code emits a third kind: review-entity.ts:105 `if (!prHead) return { kind: "unknown" };`.
+- **Why it matters**: The CLI reference is the only public description of `keryx review reviews --json`. Someone writing a consumer from it would handle two kinds and get an unexpected `{kind:"unknown"}` whenever a PR card cannot be read or the PR is missing. Its "`null` when unknown" wording also invites confusion with `commits: null`.
+- **Fix**: Add `unknown` (the PR head could not be read) to the freshness list in cli-reference.md.
+
+### [PC-002] The listing command `review reviews` migrates an older store in place, but neither the PR body nor the CLI reference says so
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts
+- **Problem**: The PR body says "Existing databases are migrated in place when opened for writing" and "Read-only badge reads still work on an unmigrated database". The CLI reference describes `review reviews` only as a listing: "Without a local review store the list is empty and no store is created." The source header calls it "Read-only list of local Reviews", and the Rust test is named `reviews_list_is_a_separate_read_only_query`. But `readReviewRows` opens the store writable (`const store = new DeskRunStore(root);`), and review-reviews.test.ts pins "a store that predates Reviews is migrated when it is read". Desktop runs this read whenever a project window opens, because ReviewsView is always mounted. So the first launch of the new Desktop rewrites the schema of the operator's `runs.sqlite`, before any review is started.
+- **Why it matters**: A reader of the body or the CLI reference expects a list read to leave the store untouched. Someone who points the command or a dev build at a store they want to keep unmigrated will get it migrated. The journal for T11 shows the author had to steer around exactly this with a scratch data directory. The body also does not say that the migration is one-way for the new columns.
+- **Fix**: State in the PR body's Store/CLI bullets and in cli-reference.md that `review reviews` (and so opening Desktop) migrates a pre-Reviews store in place. Also correct the "Read-only list" header comment. Alternatively, open the store read-only in `readReviewRows` with the same NULL-substitution as the badge path, if a migration on read is not intended.
+
+### [PC-003] info: "Its title names the round it follows" holds only when the badge carries a round
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewResults.tsx
+- **Problem**: The body says: "Outdated-review action: relabelled 'New review round'. Its title names the round it follows (decision d)." The code is conditional: `${outdated.round ? `Round ${outdated.round} reviewed` : "Reviewed"} ${outdated.headSha.slice(0, 7)} — start a new round on the current head`. The journal records the fallback ("Title wording without a round ... was the worker's choice"). The body does not mention it.
+- **Why it matters**: A tester following the body can see "Reviewed abc1234 — ..." without a round, for example from a badge read through the read-only path, and would report it as a defect.
+- **Fix**: Add "when the badge carries the round" to that body line.
+
+### [PC-004] info: the implementation plan's stage 3 hand-off still names the old label
+- **Severity**: info
+- **File**: docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+- **Problem**: The PR body says the action is "relabelled 'New review round'". The same document, edited by this diff (T13), keeps the hand-off line "**Этап 3.** Действие «Review again» заменяется раундом обновления того же Review". After stage 2 no action has that label on the PR card (ReviewResults.tsx: `card.localReview?.outdated ? "New review round"`).
+- **Why it matters**: The stage 3 agent starts from this section, which the plan describes as checked against the code. It would look for an action label that the PR card no longer uses.
+- **Fix**: Change «Review again» to «New review round» on implementation-plan.md:74, and update the matching clause on :73.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Each claim in the PR #1304 body was checked against the diff at head; the body has no checkbox checklist. Most claims match the code, journal and tests. Two minor gaps: the CLI reference for `keryx review reviews` omits the `unknown` freshness kind that the body and spec add, and neither the body nor the CLI reference says that this listing command (run on every Desktop window open) migrates a pre-Reviews store in place, although it opens the store writable and a test pins that. Two info items: the round-naming title is conditional, and the implementation plan's stage 3 hand-off still says «Review again». User-doc staleness (desktop-app.md), the unrecorded lint run, plan.md staleness and the moved interface's 'Review again' label are already filed by other reviewers and are not repeated.",
+  "slices": [{"id": "slice-01", "coverage": "read in full (flow package only, no code); code claims cross-checked at head 20e4281a2 via git show/diff", "status": "DONE"}],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "its freshness (`current`, or `behind` with",
+      "problem": "PR body: \"Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head cannot be read\". The CLI reference this diff adds for `keryx review reviews --json` lists only `current` and `behind`, while review-entity.ts emits `{ kind: \"unknown\" }` when the PR head is unknown.",
+      "impact": "The CLI reference is the only public contract of the command. A consumer written from it handles two freshness kinds and meets an undocumented third one whenever a PR card cannot be read or the PR is missing.",
+      "suggested_fix": "Add `unknown` (the PR head could not be read) to the freshness description in docs/docs/cli-reference.md.",
+      "evidence": "review-entity.ts:11 `export type ReviewFreshness = { kind: \"current\" } | { kind: \"unknown\" } | { kind: \"behind\"; ... }`; review-entity.ts:105 `if (!prHead) return { kind: \"unknown\" };`; specification.md (diff) adds `| { kind: \"unknown\" }`; cli-reference.md (diff) `its freshness (`current`, or `behind` with the number of new commits, `null` when unknown, and whether the branch was rewritten)`.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "  const store = new DeskRunStore(root);\n  try { return store.reviewRows(repositoryId, viewer); } finally { store.close(); }",
+      "problem": "PR body: \"Existing databases are migrated in place when opened for writing\" and \"Read-only badge reads still work on an unmigrated database\". The CLI reference describes `review reviews` only as a listing (\"no store is created\"), its source header says \"Read-only list of local Reviews\", and the Rust test is named `reviews_list_is_a_separate_read_only_query`. But readReviewRows opens the store writable, and review-reviews.test.ts pins \"a store that predates Reviews is migrated when it is read\". Desktop mounts ReviewsView in every project window, so opening the new Desktop migrates the operator's runs.sqlite before any review starts. Neither the body nor the CLI reference says so.",
+      "impact": "A reader expects a list read to leave the store untouched. Pointing the command or a dev build at a store that should stay on the old schema migrates it; the T11 journal entry had to steer around exactly this with a scratch KERYX_DATA_DIR.",
+      "suggested_fix": "Say in the PR body (Store/CLI bullets) and in cli-reference.md that `review reviews`, and so opening Desktop, migrates a pre-Reviews store in place, and correct the \"Read-only list\" header comment in src/commands/review-reviews.ts. Or open the store read-only in readReviewRows with NULL-substitution like the badge path, if a migration on read is not intended.",
+      "evidence": "desk-run-store.ts:903-907 readReviewRows; review-reviews.ts:1 `// Read-only list of local Reviews for the Desktop Reviews tab`; review-reviews.test.ts:184 `test(\"a store that predates Reviews is migrated when it is read\"`; journal T11: \"KERYX_DATA_DIR set to a scratch copy of the working DB. That kept the operator's real store from being migrated.\"",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "const title = outdated ? `${outdated.round ? `Round ${outdated.round} reviewed` : \"Reviewed\"} ${outdated.headSha.slice(0, 7)} — start a new round on the current head` : label;",
+      "problem": "PR body: \"relabelled 'New review round'. Its title names the round it follows (decision d).\" The title names the round only when the badge carries `outdated.round`; otherwise it reads \"Reviewed <sha> — start a new round on the current head\". The journal records the fallback, but the body does not mention it.",
+      "impact": "A tester who follows the body may report the round-less title as a defect.",
+      "suggested_fix": "Qualify the body line: the title names the round when the badge carries it.",
+      "evidence": "journal.md: \"Title wording without a round ('Reviewed abc1234 — start a new round on the current head') was the worker's choice.\"",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff",
+      "publication": "finding"
+    },
+    {
+      "id": "PC-004",
+      "severity": "info",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": null,
+      "quote": "- **Этап 3.** Действие «Review again» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).",
+      "problem": "PR body: the outdated-review action is \"relabelled 'New review round'\". The implementation plan this diff edits (T13) still names the action «Review again» in its stage 3 hand-off, while ReviewResults.tsx now renders \"New review round\".",
+      "impact": "The stage 3 agent starts from this hand-off section and would look for an action label the PR card no longer uses.",
+      "suggested_fix": "Replace «Review again» with «New review round» on implementation-plan.md:74 and the matching clause on :73.",
+      "evidence": "ReviewResults.tsx (diff): `card.localReview?.outdated ? \"New review round\" : \"Run review\"`; implementation-plan.md:73 `Подпись «Review again» из решения (d) меняется вместе со связью раундов.`",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 2}
+}
+```
+
+### Not verified
+- No tests were run (exec budget 0, and research-evidence/verify-tests-to-run-1.txt is not in the package). Claims about passing tests are checked against the journal only.
+- The parity test, the migration fixture contents and the Rust tests were read by name or diff, not executed.
+- Only the review-entity.ts freshness section and readReviewRows were read, not the whole files.
+
+### Routing audit
+- graph_used: no. The documents were found by `keryx ctx rg` for the replaced strings; `gdgraph affected` was not needed to locate the docs.
+- wiki_used: no wiki hits. `.metaproject/wiki` was included in the `ctx rg` search and matched nothing.
+- ctx_used: yes (`keryx ctx rg --all` over docs, README and wiki).
+- raw_rg_used: no. Raw `git show/diff` was used, marked `keryx:raw`, to quote exact lines.

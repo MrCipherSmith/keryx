@@ -1,0 +1,205 @@
+[
+  {
+    "id": "M01",
+    "file": "apps/desktop/dev/reviewBoard.ts",
+    "anchor": "  if (args.reviewsOnly === true) return reviewsArgs(args);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M02",
+    "file": "apps/desktop/dev/reviewBoard.ts",
+    "anchor": "args.cursor != null || args.updatedSince != null)",
+    "replacement": "args.cursor != null || false)",
+    "kind": "behavior"
+  },
+  {
+    "id": "M03",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "    unreadReplies > 0;",
+    "replacement": "    unreadReplies > 0 || !!c.localReview?.awaitingAnswer;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M04",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "    unreadReplies > 0;",
+    "replacement": "    unreadReplies > 0 || !!c.localReview?.publicationPending;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M05",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "    unreadReplies > 0;",
+    "replacement": "    unreadReplies >= 0;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M06",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "  if (attention) return attention;\n  if (c.decision) return DECISION_LABEL[c.decision];",
+    "replacement": "  if (attention) return attention;\n  { const note = reviewNote(c); if (note) return note; }\n  if (c.decision) return DECISION_LABEL[c.decision];",
+    "kind": "behavior"
+  },
+  {
+    "id": "M07",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "anchor": " && a?.outdated?.round === b?.outdated?.round",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M08",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "anchor": "if (kind !== \"start\" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);",
+    "replacement": "if (onOpenInReviews) onOpenInReviews(card.number, reviewIntent);",
+    "kind": "behavior"
+  },
+  {
+    "id": "M09",
+    "file": "apps/desktop/src/review/ReviewDetail.tsx",
+    "anchor": "reviewIntent?.kind === \"start\" ? reviewIntent : undefined",
+    "replacement": "reviewIntent",
+    "kind": "behavior"
+  },
+  {
+    "id": "M10",
+    "file": "apps/desktop/src/review/ReviewDetail.tsx",
+    "anchor": "const hasReview = local.runs.some(run => !reviewIsArchived(run));",
+    "replacement": "const hasReview = local.runs.length > 0;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M11",
+    "file": "apps/desktop/src/review/ReviewDetail.tsx",
+    "anchor": "disabled={local.working || !local.loaded || action.open || !!revisionChanged}",
+    "replacement": "disabled={local.working || !local.loaded || !!revisionChanged}",
+    "kind": "behavior"
+  },
+  {
+    "id": "M12",
+    "file": "apps/desktop/src/review/ReviewDetail.tsx",
+    "anchor": "if (local.error || card.state !== \"open\" || revisionChanged ||",
+    "replacement": "if (local.error || revisionChanged ||",
+    "kind": "behavior"
+  },
+  {
+    "id": "M13",
+    "file": "apps/desktop/src/review/ReviewResults.tsx",
+    "anchor": "const outdated = label === \"New review round\" ? card.localReview?.outdated : undefined;",
+    "replacement": "const outdated = card.localReview?.outdated;",
+    "kind": "presentation"
+  },
+  {
+    "id": "M14",
+    "file": "apps/desktop/src/review/ReviewResults.tsx",
+    "anchor": "${outdated.round ? `Round ${outdated.round} reviewed` : \"Reviewed\"}",
+    "replacement": "${\"Reviewed\"}",
+    "kind": "presentation"
+  },
+  {
+    "id": "M15",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "  if (state === \"needs_answer\") return \"waiting\";\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M16",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "  if (isBehind(review.freshness)) return \"behind\";\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M17",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "  return freshness.kind === \"behind\";",
+    "replacement": "  return freshness.kind !== \"current\";",
+    "kind": "behavior"
+  },
+  {
+    "id": "M18",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "return freshness.rewritten ? `${amount} \u00b7 history rewritten` : amount;",
+    "replacement": "return amount;",
+    "kind": "presentation"
+  },
+  {
+    "id": "M19",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "return String(review.number).startsWith(number);",
+    "replacement": "return String(review.number) === number;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M20",
+    "file": "apps/desktop/src/reviews/model.ts",
+    "anchor": "    (showClosed || review.state !== \"closed\") &&\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M21",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "    if (active && !wasActive.current) refresh();\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M22",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "    if (!active || !running) return;",
+    "replacement": "    if (!running) return;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M23",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "      if (identity.current && identity.current !== next) resetView();\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M24",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "      if (!filterReviewList([found], filters, q, true).length) {",
+    "replacement": "      if (true) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "M25",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "      if (!read.error) setNotice(",
+    "replacement": "      setNotice(",
+    "kind": "behavior"
+  },
+  {
+    "id": "M26",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "    if (previous !== undefined && previous !== signature) refresh();\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M27",
+    "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+    "anchor": "      if (found.state === \"closed\") setShowClosed(true);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M28",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "    setView(\"reviews\");\n  }, []);",
+    "replacement": "  }, []);",
+    "kind": "behavior"
+  },
+  {
+    "id": "M29",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "reviewsNotice?.binding === reviewViewer",
+    "replacement": "true",
+    "kind": "behavior"
+  }
+]

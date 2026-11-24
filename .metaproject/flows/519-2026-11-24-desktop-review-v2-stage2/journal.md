@@ -126,3 +126,26 @@ Operator answers (AskUserQuestion): archived Review never lights the indicator; 
 FB reported DONE_WITH_CONCERNS: FB-1..FB-12 fixed; red run in a temporary detached worktree at 85fa985c1 (126 pass / 21 fail, model.test import fail), green after: Desktop `bun test src` 1007 pass / 0 fail, `tsc --noEmit` clean (orchestrator re-ran both). ReviewBoard.tsx diff: 30 lines, no attention-set identifier touched (orchestrator check).
 Operator answers (AskUserQuestion): card without PR shows 'Pull request #N' with no author; hidden 60 s reload + watcher/session events kept; a waiting 'Open in Reviews' request is dropped when the user picks another base repository; new Reviews-tab banner/link wording accepted.
 Concerns kept: two role=alert elements can coexist in the PR panel when both reads fail; account-switch dot assertion not added (mock never lights the dot); no live render of the FB-9 CSS.
+- 2026-11-24T09:57:38.725Z - task-done: T16: Fix round 1 Desktop (FB-1..FB-12)
+- 2026-11-24T10:53:29.483Z - task-done: T10: Test suites, typecheck and lint
+
+## 2026-11-24 · Round 1 gate tail
+
+- Operator chose to run all three gate items (AskUserQuestion).
+- Degradation retry on slice-04 (raw/review-degradation-w4.txt): read the test output, no new findings.
+- Wave D review-premise (raw/review-premise-w1.txt, research-evidence/premises.json): 45 upheld, F-016 and F-036 challenged, F-027 owner-decision. Operator answers (AskUserQuestion): F-016 dismiss (sibling-command helper imports are accepted practice); F-036 dismiss, T10 closed with the journalled run and CI as evidence; F-027 keep the documented limitation.
+- Mutation pass (research-evidence/mutants.json = 60 candidates unchanged from testing-practices w1+w2; run as two passes by suite). Backend (mutation-1): 17 killed, 12 survived, 2 invalid, at 20e4281 in a scratch worktree. Desktop: first two runs refused a red baseline because the scratch copy has no apps/desktop/node_modules; rerun with a scratch-only node_modules link.
+- T10 closed (task done) per the F-036 answer: typecheck=0, lint=0, desktop tests/tsc green; root-suite failures are load/environment timeouts, CI green at 20e4281.
+- 2026-11-24T11:01:10.828Z - decision d-mwul3m68-1f4ef9 [review decide-premise, ordinary]: chose dismiss; no recommendation
+- 2026-11-24T11:01:11.147Z - decision d-mwul3mfp-f48499 [review decide-premise, ordinary]: chose dismiss; no recommendation
+- 2026-11-24T11:04:22.433Z - decision d-mwul7pyz-e3d89d [review decide-premise, ordinary]: chose dismiss; no recommendation
+- 2026-11-24T11:04:41.731Z - task-added: T17: Fix F-048: Review panel Open pull request link does nothing
+- 2026-11-24T11:04:41.923Z - task-attempt: T17: started (attempt 1) — 519-T17
+
+## 2026-11-24 · Round 1 ingested
+
+- Ledger READY (99 obligations closed); ingest with --premises/--scope/--blast-radius: 60 canonical findings retained (8 major, 38 minor after F-016/F-036 dismissed, 12 info).
+- Mutation: mutation-1 (root 17 killed / 12 survived / 2 invalid), mutation-2 (desktop 17/12), mutation-3 (S03/S04 rerun with exact anchors: both survived). Survivors mapped to findings in dispositions; all at 20e4281, so whether the fix commits kill them is not measured.
+- Premise answers recorded (decide-premise): F-016 dismiss, F-036 dismiss, F-027 dismiss (operator re-asked in the tool's single-word terms; the earlier wording was refused by the tool's answer check).
+- Readiness still NOT READY on: blast-radius (86 cap-cut files, mostly .metaproject artifacts — operator chose to waive coverage rather than run 42 chunks ~$6.91), pr-files (fix commits added files), quotes-located (F-034, F-035). These need the operator's own `keryx review complete ... --waive` in their terminal.
+- New minor F-048 (Review panel PR link has no click handler) → T17.

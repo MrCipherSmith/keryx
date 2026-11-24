@@ -1,0 +1,199 @@
+STATUS: DONE_WITH_CONCERNS
+
+Context: Keryx Desktop (Tauri app screen, not marketing). Audience: a developer who runs Keryx reviews on their GitHub PRs. Primary task of the changed surface: find a Keryx Review that waits on me (answer, publish, stopped, behind) and act on it in the Reviews tab. The secondary task is to go from a PR on the Pull requests board to its Review. Mode: code only. The payload supplied no URL and no screenshots. Slice read in full: slice-02 (Reviews tab, Review panel, ReviewWorkspace extraction, PR panel/board changes, AppShell navigation, review.css, Rust/dev bridge args).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-ui-ux",
+  "summary": "Code-mode review of slice-02. The Reviews tab has loading, empty (3 variants), first-load error, refresh-failed and access-lost states, as the plan's state × event matrix requires. Focus moves into the panel and returns on close, Escape closes the panel, the tab indicator carries sr-only text, and the theme tokens are reused. Slop score 0 on this app screen. One major: 'Open in Reviews' and the PR card's view/answer action hand over only the PR number. The two tabs choose their base repository separately, so with several repositories the Reviews tab can open another repository's Review that has the same number, or say the PR has no Review. Minors: the run-status error in the PR panel is shown at the bottom of the body, away from the primary button; WCAG 2.5.3 label-in-name on the 'after <run>' link; the Reviews card aria-label hides the card's facts from screen readers; the same action is named 'New review round' on the PR card and 'Review again' in the Review panel. Not run: no live render was supplied, so contrast, targets, focus-visible and dark mode were not checked on pixels. The test output file research-evidence/verify-tests-to-run-1.txt did not exist when this review ran. The spec's extra filters and panel sections are left out on purpose (plan T7 and the journal narrow them) and are not reported.",
+  "slices": [{"id": "slice-02", "status": "DONE", "coverage": "read in full (lines 1-2403)"}],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "major",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "const found = snapshot?.reviews.find(review => review.number === pending.number);",
+      "problem": "Cross-tab 'Open in Reviews' finds the target only by PR number. ReviewsFocus is {number, nonce, intent}, and App.openInReviews(number, intent) passes no repository. The Pull requests board (RepositoryBoard `repo` state) and the Reviews tab (RepositoryReviews `repo` state) each have their own 'Base repository' select. Each tab lists only the Reviews of its own selected repositoryId.",
+      "impact": "Trigger: the project has more than one base repository (the select is shown when snapshot.repositories.length > 1), and the user has chosen a different repository in one tab. The user then clicks 'Open in Reviews' in the PR panel, or the card's 'View review' / 'Answer question'. Outcome: the Reviews tab opens the panel of a different PR's Review that has the same number in the other repository, with a wrong title and rounds. The answer intent is dropped because the SHAs differ. If no Review has that number, the tab shows the false notice 'Pull request #N has no Keryx review in this list.' (Nielsen #1 visibility of system status, #5 error prevention).",
+      "suggested_fix": "Carry the repository in the focus request: ReviewsFocus { repo, repositoryId, number, nonce, intent }. Pass snapshot.repo/repositoryId from ReviewBoard.openReview and the ReviewDetail onOpenInReviews closure. In ReviewsView, call selectRepo(focus.repo) when it differs from the shown snapshot.repo before the lookup, and match on repositoryId as well as number. Add a DOM test with two repositories.",
+      "evidence": "Diff slice-02: App.tsx `setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }))`; ReviewBoard.tsx `if (kind !== \"start\" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);` and `onOpenInReviews={onOpenInReviews && (() => onOpenInReviews(card.number))}`; ReviewsView.tsx has its own `const [repo, setRepo] = useState<string>()` and a `Base repository` select that calls selectRepo. Neither tab syncs its repository with the other.",
+      "confidence": "medium",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/App.tsx:215 (openInReviews builds the focus without repo)",
+          "apps/desktop/src/review/ReviewBoard.tsx:456 (card view/answer action)",
+          "apps/desktop/src/review/ReviewBoard.tsx (ReviewDetail onOpenInReviews closure, card.number only)",
+          "apps/desktop/src/review/ReviewDetail.tsx:255 ('Open in Reviews' button)",
+          "apps/desktop/src/reviews/ReviewsView.tsx (pending lookup by number)"
+        ],
+        "enumeration_method": "keryx ctx rg \"onOpenInReviews|ReviewsFocus|openInReviews\" apps/desktop/src: 3 production producers (App, ReviewBoard x2 via ReviewDetail) and 1 consumer (ReviewsView); test files excluded"
+      }
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": null,
+      "quote": "{local.error && !local.staleRange && <p className=\"inline-banner tone-warn\" role=\"alert\">{local.error}</p>}",
+      "problem": "The run-status error is a new banner rendered as the last child of the PR panel body. It comes after the whole Discussion, the Checks list, or the Automation tab. The control it explains is the header's primary review button ('Run review' / 'Open in Reviews'). That button shows the launch label while status is unread, and 'Open in Reviews' is not offered, because hasReview comes from the failed read.",
+      "impact": "When reading the run status fails, the user sees a primary button that does not explain itself, at the top of the panel. On a PR with a long discussion the reason is below the fold (State: error near source; Nielsen #9).",
+      "suggested_fix": "Render the local.error banner directly under .review-detail-actions in the sheet header, or next to the primary button. Put it before the tab content, as the revision-changed banner already is.",
+      "evidence": "slice-02 ReviewDetail.tsx hunk @@ 231,308: the banner sits after the tab ternary closes (`</>}`), inside .sheet-body. The primary button is in header .sheet-actions.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "? <button type=\"button\" className=\"link-btn\" aria-label={`Go to the attempt this one follows, run ${previous.slice(0, 8)}`}",
+      "problem": "WCAG 2.5.3 Label in Name: the visible label is 'after <8-char run id>', but the accessible name 'Go to the attempt this one follows, run <id>' does not contain the visible string 'after <id>'.",
+      "impact": "A speech-input user who says 'click after 1a2b3c4d' does not hit the control. Screen-reader output does not match what sighted users see.",
+      "suggested_fix": "Start the accessible name with the visible text, e.g. aria-label={`after ${id} — go to the attempt this one follows`}. Or drop aria-label and add the explanation with a title or visually hidden text after the visible label.",
+      "evidence": "Visible text node `after {previous.slice(0, 8)}` vs aria-label string; substring 'after ' absent from the name.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-004",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "<button className=\"review-card\" onClick={() => onOpen(review.id)} aria-label={`Open review of #${review.number} ${reviewTitle(review)}`}>",
+      "problem": "The Reviews board card is a single button that holds the state badge, author, round, reviewed commit, freshness, findings, publication, source, Flow and tokens. The aria-label replaces the button's computed name, so none of these facts is announced. Button children are presentational. The Pull requests board tile (ReviewResults ReviewTile) has no aria-label, and its content stays in the name.",
+      "impact": "On the board view, a screen-reader user cannot tell which Review is 'Needs your answer', 'behind 3', or has findings without opening each panel. That is the card's main purpose (WCAG 1.3.1 Info and Relationships; Nielsen #4 consistency with the PR tile). The List view stays accessible.",
+      "suggested_fix": "Remove the aria-label so the visible content forms the name, as on the PR tile. Or keep a short name and put the facts in aria-describedby that points to the .review-summary-facts span and the state badge.",
+      "evidence": "slice-02 ReviewsView.tsx ReviewTile vs ReviewResults.tsx ReviewTile (`<button className=\"review-card\" onClick={() => onOpen(card.number)}>` with no aria-label).",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-005",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "card.localReview?.runState ? \"View review result\" : card.localReview?.outdated ? \"New review round\" : \"Run review\";",
+      "problem": "The outdated-review action was renamed to 'New review round' on the PR card (decision d). The same action in the moved review interface still takes its label from launchAction, which returns 'Review again' for a range other than the reviewed one (ReviewRuns.tsx:38). This label is now the primary button of every Review panel in the Reviews tab (ReviewWorkspace `{... action.label}`).",
+      "impact": "One action has two names one click apart. The card says 'New review round'; the Review panel it leads to says 'Review again' (Nielsen #4 consistency and standards).",
+      "suggested_fix": "Change launchAction's 'Review again' to 'New review round' so the PR card, the PR panel and the Review panel use one label. Update the affected tests.",
+      "evidence": "slice-02 ReviewResults.tsx label line; ReviewWorkspace.tsx primary button renders `action.label` from launchAction; apps/desktop/src/review/ReviewRuns.tsx:38 `? \"Review again\" : \"Start review\"`.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-006",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "return <aside ref={panel} className=\"side-panel review-detail-panel review-panel\" style={{ width: 560 }} aria-label={`Review of pull request #${review.number}`}",
+      "problem": "The Review panel has a fixed width of 560. The PR panel, which has the same side-panel look, has a keyboard- and pointer-resizable separator (aria-valuemin 360) that is kept in detailWidth. The Review panel now holds the report, rounds and dialogs that used to live in the resizable PR panel.",
+      "impact": "Users who widened the PR panel to read review reports lose that control after the interface moved (Nielsen #4, #3 user control). Not measured on a render.",
+      "suggested_fix": "Reuse the PR panel's side-resize separator and width state, or share the width with the PR panel.",
+      "evidence": "Code comparison only: ReviewDetail.tsx has `role=\"separator\" ... aria-label=\"Resize pull request details\"`; ReviewPanel has none.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-007",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "GitHub did not return this pull request, so its current range is unknown. Refresh to try again.",
+      "problem": "When review.card is null, the panel gives the remedy 'Refresh to try again' but has no Refresh control. The control is in the toolbar behind the panel, and onRefresh is already a prop.",
+      "impact": "The user must find the toolbar Refresh button. It is icon-only below a 1100px container (Nielsen #9: remedy without an action near the source).",
+      "suggested_fix": "Add a `<button className=\"btn btn-sm\" onClick={onRefresh}>Refresh</button>` to that banner, as the revision-changed banner does.",
+      "evidence": "slice-02 ReviewPanel.tsx else branch; onRefresh is in Props and used only for onRefreshBoard.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-008",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "<span>The PR revision changed. Refresh the board to load the latest range.</span>",
+      "problem": "The banner and its 'Refresh board' button came from the PR panel. In the Reviews tab, onRefreshBoard is the Reviews list refresh, and the user may be on the List view. The copy names a surface ('the board') that may not be the one on screen.",
+      "impact": "Minor wording mismatch (Nielsen #2/#4). The button still works.",
+      "suggested_fix": "Use neutral copy such as 'Refresh to load the latest range' with a 'Refresh' button, or let the caller pass the label.",
+      "evidence": "ReviewPanel passes onRefreshBoard={onRefresh} (ReviewsView refresh).",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-009",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "onClick={() => document.getElementById(attemptAnchor(scope, previous))?.focus()}>after {previous.slice(0, 8)}</button>",
+      "problem": "Unverified: after a mouse click, programmatic focus on the tabIndex=-1 attempt row may not match :focus-visible. The only highlight of the target is `.review-round-attempt:focus-visible`, so the jump can land with no visible marker.",
+      "impact": "The user may not see which attempt the link went to. A render check (click 'after …' with the mouse in the WebView) would settle it.",
+      "suggested_fix": "Add a transient highlight class or a `:focus` style for .review-round-attempt, which is reached only programmatically.",
+      "evidence": "CSS `.review-round-attempt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }` only; no render was available.",
+      "confidence": "low",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-010",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "aria-label=\"Show closed\" title={`Show closed${closedCount ? ` (${closedCount})` : \"\"}`}>",
+      "problem": "The number of hidden closed Reviews appears only in the hover tooltip. It is not in the visible label (which collapses to an icon below 1100px) and not in the accessible name.",
+      "impact": "Keyboard, touch and screen-reader users cannot tell whether 'Show closed' would show anything (Nielsen #6 recognition over recall).",
+      "suggested_fix": "Show the count next to the label, as the PR toolbar shows its filter count, and include it in aria-label.",
+      "evidence": "slice-02 ReviewsView.tsx toolbar.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 4, "info": 5 }
+}
+```
+
+## Summary
+
+Verdict: DONE_WITH_CONCERNS (1 major, 4 minor, 5 info).
+
+Scores
+- Slop score: 0 (T1 0, T2 0, T3 0). This is an app screen, so the marketing rows do not apply. The tab reuses the existing .flows-toolbar, lane, flow-card, badge and inline-banner system and the theme tokens (--accent/--warn/--info/--ok/--fg-muted). No tell was counted. No exemption was needed.
+- WCAG 2.2 AA floor (code mode): 2.5.3 fails on one control (UX-003), and 1.3.1 is weak on the board card (UX-004). Nothing else failed in code. Icon-only toolbar buttons keep aria-label and title. Selects have aria-labels. Panel focus moves in and back. Escape closes the panel. The indicator has sr-only text. The diff adds no transitions.
+- Viewports: not run. No render was supplied.
+
+Top 3 changes
+1. Carry the repository in the 'Open in Reviews' focus request and switch the Reviews tab to that repository (UX-001).
+2. Move the PR panel's run-status error next to the primary button (UX-002).
+3. Use one label, 'New review round', in launchAction (UX-005). Remove the Reviews card's overriding aria-label (UX-004).
+
+What works (keep)
+- Every view state in the plan's matrix is present: the 'Loading reviews…' status, three empty states each with a reason and an action, the first-load error with 'Try again', 'Last available list' after a failed refresh, and clearing on access loss.
+- When a focused Review is hidden by filters, the filters are cleared before it opens (operator decision), and closed Reviews are revealed.
+- The tab indicator text is 'Review waiting on you', with a dot and an sr-only phrase. The shortcuts follow the tab order (D4).
+- Removing secondaryNote leaves one outdated note on its own line (F-024).
+
+Exemptions honored: the 'Scheduled' source label, the 'head unknown' lowercase label, the filter set narrowed to state/freshness/source, Open in Reviews clearing filters, ⌘3 moving to Reviews (spec D4), and the existing launch labels kept for a PR without a Review. All are operator or plan decisions recorded in journal.md, plan.md and spec «Экраны».
+
+Checks not run
+- Live mode: no URL or screenshots were supplied. Not checked: contrast on pixels, target sizes, focus-visible while tabbing, dark mode, reduced motion, zoom. Closing the gap needs screenshots of the Reviews board, the List view and the Review panel at 1440/768/390 px, in light and dark.
+- Contrast was computed from tokens only in part: --warn #80510d (light) is used for the .review-behind text, but the card background token was not resolved, so no ratio is claimed.
+- Toolbar wrap and reflow, and .reviews-table min-width 960px: these belong to review-layout. The journal's T11 measurement exists and was not re-checked.
+- Test output (research-evidence/verify-tests-to-run-1.txt) was not present when this review ran.
+
+Routing audit: graph_used: no (not-relevant: diff-scoped slice review with given file paths); wiki_used: no (not-relevant: the spec, plan and journal were read directly as the payload pointed); ctx_used: yes (keryx ctx rg for the rule, the spec heading, the onOpenInReviews enumeration, tokens and launchAction); raw_rg_used: no (one raw `cat` of the finding schema with a stated keryx:raw reason).

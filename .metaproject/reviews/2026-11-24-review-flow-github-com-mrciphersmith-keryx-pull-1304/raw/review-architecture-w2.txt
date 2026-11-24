@@ -1,0 +1,106 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range, supplied slice text (slice-04, read in full)
+- Stack detected: generic TS (Bun CLI command + review domain/store) plus docs
+
+### Summary
+Slice-04 adds the `keryx review reviews` CLI command (`src/commands/review-reviews.ts`), wires it into the review command group, help and subcommand list, exports `writeJson` from `review-board.ts`, adds store migration and Review-entity tests, and updates the stage-2 docs. The layering mostly follows the existing board command: the Review state and freshness rules live in `src/review/review-entity.ts`, persistence in `desk-run-store.ts`, GitHub I/O is injected (`query`, `compare`, `root`), and the command parses arguments and writes output. There are no blocker or major findings. There are two minor findings: the command recomposes the "behind" rule that the domain's `freshness` already owns, and the new command imports its output primitive from a sibling command module. There is one info note.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Layer Violations
+[F-001] (minor) `readReviews` in `src/commands/review-reviews.ts` (the `behind` flatMap) decides which Reviews are behind their PR: `reviewed !== card.headSha && !reviewClosed(row, card)`. The domain function `freshness(reviewed, head, compare)` in `src/review/review-entity.ts`, called by `summarizeReview`, makes the same decision. So two layers now hold the rule, and the command's copy selects which comparisons are made. If the domain rule changes (for example, how a closed Review or an unknown head is treated), the command will compare a different set from the one the summary reports. Rated by clean-architecture.mdc, "Controller ... holds business rules": minor. No defect is named today. Fix: add a domain helper in review-entity.ts, such as `needsComparison(row, card): { reviewed, head } | null`, used by both the command and `summarizeReview`. The command would keep only the GitHub-safety check (`OBJECT_ID`), the cap and the pool.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+[F-002] (minor) `src/commands/review-reviews.ts` imports `writeJson` from `./review-board`, and `review-board.ts` changed `writeJson` from private to `export` for this. This is the only place under `src/commands` where one command module imports a helper from a sibling command. The other sibling imports are the group router `review.ts` taking `*_USAGE` and `run*`, and tests. `writeJson` is not plain JSON output. It wraps `withCurrentGithubBinding` (from `src/review/board-github.ts`) to re-check the GitHub binding when the payload is published. So a GitHub-binding guarantee now reaches a second command through another command's file. Fix: move `writeJson`/`writeSerialized`, for example as `writeBoundJson`, next to `withCurrentGithubBinding` in `src/review/board-github.ts`, import it from there in both commands, and keep `writeJson` private in review-board.ts.
+
+### Design Pattern Misuse
+None detected. `readReviews` takes `query`, `compare` and `root` as injected seams, which keeps it testable without gh (the test uses doubles for both).
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A, not detected in this slice.
+
+### Info
+[F-003] (info) `readReviews` passes `ReviewsSnapshot` to `listActiveReviewCards`, whose parameter is `Pick<ReviewBoardSnapshot, "repo"|"repositoryId"|"viewer">`. This works through structural typing. The board card reader and the new Reviews snapshot are now coupled by field names, not by a named subject type. A small `{ repo, repositoryId, viewer }` subject type in board-types.ts would state the contract. No change is required.
+
+### Not verified / inputs
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present (only `ingest-screened.json`), so no test results inform this review.
+- `src/review/review-entity.ts` and the `desk-run-store.ts` migration source are not in slice-04. I read only their tests here, and the exported names `referenceHead`, `reviewClosed`, `freshness` and `summarizeReview` as the diff and tests show them. I did not read the review-entity source.
+- Git history (log/blame) was not read. It was not needed.
+- I did not re-file the wave-1 architecture findings (F-001..F-005 on slice-02).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-04 adds `keryx review reviews` following the board command's layering: domain rules in review-entity.ts, persistence in desk-run-store.ts, and injected GitHub seams. Two minor findings: the command recomposes the 'behind' rule that review-entity's freshness owns, and it imports writeJson (a binding-checked output primitive) from the sibling review-board command. One info note on the structurally typed subject passed to listActiveReviewCards.",
+  "slices": [{"id": "slice-04", "status": "DONE", "coverage": "read in full"}],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "return card && reviewed && reviewed !== card.headSha && !reviewClosed(row, card) && OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)",
+      "problem": "The command layer decides which Reviews are behind (reviewed head differs from the PR head, and the Review is not closed). review-entity's freshness/summarizeReview already owns that decision, so the business rule now lives in two layers.",
+      "impact": "A change to the domain freshness rule does not change which comparisons the command makes. The reported freshness and the set of compared Reviews can then diverge silently. This is a maintenance cost: no defect is named today.",
+      "suggested_fix": "Expose a domain helper in src/review/review-entity.ts (for example needsComparison(row, card) returning {reviewed, head} or null) and use it in both readReviews and summarizeReview. Keep only the OBJECT_ID safety check, the MAX_REVIEW_COMPARES cap and the pool in the command.",
+      "evidence": "slice-04 review-reviews.ts readReviews `behind` flatMap; review-entity.test.ts shows freshness(reviewed, head, compare) deciding current/behind/unknown from the same inputs.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "reviews-behind-rule-in-command"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 9,
+      "quote": "import { writeJson } from \"./review-board\";",
+      "problem": "A command module imports a helper from a sibling command module, and review-board.ts exported a previously private function for it. writeJson wraps withCurrentGithubBinding, so a GitHub-binding output guarantee is shared through a command file, not through the review/board-github module that owns the binding.",
+      "impact": "review-reviews now depends on review-board's whole module and its internals. Refactoring the board command's output path silently changes the Reviews command's binding check. It is the only command-to-sibling-command helper import under src/commands.",
+      "suggested_fix": "Move writeJson/writeSerialized (for example as writeBoundJson) to src/review/board-github.ts beside withCurrentGithubBinding, import it from there in review-board.ts and review-reviews.ts, and revert the `export` on review-board's writeJson.",
+      "evidence": "keryx ctx rg for `from \"./review-(board|accounts|desk-run|desk-publish|rules|watch)\"` under src/commands: the only non-test, non-router match is review-reviews.ts:9. review-board.ts:110-121 shows writeJson -> writeSerialized -> withCurrentGithubBinding.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "reviews-command-imports-board-writejson"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)",
+      "problem": "A ReviewsSnapshot is passed where listActiveReviewCards expects Pick<ReviewBoardSnapshot, \"repo\"|\"repositoryId\"|\"viewer\">. It works by structural typing alone.",
+      "impact": "The board card reader and the Reviews snapshot are coupled by field names, not by a named subject contract.",
+      "suggested_fix": "Optionally declare a `{ repo, repositoryId, viewer }` subject type in board-types.ts and use it as the parameter type.",
+      "evidence": "src/review/board.ts:201-203 signature; slice-04 review-reviews.ts readReviews.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 1},
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: keryx ctx rg settled the import and caller questions within the slice). wiki_used: no (not-relevant: the plan and slice docs carried the design decisions). ctx_used: yes (keryx ctx rg for sibling-command imports, writeJson/withCurrentGithubBinding and listActiveReviewCards; keryx ctx read for the driver). raw_rg_used: no. memory: searched, no relevant entry.

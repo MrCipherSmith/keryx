@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 70855,
+      "contentHash": "dfc144d1051fdcae4ff0c1c2dc795c5355dcf6104244e6aee5385546e587ee5f",
+      "files": [
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/context.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/description.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/tasks.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T5.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T6.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T7.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T8.implement.json"
+      ],
+      "domain": ".metaproject [docs], .metaproject",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-style"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 140271,
+      "contentHash": "485229a4a3947b9f9cb6cd795f5a4b169e049c75e619f5614fe879fa10ee944a",
+      "files": [
+        "apps/desktop/dev/reviewBoard.ts",
+        "apps/desktop/src-tauri/src/review.rs",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/platform/review.ts",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/reviews/ReviewPanel.tsx",
+        "apps/desktop/src/reviews/ReviewsView.tsx",
+        "apps/desktop/src/reviews/model.ts",
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "domain": "apps",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/dev/reviewBoard.ts, apps/desktop/src-tauri/src/review.rs, apps/desktop/src/App.tsx (+10)"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 112758,
+      "contentHash": "5efd5928f4b79043a2c0519a9f1d1610a91ea67cab0e46ab2a43e9c22c34747d",
+      "files": [
+        "apps/desktop/src/platform/reviewPages.test.ts",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "domain": "apps [test]",
+      "split": "domain",
+      "roles": [
+        "review-frontend",
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 103443,
+      "contentHash": "53a41505fd3983e986d26e7f4f0412a2ad9a7c03e76ac5e981b3c9864d7f8235",
+      "files": [
+        "docs/docs/cli-reference.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "src/commands/review-board.ts",
+        "src/commands/review-reviews.ts",
+        "src/commands/review.ts",
+        "src/commands/review-reviews.test.ts",
+        "src/lib/group-subcommands.ts",
+        "src/review/board-badges.test.ts",
+        "src/review/desk-run-store.test.ts",
+        "src/review/review-entity.test.ts"
+      ],
+      "domain": "docs [docs], src/commands, src/commands [test] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/review-board.ts, src/commands/review-reviews.ts, src/commands/review.ts (+1)"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 48457,
+      "contentHash": "616e9f1cf3e3557f61b20f2d98c842a386d992fc77428bfd346db08f65670293",
+      "files": [
+        "src/review/board-badges.ts",
+        "src/review/board-types.ts",
+        "src/review/desk-run-store.ts",
+        "src/review/desk-run-types.ts",
+        "src/review/review-entity.ts"
+      ],
+      "domain": "src/review",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts (+2)"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 5,
+    "bytes": 475784,
+    "files": 48,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 4
+  },
+  "host": "claude-code"
+}

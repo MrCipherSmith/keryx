@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "estimate": {
+    "tier": "middle",
+    "reviewer": "review-regression",
+    "chunks": 42,
+    "files": 86,
+    "bytes": 7453446,
+    "tokens": {
+      "input": 1989374,
+      "output": 63000
+    },
+    "costUsd": 6.91,
+    "seconds": 6300,
+    "maxPasses": 25,
+    "ceilingFiles": 1000,
+    "overCeiling": true,
+    "limitsSource": "default",
+    "planKey": "53f8700b2ada224e"
+  },
+  "mode": "interactive",
+  "decision": "wait-for-yes",
+  "asked": true
+}

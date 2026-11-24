@@ -1,0 +1,121 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage2, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, diff mode. Slice read in full: slice-04 (1415 lines: docs/docs/cli-reference.md, docs/requirements/keryx-desktop-review-v2/{implementation-plan,specification}.md, src/commands/review-board.ts, src/commands/review-reviews.ts (new), src/commands/review.ts, src/commands/review-reviews.test.ts, src/lib/group-subcommands.ts, src/review/board-badges.test.ts, src/review/desk-run-store.test.ts, src/review/review-entity.test.ts).
+Load profile: not provided. Concrete triggers used: the number of Reviews the account has stored for the repository (never shrinks except by archiving or deleting every attempt), the number of Reviews behind their PR head, the Desktop poll/focus/window-open reads already recorded in wave 1, and the Desktop host's 150 s reader timeout.
+Context read outside the slice (read-only): src/review/board.ts:200-228 (listActiveReviewCards), src/review/board-github.ts:117-160 (boardGh 18 s default timeout, boardGraphql), src/lib/map-pool.ts, src/review/desk-run-store.ts:97-178 (constructor, assignReviews, roundFor), :563-600 (reviewRows), :890-907 (readReviewRows), apps/desktop/src-tauri/src/review.rs:114-160 (run_reader 150 s / 32 MiB bound).
+Test output: research-evidence/verify-tests-to-run-1.txt was not present; no test result was read. Nothing was run.
+Wave-1 findings not re-filed: highload F-001 (interval not visibility-gated), F-002 (eager mount read).
+
+Summary: The new `keryx review reviews` command is read-mostly and bounds its REST fan-out (25 compares, 4 in parallel), with per-compare failures degraded to warnings. Three non-blocking concerns: the 25-compare cap always picks the same highest-numbered PRs, so "Refresh to read more" never reads more; card reads cover every stored Review (closed PRs included) in sequential 20-PR GraphQL batches on every poll; and there is no overall deadline, so a stalled GitHub can push the call past the Desktop's 150 s kill instead of degrading. One info: the read lane opens the store writable and takes an IMMEDIATE transaction on every call. Stats: blocker 0 | major 0 | minor 3 | info 1.
+
+### CLI / Multi-Session
+[F-004] (info) The polled read command opens runs.sqlite writable and takes a write (RESERVED) lock per call.
+
+### Concurrency & Races
+None detected. `failed` in readReviews is a one-way boolean set from concurrent mapPool workers (no read-modify-write hazard); results are merged after `await`. Migration (assignReviews) runs inside one IMMEDIATE transaction and reviewFor's check-then-insert is covered by that lock and by `UNIQUE (repo, pr, viewer)`.
+
+### Resources
+[F-002] (minor) Card reads grow with stored Review history, including closed PRs, sequential 20-PR batches per call.
+
+### Caching
+None detected (no cache added in this slice).
+
+### Lock Contention
+See F-004 (info).
+
+### Async / Queues
+None detected beyond F-002/F-003.
+
+### Retry / Timeout / Circuit Breaker
+[F-003] (minor) No overall deadline across identity, card and compare calls; worst case exceeds the host's 150 s reader timeout.
+
+### Idempotency & Distributed Invariants
+[F-001] (minor) The compare cap always selects the same Reviews; the warning's "Refresh to read more" cannot be satisfied.
+
+Clean Areas: Part A (no shared mutable state across requests), Part C, Part D (other than F-004), Part E, Part G (read-only command; no non-idempotent writes besides the one-time migration) reviewed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "keryx review reviews bounds its REST fan-out and degrades per-compare failures, but the 25-compare cap starves a fixed subset (refresh never reads more), card reads grow with all stored Reviews including closed PRs in sequential batches, and no overall deadline keeps a stalled GitHub under the Desktop's 150 s kill. Info: the polled read lane opens the store writable with an IMMEDIATE transaction per call.",
+  "slices": [{ "id": "slice-04", "status": "DONE", "coverage": "read in full, lines 1-1415" }],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 56,
+      "quote": "Commit counts are shown for ${MAX_REVIEW_COMPARES} Reviews behind their pull request. Refresh to read more.",
+      "problem": "`behind` is built in `rows` order, and readReviewRows returns rows `ORDER BY v.pr DESC` (desk-run-store.ts:587). `behind.slice(0, MAX_REVIEW_COMPARES)` therefore always compares the 25 highest-numbered PRs, not the Reviews shown first (the result is sorted afterwards by latest attempt), and the choice is the same on every call.",
+      "impact": "Trigger: 26 or more open Reviews behind their PR head for one account and repository. The Reviews with lower PR numbers always show 'behind, count unknown', even when they are the most recently active ones at the top of the list, and the warning tells the user to refresh, which re-compares the same 25 and never reads the rest. Display-only; no data is lost.",
+      "suggested_fix": "Order `behind` by the same key as the final sort (latest attempt createdAt, then number) before slicing, so the counts go to the Reviews the user sees first; and either drop 'Refresh to read more' from the warning or rotate the compared window (e.g. a caller-supplied offset) so a refresh actually reaches the rest. Pin it with a test of 27 behind Reviews where the two most recently active have the lowest PR numbers.",
+      "evidence": "slice-04 review-reviews.ts:50-58 builds `behind` from `rows.flatMap(...)` and slices before `snapshot.reviews = rows.map(...).sort(latestCreated...)`; src/review/desk-run-store.ts:587 `ORDER BY v.pr DESC, v.id, ...`; reviewRows collects into a Map in that order. The test `at most 25 comparisons per call` asserts only the count, not which Reviews are compared.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-compare-cap-fixed-subset",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 45,
+      "quote": "for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);",
+      "problem": "Every call reads a PR card for every Review the account has ever stored in the repository, including Reviews whose PRs are merged or closed (closure is derived from the card, and `reviews.closed_at` is only set when the user closes a Review), and the result carries every Review with all its rounds and attempts. listActiveReviewCards issues one GraphQL query per 20 PRs, sequentially (board.ts:206-212). Nothing pages or bounds the set.",
+      "impact": "What grows it: locally stored Review history per (repository, account), which is only reduced by archiving or deleting every attempt. Each `review reviews` call (window open, tab show, focus, the 60 s running poll from wave 1) costs ceil(N/20) sequential GraphQL calls plus N per-attempt publication file reads in reviewRows, re-reading merged PRs whose state can no longer change; the Desktop hides closed Reviews by default, so most of that work is discarded. Degradation in latency and GitHub GraphQL budget, linear in history. Not an exhaustion at today's size (the plan's migrated store has 13 Reviews); with a few hundred Reviews the call is several sequential round trips per poll per window.",
+      "suggested_fix": "Either skip card reads (and compares) for Reviews already known closed: persist a terminal PR state observed by a writer (e.g. a closed_at/terminal flag set by the run lifecycle or a write lane, not by this read), or read the 20-PR batches through mapPool with a small concurrency (2-3) and let the CLI accept `--closed` so the default call reads only Reviews that can still change. Record the chosen bound in the CLI reference.",
+      "evidence": "slice-04 review-reviews.ts:40-49; src/review/board.ts:206-212 sequential `for (let i = 0; i < numbers.length; i += 20) { ... await query(...) }`; src/review/desk-run-store.ts:563-600 reviewRows has no LIMIT and calls this.publication(...) per reviewed attempt; review-entity.test.ts 'a Review closed locally or by its PR is closed' shows closure comes from the card.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-list-unbounded-card-reads",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 58,
+      "quote": "const compared = await mapPool(behind.slice(0, MAX_REVIEW_COMPARES), COMPARE_PARALLEL, async ({ id, reviewed, head }) => {",
+      "problem": "Each GitHub call relies only on boardGh's per-call 18 s timeout; readReviews has no overall deadline. Worst case: identity query (18 s) + one card batch per 20 Reviews (18 s each) + 25 compares at 4 in parallel (7 sequential slots x 18 s = 126 s) exceeds the Desktop host's 150 s reader bound (review.rs:119).",
+      "impact": "Trigger: GitHub or the network stalls so calls run to the 18 s client timeout, with 22 or more Reviews behind their PR head. The per-compare catch is meant to degrade to 'count unknown' plus a warning, but the host kills the CLI at 150 s first and the whole Reviews list read fails, while holding one of the Desktop's limited Review read permits for the full 150 s. Degradation, not data loss; recovers on the next read.",
+      "suggested_fix": "Give the compare phase a deadline, as verifyScheduledSubject does (board.ts, `deadline = Date.now() + 90_000`): stop admitting new compares after e.g. 45 s from the start of readReviews and report the remainder as unknown with the existing warning; optionally pass a shorter per-call timeout (e.g. 8 s) to boardGh for the compare, which only needs status and ahead_by.",
+      "evidence": "src/review/board-github.ts:117-123 `boardGh(..., timeout = 18_000)`; slice-04 review-reviews.ts:100-101 calls boardGh without a timeout argument; src/lib/map-pool.ts work-stealing pool; apps/desktop/src-tauri/src/review.rs:119 `run_bounded_with_stdin(cmd, input, Duration::from_secs(150), 32 * 1024 * 1024)`.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-no-overall-deadline",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": 40,
+      "quote": "const rows = readReviewRows(repositoryId, viewer, root);",
+      "problem": "The read-only `review reviews` command goes through readReviewRows, which opens runs.sqlite writable; the writable constructor runs CREATE ... IF NOT EXISTS and an IMMEDIATE transaction (ALTER-if-missing + assignReviews) on every open, not only when a migration is pending. The sibling board/badge readers open the store read-only.",
+      "impact": "Trigger: N project windows reading the list (open, focus, tab show, 60 s running poll) while a desk-run executor writes progress. Each read takes the RESERVED lock briefly and contends with executor writes under busy_timeout 8000; with short writer transactions this is milliseconds. If a writer ever held its lock longer than 8 s, the list read would throw SQLITE_BUSY uncaught (readReviews does not wrap readReviewRows) and the whole read fails rather than degrading. No failure shown today; recorded as a choice. The writable open is in slice-05 code; anchored here at the polled call site. Security-code w2 noted the writable open as a follow-up without filing it.",
+      "suggested_fix": "Optional: open read-only first and check `reviewColumns` plus `EXISTS (SELECT 1 FROM runs WHERE review_id IS NULL)`; only when a migration is pending, reopen writable and migrate. That keeps the polled lane lock-free in the steady state.",
+      "evidence": "src/review/desk-run-store.ts:100-143 constructor (`this.atomic(() => { ...; this.assignReviews(); })`, atomic = `transaction(fn).immediate()`), :903-907 readReviewRows `new DeskRunStore(root)` (writable); :890-901 readLocalBadges/readLocalActiveReviewNumbers use `new DeskRunStore(deskRunRoot(), true)`.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-read-lane-write-lock",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [
+    "If highload or logic reviews slice-05 in a later wave: desk-run-store.ts constructor runs an IMMEDIATE transaction on every writable open (see F-004); confirm no writer holds a transaction near busy_timeout 8000."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice was supplied as text and context files were known by path from its imports). wiki_used: no (not-relevant: concurrency review of a supplied diff). ctx_used: yes (keryx ctx rg for symbol locations). raw_rg_used: no for project code search; raw grep/sed were used for targeted line-range reads of known files and for searching the review package's own raw findings (marked keryx:raw). Metaproject index.md read.

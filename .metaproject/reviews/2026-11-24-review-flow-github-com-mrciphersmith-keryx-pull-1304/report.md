@@ -1,0 +1,1170 @@
+Reviewed `20e4281` — the PR has since moved on to `254dd21` (fix round 1: `85fa985c1`, `98c7b37a1`, flow record `254dd210e`).
+**Changes requested — 8 Major, 38 Minor (plus F-016 and F-036 dismissed on premise).** The Reviews tab, the Review store migration and `keryx review reviews` hold together; the risk was in cross-tab hand-off (focus by PR number, replayed intents, a stale hidden indicator), in which attempt the read model treats as reviewed, and in archived Reviews becoming unreachable. All 8 Major were addressed in fix round 1, which a delta round has still to review.
+Reviewed `20e4281a2` against `a5d1ab236` · round 1 · 48 files, +3931/−308 · CI green at `20e4281a2` (CI, Desktop Check, Docs, Wiki freshness). Fix commits since: `85fa985c1` (backend, FA rows), `98c7b37a1` (Desktop, FB rows), `254dd210e` (flow record only) — unchecked by this round.
+Evidence level: ran — `keryx review verify-run` tests-to-run record (`research-evidence/verify-tests-to-run-1.txt`: 2014 pass / 18 fail, every failure a load timeout in a suite outside the PR); reviewers and the verifier were static only (no execution allowed).
+
+### Major
+
+**F-001. Open in Reviews finds the Review by PR number only, so a multi-repository project opens the wrong Review or a false 'no Keryx review' notice.** [`apps/desktop/src/App.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/App.tsx), in the diff.
+Plan T7 specifies the cross-tab focus as `reviewsFocus {number, nonce}` and the code implements exactly that: `ReviewsFocus` has no repository, and ReviewsView matches `snapshot?.reviews.find(review => review.number === pending.number)`. But the Pull requests board and the Reviews tab each keep their own `repo` state with their own 'Base repository' selector (ReviewBoard.tsx ProjectBoard `selectRepo`, ReviewsView.tsx ReviewsView `selectRepo`).
+Verifier: confirmed, narrower - the answer-intent half is stopped by the SHA guard in ReviewWorkspace; what remains is the wrong Review selected or a false notice in multi-repository projects.
+Reported by: logic-w1 F-001, ui-ux-w1 UX-001, regression-w1 RR-001, degradation-w1 F-002.
+Fix: FB-1 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-002. An Open-in-Reviews intent is never cleared, so every return to the Reviews tab replays it.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff.
+The Open-in-Reviews intent is stored in `selected` and never cleared after ReviewWorkspace consumes it. The panel renders only while the tab is active, so each return to the tab remounts ReviewPanel/ReviewWorkspace with the same reviewIntent, and the replay effect runs it again.
+Verifier: confirmed as stated.
+Reported by: frontend-w1 F-001.
+Fix: FB-2 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-003. The cross-tab focus is never reset, so a remount (base repository or account change) replays it on another Review.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff.
+The focus effect runs on every mount. RepositoryReviews is keyed by [cwd, viewer, repo], ReviewsView is keyed by reviewViewer in App, and App never resets reviewsFocus, so any remount re-applies the last Open-in-Reviews request.
+Verifier: confirmed as stated.
+Reported by: frontend-w1 F-002.
+Fix: FB-3 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-004. The Reviews indicator lights for a ready Review whose publication is null (partial, budget, existing), with no action that clears it.** [`src/review/review-entity.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/review-entity.ts), in the diff.
+Plan T6 defines the indicator as `ready` with publication 'pending or unknown', and the code lights on publication === null. The store's `publication()` returns undefined unless the attempt is `completed` with coverage `complete` (desk-run-store.ts:407-408), and `reviewRows` sets it to null for `source === 'existing'`. So every Review whose newest reviewed attempt is `partial`, `budget`, completed with partial coverage, or an imported existing package is `ready` with publication null forever. `reviewState` can also never return `published` for these, because it reads the same null.
+Verifier: confirmed as stated.
+Reported by: logic-w1 F-002.
+Fix: FA-2 (`85fa985c1`) — committed, not yet re-reviewed.
+
+**F-005. Desktop shows the reviewed commit of a cancelled or blocked attempt while freshness is computed from the finished one.** [`apps/desktop/src/reviews/model.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/model.ts), in the diff.
+latestReviewed/reviewedCommit pick the newest attempt with reviewed !== null, in any state. review-entity.ts picks the reviewed attempt only among FINISHED states (completed, partial, budget) and derives freshness (referenceHead), findings and publication from it. Cancelled and blocked attempts carry result.reviewed: finishExecution sets it from checkedBase/checkedHead for every outcome, and the executor reads those from the package manifest before deciding the outcome. So the desktop's 'reviewed commit' can come from a different attempt than every other fact on the card.
+Verifier: confirmed; limit - only attempts stopped after their package existed.
+Reported by: logic-w2 F-001.
+Fix: FA-3 (`85fa985c1`), FB-6 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-006. A Review whose attempts are all archived disappears from Desktop, so its attempts can no longer be viewed, restored or deleted.** [`apps/desktop/src/review/ReviewDetail.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewDetail.tsx), in the diff.
+When every attempt of a PR is archived, the user can no longer view, restore or delete those attempts from Desktop. Base ReviewDetail.tsx:290 always rendered `<ReviewRunHistory runs={local.runs} .../>` in the panel header. The status read in desk-run-store.ts:431 excludes only 'delete', so that list included archived runs, and ReviewLifecycle.tsx:55 offers [restore, delete] for an archived run. Head removes the History menu from the PR panel. The only remaining ReviewRunHistory is in ReviewWorkspace.tsx:158, which only ReviewPanel renders, and only for a Review in the Reviews list. That list comes from DeskRunStore.reviewRows, whose query at desk-run-store.ts:586 filters `NOT IN ('archive','delete')`; its doc comment says a Review with no other attempt is left out. In the PR panel, `hasReview` is false when every run is archived, so 'Open in Reviews' does not show either. An open PR shows only 'Start review'/'Review again'; a closed or merged PR shows no review action at all.
+Verifier: confirmed, narrower - a Session-started attempt keeps a route through SessionReviewActivity.
+Reported by: degradation-w1 F-001.
+Fix: FA-4 (`85fa985c1`), FB-5 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-007. The Reviews indicator is not refreshed while the tab is hidden, and the Pull requests dot no longer counts local reviews, so a waiting answer or pending publication shows nowhere.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff.
+The change removes awaitingAnswer and publicationPending from needsViewerAttention (apps/desktop/src/review/model.ts), so the Pull requests indicator no longer reflects a local review waiting on the user. The new ReviewsTabIndicator is computed from the ReviewsView snapshot, which reloads only on mount, when the tab is shown again, and every RUNNING_RELOAD_MS while the tab is active and a Review is running. It does not follow the PR watcher poll (ReviewWatcher onPollCompleted, a 60 s interval that runs on every tab) or publishSessionReview snapshots. Those are the two channels that used to update the board's badges, and therefore the tab dot, while the user was on another tab.
+Verifier: confirmed, narrower - on base the hidden-tab update also needed the watcher poll or a session-review snapshot.
+Reported by: regression-w1 RR-002, degradation-w1 F-003, frontend-w1 F-004.
+Fix: FB-4 (`98c7b37a1`) — committed, not yet re-reviewed.
+
+**F-008. A retry on an earlier range (A, B, A) joins that range's old round, so round numbers stop tracking time.** [`src/review/desk-run-store.ts:195`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts#L195), in the diff.
+A retry on a range already seen joins that range's round even when higher rounds exist, so round number no longer tracks time. review-entity roundsOf sorts rounds by number ('Newest round first'), summarizeReview.latestRound is the newest attempt's round, and Desktop model.ts latestReviewed/reviewedCommit walk rounds in number order.
+Not verified (filed in the last wave). Operator decision D-R1 (journal.md, AC1 re-frozen): a return to an earlier range opens a new round.
+Reported by: logic-w5 F-001.
+Fix: FA-1 (`85fa985c1`) — committed, not yet re-reviewed.
+
+### Minor
+
+<details open><summary><b>Minor (40)</b></summary>
+
+- **F-009. A pending cross-tab focus never settles when its re-read fails with access lost.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by logic-w2 F-003. Fix: FB-3 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-010. reviewState looks at the newest attempt only, so a stopped retry hides a round that already has accepted findings.** [`src/review/review-entity.test.ts:103`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/review-entity.test.ts#L103), in the diff — reported by logic-w4 F-002. Fix: FA-2 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-011. The 60 s Reviews reload runs with no visibility check.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by highload-w1 F-001. Fix: FB-4 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-012. ReviewsView mounts before the GitHub account resolves and reads the list twice at start.** [`apps/desktop/src/App.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/App.tsx), in the diff — reported by performance-w1 F-001. Fix: FB-4 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-013. The reviews feature imports its indicator type from the app shell, the reverse of the Pull requests tab.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by architecture-w1 F-001. Fix: FB-7 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-014. onOpenInReviews stays optional on ReviewBoard/ReviewDetail although the review interface now lives only in the Reviews tab.** [`apps/desktop/src/review/ReviewBoard.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewBoard.tsx), in the diff — reported by architecture-w1 F-002. Fix: FB-7 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-015. The command layer decides which Reviews are behind, duplicating the domain's freshness rule.** [`src/commands/review-reviews.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts), in the diff — reported by architecture-w2 F-001. Fix: FA-5 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-016. review-reviews imports writeJson from the sibling review-board command, which exported it for that.** [`src/commands/review-reviews.ts:9`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L9), in the diff — reported by architecture-w2 F-002. Fix: FA-6 (`85fa985c1`) — committed, not yet re-reviewed. Premise: challenged; dismissed by the operator (see Refuted and narrowed).
+- **F-017. Review rules are reachable only after a successful Reviews list read.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by degradation-w1 F-004. Fix: FB-10 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-018. Desktop docs still describe the old tab numbering and the PR-panel review interface.** [`docs/docs/desktop-app.md`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/docs/docs/desktop-app.md), in the diff — reported by degradation-w1 F-005. Fix: FA-15 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-019. The CLI reference does not list the `unknown` freshness kind.** [`docs/docs/cli-reference.md:5197`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/docs/docs/cli-reference.md#L5197), in the diff — reported by degradation-w2 F-001, pr-contract-w1 PC-001, degradation-w4 F-001. Fix: FA-13 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-020. The 'read-only' reviews listing opens the store writable and migrates a pre-Reviews store, which neither the PR body nor the CLI reference says.** [`src/review/desk-run-store.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts), in the diff — reported by pr-contract-w1 PC-002, highload-w2 F-004. Fix: FA-13 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-021. specification.md still says the protocol version is raised and schemas arrive with that bump.** [`docs/requirements/keryx-desktop-review-v2/specification.md:226`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/docs/requirements/keryx-desktop-review-v2/specification.md#L226), in the diff — reported by degradation-w2 F-002, degradation-w4 F-002. Fix: FA-14 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-022. The 25-compare cap picks Reviews by PR number, not by newest activity.** [`src/commands/review-reviews.ts:56`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L56), in the diff — reported by highload-w2 F-001, degradation-w2 F-003, degradation-w4 F-003. Fix: FA-8 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-023. Every list read fetches PR cards for every Review ever stored, including closed ones.** [`src/commands/review-reviews.ts:45`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L45), in the diff — reported by highload-w2 F-002, performance-w2 F-001. Fix: FA-7 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-024. One failed card batch discards the cards of every batch that succeeded.** [`src/commands/review-reviews.ts:45`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L45), in the diff — reported by logic-w4 F-001. Fix: FA-7 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-025. The compare phase has no overall deadline.** [`src/commands/review-reviews.ts:58`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L58), in the diff — reported by highload-w2 F-003. Fix: FA-9 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-026. roundFor re-parses every attempt's full details per row during assignment.** [`src/review/desk-run-store.ts:192`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts#L192), in the diff — reported by performance-w3 F-001, degradation-w3 F-002. Fix: FA-10 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-027. A late-imported CLI package is numbered by import order, not by its createdAt.** [`src/review/desk-run-store.ts:186`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts#L186), in the diff — reported by degradation-w3 F-001. Fix: FA-17 (`85fa985c1`) — committed, not yet re-reviewed. FA-17 keeps it as a documented limitation and pins it with a test. Premise: owner decision; kept as the documented limitation.
+- **F-028. A queued request superseded before it started keeps a round of its own.** [`src/review/desk-run-store.ts:198`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts#L198), in the diff — reported by logic-w5 F-002. Fix: FA-11 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-029. The Reviews card's aria-label replaces its content in the accessible name.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by frontend-w1 F-003, ui-ux-w1 UX-004, frontend-w2 F-002. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-030. The run-status error banner renders at the end of the PR panel body, far from the action that caused it.** [`apps/desktop/src/review/ReviewDetail.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewDetail.tsx), in the diff — reported by ui-ux-w1 UX-002. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-031. The Rounds link's accessible name does not contain its visible text (WCAG 2.5.3).** [`apps/desktop/src/reviews/ReviewPanel.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewPanel.tsx), in the diff — reported by ui-ux-w1 UX-003. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-032. The moved review interface still labels the outdated action from launchAction, not 'New review round'.** [`apps/desktop/src/review/ReviewResults.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewResults.tsx), in the diff — reported by ui-ux-w1 UX-005. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-033. A digit-only search matches the PR number prefix only, never the title.** [`apps/desktop/src/reviews/model.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/model.ts), in the diff — reported by logic-w2 F-002. Fix: FB-11 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-034. The PR body claims the rest of R4, but the PR-card review link with state and round is not delivered.** [`docs/requirements/keryx-desktop-review-v2/implementation-plan.md:29`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/docs/requirements/keryx-desktop-review-v2/implementation-plan.md#L29), in the diff — reported by pr-contract-w4 PC-006. Fix: FA-16 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-035. The PR body's stage-1 overlap list omits apps/desktop/src/review/model.test.ts, which conflicts.** [`apps/desktop/src/review/model.test.ts:3`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/model.test.ts#L3), in the diff — reported by pr-contract-w3 PC-005. Fix: none in round 1 (no row in fix-round-1.md); open. No fix row in fix-round-1.md: a PR-description edit, still open.
+- **F-036. T12 (this review) ran while T10 (suites, typecheck, lint) is still todo.** [`.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json), pr-process — reported by logic-w1 F-003. Fix: none in round 1 (no row in fix-round-1.md); open. No fix row in fix-round-1.md. T10 is still `todo` in flow.json at HEAD; journal.md records a local root run (13158 pass / 18 fail, load timeouts) and CI green on 20e4281, but no lint run. Still open. Premise: challenged; dismissed by the operator (see Refuted and narrowed).
+- **F-037. The list-view Round assertion uses toContain("2") on a row that always contains a 2.** [`apps/desktop/src/reviews/ReviewsView.dom.test.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.dom.test.tsx), in the diff — reported by testing-practices-w1 F-001. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-038. Intent routing is tested on one side only.** [`apps/desktop/src/review/ReviewBoard.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewBoard.tsx), in the diff — reported by testing-practices-w1 F-002. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-039. The App-level handoff from Pull requests to Reviews has no test.** [`apps/desktop/src/App.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/App.tsx), in the diff — reported by testing-practices-w1 F-003. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-040. No test covers the list re-read after a panel mutation.** [`apps/desktop/src/reviews/ReviewsView.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewsView.tsx), in the diff — reported by testing-practices-w1 F-004. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-041. The account-change test no longer proves focus returns to search from the Review rules dialog.** [`apps/desktop/src/review/ReviewBoard.dom.test.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewBoard.dom.test.tsx), in the diff — reported by testing-practices-w1 F-005. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-042. The freshness test's requested head equals the PR head, so the referenceHead fallback is untested.** [`src/review/review-entity.test.ts:124`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/review-entity.test.ts#L124), in the diff — reported by testing-practices-w2 F-001. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-043. Deleted attempts hidden and recoverable shown as failed have no test.** [`src/review/desk-run-store.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.ts), in the diff — reported by testing-practices-w2 F-002. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-044. The A, B, A round rule has no fixture.** [`src/review/desk-run-store.test.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/desk-run-store.test.ts), in the diff — reported by testing-practices-w2 F-003. Fix: FA-1 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-045. The non-hex SHA guard on compares has no test.** [`src/commands/review-reviews.ts:53`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts#L53), in the diff — reported by testing-practices-w2 F-004. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-046. No fixture gives a non-finished attempt a reviewed range.** [`src/review/review-entity.ts:120`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/review/review-entity.ts#L120), in the diff — reported by testing-practices-w2 F-005. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-047. The positional-argument rejection test cannot fail.** [`src/commands/review-reviews.test.ts:214`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.test.ts#L214), in the diff — reported by testing-practices-w2 F-006. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-048. The Review panel's 'Open pull request' link has no click handler, so in the app it most likely does nothing.** [`apps/desktop/src/reviews/ReviewPanel.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewPanel.tsx), in the diff — reported by security-code-w1 fu1. Fix: none in round 1 (no row in fix-round-1.md); open. From review-security-code w1 follow-up fu1, confirmed by a static trace during consolidation (not executed). No fix row in fix-round-1.md; open for the delta round.
+
+</details>
+
+### Refuted and narrowed
+
+No finding was refuted by the verifier (7 checked, 7 confirmed; three confirmed narrower than filed: F-001, F-006, F-007 — the narrowing is stated in each finding). Reviewer follow-ups closed without a finding:
+
+- **review-layout-w1:fu1. Narrowed** — The toolbar half was measured live in T11; LY-001/LY-002 were acted on in FB-9 (canonical F-054, F-055); LY-003 is recorded as an info not acted on. **Remains:** No live render of a non-empty Reviews list was made: Review panel spacing, selected-filter text at 760/700/560 px and the board at 280 px with the panel open are still unmeasured, before and after FB-9. Evidence: journal.md T11 (toolbar measured live at 340-1380 px, empty list); fix rows FB-9 (98c7b37a1) for LY-001/LY-002; journal.md T16 concern "no live render of the FB-9 CSS".
+- **review-testing-practices-w1:fu2. Ruled out** — The follow-up asked to confirm the slice suites are green at head; CI at the reviewed head ran the full core and Desktop suites green, so the absent file left no open doubt about them. Evidence: CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry).
+- **review-testing-practices-w2:fu2. Ruled out** — The named suites (review-reviews, review-entity, desk-run-store, board-badges tests) are green at the reviewed head per CI. Evidence: CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry). The four named suites are not in the tests-to-run command; they ran in the CI core shards..
+- **review-testing-practices-w2:fu1. Narrowed** — The 31 proposed root mutants were run. Survivors mapped to the findings they evidence: B02 -> F-045; B09 -> F-047; B05 -> F-053; B07 -> F-053; B08 -> F-053; E05 -> F-004; S05 -> F-004; E06 -> F-046; E07 -> F-042; S02 -> F-044; S03 -> F-043, S04 -> F-043 (re-run in mutation-3 with exact anchors after mutation-1 refused them as ambiguous). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured. **Remains:** Survivors with no matching finding: B01 (empty-rows early return), S01 (previous-round lookup not scoped by review_id). Re-running all survivors at the fix head is open for the delta round. Evidence: research-evidence/mutation-1.json/.md (mutants-root.json from research-evidence/mutants.json; head 20e4281a2; baseline exit 0): killed 17, survived 12, invalid 2 (S03, S04); research-evidence/mutation-3.json/.md (S03, S04 re-run with exact anchors from research-evidence/mutants-root-exact.json, head 20e4281a2): survived 2.
+- **review-testing-practices-w1:fu1. Narrowed** — The 29 proposed Desktop mutants were run. Survivors mapped to the findings they evidence: M08 -> F-038; M09 -> F-038; M26 -> F-040; M28 -> F-039; M29 -> F-039; M18 evidences the info observation review-testing-practices-w1:F-007 (untested label branches, not acted on). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured. **Remains:** Survivors with no matching finding: M11, M12 (ReviewDetail launch-button disabled/visibility conditions), M13 (outdated round title only for New review round), M20 (Show closed filter), M24 (filters cleared before opening a hidden Review), M25 (no notice on a read error). Re-running survivors at the fix head is open for the delta round. Evidence: research-evidence/mutation-2.json/.md (mutants-desktop.json; head 20e4281a2; baseline exit 0; supersedes the refused mutation-baseline-1/2): killed 17, survived 12.
+- **F-016. Dismissed** (premise: challenged; operator answer "Dismiss (Recommended)") — sibling-command helper imports are accepted practice in `src/commands` (review-chunks.ts, review-next.ts import from ./review-layers); the move of `writeJson` to `board-github` (FA-6) stays as a tidy-up.
+- **F-036. Dismissed** (premise: challenged; operator answer "Dismiss, mark T10 done (Recommended)") — flow bookkeeping, not a defect: CI on `20e4281a2` (incl. Lint and typecheck) is green and the T10 run is journalled; T10 is to be closed with that evidence.
+- **F-027. Owner decision: keep the limitation** (operator answer "Keep limitation (Recommended)") — round numbers never change once shown; a late-imported package taking the next round is the documented limitation, pinned by a test (FA-17). Not yet recorded in the package: `keryx review decide-premise` refused the answer text because it names neither dismiss nor uphold; the operator needs to be asked again in those terms.
+
+<details><summary><b>Info (12 recorded, not counted)</b></summary>
+
+- **F-049. ReviewDetail keeps the unused onOpenReviewSession prop and ReviewBoard still passes it.** [`apps/desktop/src/review/ReviewDetail.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewDetail.tsx) — reported by architecture-w1 F-003, frontend-w1 F-005. Fix: FB-7 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-050. The Pull requests dot test helper also matches the Reviews dot.** [`apps/desktop/src/test/app-navigation.fixture.tsx:185`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/test/app-navigation.fixture.tsx#L185) — reported by frontend-w2 F-001. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-051. A stale not.toContain("start") assertion in ReviewBoard tests.** [`apps/desktop/src/review/ReviewBoard.dom.test.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewBoard.dom.test.tsx) — reported by logic-w3 F-001. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-052. Over-indented statements left in ReviewPanel tests.** [`apps/desktop/src/reviews/ReviewPanel.dom.test.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewPanel.dom.test.tsx) — reported by testing-practices-w1 F-006. Fix: FB-12 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-053. Small edges without a fixture: cap at exactly 25, sort tie-break, parse edges.** [`src/commands/review-reviews.ts`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/src/commands/review-reviews.ts) — reported by testing-practices-w2 F-007. Fix: FA-12 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-054. ReviewWorkspace's block wrapper may lose the panel's 12 px column gap (unmeasured).** [`apps/desktop/src/review/ReviewWorkspace.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewWorkspace.tsx) — reported by layout-w1 LY-001. Fix: FB-9 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-055. Compact selects may truncate their selected text at narrow widths (arithmetic, unmeasured).** [`apps/desktop/src/styles/review.css`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/styles/review.css) — reported by layout-w1 LY-002. Fix: FB-9 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-056. The missing-card panel says 'Refresh to try again' with no Refresh control.** [`apps/desktop/src/reviews/ReviewPanel.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/reviews/ReviewPanel.tsx) — reported by ui-ux-w1 UX-007. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-057. The moved banner's 'Refresh board' wording does not fit the Reviews tab.** [`apps/desktop/src/review/ReviewWorkspace.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewWorkspace.tsx) — reported by ui-ux-w1 UX-008. Fix: FB-8 (`98c7b37a1`) — committed, not yet re-reviewed.
+- **F-058. plan.md is stale against journal decisions (freshness unknown, toolbar result).** [`.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md) — reported by logic-w1 F-004. Fix: FA-16 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-059. The implementation plan's stage-3 hand-off still names the action 'Review again'.** [`docs/requirements/keryx-desktop-review-v2/implementation-plan.md`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/docs/requirements/keryx-desktop-review-v2/implementation-plan.md) — reported by pr-contract-w1 PC-004. Fix: FA-16 (`85fa985c1`) — committed, not yet re-reviewed.
+- **F-060. The PR body says the title names the round; it does so only when the badge carries outdated.round.** [`apps/desktop/src/review/ReviewResults.tsx`](https://github.com/MrCipherSmith/keryx/blob/20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b/apps/desktop/src/review/ReviewResults.tsx) — reported by pr-contract-w1 PC-003. Fix: none in round 1 (no row in fix-round-1.md); open. No fix row in fix-round-1.md: a PR-description edit, still open.
+
+Info observations not acted on (16; ledger disposition `out-of-scope`, not in the findings block):
+
+- `review-architecture-w1:F-004` — ReviewWorkspace depending on the PR panel stylesheet is a structure note with no user-visible defect.
+- `review-architecture-w1:F-005` — the partial extraction of ReviewDetail is a structure note; the reviewer names no failing behaviour.
+- `review-architecture-w2:F-003` — structural typing of ReviewsSnapshot works as written; a typing note, no defect.
+- `review-architecture-w3:F-001` — the round rule written as SQL in the store is a placement note; journal.md T5 records moving assignment logic as a follow-up.
+- `review-architecture-w3:F-002` — the reviewer states the requestAttempt details write is correct; consistency note only.
+- `review-architecture-w3:F-003` — transaction-ownership note; the reviewer names no failing caller.
+- `review-highload-w1:F-002` — one list read per project window at open is by design (keeps the indicator current); no defect claimed.
+- `review-logic-w1:F-005` — a cancelled Review lighting the indicator follows the spec table (stopped includes cancelled); spec-conformant observation.
+- `review-performance-w1:F-002` — full re-read per tab show is a cost note with no measured impact; not acted on.
+- `review-performance-w2:F-002` — re-fetching immutable compares (max 25 per read) is a cost note; not acted on.
+- `review-performance-w2:F-003` — comparator flattening is a micro-cost note; not acted on.
+- `review-layout-w1:LY-003` — the fixed 560 px Review panel (no resize separator) is a design gap the reviewer marks UNVERIFIED; not acted on.
+- `review-ui-ux-w1:UX-006` — same observation as LY-003: the Review panel has no resizable separator; design note, not acted on.
+- `review-ui-ux-w1:UX-009` — the reviewer marks it unverified (:focus-visible after a mouse click); no defect established.
+- `review-ui-ux-w1:UX-010` — hidden-count visibility in the closed toggle is a UX suggestion; not acted on.
+- `review-testing-practices-w1:F-007` — three untested label branches are a coverage note; not in fix round 1.
+
+</details>
+
+<details><summary><b>Verified clean</b></summary>
+
+- Security of the new command and bridge — review-security-code w1–w3 (slices 01–05) read the `review reviews` argv, the Tauri `review_board` bridge and the URL handling (`reviewUrl` allows only credential-free https) and filed nothing.
+- Regression through existing routes — review-regression w2 traced `group-subcommands.ts` → `cli-registry.ts` and `review.ts` dispatch: the `reviews` branch is additive and moves no existing argv route; `writeJson` changed only by `export`.
+- Attention set of the Pull requests board — journal.md T8: 13 one-line mutations of `needsViewerAttention` (model.ts 39–43) each failed a test; the T16 `ReviewBoard.tsx` diff touches no attention-set identifier (orchestrator check).
+- Store migration on real data — journal.md T9: a `.backup` copy of the working `runs.sqlite`, opened twice: 17 attempts before/after, 0 unassigned, 13 reviews = 13 distinct keys, second open changed nothing.
+
+</details>
+
+<details><summary><b>How this review was run</b></summary>
+
+- **Workflow:** `review-orchestrator`, managed `review-flow` package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304`; severity per the canonical rubric.
+- **Scope:** `a5d1ab236..20e4281a2`, round 1 (first), PR #1304. Unchecked commits: `85fa985c1`, `98c7b37a1`, `254dd210e` (fix round 1 and its flow record; for the delta round).
+- **Models:** anthropic/claude-opus-5-5 — every reviewer and the verifier (drivers/*.json).
+- **Tools:** `keryx review` plan/slice/next/verify-run/ledger, `keryx ctx rg`/`read`, git, gh (CI status).
+- **Skills:** `review-orchestrator`.
+- **Subagents:** review-architecture (w1–w3), review-degradation (w1–w3), review-frontend (w1–w4), review-highload (w1–w3), review-layout (w1), review-logic (w1–w5), review-performance (w1–w3), review-pr-contract (w1–w5), review-regression (w1–w3), review-security-code (w1–w3), review-testing-practices (w1–w2), review-ui-ux (w1), review-degradation retry (w4): 37 dispatches; review-verifier: 2 passes; review-premise: 1 pass.
+- **Fallback:** not recorded.
+- **Not run:** a live render of a non-empty Reviews list (layout w1 follow-up, narrowed); the blast-radius chunk passes (86 files cut from the regression set, 42 chunks, ~$6.91 estimated — over the ceiling, waits for the operator; `keryx review chunks estimate`).
+- **Retries:** review-degradation w2/w3 listed `research-evidence/verify-tests-to-run-1.txt` as unreadable (written after those waves); w4 re-reviewed slice-04 with it present, `inputs_unreadable` empty, and re-filed the same three findings (no new ones).
+- **Mutation pass:** at the reviewed head `20e4281a2` (scratch worktree), from `research-evidence/mutants.json` (60 proposed by testing-practices w1+w2). Root (`mutation-1`): killed 17, survived 12 (B01 B02 B05 B07 B08 B09 E05 E06 E07 S01 S02 S05), 2 refused as ambiguous anchors and re-run exactly in `mutation-3` (S03, S04: survived). Desktop (`mutation-2`, supersedes the refused `mutation-baseline-1/2`): killed 17, survived 12 (M08 M09 M11 M12 M13 M18 M20 M24 M25 M26 M28 M29). Survivors are mapped to findings in `dispositions.json` (testing-practices fu1 entries); unmatched: B01, S01, M11, M12, M13, M20, M24, M25. The fix commits were not mutation-tested.
+- **Premise judge (Wave D):** `review-premise` w1 on claude-opus-5-5 over the 48 findings of severity minor and above (`research-evidence/premises.json`): upheld 45, challenged 2 (F-016, F-036), owner-decision 1 (F-027). The operator answered each (see Refuted and narrowed).
+- **Selection:** 11 reviewers confirmed by the operator, then review-pr-contract added ("Continue full round", journal.md).
+- **Verification:** annotate. Confirmed 7, refuted 0, unverifiable 0, unverified 1 Major (F-008, filed in the last wave; settled by operator decision D-R1). Removed 0.
+- **Not verified: 1** — F-008 (major, filed in the last wave); settled by operator decision D-R1 instead of a verifier pass.
+- **Stage counts:** raw reviewer findings 91 (11 major, 45 minor, 35 info as filed) + 1 reviewer follow-up promoted to a finding (F-048). Merged as duplicates: 16 raw findings folded into 10 canonical (F-001, F-007, F-019, F-020, F-021, F-022, F-023, F-026, F-029, F-049). Not acted on (info, out-of-scope): 16. Refuted by the verifier: 0. Premise judge: upheld 45, challenged (held) 2, owner-decision 1, downgraded 0. Pre-filter: not recorded (scope.md predates this ingest). Retained: 60 canonical (8 Major, 40 Minor, 12 Info).
+- **Normalised:** F-010 and F-024 (review-logic w4) carried `evidence_kind: "code-trace"`, outside the schema enum; the optional field was dropped from the findings block so ingest accepts it. The claims and evidence text are unchanged.
+- **Context:** `.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/` (plan.md, journal.md, fix-round-1.md).
+- **Follow-up file:** `dispositions.json` and `canonical-findings.json` in the package — the raw-to-canonical map the ledger reads.
+- **Reviewed at:** 2026-11-24 (round dispatched from 08:31 UTC).
+
+</details>
+
+```json keryx:findings
+[
+ {
+  "id": "F-001",
+  "severity": "major",
+  "file": "apps/desktop/src/App.tsx",
+  "line": null,
+  "quote": "setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));",
+  "problem": "Plan T7 specifies the cross-tab focus as `reviewsFocus {number, nonce}` and the code implements exactly that: `ReviewsFocus` has no repository, and ReviewsView matches `snapshot?.reviews.find(review => review.number === pending.number)`. But the Pull requests board and the Reviews tab each keep their own `repo` state with their own 'Base repository' selector (ReviewBoard.tsx ProjectBoard `selectRepo`, ReviewsView.tsx ReviewsView `selectRepo`).",
+  "impact": "Trigger: a project with more than one base repository; the user switches the Pull requests board to repository B and clicks View review / Answer question on a card, or Open in Reviews in the PR panel. The Reviews tab stays on its own repository A and either selects the Review of a different PR that happens to share the number in A (wrong Review opened, and an `answer` intent is applied to it), or shows 'Pull request #N has no Keryx review in this list' for a PR that does have one.",
+  "suggested_fix": "Carry the repository in the focus (`{repo: snapshot.repo, number, intent, nonce}` from ReviewBoard, App passing it through), and in ReviewsView call `selectRepo(focus.repo)` when it differs from the loaded `snapshot.repo` before matching, matching only when `snapshot.repo` equals the focus repo. Amend plan.md T7 and add a DOM test with two repositories.",
+  "evidence": "App.tsx:216 builds the focus from number+intent only; ReviewsView.tsx:24 `export interface ReviewsFocus { number: number; nonce: number; intent?: ReviewIntent | undefined }`; ReviewsView.tsx:160 match by number; ReviewsView.tsx:61 and :239-240 own repo state and selector; ReviewBoard.tsx:93 and :492-493 independent repo state and selector; ReviewBoard.tsx:456 and :549 pass only `card.number`. Plan slice: 'Cross-tab navigation: App holds `reviewsFocus {number, nonce}`'.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/App.tsx:216",
+    "apps/desktop/src/reviews/ReviewsView.tsx:24",
+    "apps/desktop/src/reviews/ReviewsView.tsx:160",
+    "apps/desktop/src/review/ReviewBoard.tsx:456",
+    "apps/desktop/src/review/ReviewBoard.tsx:549"
+   ],
+   "enumeration_method": "keryx ctx rg --all 'onOpenInReviews\\(|setReviewsFocus\\(|review.number === pending.number|interface ReviewsFocus|selectRepo=' apps/desktop/src: one focus producer (App), two callers in ReviewBoard, one type and one consumer in ReviewsView; repo selectors confirmed by rg 'selectRepo|repositories' in both views."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Sites exist as named: App.tsx:215-216 focus = {number, intent, nonce}; ReviewsView.tsx:24 ReviewsFocus has no repo; :160 match by review.number only; ReviewsView.tsx:60 and ReviewBoard.tsx:92 hold independent `repo` state, selectors at ReviewsView.tsx:239-240 and ReviewBoard.tsx:493/504; ReviewBoard.tsx:456 and :549 pass only card.number. A board on repository B and a Reviews tab on A therefore match A's #N or report it missing. NARROWER than stated: the 'answer intent is applied to the wrong Review' half is guarded — ReviewWorkspace.tsx:130-132 discards an intent whose baseSha/headSha differ from the opened card, and ReviewBoard.tsx:456 never forwards 'start'. Remaining outcome: wrong Review selected and its panel opened, or a false 'no Keryx review' notice, only in projects with more than one base repository (selector rendered only when repositories.length > 1)."
+  }
+ },
+ {
+  "id": "F-002",
+  "severity": "major",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "setSelected({ id: found.id, intent: pending.intent });",
+  "problem": "The Open-in-Reviews intent is stored in `selected` and never cleared after ReviewWorkspace consumes it. The panel renders only while the tab is active, so each return to the tab remounts ReviewPanel/ReviewWorkspace with the same reviewIntent, and the replay effect runs it again.",
+  "impact": "Trigger: click 'Answer question' on a PR card, close the run dialog without answering, switch tabs and return to Reviews (⌘3). Outcome: the answer dialog reopens by itself on every return while the question is pending.",
+  "suggested_fix": "Clear the intent once handed over (onIntentConsumed callback → setSelected(s => s && { id: s.id })), or strip `intent` from `selected` when `active` turns false. Add a DOM test: answer intent, close dialog, deactivate, reactivate, assert no dialog.",
+  "evidence": "ReviewsView.tsx renders `{active && review && target && <ReviewPanel key={review.id} ... reviewIntent={selected?.intent}`. ReviewWorkspace.tsx `const initialLaunch = useRef(reviewIntent);` and its replay effect calls `setSessionId(action.sessionId)` for kind 'answer' with pending questions. ReviewsView never clears selected.intent; ReviewBoard by contrast calls setSelected(null) when !tabActive (ReviewBoard.tsx ~line 314).",
+  "confidence": "high",
+  "reviewer": "review-frontend",
+  "dedupe_key": "reviews-view-intent-replay",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/reviews/ReviewsView.tsx (selected.intent set from pending focus)",
+    "apps/desktop/src/review/ReviewWorkspace.tsx (initialLaunch = useRef(reviewIntent))"
+   ],
+   "enumeration_method": "keryx ctx rg 'initialLaunch|reviewIntent' over apps/desktop/src: three intent consumers. ReviewDetail only accepts 'start', and ReviewBoard clears selected on tab deactivation; ReviewWorkspace via ReviewsView is the only consumer whose source keeps the intent across remounts."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Trace at head: ReviewsView.tsx:169 setSelected({ id: found.id, intent: pending.intent }); nothing clears selected.intent — the only setSelected calls are :84 (resetView), :104 (load keeps `current` whole, intent included), :169, :194, :266. ReviewsView.tsx:263 renders ReviewPanel only under `active && review && target`, so deactivation unmounts it; App.tsx:631 active={workView === 'reviews'}. ReviewPanel.tsx:117-118 passes reviewIntent into ReviewWorkspace; ReviewWorkspace.tsx:89 `initialLaunch = useRef(reviewIntent)` is re-seeded on every mount, and the effect at :127-142 calls setSessionId(action.sessionId) at :138 for kind 'answer' when a run has pendingManualQuestions. Guards found that narrow but do not prevent it: :130-131 drop the intent if the card's base/head moved or status errored; :137 requires a pending question. ReviewBoard.tsx:314-315 clears selection on deactivation; ReviewsView has no equivalent."
+  }
+ },
+ {
+  "id": "F-003",
+  "severity": "major",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "if (focusNonce !== undefined && focusRef.current) setPending({ ...focusRef.current });",
+  "problem": "The focus effect runs on every mount. RepositoryReviews is keyed by [cwd, viewer, repo], ReviewsView is keyed by reviewViewer in App, and App never resets reviewsFocus, so any remount re-applies the last Open-in-Reviews request.",
+  "impact": "Trigger: use 'Open in Reviews' for PR #N, then change the Reviews tab's Base repository select (or the account). Outcome: the new repository's #N Review is selected and its panel opened unasked; if none exists, an extra reload runs and 'Pull request #N has no Keryx review in this list.' is shown.",
+  "suggested_fix": "Make the focus one-shot: App clears reviewsFocus once ReviewsView reports it handled (onFocusHandled), or track the last handled nonce in state outside the keyed child (for example in ReviewsView next to `repo`) and ignore a nonce already handled.",
+  "evidence": "ReviewsView.tsx: `return <RepositoryReviews key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase(), repo])} ...`, the focusNonce effect, and the pending effect's not-found branch setting the notice. App.tsx: `setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }))`; it is never reset to null.",
+  "confidence": "high",
+  "reviewer": "review-frontend",
+  "dedupe_key": "reviews-view-focus-replay-on-remount",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/reviews/ReviewsView.tsx (focusNonce mount effect)",
+    "apps/desktop/src/App.tsx (reviewsFocus never reset)"
+   ],
+   "enumeration_method": "Read every producer and consumer of reviewsFocus/focus in slice-02 (App.tsx openInReviews, ReviewsView focus/pending effects). There is one producer and one consumer; both remount keys (RepositoryReviews key, App's ReviewsView key) lead to the same effect."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Trace at head: ReviewsView.tsx:61 keys RepositoryReviews by [cwd, viewer, repo]; :239-240 Base repository select calls selectRepo -> new key -> remount. App.tsx:631 keys ReviewsView by reviewViewer (account change remounts). App.tsx:214-216 reviewsFocus is only ever set (nonce+1), never reset to null (grep of App.tsx shows no other setReviewsFocus). ReviewsView.tsx:155-157 effect with deps [focusNonce] runs on mount, so a remount with the same focus prop calls setPending again; :158-176 then selects the new repository's Review with that number (:169) or refreshes once and sets the 'has no Keryx review' notice (:175). No handled-nonce memory exists outside the keyed child."
+  }
+ },
+ {
+  "id": "F-004",
+  "severity": "major",
+  "file": "src/review/review-entity.ts",
+  "line": null,
+  "quote": "(review.state === \"ready\" && review.publication !== \"skipped\" && review.publication !== \"published\");",
+  "problem": "Plan T6 defines the indicator as `ready` with publication 'pending or unknown', and the code lights on publication === null. The store's `publication()` returns undefined unless the attempt is `completed` with coverage `complete` (desk-run-store.ts:407-408), and `reviewRows` sets it to null for `source === 'existing'`. So every Review whose newest reviewed attempt is `partial`, `budget`, completed with partial coverage, or an imported existing package is `ready` with publication null forever. `reviewState` can also never return `published` for these, because it reads the same null.",
+  "impact": "Trigger: a Review whose latest finished attempt ended `partial` or `budget`, or an imported session package. The Reviews tab indicator stays on and the Review sits in 'Waiting on you' with nothing to act on: the panel shows no 'Action required' (ReviewRuns marks pending only when `run.publication === \"pending\"`), and a partial result the user publishes through the offered draft (ReviewRuns allows `partial`) still reads ready/null, never Published. Only archiving or a new round clears it. The old PR-board badge did not have this: it excluded `existing` runs and lit only on `publication === \"pending\"`.",
+  "suggested_fix": "Either light only on `publication === \"pending\"` (the old `publicationPending` rule and the panel's 'Action required' rule), with null meaning 'no decision applies', or make `publication()` report receipts/skips for partial attempts and treat budget/existing explicitly. Amend plan.md T6 and AC8's wording, and add review-entity and ReviewsView tests for partial, budget and existing Reviews.",
+  "evidence": "review-entity.ts reviewNeedsViewer; review-entity.test.ts:89 pins `{state:'ready', publication:null}` → true; desk-run-store.ts:407-408 `if (state !== \"completed\" || coverage !== \"complete\" || ...) return;`; desk-run-store.ts reviewRows `const publication = reviewed && item.source !== \"existing\" ? this.publication(...) : undefined`; apps/desktop/src/review/ReviewRuns.tsx:103-105 draft offered for completed|partial, pending only on 'pending'; src/review/board-badges.ts:32 and :52 old badge excluded existing and required 'pending'.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "class_scope": {
+   "sites": [
+    "src/review/review-entity.ts reviewNeedsViewer",
+    "src/review/review-entity.ts reviewState (published branch)",
+    "src/review/desk-run-store.ts:407",
+    "src/review/desk-run-store.ts reviewRows publication assignment",
+    "apps/desktop/src/reviews/ReviewsView.tsx indicator (snapshot?.reviews.some(reviewNeedsViewer))"
+   ],
+   "enumeration_method": "Read every producer of ReviewAttemptSummary.publication (only reviewRows, which calls the one private publication()) and every consumer of ReviewSummary.publication in review-entity.ts (reviewState, reviewNeedsViewer); keryx ctx rg 'PublicationOutcome =' src/review shows the type has only pending|published|skipped, so null is the only 'unknown'."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Trace at head: desk-run-store.ts:407-408 publication() returns undefined unless state === 'completed' && coverage === 'complete' && UUID id; :597 reviewRows skips it for source 'existing'; :602 stores publication ?? null. review-entity.ts:90 FINISHED = completed|partial|budget; :99 reviewState returns 'ready' for these (never 'published' when publication is null); :161 summary publication = reviewed?.publication ?? null; :111-113 reviewNeedsViewer is true for ready with publication not skipped/published, i.e. null. ReviewsView.tsx:134 lights the indicator from reviewNeedsViewer. review-entity.test.ts:89 pins ready/null -> true. apps/desktop/src/review/ReviewRuns.tsx:103-105 offers the publish draft for 'partial' but shows Action required only on publication === 'pending', so a partial attempt the user publishes still reads null from :407 and stays ready + attention."
+  }
+ },
+ {
+  "id": "F-005",
+  "severity": "major",
+  "file": "apps/desktop/src/reviews/model.ts",
+  "line": null,
+  "quote": "const attempt = round.attempts.find(item => item.reviewed !== null);",
+  "problem": "latestReviewed/reviewedCommit pick the newest attempt with reviewed !== null, in any state. review-entity.ts picks the reviewed attempt only among FINISHED states (completed, partial, budget) and derives freshness (referenceHead), findings and publication from it. Cancelled and blocked attempts carry result.reviewed: finishExecution sets it from checkedBase/checkedHead for every outcome, and the executor reads those from the package manifest before deciding the outcome. So the desktop's 'reviewed commit' can come from a different attempt than every other fact on the card.",
+  "impact": "Trigger: round 1 completes on head A; the PR moves to B; round 2 on B is stopped by the user after its package exists (state cancelled, reviewed.headSha = B). The entity reports state stopped, freshness behind (A vs B), round-1 findings. The card, list row and panel show commit B followed by '· behind 1'. The PR's current head is labelled as the reviewed commit and as behind, and the findings shown are not for the commit shown.",
+  "suggested_fix": "Apply the entity's rule in latestReviewed: require state completed, partial or budget as well as reviewed !== null. Better, emit the reference head on ReviewSummary from the CLI (referenceHead(row)) and render it, so desktop and domain cannot diverge. Add a model test with a cancelled attempt that has reviewed set and comes after a completed one.",
+  "evidence": "apps/desktop/src/reviews/model.ts latestReviewed (slice-02 lines 2118-2130); src/review/review-entity.ts: `const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);` and referenceHead/summarizeReview use it; src/review/desk-run-service.ts finishExecution: `reviewed: out.checkedBase && out.checkedHead ? {...} : null` for every outcome; src/review/desk-run-executor.ts:373-374 checkedBase/checkedHead from the manifest, 437-440 outcome becomes 'cancelled' on abort, 445 returns them; src/review/desk-run-store.ts reviewRows maps result.reviewed for every state.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "dedupe_key": "reviews-reviewed-commit-ignores-finished-state",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/reviews/model.ts:latestReviewed (wrong: no state check)",
+    "apps/desktop/src/reviews/ReviewsView.tsx:ReviewFacts reviewedCommit (consumer)",
+    "apps/desktop/src/reviews/ReviewsView.tsx:ReviewList list row reviewedCommit (consumer)",
+    "apps/desktop/src/reviews/ReviewPanel.tsx:header reviewedCommit (consumer)",
+    "src/review/review-entity.ts:latestReviewed (correct: FINISHED check)"
+   ],
+   "enumeration_method": "keryx ctx rg --all 'latestReviewed|reviewedCommit|reviewed !== null' over apps/desktop/src and src/review: two definitions of 'latest reviewed attempt' (desktop model, domain entity), three render consumers of the desktop one; complete-head-gate.ts's match is unrelated (PR head move check)."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Desktop apps/desktop/src/reviews/model.ts:53-58 latestReviewed = first attempt with `reviewed !== null`, no state filter; :62-64 reviewedCommit renders its headSha; consumers ReviewsView.tsx:276 (card), :322 (row), ReviewPanel.tsx:107 (panel header). Domain src/review/review-entity.ts:90 FINISHED = completed|partial|budget; :120 latestReviewed requires FINISHED.has(state); :123-125 referenceHead -> :155 freshness, :160-161 findings/publication. Do non-finished attempts carry result.reviewed? Yes: desk-run-executor.ts:373-374 checkedBase/checkedHead come from the moved package manifest whenever the attempt owns a package; :376 floor -> outcome 'blocked'; :435-438 signal.aborted -> outcome 'cancelled' without clearing them; :445 returns them. desk-run-service.ts:65-82 finishExecution maps cancelled/blocked/failed states and sets result.reviewed from checkedBase/checkedHead for every outcome. desk-run-store.ts:578 reads $.result.reviewed regardless of state and :596/:600 copies it onto the attempt. Trigger path holds as stated: completed round on head A, then a cancelled or blocked round on head B after its package exists -> card shows B with entity freshness 'behind' computed from A. Limit: an attempt cancelled before a package exists has reviewed = null and is not affected."
+  }
+ },
+ {
+  "id": "F-006",
+  "severity": "major",
+  "degradation_class": "behaviour-delta",
+  "evidence_kind": "base-diff",
+  "file": "apps/desktop/src/review/ReviewDetail.tsx",
+  "line": null,
+  "quote": "  const hasReview = local.runs.some(run => !reviewIsArchived(run));",
+  "problem": "When every attempt of a PR is archived, the user can no longer view, restore or delete those attempts from Desktop. Base ReviewDetail.tsx:290 always rendered `<ReviewRunHistory runs={local.runs} .../>` in the panel header. The status read in desk-run-store.ts:431 excludes only 'delete', so that list included archived runs, and ReviewLifecycle.tsx:55 offers [restore, delete] for an archived run. Head removes the History menu from the PR panel. The only remaining ReviewRunHistory is in ReviewWorkspace.tsx:158, which only ReviewPanel renders, and only for a Review in the Reviews list. That list comes from DeskRunStore.reviewRows, whose query at desk-run-store.ts:586 filters `NOT IN ('archive','delete')`; its doc comment says a Review with no other attempt is left out. In the PR panel, `hasReview` is false when every run is archived, so 'Open in Reviews' does not show either. An open PR shows only 'Start review'/'Review again'; a closed or merged PR shows no review action at all.",
+  "impact": "After archiving a PR's only attempt, the user cannot restore or delete it, or open its report, anywhere in Desktop. The archive action's own text promises 'It remains available in History.' (ReviewLifecycle.tsx:20). This is a lost result for a user-initiated, supposedly reversible action.",
+  "suggested_fix": "Keep a History entry in the PR panel when `local.runs` holds only archived runs: render ReviewRunHistory plus a ReviewRunDialog for the selected run. Or have reviewRows keep a Review whose attempts are all archived, marked as such, so the Reviews panel can show its History. Add a DOM test: a PR with one archived run can still reach Restore.",
+  "evidence": "base-diff: read base ReviewDetail.tsx (git show a5d1ab236) line 290 `<ReviewRunHistory runs={local.runs} onSelect={setSessionId} />` and head slice lines 1123/1132 (history removed; hasReview gate). Consumer trace: grep `<ReviewRunHistory|<ReviewWorkspace|<ReviewPanel` over apps/desktop/src found the only head sites at ReviewWorkspace.tsx:158 ← ReviewPanel.tsx:117 ← ReviewsView.tsx:263. ReviewsView lists `review reviews` output, which reads reviewRows (desk-run-store.ts:561-586, archived excluded). Refute: checked whether the Reviews list or the PR panel exposes archived-only PRs some other way. The panel shows Open in Reviews only when hasReview is true, the list query excludes archived rows, and launchAction (ReviewRuns.tsx:27) also ignores archived runs. No guard found, and the PR description does not mention archived history.",
+  "confidence": "high",
+  "reviewer": "review-degradation",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/review/ReviewDetail.tsx:hasReview/Open in Reviews gate",
+    "src/review/desk-run-store.ts:586 reviewRows archive filter",
+    "apps/desktop/src/review/ReviewWorkspace.tsx:158 (only remaining ReviewRunHistory)"
+   ],
+   "enumeration_method": "keryx ctx rg '<ReviewRunHistory|<ReviewWorkspace|<ReviewRuns |<ReviewPanel' over apps/desktop/src (complete, 6 matches): every route to a run history on head, followed to its data source"
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Base ReviewDetail.tsx:290 (git show a5d1ab236) rendered `<ReviewRunHistory runs={local.runs} onSelect={setSessionId} />` in the PR panel header unconditionally. Head ReviewDetail.tsx:240-262 has no ReviewRunHistory; :181 hasReview = local.runs.some(run => !reviewIsArchived(run)); :255 shows Open in Reviews only when hasReview, else Start/Review again only for card.state === 'open'. keryx ctx rg '<ReviewRunHistory|<ReviewWorkspace|<ReviewPanel' over apps/desktop/src (complete): only ReviewWorkspace.tsx:158 <- ReviewPanel.tsx:117 <- ReviewsView.tsx:263. The Reviews list comes from desk-run-store.ts:561-605 reviewRows whose WHERE at :586 drops decision.action IN ('archive','delete'), so a Review whose attempts are all archived yields no row (doc comment :561-562). ReviewLifecycle.tsx:54-55 offers restore/delete only from a dialog reached through those routes; :20 archive text promises 'It remains available in History.' The existing test ReviewsView.dom.test.tsx:387-388 pins the head behaviour (archived-only run -> no 'Open in Reviews'), and :390 asserts no .review-run-history in the PR panel. NARROWER: an attempt started from a Session stays reachable — SessionReviewActivity.tsx:243-252 renders ReviewRunDialog with onLifecycle for its linked run, the links persist (App.tsx:523 readSessionReviewLinks), and :149-157 keeps showing the run after an archive decision because the status read excludes only 'delete'. Attempts started from the PR board, the Reviews tab or automation have no such route."
+  }
+ },
+ {
+  "id": "F-007",
+  "severity": "major",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "const indicator: ReviewsTabIndicator = snapshot?.reviews.some(reviewNeedsViewer) ? \"attention\" : null;",
+  "problem": "The change removes awaitingAnswer and publicationPending from needsViewerAttention (apps/desktop/src/review/model.ts), so the Pull requests indicator no longer reflects a local review waiting on the user. The new ReviewsTabIndicator is computed from the ReviewsView snapshot, which reloads only on mount, when the tab is shown again, and every RUNNING_RELOAD_MS while the tab is active and a Review is running. It does not follow the PR watcher poll (ReviewWatcher onPollCompleted, a 60 s interval that runs on every tab) or publishSessionReview snapshots. Those are the two channels that used to update the board's badges, and therefore the tab dot, while the user was on another tab.",
+  "impact": "Trigger: the user is on Sessions, Flows or Issues while a watcher-scheduled review finishes and waits for a publication decision or an answer, or a session-started review is published. Outcome: no tab indicator lights until the user opens the Reviews tab. Before, the Pull requests tab dot lit after the next watcher poll or session snapshot. The App comment says the view is 'Mounted like the PR board, so the Reviews indicator stays current on every tab', but nothing reloads it while hidden.",
+  "suggested_fix": "Reload the Reviews list while hidden on the same signals the board used: subscribe to subscribeSessionReview, and to the watcher's completed-poll signal (or a low-frequency interval not gated on `active`). Alternatively, keep the PR-board signal as a trigger that refreshes ReviewsView.",
+  "evidence": "slice-02: needsViewerAttention drops `|| !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending`. In ReviewsView the load effect depends on [cwd, repo, expectedViewer, attempt, ...]. `refresh()` is called only from the active-transition effect, the `if (!active || !running) return;` interval, the focus effect, observeRuns and buttons. Repository: ReviewWatcher.tsx polls status every 60000 ms with no `active` gate and calls onPollCompleted, which ReviewBoard wires to `refresh`. ReviewBoard subscribes to subscribeSessionReview → updateRunSummary on every tab. ReviewsView has neither subscription.",
+  "confidence": "medium",
+  "reviewer": "review-regression",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "apps/desktop/src/reviews/ReviewsView.tsx (indicator derived from a snapshot not reloaded while hidden)",
+    "apps/desktop/src/review/ReviewBoard.tsx (attentionPrs/indicator no longer include awaiting/publication via needsViewerAttention)"
+   ],
+   "enumeration_method": "keryx ctx rg over apps/desktop/src for subscribeSessionReview|publishSessionReview|onPollCompleted|needsViewerAttention. Indicator producers are ReviewBoard (PR tab) and ReviewsView (Reviews tab). Refresh channels that run while hidden: ReviewWatcher interval → ReviewBoard refresh, and SessionReviewActivity/App publishSessionReview → ReviewBoard updateRunSummary. ReviewsView wires neither."
+  },
+  "verification": {
+   "verdict": "confirmed",
+   "method": "site-check",
+   "evidence": "Head: apps/desktop/src/review/model.ts:38-43 needsViewerAttention no longer has `|| !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending` (base model.ts:42, via git show a5d1ab236). ReviewsView.tsx:133 indicator = snapshot.reviews.some(reviewNeedsViewer). Every reload trigger of that snapshot enumerated (keryx ctx rg 'refresh\\b|setAttempt' ReviewsView.tsx, complete): load effect deps [cwd, repo, expectedViewer, attempt, ...] :96-117; :122 refresh only on inactive->active transition; :128-132 interval returns early `if (!active || !running)`; :172 focus effect (fired by Open in Reviews, which also switches to the tab); :185 observeRuns (only the panel, rendered only when active, :263); :233/:248 buttons. ReviewsView has no subscribeSessionReview and no watcher hook. App.tsx:624-631 keeps it mounted hidden with the comment 'so the Reviews indicator stays current on every tab', which the code does not do. Base comparison: base ReviewWatcher.tsx:73-82 60 s interval not gated on `active` -> request status -> :48-50 onPollCompleted when lastSuccessAt changes -> base ReviewBoard.tsx:477 onPollCompleted={refresh} -> board read carries localReview (src/review/board-badges.ts:51-52 awaitingAnswer/publicationPending) -> base ReviewBoard.tsx:391-395/431-434 indicator via needsViewerAttention. Base ReviewBoard.tsx:164 subscribeSessionReview also updated badges on every tab. NARROWER: on base the hidden-tab update needed an enabled, installed watcher whose background poll completed, or a session-review snapshot; with neither, base was stale while hidden too. The regression is real for projects using the watcher or session-started reviews."
+  }
+ },
+ {
+  "id": "F-008",
+  "severity": "major",
+  "file": "src/review/desk-run-store.ts",
+  "line": 195,
+  "quote": "if (retry) return { round: retry.round, previous: newest(retry.round) };",
+  "problem": "A retry on a range already seen joins that range's round even when higher rounds exist, so round number no longer tracks time. review-entity roundsOf sorts rounds by number ('Newest round first'), summarizeReview.latestRound is the newest attempt's round, and Desktop model.ts latestReviewed/reviewedCommit walk rounds in number order.",
+  "impact": "Trigger: round 1 on A ends partial or budget, or is re-run with other options. Round 2 on B completes. The PR is force-pushed back to A and a manual review on A completes (it lands in round 1). The server reports freshness current (reference A), A's findings and publication, and latestRound 1. Desktop shows reviewed commit B, and the panel says 'Round 1' while the timeline lists Round 2 first and holds the newest result in the lower entry. The view gives a wrong result with no error. review-logic w2 F-001's finished-state patch does not fix it, because B is finished too.",
+  "suggested_fix": "Either (b) restrict the same-range match to the current highest round, so any other range opens max+1 and round number follows time (assignReviews never renumbers placed rows), and update plan T5 and the migration fixture. Or (a) keep placement and make every consumer use recency: order roundsOf by newest attempt createdAt, define latestRound consistently, and have the CLI emit reviewedHead = referenceHead(row) for Desktop to render. Add an A,B,A fixture through reviewRows -> summarizeReview -> reviewedCommit.",
+  "evidence": "Read roundFor (desk-run-store.ts:186-200), requestAttempt reuse rule (reuses only completed+complete with matching options), review-entity.ts roundsOf :131-141, summarizeReview :159, latestReviewed :120ff (createdAt order), apps/desktop/src/reviews/model.ts:52-65. The migration fixture (desk-run-store.test.ts:870-875) has no range that returns after a later one.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding",
+  "class_scope": {
+   "sites": [
+    "src/review/desk-run-store.ts:195",
+    "src/review/review-entity.ts:138",
+    "src/review/review-entity.ts:159",
+    "apps/desktop/src/reviews/model.ts:54",
+    "apps/desktop/src/reviews/model.ts:63",
+    "apps/desktop/src/reviews/ReviewPanel.tsx:106",
+    "apps/desktop/src/reviews/ReviewsView.tsx:275",
+    "apps/desktop/src/reviews/ReviewsView.tsx:321"
+   ],
+   "enumeration_method": "keryx ctx rg \"latestRound|rounds\\[0\\]|\\.rounds\\b\" apps/desktop/src src: 127 hits; the Reviews read-model consumers are the listed sites; the rest are unrelated 'rounds' concepts (review-gate, loop, autonomous-run, agent tests); review-reviews.ts:75 uses createdAt and is unaffected"
+  }
+ },
+ {
+  "id": "F-009",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "setRead(old => ({ snapshot: null, error: message, loading: false, request: old.request }));",
+  "problem": "The pending cross-tab focus settles only when read.request > pending.after. accessLost keeps the previous good request number, so when the focus's re-read fails with access: or configuration:, pending is never cleared. When the first load fails that way, the effect also fires one automatic extra read against the failing account.",
+  "impact": "After 'Open in Reviews' for #N hits an access failure, a later manual 'Try again' unexpectedly selects #N, opens its panel and resets filters and search. If #N is absent, it posts 'Pull request #N has no Keryx review in this list.' long after the request.",
+  "suggested_fix": "Clear pending in accessLost (setPending(null)), or record the failed request number in the access-lost state so the pending check settles.",
+  "evidence": "slice-02 lines 1820-1825 (accessLost keeps old.request), 1890-1909 (pending effect: guard passes on read.error; after = sequence.current; settles only on read.request > pending.after).",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "dedupe_key": "reviews-focus-pending-stuck-after-access-error"
+ },
+ {
+  "id": "F-010",
+  "severity": "minor",
+  "file": "src/review/review-entity.test.ts",
+  "line": 103,
+  "quote": "id: \"review-1\", number: 12, state: \"stopped\", latestRound: 2, source: \"scheduled\", flowId: \"519\", tokens: 150,",
+  "problem": "reviewState is called with the latest attempt only. The spec state table defines stopped as a failed/cancelled/blocked/budget/skipped last attempt 'и у раунда нет принятых находок', and ready/published from the last round. A round whose completed (even published) attempt is followed by a failed/cancelled attempt on the same range reads 'stopped'. This slice's test fixture is that exact case and asserts 'stopped'.",
+  "impact": "Reachable: requestAttempt reuses a completed range only under the same options (desk-run-store.ts:690-700), so a manual start with other options, or a continuation of a partial attempt, joins the same round. Cancelling or failing it turns a published Review into stopped, which moves it to 'Waiting on you' and lights the Reviews indicator while the round's published result is unchanged. The spec clause is ambiguous: it may attach only to skipped.",
+  "suggested_fix": "Confirm the reading with the spec owner. If the clause covers the row, derive the state from the latest round: a non-live failed latest attempt with an earlier reviewed attempt in the same round reports that attempt's ready/published, and the test is updated. Otherwise state the narrower reading in the spec table.",
+  "evidence": "specification.md state table (`stopped` row); review-entity.ts reviewState/summarizeReview (state from latestAttempt, findings/publication from latestReviewed); review-entity.test.ts:96-107; desk-run-store.ts:690-700.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "publication": "question",
+  "dedupe_key": "review-state-stopped-ignores-round-accepted-findings"
+ },
+ {
+  "id": "F-011",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "const timer = window.setInterval(refresh, RUNNING_RELOAD_MS);",
+  "problem": "While the Reviews tab is the work view and any Review is queued or running, the list is reloaded every 60 s with no check of document.visibilityState and no focus gating. The sibling run poller useReviewRuns skips its poll when the document is hidden; this new poller does not.",
+  "impact": "Each reload is one `keryx review reviews` spawn that makes an identity GraphQL query, a card read, and up to MAX_REVIEW_COMPARES = 25 REST compare calls (src/commands/review-reviews.ts) for Reviews behind their PR head. Trigger: a window left minimized or in the background with the Reviews tab selected (also while Settings is open, since workView stays 'reviews') and a Review that stays queued or running; with N project windows that is up to 25*N compare calls a minute against the user's shared GitHub REST budget, which the PR watcher and the Pull requests board also draw on. Degradation, not a crash: the list is correct, it is just read for nobody.",
+  "suggested_fix": "Mirror useReviewRuns: in the interval callback skip the refresh when document.visibilityState === 'hidden' (and optionally refresh once on 'visibilitychange' to visible), e.g. `const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') refresh(); }, RUNNING_RELOAD_MS);`.",
+  "evidence": "slice-02 ReviewsView.tsx hunk: `useEffect(() => { if (!active || !running) return; const timer = window.setInterval(refresh, RUNNING_RELOAD_MS); ... }, [active, running, refresh]);`. apps/desktop/src/review/useReviewRuns.ts: `function poll() { if (document.visibilityState !== \"hidden\") void request({ kind: \"status\" }, true); }`. src/commands/review-reviews.ts: MAX_REVIEW_COMPARES = 25, COMPARE_PARALLEL = 4, one `gh api repos/<repo>/compare/...` per behind Review. App.tsx passes active={workView === \"reviews\"}, and workView is settingsReturn.current while Settings is shown.",
+  "confidence": "medium",
+  "reviewer": "review-highload",
+  "dedupe_key": "reviews-list-interval-not-visibility-gated",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-012",
+  "severity": "minor",
+  "file": "apps/desktop/src/App.tsx",
+  "line": null,
+  "quote": "<ReviewsView key={reviewViewer ?? \"active-gh\"} expectedViewer={reviewViewer} active={workView === \"reviews\"} cwd={cwd}",
+  "problem": "githubAccount starts null and resolves asynchronously, so the always-mounted ReviewsView first mounts under key 'active-gh' and starts fetchReviews. Once the login arrives, the key changes and the view remounts and reads again. The read-lane key includes expectedViewer, so the second read is not deduplicated.",
+  "impact": "Every project window open (or project switch) spends one extra CLI spawn: a GraphQL identity query, a card read, and up to 25 REST compares, also counted against the GitHub rate limit. Happens once per open, not on a hot path.",
+  "suggested_fix": "Mount ReviewsView only after the account read has settled (e.g. githubAccount !== null), or skip the load while expectedViewer is undefined and an account read is pending.",
+  "evidence": "App.tsx: useState<ProjectGitHubAccount|null>(null) and async refreshGitHubAccount (lines ~242-262). ReviewsView key={reviewViewer ?? 'active-gh'} in the diff. RepositoryReviews load effect deps [cwd, repo, expectedViewer, attempt, ...]. fetchReviews lane key JSON.stringify([cwd, expectedViewer, repo]). src/commands/review-reviews.ts:33-71 per-call cost. ReviewBoard uses the same pre-existing pattern.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-013",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "import type { ReviewsTabIndicator } from \"../shell/AppShell\";",
+  "problem": "The feature module reviews/ imports its indicator type from the app shell (shell/AppShell.tsx). The existing PR tab does the reverse: ReviewTabIndicator is declared in review/ReviewBoard.tsx and the shell imports it. Feature-to-shell dependency direction is inverted for the new tab.",
+  "impact": "The Reviews feature cannot be built or tested apart from the shell module, and the two sibling tabs follow opposite dependency rules, so the next tab has no clear pattern to copy. Type-only today, so there is no runtime cycle.",
+  "suggested_fix": "Declare `export type ReviewsTabIndicator = \"attention\" | null;` in reviews/ReviewsView.tsx (or reviews/model.ts), and have AppShell.tsx import it the same way it imports ReviewTabIndicator from review/ReviewBoard. Update reviews/ReviewsView.dom.test.tsx.",
+  "evidence": "slice-02: ReviewsView.tsx imports ../shell/AppShell. AppShell.tsx declares ReviewsTabIndicator and imports ReviewTabIndicator from ../review/ReviewBoard. A search for `from \"../shell/` in apps/desktop/src finds only reviews/ReviewsView.tsx, reviews/ReviewsView.dom.test.tsx, and the pre-existing platform/projects.ts.",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "location_class": "in-diff",
+  "dedupe_key": "reviews-indicator-type-in-shell"
+ },
+ {
+  "id": "F-014",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/ReviewBoard.tsx",
+  "line": null,
+  "quote": "else setSelected({ number: card.number, reviewIntent });",
+  "problem": "The PR panel's review interface moved to the Reviews tab, so the PR feature now depends on the Reviews tab. But `onOpenInReviews` stays optional on ReviewBoard and ReviewDetail Props. Without it, openReview falls back to setSelected with a view/answer intent, which ReviewDetail now discards (`reviewIntent?.kind === \"start\" ? reviewIntent : undefined`). The panel then shows no review interface and a disabled launch button for a PR that has a Review.",
+  "impact": "A required dependency is typed as optional, and the fallback branch is dead code that looks supported. App.tsx always passes the callback, so there is no production defect today. Any other host of ReviewBoard, such as tests or a future embedding, would get a silently broken view/answer action.",
+  "suggested_fix": "Make onOpenInReviews required on ReviewBoard and ReviewDetail Props. Alternatively, keep it optional but route only `start` through setSelected, and do not render the view/answer card action when the callback is absent.",
+  "evidence": "slice-02: ReviewBoard.tsx openReview (`if (kind !== \"start\" && onOpenInReviews) ... else setSelected(...)`). ReviewDetail.tsx initialLaunch filters kind === \"start\". ReviewDetail renders `Open in Reviews` only when `hasReview && onOpenInReviews`, and otherwise renders the launch button disabled by `action.open`.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "location_class": "in-diff",
+  "dedupe_key": "optional-onOpenInReviews-hidden-dependency"
+ },
+ {
+  "id": "F-015",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": null,
+  "quote": "return card && reviewed && reviewed !== card.headSha && !reviewClosed(row, card) && OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)",
+  "problem": "The command layer decides which Reviews are behind (reviewed head differs from the PR head, and the Review is not closed). review-entity's freshness/summarizeReview already owns that decision, so the business rule now lives in two layers.",
+  "impact": "A change to the domain freshness rule does not change which comparisons the command makes. The reported freshness and the set of compared Reviews can then diverge silently. This is a maintenance cost: no defect is named today.",
+  "suggested_fix": "Expose a domain helper in src/review/review-entity.ts (for example needsComparison(row, card) returning {reviewed, head} or null) and use it in both readReviews and summarizeReview. Keep only the OBJECT_ID safety check, the MAX_REVIEW_COMPARES cap and the pool in the command.",
+  "evidence": "slice-04 review-reviews.ts readReviews `behind` flatMap; review-entity.test.ts shows freshness(reviewed, head, compare) deciding current/behind/unknown from the same inputs.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "location_class": "in-diff",
+  "dedupe_key": "reviews-behind-rule-in-command"
+ },
+ {
+  "id": "F-016",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 9,
+  "quote": "import { writeJson } from \"./review-board\";",
+  "problem": "A command module imports a helper from a sibling command module, and review-board.ts exported a previously private function for it. writeJson wraps withCurrentGithubBinding, so a GitHub-binding output guarantee is shared through a command file, not through the review/board-github module that owns the binding.",
+  "impact": "review-reviews now depends on review-board's whole module and its internals. Refactoring the board command's output path silently changes the Reviews command's binding check. It is the only command-to-sibling-command helper import under src/commands.",
+  "suggested_fix": "Move writeJson/writeSerialized (for example as writeBoundJson) to src/review/board-github.ts beside withCurrentGithubBinding, import it from there in review-board.ts and review-reviews.ts, and revert the `export` on review-board's writeJson.",
+  "evidence": "keryx ctx rg for `from \"./review-(board|accounts|desk-run|desk-publish|rules|watch)\"` under src/commands: the only non-test, non-router match is review-reviews.ts:9. review-board.ts:110-121 shows writeJson -> writeSerialized -> withCurrentGithubBinding.",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "location_class": "in-diff",
+  "dedupe_key": "reviews-command-imports-board-writejson"
+ },
+ {
+  "id": "F-017",
+  "severity": "minor",
+  "degradation_class": "behaviour-delta",
+  "evidence_kind": "base-diff",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "{active && target && <ProjectReviewRules key={\"rules-\" + JSON.stringify(target)} cwd={cwd} target={target} command={rulesCommand} onAccessLost={accessLost} />}",
+  "problem": "On base, the Review rules button showed once the PR board snapshot loaded (`tabActive && watcherTarget`). On head it shows only after a successful `keryx review reviews --json` read (`target` comes from the Reviews snapshot). If the configured Keryx CLI predates `review reviews`, or the first list read fails with an unavailable error, `snapshot` stays null. Review rules then cannot be reached anywhere in Desktop, while the Pull requests board, which rules are about, still works.",
+  "impact": "Rule management (automatic reviews on request or new head) is lost when the CLI is older than the app, or until a retry succeeds.",
+  "suggested_fix": "Build the rules target from the identity the board or project already knows (repo, repositoryId, viewer) and do not require a Reviews snapshot. Or keep the target from the last successful read and show the button with a warning.",
+  "evidence": "base-diff: slice line 802 (removed `{tabActive && watcherTarget && <ProjectReviewRules .../>}` from ReviewBoard) versus slice line 1959 (head, gated on `target` derived from the snapshot at 1921-1922). ReviewsView sets a null snapshot on a first-load failure (1846, `old.snapshot` is null). Refute: no other ProjectReviewRules mount was found on head; the PR description says only that the button 'moved here'.",
+  "confidence": "medium",
+  "reviewer": "review-degradation"
+ },
+ {
+  "id": "F-018",
+  "severity": "minor",
+  "degradation_class": "debt",
+  "evidence_kind": "base-diff",
+  "file": "docs/docs/desktop-app.md",
+  "line": null,
+  "quote": "| ⌘4 / ⌘5 | Issues / Metaproject in the current project |",
+  "problem": "The change renumbers the project tabs (⌘3 Reviews, ⌘4 Pull requests, ⌘5 Issues, ⌘6 Metaproject), moves Review rules to the Reviews tab and removes the PR panel's 'Keryx review' tab. The user docs, unchanged in this PR, still say ⌘3 Review, ⌘4 Issues, ⌘5 Metaproject (desktop-app.md:437-438), '⌘5' for Metaproject (desktop-app.md:426, guides/desktop-metaproject.md:3), 'Review → Review rules → New rule' (desktop-app.md:156) and 'Under **Keryx review**' (desktop-app.md:168).",
+  "impact": "Docs that were correct on base are wrong on head. A user who presses ⌘5 for Metaproject lands in Issues.",
+  "suggested_fix": "Update the shortcut table and the Metaproject guide to the D4 order, point Review rules at the Reviews tab, and describe the Review panel in place of the 'Keryx review' tab.",
+  "evidence": "base-diff: AppShell.tsx PROJECT_VIEWS head (slice 2208-2218) versus base (⌘3 review, ⌘4 issues, ⌘5 metaproject). `keryx ctx rg` found the stale lines in docs/docs/desktop-app.md:156,168,426,437,438 and docs/docs/guides/desktop-metaproject.md:3. `git diff --stat base..head` over both doc files is empty.",
+  "confidence": "high",
+  "reviewer": "review-degradation"
+ },
+ {
+  "id": "F-019",
+  "severity": "minor",
+  "file": "docs/docs/cli-reference.md",
+  "line": 5197,
+  "quote": "the number of new commits, `null` when unknown, and whether the branch was rewritten),",
+  "problem": "The CLI reference describes freshness as `current` or `behind` (with a null count when unknown). It does not mention `{kind: \"unknown\"}`, which `review reviews` emits when the PR card cannot be read or the PR is missing (review-entity.ts:105). Commit 98bec5904 added that kind without touching cli-reference.md.",
+  "impact": "A script or host written from the CLI reference would mishandle a third freshness kind. The spec and PR body document it; the reference does not.",
+  "suggested_fix": "List three kinds in cli-reference.md: current; behind {commits (null when unknown), rewritten}; unknown when the PR head cannot be read.",
+  "evidence": "Read cli-reference.md:5197 at head and review-entity.ts:104-109; `git show --stat 98bec5904` changes no docs file; review-reviews.test.ts asserts freshness {kind:'unknown'} for an unread and an unreturned PR.",
+  "confidence": "high",
+  "reviewer": "review-degradation",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding",
+  "degradation_class": "diff-vs-description",
+  "evidence_kind": "base-diff"
+ },
+ {
+  "id": "F-020",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": null,
+  "quote": "  const store = new DeskRunStore(root);\n  try { return store.reviewRows(repositoryId, viewer); } finally { store.close(); }",
+  "problem": "PR body: \"Existing databases are migrated in place when opened for writing\" and \"Read-only badge reads still work on an unmigrated database\". The CLI reference describes `review reviews` only as a listing (\"no store is created\"), its source header says \"Read-only list of local Reviews\", and the Rust test is named `reviews_list_is_a_separate_read_only_query`. But readReviewRows opens the store writable, and review-reviews.test.ts pins \"a store that predates Reviews is migrated when it is read\". Desktop mounts ReviewsView in every project window, so opening the new Desktop migrates the operator's runs.sqlite before any review starts. Neither the body nor the CLI reference says so.",
+  "impact": "A reader expects a list read to leave the store untouched. Pointing the command or a dev build at a store that should stay on the old schema migrates it; the T11 journal entry had to steer around exactly this with a scratch KERYX_DATA_DIR.",
+  "suggested_fix": "Say in the PR body (Store/CLI bullets) and in cli-reference.md that `review reviews`, and so opening Desktop, migrates a pre-Reviews store in place, and correct the \"Read-only list\" header comment in src/commands/review-reviews.ts. Or open the store read-only in readReviewRows with NULL-substitution like the badge path, if a migration on read is not intended.",
+  "evidence": "desk-run-store.ts:903-907 readReviewRows; review-reviews.ts:1 `// Read-only list of local Reviews for the Desktop Reviews tab`; review-reviews.test.ts:184 `test(\"a store that predates Reviews is migrated when it is read\"`; journal T11: \"KERYX_DATA_DIR set to a scratch copy of the working DB. That kept the operator's real store from being migrated.\"",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-021",
+  "severity": "minor",
+  "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+  "line": 226,
+  "quote": "Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).",
+  "problem": "The PR edits specification.md (0.1.3) but leaves two sentences: that the CLI protocol version is raised (:226) and that machine schemas arrive in stage 2 with that bump (:8). implementation-plan.md, changed in the same PR, records the decision that `review reviews` keeps `version: 1`, and the code emits version 1 (review-entity.ts:80, review-reviews.ts).",
+  "impact": "Stage 3/4 agents take the spec as input, and two documents in this PR now give opposite protocol rules.",
+  "suggested_fix": "Amend specification.md:8 and :226 to record that stage 2 kept version 1 and added no schema, or link the plan's decision.",
+  "evidence": "Read specification.md:8 and :226 at head (unchanged by the diff), implementation-plan.md stage-2 decision list (diff lines added), review-entity.ts:80 `version: 1`.",
+  "confidence": "high",
+  "reviewer": "review-degradation",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding",
+  "degradation_class": "diff-vs-description",
+  "evidence_kind": "base-diff"
+ },
+ {
+  "id": "F-022",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 56,
+  "quote": "Commit counts are shown for ${MAX_REVIEW_COMPARES} Reviews behind their pull request. Refresh to read more.",
+  "problem": "`behind` is built in `rows` order, and readReviewRows returns rows `ORDER BY v.pr DESC` (desk-run-store.ts:587). `behind.slice(0, MAX_REVIEW_COMPARES)` therefore always compares the 25 highest-numbered PRs, not the Reviews shown first (the result is sorted afterwards by latest attempt), and the choice is the same on every call.",
+  "impact": "Trigger: 26 or more open Reviews behind their PR head for one account and repository. The Reviews with lower PR numbers always show 'behind, count unknown', even when they are the most recently active ones at the top of the list, and the warning tells the user to refresh, which re-compares the same 25 and never reads the rest. Display-only; no data is lost.",
+  "suggested_fix": "Order `behind` by the same key as the final sort (latest attempt createdAt, then number) before slicing, so the counts go to the Reviews the user sees first; and either drop 'Refresh to read more' from the warning or rotate the compared window (e.g. a caller-supplied offset) so a refresh actually reaches the rest. Pin it with a test of 27 behind Reviews where the two most recently active have the lowest PR numbers.",
+  "evidence": "slice-04 review-reviews.ts:50-58 builds `behind` from `rows.flatMap(...)` and slices before `snapshot.reviews = rows.map(...).sort(latestCreated...)`; src/review/desk-run-store.ts:587 `ORDER BY v.pr DESC, v.id, ...`; reviewRows collects into a Map in that order. The test `at most 25 comparisons per call` asserts only the count, not which Reviews are compared.",
+  "confidence": "high",
+  "reviewer": "review-highload",
+  "dedupe_key": "reviews-compare-cap-fixed-subset",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-023",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 45,
+  "quote": "for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);",
+  "problem": "Every call reads a PR card for every Review the account has ever stored in the repository, including Reviews whose PRs are merged or closed (closure is derived from the card, and `reviews.closed_at` is only set when the user closes a Review), and the result carries every Review with all its rounds and attempts. listActiveReviewCards issues one GraphQL query per 20 PRs, sequentially (board.ts:206-212). Nothing pages or bounds the set.",
+  "impact": "What grows it: locally stored Review history per (repository, account), which is only reduced by archiving or deleting every attempt. Each `review reviews` call (window open, tab show, focus, the 60 s running poll from wave 1) costs ceil(N/20) sequential GraphQL calls plus N per-attempt publication file reads in reviewRows, re-reading merged PRs whose state can no longer change; the Desktop hides closed Reviews by default, so most of that work is discarded. Degradation in latency and GitHub GraphQL budget, linear in history. Not an exhaustion at today's size (the plan's migrated store has 13 Reviews); with a few hundred Reviews the call is several sequential round trips per poll per window.",
+  "suggested_fix": "Either skip card reads (and compares) for Reviews already known closed: persist a terminal PR state observed by a writer (e.g. a closed_at/terminal flag set by the run lifecycle or a write lane, not by this read), or read the 20-PR batches through mapPool with a small concurrency (2-3) and let the CLI accept `--closed` so the default call reads only Reviews that can still change. Record the chosen bound in the CLI reference.",
+  "evidence": "slice-04 review-reviews.ts:40-49; src/review/board.ts:206-212 sequential `for (let i = 0; i < numbers.length; i += 20) { ... await query(...) }`; src/review/desk-run-store.ts:563-600 reviewRows has no LIMIT and calls this.publication(...) per reviewed attempt; review-entity.test.ts 'a Review closed locally or by its PR is closed' shows closure comes from the card.",
+  "confidence": "medium",
+  "reviewer": "review-highload",
+  "dedupe_key": "reviews-list-unbounded-card-reads",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-024",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 45,
+  "quote": "for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);",
+  "problem": "listActiveReviewCards returns only after all sequential 20-PR batches succeed. A non-access error in any batch is caught here and leaves `cards` empty, which discards batches that already succeeded. With card === null, reviewClosed sees only closedAt, so Reviews of PRs merged or closed on GitHub get their attempt state (ready/stopped) instead of closed.",
+  "impact": "Trigger: a stored merged-PR Review whose last round is ready with an undecided publication, or stopped, plus one transient GitHub error on any card batch. Those Reviews move from Closed to 'Waiting on you', and the Reviews indicator lights (ReviewsView.tsx:134 counts all Reviews), contrary to AC8's 'stays off otherwise'. A warning is shown, so this is not silent.",
+  "suggested_fix": "Keep per-batch results (read batches in readReviews, or return partial cards plus a failure flag). For card === null, let only needs_answer light the indicator, or carry a cardUnread flag that the Desktop excludes from the indicator.",
+  "evidence": "board.ts:201-228 (single return after the loop; throws mid-loop); review-reviews.ts:44-49 (catch pushes a warning, cards stay empty); review-entity.ts:127 reviewClosed; review-entity.ts:111 reviewNeedsViewer; ReviewsView.tsx:134; reviews/model.ts:37.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "dedupe_key": "review-reviews-card-batch-failure-drops-closed-state"
+ },
+ {
+  "id": "F-025",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 58,
+  "quote": "const compared = await mapPool(behind.slice(0, MAX_REVIEW_COMPARES), COMPARE_PARALLEL, async ({ id, reviewed, head }) => {",
+  "problem": "Each GitHub call relies only on boardGh's per-call 18 s timeout; readReviews has no overall deadline. Worst case: identity query (18 s) + one card batch per 20 Reviews (18 s each) + 25 compares at 4 in parallel (7 sequential slots x 18 s = 126 s) exceeds the Desktop host's 150 s reader bound (review.rs:119).",
+  "impact": "Trigger: GitHub or the network stalls so calls run to the 18 s client timeout, with 22 or more Reviews behind their PR head. The per-compare catch is meant to degrade to 'count unknown' plus a warning, but the host kills the CLI at 150 s first and the whole Reviews list read fails, while holding one of the Desktop's limited Review read permits for the full 150 s. Degradation, not data loss; recovers on the next read.",
+  "suggested_fix": "Give the compare phase a deadline, as verifyScheduledSubject does (board.ts, `deadline = Date.now() + 90_000`): stop admitting new compares after e.g. 45 s from the start of readReviews and report the remainder as unknown with the existing warning; optionally pass a shorter per-call timeout (e.g. 8 s) to boardGh for the compare, which only needs status and ahead_by.",
+  "evidence": "src/review/board-github.ts:117-123 `boardGh(..., timeout = 18_000)`; slice-04 review-reviews.ts:100-101 calls boardGh without a timeout argument; src/lib/map-pool.ts work-stealing pool; apps/desktop/src-tauri/src/review.rs:119 `run_bounded_with_stdin(cmd, input, Duration::from_secs(150), 32 * 1024 * 1024)`.",
+  "confidence": "low",
+  "reviewer": "review-highload",
+  "dedupe_key": "reviews-no-overall-deadline",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-026",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": 192,
+  "quote": "WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?",
+  "problem": "For each unassigned row, roundFor's retry query JSON-parses the full details of every attempt of the Review (details embeds result.report). The migration loop in assignReviews therefore does O(k^2) full-document parses per Review of k attempts, inside the constructor's immediate write transaction; each later dispatch and history import pays an O(k) full-document scan.",
+  "impact": "Longer write-lock hold on the first writable open after upgrade (other windows wait on busy_timeout 8 s) and extra per-dispatch cost that grows with attempts x report size. Estimated (e.g. 50 attempts x 100 KB reports ~ 125 MB parsed once); not measured.",
+  "suggested_fix": "Keep (reviewId, base, head) -> round and reviewId -> max round in memory across the assignReviews loop, seeded by one narrow query per Review, or persist base/head as columns next to round so the lookup needs no JSON parse.",
+  "evidence": "slice-05 desk-run-store.ts roundFor retry query (head line 192), assignReviews loop (161-172), constructor atomic migration (138-142), requestAttempt (741), recordExisting (397); history() 524288-char report preview cap shows reports of that size are stored in details.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "dedupe_key": "assign-reviews-retry-parses-full-details",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-027",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": 186,
+  "quote": "return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };",
+  "problem": "Rounds are numbered in creation order only within one assignReviews batch. recordExisting imports CLI review packages with their own createdAt (desk-run-legacy.ts:71). The scan runs per cwd and every 5 min, after Desktop attempts can exist (desk-run-service.ts:258-260). An older package on a new range therefore gets round max+1 and previous_run_id = the newest attempt of the last round, which points forward in time. On a known range it becomes the round's first attempt by createdAt, so roundsOf reports a later attempt of the same round as the round's previous. summarizeReview's latestRound (newest attempt by createdAt) is then lower than rounds[0].number.",
+  "impact": "After a worktree or late CLI import, the Reviews rounds timeline (ordered by round number) shows an older review as the newest round with an 'after' link to a later attempt. No data is lost; the numbering is wrong against AC1 and the docstring.",
+  "suggested_fix": "Either place late imports by createdAt (join the round of the newest older attempt on that range, or record them without opening a new top round), or document 'numbered when recorded' in AC1, the docstring and the spec, keep roundsOf/latestRound consistent, and add a fixture that imports an older package after a Desktop attempt.",
+  "evidence": "Read: desk-run-store.ts assignReviews (:161, ORDER BY createdAt over unassigned rows only) and roundFor (:186-200, new range -> max+1, previous = newest(last)); recordExisting -> assignReviews; desk-run-legacy.ts:71 createdAt from the package; desk-run-service.ts:258-260 scan per cwd every 5 min; review-entity.ts roundsOf/summarizeReview (latestRound = latest.round). Refute: desk-run-store.test.ts:926-928 covers only a same-range import; no re-sort guard exists.",
+  "confidence": "medium",
+  "reviewer": "review-degradation",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding",
+  "degradation_class": "diff-vs-description",
+  "evidence_kind": "consumer-trace"
+ },
+ {
+  "id": "F-028",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": 198,
+  "quote": "return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };",
+  "problem": "Rows are placed at insert. A queued request on a new range opens round N+1. When a newer request supersedes it before it starts (state skipped, phase Superseded, startedAt null), it keeps that round, and the next range opens N+2 with previous_run_id pointing at the never-started row. previousAttempt in the same store excludes exactly this row shape as not an attempt.",
+  "impact": "After two reviews the Review shows Round 3. Round 2 is a stopped request that never ran, and Round 3's 'after' link points at that request. No data loss.",
+  "suggested_fix": "Exclude never-started superseded rows from roundFor's max(round) and newest() lookups (reuse the previousAttempt predicate), or have queued rows join the current round until they are dispatched.",
+  "evidence": "Read requestAttempt supersede path (end(queued, skipped/Superseded)) and the previousAttempt NOT(state='skipped' AND phase='Superseded' AND startedAt IS NULL ...) predicate; roundFor new-range branch; reviewRows filters only archive/delete.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding"
+ },
+ {
+  "id": "F-029",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "<button className=\"review-card\" onClick={() => onOpen(review.id)} aria-label={`Open review of #${review.number} ${reviewTitle(review)}`}>",
+  "problem": "The aria-label replaces the content-derived accessible name, so state, round, reviewed commit, freshness, findings, publication and source inside the card are not announced. The PR board's card has no aria-label.",
+  "impact": "A screen-reader user moving through the Reviews board hears only '#N title' and cannot tell which Reviews wait on them or are behind.",
+  "suggested_fix": "Remove the aria-label so the button content names it, as on the PR board, or include state and freshness in the label.",
+  "evidence": "ReviewsView.tsx ReviewTile vs ReviewResults.tsx ReviewTile (`<button className=\"review-card\" onClick={() => onOpen(card.number)}>`, no aria-label).",
+  "confidence": "medium",
+  "reviewer": "review-frontend",
+  "dedupe_key": "reviews-card-aria-label",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-030",
+  "severity": "minor",
+  "reviewer": "review-ui-ux",
+  "file": "apps/desktop/src/review/ReviewDetail.tsx",
+  "line": null,
+  "quote": "{local.error && !local.staleRange && <p className=\"inline-banner tone-warn\" role=\"alert\">{local.error}</p>}",
+  "problem": "The run-status error is a new banner rendered as the last child of the PR panel body. It comes after the whole Discussion, the Checks list, or the Automation tab. The control it explains is the header's primary review button ('Run review' / 'Open in Reviews'). That button shows the launch label while status is unread, and 'Open in Reviews' is not offered, because hasReview comes from the failed read.",
+  "impact": "When reading the run status fails, the user sees a primary button that does not explain itself, at the top of the panel. On a PR with a long discussion the reason is below the fold (State: error near source; Nielsen #9).",
+  "suggested_fix": "Render the local.error banner directly under .review-detail-actions in the sheet header, or next to the primary button. Put it before the tab content, as the revision-changed banner already is.",
+  "evidence": "slice-02 ReviewDetail.tsx hunk @@ 231,308: the banner sits after the tab ternary closes (`</>}`), inside .sheet-body. The primary button is in header .sheet-actions.",
+  "confidence": "medium",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-031",
+  "severity": "minor",
+  "reviewer": "review-ui-ux",
+  "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+  "line": null,
+  "quote": "? <button type=\"button\" className=\"link-btn\" aria-label={`Go to the attempt this one follows, run ${previous.slice(0, 8)}`}",
+  "problem": "WCAG 2.5.3 Label in Name: the visible label is 'after <8-char run id>', but the accessible name 'Go to the attempt this one follows, run <id>' does not contain the visible string 'after <id>'.",
+  "impact": "A speech-input user who says 'click after 1a2b3c4d' does not hit the control. Screen-reader output does not match what sighted users see.",
+  "suggested_fix": "Start the accessible name with the visible text, e.g. aria-label={`after ${id} — go to the attempt this one follows`}. Or drop aria-label and add the explanation with a title or visually hidden text after the visible label.",
+  "evidence": "Visible text node `after {previous.slice(0, 8)}` vs aria-label string; substring 'after ' absent from the name.",
+  "confidence": "high",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-032",
+  "severity": "minor",
+  "reviewer": "review-ui-ux",
+  "file": "apps/desktop/src/review/ReviewResults.tsx",
+  "line": null,
+  "quote": "card.localReview?.runState ? \"View review result\" : card.localReview?.outdated ? \"New review round\" : \"Run review\";",
+  "problem": "The outdated-review action was renamed to 'New review round' on the PR card (decision d). The same action in the moved review interface still takes its label from launchAction, which returns 'Review again' for a range other than the reviewed one (ReviewRuns.tsx:38). This label is now the primary button of every Review panel in the Reviews tab (ReviewWorkspace `{... action.label}`).",
+  "impact": "One action has two names one click apart. The card says 'New review round'; the Review panel it leads to says 'Review again' (Nielsen #4 consistency and standards).",
+  "suggested_fix": "Change launchAction's 'Review again' to 'New review round' so the PR card, the PR panel and the Review panel use one label. Update the affected tests.",
+  "evidence": "slice-02 ReviewResults.tsx label line; ReviewWorkspace.tsx primary button renders `action.label` from launchAction; apps/desktop/src/review/ReviewRuns.tsx:38 `? \"Review again\" : \"Start review\"`.",
+  "confidence": "high",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-033",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/model.ts",
+  "line": null,
+  "quote": "if (/^\\d+$/.test(number)) return String(review.number).startsWith(number);",
+  "problem": "matchesSearch returns the number-prefix result for any all-digit query and never checks the title. The placeholder and plan T7 say 'Search by title or #number'. The PR board's filterReviews matches title OR number, and matches the number by substring rather than prefix.",
+  "impact": "A query such as '404' hides 'Fix 404 page' (#1290); '04' finds #1304 on the Pull requests board but not on Reviews.",
+  "suggested_fix": "return String(review.number).startsWith(number) || reviewTitle(review).toLowerCase().includes(text); or make only a '#'-prefixed query number-only.",
+  "evidence": "slice-02 lines 2164-2170 (reviews/model.ts matchesSearch) versus lines 1560-1563 (review/model.ts filterReviews title-or-number); ReviewsView placeholder 'Search by title or #number' (line 1937).",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "dedupe_key": "reviews-search-digits-skip-title"
+ },
+ {
+  "id": "F-034",
+  "severity": "minor",
+  "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+  "line": 29,
+  "quote": "Sources: `docs/requirements/keryx-desktop-review-v2/` (PRD R8, rest of R4, R12; implementation plan stage 2).",
+  "problem": "The PR body claims the rest of R4. R4 (prd.md:40) asks for a review link on the PR card and panel with state and round. The plan's stage-2 row (implementation-plan.md:12) and hand-off (line 67) promise the round and behind on that link. The diff adds only a bare 'Open in Reviews' button in the PR panel and `outdated.round` in the outdated action title. LocalBadge has no behind field. The new 'Состояние этапа 2' section and the body's 'Not verified' list name the missing filters but not this gap. Only the flow's description.md:21 defers it to stage 1.",
+  "impact": "A stage-3 agent or the operator closing stage 2 reads the plan and the body as saying the card link with round and behind exists. It does not, and even after stage 1 merges the behind count has no source on the badge.",
+  "suggested_fix": "Record in 'Состояние этапа 2' and in the PR body that the R4 remainder (card and panel review link with state, round and behind) is not in this stage, that only outdated.round is on the badge, and who owns the rest. Or narrow 'rest of R4' to what was delivered.",
+  "evidence": "Read prd.md:40, implementation-plan.md:12, :29-52 and :67 at head. Filtered `git diff a5d1ab236 20e4281a2` of ReviewDetail.tsx, ReviewResults.tsx and ReviewBoard.tsx: 'Open in Reviews' has no state or round, and the only round use is the outdated action title. `keryx ctx rg 'behind|commits'` in board-badges.ts and board-types.ts: no match. Flow description.md:21 defers the work row to stage 1.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "blocking_merge": false,
+  "location_class": "in-diff",
+  "publication": "finding"
+ },
+ {
+  "id": "F-035",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/model.test.ts",
+  "line": 3,
+  "quote": "+import { EMPTY_FILTERS, filterReviews, laneReason, needsViewerAttention, reviewLane, reviewNote, stateQuery } from \"./model\";",
+  "problem": "PR body, 'Expected overlap with stage 1': \"Expect conflicts in:\" names apps/desktop/src/review/model.ts but not model.test.ts. Slice-03 rewrites model.test.ts's import line and its outdated-review and base-moved tests (laneReason → reviewNote, 'No review requested'), and it adds the needsViewerAttention test. Stage 1 rewrites the same import and the same tests. `git merge-tree --write-tree feat/desktop-review-v2-stage1 20e4281a2` reports a content conflict in apps/desktop/src/review/model.test.ts.",
+  "impact": "Whoever merges the second stage treats the list as the full set of conflicts and the guidance for each. With no guidance for this file, resolving by taking one side drops either stage 2's needsViewerAttention test, which guards the 'Pull requests tab no longer lights from a local review' claim, or stage 1's lane tests.",
+  "suggested_fix": "Add apps/desktop/src/review/model.test.ts to the overlap list with 'keep both': keep stage 1's lane tests, and stage 2's needsViewerAttention test and reviewNote assertions.",
+  "evidence": "git diff -U0 a5d1ab236...feat/desktop-review-v2-stage1 -- model.test.ts: hunks @@ -3 +3,5 @@ (import) and @@ -85,7 / -94,7 @@ (outdated/base-moved tests). git diff -U0 a5d1ab236 20e4281a2 -- model.test.ts: @@ -3 +3 @@, @@ -71,3 @@, @@ -82 @@, @@ -97,4 +100,25 @@. merge-tree output: 'CONFLICT (content): Merge conflict in apps/desktop/src/review/model.test.ts'. pr-context.md:50-58 lists ReviewResults.tsx, model.ts, ReviewBoard.tsx, ReviewBoard.dom.test.tsx, App.tsx, AppShell.tsx, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx, review.css and implementation-plan.md only.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-036",
+  "severity": "minor",
+  "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json",
+  "line": null,
+  "quote": null,
+  "problem": "T12 (review-orchestrator, this run) dependsOn T10 (test suites, typecheck and lint), and T10 is still `todo`. The journal records test and typecheck re-runs per task but no lint run, and AC12 requires lint and a green or explained CI.",
+  "impact": "The flow's own ordering says the review runs on a verified tree; it is running before AC12's verification is recorded, so a lint or full-suite failure would arrive after the review round.",
+  "suggested_fix": "Run T10 (root and Desktop suites, typecheck, lint) and mark it done before closing T12, or record why the order was changed.",
+  "evidence": "flow.json tasks T10 status 'todo', T12 dependsOn ['T10']; journal.md has no lint entry; AC12 check `bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit`.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "location_class": "pr-process"
+ },
+ {
+  "id": "F-037",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+  "line": null,
+  "quote": "for (const text of [\"lee\", \"Ready\", \"2\", \"abcdef0\", \"behind 3\", \"1 blocker · 2 minor\", \"Not published\", \"Scheduled\", \"#488\", (15000).toLocaleString()]) {",
+  "problem": "The list-view half of the AC6 card/list parity test checks the Round column with `toContain(\"2\")` on the whole row. The same row always contains \"1 blocker · 2 minor\" (checked in the same loop), so the round check passes whatever the Round cell says.",
+  "impact": "The list's Round column (`<td>{review.latestRound}</td>` in ReviewsView.tsx) is effectively unpinned. A regression that shows the wrong round or no round leaves the test green while it reads as coverage of AC6 \"list shows the same\".",
+  "suggested_fix": "Assert the Round cell itself, for example by header index: `const cols = [...document.querySelectorAll('thead th')].map(th => th.textContent); expect(row.children[cols.indexOf('Round')]!.textContent).toBe('2');`. Alternatively use a round that does not appear elsewhere in the row (latestRound 7).",
+  "evidence": "ReviewsView.tsx renders `<th>Round</th>` and `<td>{review.latestRound}</td>`. The fixture's findings are { blocker: 1, minor: 2 }, rendered as \"1 blocker · 2 minor\" in the same row, so the substring \"2\" is always present.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-038",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/ReviewBoard.tsx",
+  "line": null,
+  "quote": "if (kind !== \"start\" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);",
+  "problem": "Rule 3 (new logic gets a test): the new routing by intent kind is tested only on one side. (a) ReviewBoard.openReview: no test renders the board with `onOpenInReviews` and clicks a start action (\"Run review\" / \"New review round\"). The two tests that pass `onOpenInReviews` click only view and answer actions, and the start tests pass no `extra`. So nothing shows that a start stays in the PR panel when the App wiring is present. (b) ReviewDetail now keeps only a start intent (`reviewIntent?.kind === \"start\" ? reviewIntent : undefined`), and no test hands ReviewDetail a view or answer intent. This is a reading-based coverage gap, not a mutation result (M08, M09 not run).",
+  "impact": "In the real app `onOpenInReviews` is always wired. A later edit that sends every card action to the Reviews tab, or that lets a view intent start a review in the PR panel, would not turn any test red.",
+  "suggested_fix": "In ReviewBoard.dom.test.tsx, render with `{ onOpenInReviews }` and click \"Run review for #101\" / \"New review round for #101\": assert `opened` stays empty and the start reaches `runCommand`. In ReviewsView.dom.test.tsx (the ReviewDetail AC7 test), render ReviewDetail with `reviewIntent: { kind: 'view', ... }` and a non-open action, then assert no `start` action is sent.",
+  "evidence": "ReviewBoard.dom.test.tsx: the tests \"opening a running review from its badge action...\" and \"a merged PR awaiting a Keryx answer...\" pass onOpenInReviews and click View/Answer. The tests \"Run review for #105\" (renders with `run` only) and \"an outdated review ... New review round\" (no extra) leave onOpenInReviews undefined. ReviewsView.dom.test.tsx renders ReviewDetail without reviewIntent.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-039",
+  "severity": "minor",
+  "file": "apps/desktop/src/App.tsx",
+  "line": null,
+  "quote": "setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));",
+  "problem": "Rule 3: the App-level handoff from Pull requests to Reviews has no test. That covers `openInReviews` (switching to the Reviews view and incrementing the focus nonce) and the reviewsIndicator account-binding gate (`reviewsNotice?.binding === reviewViewer`). Each component is tested alone: ReviewBoard calls a stub, ReviewsView receives a hand-built `focus`, AppShell receives `reviewsIndicator` directly. The app-navigation fixture reaches the Reviews tab only through Cmd+3 and never clicks a card action or \"Open in Reviews\".",
+  "impact": "If the App stops switching the view, repeats a nonce, or shows the previous account's Reviews dot after an account change, every test stays green. AC7's \"offers Open in Reviews\" is pinned up to the callback, not up to the Reviews panel opening.",
+  "suggested_fix": "In app-navigation.fixture.tsx, give the `review_board` reviewsOnly mock a Review for PR #12 and an active run. Click the card's \"View review for #12\" (or \"Open in Reviews\" in the PR panel), then assert `main nav button[aria-current=page]` reads \"Reviews\" and `aside[aria-label=\"Review of pull request #12\"]` is present. Clicking a second time should still open it (nonce). Add one assertion that `.reviews-tab-dot` clears after an account switch.",
+  "evidence": "A ctx rg over app-navigation.fixture.tsx for Run review / Open in Reviews / onOpenInReviews matches only the session-composer \"Run review\" dialog (line ~233). ProjectNavigation.dom.test.tsx's AC6 test renders AppShell with `reviewsIndicator` set by hand.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-040",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+  "line": null,
+  "quote": "if (previous !== undefined && previous !== signature) refresh();",
+  "problem": "Rule 3: ReviewsView re-reads the list when a mutation in the panel (start, cancel, answer, decision, publication) changes a run's signature (`observeRuns`), but no test checks it. No ReviewsView test performs a panel action and then checks `reads` or the Review's new column. The same applies to the focus effect's `if (!read.error) setNotice(...)` gate and its filter-preserving branch (`if (!filterReviewList([found], filters, q, true).length)`): no fixture focuses a Review that the current filters already show, or fails the re-read.",
+  "impact": "After a start or cancel in the Review panel the list and the tab indicator can go stale until the next minute or tab switch, and no test would notice. The first-observation guard (`previous !== undefined`) that prevents a refresh loop on open is also unpinned.",
+  "suggested_fix": "Add a ReviewsView test with a counting `load` and a `runCommand` whose snapshot changes after a `start` or `cancel`. Open the Review, click the action, and assert `reads` grew by exactly one; opening alone must not re-read. Add a focus case whose Review matches an active filter (filters kept) and one where the re-read fails (no \"has no Keryx review\" notice).",
+  "evidence": "A ctx rg for onRunSnapshot across src/reviews/*.dom.test.tsx finds no match. The ReviewsView tests that count `reads` are the reload, focus and timer tests, and none of them drives a panel mutation.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-041",
+  "severity": "minor",
+  "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+  "line": null,
+  "quote": "for (const opener of [\"PR watcher · Off\"]) {",
+  "problem": "The account-change test used to prove that focus returns to search from both portaled dialogs, PR watcher and Review rules. It now covers only the watcher. When the Review rules dialog moved to the Reviews toolbar, the moved test (\"a rules dialog pending for a previous account cannot expose that account's rules\") kept the dialog-closes check and dropped the focus check. ReviewsView has no focus restoration on an identity change (the identity branch only calls `resetView()`, which sets state).",
+  "impact": "The pinned behaviour (focus lands on search, not <body>, when the account changes under an open rules dialog) disappeared without a test. Keyboard and screen-reader users lose their place. The tdd-workflow table treats a weakened assertion as no finding only when the behaviour was removed deliberately, and nothing in the PR says this one was.",
+  "suggested_fix": "Decide whether ReviewsView should restore focus to \"Search reviews\" when the account or repository changes. If yes, add the focus assertion to the moved rules-dialog test in ReviewsView.dom.test.tsx and implement it, mirroring ReviewBoard. If no, record the decision. In both cases drop the single-element loop and the `opener.length` suffix in the ReviewBoard test.",
+  "evidence": "Base test: `for (const opener of [\"PR watcher · Off\", \"Review rules\"])` asserting `document.activeElement` aria-label \"Search pull requests\". Head: the opener list is reduced to the watcher. In ReviewsView.dom.test.tsx, the rules account-change test has no activeElement assertion. In ReviewsView.tsx, `if (identity.current && identity.current !== next) resetView();` is followed by no focus call.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-042",
+  "severity": "minor",
+  "file": "src/review/review-entity.test.ts",
+  "line": 124,
+  "quote": "test(\"without a reviewed round freshness compares the requested head and findings stay unknown\", () => {",
+  "problem": "Branch under test: the name says freshness compares the requested head, but the fixture's requested head (sha b) equals the PR head (sha b). referenceHead's fallback `?? latestAttempt(row)?.headSha` and its absence give the same answer: freshness(b, b) and freshness(null, b) are both `current`. The CLI fixture for #15 (running on b, PR head b) in review-reviews.test.ts:110 has the same shape. No fixture has an unreviewed Review whose requested head differs from the PR head.",
+  "impact": "Without the fallback, a running or failed first round on an old head reads `current` instead of `behind`, which drops it out of the Behind column, and the suite stays green. The test reads as coverage of that case.",
+  "suggested_fix": "In review-entity.test.ts, use `const running = attempt({ state: \"running\", reviewed: null, findings: null, publication: null, headSha: sha(\"c\") })` with `card({ headSha: sha(\"d\") })`, and expect `freshness: { kind: \"behind\", commits: null, rewritten: false }`. Keep one equal-head case for `current`.",
+  "evidence": "review-entity.ts:124 `return latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null;` and :106 `if (!reviewedHead || reviewedHead === prHead ...) return { kind: \"current\" }`. Candidate E07, not run.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-043",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.ts",
+  "line": null,
+  "quote": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')",
+  "problem": "tdd-workflow rule (new logic gets a test): reviewRows leaves out deleted attempts and maps `recoverable` to `failed`. The CLI docs promise both: \"Archived and deleted attempts are left out\", and \"An interrupted attempt ... reads as failed\". Only the archive half has a fixture (#14 in review-reviews.test.ts). A ctx rg for reviewRows|readReviewRows|recoverable over the three new or changed backend test files finds nothing.",
+  "impact": "If the 'delete' term or the recoverable CASE is dropped, a deleted attempt comes back into the Reviews list, or an interrupted attempt reads as `recoverable`. reviewState then has no branch for that value and falls to `stopped` by accident. Both regressions leave the suite green.",
+  "suggested_fix": "In the 'one summary per Review' test, add a deleted attempt on another PR and expect it to be absent. Add a row whose state column is 'recoverable' (as in the existing recovery tests) and expect `rounds[0].attempts[0].state === \"failed\"`.",
+  "evidence": "Candidates S03 and S04, not run. Search: keryx ctx rg --all 'reviewRows|readReviewRows|recoverable' on src/review/desk-run-store.test.ts, src/commands/review-reviews.test.ts and src/review/review-entity.test.ts: none.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-044",
+  "severity": "minor",
+  "file": "src/review/desk-run-store.test.ts",
+  "line": null,
+  "quote": "a5: [3, \"a4\"], a6: [3, \"a5\"], a7: [4, \"a6\"], a8: [5, \"a7\"],",
+  "problem": "The plan's assignment rule, \"Диапазон, вернувшийся после других (A, B, A), присоединяется к своему первому раунду как повтор\", has no fixture. The migration fixture uses heads 1,1,2,2,3,3,4,5, and the live-assignment test uses revision, next, d: every range repeats only inside its own latest round. roundFor's retry query (`ORDER BY round DESC LIMIT 1` over all rounds) is what implements A,B,A. A narrower retry, matching only the latest round, would pass every existing case.",
+  "impact": "A later edit to roundFor could put a returning range into a new round. That breaks the documented rule and renumbers history the way the plan forbids, and the suite stays green.",
+  "suggested_fix": "Add to the live-assignment test: request on revision, then next, then revision again, and expect the third to be placed `[review, 1, <newest of round 1>]`. Optionally add the same A,B,A sequence to writeMainFixture.",
+  "evidence": "implementation-plan.md stage 2 'Хранилище' bullet; desk-run-store.ts roundFor `const retry = ... WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ? ORDER BY round DESC LIMIT 1`. Candidate S02, not run.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-045",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.ts",
+  "line": 53,
+  "quote": "? [{ id: row.id, reviewed, head: card.headSha }] : [];",
+  "problem": "The behind filter keeps a pair only when `OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)`. The comment explains why: both heads go into a GitHub API path. Every fixture uses `sha(c) = c.repeat(40)` with hex letters, so no input separates this guard from the conditions beside it.",
+  "impact": "If the guard is dropped, a malformed stored or card head reaches `repos/${repo}/compare/${base}...${head}` unchecked, and no test turns red.",
+  "suggested_fix": "Add a review-reviews.test.ts case with a stored run whose headSha is not a 40-hex id (for example \"main\") and a PR head that differs. Expect `cmp.calls` to have length 0 and freshness `behind` with `commits: null`.",
+  "evidence": "review-reviews.ts:16 `const OBJECT_ID = /^[0-9a-f]{40}$/;` and :53; test helper `const sha = (c: string) => c.repeat(40)`. Candidate B02, not run.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-046",
+  "severity": "minor",
+  "file": "src/review/review-entity.ts",
+  "line": 120,
+  "quote": "const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);",
+  "problem": "latestReviewed requires both a finished state and a reviewed range, but every summarizeReview fixture that has a non-finished attempt also gives it `reviewed: null`. The `FINISHED.has` term is never separated from `a.reviewed !== null`. The store can hold a failed attempt with a recorded reviewed range: desk-run-store.test.ts builds one (`run(filtered, d, \"failed\", d)`).",
+  "impact": "If the term is dropped, a newer failed attempt with a range takes over the Review's findings, publication and reference head (and so freshness), and the suite stays green. Whether the executor emits such a row in production was not verified.",
+  "suggested_fix": "In the summarizeReview grouping test, give `retry` a `reviewed: { baseSha: sha(\"a\"), headSha: sha(\"e\") }` and findings that differ. Expect `findings` and `publication` to stay those of `second`, and freshness to be computed from sha c.",
+  "evidence": "review-entity.test.ts 'groups attempts into rounds' (retry: state failed, reviewed null); desk-run-store.test.ts 'Finished-state filter: a newer failed run with a recorded result'. Candidate E06, not run.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-047",
+  "severity": "minor",
+  "file": "src/commands/review-reviews.test.ts",
+  "line": 214,
+  "quote": "await expect(runReviewReviews([\"--json\", \"extra\"], root)).rejects.toThrow();",
+  "problem": "This assertion cannot fail. `root` is a fresh tmpdir, not a Git checkout. If parseArgs accepted the positional, runReviewReviews would go on to `reviewRepositories(root)`, which throws \"configuration: Open a Git project with a GitHub.com remote.\", and `rejects.toThrow()` with no message accepts that. The same test's `--state` case avoids this by matching \"--state\".",
+  "impact": "If `allowPositionals` is flipped, extra arguments are silently ignored, and the test stays green while it also spawns git.",
+  "suggested_fix": "Match parseArgs's error, for example `.rejects.toThrow(/positional|Unexpected argument/i)`, or assert the rejection is not the `configuration:` error.",
+  "evidence": "board-github.ts:61-68 reviewRepositories throws on any git failure; review-reviews.ts parseArgs `allowPositionals: false`. Candidate B09, not run.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-048",
+  "reviewer": "review-security-code",
+  "severity": "minor",
+  "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+  "line": null,
+  "location_class": "in-diff",
+  "quote": "{card && <ReviewBrowserLink className=\"btn review-icon-action review-pr-link\" url={card.url} label=\"Open pull request\"><Icon name=\"external\" /></ReviewBrowserLink>}",
+  "problem": "The Review panel header renders 'Open pull request' as a plain ReviewBrowserLink anchor with no click handler. ReviewDetail routes the same link through followLink -> openPullRequest/openExternal on its .sheet-actions container; ReviewPanel and its ancestors in apps/desktop/src/reviews/ have no such handler, and the host refuses off-origin navigation (src-tauri/src/navigation.rs navigation_allowed, on_navigation guard).",
+  "impact": "Clicking 'Open pull request' in the Reviews tab panel most likely does nothing in the Tauri app; the user has to open the PR from the Pull requests tab instead.",
+  "suggested_fix": "Route the panel's link through the same handler ReviewDetail uses (followLink -> openPullRequest for GitHub PR URLs, openExternal otherwise), and add a DOM test that clicking it calls openPullRequest.",
+  "evidence": "Raised as follow-up fu1 by review-security-code w1 (not a security defect). Static trace at 20e4281a2 during round-1 consolidation: ReviewPanel.tsx:100 renders the anchor with no onClick; keryx ctx rg 'followLink|closest(\"a' over apps/desktop/src finds handlers only in review/ReviewDetail.tsx and unrelated views, none in reviews/; ReviewBrowserLink.tsx renders a bare <a href>; navigation.rs:15-23 allows only the app origin. Not executed in the app.",
+  "confidence": "medium"
+ },
+ {
+  "id": "F-049",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewDetail.tsx",
+  "line": null,
+  "quote": "/** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */",
+  "problem": "ReviewDetail keeps the onOpenReviewSession prop but no longer reads it, and ReviewBoard.tsx still forwards it.",
+  "impact": "A dead edge in the component interface: it suggests the PR panel can open review sessions, which it no longer does.",
+  "suggested_fix": "Remove onOpenReviewSession from ReviewDetail Props and from the ReviewBoard call site. ReviewsView receives it from App directly.",
+  "evidence": "slice-02 ReviewDetail.tsx: the prop was removed from the ReviewDetailSheet destructuring. Search: onOpenReviewSession appears in ReviewDetail.tsx only at its Props declaration.",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-050",
+  "severity": "info",
+  "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+  "line": 185,
+  "quote": "const reviewDot = () => host.querySelector(\"nav .review-tab-dot\")?.getAttribute(\"data-indicator\");",
+  "problem": "The helper meant for the Pull requests dot also matches the Reviews dot (class \"review-tab-dot reviews-tab-dot\", same data-indicator value). Reviews precedes Pull requests in the nav, so querySelector returns the Reviews dot first once it is lit.",
+  "impact": "Latent: the assertions at lines 186 and 209 would pass on the Reviews dot even if the PR dot disappeared. Today the reviewsOnly mock returns no reviews, so the helper still reads the PR dot.",
+  "suggested_fix": "Scope the helper: `nav .review-tab-dot:not(.reviews-tab-dot)`, or select within the button labelled Pull requests.",
+  "evidence": "AppShell.tsx:175 `<span className={id === \"reviews\" ? \"review-tab-dot reviews-tab-dot\" : \"review-tab-dot\"}`; PROJECT_VIEWS order session, flows, reviews, review; fixture line 78 returns `reviews: []`.",
+  "confidence": "high",
+  "reviewer": "review-frontend",
+  "dedupe_key": "fixture-review-dot-selector-ambiguous",
+  "blocking_merge": false,
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-051",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+  "line": null,
+  "quote": "expect(actions).not.toContain(\"start\");",
+  "problem": "With onOpenInReviews passed, the answer action no longer mounts ReviewDetail (ReviewBoard.tsx:456). The only remaining runCommand caller is badge polling (ReviewBoard.tsx:340), so this assertion no longer guards the PR panel against auto-launching on a non-start intent, which is what it was written for.",
+  "impact": "No defect. The answer routing is pinned by the new `opened` assertion and by the ReviewsView answer-intent test. Nothing in this slice drives an answer intent into ReviewDetail, so the start-only `initialLaunch` filter (ReviewDetail.tsx:175) is not pinned here.",
+  "suggested_fix": "Drop the line or comment what it now covers. Optionally add a ReviewDetail test with reviewIntent {kind:'answer'} that asserts no start request.",
+  "evidence": "slice-03 lines 477-490; ReviewBoard.tsx:340, 453-458; ReviewDetail.tsx:175, 193-203.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "dedupe_key": "board-merged-answer-test-start-assertion-vacuous"
+ },
+ {
+  "id": "F-052",
+  "severity": "info",
+  "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+  "line": null,
+  "quote": "      expect(document.querySelector('[role=\"progressbar\"]')?.getAttribute(\"aria-valuenow\") ?? null).toBe(percent);",
+  "problem": "Removing the `await click(\"Keryx review\")` lines left over-indented statements (this one and `      await click(\"Refresh runs\");` in the polling test). The ReviewBoard watcher-focus test still loops over a one-element array.",
+  "impact": "Readability only; no effect on what the tests pin.",
+  "suggested_fix": "Re-indent the two lines; unroll the one-element loop.",
+  "evidence": "slice-03 hunks @@ 1,136 @@ and @@ 705,745 @@ of ReviewPanel.dom.test.tsx; ReviewBoard.dom.test.tsx @@ 198,239 @@.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "publication": "omit"
+ },
+ {
+  "id": "F-053",
+  "severity": "info",
+  "file": "src/commands/review-reviews.ts",
+  "line": null,
+  "quote": "if (behind.length > MAX_REVIEW_COMPARES) snapshot.warnings.push(",
+  "problem": "Small edges have no fixture. (a) The cap boundary: only 27 is tested, so `>` versus `>=` at exactly 25 is unpinned. (b) The `b.number - a.number` sort tie-break. (c) parseCompare's `Number.isSafeInteger` against a non-number such as \"2\" (-1 is still refused by `< 0`). (d) The real compare closure in runReviewReviews (gh path, `--jq`, base/head order) is not exercised.",
+  "impact": "Low. These are edges and CLI wiring, and the core paths are pinned.",
+  "suggested_fix": "Add a 25-row cap case expecting no warning; a parseCompare case with `\"ahead_by\":\"2\"`; optionally two Reviews with an equal latest createdAt.",
+  "evidence": "Candidates B05, B07 and B08, not run.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices"
+ },
+ {
+  "id": "F-054",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+  "line": null,
+  "quote": "return <div className=\"review-workspace-block\" aria-busy={local.working}>",
+  "problem": "UNVERIFIED (no measurement). ReviewWorkspace wraps its actions row, the associated-Flow link, the revision banner, the Rounds `children` and `ReviewRuns` in `div.review-workspace-block`. No stylesheet has a rule for that class: `keryx ctx rg \"review-workspace-block\" apps/desktop/src --glob '*.css'` returns 0 matches. So the wrapper is a plain block. Its children no longer get the `gap: var(--sp-3)` of `.review-detail-body` (a flex column), which they did get as direct children of the PR panel body before. Two effects follow from the cascade. First, `.review-rounds` (no margin) is followed directly by `section.desk-runs`, whose h3 has `margin: 0` (ReviewDetail.css: `.desk-run-head h3, .desk-runs p { margin: 0; }`), so the last round's border should touch the 'Latest review' heading with 0px between them. Second, `.review-associated-flow { align-self: flex-start }` and `.review-detail-body > .btn` no longer apply, because the parent is not a flex container. The fallback branch in ReviewPanel (no `card`) puts `<Rounds>` directly into `.review-detail-body`, so the same Review renders with a 12px gap there and with no gap here.",
+  "impact": "In the Review panel of every Review whose PR GitHub returned, the Rounds timeline and the Latest review block probably run into each other. The same panel has different spacing depending on whether the PR card loaded.",
+  "suggested_fix": "Add `.review-workspace-block { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }` to review.css or ReviewDetail.css. Alternatively use `display: contents`, so the children join the `.review-detail-body` flex column as they did in the PR panel. Then confirm with a computed-style probe.",
+  "evidence": "Cascade read: ReviewDetail.css line 1 (`.review-workspace` matches only that class), `.review-detail-body { display:flex; flex-direction:column; gap: var(--sp-3) }`, `.desk-runs { display:grid; gap: var(--sp-3) }`, and `.review-rounds` rules in review.css with no margin-bottom. Not measured: exec_budget_s 0, and T11's live check had an empty list, so the panel never rendered. To settle it: in `bun run dev:browser` with a project that has a Review, open the Review panel and read `getComputedStyle(document.querySelector('.review-workspace-block')).display` and the vertical distance between `.review-rounds` getBoundingClientRect().bottom and `.desk-runs` getBoundingClientRect().top.",
+  "confidence": "medium",
+  "reviewer": "review-layout",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-055",
+  "severity": "info",
+  "file": "apps/desktop/src/styles/review.css",
+  "line": null,
+  "quote": ".reviews-board .flows-toolbar > select { max-width: 6.5rem; }",
+  "problem": "UNVERIFIED (arithmetic, not a measurement). `.select-compact` has `padding: 0 24px 0 8px`, a 1px border and `font-size: var(--fs-md)`. Under `flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem`, and with `max-width: 6.5rem` at a container of 760px or less, the text box of the selected value is 104 - 34 = 70px at the cap and 80 - 34 = 46px at the minimum. The longest option labels are 'Needs your answer' (17 characters), 'Any freshness' (13) and 'Existing review' (15), which at about 13px are wider than 70px by estimate. T11 reports 'nothing is clipped at any width', but it measured with each select showing its default option ('All states', 'Any freshness', 'Any source'), and the journal does not say whether the text inside the select was checked.",
+  "impact": "In a narrow Reviews toolbar (window or panel width below 760px), a chosen filter can show a cut-off value, for example 'Needs your…'. The user may not be able to tell which state filter is on.",
+  "suggested_fix": "Measure first. If the text is cut off, raise the 760px cap (for example to `max-width: 8.5rem`) or shorten the option labels in the select, for example 'Needs answer' and 'Existing'. Alternatively, mirror the selected value in a `title` attribute so the full value is reachable.",
+  "evidence": "CSS read: components.css `.select-compact { height: 28px; padding: 0 24px 0 8px; ... max-width: 180px; }` and review.css lines 2380-2383 of the slice. Supplied measurement: flow 519 journal, T11 section (default option values only). Not measured: exec_budget_s 0. To settle it: in `bun run dev:browser` at Reviews board widths 760, 700 and 560px, select 'Needs your answer', then 'Behind' and 'Existing review', screenshot each select, and record the select width beside the rendered text.",
+  "confidence": "low",
+  "reviewer": "review-layout",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-056",
+  "severity": "info",
+  "reviewer": "review-ui-ux",
+  "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+  "line": null,
+  "quote": "GitHub did not return this pull request, so its current range is unknown. Refresh to try again.",
+  "problem": "When review.card is null, the panel gives the remedy 'Refresh to try again' but has no Refresh control. The control is in the toolbar behind the panel, and onRefresh is already a prop.",
+  "impact": "The user must find the toolbar Refresh button. It is icon-only below a 1100px container (Nielsen #9: remedy without an action near the source).",
+  "suggested_fix": "Add a `<button className=\"btn btn-sm\" onClick={onRefresh}>Refresh</button>` to that banner, as the revision-changed banner does.",
+  "evidence": "slice-02 ReviewPanel.tsx else branch; onRefresh is in Props and used only for onRefreshBoard.",
+  "confidence": "high",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-057",
+  "severity": "info",
+  "reviewer": "review-ui-ux",
+  "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+  "line": null,
+  "quote": "<span>The PR revision changed. Refresh the board to load the latest range.</span>",
+  "problem": "The banner and its 'Refresh board' button came from the PR panel. In the Reviews tab, onRefreshBoard is the Reviews list refresh, and the user may be on the List view. The copy names a surface ('the board') that may not be the one on screen.",
+  "impact": "Minor wording mismatch (Nielsen #2/#4). The button still works.",
+  "suggested_fix": "Use neutral copy such as 'Refresh to load the latest range' with a 'Refresh' button, or let the caller pass the label.",
+  "evidence": "ReviewPanel passes onRefreshBoard={onRefresh} (ReviewsView refresh).",
+  "confidence": "medium",
+  "location_class": "in-diff"
+ },
+ {
+  "id": "F-058",
+  "severity": "info",
+  "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+  "line": null,
+  "quote": null,
+  "problem": "plan.md is stale against decisions the journal records: T6 still defines `freshness` as `current | behind` (T14 added `unknown`); T7 still asks for one toolbar row at 560px (T11 measured two and recorded a known limit); the journal's T5 note gives desk-run-store.ts as 854 lines, it is 912 at head after T6's reviewRows.",
+  "impact": "A later stage reading plan.md as the contract would miss the `unknown` freshness kind; no code defect.",
+  "suggested_fix": "Add a short 'Amendments' note to plan.md pointing at the T14 and T11 journal entries.",
+  "evidence": "plan.md T6 'freshness(...) → current | behind'; journal T14 and T11 entries; `wc -l src/review/desk-run-store.ts` = 912.",
+  "confidence": "high",
+  "reviewer": "review-logic"
+ },
+ {
+  "id": "F-059",
+  "severity": "info",
+  "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+  "line": null,
+  "quote": "- **Этап 3.** Действие «Review again» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).",
+  "problem": "PR body: the outdated-review action is \"relabelled 'New review round'\". The implementation plan this diff edits (T13) still names the action «Review again» in its stage 3 hand-off, while ReviewResults.tsx now renders \"New review round\".",
+  "impact": "The stage 3 agent starts from this hand-off section and would look for an action label the PR card no longer uses.",
+  "suggested_fix": "Replace «Review again» with «New review round» on implementation-plan.md:74 and the matching clause on :73.",
+  "evidence": "ReviewResults.tsx (diff): `card.localReview?.outdated ? \"New review round\" : \"Run review\"`; implementation-plan.md:73 `Подпись «Review again» из решения (d) меняется вместе со связью раундов.`",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "in-diff",
+  "publication": "finding"
+ },
+ {
+  "id": "F-060",
+  "severity": "info",
+  "file": "apps/desktop/src/review/ReviewResults.tsx",
+  "line": null,
+  "quote": "const title = outdated ? `${outdated.round ? `Round ${outdated.round} reviewed` : \"Reviewed\"} ${outdated.headSha.slice(0, 7)} — start a new round on the current head` : label;",
+  "problem": "PR body: \"relabelled 'New review round'. Its title names the round it follows (decision d).\" The title names the round only when the badge carries `outdated.round`; otherwise it reads \"Reviewed <sha> — start a new round on the current head\". The journal records the fallback, but the body does not mention it.",
+  "impact": "A tester who follows the body may report the round-less title as a defect.",
+  "suggested_fix": "Qualify the body line: the title names the round when the badge carries it.",
+  "evidence": "journal.md: \"Title wording without a round ('Reviewed abc1234 — start a new round on the current head') was the worker's choice.\"",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "in-diff",
+  "publication": "finding"
+ }
+]
+```
+
+## Token spend
+
+token spend: unknown (37 dispatch(es), none reported usage)
