@@ -1,0 +1,98 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-2 delta 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (PR #1304)
+- Slice: slice-10 (src/review: board-badges.ts, board-types.ts, desk-run-store.ts, desk-run-types.ts, review-entity.ts and their tests)
+- Scope mode: explicit-hash-range; the slice text was read in full and checked against `git diff 20e4281a2..f6971fd4a -- src/review/` to separate delta lines from carried context
+- Spec compliance gate: skipped as a separate pass. Operator decisions in fix-round-1.md (D-R1, FA-1, FA-2, FA-11, FA-17) and plan.md T5 were used as the spec for round placement and state
+
+### Summary
+The delta's backend changes are logically sound under the settled decisions. These are: `roundFor` (now pure, in memory, retries only within the top round, and superseded never-started requests excluded), `neverStarted` (shared by `previousAttempt` and `reviewRows`), `publication()` (reports published/skipped for every finished state), the `stateAttempt`/`stateAttempts` split in `summarizeReview`, and `headComparison`. I traced them through `requestAttempt` (supersede runs `end()` before the insert, so the loaded `superseded` flag is already set), `recordExisting`, the migration, `history()`, `attachBadges`, and the Desktop readers of `publication`/`previousRunId`. I found no new defect at minor or above. I am filing one info item.
+
+I found one case that looks like a defect but is settled. A package imported late with an older `createdAt` and a range other than the top round's opens the next round. A later retry on the real current head then also opens a round. This is FA-17 / plan T5, "known limitation", and it is pinned by the test at desk-run-store.test.ts:991. I do not re-file it.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+Checked and sound:
+- `roundFor`, desk-run-store.ts:106-117. A continuation joins its linked round. `counted` drops superseded rows, so a request that supersedes a queued one takes that round (FA-11). The retry check is limited to the top round (D-R1). For a retry, `previous` is the newest counted attempt of the top round by (createdAt, rowid), which matches the old SQL ordering. `assignReviews` pushes each placed row into the per-Review cache, so several pending rows of one Review placed in one call (migration, multi-package import) see each other.
+- `stateAttempt` / `reviewState`. Continuations only start from the latest admission (`continuationSource`), and rounds only grow with insertion time, apart from the FA-17 case. So the "accepted result in the latest round" is also the newest reviewed attempt overall. The state (`settled`) and `findings`/`publication` (`reference`) therefore come from the same attempt when both exist.
+- `publication()` widened to all finished states. `localBadge` and `SessionReviewActivity` still act only on `"pending"`, which still requires completed+complete. In `ReviewRuns.tsx:103-171`, a partial run with a receipt now shows "View publication" instead of "Publish to GitHub", which is the intended fix.
+
+### Async & Concurrency
+None detected. The migration and `recordExisting` each run inside one `atomic` (immediate) transaction. `requestAttempt` calls `assignReviews` inside the caller's dispatch transaction.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected. `place()` leaves pre-Reviews rows untouched. `localBadge` adds `round` only when it is a number. The read-only path selects literal NULL for missing columns. `headsDiffer` is a module `const` declared after the functions that use it, but those are only called after module evaluation, so there is no TDZ hazard.
+
+### Type Contract Violations
+None new. The `Pending` type that claims `round` is already filed as R2-BE-W4-001.
+
+### Edge Cases
+
+#### [F-001] A queued request cancelled before dispatch still counts as an attempt: it opens a round and turns the Review "stopped"
+- Severity: info
+- File: src/review/desk-run-store.ts:26-29 (`neverStarted`), :776-780 (`cancel` of a queued run)
+- Problem: FA-11 drops only a request superseded before it started (`state='skipped'`, `phase='Superseded'`). Cancelling a queued request also leaves an attempt that never started and spent nothing (`state='cancelled'`, `phase='Cancelled'`, `startedAt` null). But it stays in `counted` and in `reviewRows`. Scenario: round 2 has a completed, reviewed attempt on H2. The viewer queues H3 behind a running run, then cancels the queued H3. The cancelled request opens round 3. `stateAttempt` finds no accepted result in round 3, so the Review reads `stopped`, and `reviewNeedsViewer` lights the "waiting on you" indicator for a request the viewer just withdrew.
+- Why it matters: the specification table maps cancellations to `stopped`, so this may be intended. It is filed so the operator can decide whether a cancel before dispatch should be treated like a supersede (no round, not listed). No change is requested if the current table stands.
+- Fix (if wanted): widen `neverStarted` to `state IN ('skipped','cancelled') AND phase IN ('Superseded','Cancelled') AND startedAt IS NULL AND result IS NULL AND usage IS NULL`, and add a fixture next to desk-run-store.test.ts:979.
+
+### Settled / already filed (not re-filed)
+- Late-imported package with an older `createdAt` gets the next round, and a later same-range retry of the real top round then opens another round: FA-17 / plan T5 known limitation, pinned at desk-run-store.test.ts:991.
+- `latestRound` and the timeline come from different attempt sets: degradation-w1 F-001.
+- A fully archived Review that was published reads `ready`/`publication: null`: R2-BE-006.
+- `headComparison` vs `freshness` for closed Reviews: logic-w1 F-002, R2-BE-002.
+- `ReviewAttemptSummary.archived` doc and the fourth copy of the finished-state set: clean-code-w4 F-001, F-003.
+
+### Suggested Patches
+None warranted.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-10"],
+  "summary": "Slice-10 (backend Review store, entity and badge changes of the round-2 delta) is logically sound under the settled decisions D-R1, FA-1, FA-2, FA-11 and FA-17. roundFor, neverStarted, the widened publication(), stateAttempt/stateAttempts and headComparison were traced through requestAttempt, recordExisting, migration, history, attachBadges and the Desktop readers. One info item: a queued request cancelled before dispatch still counts as an attempt and opens a round, while only superseded never-started requests are excluded. The late-import ordering effect is the documented FA-17 limitation and is not re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": 26,
+      "quote": "const neverStarted = (r = \"\") => `(${r}state='skipped' AND coalesce(json_extract(${r}details,'$.phase'),'')='Superseded'",
+      "problem": "Only a superseded never-started request is excluded from rounds and from reviewRows. A queued request cancelled before dispatch (state cancelled, phase Cancelled, startedAt null, no result, no usage) also never started and spent nothing, but it still counts. It opens the next round, and because that round has no accepted result, stateAttempt makes the Review 'stopped'.",
+      "impact": "After the viewer withdraws a queued review of a new head, the Review leaves ready/published for stopped and lights the 'waiting on you' indicator. The specification table maps cancellations to stopped, so this may be intended; it is recorded for an operator decision.",
+      "suggested_fix": "If a cancel before dispatch should be treated like a supersede, widen neverStarted to cover state 'cancelled' with phase 'Cancelled' (startedAt, result and usage null), and add a fixture next to desk-run-store.test.ts:979.",
+      "evidence": "desk-run-store.ts:722-729 (supersede path) vs :775-780 (cancel of a queued run, phase 'Cancelled'); roundFor :106-117 filters only `superseded`; review-entity.ts stateAttempt returns latest when its round has no reviewedResult.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": []
+}
+```
+
+### Not read / not verified
+- I did not run any tests or mutants (exec budget 0). The test claims rest on the slice text and on research-evidence (194 root + 1008 Desktop tests, 0 failed, at f6971fd), which I did not re-run.
+- Desktop files were read only at the `publication`/`previousRunId` reader sites (ReviewRuns.tsx:95-180, ReviewPanel.tsx:15-45). Other slices were not reviewed.
+- I did not consult gdgraph, wiki or memory. The questions were settled by the code, plan.md and fix-round-1.md.
+
+### Routing audit
+- graph_used: no (not-relevant: bounded slice; callers enumerated with keryx ctx rg)
+- wiki_used: no (not-relevant: intent stated in plan.md / fix-round-1.md)
+- ctx_used: yes (keryx ctx rg for prior findings, publication readers, recordExisting callers, details writers, FA-17 test; keryx ctx read for the schema)
+- raw_rg_used: no

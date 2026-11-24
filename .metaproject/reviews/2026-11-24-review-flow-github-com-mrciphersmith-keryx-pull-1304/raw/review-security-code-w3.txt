@@ -1,0 +1,59 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b
+- Scope mode: diff, read-only, round 1 wave 3
+- Slice read in full: slice-05 (923 lines): src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts (schema/migration, assignReviews/reviewFor/roundFor, save, recordExisting, history, attachBadges, reviewRows, readReviewRows, createAttempt insert), src/review/desk-run-types.ts, src/review/review-entity.ts (new)
+- Context read outside the slice: src/commands/review-reviews.ts:1-80 (the only caller of readReviewRows, to confirm where repositoryId and viewer come from).
+- Earlier waves checked to avoid duplicates: raw/*-w1.txt, raw/*-w2.txt (my wave-1 and wave-2 results have no findings; wave 2 already covered the reviewRows binding and the forged-placement question from the caller side).
+- Test output for this round (research-evidence/verify-tests-to-run-1.txt): not available (only ingest-screened.json present).
+- Git history: not read (no finding depends on it).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness was found in slice-05.
+
+### What was checked, and why it holds
+
+1. SQL injection in the new store code. Every value reaching SQL is bound with `?`: reviewFor (repo, pr, viewer), roundFor (reviewId, round, previousId, base, head), the assignReviews UPDATE, reviewRows (repositoryId, viewer), attachBadges (`?1..?3`). The interpolated fragments are constants: `ALTER TABLE runs ADD COLUMN ${name} ${type}` iterates the module-level `reviewColumns` tuple; `placement(alias)` yields either a fixed column name with a literal alias ("", "r.") or `NULL`; `questionRows`, `pending` (table names from a fixed IN list in sqlite_schema) and `visible(r)` are internal. No request, GitHub or run-details data is interpolated.
+
+2. Account scoping / IDOR. reviewRows selects by `v.repo=? AND v.viewer=?`; the only caller (src/commands/review-reviews.ts:33-40) takes both from the GitHub identity query for the bound account and refuses with `access:` when either is missing. Review assignment keys on the runs table's own repo/pr/viewer columns, not on `details`, so a run's JSON cannot place it in another account's Review. Both `reviews.viewer` and `runs.viewer` are COLLATE NOCASE, matching GitHub's case-insensitive logins, so case variants neither split nor cross accounts.
+
+3. Forged placement on import/save. `storedDetails` overwrites `reviewId`, `round` and `previousRunId` with undefined before serializing, in save and recordExisting, so an imported run (source `existing`) cannot carry its own placement into `details`; `place()` projects only from the columns. roundFor links a continuation only when `previousId` belongs to the same reviewId (`WHERE id=? AND review_id=?`), so a crafted `continuation.previousId` cannot join another Review's round.
+
+4. Path traversal. reviewRows and attachBadges call `publication(id, ...)` and `transcriptUpdatedAt(id)`, both of which require the id to match the UUID regex before building a path under `attempts/`; no new path is built from input.
+
+5. Data exposure. reviewRows reads no report body and no reviewer sessions; history continues to strip `result.report`, `workerIdentity` and `continuation.guidance` from the metadata. The badge `outdated.round` adds only an integer.
+
+6. Untrusted parsing. `JSON.parse(item.findings)` parses a value SQLite extracted from the store's own JSON; it is not a new trust boundary.
+
+### Clean Areas
+Injection (SQL: see 1; command/eval/XSS: none in this slice), auth/authz and IDOR (see 2, 3), input validation (identity-derived keys only; see 2), secrets and logging (none added), cryptography (randomUUID for Review ids, not a secret), CSRF/open redirect (not applicable: local store), path traversal (see 4), React/NestJS patterns (not in this slice).
+
+### Cross-lens handover (not a security finding)
+- None new. The wave-2 handover about readReviewRows opening an existing store writable from the read-only command stands for the logic/degradation lenses; no security impact found.
+
+### Routing audit
+- graph_used: no (not-relevant: the slice is self-contained store code; the single caller was located with ctx rg)
+- wiki_used: no (not-relevant: the boundary code was read directly)
+- ctx_used: yes (`keryx ctx rg` for readReviewRows callers)
+- raw_rg_used: no (sed/cat/grep used on known files and prior result files, marked keryx:raw)
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-05 read in full. All new SQL (Review table, migration, assignReviews/reviewFor/roundFor, reviewRows, round in badges) binds values as parameters; interpolated fragments are module constants. Reviews are keyed on the runs table's repo/pr/viewer columns and read by the GitHub-verified account; storedDetails strips placement from details so imported runs cannot forge it; continuation linking is restricted to the same Review; attempt paths remain behind the UUID check; no report bodies are read. No blocker, major, minor or info security finding. Test output for the round was not available.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-05"],
+  "follow_ups": []
+}
+```

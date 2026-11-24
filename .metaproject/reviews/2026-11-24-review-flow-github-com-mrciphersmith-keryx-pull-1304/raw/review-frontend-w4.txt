@@ -1,0 +1,44 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: a5d1ab236fe85dee62a758a19390049dde4eb7f9..20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (diff mode, supplied slice)
+- Slice read in full: slice-05 (923 lines). Files: src/review/board-badges.ts, src/review/board-types.ts, src/review/desk-run-store.ts, src/review/desk-run-types.ts, src/review/review-entity.ts (new).
+- Context checked at head with `keryx ctx rg`: the Desktop consumers of the one contract change in this slice that reaches the UI, `localReview.outdated.round` (board-types.ts). It is compared in apps/desktop/src/review/ReviewBoard.tsx:63 (`badgesEqual`, so a round-only change re-renders the card) and rendered in apps/desktop/src/review/ReviewResults.tsx:38, which falls back to "Reviewed <sha>" when `round` is absent. The DOM tests in ReviewBoard.dom.test.tsx:683-690 cover both forms.
+- Earlier waves' raw findings were read (all `raw/*.txt` headings, and review-frontend w1-w3). Nothing here re-files them.
+
+### Notes on inputs
+- slice-05 has no React components, hooks, JSX or MobX stores. It holds the SQLite run store (Review placement columns, migration, `reviewRows`), the badge projection, and the pure Review read model. The frontend laws (observer, actions, View-Store boundary, API calls in components, `public`/`private` on store members) have nothing here to apply to. apps/desktop uses React state and hooks and has no MobX, as w1 recorded.
+- Store correctness (migration atomicity, round placement, SQL cost) is outside the frontend lens. review-logic, review-degradation and review-performance covered it in w3. I did not assess it beyond the contract check.
+- No tests were run (read-only, exec_budget_s 0). I did not read research-evidence/verify-tests-to-run-1.txt because this slice has no frontend code it could confirm.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- Component patterns, effects, keys and accessibility: not applicable, because the slice has no component code.
+- MobX store patterns: not applicable, because the project has no MobX.
+- TypeScript safety: there is no `any`. The two non-null `!` assertions in review-entity.ts are safe. `attempts[i]!` sits inside a bounds-checked loop, and `list[0]!` is commented: every map entry holds the attempt that created it. Neither sits on a value a named input can leave missing. Optional placement fields are typed for older stores. `BadgeRun.round` is `number | null`, and `localBadge` emits `round` only when `typeof === "number"`. This keeps the wire type `round?: number` honest for the UI.
+- UI contract: `outdated.round` is optional. Desktop handles both its presence and its absence (sites under Scope).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "slices": ["slice-05"],
+  "summary": "slice-05 contains no frontend code. It holds backend TS for the run store's Review placement and migration, the badge projection with the outdated round, and the pure Review read model. There are no React or MobX patterns to review. The one UI-facing contract change (optional localReview.outdated.round) was checked at head: Desktop compares it in badgesEqual and renders it with a fallback when it is absent. No findings. No tests were run.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice has no frontend code, and the Desktop consumers were found by a targeted search); wiki_used: no (not-relevant: the contract is stated in the slice's own type comments); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.

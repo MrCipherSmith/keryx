@@ -130,7 +130,8 @@ test("the slots open the review panel, the Flow, the newest bound session and th
   const calls: Calls = { flows: [], created: [], sessions: [] };
   await render([reviewed], { ...linked, calls });
   await click(button("Review · ready for #101"));
-  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+  // The review interface lives in the Reviews tab (stage 2); without it wired, the slot opens the PR panel.
+  expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
   await click(button("Close details"));
   await click(button("Flow #517 · In progress for #101"));
   expect(calls.flows).toEqual(["517-work"]);
@@ -147,6 +148,15 @@ test("the slots open the review panel, the Flow, the newest bound session and th
   expect(calls.sessions.slice(1).map(([, target]) => target)).toEqual(["s1", "new"]);
 });
 
+test("an outdated review's slot title names the round it follows and offers a new review round", async () => {
+  const outdated = (round?: number): ReviewCard => ({ ...pr, localReview: { active: false, ready: false,
+    outdated: { headSha: "abcdef0123456", state: "completed", ...(round !== undefined && { round }) } } });
+  await render([outdated(2)]);
+  expect(button("Review · outdated for #101").title).toBe("Round 2 · Outdated review · abcdef0 — New review round");
+  await render([outdated()]);
+  expect(button("Review · outdated for #101").title).toBe("Outdated review · abcdef0 — New review round");
+});
+
 test("empty slots offer Run review, Create Flow and Open in session", async () => {
   const calls: Calls = { flows: [], created: [], sessions: [] };
   await render([pr], { calls });
@@ -155,7 +165,8 @@ test("empty slots offer Run review, Create Flow and Open in session", async () =
   await click(button("Open in session for #101"));
   expect(calls.sessions.map(([n, target]) => [n, target])).toEqual([[101, "latest"]]);
   await click(button("Run review for #101"));
-  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+  // The review interface lives in the Reviews tab (stage 2); without it wired, the slot opens the PR panel.
+  expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
 });
 
 test("a Flow linked to a session bound to the PR is the card's Flow", async () => {

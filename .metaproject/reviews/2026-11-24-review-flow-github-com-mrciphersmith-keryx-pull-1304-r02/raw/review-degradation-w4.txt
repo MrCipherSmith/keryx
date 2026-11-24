@@ -1,0 +1,62 @@
+STATUS: DONE
+
+## review-degradation · round 2 · wave 4 · slice-05, slice-06
+
+### Scope
+I read all of slice-05 (1160 lines: `review-reviews.test.ts`, `board-github.ts`, `desk-run-store.ts`, `review-entity.ts` and their tests). I also read all of slice-06 (843 lines). Most of slice-06 is deletion fragments and context. To see what the delta actually changed, I compared it with `keryx ctx diff 20e4281a2..f6971fd4a` for ReviewDetail.tsx, implementation-plan.md, ReviewPanel.dom.test.tsx, reviewPages.test.ts and app-navigation.fixture.tsx. ReviewResults.tsx and review/model.ts appear in slice-06 as context only, with no delta change. Base is `20e4281a2`, head is `f6971fd4a` (the working tree). Acceptance criteria: plan.md and the operator decisions in fix-round-1.md (D-R1, FA-1..FA-17, FB-1..FB-12). I treat those decisions as settled. Nothing was run: the exec budget is 0.
+
+### Findings
+
+### [F-001] The implementation plan still cites a migration check that ran before the round rule changed
+- **Severity**: minor
+- **Class**: diff-vs-description
+- **Evidence kind**: base-diff
+- **File**: docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+- **Problem**: In 0.1.5, the plan's "Хранилище" bullet now describes the D-R1 rule (A,B,A opens a new round; a superseded never-started request keeps no round). The same section still says the migration was checked on a copy of the working database, with "раундов 1 — 13, раундов 2 — 4". That count is T9 in the journal (journal.md:31-37, task-done 2026-11-24T07:37Z). It ran before 85fa985c1 (13:38 +0400 = 09:38Z), the commit that replaced `roundFor` with the D-R1 rule and added the `neverStarted` exclusion. Nothing in the journal records a re-run.
+- **Why it matters**: The doc presents a verification of the migration it now describes, but the check exercised a different rule. On data with an A,B,A range sequence or a superseded queued request, the round counts would differ. A reader takes AC11 as checked against the shipped rule when it was not.
+- **Fix**: Re-run T9 on a fresh scratch copy at head and update the counts. Otherwise, mark the sentence as measured under the pre-D-R1 rule.
+
+### Verified clean (one line per thing traced)
+- `publication()` widened to `FINISHED_STATES` (desk-run-store.ts:425). I traced every reader of a run or attempt `publication`. `board-badges.ts:52`, `SessionReviewActivity.tsx:76,168`, `ReviewRunDialog.tsx:99` and `ReviewRuns.tsx:105` compare only with `"pending"`. `pending` is still returned only for completed+complete, so they behave as on base. `ReviewRuns.tsx:169-171` (draft covers completed|partial) now shows "View publication" or "Publication skipped" for a partial attempt that was published or skipped, where base offered "Publish to GitHub" again. That is an improvement. `reviewState` now reads such a Review as `published` (FA-2, intended). `desk-run-service.ts`, `pr-context.ts` and `desk-publication.ts` do not read the field.
+- `roundFor`/`assignReviews` rewrite (desk-run-store.ts:102-204). The in-memory per-Review list matches the base per-row queries. For `previous`, ties and NULL `createdAt` order the same as the base `ORDER BY createdAt DESC, rowid DESC`. A null base or head compares the same way (`===` vs `IS`). A linked continuation stays scoped to its Review. The only behaviour deltas are D-R1 (retry only in the current highest round) and FA-11 (superseded rows ignored). In `requestAttempt` (desk-run-store.ts:722-761), the queued row is ended as Superseded before the INSERT and `assignReviews`, so the placed list reads it as superseded. Only manual requests supersede: a scheduled request returns null while anything is active or queued.
+- `neverStarted` extraction: the predicate in `previousAttempt` is unchanged in text and now shared with `reviewRows` and `assignReviews`. The divergence between `history()` and `reviewRows` for superseded rows is degradation-w2, not re-filed.
+- `summarizeReview` / `stateAttempt` / `stateAttempts` / `referenceHead`. Graph consumers of review-entity.ts were walked (ReviewsView, ReviewPanel, reviews/model, platform/review, review-reviews, desk-run-store). The `stopped` → `ready`/`published` move for a failed retry in a round with an accepted result is FA-2, as decided. `tokens`, `source` and `flowId` now come from unarchived attempts, the same set base read once archived rows were filtered. The archived-related rounds/latestRound split and the all-archived publication null are already filed (degradation-w1, backend-w1).
+- `reviewNeedsViewer` now takes `card`/`archived`. Its one product consumer (ReviewsView.tsx:206) passes a full summary. The card-null and ready-null exclusions are FA-7/FA-2 decisions, and the lane mismatch is logic-w1.
+- `writeBoundJson` move: verified in degradation-w3, unchanged here.
+- slice-06 Desktop deltas. `ReviewDetail` `hasReview = local.runs.length > 0` (FB-5): `history()` drops only deleted rows, and a superseded row always has a newer sibling, so a PR without a Review cannot show "Open in Reviews". `openReviewLink` replaces the githubPrUrl branch (T17, frontend-w2 / architecture-w2 already filed). Moving the error banner changes placement only. The test edits (Review again → New review round, Refresh board → Refresh with a banner assertion, the reviewDot `:not(.reviews-tab-dot)` selector, the new include-closed args test) are as strict as before or stricter. The `board_read_args` signature change in review.rs is filed (backend-w2, pr-contract-w3). The specification.md removals (protocol bump line, old migration rule) match FA-14 and D-R1.
+- Consumer enumeration: `keryx gdgraph affected` on review-entity.ts (11 dependents) and desk-run-store.ts (15 dependents) with `--data-dir <package>/layers/graph`. The graph's freshness could not be determined. The cap dropped nothing. I traced the publication readers in the product dependents. I did not trace test-only dependents (agent-question-axis, spawn-subagent-tool, desk-run-legacy tests) because the changed fields do not reach them.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "Slice-05 and slice-06 add one minor finding: implementation-plan 0.1.5 describes the D-R1 round rule but still cites the T9 migration counts measured before 85fa985c1 changed that rule. Verified clean against base 20e4281a2: publication() widened to finished states (every reader compares only with pending, except ReviewRuns, which improves); the roundFor/assignReviews rewrite (in-memory equals per-row queries; only the D-R1 and FA-11 deltas; the supersede runs before assign); the neverStarted extraction; summarizeReview/stateAttempt (FA-2/FA-4 as decided; rest filed in w1); the reviewNeedsViewer signature (one product consumer); the ReviewDetail hasReview/openReviewLink/banner deltas; the test label and selector edits (equal or stricter). Graph dependents of review-entity.ts and desk-run-store.ts walked; cap dropped none; graph freshness unknown. Nothing run (exec budget 0).",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": null,
+      "quote": "Миграция проверена на копии рабочей базы (`runs.sqlite`, копия не закоммичена): попыток до и после — 17, Review — 13 (равно числу ключей), раундов 1 — 13, раундов 2 — 4; повторное открытие ничего не меняет.",
+      "problem": "Version 0.1.5 of the plan rewrites the storage bullet to the D-R1 round rule and the FA-11 rule, but keeps the claim that the migration was verified on a copy of the working database (rounds 1 x 13, rounds 2 x 4). That count is T9, recorded in journal.md:31-37 and done at 2026-11-24T07:37Z. It predates 85fa985c1 (09:38Z), which replaced roundFor with the D-R1 rule and added the neverStarted exclusion. The journal records no re-run.",
+      "impact": "The plan presents AC11's verification as covering the shipped migration rule, but the check ran the old rule. Data with an A,B,A range sequence or a superseded queued request would produce different round counts.",
+      "suggested_fix": "Re-run T9 on a fresh scratch copy at head and update the counts, or label the sentence as measured under the pre-D-R1 rule.",
+      "evidence": "base-diff: read implementation-plan.md hunk @@ -32,15 +32,17 @@ (0.1.4 -> 0.1.5, keeps the verification sentence, rewrites the rule). journal.md:31-37 (T9 counts, task-done 07:37:09Z). keryx ctx run -- git log 85fa985c1 (13:38:39 +0400). Refute: searched journal.md for migrat|T9|recount|rounds and found no later T9 run; the fix-round-1 FA list has no T9 re-run item.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff",
+      "location_class": "changed"
+    }
+  ],
+  "prior_dispositions": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+Routing audit: graph_used: yes (`keryx gdgraph affected` on review-entity.ts and desk-run-store.ts with the package graph) · wiki_used: no (not-relevant: intent comes from plan.md, fix-round-1.md and operator decisions) · ctx_used: yes (`keryx ctx rg` for consumers, earlier waves and the journal; `keryx ctx diff`/`run` for the delta and commit times) · raw_rg_used: no.

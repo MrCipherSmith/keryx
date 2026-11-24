@@ -1,0 +1,842 @@
+--- apps/desktop/src-tauri/src/review.rs
+@@ 52,52 @@
+-    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>) -> Result<Vec<String>, String> {
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 659,678 @@
+ 
+     #[test]
+     fn rule_settings_only_forward_scoped_data() {
+         let key = || WatcherTarget { repo: "org/repo".into(), repository_id: "R".into(), viewer: "me".into() };
+         assert!(rule_args(key(), serde_json::json!({"kind":"worker"})).is_err());
+         for rule in [serde_json::json!({}), serde_json::json!({"budgetTokens": null}), serde_json::json!({"budgetTokens": 500000})] {
+             let request = serde_json::json!({"kind": "save", "rule": rule});
+             let args = rule_args(key(), request.clone()).unwrap();
+             assert_eq!(serde_json::from_str::<Value>(args.last().unwrap()).unwrap(), request);
+         }
+         let args = rule_args(key(), serde_json::json!({"kind":"mode", "number":1, "choice":{"mode":"manual"}})).unwrap();
+         assert_eq!(&args[..5], ["review","rules","--json","--repo","org/repo"]);
+         assert_eq!(args[9], "--request");
+         assert_eq!(serde_json::from_str::<Value>(&args[10]).unwrap()["choice"]["mode"], "manual");
+     }
+ 
+     #[test]
+     fn badge_batches_and_page_cursors_are_read_only_board_queries() {
+         let r = format!("1:{}:{}", "a".repeat(40), "b".repeat(40));
+         let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: r.clone() };
+-        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target)).unwrap(),
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 681,681 @@
+-        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None).unwrap(),
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 683,683 @@
+-        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None).is_err());
+
+--- apps/desktop/src/App.tsx
+@@ 1,16 @@
+ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+ import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+ import { isTauri } from "./platform/backend";
+ import {
+   acpStop,
+   pickFolder,
+   setFolderPrompter,
+   setWindowTitle,
+   settingsAddRecent,
+   settingsGet,
+   windowInitialCwd,
+   windowOpenProject,
+ } from "./platform/commands";
+ import { applyTheme, setPrefs, MOD } from "./lib/prefs";
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+-import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+
+--- apps/desktop/src/App.tsx
+@@ 653,655 @@
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 1,37 @@
+ import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
+ import { Icon } from "../components/Icon";
+ import { EmptyState, overlayOpen, Spinner } from "../components/ui";
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+ import { withRunBackoff } from "./runPolling";
+ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+ import { sameRange, type RunObserver } from "./useReviewRuns";
+ import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+ import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
+-import { ProjectReviewRules } from "./ProjectReviewRules";
+ import { reviewRules } from "../platform/reviewRules";
+ import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
+ import { ReviewWatcher } from "./ReviewWatcher";
+ import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
+ import { readReplies, subscribeReviewReads } from "./reviewReadState";
+ import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
+ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
+ import { ReviewFilters, filterSummary } from "./ReviewFilters";
+ import { ReviewResults } from "./ReviewResults";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+ import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
+-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ export type ReviewTabIndicator = "attention" | "watching" | null;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string;
+   active?: boolean;
+   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: ((card: ReviewCard) => void) | undefined;
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 83,98 @@
+ const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+ const attentionNumbers = (board: ReviewBoardSnapshot) =>
+   new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+ /** A load of this scope holds every open PR, so it replaces the carried attention set. */
+ const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+ const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
+ 
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 477,486 @@
+       </button>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+         <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
+       </button>
+       <div className="grow" />
+-      {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
+-      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 1,5 @@
+-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+ import { Icon } from "../components/Icon";
+ import { useToast } from "../components/Toasts";
+ import { Spinner } from "../components/ui";
+ import { absoluteTime, errMessage, relativeTime } from "../lib/format";
+-import { openExternal, openPullRequest, type FlowCard } from "../platform/commands";
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 9,9 @@
+ import type { reviewRules } from "../platform/reviewRules";
+-import { pendingManualQuestions } from "./ReviewProgress";
+-import { launchAction, ReviewRuns } from "./ReviewRuns";
+-import type { reviewPublish } from "./ReviewPublishDialog";
+-import { ReviewRunDialog, ReviewRunHistory } from "./ReviewRunDialog";
+-import type { ReviewLifecycleCommand } from "./ReviewLifecycle";
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 14,16 @@
+ import type { ReviewCard } from "./types";
+ import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewReadState";
+ import { DiscussionMarkdown } from "./DiscussionMarkdown";
+-import { githubPrUrl } from "../lib/githubPr";
+-import { ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 33,42 @@
+   onResize?: (width: number) => void;
+   flow?: FlowCard | undefined;
+   projectFlows?: readonly FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   onOpenFlow?: (dir: string) => void;
+   onClose: () => void;
+   onAccessLost?: (reason: string) => void;
+   load?: typeof fetchReviewDetail;
+   openBrowser?: typeof openExternal;
+-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: (() => void) | undefined;
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 46,65 @@
+-  publishCommand?: typeof reviewPublish;
+   onRunSnapshot?: RunObserver;
+   rulesCommand?: typeof reviewRules;
+   onRefreshBoard?: () => void;
+   onDiscussionLoaded?: (detail: ReviewDetailSnapshot) => void;
+ }
+ 
+ function Message({ item, label, read }: { item: ReviewMessage; label: string; read: Set<string> }) {
+   return <article className="review-detail-message">
+     <div className="review-detail-meta discussion-byline">
+       <strong>{item.author}</strong>
+       {item.own && <span>You</span>}
+       <span className="discussion-event">{label}</span>
+       {!item.own && !read.has(item.id) && <span className="badge">Unread</span>}
+       <time dateTime={item.createdAt} title={absoluteTime(item.createdAt)}><ReviewBrowserLink url={item.url}>{relativeTime(item.createdAt)}</ReviewBrowserLink></time>
+     </div>
+     {item.body && <DiscussionMarkdown body={item.body} />}
+   </article>;
+ }
+ 
+ function Discussion({ data }: { data: ReviewDetailSnapshot }) {
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 141,157 @@
+   const currentWidth = () => panel.current?.offsetWidth || width;
+   const maxWidth = () => Math.max(360, (panel.current?.parentElement?.clientWidth || window.innerWidth) - 280);
+   const resize = (next: number) => onResize?.(Math.min(maxWidth(), Math.max(360, next)));
+   function startResize(event: PointerEvent<HTMLDivElement>) {
+     if (event.button !== 0) return;
+     event.currentTarget.setPointerCapture(event.pointerId);
+     drag.current = { pointerId: event.pointerId, x: event.clientX, width: currentWidth() };
+   }
+ 
+   function followLink(event: MouseEvent<HTMLElement>) {
+     if (event.button > 1) return;
+     const link = (event.target as Element).closest("a[href]");
+     if (!link) return;
+     event.preventDefault();
+     const url = reviewUrl(link.getAttribute("href"));
+     if (!url || openingLink.current) return;
+     openingLink.current = true;
+-    const open = openBrowser ?? (githubPrUrl(url) ? openPullRequest : openExternal);
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 172,172 @@
+-  const publication = { cwd, target: subject, url: card.url, publishCommand };
+   const rulesTarget = useMemo(() => ({ repo, repositoryId, viewer }), [repo, repositoryId, viewer]);
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 227,248 @@
+         onClose();
+       }
+     }}>
+     {onResize && <div className="side-resize review-detail-resize" role="separator" tabIndex={0}
+       aria-orientation="vertical" aria-label="Resize pull request details" aria-controls={panelId}
+       aria-valuemin={360} aria-valuenow={Math.min(maxWidth(), width)} aria-valuemax={maxWidth()}
+       onPointerDown={startResize} onPointerMove={event => {
+         const start = drag.current;
+         if (start?.pointerId === event.pointerId) resize(start.width + start.x - event.clientX);
+       }} onLostPointerCapture={() => { drag.current = null; }}
+       onKeyDown={event => {
+         const keys: Record<string, number> = { ArrowLeft: currentWidth() + 32, ArrowRight: currentWidth() - 32, Home: 360, End: maxWidth() };
+         if (!Object.hasOwn(keys, event.key)) return;
+         event.preventDefault();
+         resize(keys[event.key]!);
+       }} />}
+     <header className="sheet-head">
+       <div className="sheet-head-row">
+         <span className="flow-id">{repo} #{card.number}</span>
+         <span className="grow" />
+-        <ReviewRunHistory runs={local.runs} onSelect={setSessionId} />
+         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close details"><Icon name="x" size={16} /></button>
+       </div>
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 274,283 @@
+         {Object.entries(link.documents).map(([name, text]) => <details key={name}>
+           <summary>{name}</summary><pre>{text}</pre>
+         </details>)}
+       </article>)}
+     </details>}
+     <div className="tabs" role="group" aria-label="Pull request details">
+       <button className="tab" aria-pressed={tab === "discussion"} onClick={() => setTab("discussion")}>Discussion</button>
+       <button className="tab" aria-pressed={tab === "checks"} onClick={() => setTab("checks")}>Checks</button>
+-      <button className="tab" aria-pressed={tab === "review"} onClick={() => setTab("review")}>Keryx review</button>
+       <button className="tab" aria-pressed={tab === "automation"} onClick={() => setTab("automation")}>Automation</button>
+     </div>
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 52,59 @@
+         void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
+       }}><Icon name="external" size={15} /></a>}
+     {onSubscribe && <button type="button" className={`icon-btn${following ? " is-following" : ""}`} aria-haspopup="dialog"
+       aria-label={watchLabel} title={watchLabel} onClick={() => onSubscribe(card)}><Icon name="bell" size={15} /></button>}
+   </div>;
+ }
+ 
+-function secondaryNote(card: ReviewCard, reason: string) {
+-  const note = reviewNote(card);
+-  return note && note !== reason ? note : null;
+-}
+-
+ function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: ReviewCard }) {
+
+--- apps/desktop/src/review/model.ts
+@@ 84,107 @@
+ /** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
+ export function reviewNote(c: ReviewCard): string | null {
+   const outdated = c.localReview?.outdated;
+   if (!outdated) return null;
+   const partial = outdated.state === "partial" || outdated.state === "budget";
+   const sha = outdated.headSha.slice(0, 7);
+   // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+   if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+   return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
+ }
+ 
+ export function laneReason(c: ReviewCard) {
+   if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+   if (c.localReview?.runState === "queued") return "Keryx review queued";
+   if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
+   if (c.localReview?.active) return "Keryx review in progress";
+   if (c.state !== "open") return STATE_LABEL[c.state];
+   if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
+   const attention = attentionReason(c);
+   if (attention) return attention;
+-  const note = reviewNote(c);
+-  if (note) return note;
+   if (c.decision) return DECISION_LABEL[c.decision];
+   if (c.draft) return "Draft pull request";
+   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
+ }
+
+--- apps/desktop/src/platform/reviewPages.test.ts
+@@ 38,59 @@
++});
++
+ test("a board larger than the transport limit combines bounded pages without missing the final PR", async () => {
+   const text = "x".repeat(65536);
+   let calls = 0;
+   const result = await collectBoardPages(async (cursor, repository) => {
+     expect(cursor).toBe(calls ? String(calls) : null);
+     if (calls) expect(repository).toBe("org/repo");
+     const start = calls++ * 100;
+     return { ...page(calls < 6 ? String(calls) : null), cards: Array.from({length:100}, (_, n) => ({ ...card, number: start+n+1, title: text })) };
+   });
+   expect(calls).toBe(6); expect(result.cards.length*text.length).toBeGreaterThan(32*1024*1024);
+   expect(result.cards.at(-1)?.number).toBe(600); expect(result.warnings).toEqual([]);
+ });
+ 
+ test("later page access loss invalidates earlier private cards; a temporary failure or repeated cursor is visibly partial", async () => {
+   for (const changed of [{viewer:"other"}, {repositoryId:"another"}]) {
+     expect(await collectBoardPages(async cursor => cursor ? {...page(null), ...changed} : page("next")).catch((e: Error) => e.message)).toContain("access:");
+   }
+   expect(await collectBoardPages(async cursor => { if (cursor) throw Error("access: denied"); return page("next"); }).catch((e: Error) => e.message)).toBe("access: denied");
+   const partial = await collectBoardPages(async cursor => { if (cursor) throw Error("unavailable: offline"); return page("next"); });
+   expect(partial.cards).toEqual([card]); expect(partial.warnings.length).toBe(1);
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 444,492 @@
+   expect(button("PR watcher · Off").getAttribute("title")).toBe("PR watcher · Off");
+ });
+ 
+-test("project rule previews its scope and budgets, can be disabled, edited and deleted", async () => {
+-  const backend = rulesBackend([]);
+-  await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
+-  await click(button("Review rules"));
+-  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+-  expect(document.activeElement).toBe(dialog);
+-  dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+-  expect(document.activeElement).toBe(button("Close"));
+-  await click(button("New rule"));
+-  const field = (text: string) => Array.from(document.body.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
+-  const fill = (text: string, value: string) => act(async () => {
+-    const input = field(text);
+-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+-    input.dispatchEvent(new Event("input", { bubbles: true }));
+-  });
+-  expect(field("Token limit (optional)").value).toBe("");
+-  expect(field("Token limit (optional)").required).toBe(false);
+-  await fill("Rule name", "   ");
+-  await click(button("Save rule"));
+-  const name = field("Rule name");
+-  expect(document.activeElement).toBe(name);
+-  expect(name.getAttribute("aria-invalid")).toBe("true");
+-  expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a rule name.");
+-  expect(backend.actions.some(action => action.kind === "save")).toBe(false);
+-  await fill("Rule name", automationRule.name);
+-  expect(name.hasAttribute("aria-invalid")).toBe(false);
+-  await click(button("Save rule"));
+-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { budgetTokens: null } });
+-  await click(button("Edit"));
+-  await fill("Requested reviewer", "org/team");
+-  await fill("Time limit (minutes)", "15");
+-  await fill("Token limit (optional)", "300000");
+-  expect(field("Token limit (optional)").checkValidity()).toBe(true);
+-  await fill("Token limit (optional)", "50000");
+-  expect(document.body.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
+-  await click(button("Save rule"));
+-  const creation = backend.actions.at(-1);
+-  expect(creation?.kind).toBe("save");
+-  if (creation?.kind !== "save") throw new Error("rule save missing");
+-  expect(creation.rule.id.length).toBeGreaterThan(0);
+-  expect(creation.rule).toEqual({ ...automationRule, id: creation.rule.id });
+-  await click(button("Disable"));
+-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { enabled: false } });
+-  await click(button("Edit"));
+-  expect(field("Token limit (optional)").value).toBe("50000");
+-  await fill("Token limit (optional)", "");
+-  await fill("PR author", "jo");
+-  await click(button("Save rule"));
+-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { author: "jo", enabled: false, budgetTokens: null } });
+-  expect(document.body.textContent).toContain("No token limit");
+-  await click(button("Delete")); await click(button("Confirm delete"));
+-  expect(backend.actions.at(-1)?.kind).toBe("delete");
+-  expect(document.body.textContent).toContain("No automatic review rules");
+-});
+-
+ test("PR mode pins an enabled rule, preserves manual launch and scopes its history to the open card", async () => {
+   const backend = rulesBackend([automationRule]);
+   const command: typeof reviewRules = async (...args) => ({ ...await backend.command(...args), activity: [
+     { number: 101, at: pr.updatedAt, headSha: pr.headSha, reason: "Team changes is waiting for green CI", state: "waiting" },
+     { number: 102, at: pr.updatedAt, headSha: pr.headSha, reason: "Unrelated PR reason", state: "ready" },
+     { number: 101, at: pr.updatedAt, headSha: pr.headSha, reason: "Team changes linked to an earlier manual attempt", state: "linked", runId: "manual-run-id" },
+   ]});
+   const detail: typeof fetchReviewDetail = async () => ({ version: 1, number: pr.number, repo: "org/repo", viewer: "ann",
+     repositoryId: "repo1", headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], threads: [], reviews: [], checks: [], warnings: [] });
+   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, detail, async () => ({ version: 1, runs: [] }), watcherDisabled, command);
+   await click(document.body.querySelector<HTMLElement>(".review-card")!); await click(button("Automation"));
+   const select = document.body.querySelector<HTMLSelectElement>(".pr-automation select")!;
+   expect(select.value).toBe("project");
+   expect(document.body.textContent).toContain("Team changes is waiting for green CI");
+   expect(document.body.textContent).not.toContain("Unrelated PR reason");
+   const linked = Array.from(document.body.querySelectorAll(".automation-history li")).find(row => row.textContent?.includes("earlier manual attempt"));
+   expect(linked?.querySelector("strong")?.textContent).toBe("Linked");
+   expect(linked?.textContent).toContain("Run manual-r");
+   for (const value of ["auto/rule-1", "manual", "project"]) {
+     await act(async () => { select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); });
+     await click(button("Save mode"));
+     expect(backend.actions.at(-1)).toEqual({ kind: "mode", number: 101, choice: value === "auto/rule-1" ? { mode: "auto", ruleId: "rule-1" } : { mode: value } });
+     expect(button("Start review").disabled).toBe(false);
+   }
+ });
+ 
+-test("a rules dialog pending for a previous account cannot expose that account's rules or change repository state", async () => {
+-  let resolveRules!: (s: ReviewRuleSnapshot) => void;
+-  const old = () => new Promise<ReviewRuleSnapshot>(resolve => { resolveRules = resolve; });
+-  const board = snapshot([pr]);
+-  const load: typeof fetchReviewBoard = async () => ({ ...board });
+-  await render(load, "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, old);
+-  await click(button("Review rules"));
+-  expect(document.body.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
+-  board.viewer = "other";
+-  await click(button("Refresh pull requests"));
+-  await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
+-  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+-  expect(document.body.textContent).not.toContain("Previous account secret rule");
+-});
+-
+ test("project tabs reuse prefetched cards until refresh and evict them on denied access", async () => {
+   const key = ++renderKey;
+   let problem = "";
+   let reads = 0;
+   const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+     reads++;
+     if (problem) throw new Error(problem);
+     return { ...snapshot([{ ...pr, title: repo === "org/upstream" ? "Upstream card" : "Fork card" }]), repo: repo ?? "org/fork", repositories: ["org/fork","org/upstream"] };
+   };
+   const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
+     key, cwd: "/project", flows: [], onOpenFlow: () => {}, active, load, watcherCommand: watcherDisabled, listRepositories: async () => [],
+   })));
+   await show(false);
+   expect(reads).toBe(1);
+   await show(true);
+   expect(reads).toBe(1);
+   const select = document.body.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+   await act(async () => { select.value = "org/upstream"; select.dispatchEvent(new Event("change", {bubbles: true})); });
+   expect(document.body.textContent).toContain("Upstream card");
+   await show(false);
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 791,791 @@
+   await click(button("View review for #101"));
+-  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+-  expect(calls).toEqual(["status"]);
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 906,906 @@
+-    expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 932,932 @@
+     key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
+-    listRepositories: async () => [],
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 64,155 @@
+   await show(async (_cwd, _key, action) => {
+     actions.push(action);
+     if (action.kind === "readiness") return { version: 1, runs: [attempt], completion: { checks: [
+       { id: "reviewers", title: "All reviewers reported", evidence: "Two reviewers did not report", canWaive: true },
+     ] } };
+     if (action.kind === "status" && action.id) return { version: 1, runs: [{ ...attempt, coordinatorActivity: [
+       { kind: "message", final: true, text: "Suggested review action: complete — Retain the explicitly limited result." },
+     ] }] };
+     if (action.kind === "decide") attempt = { ...attempt, closure: "completed",
+       decision: { action: action.decision, reason: action.reason, at: time } };
+     return { version: 1, runs: [attempt] };
+   }, pr);
+-  await click("Keryx review");
+   await click("Complete review");
+   const dialog = document.querySelector('[role="dialog"][aria-modal="true"]:has(textarea)')!;
+   expect(dialog.querySelector("textarea")?.value).toBe("Retain the explicitly limited result.");
+   expect([...dialog.querySelectorAll("button")].find(button => button.textContent === "Complete review")?.disabled).toBe(true);
+   await act(async () => dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+   await click("Complete with exceptions");
+   expect(actions.find(action => action.kind === "decide")).toEqual({ kind: "decide", id: attempt.id,
+     decision: "complete", reason: "Retain the explicitly limited result.", waive: ["reviewers"] });
+   expect(document.body.textContent).toContain("Completed by operator");
+   await act(() => root.render(null));
+ });
+ 
+ test("starts the pinned range, ignores an older read and polls through to a distinct local verdict", async () => {
+   let old!: (r: DeskRunSnapshot) => void;
+   let launched = false;
+   const actions: ReviewRunAction[] = [];
+   const command: typeof reviewRun = async (_cwd, key, action) => {
+     expect(key).toEqual({ repo: "owner/repo", repositoryId: "node", viewer: "tester", number: 42 });
+     actions.push(action);
+     if (action.kind === "start") { launched = true; return { version: 1, runs: [running] }; }
+     if (launched) return { version: 1, runs: [complete] };
+     return new Promise(resolve => { old = resolve; });
+   };
+   const clock: Window = window;
+   const schedule = clock.setInterval, cancel = clock.clearInterval;
+   const activeTimers = new Map<number, () => void>();
+   let nextTimer = -1;
+   clock.setInterval = (fn, delay, ...args) => {
+     if (delay !== 3000 || typeof fn !== "function") return schedule.call(window, fn, delay, ...args);
+     const id = nextTimer--;
+     activeTimers.set(id, () => fn(...args));
+     return id;
+   };
+   clock.clearInterval = id => {
+     if (id === undefined || !activeTimers.delete(id)) cancel.call(window, id);
+   };
+   try {
+     await show(command, pr);
+     expect(btn("Checking review…").disabled).toBe(true);
+     await act(async () => old({ version: 1, runs: [] }));
+-    await click("Keryx review");
+     await click("Refresh runs");
+     await click("Start review");
+     expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "head" });
+     expect(document.body.textContent).toContain("Reviewing diff");
+     await act(async () => old({ version: 1, runs: [] }));
+     expect(document.body.textContent).toContain("In progress");
+     expect(activeTimers.size).toBe(1);
+     const [tick] = activeTimers.values();
+     const beforeTick = actions.length;
+     await act(async () => { tick!(); });
+     expect(actions.slice(beforeTick)).toEqual([{ kind: "status" }]);
+     const outcome = document.querySelector('article [aria-label="Review result"]');
+     expect(outcome?.textContent).toContain("REQUEST_CHANGES");
+     expect(document.body.textContent).toContain("GitHub review decision · Approved");
+     expect(outcome?.textContent).toContain("1 blocker");
+     expect(document.querySelector(".desk-run-report summary")?.textContent).toBe("Open review report");
+     const disclosure = document.querySelector<HTMLDetailsElement>(".desk-run-report")!;
+     expect(disclosure.open).toBe(false);
+     await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
+     expect(disclosure.textContent).toContain("Incorrect owner on rename");
+     expect(disclosure.querySelector("script")).toBeNull();
+     await click("View review result");
+     expect(actions.filter(a => a.kind === "start")).toHaveLength(1);
+   } finally {
+     clock.setInterval = schedule;
+     clock.clearInterval = cancel;
+   }
+ });
+ 
+ test("historic result survives a push, and retry and stop target the correct attempt", async () => {
+   const newer = { ...pr, number: 43, headSha: "next" };
+   const next: DeskRun = { ...running, id: "attempt-2", headSha: "next" };
+   const actions: ReviewRunAction[] = [];
+   const command: typeof reviewRun = async (_cwd, _key, action) => {
+     actions.push(action);
+     if (action.kind === "status") return { version: 1, runs: [complete] };
+     if (action.kind === "start") return { version: 1, runs: [next, complete] };
+     return { version: 1, runs: [{ ...next, state: "cancelled", reason: "Stopped by user" }, complete] };
+   };
+   await show(command, newer);
+-  await click("Review again");
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 164,187 @@
+ });
+ 
+ test("a late status from another PR cannot reveal its report and a closed PR cannot launch", async () => {
+   let finish!: (r: DeskRunSnapshot) => void;
+   const waiting: typeof reviewRun = () => new Promise(resolve => { finish = resolve; });
+   await show(waiting, { ...pr, number: 44 });
+   await show(async () => ({ version: 1, runs: [] }), { ...pr, number: 45, state: "merged" });
+-  await click("Keryx review");
+   await act(async () => finish({ version: 1, runs: [complete] }));
+   expect(document.body.textContent).toContain("No Keryx reviews");
+   expect(document.body.textContent).not.toContain("Start review");
+   expect(document.body.textContent).not.toContain("Incorrect owner");
+ });
+ 
+ test("a stale range keeps the board refresh action through status polling; denied history removes stored reports", async () => {
+   let deny = false, refreshed = 0, denied = "";
+   const command: typeof reviewRun = async (_cwd, _key, action) => {
+     if (action.kind === "start") throw new Error("stale: Range changed");
+     if (deny) throw new Error("access: Permission revoked");
+     return { version: 1, runs: [complete] };
+   };
+   await show(command, { ...pr, number: 46, baseSha: "new-base" }, {
+     onRefreshBoard: () => { refreshed++; },
+     onAccessLost: message => { denied = message; },
+   });
+-  await click("Review again");
+-  expect(btn("Review again").disabled).toBe(true);
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 191,191 @@
+-  await click("Refresh board");
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 218,257 @@
+   await click("View review result");
+   expect(actions).toEqual([{ kind: "status" }]);
+   const disclosure = document.querySelector<HTMLDetailsElement>(".desk-run-report")!;
+   await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
+   expect(actions.at(-1)).toEqual({ kind: "status", id: complete.id });
+   await click("Refresh runs");
+   expect(actions).toEqual([{ kind: "status" }, { kind: "status", id: complete.id }, { kind: "status" }]);
+   expect(disclosure.textContent).not.toContain("Incorrect owner on rename");
+   await act(async () => finish({ version: 1, runs: [complete] }));
+   expect(disclosure.textContent).toContain("Incorrect owner on rename");
+   expect(actions.filter(action => action.kind === "status" && action.id)).toHaveLength(1);
+ });
+ 
+ test("a closed result from an earlier review scope stays readable and allows a new run", async () => {
+   const archived = { ...complete, id: "archived-attempt", scope: "earlier-profile" };
+   const requests: ReviewRunAction[] = [];
+   await show(async (_cwd, _key, action) => {
+     requests.push(action);
+     return { version: 1, runs: action.kind === "start" ? [running, archived] : [archived] };
+   }, pr);
+-  await click("Keryx review");
+   expect(document.body.textContent).toContain("Open review report");
+   await click("Retry review");
+   expect(requests.at(-1)).toEqual({ kind: "start", baseSha: pr.baseSha, headSha: pr.headSha });
+ });
+ 
+ test("docked review actions let Tab and Shift+Tab leave the panel", async () => {
+   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 105 });
+   await click("View review result");
+   const publish = btn("Publish to GitHub");
+   const first = document.querySelector<HTMLButtonElement>('.review-run-history button')!;
+   const tab = (shiftKey: boolean) => document.activeElement!.dispatchEvent(
+     new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
+   );
+   first.focus();
+   expect(tab(true)).toBe(true);
+   publish.focus();
+   expect(tab(false)).toBe(true);
+ });
+ 
+ test("a scheduled review shares the card action and identifies its rule and budget in history", async () => {
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 754,807 @@
+   expect(result.closest("details")).toBeNull();
+   const transcript = dialog.querySelector('[role="log"]')!;
+   const tools = transcript.querySelector<HTMLDetailsElement>("details")!;
+   expect(tools.open).toBe(false);
+   expect(tools.querySelector("summary")!.textContent).toBe("2 tool calls");
+   expect(tools.textContent).toContain("Read 20 lines");
+   expect(transcript.querySelector('[data-kind="message"]')!.textContent).toContain("The fixture omits a rename.");
+   expect(transcript.querySelector('[data-kind="status"]')!.textContent).toContain("Examining changes");
+   await act(async () => tools.querySelector("summary")!.click());
+   expect(tools.open).toBe(true);
+   await click("Close");
+ });
+ 
+ test("coordinator separates progress and replies from compact tool records and shows the partial outcome", async () => {
+   const run: DeskRun = { ...running, state: "partial", reason: "A reviewer returned without a receipt.",
+     coordinatorActivity: [
+       { kind: "tool", text: "Read project plan" }, { kind: "result", text: "Accepted" },
+       { kind: "status", text: "Wave 2 started" }, { kind: "answer", text: "Review the rename" },
+     ] };
+   await show(async () => ({ version: 1, runs: [run] }), { ...pr, number: 189 });
+-  await click("Keryx review");
+   await click("Open review session");
+   const dialog = document.querySelector(".dialog")!;
+   expect(dialog.querySelector('[aria-label="Review result"]')?.textContent).toContain(run.reason);
+   expect(dialog.querySelector('[data-kind="answer"]')?.textContent).toContain("Review the rename");
+   expect(dialog.querySelector('[data-kind="status"]')?.textContent).toContain("Wave 2 started");
+   expect(dialog.querySelector<HTMLDetailsElement>(".review-transcript-tools")?.open).toBe(false);
+   expect(dialog.querySelector<HTMLDetailsElement>(".review-session-details")?.open).toBe(false);
+   await click("Close");
+ });
+ 
+ test("status distinguishes missing, quiet and recent transcripts, an outstanding question and a partial verdict", async () => {
+   const question = { id: "waiting", question: "Continue this wave?", options: [], allowFreeform: true };
+   let observed: DeskRun = running;
+   await show(async () => ({ version: 1, runs: [observed] }), { ...pr, number: 225 });
+-  await click("Keryx review");
+   const article = () => document.querySelector("article.desk-run")!;
+   expect(article().textContent).toContain("No transcript activity recorded yet");
+   observed = { ...running, lastActivityAt: time };
+   await click("Refresh runs");
+   expect(article().textContent).toContain("No recent transcript events");
+   observed = { ...running, lastActivityAt: new Date().toISOString() };
+   await click("Refresh runs");
+   expect(article().textContent).toContain("Transcript updated");
+   observed = { ...observed, pendingQuestion: question };
+   await click("Refresh runs");
+   expect(article().querySelector("header strong")?.textContent).toBe("Awaiting your answer");
+   expect(article().textContent).toContain(question.question);
+   expect(btn("Answer review question").disabled).toBe(false);
+   observed = { ...observed, state: "partial", reason: "No reviewer dispatch recorded." };
+   await click("Refresh runs");
+   expect(article().querySelector("header strong")?.textContent).toBe("Partial");
+   expect(article().textContent).toContain("before completion");
+   expect(article().textContent).toContain(observed.reason);
+   expect(article().textContent).not.toContain(question.question);
+   observed = { ...observed, reviewerProgress: {
+
+--- apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+@@ 864,895 @@
+   await choose("review-layout");
+   expect(document.querySelector(".dialog .review-question p")?.textContent).toBe(c.question);
+   await click("All questions");
+   await choose("Coordinator");
+   expect(document.querySelector(".dialog .review-question p")?.textContent).toBe(a.question);
+   expect(requests.some(r => r.kind === "answer")).toBe(false);
+   await click("Close");
+ });
+ 
+ test("ended reviewer context explicitly addresses the current coordinator question and waits for submission", async () => {
+   const q = { id: "coord-approval", question: "Authorize the additional wave?", options: [
+     { id: "yes", label: "Approve budget", description: "" }], allowFreeform: true };
+   const commands: ReviewRunAction[] = [];
+   await show(async (_cwd, _key, action) => {
+     commands.push(action);
+     return { version: 1, runs: [{ ...running, pendingQuestion: q, reviewerProgress: {
+       planned: 1, finished: 1, wave: 2, sessions: [{ id: "finished-logic", reviewer: "review-logic", wave: 2,
+         state: "partial", needsContext: true, outcomeReason: "The migration version is missing." }],
+     } }] };
+   }, { ...pr, number: 192 });
+-  await click("Keryx review");
+   const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
+   await act(async () => list.querySelector("summary")!.click());
+   await act(async () => list.querySelector<HTMLButtonElement>(".review-session-row")!.click());
+   expect(document.querySelector(".dialog .review-session-outcome")?.textContent).toContain("The migration version is missing.");
+   await click("Provide context to coordinator");
+   const dialog = document.querySelector(".dialog")!;
+   expect(dialog.querySelector("legend")!.textContent).toBe("Coordinator question");
+   expect(dialog.textContent).toContain(q.question);
+   expect(dialog.textContent).toContain("Approve budget");
+   expect(dialog.textContent).toContain("review-logic has finished");
+   const textarea = dialog.querySelector("textarea")!;
+   expect(textarea.value).toContain("review-logic");
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 170,189 @@
+     accountListError = message;
+     await React.act(() => refreshAccounts.click());
+     assert.ok(host.querySelector('[role="alert"]')?.textContent?.includes("choose Bundled keryx"));
+     assert.ok(namedButton("Connect account").disabled);
+   }
+   accountListError = undefined;
+   await React.act(() => refreshAccounts.click());
+   await React.act(() => namedButton("Connect account").click());
+   assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));
+   await React.act(() => namedButton("Close Settings").click());
+   await chooseAccount("me");
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @me");
+   assert.ok(host.querySelector('.titlebar-right button[aria-label="Activity"]'));
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "Keep this unsent draft");
+     composer.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   // Review warms once for the active gh account and once after onboarding binds it.
+   const accountReads = [cwd, cwd];
+   assert.deepEqual(reads, accountReads);
+-  const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 1,1 @@
+ # План реализации · Review v2
+-Version: 0.1.3
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 66,74 @@
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+-- **Этап 2.** Начать с миграции запусков (`src/review/desk-run-store.ts`) в раунды и попытки на копии рабочей базы. После появления вкладки Reviews индикатор вкладки Pull requests перестаёт загораться от локального ревью — это снимает отклонение (b). Подпись «Review again» из решения (d) меняется вместе со связью раундов.
+-- **Этап 3.** Действие «Review again» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 73,74 @@
+ 
+ - `runs.sqlite`: к таблице `runs` добавляются `review_id`, `round` (порядковый номер), `previous_run_id`. Новая таблица `reviews` (`id`, `repo`, `pr`, `viewer`, `closed_at`, `on_head_move`).
+-- Миграция: существующие строки группируются по `(repo, pr, viewer)` в один Review; раунды нумеруются по первой встрече пары base..head в порядке `createdAt`; запуски с `continuation.previousId` попадают в раунд предшественника.
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 219,225 @@
+   mode: "first" | "delta" | "fallback-first";
+   previousRound?: number;
+   attempts: DeskRun[];           // существующий тип
+   publication?: "pending" | "published" | "skipped";
+ }
+ ```
+ 
+-Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).
+
+--- src/review/desk-run-store.ts
+@@ 426,426 @@
+-    if (state !== "completed" || coverage !== "complete" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+
+--- src/review/desk-run-store.ts
+@@ 430,432 @@
+       try { if (typeof JSON.parse(receipt.text)?.url === "string") return "published"; }
+       catch { /* Receipt without a confirmed URL needs operator attention. */ }
+     }
+-    return existsSync(path.join(directory, PUBLICATION_SKIPPED)) ? "skipped" : "pending";
+
+--- src/review/desk-run-store.ts
+@@ 649,664 @@
+     const storedKey = effectiveOptionsKey === undefined
+       ? "coalesce(json_extract(details,'$.options'),'')"
+       : "coalesce(json_extract(details,'$.effectiveOptionsKey'),json_extract(details,'$.options'),'')";
+     return this.db
+       .query<
+         { id: string; state: string; complete: number; retryable: number | null; attempt: number | null },
+         [string, string, number, string, string, string, string, number, number]
+       >(
+         `SELECT id,state,json_extract(details,'$.retryableBeforeSpend') AS retryable,
+          json_extract(details,'$.preflightAttempt') AS attempt,
+          (json_extract(details,'$.scope')=? AND json_extract(details,'$.result.coverage')='complete'
+           AND json_extract(details,'$.result.reviewed.baseSha')=json_extract(details,'$.baseSha')
+           AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
+        FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
+          AND json_extract(details,'$.headSha')=? AND (${storedKey}=? OR ?=1) AND json_extract(details,'$.source') IN ('manual','scheduled')
+          AND (?=1 OR coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete'))
+-         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
+-           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
+-           AND json_extract(details,'$.usage') IS NULL)

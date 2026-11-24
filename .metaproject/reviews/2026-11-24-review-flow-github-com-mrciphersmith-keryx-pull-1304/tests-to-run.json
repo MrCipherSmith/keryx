@@ -1,0 +1,749 @@
+[
+  {
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/platform/reviewReadLane.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/platform/reviewRunArgs.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/platform/reviewWatcherArgs.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/runPolling.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewRun"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/commands/agent-review-gate.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/approvals.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/automatic-review.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/import-only.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-review-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs",
+      "reviewConfirmSpecs"
+    ]
+  },
+  {
+    "file": "src/commands/permissions-command.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/review-ac-check-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-accounts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/commands/review-agents-serve.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-agents.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-arbiter-config.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-arbiter-eval.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-arbiter.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-blast-radius-base.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-chunks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-ci-triage-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-comments-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-complete-host-question.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-conform-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-degradation-ingest.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-desk-provider.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-desk-publish.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-desk-run.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/commands/review-floor-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-help.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "printReviewHelpFor"
+    ]
+  },
+  {
+    "file": "src/commands/review-host-question.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-jev-comments-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-contract-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-docs-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-edit-guard.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-jev-profile-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-risk-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-rules-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-rules-discovery.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-jev-scenarios-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-select-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-triage-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-layers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-learn-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-learn-reviewer-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-ledger.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-next.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-operator-cli.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-parity-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-plan-desktop.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-plan.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-plan.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "printReviewHelpFor"
+    ]
+  },
+  {
+    "file": "src/commands/review-pr-base.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-premises-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-ref-alias.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-required-package.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-result-contract.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-revision-operand.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-rules.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-run.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-slice-head.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-slice-paths.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-slice.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-tty-refusal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-watch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/commands/review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-review.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/skills-references.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "knownSubcommandsFor"
+    ]
+  },
+  {
+    "file": "src/commands/skills-remove.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "knownSubcommandsFor"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-review.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/decisions/backfill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/flow/renumber-reviews.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/flow/review-gate.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/lib/group-subcommands-flow.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/product/bulk-budget.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/review/active-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/board-addressed-replies.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/review/board.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runReviewBoard"
+    ]
+  },
+  {
+    "file": "src/review/clean-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/cost-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/cross-family.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/desk-publication.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/desk-reviewer-progress.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRun"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-executor.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "finishExecution"
+    ]
+  },
+  {
+    "file": "src/review/desk-run-legacy.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/desk-worker-roster.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRun"
+    ]
+  },
+  {
+    "file": "src/review/estimate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/filter-stats.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/harness-robustness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs"
+    ]
+  },
+  {
+    "file": "src/review/loop-real-path.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/managed.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/mutate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/pr-comments.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/pr-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore"
+    ]
+  },
+  {
+    "file": "src/review/prior-round.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/publish.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/readiness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/review-next.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/review-notes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/review-rules.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "DeskRunStore",
+      "attachDeskRunBadges",
+      "readLocalActiveReviewNumbers",
+      "readLocalBadges",
+      "readReviewRows"
+    ]
+  },
+  {
+    "file": "src/review/round-split.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/second-look.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/watcher-project.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "pollWatcher"
+    ]
+  },
+  {
+    "file": "src/review/watcher.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewBoardSnapshot",
+      "ReviewCard"
+    ]
+  },
+  {
+    "file": "src/review/wave-events.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/tui/decisions-surface.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/tui/review-readiness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  }
+]

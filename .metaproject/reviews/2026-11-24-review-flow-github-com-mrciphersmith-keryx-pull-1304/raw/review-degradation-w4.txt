@@ -1,0 +1,119 @@
+STATUS: DONE
+
+review-degradation, round 1, wave 4 (retry of wave 2 on slice-04 with the test output now present). Reviewed commit 20e4281a2 against base a5d1ab236, read with `git show 20e4281a2:<path>`. The slice holds the backend half of the PR: the `keryx review reviews` command, its routing, help and tests, the `writeJson` export from review-board.ts, the store and badge tests, and the stage-2 docs. No blocker or major. This result replaces review-degradation-w2.txt for slice-04: it carries the same three findings, F-001 to F-003, rechecked at 20e4281a2. They are not new defects. No new findings.
+
+### [F-001] The CLI reference does not document the `unknown` freshness that `review reviews` emits
+
+- **Severity**: minor
+- **Class**: diff-vs-description
+- **Evidence kind**: base-diff
+- **File**: docs/docs/cli-reference.md:5197
+- **Problem**: The new paragraph describes freshness as "`current`, or `behind` with the number of new commits, `null` when unknown". Commit 98bec5904 is in the range (ancestor of 20e4281a2, not of a5d1ab236). It added `{ kind: "unknown" }` (review-entity.ts `freshness()`: `if (!prHead) return { kind: "unknown" }`), and `review reviews` returns it when the PR card cannot be read. That commit did not touch cli-reference.md. As a result the reference names only two kinds.
+- **Why it matters**: A script or host written from the CLI reference would treat freshness as `current | behind` and mishandle the third kind. specification.md and the PR body do document `unknown`.
+- **Fix**: List three kinds: `current`; `behind {commits (null when unknown), rewritten}`; `unknown` when the PR head cannot be read.
+
+### [F-002] The specification still says the CLI protocol version is raised and machine schemas arrive in stage 2; the stage kept `version: 1`
+
+- **Severity**: minor
+- **Class**: diff-vs-description
+- **Evidence kind**: base-diff
+- **File**: docs/requirements/keryx-desktop-review-v2/specification.md:226
+- **Problem**: The PR edits specification.md in three hunks (lines 2, 70 and 210). Two sentences stay as they were. Line 226 says "Версия протокола ответов CLI повышается", and line 8 says machine schemas "добавляются на этапе 2 вместе с повышением версии протокола". implementation-plan.md, changed in the same PR, records the opposite decision: `review reviews` keeps `version: 1`. The code agrees with the plan: `ReviewsSnapshot.version: 1` in review-entity.ts.
+- **Why it matters**: Agents in stages 3 and 4 read the spec as an input, and two documents in this PR now give opposite protocol rules.
+- **Fix**: Amend lines 8 and 226 to say that stage 2 kept version 1 and added no schema, or link the plan's decision.
+
+### [F-003] (info) The 25 commit-count comparisons go to the highest PR numbers, not to the Reviews the list shows first
+
+- **Severity**: info
+- **Class**: behaviour-delta
+- **Evidence kind**: consumer-trace
+- **File**: src/commands/review-reviews.ts:50
+- **Problem**: `behind` keeps the order from `readReviewRows`, which is `ORDER BY v.pr DESC` (desk-run-store.ts:587). `behind.slice(0, MAX_REVIEW_COMPARES)` then compares the first 25. The output is sorted afterwards by the newest attempt's `createdAt`. With more than 25 Reviews behind, the rows shown first can be the ones with an unknown count.
+- **Fix**: Sort by the latest attempt's `createdAt` before slicing.
+
+### Verified clean (traced, no finding)
+- Test output (verify-tests-to-run-1.txt; 2014 pass, 18 fail, 15 errors; exit 1). The 18 failures are all in suites outside this slice: desk-publication, harness-robustness, desk-run-executor ×8, review-operator-cli, review-accounts ×4, review-desk-run and review-host-question. They are 5 s or 30 s timeouts, plus one `--package resolves outside the project root` refusal and the ENOENT fallout of a timed-out gate. No failure touches a file in this slice. Consumers of this slice's changes that ran and passed: `src/commands/review.test.ts` (review.ts routing and help), `src/review/board.test.ts` (graph dependent of review-board.ts / writeJson), `src/lib/group-subcommands-flow.test.ts` and `src/commands/review-help.test.ts`.
+- `writeJson` export (review-board.ts): the body is unchanged. Graph dependents are review-reviews.ts, review.ts and board.test.ts, and the cap dropped none. Only review-reviews.ts calls it, and it passes `projectGithubConnection` auth, so the binding check at publication still applies.
+- `review reviews` routing: at base, "reviews" fell through to `Unknown review command`, so no existing route is shadowed. The command is read-only and needs no command-risk entry.
+- `readReviews` error paths: `cannotRetainData` errors are rethrown, a card-read failure becomes a warning, and a compare failure leaves the count null and adds a warning. All were reread at 20e4281a2 (review-reviews.ts:40-75).
+- A writable store open on a read path is not new: the base `desk-run status` path already opens the store writable.
+- The MAIN_DDL fixture in desk-run-store.test.ts matches base desk-run-store.ts.
+- The badge `round` tests keep the `attachBadges == localBadge` parity assertion.
+- The new review-reviews.test.ts cases are not blind: each pins a distinct branch.
+
+### Not covered / inputs
+- Inputs read: payload review-degradation-w4.json, driver review-degradation-w4.json, SKILL.md, .metaproject/index.md, raw/review-degradation-w2.txt (my earlier reasoning), research-evidence/verify-tests-to-run-1.txt (the command line, every `(fail)` entry and the totals, through keryx ctx read/rg/show), and, at 20e4281a2: cli-reference.md:5190-5202, specification.md lines 8 and 226 plus the base..head hunk list, review-entity.ts (`freshness`, `ReviewsSnapshot`), review-reviews.ts:40-75 and desk-run-store.ts:587. slice-04.diff was read in wave 2 and not reread here. The w2 reasoning is reused and its claims were rechecked at the commit as listed.
+- Test-output gap, stated, not filed: the verify run (tests-to-run) did not include this slice's own test files: src/commands/review-reviews.test.ts, src/review/desk-run-store.test.ts, src/review/board-badges.test.ts and src/review/review-entity.test.ts. Its desktop half (`&& cd apps/desktop && bun test ...`) never ran, because the root step exited 1; the output ends at "Ran 2032 tests across 104 files". This review therefore has no local run of the slice's own tests. The only evidence that they pass is CI at 20e4281 (29 pass, 0 fail, per the dispatch) and the PR body.
+- No tests were run (exec_budget_s 0).
+- Not re-filed: review-performance-w2 (unbounded `listActiveReviewCards`) and the wave-1 items.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "slice-04 retry (review reviews CLI, routing, writeJson export, store/badge/entity tests, stage-2 docs), reviewed at 20e4281a2: no blocker or major. This result supersedes review-degradation-w2 and carries its three findings, rechecked at the commit: F-001 (minor) cli-reference.md omits the `unknown` freshness kind added in 98bec5904 (in range); F-002 (minor) specification.md:8/:226 still say the protocol version is raised and schemas arrive in stage 2, while the plan and code keep version 1; F-003 (info) the 25-compare cap follows PR-number order, not list order. Test output read: 2014 pass / 18 fail, every failure a timeout or path refusal in suites outside this slice. review.test.ts, board.test.ts, review-help.test.ts and group-subcommands-flow.test.ts (consumers of this slice) passed. Gap: the verify run did not include the slice's own tests (review-reviews, desk-run-store, board-badges, review-entity), and its desktop half never ran because the root step exited 1. Those rest on CI at 20e4281 (29/0). Verified clean: writeJson export (graph dependents review-reviews.ts, review.ts, board.test.ts; the cap dropped none), no shadowed route, readReviews error paths, writable open already present at base, MAIN_DDL equal to base, badge round parity, new tests not blind. No graph-unanswered exports.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 5197,
+      "quote": "the number of new commits, `null` when unknown, and whether the branch was rewritten),",
+      "problem": "The CLI reference describes freshness as `current` or `behind` (with a null count when unknown). It omits `{kind: \"unknown\"}`, which `review reviews` emits when the PR head cannot be read (review-entity.ts freshness()). Commit 98bec5904 (in range) added that kind without touching cli-reference.md.",
+      "impact": "A script or host written from the CLI reference would mishandle a third freshness kind. The spec and PR body document it; the reference does not.",
+      "suggested_fix": "List three kinds in cli-reference.md: current; behind {commits (null when unknown), rewritten}; unknown when the PR head cannot be read.",
+      "evidence": "Read cli-reference.md:5190-5202 and review-entity.ts freshness() at 20e4281a2; 98bec5904 is an ancestor of 20e4281a2 and not of a5d1ab236; per wave 2, `git show --stat 98bec5904` changes no docs file.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "line": 226,
+      "quote": "Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).",
+      "problem": "The PR edits specification.md (hunks at lines 2, 70 and 210) but leaves two sentences: :226 says the CLI protocol version is raised, and :8 says machine schemas arrive in stage 2 with that bump. implementation-plan.md, changed in the same PR, records that `review reviews` keeps `version: 1`, and the code emits version 1 (ReviewsSnapshot.version: 1 in review-entity.ts).",
+      "impact": "Stage 3/4 agents take the spec as input, and two documents in this PR now give opposite protocol rules.",
+      "suggested_fix": "Amend specification.md:8 and :226 to record that stage 2 kept version 1 and added no schema, or link the plan's decision.",
+      "evidence": "Read specification.md lines 8 and 226 at 20e4281a2; `git diff -U0 a5d1ab236 20e4281a2` on the spec shows hunks only at lines 2, 70 and 210; review-entity.ts ReviewsSnapshot `version: 1`.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": 50,
+      "quote": "const behind = rows.flatMap(row => {",
+      "problem": "Compare candidates keep readReviewRows order (ORDER BY v.pr DESC, desk-run-store.ts:587), and only the first 25 are compared. The output is sorted by the newest attempt's createdAt, so with more than 25 Reviews behind, the rows shown first may have an unknown count.",
+      "impact": "Cosmetic: it decides which Reviews get a commit count. Nothing is lost, and the warning tells the user to refresh.",
+      "suggested_fix": "Sort rows (or behind) by latest attempt createdAt before slicing to MAX_REVIEW_COMPARES.",
+      "evidence": "Read desk-run-store.ts:587 and review-reviews.ts:40-75 at 20e4281a2: the behind flatMap keeps row order, behind.slice(0, MAX_REVIEW_COMPARES), then a sort by latestCreated.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Routing audit: graph_used: yes (the wave-2 gdgraph affected on review-board.ts with the package graph; not rerun because the graph and the commit are unchanged). wiki_used: no (not relevant: the spec and plan in the diff were read directly). ctx_used: yes (keryx ctx read/rg/show on the test output). raw_rg_used: no (git show / git diff with sed and grep over blobs at the reviewed commit ran under the keryx:raw marker).

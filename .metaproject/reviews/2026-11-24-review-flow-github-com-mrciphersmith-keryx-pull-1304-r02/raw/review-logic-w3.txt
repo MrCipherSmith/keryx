@@ -1,0 +1,100 @@
+STATUS: DONE
+
+## Logic Review (round 2, wave 3)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (delta round)
+- Slice: slice-08 (read in full, 1969 lines). The slice carries hunks of the whole PR for its files, so I also read the true delta of those files (`git diff 20e4281a2..f6971fd4a`) and these head files in full or in part: apps/desktop/src/reviews/ReviewsView.tsx (lines 1-360), apps/desktop/src/reviews/model.ts (whole), src/review/review-entity.ts (lines 100-215), apps/desktop/src/review/ReviewBoard.tsx (watcherTarget, refresh, openReview).
+- Scope mode: explicit-hash-range, supplied slice text plus head reads
+- Spec compliance gate: not re-run. Slice-01 (wave 1) checked fix-round-1 compliance; the operator decisions in the journal are treated as settled.
+
+### Summary
+The delta in slice-08 does these things. It adds `includeClosed` end to end (Rust `board_read_args`, the dev shim, `fetchReviews`, the ReviewsView load effect). The Reviews focus now carries the repository. Intent consumption is acknowledged to the caller. ReviewDetail drops the review tab. `openReviewLink` sends the Review panel's PR link to the system browser. The board identity and watcher polls are wired to the Reviews tab.
+
+The Rust and dev-shim refusals agree. The include-closed opt-in is accepted only for the Reviews list, and the read-lane key includes it. The focus and intent hand-off is taken once and cannot loop: after `focusRepo`, the guard `repo === wanted` stops a second switch, and `refreshedFor` bounds the re-read to one. `watcherTarget` is memoized, so `onIdentityChange` cannot loop renders.
+
+I found one new minor defect. It is a side effect of making `showClosed` a dependency of the load: `resetView()` also flips `showClosed`, which starts an extra list read that nothing asked for. On the access-lost path, that read can silently undo the access-lost state.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+#### [F-001] `resetView()` now starts a list read when "Show closed" was on, including right after access was lost
+- Severity: minor
+- File: apps/desktop/src/reviews/ReviewsView.tsx:131-146, :148-175
+- Problem: The delta adds `showClosed` to the load effect's dependencies (`load(cwd, repo, expectedViewer, showClosed)`, deps `[cwd, repo, expectedViewer, showClosed, attempt, ...]`). `resetView()` sets `showClosed` to false, and two paths call it:
+  - (a) `accessLost`. It is meant to stop reading: it bumps `sequence`, settles the pending focus, and leaves `snapshot: null` with the error until the user presses Try again ("a later Try again must not act on it"). If Show closed was on, the `showClosed` change re-runs the effect at once and starts a new read without the user doing anything.
+  - (b) The identity-change branch inside `.then`. It applies the new snapshot and then, because `showClosed` flipped, reads the whole list a second time.
+- Why it matters: For (a), take a panel or rules command that reports `access:` or `configuration:` through `onAccessLost` (ReviewPanel, ProjectReviewRules) while the list read itself still succeeds. With Show closed on, the access-lost banner is replaced by a fresh list within one read. With Show closed off, it stays until Try again. So the same signal behaves differently depending on an unrelated toggle. If the condition persists, the second read fails the same way and stops, so this does not loop. For (b), the result is one redundant GitHub-backed list read, with card reads and compares, on every account or repository change while Show closed is on.
+- Fix: Keep the reset from re-triggering the read. Either leave `showClosed` out of `resetView` on the access-lost path, or bump `sequence` and skip the load while an access error is held. One way is a `held` ref set in `accessLost` and cleared by `refresh`; the effect returns early while it is set. For (b), apply the reset before the read is issued, or accept the snapshot read with `includeClosed` as is.
+- Evidence: ReviewsView.tsx:131-137 (`resetView` sets `setShowClosed(false)`), :139-146 (`accessLost` calls `resetView()`), :152 and :175 (`showClosed` is a load argument and a dependency), :157-160 (identity branch calls `resetView()`). In the delta, `git diff 20e4281a2..f6971fd4a -- apps/desktop/src/platform/review.ts` adds `includeClosed`. In round 1, `showClosed` was not a load dependency.
+- Confidence: medium. The ordering is read from the code; I did not run it.
+
+### Async & Concurrency
+None detected beyond F-001. Checked:
+- The focus effect switches repository once. `focusRepo` is followed by the `repo?.toLowerCase() !== wanted` guard. `refreshedFor.after = sequence.current` is always below the next request id, because the effect cleanup and the new request each bump it.
+- `reloadSignal` starts from its mount value, so a remount does not replay a watcher poll.
+- `consumeIntent` on tab leave is a no-op when there is no intent.
+- `ReviewWorkspace` reports consumption on both the drop branch and the act branch, through a ref, so a changing callback identity cannot re-run the effect.
+- The in-flight join of `ReviewReadLane` is already filed in wave 1/2 ("A refresh that should pick up a just-made change can join an older in-flight read"), so I did not re-file it.
+
+### Error Handling
+None detected. `openReviewLink` failures are surfaced by the toast in ReviewPanel and ReviewDetail. The ReviewDetail run-status error moved to the header unchanged.
+
+### Null / Undefined Safety
+None detected. ReviewBoard `openReview` falls back to `setSelected({ number })` when `snapshot` fields are missing, though a card cannot be clicked without a snapshot. `projectViewForKey` returns undefined for digits past the six tabs, and App falls through to its other branches.
+
+### Type Contract Violations
+None detected. The parity between `board_read_args` and dev `reviewBoardArgs` holds for `includeClosed`: refused outside the Reviews list, and `--include-closed` appended last.
+
+### Edge Cases
+None new. Related edge cases already filed in waves 1-2 that I did not re-file:
+- PR panel "Open in Reviews" for superseded-only runs (`hasReview = local.runs.length > 0`)
+- Show closed toggle and focus-driven re-reads (P2-001, I2-001, F-003 highload)
+- Closed Review panel after Show closed off
+- The rules-target fallback
+
+### Suggested Patches
+None. The fix for F-001 needs a choice between the two options.
+
+### Not read / not verified
+- No tests run (exec budget 0). I relied on research-evidence/verify-tests-to-run-1.txt (green at f6971fd).
+- I did not read in full ReviewWorkspace.tsx, ReviewDetail.tsx or ReviewBoard.tsx at head. I read only the delta hunks and the regions named above. I did not read useReviewRuns, to check whether `onRunSnapshot` fires on every poll.
+- The CSS hunks in slice-08 (review.css) are outside the logic lens. The protected stage-0 code (the attention set, attachBadges/localBadge parity, toolbar container queries) is not changed by this delta's code hunks.
+- Layers: gdgraph, wiki and memory were not consulted. The slice names its files, and none of the questions needed a dependency lookup.
+
+### Routing audit
+graph_used: no (not-relevant: files named by the slice). wiki_used: no (not-relevant: the plan and fix-round give the intent). ctx_used: yes (`keryx ctx rg`, `keryx ctx read`). raw_rg_used: no. Raw `git diff --stat`, `git diff` into the scratchpad and `git log --oneline` were run with `keryx:raw` markers to get the exact delta.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-08 delta (includeClosed end to end, repo-aware focus, intent acknowledgement, ReviewDetail without the review tab, openReviewLink, board identity and watcher-poll wiring) is logically sound: Rust/dev refusals agree, the focus and intent hand-off is taken once and cannot loop, watcherTarget is memoized. One new minor: resetView() flips showClosed, which is now a load dependency, so access-lost and identity-change start an extra list read when Show closed was on.",
+  "slices": ["slice-08"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 131,
+      "quote": "setShowClosed(false);",
+      "problem": "showClosed became a dependency of the list load (includeClosed). resetView() sets showClosed false. accessLost and the identity-change branch of the load both call resetView(), so with Show closed on, each starts an unrequested list read. accessLost is meant to hold the error until Try again.",
+      "impact": "With Show closed on, an access/configuration signal from the Review panel or Review rules is replaced by a fresh list read without user action. With Show closed off, it stays until Try again, so the behaviour depends on an unrelated toggle. An account or repository change with Show closed on costs a second full GitHub-backed list read. It does not loop: a persisting failure stops after one read.",
+      "suggested_fix": "Do not let the reset re-trigger the read. For example, hold reads after accessLost with a ref that refresh clears, or keep showClosed out of resetView on the access-lost path. For the identity change, accept the includeClosed snapshot instead of re-reading.",
+      "evidence": "ReviewsView.tsx:131-137 resetView sets showClosed false; :139-146 accessLost calls resetView; :152 load(cwd, repo, expectedViewer, showClosed) and :175 deps include showClosed; :157-160 identity branch calls resetView. The delta 20e4281a2..f6971fd4a adds includeClosed to fetchReviews and the load.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```

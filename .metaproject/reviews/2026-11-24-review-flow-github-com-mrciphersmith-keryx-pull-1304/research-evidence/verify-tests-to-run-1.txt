@@ -1,0 +1,596 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test src/commands/agent-question-axis.test.ts src/commands/agent-review-gate.test.ts src/commands/approvals.test.ts src/commands/automatic-review.test.ts src/commands/import-only.test.ts src/commands/operator-confirm-review-tools.test.ts src/commands/permissions-command.test.ts src/commands/review-ac-check-cli.test.ts src/commands/review-accounts.test.ts src/commands/review-agents-serve.test.ts src/commands/review-agents.test.ts src/commands/review-arbiter-config.test.ts src/commands/review-arbiter-eval.test.ts src/commands/review-arbiter.test.ts src/commands/review-blast-radius-base.test.ts src/commands/review-chunks.test.ts src/commands/review-ci-triage-cli.test.ts src/commands/review-comments-cli.test.ts src/commands/review-complete-host-question.test.ts src/commands/review-conform-cli.test.ts src/commands/review-degradation-ingest.test.ts src/commands/review-desk-provider.test.ts src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts src/commands/review-floor-cli.test.ts src/commands/review-help.test.ts src/commands/review-host-question.test.ts src/commands/review-jev-comments-cli.test.ts src/commands/review-jev-contract-cli.test.ts src/commands/review-jev-docs-cli.test.ts src/commands/review-jev-edit-guard.test.ts src/commands/review-jev-profile-cli.test.ts src/commands/review-jev-risk-cli.test.ts src/commands/review-jev-rules-cli.test.ts src/commands/review-jev-rules-discovery.test.ts src/commands/review-jev-scenarios-cli.test.ts src/commands/review-jev-select-cli.test.ts src/commands/review-jev-triage-cli.test.ts src/commands/review-layers.test.ts src/commands/review-learn-cli.test.ts src/commands/review-learn-reviewer-cli.test.ts src/commands/review-ledger.test.ts src/commands/review-next.test.ts src/commands/review-operator-cli.test.ts src/commands/review-parity-cli.test.ts src/commands/review-plan-desktop.test.ts src/commands/review-plan.e2e.test.ts src/commands/review-plan.test.ts src/commands/review-pr-base.test.ts src/commands/review-premises-cli.test.ts src/commands/review-ref-alias.test.ts src/commands/review-required-package.test.ts src/commands/review-result-contract.test.ts src/commands/review-revision-operand.test.ts src/commands/review-rules.test.ts src/commands/review-run.test.ts src/commands/review-slice-head.test.ts src/commands/review-slice-paths.test.ts src/commands/review-slice.test.ts src/commands/review-tty-refusal.test.ts src/commands/review-watch.test.ts src/commands/review.test.ts src/commands/schedule-review.test.ts src/commands/skills-references.test.ts src/commands/skills-remove.test.ts src/commands/trigger-review.test.ts src/decisions/backfill.test.ts src/flow/renumber-reviews.e2e.test.ts src/flow/review-gate.e2e.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts src/lib/group-subcommands-flow.test.ts src/product/bulk-budget.test.ts src/review/active-review.test.ts src/review/board-addressed-replies.test.ts src/review/board.test.ts src/review/clean-context.test.ts src/review/cost-cli.test.ts src/review/cross-family.test.ts src/review/desk-publication.test.ts src/review/desk-reviewer-progress.test.ts src/review/desk-run-executor.test.ts src/review/desk-run-legacy.test.ts src/review/desk-worker-roster.test.ts src/review/estimate.test.ts src/review/filter-stats.test.ts src/review/harness-robustness.test.ts src/review/loop-real-path.test.ts src/review/managed.test.ts src/review/mutate.test.ts src/review/pr-comments.test.ts src/review/pr-context.test.ts src/review/prior-round.test.ts src/review/publish.test.ts src/review/readiness.test.ts src/review/review-next.test.ts src/review/review-notes.test.ts src/review/review-rules.test.ts src/review/round-split.test.ts src/review/second-look.test.ts src/review/watcher-project.test.ts src/review/watcher.test.ts src/review/wave-events.test.ts src/tui/decisions-surface.test.ts src/tui/review-readiness.test.ts && cd apps/desktop && bun test src/App.dom.test.tsx src/issues/IssuesBoard.dom.test.tsx src/panels/RunButton.dom.test.tsx src/panels/SideTabs.dom.test.tsx src/platform/reviewReadLane.test.ts src/platform/reviewRunArgs.test.ts src/platform/reviewWatcherArgs.test.ts src/review/ReviewDetail.dom.test.tsx src/review/ReviewLaunchDialog.dom.test.tsx src/review/runPolling.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093
+time: 2026-11-24T09:08:50.469Z
+exit: 1
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+lightweight review mode: report-only; no managed review artifacts created
+coverage waived by the operator (2026-11-24T08:54:07.784Z): "Operator accepts the explicitly recorded scope limitation"; 8 file(s) not reviewed: src/far-0.ts, src/far-1.ts, src/far-2.ts, src/far-3.ts, src/far-4.ts, …
+# managed review complete: 2026-10-21-host-waivers
+status: closed
+readiness: READY
+опциональные роли не запускались: review-clean-code, review-style (включить: --style или --with-role <роль> у `keryx review start|required`, либо reviewRoles в routing.config.json)
+dispositions recorded: 1
+cost: not recorded
+  Nothing reported what this round used. That is NOT zero: pass --tokens-in/--tokens-out
+  or --spent at ingest so the price of a round is a number somebody can weigh.
+findings: 1 — 1 with a recorded disposition, 0 still `unknown`
+slices: 1 (<= 150000 bytes each, 623 bytes total, 2 files)
+waves: 1 for one reviewer owning every slice (<= 150000 bytes per dispatch)
+- slice-01  623 bytes  2 files  [domain]  scripts
+omitted: 1 files (58 bytes of diff)
+- scripts/broken.generated.json  generated  58 bytes
+routing: 0 deep (0 audit), 1 light of 1 slice(s); slices per role: review-logic 1
+
+manifest: /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-slice-head-HINfsL/structural-slices/manifest.json
+keryx trigger run pr-7435: ok — autonomous review complete (exit 0): because
+--- stderr ---
+
+src/review/prior-round.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+killed 1 dangling process
+
+src/review/desk-publication.test.ts:
+(fail) draft questions, template and saved settings are local until one explicit submit [5705.03ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+130 |     { kind: "submit", id, settings: draft.settings, digest: draft.digest }, confirmFixture);
+131 |   expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
+132 |   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"))).toMatchObject({
+133 |     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
+134 |   });
+135 |   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
+                                                                                                                                           ^
+error: expect(received).toThrow(expected)
+
+Expected substring: "already been published"
+Received message: "stale: The review preview changed. Refresh it before submitting."
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-publication.test.ts:135:134)
+-------------------------------
+
+
+src/review/clean-context.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/r-cli/layers-refresh.log)
+
+src/review/harness-robustness.test.ts:
+561 |     const started = Date.now();
+562 |     const result = await defaultRunner(["sh", "-c", `(sleep 6; touch ${marker}) & sleep 6`], { cwd: root, timeoutMs: 1000 });
+563 |     expect(result.timedOut).toBe(true);
+564 |     expect(Date.now() - started).toBeLessThan(5000);
+565 |     await new Promise((resolve) => setTimeout(resolve, 6500));
+566 |     expect(existsSync(marker)).toBe(false);
+                                     ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/harness-robustness.test.ts:566:32)
+(fail) row 4: verification commands run in the parent > a timed-out command is killed with its whole process group (security review M7) [7689.30ms]
+
+src/review/managed.test.ts:
+
+src/review/cost-cli.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-09-15-cost/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-09-15-silent/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-09-15-priced/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-09-15-unpriced/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/missing-ledger/layers-refresh.log)
+Switched to branch 'pr'
+Switched to branch 'base'
+Preparing worktree (detached HEAD a79f4bc)
+killed 1 dangling process
+
+src/review/desk-run-executor.test.ts:
+(fail) runs a linked worktree's review with the main checkout's installed controls and pinned PR objects [8498.95ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+156 |       ].map(event => JSON.stringify(event)).join("\n") + "\n");
+157 |       inspected = true;
+158 |       return { exited: Promise.resolve(0), kill() {} };
+159 |     },
+160 |   });
+161 |   expect(result.usage?.total).toEqual({ inputTokens: 98, outputTokens: 17, totalTokens: 115 });
+                                    ^
+error: expect(received).toEqual(expected)
+
+- {
+-   "inputTokens": 98,
+-   "outputTokens": 17,
+-   "totalTokens": 115,
+- }
++ undefined
+
+- Expected  - 5
++ Received  + 1
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:161:31)
+-------------------------------
+
+killed 1 dangling process
+(fail) an explicit single reviewer records findings for the pinned range without claiming full coverage [7583.06ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+189 |       const file = path.join(spec.cwd, ".metaproject/reviews/pkg/manifest.json");
+190 |       writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), status: "draft", mode: "ingest" }));
+191 |       return { exited: Promise.resolve(0), kill() {} };
+192 |     },
+193 |   });
+194 |   expect(result).toMatchObject({ coverage: "partial", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
+                       ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "checkedBase": "7936a1d82c8e977f4b8c9425e0e698e8696aa1e3",
+-   "checkedHead": "33c182c6563e5fb4c8857e137fc826db5332d058",
+-   "coverage": "partial",
++   "checkedBase": null,
++   "checkedHead": null,
++   "coverage": "unknown",
+    "findings": {
+-     "major": 1,
++     "blocker": 0,
++     "info": 0,
++     "major": 0,
++     "minor": 0,
+    },
++   "findingsKnown": false,
++   "outcome": "failed",
++   "reason": "Private review checkout: git fetch failed. Verify the GitHub account and retry.",
++   "report": null,
++   "verdict": null,
+  }
+
+- Expected  - 4
++ Received  + 12
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:194:18)
+-------------------------------
+
+killed 1 dangling process
+(fail) a named credential is injected only into the private fetch and a concurrent disconnect prevents launch [9657.60ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+224 |       verifyBeforeExecution: async () => { bind(null); },
+225 |     }, {
+226 |       selectModel, remoteUrl: cwd, revision,
+227 |       spawn() { launches++; return { exited: Promise.resolve(0), kill() {} }; },
+228 |     });
+229 |     expect(existsSync(probe)).toBe(true);
+                                    ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:229:31)
+-------------------------------
+
+killed 1 dangling process
+(fail) a closed prepared Desktop package without a reviewer participation receipt retains partial coverage [8070.39ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+241 |     preparedPackageAt(spec);
+242 |     writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "co", participant: "coordinator",
+243 |       usage: { inputTokens: 70, outputTokens: 10 } }) + "\n");
+244 |     return { exited: Promise.resolve(0), kill() {} };
+245 |   } });
+246 |   expect(result).toMatchObject({ outcome: "incomplete", coverage: "partial", checkedBase: baseSha, checkedHead: headSha });
+                       ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "checkedBase": "4c130eb905d8b14454f307ec035098d62706aa73",
+-   "checkedHead": "44f70802656663ccbc73bf4784a56f8f477339c7",
+-   "coverage": "partial",
+-   "outcome": "incomplete",
++   "checkedBase": null,
++   "checkedHead": null,
++   "coverage": "unknown",
++   "findings": {
++     "blocker": 0,
++     "info": 0,
++     "major": 0,
++     "minor": 0,
++   },
++   "findingsKnown": false,
++   "outcome": "blocked",
++   "reason": "The PR closed or its base/head changed. Refresh the card before starting another review.",
++   "report": null,
++   "verdict": null,
+  }
+
+- Expected  - 4
++ Received  + 14
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:246:18)
+-------------------------------
+
+killed 1 dangling process
+(fail) reverifies default branch controls when the advertised commit moves before fetch [7581.30ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+281 |       observedPreparedPackage(spec);
+282 |       return { exited: Promise.resolve(0), kill() {} };
+283 |     },
+284 |   });
+285 |   expect(reads).toBe(2);
+286 |   expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha });
+                       ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "checkedBase": "efc1e776aab53352593ed0cb567b377b0e315e04",
+-   "checkedHead": "6eafd456cd1215e853cd6ec364e9b39da267d8d0",
+-   "outcome": "complete",
++   "checkedBase": null,
++   "checkedHead": null,
++   "coverage": "unknown",
++   "findings": {
++     "blocker": 0,
++     "info": 0,
++     "major": 0,
++     "minor": 0,
++   },
++   "findingsKnown": false,
++   "outcome": "failed",
++   "reason": "unavailable: The default branch changed or could not be verified. Retry the review.",
++   "report": null,
++   "retryableBeforeSpend": true,
++   "verdict": null,
+  }
+
+- Expected  - 3
++ Received  + 15
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:286:18)
+-------------------------------
+
+(fail) an alternate PR target from a linked checkout cannot select Desktop's review controls [7910.59ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+318 |       expect(existsSync(path.join(spec.cwd, "bunfig.toml"))).toBe(false);
+319 |       inspected = true;
+320 |       return { exited: Promise.resolve(2), kill() {} };
+321 |     },
+322 |   });
+323 |   expect(inspected).toBe(true);
+                          ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:323:21)
+-------------------------------
+
+killed 2 dangling processes
+(fail) installed review skills supply the coordinator when the default branch has none [6783.61ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+335 |       expect(spec.argv.at(-1)).toContain(`--ref ${baseSha} --head ${headSha}`);
+336 |       inspected = true;
+337 |       return { exited: Promise.resolve(2), kill() {} };
+338 |     },
+339 |   });
+340 |   expect(inspected).toBe(true);
+                          ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:340:21)
+-------------------------------
+
+killed 1 dangling process
+(fail) a changed GitHub base after fetch blocks the old card and accepts the refreshed revision [8009.10ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+365 |     selectModel, remoteUrl: cwd, revision: readUpdated, spawn(spec) {
+366 |       observedPreparedPackage(spec, updated);
+367 |       return { exited: Promise.resolve(0), kill() {} };
+368 |     },
+369 |   });
+370 |   expect(fresh).toMatchObject({ outcome: "complete", checkedBase: updated });
+                      ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "checkedBase": "d937ea3e4f104765c6e1669eff3ad494422ec621",
+-   "outcome": "complete",
++   "checkedBase": null,
++   "checkedHead": null,
++   "coverage": "unknown",
++   "findings": {
++     "blocker": 0,
++     "info": 0,
++     "major": 0,
++     "minor": 0,
++   },
++   "findingsKnown": false,
++   "outcome": "failed",
++   "reason": "Private review checkout: git fetch failed. Verify the GitHub account and retry.",
++   "report": null,
++   "verdict": null,
+  }
+
+- Expected  - 2
++ Received  + 14
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/desk-run-executor.test.ts:370:17)
+-------------------------------
+
+(fail) the scheduled token budget reaches the autonomous executor [7554.96ms]
+  ^ this test timed out after 5000ms.
+
+src/review/active-review.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/r-start/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/flows/001-2026-10-15-active-review-flow/reviews/r-attach/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/r-ingest/layers-refresh.log)
+
+src/commands/review-plan-desktop.test.ts:
+layers: no pull request base is known for /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-layers-vDgQJm/.metaproject/reviews/2026-10-13-fixture-review (no --base, no manifest target.base, no resolvable PR base, no merge base with a default branch); falling back to 342eb50d0b18~1, which covers only the head commit. Pass --base <sha> to measure the whole change.
+layers: no pull request base is known for /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-layers-Prtocj/.metaproject/reviews/2026-10-13-fixture-review (no --base, no manifest target.base, no resolvable PR base, no merge base with a default branch); falling back to 96e2d3ca228c~1, which covers only the head commit. Pass --base <sha> to measure the whole change.
+layers: no pull request base is known for /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-layers-iqIgrt/.metaproject/reviews/2026-10-13-fixture-review (no --base, no manifest target.base, no resolvable PR base, no merge base with a default branch); falling back to 9d3eadba54a9~1, which covers only the head commit. Pass --base <sha> to measure the whole change.
+layers: no pull request base is known for /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-layers-cEmdHZ/.metaproject/reviews/2026-10-13-fixture-review (no --base, no manifest target.base, no resolvable PR base, no merge base with a default branch); falling back to 3cfb7e14e6b9~1, which covers only the head commit. Pass --base <sha> to measure the whole change.
+
+src/commands/review-premises-cli.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-premises/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-17-premises-many/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-17-premises-many/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-reingest/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-reingest/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-typo/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-typo/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-sibling/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-sibling/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-planted/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-planted/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-nofile/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-nofile/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-scope/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-scope/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-damaged/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-fresh/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-fresh/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-changed/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-upheld/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-10-16-upheld/layers-refresh.log)
+killed 1 dangling process
+
+src/commands/review-operator-cli.test.ts:
+43 |     "decide-premise": ["--package", "pkg", "--finding", "LY-003", "--answer", "dismiss", "--reason", "slow"],
+44 |   };
+45 |   for (const [command, args] of Object.entries(cards)) {
+46 |     const result = run("review", command, ...args);
+47 |     expect(result.output).not.toContain("Unknown command");
+48 |     expect(result.output).toContain(`review_${command.replace("-", "_")}`);
+                               ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "review_decide_premise"
+Received: ""
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-operator-cli.test.ts:48:27)
+(fail) decision commands reach the command and refuse without a TTY, naming the card [5003.60ms]
+  ^ this test timed out after 5000ms.
+
+src/commands/review-ac-check-cli.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/flows/001-2026-09-25-no-opt-in-fixture/reviews/2026-09-25-ac-check-no-optin/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/flows/001-2026-09-25-no-cache-fixture/reviews/2026-09-25-ac-check-no-cache/layers-refresh.log)
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+layers: graph: failed; wiki unknown; memory unknown (refresh exited 1; log: .metaproject/reviews/2026-09-25-ac-check-no-flow/layers-refresh.log)
+
+src/commands/review-slice-head.test.ts:
+
+src/commands/trigger-review.test.ts:
+keryx trigger run pr-7435: failed — autonomous review incomplete (exit 2): because
+keryx trigger run pr-7435: failed — autonomous review floor (exit 3): because
+keryx trigger run pr-7435: failed — autonomous review budget (exit 4): because
+keryx trigger run pr-7435: failed — autonomous review stalled (exit 5): because
+keryx trigger run pr-7435: lock-refused — an autonomous review of this pull request is already running (pid 4242, started 2026-10-11T10:00:00.000Z); stop it or wait: /tmp/run
+keryx trigger run pr-7435: failed — autonomous review failed: boom
+keryx trigger run pr-7435: dispatch-refused — schedule "pr-7435" changed after the operator confirmed it (prompt, cadence, runner or grants) — refusing to run content nobody confirmed. Remove it and create it again with `keryx schedule add`.
+killed 2 dangling processes
+
+src/commands/review-accounts.test.ts:
+(fail) saved accounts have no token metadata and separate project bindings are shared by linked worktrees [6006.66ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+131 |     if (failure.code === "ENOENT") {
+132 |       // eslint-disable-next-line preserve-caught-error -- The subprocess error can contain private request arguments.
+133 |       throw new Error("configuration: Install GitHub CLI (gh) and sign in.");
+134 |     }
+135 |     // Command errors may include private URLs, tokens or full queries. Expose fixed diagnostics only.
+136 |     throw githubFailure(failure.stderr ?? "", auth.login);
+                ^
+error: unavailable: Could not read from GitHub. Check the connection and refresh.
+      at boardGh (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/board-github.ts:136:11)
+      at async boardGraphql (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/board-github.ts:150:21)
+      at async viewer (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:99:17)
+      at async <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:115:24)
+-------------------------------
+
+killed 1 dangling process
+(fail) failed account changes and bad credentials retain the selected account and expose only fixed errors [5773.92ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+36 |   try {
+37 |     return (await exec(gh, ["auth", ...args], reviewCommandOptions(cwd, withoutGithubCredentials(env)))).stdout;
+38 |   } catch (error) {
+39 |     const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+40 |     // eslint-disable-next-line preserve-caught-error -- Auth subprocess errors can include credentials.
+41 |     throw new Error(missing ? "configuration: Install GitHub CLI (gh) and sign in." : message);
+                   ^
+error: access: Reconnect @alice in Settings → Integrations.
+      at runGhAuth (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/github-cli.ts:41:15)
+      at async namedGithubEnvironment (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/github-cli.ts:48:21)
+      at async projectGithubConnection (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/board-github.ts:113:38)
+      at async boardGraphql (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/review/board-github.ts:149:36)
+      at async viewer (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:99:17)
+      at async <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:124:16)
+-------------------------------
+
+killed 1 dangling process
+(fail) a delayed bind cannot overrule the later selection null [6081.06ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+170 |     await waitForFixtureMarker(gate + ".started");
+171 |     expect(await bindProjectGithubAccount(worktree, latest)).toMatchObject({ login: latest, configured: true });
+172 |   } finally {
+173 |     writeFileSync(gate + ".release", "");
+174 |   }
+175 |   expect(await stale).toMatchObject({ message: "stale: A newer GitHub account selection superseded this request." });
+                            ^
+error: expect(received).toMatchObject(expected)
+
+- {
+-   "message": "stale: A newer GitHub account selection superseded this request.",
+- }
++ [Error: unavailable: Could not read from GitHub. Check the connection and refresh.]
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:175:23)
+-------------------------------
+
+killed 2 dangling processes
+(fail) the optional notifications warning cannot expose a board prepared under the previous binding [5897.78ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+197 |   const output = Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+198 |   try {
+199 |     await waitForFixtureMarker(gate + ".started");
+200 |     await bindProjectGithubAccount(worktree, null);
+201 |   } finally {
+202 |     writeFileSync(gate + ".release", "");
+          ^
+ENOENT: no such file or directory, open '/private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/review-accounts-QKMnPt/board-notifications.release'
+    path: "/private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/review-accounts-QKMnPt/board-notifications.release",
+ syscall: "open",
+   errno: -2,
+    code: "ENOENT"
+
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-accounts.test.ts:202:5)
+-------------------------------
+
+killed 1 dangling process
+
+src/commands/review-desk-run.test.ts:
+(fail) two linked worktrees attach to one worker and can cancel while its revision is being verified [30038.29ms]
+  ^ this test timed out after 30000ms.
+
+# Unhandled error between tests
+-------------------------------
+106 |     const [stdout, stderr, exit] = await Promise.all([
+107 |       new Response(proc.stdout).text(),
+108 |       new Response(proc.stderr).text(),
+109 |       proc.exited,
+110 |     ]);
+111 |     if (exit !== 0) throw new Error(stderr);
+                                    ^
+Error: 
+      at call (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-desk-run.test.ts:111:31)
+      at async <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-desk-run.test.ts:152:21)
+-------------------------------
+
+killed 1 dangling process
+
+src/commands/review-host-question.test.ts:
+(fail) HQ-01: the three yes-verbs record only an affirmative --answer-text > every affirmative word is accepted on its own, on each verb [5479.59ms]
+  ^ this test timed out after 5000ms.
+
+# Unhandled error between tests
+-------------------------------
+49 | /** The confined `--package` directory of a `review <command>` call (layers, chunks, coverage). */
+50 | export function resolvePackageDir(args: readonly string[], cwd: string = process.cwd(), command: string = "layers"): string {
+51 |   const raw = optionValue([...args], "--package");
+52 |   if (raw === undefined) throw new Error(`Missing --package <dir>. See \`keryx review ${command} --help\`.`);
+53 |   const placed = placeReviewPath(command, "--package", raw, { projectRoot: resolveProjectRoot(cwd), cwd });
+54 |   if (!placed.ok) throw new Error(placed.message);
+                                 ^
+error: keryx review override-reviewers --package: refused: /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-host-question-Z2Mbkx/pkg-8hy0wt resolves outside the project root. Paths must stay inside /private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-host-question-V47q1C.
+      at resolvePackageDir (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-layers.ts:54:29)
+      at runOperatorCommand (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-operator.ts:147:22)
+      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-host-question.test.ts:362:53)
+      at expectRefused (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/src/commands/review-host-question.test.ts:122:37)
+-------------------------------
+
+
+ 2014 pass
+ 18 fail
+ 15 errors
+ 9894 expect() calls
+Ran 2032 tests across 104 files. [1285.85s]

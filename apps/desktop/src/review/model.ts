@@ -36,14 +36,15 @@ export function stateQuery(states: string[]): ReviewBoardState {
 
 /**
  * Whether an open pull request needs the viewer: requested from their login (teams are not matched),
- * their own change with requested changes, unread replies to them, or a Keryx review that waits on them.
+ * their own change with requested changes, or unread replies to them. A Keryx review that waits on
+ * them lights the Reviews tab instead.
  */
 export function needsViewerAttention(c: ReviewCard, viewer: string, unreadReplies: number) {
   if (c.state !== "open") return false;
   const login = viewer.toLowerCase();
   return c.reviewers.some((r) => r.toLowerCase() === login) ||
     (c.author.toLowerCase() === login && c.decision === "CHANGES_REQUESTED") ||
-    unreadReplies > 0 || !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending;
+    unreadReplies > 0;
 }
 
 export function prState(c: ReviewCard) {

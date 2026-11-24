@@ -1,0 +1,118 @@
+STATUS: DONE
+
+## Performance Review (round 1, wave 2)
+
+### Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, mode diff via supplied slice.
+- Slice read in full: slice-04 (lines 1-1415): docs, src/commands/review-board.ts, src/commands/review-reviews.ts (+test), src/commands/review.ts, src/lib/group-subcommands.ts, board-badges.test.ts, desk-run-store.test.ts, review-entity.test.ts.
+- Context read outside the slice (leads only, to judge cost of callees): src/review/desk-run-store.ts lines 120-200 (migration, assignReviews), 400-420 (publication), 555-610 (reviewRows), 895-910 (readReviewRows); src/review/board.ts lines 195-225 (listActiveReviewCards).
+- Test output: `research-evidence/verify-tests-to-run-1.txt` was not available. No commands or tests were run (exec_budget_s 0).
+- Known wave-1 findings not re-filed: performance F-001 (double read at window open), F-002 (re-read on every tab visit); highload F-001 (60 s reload not visibility-gated, includes the 25 compares per reload), F-002 (eager mount read).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 2
+
+### Findings
+
+### [F-001] Every list read fetches GitHub cards for the whole local Review history, closed Reviews included, in sequential batches
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:369 (`listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)`)
+- **Hot path**: each `keryx review reviews` call: window open, every Reviews tab show, every run transition, and the 60 s reload while a run is active (wave-1 findings name these triggers). Cost per call scales with the number of Reviews this account ever recorded in the repository, not with the open ones.
+- **Problem**: `readReviewRows` returns every Review of the viewer in the repo with no bound (no state filter, no limit), and `readReviews` passes every distinct PR number to `listActiveReviewCards`. That function (board.ts:206) awaits one GraphQL query per 20 numbers, in sequence, each selecting the full card fields (assignees, reviewRequests, last-commit status rollup). Reviews closed locally (`closedAt`) are read too, although their state is already `closed` without a card, and closed/merged Reviews are hidden by default ("Show closed" off). The same row set also drives `reviewRows`, which runs `this.publication()` per completed attempt: up to one receipt read plus one `existsSync` per attempt across the whole history (desk-run-store.ts:410-414), every call.
+- **Why it matters**: the list grows by one Review per reviewed PR and never shrinks. The plan records 13 Reviews in the working copy of the store today; at a few hundred historic Reviews a read is ~10-15 sequential GraphQL round trips (each 20 aliased pullRequest selections) plus hundreds of small file reads, repeated on every refresh, and it spends GraphQL rate-limit points on PRs the default view does not show. Not measured; rated minor because the current size is small ("could grow").
+- **Fix**: skip the card read for Reviews with `closedAt` set (state is already `closed`), and consider caching or skipping cards for Reviews whose PR was last seen merged/closed unless "Show closed" is requested; run the card batches through `mapPool` like the compares instead of in sequence. In `reviewRows`, compute `publication` only for the attempts of the latest reviewed round, which is all `summarizeReview` needs for state.
+- **Confidence**: medium. Sequencing and unbounded row set read from code; latency figures are estimates, no timing was taken.
+
+### [F-002] Commit-count comparisons for an unchanged (reviewed head, PR head) pair are re-fetched on every read
+- **Severity**: info
+- **File**: src/commands/review-reviews.ts:382-389
+- **Hot path**: same triggers as F-001; up to MAX_REVIEW_COMPARES = 25 `gh api .../compare` child processes per call.
+- **Problem**: a compare result for two full object IDs is immutable, but each call recomputes it for every behind Review. The wave-1 highload finding addresses how often the read happens; this is the separate point that the comparison itself is cacheable.
+- **Fix**: optional. Cache `{reviewed, head} -> ReviewCompare` (for example in the review store or a small file next to it, keyed by both SHAs) so a refresh with no new push spawns no `gh` process for that Review.
+- **Confidence**: high on the shape; the benefit is bounded by the existing 25-compare cap.
+
+### [F-003] `latestCreated` is recomputed inside the sort comparator
+- **Severity**: info
+- **File**: src/commands/review-reviews.ts:394, 398-399
+- **Hot path**: once per read, O(n log n) comparator calls, each flattening all attempts of two Reviews.
+- **Problem**: the newest `createdAt` per Review is rebuilt with `flatMap` + `reduce` on every comparison instead of once per Review.
+- **Fix**: optional. Compute the key once (`map(r => [latestCreated(r), r])`) before sorting. Negligible at current sizes; noted only because it sits next to F-001's growth axis.
+
+### Clean Areas
+- CLI startup: `review.ts` adds a static import of `review-reviews.ts`, which pulls only modules already loaded by the `review` command group (board, board-github, desk-run-store); no new heavy top-level work.
+- Regexes (`OBJECT_ID`, `compareStates`) are hoisted; no per-iteration compilation.
+- Compare fan-out is bounded (25, parallelism 4) and the `--jq` filter drops commit/file lists before they reach the process.
+- `writeJson` export is a visibility change only.
+- Migration (`assignReviews`) runs only over `review_id IS NULL` rows, served by the new `review_rounds(review_id, round)` index; a migrated store pays one indexed empty query per writable open.
+- Tests: no performance-relevant patterns (fixtures are small, temp dirs cleaned).
+- Not applicable: React re-renders, bundle imports, N+1 DB in request handlers (no Desktop code in this slice).
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "slice-04: new `keryx review reviews` command is bounded on compares, but each read fetches cards and publication files for the whole local Review history (closed included) in sequential batches; minor. Two info notes: compare results are not cached; sort key recomputed in comparator.",
+  "slices": [{ "id": "slice-04", "status": "DONE", "coverage": "read in full, lines 1-1415" }],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 369,
+      "quote": "for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);",
+      "problem": "Every `keryx review reviews` read requests GitHub cards for every PR the account ever reviewed locally in the repo (readReviewRows has no state filter or limit), including Reviews closed locally whose state needs no card; listActiveReviewCards awaits one full-card GraphQL query per 20 numbers in sequence. reviewRows also reads a publication receipt and stats a skipped marker per completed attempt across the whole history.",
+      "impact": "Read latency and GraphQL rate-limit spend grow linearly with Review history on every refresh (window open, tab show, run transition, 60 s reload while a run is active). Today about 13 Reviews (plan, migration check); a few hundred means ~10-15 sequential round trips plus hundreds of file reads per refresh. Not measured.",
+      "suggested_fix": "Skip card reads for Reviews with closedAt; optionally skip or cache cards of PRs last seen merged/closed unless closed Reviews are requested; run card batches through mapPool; in reviewRows compute publication only for the latest reviewed round's attempts.",
+      "evidence": "slice-04 review-reviews.ts:364-373; src/review/board.ts:201-225 sequential `for (let i = 0; i < numbers.length; i += 20) ... await query(...)`; src/review/desk-run-store.ts:563-607 reviewRows with no limit and per-attempt `this.publication(...)`, :406-414 readConfigFile + existsSync.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "reviews-read-unbounded-history-cards",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": 382,
+      "quote": "const compared = await mapPool(behind.slice(0, MAX_REVIEW_COMPARES), COMPARE_PARALLEL, async ({ id, reviewed, head }) => {",
+      "problem": "The comparison of two full object IDs is immutable, yet it is re-fetched (one gh child process each, up to 25) on every read.",
+      "impact": "Repeated gh spawns and REST calls for unchanged pairs; bounded by the 25-compare cap. Frequency is covered by wave-1 highload F-001.",
+      "suggested_fix": "Optional: cache ReviewCompare keyed by (reviewed head, PR head).",
+      "evidence": "slice-04 review-reviews.ts:374-391, 420-426.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "reviews-compare-not-cached",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": 394,
+      "quote": ".sort((a, b) => latestCreated(b).localeCompare(latestCreated(a)) || b.number - a.number);",
+      "problem": "The sort key flattens all attempts of both Reviews on every comparator call instead of once per Review.",
+      "impact": "Negligible at current sizes; grows with the same history axis as F-001.",
+      "suggested_fix": "Optional: precompute the key per Review before sorting.",
+      "evidence": "slice-04 review-reviews.ts:392-399.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "reviews-sort-key-recomputed",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "not_verified": [
+    "No timing measured (exec_budget_s 0); latency figures are estimates.",
+    "Test output verify-tests-to-run-1.txt was not available.",
+    "Git history of the touched lines was not read; not needed for these findings."
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice supplied, callees located by ctx rg); wiki_used: no (not-relevant: plan and slice state intent); ctx_used: yes (keryx ctx rg); raw_rg_used: no (bounded sed/awk excerpts of known line ranges with keryx:raw markers).

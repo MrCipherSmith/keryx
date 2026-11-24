@@ -1,0 +1,52 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 5, slice-03)
+
+### Scope
+- Branch: feat/desktop-review-v2-stage2 (PR #1304)
+- Scope mode: explicit-hash-range, delta 20e4281a2..f6971fd4a (round-1 fixes: 85fa985c1, 98c7b37a1, 8d95e651a)
+- Slice read: slice-03 in full (1782 lines): apps/desktop/dev/reviewBoard.ts, apps/desktop/src-tauri/src/review.rs (board_read_args, review_board, tests), App.tsx, platform/review.ts, review/ReviewBoard.tsx, review/ReviewBrowserLink.tsx, review/ReviewDetail.{css,tsx}, review/ReviewRuns.tsx, review/ReviewWorkspace.tsx, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx.
+- Also read outside the slice: apps/desktop/src/platform/commands.ts:130-146 (`openExternal`, `openPullRequest`). This closes the gap that review-security-code-w2 noted ("openPullRequest and openExternal ... were not read").
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked
+- Argv injection, `include_closed` (Rust and dev shim). It is a typed `Option<bool>` in Rust and `=== true` in the dev shim. It appends only the literal `--include-closed`. Both bridges refuse it unless `reviews_only` is set, so no board, badge or paged query widens. `--repo` keeps its existing checks: not empty, no leading `-`, no whitespace. The CLI is spawned with argv, not a shell string.
+- External link opening (T17, `ReviewBrowserLink` / `openReviewLink` / `ReviewPanel.openPullRequestLink`). `reviewUrl` admits only `https:` URLs with no userinfo. `openExternal` checks the `^https?://` scheme a second time and hands the URL to the Tauri opener plugin, or to `window.open(..., "noopener,noreferrer")`. `javascript:`, `file:` and custom-scheme URLs cannot reach the OS opener. The href shown on the anchor is the checked `href`. `onOpen` receives that value, not the raw `card.url`. Right-click (button > 1) is left to the default handler, and the app blocks in-webview navigation, per the comment and the stage-0 behavior.
+- Focus hand-off across tabs (`ReviewsFocus.repo`, `focusRepo`). The repo comes from the Pull requests board's verified snapshot (`snapshot.repo`), not from GitHub content. It reaches the CLI only through `fetchReviews`, so it passes the same `--repo` validation.
+- Review rules fallback (`rulesTarget` from the board identity). It applies only when the Reviews list failed with a non-access error. It also requires the board viewer to match `expectedViewer` and the board repo to match the selected repo. The target is the board's GitHub-verified identity, and the rules command scopes by it. No identity crosses accounts or repositories. The structural concerns about this fallback were already filed in waves 1-4 (review-style-w1 F-001/F-002, review-architecture-w1 F-003, review-frontend-w1 F-003, review-logic-w1 F-005). They are not re-filed here.
+- Hidden-tab polling (`RUNNING_RELOAD_MS`, watcher poll reload). These are read-only `review reviews` calls through the existing read lane. They are skipped when the document is hidden. No mutation and no unbounded loop.
+- XSS. No `dangerouslySetInnerHTML` or `eval` was added. The PR title, author and state labels render as React text. `DiscussionMarkdown` is unchanged in this delta.
+- Secrets and PII: none in the code, comments or test literals.
+
+### Clean areas
+Command/argv injection, open redirect / URL scheme, authz and identity binding, IDOR (the Review panel subject is taken from the verified list snapshot), XSS, secrets and PII, CSRF (not applicable: Tauri IPC), path traversal (not applicable), crypto (not applicable), framework patterns.
+
+### Not verified
+- The Tauri opener plugin's own scope/capability configuration (tauri capabilities JSON) was not read. The TS-side scheme checks are enough for the URLs this delta passes.
+- The Rust `rule_args` and the CLI `review rules` identity check were not re-read. They are unchanged in this delta and were covered in earlier slices.
+- No tests were run (exec budget 0). I relied on the dispatch's statement that verify-tests-to-run-1.txt is green at f6971fd. I did not re-read that file.
+- No git history was read. It was not needed for a zero-finding result.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-03 (Desktop and bridge side of the round-1 fixes) has no security findings. `include_closed` is a typed boolean that appends one literal flag and is refused outside the Reviews list in both bridges. Review links pass an https-only, no-userinfo filter (`reviewUrl`) and a second scheme check in `openExternal` before the OS opener. The cross-tab focus repo and the Review rules fallback both come from the board's GitHub-verified identity, are matched against the expected viewer and repo, and reach the CLI through the existing `--repo` validation.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-03"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: the sinks were followed directly from the slice to commands.ts). wiki_used: no (not-relevant: the controls were read in code). ctx_used: yes (keryx ctx rg for the open handlers and for prior-wave findings). raw_rg_used: no.

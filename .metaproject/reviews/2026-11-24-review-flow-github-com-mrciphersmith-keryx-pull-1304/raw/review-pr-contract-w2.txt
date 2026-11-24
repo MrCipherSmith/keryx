@@ -1,0 +1,60 @@
+STATUS: DONE
+
+## review-pr-contract · round 1 · wave 2
+
+### Scope
+- Read in full: the skill, the driver, `pr-context.md`, my own wave 1 result, and slice-02 (2402 lines). Slice-02 covers apps/desktop/dev/reviewBoard.ts, src-tauri/src/review.rs, App.tsx, platform/review.ts, review/ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, ReviewWorkspace.tsx, review/model.ts, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx and styles/review.css.
+- Read at head 20e4281a2 with read-only `git show` to settle claims the slice depends on: `reviewState`, `freshness` and `reviewNeedsViewer` in src/review/review-entity.ts; the archive filters in desk-run-store.ts `reviewRows`; `reviewIsArchived` in ReviewLifecycle.tsx; `launchAction` in ReviewRuns.tsx; the column rule in specification.md:173 and the freshness rule at :70.
+- Docs outside the diff: `keryx ctx rg` over apps/desktop, docs and README.md for the old shortcuts and the "Keryx review" tab label. It found docs/docs/desktop-app.md:395,426,437-438 and docs/docs/guides/desktop-metaproject.md:3. Degradation w1 F-005 and regression w1 already cover both files, so they are not filed again.
+- Test output: `research-evidence/verify-tests-to-run-1.txt` is not in the package. Nothing was executed (exec budget 0).
+- Earlier findings I did not file again: the Reviews indicator refreshes only on mount, activation and Refresh (frontend w1 F-004, regression); the moved interface still says "Review again" (ui-ux); the partial extraction and the unused `onOpenReviewSession` (architecture, frontend w1 F-005); focus routing by PR number only (logic w1, regression); `stopped` includes cancelled, and publication `null` vs undefined in the indicator (logic w1); the null-card panel has no Refresh control (ui-ux); the stale desktop docs (degradation w1 F-005); and my wave 1 PC-001 to PC-004.
+
+### Checklist form (claims that touch slice-02)
+The PR body has no checkbox checklist, so each claim is a row.
+
+| Claim (quoted) | State | What the slice shows | Verdict |
+|---|---|---|---|
+| "`review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is refused in combination with any other board mode" | stated | review.rs `board_read_args(..., reviews_only)` refuses state, number, repositories, paged, cursor and badges. `review_board` also refuses `updated_since` when `reviews_only`. dev/reviewBoard.ts `reviewsArgs` refuses the same set, including `updatedSince`. Both build `["review","reviews","--json"(,"--repo",repo)]`. | consistent (Rust is CI-only, as the body says) |
+| "the tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject, on ⌘1–⌘6 (D4)" | stated | AppShell.tsx `PROJECT_VIEWS` has reviews at `${MOD}3` and metaproject at `${MOD}6`. App.tsx replaces the hard-coded digit branches with `projectViewForKey(k)`. | consistent; the user docs are stale (already filed) |
+| "Board columns: Running · Waiting on you · Behind · Published, plus Closed when 'Show closed' is on. A list view is also available." | stated | reviews/model.ts `COLUMNS`. `groupByColumn` drops `closed` unless `showClosed`. ReviewsView has a board/list segmented control and a list table. | consistent; `ready` and `stopped` go to "Waiting on you", as specification.md:173 requires |
+| "Search, plus state / freshness / source filters." | stated | ReviewsView toolbar: a search field and three selects (state, freshness with current/behind/unknown, source) | consistent (the digits-only search defect is already filed) |
+| "The Review rules button moved here." | stated | ReviewBoard.tsx removes `<ProjectReviewRules>`, and ReviewsView.tsx renders it when `active && target` | consistent (the gating change is already filed) |
+| "The Review panel shows the rounds timeline and the review interface: history, report, answers, publication and lifecycle. That interface was moved out of the PR panel into one shared component." | stated | ReviewPanel renders `<ReviewWorkspace>` with `<Rounds>` as children. ReviewWorkspace holds ReviewRunHistory, ReviewRuns (report, answers, publication, lifecycle), ReviewRunDialog and RunLaunchDialog. | consistent (the partial extraction and the null-card case are already filed) |
+| "the 'Keryx review' tab is gone. For a PR that has a Review, the header offers 'Open in Reviews'; for a PR without one it keeps its launch action." | stated | ReviewDetail.tsx deletes the tab button. Header: `hasReview && onOpenInReviews ? "Open in Reviews" : card.state === "open" && <launch>`. `hasReview` leaves out archived runs, and so does the store's `reviewRows` (`NOT IN ('archive','delete')`), so "has a Review" means the same thing in both. | consistent |
+| "The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`." | stated | ReviewsView: `indicator = snapshot?.reviews.some(reviewNeedsViewer) ? "attention" : null`. `reviewNeedsViewer` (review-entity.ts:111) returns needs_answer, stopped, and ready unless publication is skipped or published. | consistent (when it updates, and the publication null/undefined question, are already filed) |
+| "The Pull requests tab no longer lights from a local review." | stated | review/model.ts `needsViewerAttention` drops `!!c.localReview?.awaitingAnswer \|\| !!c.localReview?.publicationPending` | consistent |
+| "relabelled 'New review round'. Its title names the round it follows (decision d). The action itself still starts an ordinary review" | stated | ReviewResults.tsx label and title. In ReviewBoard `openReview` an outdated card has kind `start`, which stays in the PR panel. ReviewDetail's consume-once effect calls `start()` when `!action.open`. | consistent (the conditional round is my wave 1 PC-003) |
+| "F-024: `secondaryNote` and its text comparison are removed, and the outdated note shows once, on its own line." | stated | `secondaryNote` is deleted. ReviewTile and the list row render `reviewNote(card)` as a separate `.review-note` span, and `laneReason` no longer falls back to `reviewNote`. | consistent |
+| Overlap: "`ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` from the toolbar, and adds `outdated.round` to `badgesEqual`" | stated | The slice shows all four. | consistent |
+| Overlap: "`ReviewResults.tsx`: ... stage 2 relabels the action and removes `secondaryNote`" | stated | The slice shows both. | consistent |
+| Overlap: "`model.ts`: stage 2 removes the local-review clauses from `needsViewerAttention` and the `reviewNote` fallback from `laneReason`" | stated | The slice shows both. | consistent |
+| Overlap: "`App.tsx`, `AppShell.tsx` ...: the new tab and the D4 shortcut order" | stated | App.tsx mounts ReviewsView and wires `openInReviews` and `reviewsIndicator`. AppShell.tsx has the new order. | consistent |
+| Overlap: "`apps/desktop/src/styles/review.css` ...: localized additions" | stated | The slice adds only appended `.reviews-*`, `.review-round*`, `.review-summary-*` and `.review-panel-facts` rules. | consistent |
+| "Not verified: ... Spec filters not built in this stage: publication, PR author, Flow, period." | stated | The ReviewsView toolbar has only state, freshness and source. | consistent |
+
+### Findings
+None new. Every claim in the PR body that touches slice-02 matches the slice. Every documentation gap and code-vs-claim nuance I found was already filed by an earlier reviewer or by my wave 1.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Wave 2 (slice-02, the Desktop code): I checked each claim of the PR #1304 body that touches this slice against the slice, and against review-entity.ts, desk-run-store.ts reviewRows, ReviewRuns.launchAction and specification.md at head. These all match: the bridge refusals in Rust and the dev bridge, the D4 tab order and shortcuts, the board columns and list view, search and the three filters, the move of Review rules, the Review panel built on the shared ReviewWorkspace, 'Open in Reviews' vs the launch action (archived runs are excluded on both sides), the Reviews indicator set, the Pull requests indicator no longer lighting from a local review, the 'New review round' relabel, the F-024 note change, and every overlap line. The stale shortcut docs (desktop-app.md, guides/desktop-metaproject.md) and the other nuances are already filed by degradation, regression, frontend, logic, architecture and ui-ux, or by my wave 1. No new findings.",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+### Not verified
+- No tests were run (exec budget 0, and research-evidence/verify-tests-to-run-1.txt is not in the package).
+- The Rust bridge was read, not compiled or run.
+- Outside slice-02, I read only the helpers named in Scope, not whole files.
+
+### Routing audit
+- graph_used: no. Not needed: the documents outside the diff were found by `keryx ctx rg` for the replaced shortcuts and tab label.
+- wiki_used: no. Not relevant: wave 1 searched `.metaproject/wiki` for the same strings and found nothing. The spec was read directly at head.
+- ctx_used: yes (`keryx ctx rg` over apps/desktop, docs, README.md).
+- raw_rg_used: no. I used raw `git show` and `grep` on package files, marked `keryx:raw`, only to quote exact lines at head and to de-duplicate against the earlier raw results.

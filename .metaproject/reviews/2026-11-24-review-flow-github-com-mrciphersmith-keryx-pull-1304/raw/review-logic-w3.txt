@@ -1,0 +1,97 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range, supplied slice text (slice-03, read in full: 1818 lines)
+- Spec compliance gate: ran against the payload's AC1-AC12, for the criteria this slice's tests verify (AC6, AC7, AC8, AC9, AC10, and the AC5 host mirror)
+
+### Summary
+Slice-03 is test code only. It covers the browser-host argument builder, the Pull requests board DOM tests, the board model tests, the moved Review panel tests, the new Reviews view tests, the navigation tests and the app-navigation fixture. I checked each changed assertion against the production code it pins: `apps/desktop/dev/reviewBoard.ts`, `apps/desktop/src/reviews/model.ts`, `ReviewBoard.tsx` openReview, `ReviewDetail.tsx` start intent and "Open in Reviews", the AppShell tab dots and labels, and the App key handler. Every assertion matches what that code does, and each criterion the slice is meant to verify has a test that can fail. I found no blocker or major. The one info item is a guard that has gone weak. Earlier waves' findings on these files were not re-filed: testing-practices w1 F-001..F-007, frontend w2 F-001/F-002, logic w2 F-001..F-003 and regression RR-001/RR-002.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected. The criteria this slice pins:
+- AC5 (host mirror): `reviewBoardArgs` refuses each of the seven board modes when combined with `reviewsOnly`, and validates `--repo`. This matches `reviewsArgs` in dev/reviewBoard.ts.
+- AC6: the six tab labels, the ⌘/Ctrl 1–6 mapping (`projectViewForKey`), column order and placement are pinned. Placement follows `reviewColumn`: closed → running → needs_answer → behind → by state, and an unknown kind is not behind. Search, the filters and Show closed are pinned too.
+- AC7: the panel's rounds timeline and review interface are pinned, along with the PR panel tabs (Discussion, Checks, Automation) and the "Open in Reviews" gate on a non-archived run.
+- AC8: the Reviews indicator matrix and the Pull requests signal without local-review clauses are pinned.
+- AC10: the "New review round" title with and without a round, a single `.review-note`, and the reason falling through to the GitHub state are pinned.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. The fake-interval tests restore `setInterval`/`clearInterval` in `finally`. The stale-project and stale-account tests resolve the old promise after the switch and assert that nothing leaked.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected. In the AC8 matrix and the state-matrix test, the `indicator` variables start `undefined` and are checked with `toEqual([... null])` and `toBeNull()`. A missing callback call therefore fails the test instead of passing silently.
+
+### Type Contract Violations
+None detected. The `as unknown as ReviewSummary["freshness"]` cast on `diverged-in-future` is deliberate: it tests forward compatibility, and `isBehind` takes `{ kind: string }`.
+
+### Edge Cases
+### [F-001] info: the "merged PR awaiting a Keryx answer" board test keeps `expect(actions).not.toContain("start")`, which no longer guards the path it was written for
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewBoard.dom.test.tsx (slice-03 lines 477-490)
+- **Problem**: Before this change, clicking "Answer question for #101" opened the PR panel with an `answer` intent. The `not.toContain("start")` assertion proved that the panel did not auto-launch a review. The test now passes `onOpenInReviews`, so `openReview` hands the `answer` intent to the callback (ReviewBoard.tsx:456) and never mounts `ReviewDetail`. The only remaining caller of `command` is the board's badge polling (`withRunBackoff(runCommand, …)`, ReviewBoard.tsx:340), and it never sends `start`. The routing is now guarded by the new `opened` assertion. The `start` assertion can only fail if badge polling starts reviews.
+- **Why it matters**: There is no defect. The question removed from this test is now pinned in ReviewsView.dom.test.tsx ("an answer intent carried from Pull requests…"). A later reader may still think this line covers the auto-launch guard. That guard is `initialLaunch` = start-only in ReviewDetail.tsx:175. It is pinned by testing-practices w1 mutation M09 only if a test drives an `answer` intent into ReviewDetail, and none in this slice does.
+- **Fix**: Drop the line or add a comment saying it now guards badge polling only. Or add one ReviewDetail test that mounts the panel with `reviewIntent: { kind: "answer", … }` and asserts no `start` request.
+
+### Suggested Patches
+None.
+
+### Verified clean (refutation attempts)
+- Fixture ⌘3 dispatch uses `metaKey`. The App handler accepts `metaKey || ctrlKey` (App.tsx:391), so the fixture also runs on Linux CI.
+- ProjectNavigation `querySelectorAll(".review-tab-dot")` has length 1 with only `reviewsIndicator` set. AppShell gives the Reviews dot both classes, `review-tab-dot reviews-tab-dot` (AppShell.tsx:175), so this is correct. The fixture's `reviewDot()` ambiguity is frontend w2 F-001 and is not re-filed.
+- The "New review round" start path under App (with `onOpenInReviews`) still launches. `kind === "start"` routes to `setSelected` (ReviewBoard.tsx:457), and ReviewDetail's `initialLaunch` effect calls `start()` whenever `hasReview` is true (ReviewDetail.tsx:193-203). The launch dialog renders independently of the header button (line 304).
+- In the AC6 card test, the regex `/· behind(?! \d)/` can match only the `commits: null` card (#8). #6 renders "behind 3".
+- Search `#1` → [#1, #10, #11] matches `matchesSearch`'s number-prefix rule. The digits-only title gap is logic w2 F-002.
+- Stopped and behind goes to Behind, as plan T7 specifies ("behind (any `behind` Review)"). This is not a defect.
+
+### Not verified
+- No tests were run (exec_budget_s 0; read-only). `research-evidence/verify-tests-to-run-1.txt` does not exist; the package has only `ingest-screened.json`.
+- Rust `board_read_args` (AC5) was not read. It is outside slice-03, and only CI can check it.
+- Git history (`git log`/`blame`) was not consulted for these test files.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-03 (tests only) read in full and checked against the production code each assertion pins: dev/reviewBoard.ts, reviews/model.ts, ReviewBoard openReview, ReviewDetail start intent, AppShell dots and labels, App key handler. The criteria this slice is meant to verify (AC5 host mirror, AC6, AC7, AC8, AC10) are pinned by assertions that can fail. No blocker, major or minor. One info: a board test keeps a 'no start' assertion that, after the routing change, guards only badge polling. Earlier waves' findings were not re-filed.",
+  "slices": ["slice-03"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": null,
+      "quote": "expect(actions).not.toContain(\"start\");",
+      "problem": "With onOpenInReviews passed, the answer action no longer mounts ReviewDetail (ReviewBoard.tsx:456). The only remaining runCommand caller is badge polling (ReviewBoard.tsx:340), so this assertion no longer guards the PR panel against auto-launching on a non-start intent, which is what it was written for.",
+      "impact": "No defect. The answer routing is pinned by the new `opened` assertion and by the ReviewsView answer-intent test. Nothing in this slice drives an answer intent into ReviewDetail, so the start-only `initialLaunch` filter (ReviewDetail.tsx:175) is not pinned here.",
+      "suggested_fix": "Drop the line or comment what it now covers. Optionally add a ReviewDetail test with reviewIntent {kind:'answer'} that asserts no start request.",
+      "evidence": "slice-03 lines 477-490; ReviewBoard.tsx:340, 453-458; ReviewDetail.tsx:175, 193-203.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "board-merged-answer-test-start-assertion-vacuous"
+    }
+  ],
+  "not_verified": [
+    "No tests run (exec_budget_s 0); research-evidence/verify-tests-to-run-1.txt absent",
+    "Rust board_read_args not read (outside slice; CI only)",
+    "Git history not consulted"
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: test-only slice; production files located by direct path from the slice imports) · wiki_used: no (not-relevant: behaviour taken from plan T7 and the code) · ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) · raw_rg_used: no (raw `grep`/`sed` was used only on review-package result files to list earlier finding titles, marked keryx:raw).

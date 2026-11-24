@@ -1,0 +1,7 @@
+head: b38e33ce8bf454e302977c1e085382fe43458fa5
+cmd: bun test --timeout 60000 src/review/desk-run-store.test.ts src/review/board-badges.test.ts
+
+ 51 pass
+ 0 fail
+ 275 expect() calls
+Ran 51 tests across 2 files. [1.68s]

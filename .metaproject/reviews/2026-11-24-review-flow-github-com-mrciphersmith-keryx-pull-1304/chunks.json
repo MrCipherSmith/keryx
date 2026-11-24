@@ -1,0 +1,438 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 86,
+  "droppedKey": "fe911b901a19c249",
+  "fileBytes": {
+    ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/flow.json": 30319,
+    ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/blast-radius.json": 64706,
+    ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/manifest.json": 1983,
+    ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/manifest.json": 2073,
+    ".metaproject/flows/392-2026-10-02-recommendation-journal/acceptance-criteria.md": 2794,
+    ".metaproject/flows/400-2026-10-03-recommendation-journal-v2/acceptance-criteria.md": 4559,
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md": 15759,
+    ".metaproject/flows/508-2026-11-20-desktop-changes-tab-git-changes-git-file/description.md": 466,
+    ".metaproject/flows/509-2026-11-20-desktop-files-tab-and-mentions-workspace/acceptance-criteria.md": 1702,
+    ".metaproject/flows/509-2026-11-20-desktop-files-tab-and-mentions-workspace/description.md": 942,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-02.diff": 107680,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/slices/slice-02.diff": 122946,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/slices/slice-05.diff": 109816,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/slices/slice-05.diff": 66464,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/slices/slice-05.diff": 148125,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/raw/review-pr-contract-w3.txt": 9862,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/scope.json": 448163,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/slices/slice-01.diff": 108701,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/scope.json": 436762,
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/slices/slice-02.diff": 129844,
+    ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/blast-radius.json": 354803,
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-09.diff": 148958,
+    ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-12.diff": 136515,
+    ".metaproject/reviews/2026-11-23-review-flow-branch/blast-radius.json": 272802,
+    ".metaproject/reviews/2026-11-23-review-flow-branch/scope.json": 719447,
+    ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-05.diff": 123422,
+    ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/scope.json": 205460,
+    ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-01.diff": 105067,
+    ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-02.diff": 87101,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/prior_findings.json": 36105,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/scope.json": 137759,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-02.diff": 110768,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-04.diff": 95416,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-05.diff": 145316,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/scope.json": 36625,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-01.diff": 20221,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-03.diff": 3858,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-04.diff": 131733,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-05.diff": 146633,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json": 81716,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff": 54946,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-03.diff": 5836,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-04.diff": 129859,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-05.diff": 145708,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json": 133236,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff": 83789,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-03.diff": 7085,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-04.diff": 124040,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-05.diff": 145611,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/canonical-findings.json": 16592,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/findings.json": 25977,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/report-draft.md": 25879,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/report.md": 25956,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/scope.json": 286851,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff": 106923,
+    ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-02.diff": 141532,
+    "CHANGELOG.md": 744110,
+    "apps/desktop/dev/bridge.ts": 37097,
+    "apps/desktop/src/main.tsx": 649,
+    "apps/desktop/src/review/PrSubscriptionDialog.tsx": 7401,
+    "apps/desktop/src/review/ReviewFilters.tsx": 4365,
+    "apps/desktop/src/review/SessionReviewActivity.tsx": 14663,
+    "apps/desktop/src/review/runPolling.ts": 1608,
+    "apps/desktop/src/review/sessionReview.ts": 3463,
+    "apps/desktop/src/shell/RoutingDialog.tsx": 6749,
+    "apps/desktop/src/styles/flows.css": 14256,
+    "apps/desktop/src/styles/panels.css": 9456,
+    "apps/hub-web/src/features/global-flows.css": 2469,
+    "apps/hub-web/src/features/project-overview.css": 6978,
+    "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md": 22238,
+    "docs/requirements/keryx-desktop-client/implementation-plan.md": 7504,
+    "scripts/verify-native-coverage.ts": 77145,
+    "src/cli.ts": 10721,
+    "src/commands/help.ts": 2179,
+    "src/commands/operator-confirm-tools.ts": 12425,
+    "src/commands/review-desk-publish.ts": 7676,
+    "src/commands/review-desk-run.ts": 5918,
+    "src/commands/review-pr-context.ts": 1339,
+    "src/commands/review-rules.ts": 4869,
+    "src/commands/review-watch.ts": 7001,
+    "src/review/board-badge-read.ts": 2806,
+    "src/review/desk-reviewer-question.ts": 6920,
+    "src/review/desk-run-executor.ts": 40722,
+    "src/review/review-automation-guard.ts": 2430,
+    "src/review/review-rule-queue.ts": 7275,
+    "src/tui/ask-user-bridge.ts": 7803
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/styles/flows.css",
+        "apps/desktop/src/styles/panels.css",
+        "apps/hub-web/src/features/global-flows.css",
+        "apps/hub-web/src/features/project-overview.css",
+        ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/flow.json",
+        ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/blast-radius.json",
+        ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-413-final/manifest.json"
+      ],
+      "bytes": 149195
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/flows/204-2026-08-30-deep-review-rounds-after-the-draft-pr-co/reviews/2026-08-30-pr-github-com-mrciphersmith-keryx-pull-413/manifest.json",
+        ".metaproject/flows/392-2026-10-02-recommendation-journal/acceptance-criteria.md",
+        ".metaproject/flows/400-2026-10-03-recommendation-journal-v2/acceptance-criteria.md",
+        ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md",
+        ".metaproject/flows/508-2026-11-20-desktop-changes-tab-git-changes-git-file/description.md",
+        ".metaproject/flows/509-2026-11-20-desktop-files-tab-and-mentions-workspace/acceptance-criteria.md",
+        ".metaproject/flows/509-2026-11-20-desktop-files-tab-and-mentions-workspace/description.md",
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-02.diff"
+      ],
+      "bytes": 135975
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r04/slices/slice-02.diff"
+      ],
+      "bytes": 122946
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/slices/slice-05.diff"
+      ],
+      "bytes": 109816
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r06/slices/slice-05.diff"
+      ],
+      "bytes": 66464
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r07/slices/slice-05.diff"
+      ],
+      "bytes": 148125
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/raw/review-pr-contract-w3.txt"
+      ],
+      "bytes": 9862
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/scope.json"
+      ],
+      "bytes": 448163
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052/slices/slice-01.diff"
+      ],
+      "bytes": 108701
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/scope.json"
+      ],
+      "bytes": 436762
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1058/slices/slice-02.diff"
+      ],
+      "bytes": 129844
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/blast-radius.json"
+      ],
+      "bytes": 354803
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r02/slices/slice-09.diff"
+      ],
+      "bytes": 148958
+    },
+    {
+      "id": "chunk-014",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch-r04/slices/slice-12.diff"
+      ],
+      "bytes": 136515
+    },
+    {
+      "id": "chunk-015",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/blast-radius.json"
+      ],
+      "bytes": 272802
+    },
+    {
+      "id": "chunk-016",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/scope.json"
+      ],
+      "bytes": 719447
+    },
+    {
+      "id": "chunk-017",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-branch/slices/slice-05.diff"
+      ],
+      "bytes": 123422
+    },
+    {
+      "id": "chunk-018",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/scope.json"
+      ],
+      "bytes": 205460
+    },
+    {
+      "id": "chunk-019",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-01.diff"
+      ],
+      "bytes": 105067
+    },
+    {
+      "id": "chunk-020",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0/slices/slice-02.diff",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/prior_findings.json"
+      ],
+      "bytes": 123206
+    },
+    {
+      "id": "chunk-021",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/scope.json"
+      ],
+      "bytes": 137759
+    },
+    {
+      "id": "chunk-022",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-02.diff"
+      ],
+      "bytes": 110768
+    },
+    {
+      "id": "chunk-023",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-04.diff"
+      ],
+      "bytes": 95416
+    },
+    {
+      "id": "chunk-024",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r02/slices/slice-05.diff"
+      ],
+      "bytes": 145316
+    },
+    {
+      "id": "chunk-025",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/scope.json",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-01.diff",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-03.diff"
+      ],
+      "bytes": 60704
+    },
+    {
+      "id": "chunk-026",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-04.diff"
+      ],
+      "bytes": 131733
+    },
+    {
+      "id": "chunk-027",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r03/slices/slice-05.diff"
+      ],
+      "bytes": 146633
+    },
+    {
+      "id": "chunk-028",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/scope.json",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-01.diff",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-03.diff"
+      ],
+      "bytes": 142498
+    },
+    {
+      "id": "chunk-029",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-04.diff"
+      ],
+      "bytes": 129859
+    },
+    {
+      "id": "chunk-030",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r04/slices/slice-05.diff"
+      ],
+      "bytes": 145708
+    },
+    {
+      "id": "chunk-031",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/scope.json"
+      ],
+      "bytes": 133236
+    },
+    {
+      "id": "chunk-032",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-01.diff",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-03.diff"
+      ],
+      "bytes": 90874
+    },
+    {
+      "id": "chunk-033",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-04.diff"
+      ],
+      "bytes": 124040
+    },
+    {
+      "id": "chunk-034",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/slices/slice-05.diff"
+      ],
+      "bytes": 145611
+    },
+    {
+      "id": "chunk-035",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/canonical-findings.json",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/findings.json",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/report-draft.md",
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/report.md"
+      ],
+      "bytes": 94404
+    },
+    {
+      "id": "chunk-036",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/scope.json"
+      ],
+      "bytes": 286851
+    },
+    {
+      "id": "chunk-037",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-01.diff"
+      ],
+      "bytes": 106923
+    },
+    {
+      "id": "chunk-038",
+      "files": [
+        ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294/slices/slice-02.diff"
+      ],
+      "bytes": 141532
+    },
+    {
+      "id": "chunk-039",
+      "files": [
+        "CHANGELOG.md"
+      ],
+      "bytes": 744110
+    },
+    {
+      "id": "chunk-040",
+      "files": [
+        "apps/desktop/dev/bridge.ts",
+        "apps/desktop/src/main.tsx",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/requirements/keryx-desktop-client/implementation-plan.md",
+        "src/cli.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/tui/ask-user-bridge.ts",
+        "src/review/desk-reviewer-question.ts",
+        "apps/desktop/src/review/runPolling.ts",
+        "apps/desktop/src/review/sessionReview.ts",
+        "src/commands/review-desk-publish.ts",
+        "src/review/board-badge-read.ts"
+      ],
+      "bytes": 120910
+    },
+    {
+      "id": "chunk-041",
+      "files": [
+        "src/review/desk-run-executor.ts",
+        "src/review/review-rule-queue.ts",
+        "scripts/verify-native-coverage.ts",
+        "src/commands/help.ts",
+        "src/commands/review-rules.ts",
+        "src/commands/review-watch.ts",
+        "src/review/review-automation-guard.ts",
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx"
+      ],
+      "bytes": 149022
+    },
+    {
+      "id": "chunk-042",
+      "files": [
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "src/commands/review-desk-run.ts",
+        "src/commands/review-pr-context.ts"
+      ],
+      "bytes": 14006
+    }
+  ]
+}

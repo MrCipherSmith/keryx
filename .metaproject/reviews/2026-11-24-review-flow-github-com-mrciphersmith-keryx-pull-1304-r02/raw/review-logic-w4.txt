@@ -1,0 +1,84 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` (PR #1304), round 2 delta, wave 4
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1
+- Slice: slice-09 (read in full: Desktop tests reviewPages, ReviewBoard.dom, model, ReviewPanel.dom, ReviewsView.dom, ProjectNavigation.dom, app-navigation fixture; cli-reference.md; implementation-plan.md; specification.md; review-reviews.ts/.test.ts; review.ts; group-subcommands.ts)
+- Supporting reads: full `src/commands/review-reviews.ts` at head and its delta; `apps/desktop/dev/reviewBoard.ts` and `platform/review.ts` (reviewsOnly/includeClosed handling); `review-entity.ts` indicator and recoverable lines; flow 519 journal.md and fix-round-1.md.
+- Spec compliance gate: skipped (no new acceptance criteria in this slice; AC set settled in plan.md / fix-round-1.md)
+
+### Summary
+Slice-09 is mostly tests and documentation for the round-1 fixes, plus the reviewed hunks of `review-reviews.ts`. The tests match the code they exercise. `compareHeads` handles its timer correctly: `Promise.race` subscribes to the abandoned `compare` promise, so a late rejection is handled, and `finally` clears the timer. Sorting the rows before the compare cap matches the CLI reference's "first 25 ... in list order". The new docs claims match the code where I checked them: `recoverable` reads as `failed` (desk-run-store.ts:533/595), the indicator rule (review-entity.ts:121-123), and the include-closed refusal (dev/reviewBoard.ts:4-5, 56). One new minor finding: the implementation plan's migration evidence was measured before the fix round changed the migration rule, and the plan still presents it as verification of the current rule.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. Already filed this round and not re-filed: R2-BE-001 and performance-w1 I-002 (the compare deadline abandons `gh` children), and highload-w1 F-002 (the card phase has no deadline).
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None new. Already filed and still applicable to code in this slice: logic-w1 F-001 (`closed_at` has no production writer, so the `includeClosed` filter in `readReviews` never removes a row) and logic-w1 F-002 (a merged PR past the reviewed head reads `behind` with a null count; review-reviews.test.ts asserts this for #20).
+
+### Documentation / verification claims
+
+### [F-001] The plan presents the migration check as verification, but that check ran before D-R1 and FA-11 changed the migration rule
+- **Severity**: minor
+- **File**: docs/requirements/keryx-desktop-review-v2/implementation-plan.md (section «Состояние этапа 2», the paragraph «Миграция проверена на копии рабочей базы …»)
+- **Problem**: The delta rewrites the «Хранилище» bullet to the new rule. Under D-R1, a range that returns after others (A, B, A) opens a new round. Under FA-11, a request superseded before it started keeps no round, and the next request takes its number. The paragraph just below still states, unchanged, that the migration was verified on a copy of the working database: «раундов 1 — 13, раундов 2 — 4». The journal records that check as T9 (journal.md:31-34). That entry is dated before review round 1 (journal.md:106-110), which is where D-R1 and FA-11 were decided and implemented (85fa985c1). I found no journal entry that re-ran the copy check after the fix round. Under the new rule, the same store can number its rounds differently, either through an A,B,A sequence or through a superseded queued row.
+- **Why it matters**: A reader of «Что не проверено» and of the verification paragraph takes the 13/4 numbers as evidence for the rule the plan describes. They are evidence for the old rule. Agent conduct rule 5 asks that what was not verified be named. The plan's «Проверка» section also lists "тест миграции на копии рабочей базы" as the stage-2 check.
+- **Fix**: Re-run the T9 copy check at head and update the numbers. Or mark the paragraph as measured before D-R1/FA-11, and add "the migration under the D-R1 rule was not re-checked on a copy of the working database" to «Что не проверено».
+- **Evidence**: `git diff 20e4281a2..f6971fd4a -- docs/requirements/keryx-desktop-review-v2/implementation-plan.md` changes the «Хранилище» bullet and leaves the «Миграция проверена» line untouched. `keryx ctx rg "runs.sqlite|D-R1|superseded"` over journal.md and fix-round-1.md finds the T9 copy check only at journal.md:31-34; D-R1 is at journal.md:110 and fix-round-1.md:7; FA-11 is at fix-round-1.md:24.
+
+### Suggested Patches
+```diff
+-Миграция проверена на копии рабочей базы (`runs.sqlite`, копия не закоммичена): попыток до и после — 17, Review — 13 (равно числу ключей), раундов 1 — 13, раундов 2 — 4; повторное открытие ничего не меняет.
++Миграция проверена на копии рабочей базы до решения D-R1 и FA-11 (`runs.sqlite`, копия не закоммичена): попыток до и после — 17, Review — 13 (равно числу ключей), раундов 1 — 13, раундов 2 — 4; повторное открытие ничего не меняет. С правилом D-R1 проверка на копии не повторялась.
+```
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-09"],
+  "summary": "Slice-09 (tests and docs for the round-1 fixes, plus review-reviews.ts hunks) is logically sound. compareHeads handles its timer and late rejections correctly, the row sort before the compare cap matches the CLI reference, and the doc claims I checked match the code. One new minor finding: the implementation plan's migration evidence predates the D-R1/FA-11 rule change, and the plan still presents it as verification. Already-filed items (logic-w1 F-001/F-002, R2-BE-001, highload-w1 F-002) apply here and are not re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": null,
+      "quote": "Миграция проверена на копии рабочей базы (`runs.sqlite`, копия не закоммичена): попыток до и после — 17, Review — 13 (равно числу ключей), раундов 1 — 13, раундов 2 — 4; повторное открытие ничего не меняет.",
+      "problem": "The delta rewrites the Storage bullet to the D-R1 rule (A,B,A opens a new round) and the FA-11 rule (a request superseded before start keeps no round). The migration-evidence paragraph is unchanged and still claims verification on a copy of the working DB. The journal records that copy check as T9 (journal.md:31-34), before review round 1 decided D-R1/FA-11 (journal.md:106-110). No later re-run is recorded.",
+      "impact": "The plan offers numbers measured under the old round rule as verification of the new one. Under D-R1 the same store can number its rounds differently. The plan's own 'Проверка' section names this copy test as the stage-2 check, so the gap is hidden rather than listed under 'Что не проверено'.",
+      "suggested_fix": "Re-run the copy check at head and update the counts, or mark the paragraph as pre-D-R1 and add the missing re-check to 'Что не проверено'.",
+      "evidence": "git diff 20e4281a2..f6971fd4a on implementation-plan.md leaves the 'Миграция проверена' line untouched while rewriting the Хранилище bullet. keryx ctx rg 'runs.sqlite|D-R1|superseded' on journal.md/fix-round-1.md: copy check only at journal.md:31-34; D-R1 at journal.md:110 and fix-round-1.md:7; FA-11 at fix-round-1.md:24.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": []
+}
+```
+
+Not verified / not read: I did not run any tests or mutants (exec budget 0). I did not read the slices other than slice-09 beyond the files named above. Layer commands (gdgraph, wiki, memory) were not used, because the slice's questions were settled by the code and the journal.
+
+Routing audit: graph_used: no (not-relevant: bounded slice review; dependents were not in question). wiki_used: no (not-relevant: intent stated in plan/journal). ctx_used: yes (keryx ctx rg for the slice headers, prior raw findings, the journal, the dev host and review-entity). raw_rg_used: no.

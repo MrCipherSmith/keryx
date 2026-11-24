@@ -1,0 +1,89 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` (round-2 delta base)
+- Head: `f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range` (delta round 2, wave 4)
+- Slices read in full: slice-05 (1160 lines), slice-06 (843 lines)
+- Stack detected: fullstack (Bun/TS CLI + SQLite store, React Desktop, Tauri Rust bridge)
+
+### Summary
+Slice-05 is the backend half of fix round 1: `roundFor` becomes a pure module-level function fed by one per-Review read, `neverStarted` names the superseded-request predicate once (three SQL sites), `reviewRows` keeps archived attempts flagged, `review-entity.ts` stays pure and gains `stateAttempts`/`stateAttempt`/`headComparison`, and the pipe writer now lives in `board-github.ts` (the placement round-1 architecture-w2 F-002 asked for). Slice-06 holds the removed side of moves: the review UI, `ProjectReviewRules` and the `onOpenReviewSession`/`DeskRun` imports leave the PR board and PR panel, which lowers coupling between the Pull requests feature and the attempt model. One new minor: the delta adds another store-side copy of two domain predicates ("finished attempt" and "offered for publication"), and the store's copy of the second contradicts the publication service.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Layer Violations
+
+#### [F-001] The store re-derives "finished" and "offered for publication" itself, and its publication rule contradicts the publication service
+
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:30, :423-435, :618
+- **Problem**: The delta adds `FINISHED_STATES` to the store (desk-run-store.ts:30). This is a fourth definition of a finished attempt. The others are `FINISHED` in review-entity.ts:96, `runFinished` in board-badges.ts:15 (exported, from a module the store already imports) and the SQL literal at desk-run-store.ts:513. The delta also rewrites `publication()`. Its doc says "only a complete review without one is `pending`, because only it is offered for publication", and the code returns `pending` only for `completed` with `coverage === "complete"` (:434). That is a business rule (which attempts are offered for publication) placed in the repository. It is also not the rule the publication boundary enforces: `desk-publication.ts:297` accepts `completed` **or** `partial`, and Desktop `ReviewRuns.tsx:103` drafts a publication for both. The archived side of the rule is split as well. The store nulls an archived attempt's publication (:618–619), while `review-entity.ts` `stateAttempts` decides which attempts state and publication come from. That split is the root of backend-w1 R2-BE-006: a fully archived, published Review reads `ready` with `publication: null`. This finding does not re-file R2-BE-006. It names the placement behind it.
+- **Why it matters**: The operator settled the behaviour (FA-2: `ready` lights only on `pending`), so no new user-visible defect is claimed here. The cost is structural. `reviewNeedsViewer` (review-entity.ts:117–124) depends on a meaning of `pending` that only the repository's private method produces, and its doc restates that rule as fact. The next change to publication eligibility, for example letting stage 3's publish dialog offer partial results per D1, has to find and change the store, the service and the view separately. Today the three already disagree.
+- **Fix**: Keep the store as I/O. Have `publication()` report only the recorded outcome (`published`/`skipped`/none) for a finished attempt with a reviewed range. Decide "pending" in `review-entity.ts` from `state`, `coverage`, `source` and `archived` with one exported predicate (for example `publicationOffered(attempt)`), and import the finished-state test from one place (`runFinished` or an exported `FINISHED`) instead of `FINISHED_STATES`. Then either align the predicate with `desk-publication.ts:297` or state there that partial publication is a manual-only exception. Correct the store comment either way.
+- **class_scope**: sites `src/review/desk-run-store.ts:30`, `src/review/desk-run-store.ts:434`, `src/review/desk-run-store.ts:513`, `src/review/desk-run-store.ts:618`, `src/review/review-entity.ts:96`, `src/review/board-badges.ts:15`, `src/review/desk-publication.ts:297`, `src/review/desk-run-service.ts:440`, `apps/desktop/src/review/ReviewRuns.tsx:37`, `apps/desktop/src/review/ReviewRuns.tsx:103`. Enumeration: `keryx ctx rg` over `src/review` and `apps/desktop/src` (tests excluded) for `FINISHED`, `"completed", "partial", "budget"`, `coverage === "complete"`, `coverage')='complete'`, and `state === "completed"`/`state !== "completed"` in desk-publication.ts, desk-run-service.ts and ReviewRuns.tsx. 4 finished-set definitions, 5 publication-eligibility checks.
+
+### Dependency Direction
+None detected. `desk-run-store.ts` imports only types from `review-entity.ts` (repository → domain types). `review-entity.ts` imports only types and stays pure, as its header says. `board-github.ts` gains no new imports for `writeBoundJson`.
+
+### Module Boundary Violations
+None detected. Slice-06's removals take `DeskRun`/`DeskRunKey`, `ProjectReviewRules`, `ReviewRuns`, `ReviewRunDialog`, `ReviewPublishDialog` and `ReviewLifecycle` imports out of `ReviewBoard.tsx`/`ReviewDetail.tsx`. That leaves the Pull requests feature without a dependency on the attempt model. The `board_read_args` positional-bool growth in review.rs is already filed (clean-code-w2 F-001, backend-w2 R2-BE-W2-001).
+
+### Design Pattern Misuse
+None beyond F-001. `roundFor` is now a pure function over an in-memory list, which is the right shape for the D-R1 rule. It is not exported.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS and MobX. React: slice-06 holds only removed lines. The replacements are in slices 01/03/08, which architecture-w1..w3 reviewed.
+
+### Not re-filed (already raised this round)
+- `headComparison` vs `freshness` ("one rule"): architecture-w1 F-001, backend-w1 R2-BE-002, clean-code-w1 F-001, logic-w1 F-002.
+- Fully archived published Review reads `ready`/`publication: null`: backend-w1 R2-BE-006 (F-001 above names its placement cause only).
+- Structure-asserting test for `writeBoundJson`: testing-practices-w3.
+
+### Not verified
+- No tests were run (exec budget 0). The CI and test evidence is the package's `verify-tests-to-run-1.txt` (0 fail at f6971fd).
+- `keryx gdgraph affected` was not run. Dependents were checked by targeted `keryx ctx rg`.
+- Git history (`git log -L`/`blame`) of `publication()` was not read beyond the delta itself.
+
+### Routing audit
+graph_used: no (not-relevant: change set given by slices; dependents checked by targeted search) | wiki_used: no (not-relevant: flow plan, fix-round-1.md and implementation-plan in payload context) | ctx_used: yes (`keryx ctx rg`) | raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-05", "slice-06"],
+  "summary": "Slices 05/06 are architecturally sound overall: roundFor is pure over one per-Review read, neverStarted names the superseded predicate once, review-entity stays pure, the pipe writer sits with the GitHub binding, and slice-06's removals decouple the PR board/panel from the attempt model. One minor: the store adds a fourth 'finished' set and keeps its own 'offered for publication' rule (completed+complete only), which contradicts desk-publication.ts:297 / ReviewRuns.tsx:103 (completed or partial) and is the placement cause behind R2-BE-006.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "repo": null,
+      "file": "src/review/desk-run-store.ts",
+      "line": 434,
+      "quote": "return state === \"completed\" && coverage === \"complete\" ? \"pending\" : undefined;",
+      "problem": "The repository decides the business rule 'offered for publication' (pending only for completed + complete coverage, never for archived at :618) and re-defines 'finished' as FINISHED_STATES (:30), a fourth copy beside review-entity.ts:96 FINISHED, board-badges.ts:15 runFinished and the SQL at :513. Its rule contradicts the publication boundary: desk-publication.ts:297 accepts completed or partial, and ReviewRuns.tsx:103 drafts a publication for both. The archived rule is split between the store (publication nulled) and review-entity stateAttempts (state fallback), which is the cause of backend-w1 R2-BE-006.",
+      "impact": "No new user-visible defect: the operator settled FA-2. reviewNeedsViewer depends on a 'pending' meaning produced only by a private store method, and the store, service and view already disagree on eligibility, so the next change to it (stage 3 D1 publish options) must change three places.",
+      "suggested_fix": "Have publication() report only the recorded outcome (published/skipped/none) for finished reviewed attempts. Decide 'pending' in review-entity.ts with one exported predicate over state, coverage, source and archived. Import the finished test from one place (runFinished or an exported FINISHED). Then align the predicate with desk-publication.ts:297 or document partial publication as a manual-only exception, and fix the store comment at :424.",
+      "evidence": "slice-05 lines 317-321 (neverStarted/FINISHED_STATES), 514-528 (publication), 612-614 (archived publication); HEAD: desk-publication.ts:296-303, ReviewRuns.tsx:103-105, review-entity.ts:96,117-124, board-badges.ts:15; fix-round-1.md FA-2/FA-4.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/desk-run-store.ts:30", "src/review/desk-run-store.ts:434", "src/review/desk-run-store.ts:513", "src/review/desk-run-store.ts:618", "src/review/review-entity.ts:96", "src/review/board-badges.ts:15", "src/review/desk-publication.ts:297", "src/review/desk-run-service.ts:440", "apps/desktop/src/review/ReviewRuns.tsx:37", "apps/desktop/src/review/ReviewRuns.tsx:103"],
+        "enumeration_method": "keryx ctx rg over src/review and apps/desktop/src (tests excluded) for FINISHED, the completed/partial/budget literal, coverage === \"complete\", coverage')='complete', and state ===/!== \"completed\" in desk-publication.ts, desk-run-service.ts, ReviewRuns.tsx; 4 finished-set definitions, 5 publication-eligibility checks"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "prior_dispositions": []
+}
+```

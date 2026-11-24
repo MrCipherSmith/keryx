@@ -23,6 +23,8 @@ type BadgeRun = Pick<DeskRun, "state" | "source" | "baseSha" | "headSha"> & {
   publication?: DeskRun["publication"];
   awaitingAnswer?: boolean;
   lastActivityAt?: string | undefined;
+  /** Null when SQL reads a store that predates rounds. */
+  round?: number | null;
 };
 
 /** Both Desktop's live history and SQLite's projected rows use the same ordering and revision rules. */
@@ -39,7 +41,8 @@ export function localBadge(runs: readonly BadgeRun[], revision: DeskRevision): L
   const ready = runs.some(run => runFinished(run) && !!run.result && sameRange(run.result.reviewed, revision));
   // Outdated is a fallback only: any run on this range, or any active run, says more about the card.
   const stale = latest || ready ? undefined : runs.find(run => runFinished(run) && !!run.result?.reviewed);
-  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state } : undefined;
+  const outdated = stale?.result?.reviewed ? { headSha: stale.result.reviewed.headSha, state: stale.state,
+    ...(typeof stale.round === "number" && { round: stale.round }) } : undefined;
   return {
     active: !!current,
     ready,

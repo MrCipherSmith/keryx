@@ -1,0 +1,60 @@
+STATUS: DONE
+
+# Style Review Report: review-style, round 2 (delta), wave 3
+
+## Summary
+Slice-03 (1782 lines, read in full) holds the Desktop and bridge side of the fix delta: dev/reviewBoard.ts, review.rs (include_closed), App.tsx, platform/review.ts, ReviewBoard.tsx, ReviewBrowserLink.tsx, ReviewDetail.css/.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, reviews/ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts and shell/AppShell.tsx. The new names are specific and match their roles: openReviewLink, openPullRequestLink, reviewStateLabel, isClosedOrArchived, consumeIntent, settlePending, focusRepo, refreshedFor, watcherPolled, noteWatcherPoll and reviewsFocusHandled. No touched file crosses a length, nesting, branch or clause threshold that wave 1 did not already report, and the slice adds no console output. I found no new findings in this lens. The two ReviewsView.tsx naming and condition findings for the Review-rules fallback (`rulesTarget`/`boardRules`, and the six-clause guard) also appear in this slice. They are wave 1's F-001 and F-002 (raw/review-style-w1.txt), and I did not file them again.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (explicit-hash-range, delta round 2)
+- Slice: slice-03, read in full. It is not the FIX slice, so this result has no prior_dispositions.
+- Extra reads: solid-principles.mdc Readability thresholds; head reviews/model.ts lines 50-71; `keryx ctx rg` for `archived` in review-entity.ts and model.ts, and for `*_LABEL` maps in apps/desktop/src.
+- Already filed in this round and not filed again: review-style w1 F-001 (rulesTarget has three names) and F-002 (unnamed six-clause fallback guard), both in ReviewsView.tsx.
+
+## Stats
+- major: 0
+- minor: 0
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+None.
+
+## Considered and not reported
+- review.rs `board_read_args` now takes 9 positional parameters, and its tests call it with long runs of `None`/`false`. The thresholds table has no parameter-count row, `#[allow(clippy::too_many_arguments)]` was already there, and test files are exempt from the readability rows.
+- reviews/model.ts: `reviewColumn`, `reviewStateLabel` and `isClosedOrArchived` each accept `Pick<ReviewSummary, ...> & { archived?: boolean }`, while `ReviewSummary` already declares `archived: boolean` (review-entity.ts:76). This is a type-shape duplication, not a naming question, so it belongs to review-clean-code. `reviewColumn` also inlines `state === "closed" || review.archived` instead of calling `isClosedOrArchived`; that is duplication for the same lens.
+- ReviewsView.tsx:57 `FRESHNESS_LABEL` (filter option text, including "Any freshness") sits next to model.ts's `freshnessLabel()` (card text). They differ only in case but serve different purposes. The file already pairs `STATE_LABEL` with `reviewStateLabel()` in the same way, and the review board's model.ts follows the `*_LABEL` map convention. That makes it a sibling pattern (law 4).
+- ReviewPanel `openBrowser?: typeof openExternal` defaults to `openReviewLink`. ReviewDetail.tsx declares the same prop and type, so it is a sibling pattern.
+- ReviewBoard.tsx `watcherPolled` is a callback with a past-participle name. It follows the callback-ref naming convention that wave 1 already noted (`handled`, `intentConsumed`, `changed`, `ended`).
+- File lengths at head: ReviewsView.tsx 417, reviews/model.ts about 120, ReviewPanel.tsx about 150, ReviewBrowserLink.tsx 35. App.tsx (741) and ReviewBoard.tsx (561) were already past 500 before the delta. None of them crosses a threshold in this delta (w1 counts).
+- ReviewsView pending-focus effect: about 9 branches, under the more-than-10 threshold (w1).
+
+## Positive Notes
+- `openReviewLink` gives one name to a rule that ReviewDetail used to inline: a PR goes through `openPullRequest`, anything else through `openExternal`. ReviewPanel reuses it.
+- `ReviewsTabIndicator` now lives with ReviewsView, which owns it, so AppShell imports it from there. The type's name and its home now match.
+- The doc comments on the new props state the contract: `onFocusHandled`, `reloadSignal`, `rulesTarget`, `onIntentConsumed`, `onWatcherPoll`, `onIdentityChange` and ReviewBrowserLink's `onOpen`.
+- The literal freshness options became a `FRESHNESS_LABEL` map that also feeds the select's `title`, matching how the state and source filters are built.
+
+## Not verified
+- I ran no tests (exec_budget_s 0) and did not read verify-tests-to-run-1.txt. I did not read git history: no naming choice in this slice needed a history check. Head line counts other than ReviewsView.tsx and model.ts come from wave 1's base-to-head figures.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-03 (the Desktop and bridge side of the fix delta) has no new naming, readability, file-length, module-hygiene or console findings. The new helpers and props have specific names and doc comments. The ReviewsView Review-rules fallback naming and condition issues are wave 1's F-001 and F-002 and are not filed again.",
+  "slices": ["slice-03"],
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "review-clean-code (if not already raised): reviews/model.ts re-declares `archived?: boolean` beside Pick<ReviewSummary, ...> in three helpers although ReviewSummary.archived exists, and reviewColumn inlines the isClosedOrArchived predicate."
+  ]
+}
+```
+
+Routing audit: graph_used: not-relevant (I reviewed the supplied slice and did not navigate the code); wiki_used: not-relevant (style lens, no domain question); ctx_used: yes (keryx ctx read for the wave 1 and wave 2 results, keryx ctx rg for thresholds, `archived` and the label maps); raw_rg_used: no.

@@ -18,6 +18,25 @@ test("browser host sends scoped badges, page cursors and untouched legacy board 
   expect(() => reviewBoardArgs({repo:"org/repo",number:1,paged:true})).toThrow();
 });
 
+test("browser host sends the Reviews list as its own read and refuses it combined with a board mode", () => {
+  expect(reviewBoardArgs({reviewsOnly:true})).toEqual(["review","reviews","--json"]);
+  expect(reviewBoardArgs({reviewsOnly:true,repo:"org/repo"})).toEqual(["review","reviews","--json","--repo","org/repo"]);
+  expect(() => reviewBoardArgs({reviewsOnly:true,repo:"--other"})).toThrow("Invalid repository");
+  for (const extra of [{prState:"open"},{number:1},{repositoriesOnly:true},{paged:true},{cursor:"c"},{updatedSince:"2026-11-01T00:00:00Z"},
+    {badgeTarget:{viewer:"me",repositoryId:"R",revisions:"1:a:b"}}]) {
+    expect(() => reviewBoardArgs({reviewsOnly:true,repo:"org/repo",...extra})).toThrow("cannot be combined");
+  }
+});
+
+test("browser host reads closed Reviews' PR cards only for the Reviews list", () => {
+  expect(reviewBoardArgs({reviewsOnly:true,includeClosed:true})).toEqual(["review","reviews","--json","--include-closed"]);
+  expect(reviewBoardArgs({reviewsOnly:true,repo:"org/repo",includeClosed:true})).toEqual(["review","reviews","--json","--repo","org/repo","--include-closed"]);
+  expect(reviewBoardArgs({reviewsOnly:true,includeClosed:false})).toEqual(["review","reviews","--json"]);
+  for (const args of [{includeClosed:true}, {prState:"open",includeClosed:true}, {repo:"org/repo",number:1,includeClosed:true}]) {
+    expect(() => reviewBoardArgs(args)).toThrow("only in the Reviews list");
+  }
+});
+
 test("a board larger than the transport limit combines bounded pages without missing the final PR", async () => {
   const text = "x".repeat(65536);
   let calls = 0;

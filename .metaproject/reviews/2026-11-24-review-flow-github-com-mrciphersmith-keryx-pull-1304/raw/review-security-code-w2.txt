@@ -1,0 +1,66 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b
+- Scope mode: diff, read-only, round 1 wave 2
+- Slice read in full: slice-04 (1415 lines): docs/docs/cli-reference.md, docs/requirements/keryx-desktop-review-v2/{implementation-plan,specification}.md, src/commands/review-board.ts, src/commands/review-reviews.ts (new), src/commands/review-reviews.test.ts (new), src/commands/review.ts, src/lib/group-subcommands.ts, src/review/board-badges.test.ts, src/review/desk-run-store.test.ts, src/review/review-entity.test.ts
+- Context read outside the slice (to settle the boundary questions): src/review/board-github.ts:44-50 (selectRepository), :117-160 (boardGh, boardGraphql); src/review/desk-run-store.ts:563-600 (reviewRows), :895-907 (readReviewRows); every `${...}` interpolation in src/review/desk-run-store.ts (ctx rg, 36 sites).
+- Wave-1 findings checked to avoid duplicates: raw/*-w1.txt (my own wave-1 result on slice-02 had no findings).
+- Test output for this round (research-evidence/verify-tests-to-run-1.txt): not available (only ingest-screened.json present).
+- Git history: not read (no finding depends on it).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness was found in slice-04.
+
+### What was checked, and why it holds
+
+1. Command / URL-path injection in the new compare call (src/commands/review-reviews.ts:424-425).
+   `gh` runs through `boardGh` -> `execFile` with an argv array (board-github.ts:16,123), no shell. The API path `repos/${repo}/compare/${base}...${head}?per_page=1` takes `repo` only from `selectRepository`, which returns an entry of the project's configured GitHub.com fetch remotes (a `--repo` value not in that list is refused). Both SHAs pass `OBJECT_ID = /^[0-9a-f]{40}$/` before any compare is queued (review-reviews.ts:377), including the reviewed head read from the local store, so a tampered store row cannot add path segments or query parameters. `--jq "{status, ahead_by}"` limits what leaves gh, and `parseCompare` accepts only a known status and a non-negative safe integer.
+
+2. GraphQL. `identityQuery` is a constant; owner/name go as `-f` variables, not interpolated into the query text (boardGraphql).
+
+3. SQL. `reviewRows` binds repositoryId and viewer as `?` parameters (desk-run-store.ts:586-587). All 36 `${...}` interpolations in desk-run-store.ts are module constants or internally built fragments (state lists, `placement`, `questionRows`, the fixed `reviewColumns` list for ALTER TABLE, `?` placeholder lists); none carries request or GitHub data.
+
+4. Account/IDOR. Rows are selected by the repositoryId and viewer login GitHub returns for the selected account (the identity query runs as the project-bound gh account; `boardGh` calls `verifyGithubBindingUnchanged` after every call, and the response is written under `withCurrentGithubBinding`). Another account's Reviews and archived/deleted attempts stay out (test "one summary per Review ..." pins the colleague and archived cases). An unidentified account or repository is refused with `access:`.
+
+5. Data exposure. Report bodies and reviewer progress are not in the output (test asserts `private report body` and `reviewerProgress` absent). Compare failures are swallowed into a fixed warning; `boardGh` already maps subprocess errors to fixed diagnostics, so stderr with URLs/tokens does not reach the JSON. `access:`/`configuration:` errors are rethrown rather than turned into a partial list.
+
+6. Forged projection on import. `recordExisting` ignores `reviewId`/`round`/`previousRunId` carried in an imported run, and the projection is never written into `details` (desk-run-store.test.ts "a new attempt is assigned its Review and round ..." pins both), so an imported package cannot attach itself to another account's Review.
+
+7. Resource bounds. Compares are capped at 25 per call with parallelism 4; the board writer's 30 MiB guard is unchanged (the only change to review-board.ts is exporting `writeJson`).
+
+8. CLI surface. `parseArgs` is strict with no positionals; `reviews` is added to the help table (a printer, cannot execute) and to group-subcommands; no new mutating flag.
+
+### Clean Areas
+Injection (SQL: parameterized, see 3; command/argv and API path: see 1; GraphQL: see 2; XSS/eval: none in slice), auth/authz and IDOR (see 4, 6), input validation at the CLI boundary (see 1, 8), secrets and logging (see 5; no secret or token added), cryptography (none), CSRF (not applicable: local CLI), path traversal (no file path built from input in this slice; publication receipts are read by internal run id), open redirect (none), React and NestJS patterns (not in this slice).
+
+### Cross-lens handover (not a security finding)
+- src/review/desk-run-store.ts:903-907 `readReviewRows`: the read-only `keryx review reviews --json` opens an existing store writable and migrates it (documented in the function comment and the plan). Wave-1 noted the Desktop invokes this command on the read-only lane. Whether a migration from a read path can race a concurrent writer is a logic/degradation question; no security impact found.
+
+### Routing audit
+- graph_used: no (not-relevant: the change is a new CLI read with its boundaries in two known files, located with ctx rg)
+- wiki_used: no (not-relevant: the boundary code was read directly)
+- ctx_used: yes (`keryx ctx rg`)
+- raw_rg_used: no (sed used once for targeted line ranges of two known files, marked keryx:raw)
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-04 read in full. The new `keryx review reviews --json` read runs gh through execFile with an argv array; the compare API path takes the repo only from the configured remotes and both SHAs only after a 40-hex check; GraphQL uses variables; reviewRows binds repositoryId and viewer as parameters and every other SQL interpolation in desk-run-store.ts is a constant fragment; rows are scoped to the GitHub-verified account; reports are excluded and errors map to fixed warnings; imported runs cannot forge their Review placement. No blocker, major, minor or info security finding. Test output for the round was not available.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-04", "coverage": "read in full (1415 lines)", "status": "DONE" } ],
+  "follow_ups": [
+    "review-logic/degradation: src/review/desk-run-store.ts:903-907 readReviewRows opens an existing store writable and migrates it from the read-only `review reviews` command; check that a migration on the read lane cannot race a concurrent writer. Not a security defect."
+  ]
+}
+```

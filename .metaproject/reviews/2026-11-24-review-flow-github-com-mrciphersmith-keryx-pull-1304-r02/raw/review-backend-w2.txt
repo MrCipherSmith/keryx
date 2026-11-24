@@ -1,0 +1,72 @@
+STATUS: DONE
+
+# Backend Review Report — PR #1304, round 2 (delta), wave 2, slice-03
+
+## Summary
+Slice-03 is the Desktop and host side of the round-1 fixes. In this lens the backend contract is the `--include-closed` chain: `fetchReviews` invokes `review_board` with `includeClosed`, the Rust `board_read_args` builds the args, and the CLI `review reviews` reads them. The dev mirror `reviewBoardArgs` handles the same request. The chain holds end to end. Rust refuses `include_closed` without `reviews_only` (review.rs:53) and appends the flag only on the Reviews-list path (:67). The dev mirror refuses and appends the same way (dev/reviewBoard.ts:5, :65). The CLI declares the flag as a strict `parseArgs` boolean (review-reviews.ts:124). Tauri maps `includeClosed` to `include_closed: Option<bool>`, which defaults to false. The Reviews-list cache key includes `includeClosed` (platform/review.ts:118), so a list read with closed Reviews and one without are never mixed. I found no blocker, major or minor in this lens, and one info item. The rest of the slice is React state, focus and UI work, which belongs to the frontend, logic and ui-ux lenses.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2..f6971fd4a` (explicit-hash-range, round 2 delta)
+- Slice: slice-03, read in full (14 files, excerpts).
+- Also read: src/commands/review-reviews.ts:1-130, to confirm the CLI side of `--include-closed`. I also located the matching lines in review.rs and in the dev parity test apps/desktop/src/platform/reviewPages.test.ts:32-35.
+- Not read: the rest of review.rs outside the slice hunks, and the Desktop components beyond the excerpts (outside this lens). I ran no tests (exec budget 0) and did not open verify-tests-to-run-1.txt. The Rust unit tests in the slice (`reviews_list_is_a_separate_read_only_query`) only run in CI, because this machine has no Rust toolchain. The reported 194 root and 1008 Desktop passes do not cover them.
+
+## Stats
+- blocker: 0
+- major: 0
+- minor: 0
+- info: 1
+
+## Minor & Info
+
+### [R2-BE-W2-001] `board_read_args` now takes two adjacent positional bools, `reviews_only, include_closed`
+- **Severity**: info
+- **File**: apps/desktop/src-tauri/src/review.rs:51-52
+- **Problem**: The function takes nine positional parameters under `#[allow(clippy::too_many_arguments)]`, and four of them are bare `bool`s (`repositories_only`, `paged`, `reviews_only`, `include_closed`). The new `include_closed` sits right after `reviews_only`, so a swapped call such as `(…, true, false)` compiles. The unit tests call `board_read_args` directly, so they would not catch a swap at the single production call site (`review_board`, :141). In practice a swap fails closed: `reviews_only=false, include_closed=true` returns the configuration error. That is why this is info and not minor.
+- **Fix**: Optional. Pass a small options struct, for example `BoardRead { reviews_only, include_closed, paged, repositories_only }`, or an enum `ReadKind::Reviews { include_closed } | Board { paged, … } | Badges(…)`. Either makes the mutually exclusive modes unrepresentable instead of checked at runtime.
+
+## Prior findings this slice bears on (not a fix slice; no dispositions returned)
+- F-023 (wave 1: closed by review-backend; partial or residual per review-performance, review-logic and review-degradation): the slice adds the Desktop half of `--include-closed`, and it is wired correctly. Archived-only and GitHub-closed Reviews still get card reads. That was raised in wave 1 (review-degradation F-002, review-logic, review-regression), and I do not re-file it.
+- The 60 s reload of the running list while the tab is hidden (ReviewsView.tsx) adds CLI and GitHub reads. Wave 1 covered that in review-frontend, review-highload and review-performance, and I do not re-file it.
+
+## Positive Notes
+- The refusal is placed the same way in the host and the dev mirror, and both are tested: Rust with five new assertions, the dev mirror in reviewPages.test.ts:32-35.
+- `includeClosed` is part of the read-lane key, so concurrent list reads with and without closed Reviews never share a promise.
+
+## Routing audit
+- graph_used: no. The `invoke` → Tauri → CLI chain is a runtime edge the graph does not hold. I traced it with `keryx ctx rg` over the three layers.
+- wiki_used: not-relevant. The behaviour is defined by plan.md, fix-round-1.md and the CLI usage string.
+- ctx_used: yes (`keryx ctx rg` for include-closed usages, wave-1 overlap and line numbers).
+- raw_rg_used: no. I ran one `git log`/`merge-base` command with a keryx:raw marker, to check whether `review reviews` is already released: it was added in ecbec1fb9, which is not on main, so no older CLI lacks the flag.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "slices": ["slice-03"],
+  "summary": "The --include-closed chain (fetchReviews → review_board → board_read_args → CLI review reviews, with the dev mirror) is consistent: refused outside the Reviews list on both host paths, appended only there, strict boolean in the CLI, and part of the read-lane cache key. No blocker, major or minor in the backend lens. One info: board_read_args gained a second adjacent positional bool; a swap fails closed. The Rust tests run only in CI.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "findings": [
+    {
+      "id": "R2-BE-W2-001",
+      "severity": "info",
+      "reviewer": "review-backend",
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "line": 51,
+      "problem": "board_read_args takes nine positional parameters, four of them bare bools; the new include_closed sits next to reviews_only, so a swapped call compiles, and the unit tests call the function directly rather than through review_board.",
+      "impact": "Low: a swap fails closed with the configuration error, so there is no wrong data, only a readability and maintenance cost.",
+      "suggested_fix": "Optional: pass an options struct or a ReadKind enum (Reviews { include_closed } | Board { paged, ... } | Badges(...)) so the exclusive modes cannot be represented together.",
+      "evidence": "review.rs:51-53 signature and the include_closed && !reviews_only refusal; :141 the single production call site; tests call board_read_args(..., true, true) directly.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "The Rust unit tests for include_closed (reviews_list_is_a_separate_read_only_query) are verifiable only in CI; the local 194 + 1008 passes do not include them.",
+    "F-023 residual (archived-only and GitHub-closed Reviews still get card reads) and the hidden-tab 60 s reload cost were raised in wave 1; not re-filed."
+  ]
+}
+```

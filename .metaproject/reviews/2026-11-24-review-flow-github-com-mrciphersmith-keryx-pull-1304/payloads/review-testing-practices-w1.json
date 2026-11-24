@@ -1,0 +1,238 @@
+{
+  "review_context": {
+    "request": {
+      "words": "Review PR #1304 (flow 519, Desktop Review v2 stage 2)",
+      "flags": [],
+      "mode": "diff",
+      "range": "a5d1ab236fe85dee62a758a19390049dde4eb7f9..20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b"
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat/desktop-review-v2-stage2",
+      "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+      "head": "20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b",
+      "merge_base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9"
+    },
+    "pr": {
+      "number": 1304,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1304",
+      "title": "Desktop Review v2 stage 2: Reviews with rounds and the Reviews tab",
+      "state": "open",
+      "body": "Stage 2 of Desktop Review v2 (Flow 519): attempts are grouped into Reviews with rounds, and the review interface gets its own **Reviews** tab.\n\nSources: `docs/requirements/keryx-desktop-review-v2/` (PRD R8, rest of R4, R12; implementation plan stage 2). Flow package: `.metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/` (plan, acceptance criteria, journal with every operator decision).\n\n## What changes\n\n- **Store** (`src/review/desk-run-store.ts`): a new `reviews` table keyed by repository id, PR number and reviewer account (D3, case-insensitive). `runs` gains `review_id`, `round` and `previous_run_id`. Existing databases are migrated in place when opened for writing, and new attempts are assigned when they are recorded. One rule covers both:\n  - a continuation joins its predecessor's round;\n  - the same base..head joins its existing round as a retry;\n  - any other range opens the next round.\n  - `previous_run_id` links each attempt to the one it follows.\n  - Read-only badge reads still work on an unmigrated database.\n  - SQL `attachBadges` stays in parity with `localBadge`, now including `outdated.round`.\n- **CLI**: `keryx review reviews --json [--repo owner/name]` lists Reviews with state, freshness, rounds, latest findings, publication, source, Flow and tokens. It adds one compare call per Review that is behind, capped at 25. A missing store gives an empty list and creates nothing. Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head cannot be read; `unknown` is an operator decision recorded in the spec.\n- **Desktop bridge**: `review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is refused in combination with any other board mode.\n- **Reviews tab**: the tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject, on \u23181\u2013\u23186 (D4).\n  - Board columns: Running \u00b7 Waiting on you \u00b7 Behind \u00b7 Published, plus Closed when \"Show closed\" is on. A list view is also available.\n  - Search, plus state / freshness / source filters.\n  - The Review rules button moved here.\n  - The Review panel shows the rounds timeline and the review interface: history, report, answers, publication and lifecycle. That interface was moved out of the PR panel into one shared component.\n- **Pull requests panel**: the \"Keryx review\" tab is gone. For a PR that has a Review, the header offers \"Open in Reviews\"; for a PR without one it keeps its launch action.\n- **Indicators**:\n  - The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`.\n  - The Pull requests tab no longer lights from a local review. This closes stage 0 deviation (b).\n- **Outdated-review action**: relabelled \"New review round\". Its title names the round it follows (decision d). The action itself still starts an ordinary review; the update round is stage 3.\n- **F-024**: `secondaryNote` and its text comparison are removed, and the outdated note shows once, on its own line.\n\n## Verification\n\n- Root: `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts src/review/review-entity.test.ts src/commands/review-reviews.test.ts` pass. `bun run typecheck` and `bun run lint` are clean.\n- Desktop: `bun test src` passes 989 tests with 0 failures (one run after the last code commit), and `bunx tsc --noEmit` is clean.\n- Migration test on a fixture built with main's exact old DDL. The migration was also run on a scratch copy of a real working database: 17 attempts before and after, 13 Reviews (equal to the number of distinct keys), round 1 \u00d7 13 and round 2 \u00d7 4, and a second open changed nothing.\n- `needsViewerAttention` mutation check: 13 one-line mutations, including putting each removed local-review clause back. Every mutation failed at least one test. The attention-set code in `ReviewBoard.tsx` is unchanged.\n- Browser dev build, run against real GitHub with a scratch data dir: the Reviews tab loads (empty list for this repo) and the toolbar was measured.\n  - It stays on one row with nothing clipped at panel widths from 760 to 1380 px.\n  - At 700 px and below it takes two rows, and three at 340 px.\n  - At 560 px it needs 648 px even with every item at its minimum, so this is recorded as a known limit.\n\n## Not verified\n\n- Populated Review cards with real GitHub data, and the built native app.\n- The Rust bridge (`apps/desktop/src-tauri/src/review.rs`): there is no local toolchain, so CI is the only check.\n- Spec filters not built in this stage: publication, PR author, Flow, period.\n\n## Expected overlap with stage 1 (PR #1300, `feat/desktop-review-v2-stage1`)\n\nStage 2 does not depend on stage 1 and was not rebased onto it. Expect conflicts in:\n- `apps/desktop/src/review/ReviewResults.tsx`: stage 1 removes the icon review action and `secondaryNote` and adds `PrWorkRow`; stage 2 relabels the action and removes `secondaryNote`. Take stage 1's card. Its review slot can then show `outdated.round` from the badge.\n- `apps/desktop/src/review/model.ts`: stage 1 rewrites the lanes and quick filters; stage 2 removes the local-review clauses from `needsViewerAttention` and the `reviewNote` fallback from `laneReason`. Keep both.\n- `apps/desktop/src/review/ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` from the toolbar, and adds `outdated.round` to `badgesEqual`.\n- `apps/desktop/src/review/ReviewBoard.dom.test.tsx`: the Review rules tests moved to `src/reviews/ReviewsView.dom.test.tsx`, and three assertions now go to `onOpenInReviews`.\n- `apps/desktop/src/App.tsx`, `apps/desktop/src/shell/AppShell.tsx`, `apps/desktop/src/shell/ProjectNavigation.dom.test.tsx`, `apps/desktop/src/test/app-navigation.fixture.tsx`: the new tab and the D4 shortcut order.\n- `apps/desktop/src/styles/review.css`, `docs/requirements/keryx-desktop-review-v2/implementation-plan.md`: localized additions.\n\nDraft: the review round runs on this PR. Do not merge.\n"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/context.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/description.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T5.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T6.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T7.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T8.implement.json",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/tasks.md",
+        "apps/desktop/dev/reviewBoard.ts",
+        "apps/desktop/src-tauri/src/review.rs",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/platform/review.ts",
+        "apps/desktop/src/platform/reviewPages.test.ts",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "apps/desktop/src/reviews/ReviewPanel.tsx",
+        "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+        "apps/desktop/src/reviews/ReviewsView.tsx",
+        "apps/desktop/src/reviews/model.ts",
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/styles/review.css",
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "docs/docs/cli-reference.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "src/commands/review-board.ts",
+        "src/commands/review-reviews.test.ts",
+        "src/commands/review-reviews.ts",
+        "src/commands/review.ts",
+        "src/lib/group-subcommands.ts",
+        "src/review/board-badges.test.ts",
+        "src/review/board-badges.ts",
+        "src/review/board-types.ts",
+        "src/review/desk-run-store.test.ts",
+        "src/review/desk-run-store.ts",
+        "src/review/desk-run-types.ts",
+        "src/review/review-entity.test.ts",
+        "src/review/review-entity.ts"
+      ],
+      "changed_lines": null,
+      "risk_areas": [
+        "sqlite migration of runs.sqlite",
+        "attachBadges/localBadge parity",
+        "attention set in ReviewBoard.tsx",
+        "Rust bridge arg builder (CI only)",
+        "Reviews tab state x event matrix"
+      ]
+    },
+    "requirements": {
+      "issue_url": null,
+      "task_docs": [
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+        ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md"
+      ],
+      "acceptance_criteria": [
+        "- AC1: Opening a copy of a database created with main's schema migrates it in place: the number of attempts is unchanged, every attempt has exactly one Review keyed by repository id, PR number and viewer (case-insensitive), rounds are numbered by first appearance of a base..head pair in creation order, a continuation joins its predecessor's round, `previous_run_id` links each attempt to the one it follows, and a second open changes nothing. \u00b7 sensitive: failure-scenario [verify: exec `bun test src/review/desk-run-store.test.ts`]",
+        "- AC2: One PR with three historical runs on three ranges is one Review with rounds 1\u20133; a new attempt (start, retry on the same range, continuation, new head) is assigned its Review and round when it is recorded. [verify: exec `bun test src/review/desk-run-store.test.ts`]",
+        "- AC3: A read-only store on an unmigrated database still returns badges and active numbers, and SQL `attachBadges` stays equal to `localBadge` for every query condition, including the round of an outdated result. [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]",
+        "- AC4: `keryx review reviews --json` returns one summary per Review with state, freshness, rounds and latest findings; state and freshness follow the specification table, and a missing store returns an empty list without creating one. [verify: exec `bun test src/review/review-entity.test.ts src/commands/review-reviews.test.ts`]",
+        "- AC5: The Desktop bridge builds `review reviews --json [--repo]` only for a reviews-only request and refuses any combination with other board modes. (Rust unit tests run in CI only; no local toolchain) [verify: judged]",
+        "- AC6: The project tabs read Sessions, Flows, Reviews, Pull requests, Issues, Metaproject with shortcuts in that order, and the Reviews tab shows Reviews in the columns Running \u00b7 Waiting on you \u00b7 Behind \u00b7 Published (\u00b7 Closed when shown) with list view, search and filters. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/shell'`]",
+        "- AC7: The Review panel shows the rounds timeline and the review interface (history, report, answer, publication, lifecycle); the Pull requests panel no longer contains it and offers \"Open in Reviews\" for a PR that has a Review. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/review'`]",
+        "- AC8: The Reviews tab indicator lights for `needs_answer`, `ready` without a publication decision and `stopped`, and stays off otherwise; the Pull requests indicator no longer lights from a local review that waits on the user. \u00b7 sensitive: mutation [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/review'`]",
+        "- AC9: The attention-set logic in `ReviewBoard.tsx` is unchanged, and every line changed in `needsViewerAttention` is pinned by a test (each one-line mutation fails at least one test). \u00b7 sensitive: mutation [verify: judged]",
+        "- AC10: The outdated-review action reads \"New review round\" and names the round it follows; F-024's text comparison is gone and the outdated note appears once. [verify: exec `sh -c 'cd apps/desktop && bun test src/review'`]",
+        "- AC11: The migration run on a copy of the local working database keeps every attempt and assigns each to one Review. (operator database; counts recorded in the journal, no data committed) [verify: judged]",
+        "- AC12: Desktop and root test suites, typecheck and lint pass; CI is green or every failure is explained. [verify: invariant `sh -c 'bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit'`]"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc",
+      ".metaproject/rules/stacks/react/code-style-patterns.mdc",
+      ".metaproject/rules/core/error-handling.mdc",
+      ".metaproject/rules/core/cli-interface-design.mdc"
+    ],
+    "cross_repo": [],
+    "memory": {
+      "query": "desktop review store migration reviews tab attention indicator",
+      "status_filter": "accepted",
+      "entries": [
+        {
+          "path": "memory/known-mistakes/review-ingest-discards-verdicts.md",
+          "title": "review ingest discards verdicts"
+        },
+        {
+          "path": "memory/constraints/stale-installed-keryx-binary.md",
+          "title": "stale installed keryx binary"
+        },
+        {
+          "path": "memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+          "title": "a fix round needs its own review three consecutive rounds each introduced a blocker"
+        }
+      ],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "review-architecture": "keryx review required --depth auto",
+        "review-degradation": "keryx review required --depth auto",
+        "review-frontend": "keryx review required --depth auto",
+        "review-highload": "keryx review required --depth auto",
+        "review-layout": "keryx review required --depth auto",
+        "review-logic": "keryx review required --depth auto",
+        "review-performance": "keryx review required --depth auto",
+        "review-regression": "keryx review required --depth auto",
+        "review-security-code": "keryx review required --depth auto",
+        "review-testing-practices": "keryx review required --depth auto",
+        "review-ui-ux": "keryx review required --depth auto"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [],
+      "budget": {
+        "max_findings": 20
+      },
+      "model_plan": {
+        "detector_ran": true,
+        "strategy": "adaptive",
+        "current_model": "claude-opus-5-5",
+        "normal_model": "claude-opus-5-5",
+        "user_confirmed_expensive_fanout": true
+      }
+    }
+  },
+  "reviewer": "review-testing-practices",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with \u2026\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+  "scope_mode": "diff",
+  "slices": [
+    "slice-03"
+  ],
+  "context_doc": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+  "issue_url": null,
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": 0,
+      "ranked": 0,
+      "session_rank": null
+    },
+    "inherit": true,
+    "provider": "anthropic",
+    "model": "claude-opus-5-5"
+  },
+  "budget": {
+    "max_findings": 20
+  },
+  "branch": "feat/desktop-review-v2-stage2",
+  "base_sha": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+  "pr_context": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304/pr-context.md",
+  "round": 1,
+  "is_fix_round": false,
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "prior_findings": [],
+  "known_findings": [],
+  "metaproject": {
+    "memory": [
+      {
+        "path": "memory/known-mistakes/review-ingest-discards-verdicts.md",
+        "title": "review ingest discards verdicts",
+        "type": "known-mistake",
+        "status": "accepted"
+      },
+      {
+        "path": "memory/constraints/stale-installed-keryx-binary.md",
+        "title": "stale installed keryx binary",
+        "type": "constraint",
+        "status": "accepted"
+      },
+      {
+        "path": "memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "title": "a fix round needs its own review three consecutive rounds each introduced a blocker",
+        "type": "lesson",
+        "status": "accepted"
+      }
+    ]
+  }
+}

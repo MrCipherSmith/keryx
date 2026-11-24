@@ -1,0 +1,1141 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (headComparison (closed check included) drives the command's comparisons, but summarizeReview compute) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (When summary.reviewed is null, Desktop falls back to rounds[0].headSha (highest round, archived atte) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (Sibling of round-1 F-001 (cross-tab repository identity). The Review-rules fallback accepts the PR b) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (Opening review links externally now has two mechanisms: ReviewDetail's sheet-body click delegation () real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-architecture-w4:F-001",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding F-001 (The repository decides the business rule 'offered for publication' (pending only for completed + com) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-001",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-001 (compareHeads races each compare against a deadline but does not cancel the losing gh child (boardGh ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-002",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-002 (headComparison's docstring says it is the one rule for the command's comparisons and for freshness, ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-003",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-003 (The cap warning says 'Refresh to read more', but the compared set is the first 25 in deterministic l) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-004",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-004 (The header comment still reads 'Read-only list of local Reviews', but the read opens the store writa) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-005",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-005 (The PR body's store bullet says 'the same base..head joins its existing round as a retry', but after) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:R2-BE-006",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is review-backend finding R2-BE-006 (Archived attempts get publication null, so a Review whose attempts are all archived and whose last a) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:fu1",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? Desktop-only prior findings were not disposed by this lens: they go to the frontend, ui-ux and testing lenses. F-034 and F-036 are for review-pr-contract and review-logic.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w1:fu2",
+      "source": "raw/review-backend-w1.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? No tests were run (exec_budget_s 0); verify-tests-to-run-1.txt was not opened.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w2:R2-BE-W2-001",
+      "source": "raw/review-backend-w2.txt",
+      "question": "Is review-backend finding R2-BE-W2-001 (board_read_args takes nine positional parameters, four of them bare bools; the new include_closed si) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w2:fu1",
+      "source": "raw/review-backend-w2.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? The Rust unit tests for include_closed (reviews_list_is_a_separate_read_only_query) are verifiable only in CI; the local 194 + 1008 passes do not include them.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w2:fu2",
+      "source": "raw/review-backend-w2.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? F-023 residual (archived-only and GitHub-closed Reviews still get card reads) and the hidden-tab 60 s reload cost were raised in wave 1; not re-filed.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w3:fu1",
+      "source": "raw/review-backend-w3.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? Abandoned compare subprocesses after the deadline and the card phase's lack of a deadline are review-highload-w1 F-002; not re-filed.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w3:fu2",
+      "source": "raw/review-backend-w3.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? Tests were not run by this reviewer (exec budget 0); verify-tests-to-run-1.txt was not opened.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w4:R2-BE-W4-001",
+      "source": "raw/review-backend-w4.txt",
+      "question": "Is review-backend finding R2-BE-W4-001 (Pending inherits round: number from PlacedAttempt, but the pending SELECT returns no round column, s) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-backend-w4:fu1",
+      "source": "raw/review-backend-w4.txt",
+      "question": "Is the parent follow-up from review-backend done or ruled out, and where is that recorded? R2-BE-006, R2-BE-002 and the earlier F-001/F-002 findings bear on slice-05 and were not re-filed.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (headComparison's doc says it is the one rule for freshness, but summarizeReview computes freshness v) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (After the F-010 fix, summarizeReview calls reviewState(settled, ...) where settled = stateAttempt(at) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (New helper with 4 positional parameters and no options object, one of them an output argument it fil) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w2:F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-001 (The delta adds include_closed: bool, a second behaviour-selecting flag after reviews_only (one refus) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w2:F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-002 (The new freshness label map is defined in the view, while STATE_LABEL and SOURCE_LABEL live in revie) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w3:F-001",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding F-001 (The delta adds two tests that each repeat the AC7 test's empty PR-detail loader and the same createE) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w4:F-001",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-001 (The ReviewAttemptSummary.archived doc says an archived attempt is never the source of state, finding) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w4:F-002",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-002 (The doc and the test title (review-entity.test.ts:195) say the state is the last attempt's, and revi) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-clean-code-w4:F-003",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding F-003 (The delta adds a fourth copy of the finished-run-state rule. The others are board-badges.ts:15 (expo) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (Base reviewRows dropped archived attempts, so rounds, latestRound and the reviewed-commit fallback c) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:F-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-002 (On base, an all-archived Review was not in rows, so it cost no card read and no compare. On head it ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:F-003",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-003 (On base, showClosed only filtered the loaded snapshot. On head it is a load-effect dependency passed) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:fu1",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? Dispositions for F-036, F-037, F-041..F-043, F-046, F-047 and F-058 rest on test names, assertions and the journal, not on a run or a line-by-line trace.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w1:fu2",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? Rust bridge (review.rs include_closed) read only; it can be checked only in CI.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w2:F-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-001 (Head reviewRows drops never-started superseded rows (AND NOT neverStarted). The status history the P) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w2:fu1",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? Rust bridge include_closed read only; CI is its only check.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w2:fu2",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is the parent follow-up from review-degradation done or ruled out, and where is that recorded? The trigger's frequency depends on when a superseding run can be deleted; not traced.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-degradation-w4:F-001",
+      "source": "raw/review-degradation-w4.txt",
+      "question": "Is review-degradation finding F-001 (Version 0.1.5 of the plan rewrites the storage bullet to the D-R1 round rule and the FA-11 rule, but) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (Turning Show closed off re-reads the list without closed Reviews' PR cards (new includeClosed card s) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-frontend-w1:F-002",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-002 (The watcher-poll reload is not visibility-gated, while the running interval next to it is (sibling o) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-frontend-w1:F-003",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-003 (With the Reviews tab on its default repository (repo undefined) the rules fallback accepts whatever ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-frontend-w2:FE2-001",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding FE2-001 (T17 routes the Review panel's 'Open pull request' through openPullRequestLink, which calls openBrows) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (The refreshes added so the hidden tab stays current (session-review events, PR watcher polls, panel ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (The deadline added in FA-9 covers only the compare phase and starts after the card phase. readCards ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-003 (Since FB-4, the 60 s reload runs while any Review is queued or running, on any tab while the window ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (includeClosed follows the Show closed toggle. The toggle persists while the tab is hidden (consumeIn) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-layout-w1:fu1",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Not measured: confirm in dev:browser with a populated Reviews list that the gap between .review-rounds and .desk-runs is 12px, and check the selected-value text of the 6.5rem-capped filter selects at ",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-layout-w2:fu1",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Not measured: in dev:browser, check the Reviews toolbar in the list-load-error state, where the Review rules button is now shown, at 560px and 700px panel widths, and confirm it matches the populated-",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-layout-w3:LY-001",
+      "source": "raw/review-layout-w3.txt",
+      "question": "Is review-layout finding LY-001 (The test name claims a rendered 12px gap. The body only regex-matches `.review-workspace-block { dis) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-layout-w3:fu1",
+      "source": "raw/review-layout-w3.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Not measured: in dev:browser with a populated Reviews list, read the computed row gap of .review-workspace-block and the .review-rounds to .desk-runs distance (expected 12px). That measurement would s",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The FA-7 skip of locally closed Reviews filters on reviews.closed_at, but no product code writes tha) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (headComparison's doc claims to be the one rule for the command's comparisons and for freshness, but ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (Without a finished reviewed attempt, Desktop falls back to the newest round's head; rounds include a) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (The 'Waiting on you' lane (plan T7: needs_answer, ready, stopped) now holds Reviews the indicator ex) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (When the Reviews list read fails and no repository was picked in the Reviews tab, the fallback accep) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (showClosed became a dependency of the list load (includeClosed). resetView() sets showClosed false. ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (The delta rewrites the Storage bullet to the D-R1 rule (A,B,A opens a new round) and the FA-11 rule ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w5:F-001",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding F-001 (Only a superseded never-started request is excluded from rounds and from reviewRows. A queued reques) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w7:F-001",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding F-001 (The pending-focus effect (ReviewsView.tsx:225-251) has no active guard, and consumeIntent runs only ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w7:F-002",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding F-002 (ReviewWorkspace is mounted only by ReviewPanel (Reviews tab). The only intent producer, ReviewBoard.) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w8:F-001",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is review-logic finding F-001 (localBadge (board-badges.ts:32) does not filter a queued request superseded before it started (skipp) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w8:fu1",
+      "source": "raw/review-logic-w8.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? Fold F-001 into the fix for degradation-w2 F-001: one never-started predicate for reviewRows, ReviewDetail hasReview and localBadge.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-logic-w9:F-001",
+      "source": "raw/review-logic-w9.txt",
+      "question": "Is review-logic finding F-001 (withCurrentGithubBinding runs the synchronous watcherTransaction, and its callback only queues proce) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w1:I-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding I-001 (Each completed PR-watcher poll now refreshes the PR board and also triggers a full `keryx review rev) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w1:I-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding I-002 (A compare cut off by the deadline is abandoned, not cancelled: its gh child runs until boardGh's 18 ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w1:fu1",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is the parent follow-up from review-performance done or ruled out, and where is that recorded? F-022 residual: the warning 'Refresh to read more.' (review-reviews.ts:58) promises something a refresh does not do; reword it or rotate the compared window.",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w1:fu2",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is the parent follow-up from review-performance done or ruled out, and where is that recorded? F-023 residual: Reviews whose PR is merged or closed on GitHub are re-read on every call; this fix round made the call more frequent (watcher poll, session event, 60 s hidden-tab reload while running)",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w2:P2-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding P2-001 (showClosed is a dependency of the load effect and is passed as --include-closed. Turning it off spaw) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-performance-w2:I2-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding I2-001 (Open in Reviews on a locally closed or archived Review first reads the list without --include-closed) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (PR body Store bullet: \"the same base..head joins its existing round as a retry; any other range open) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (Body: tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject; Review rules moved ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (Body says the fixes are in 85fa985 and 98c7b37, the full list is in fix-round-1.md, and Desktop veri) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-W2-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-W2-001 (PR body says Open in Reviews now carries the repository and the indicator stays current while the ta) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-W2-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-W2-002 (Round-1 minor F-060 has no fix-round-1.md row and is deferred (wave-1 pr-contract disposition: open)) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-W3-001",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-W3-001 (Body: \"`review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is re) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-W3-002",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-W3-002 (The body's Expected-overlap entries for ReviewBoard.tsx and App.tsx describe only the pre-fix stage-) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-W3-003",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-W3-003 (Unverified. The body names CI as the only check of review.rs and cites CI only at 20e4281; review.rs) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-W4-001",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-W4-001 (Body, What changes -> Indicators: 'The Reviews tab lights for `needs_answer`, `ready` with publicati) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-W4-002",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-W4-002 (The reworded storage rule in specification.md does not mention requests superseded before they start) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-W4-003",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-W4-003 (The body says 'The minors are fixed too: docs and shortcuts' and 'Archived Reviews: they are reachab) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w5:PC-W5-001",
+      "source": "raw/review-pr-contract-w5.txt",
+      "question": "Is review-pr-contract finding PC-W5-001 (The spec's state table (:57, :61-67) and freshness rule (:70) derive state, round and freshness from) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-pr-contract-w5:PC-W5-002",
+      "source": "raw/review-pr-contract-w5.txt",
+      "question": "Is review-pr-contract finding PC-W5-002 (cli-reference.md:5197 defines `reviewed` as the newest finished reviewed attempt's range, and :5205 ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (One concept has three names: boardIdentity in App.tsx (passed as rulesTarget={boardIdentity}), the p) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The board-rules fallback guard has six && clauses, four of them ungrouped, followed by a ternary ins) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The new module function compareHeads (run every comparison within one deadline and record warnings) ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The type name Pair, and the local `pair`, do not say what is paired. The same {reviewed, head} conce) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w3:fu1",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is the parent follow-up from review-style done or ruled out, and where is that recorded? review-clean-code (if not already raised): reviews/model.ts re-declares `archived?: boolean` beside Pick<ReviewSummary, ...> in three helpers although ReviewSummary.archived exists, and reviewColumn i",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w4:F-001",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding F-001 (The shared binding-checked writers moved to board-github.ts as writeBoundJson/writeBoundJsonText. re) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w5:F-001",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding F-001 (The table-alias prefix parameter is named r. One call site passes \"r.\" (line 606), so r names both t) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-style-w5:F-002",
+      "source": "raw/review-style-w5.txt",
+      "question": "Is review-style finding F-002 (stateAttempts(row) returns the set of attempts that state, findings and publication come from: the u) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (tdd-workflow Rule 5 (a unit test uses no wall-clock time): the new test 'comparisons that outlast th) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (tdd-workflow Rule 3 (a bug fix gets a regression test): four App-level wirings added for round-1 maj) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (Lens rule 'Branch Under Test': a test that asserts only falsy state passes when the path never ran. ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (Lens rule 'Fixture Shape Against the Producer'. Two new fixtures carry shapes the producer cannot em) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w3:F-001",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-001 (Lens rule 'The mutation pass': a gate added in answer to an earlier round has no fixture that builds) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w3:F-002",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-002 (tdd-workflow (a changed piece of logic gets a test that can fail) and the lens rule 'Behaviour Asser) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w3:F-003",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-003 (Lens rule 'Fixture Shape Against the Producer' (a value the producer cannot emit). The cap test rewr) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-testing-practices-w3:F-004",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding F-004 (Lens rule 'Fixture Shape Against the Producer'. The 'archived attempts stay listed and flagged…' fix) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (The fix for round-1 F-006 lists archived Reviews under Show closed with the state label \"Archived\" () real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (A Review closed locally has `card: null` while Show closed is off (the CLI reads its card only with ) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-003",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-003 (The F-012 fix mounts ReviewsView only once the project account read settled, and renders `null` unti) real, and where is it reported?",
+      "status": "unresolved"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-004",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-004 (Tiles and list rows without a PR card now drop the author entirely. Before, they read \"Unknown autho) real, and where is it reported?",
+      "status": "unresolved"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "F-001": "closed",
+      "F-002": "closed",
+      "F-003": "closed",
+      "F-004": "closed",
+      "F-005": "closed",
+      "F-006": "closed",
+      "F-007": "closed",
+      "F-008": "closed",
+      "F-009": "closed",
+      "F-010": "closed",
+      "F-011": "closed",
+      "F-012": "closed",
+      "F-013": "closed",
+      "F-014": "closed",
+      "F-015": "closed",
+      "F-016": "closed",
+      "F-017": "closed",
+      "F-018": "closed",
+      "F-019": "closed",
+      "F-020": "closed",
+      "F-021": "closed",
+      "F-022": "closed",
+      "F-023": "closed",
+      "F-024": "closed",
+      "F-025": "closed",
+      "F-026": "closed",
+      "F-027": "closed",
+      "F-028": "closed",
+      "F-029": "closed",
+      "F-030": "closed",
+      "F-031": "closed",
+      "F-032": "closed",
+      "F-033": "closed",
+      "F-034": "closed",
+      "F-035": "closed",
+      "F-036": "closed",
+      "F-037": "closed",
+      "F-038": "closed",
+      "F-039": "partial",
+      "F-040": "closed",
+      "F-041": "closed",
+      "F-042": "closed",
+      "F-043": "closed",
+      "F-044": "closed",
+      "F-045": "closed",
+      "F-046": "closed",
+      "F-047": "closed",
+      "F-048": "closed",
+      "F-049": "closed",
+      "F-050": "closed",
+      "F-051": "closed",
+      "F-052": "closed",
+      "F-053": "closed",
+      "F-054": "closed",
+      "F-055": "closed",
+      "F-056": "closed",
+      "F-057": "closed",
+      "F-058": "closed",
+      "F-059": "closed",
+      "F-060": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:c4c7c77f18c2",
+        "rawEvidence": "raw/review-architecture-w4.txt#sha256:c4c7c77f18c2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:bce8741105e7",
+        "rawEvidence": "raw/review-backend-w4.txt#sha256:bce8741105e7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:997944318089",
+        "rawEvidence": "raw/review-clean-code-w4.txt#sha256:997944318089",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:94f54bb29704",
+        "rawEvidence": "raw/review-degradation-w4.txt#sha256:94f54bb29704",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:3e0326492579",
+        "rawEvidence": "raw/review-frontend-w4.txt#sha256:3e0326492579",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:b62d6e06560f",
+        "rawEvidence": "raw/review-highload-w4.txt#sha256:b62d6e06560f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:e11af465ae8a",
+        "rawEvidence": "raw/review-layout-w4.txt#sha256:e11af465ae8a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:a042ac2299f1",
+        "rawEvidence": "raw/review-logic-w9.txt#sha256:a042ac2299f1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08",
+          "slice-09",
+          "slice-10"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:2c8f9c784029",
+        "rawEvidence": "raw/review-performance-w4.txt#sha256:2c8f9c784029",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:d626d58c620d",
+        "rawEvidence": "raw/review-pr-contract-w5.txt#sha256:d626d58c620d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:cb9f5d46e9d5",
+        "rawEvidence": "raw/review-regression-w4.txt#sha256:cb9f5d46e9d5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:3749f5b9bee2",
+        "rawEvidence": "raw/review-security-code-w7.txt#sha256:3749f5b9bee2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08",
+          "slice-09",
+          "slice-10"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:267551da03ad",
+        "rawEvidence": "raw/review-style-w5.txt#sha256:267551da03ad",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:9f755048040e",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:9f755048040e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-04",
+          "slice-05",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:018746495b8c",
+        "rawEvidence": "raw/review-ui-ux-w4.txt#sha256:018746495b8c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-03",
+          "slice-04",
+          "slice-06"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 69,
+    "known": 0,
+    "unknown": 69,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-verifier-w1.txt"
+  ]
+}

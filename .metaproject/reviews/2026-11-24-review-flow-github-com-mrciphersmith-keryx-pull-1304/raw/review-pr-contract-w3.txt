@@ -1,0 +1,84 @@
+STATUS: DONE_WITH_CONCERNS
+
+## review-pr-contract · round 1 · wave 3
+
+### Scope
+- Read in full: the skill, the driver, `pr-context.md`, my wave 1 and wave 2 results, and slice-03 (1818 lines). Slice-03 holds the Desktop tests: platform/reviewPages.test.ts, review/ReviewBoard.dom.test.tsx, review/model.test.ts, reviews/ReviewPanel.dom.test.tsx (renamed from review/ReviewDetail.dom.test.tsx), reviews/ReviewsView.dom.test.tsx (new), shell/ProjectNavigation.dom.test.tsx and test/app-navigation.fixture.tsx.
+- To settle the body's "Expected overlap with stage 1" section, I compared the test files that both branches change. I used read-only `git diff --stat`/`-U0` between base a5d1ab236, head 20e4281a2 and the local branch `feat/desktop-review-v2-stage1`, plus `git merge-tree --write-tree feat/desktop-review-v2-stage1 20e4281a2`. That command creates no ref and touches no worktree or index, but it does write unreferenced tree and blob objects to the object store.
+- Test output: `research-evidence/verify-tests-to-run-1.txt` covers the root suite only (2032 tests, 18 timeout failures, none in slice-03 files). It has no Desktop `bun test src` run, so the body's "989 tests with 0 failures" stays checked against the journal only (wave 1).
+- Earlier findings I did not file again: testing-practices w1 F-005 (the focus-return-to-search assertion for the Review rules dialog was dropped, not moved), F-006 and F-007; logic w3 F-001 (the answer test's `actions` assertion no longer guards the PR panel); ui-ux UX-005 ("Review again" in the moved interface, still clicked in ReviewPanel.dom.test.tsx); degradation w1 F-005 (stale shortcut docs); my PC-001 to PC-004.
+
+### Checklist form (claims that touch slice-03)
+The PR body has no checkbox checklist, so each claim is a row.
+
+| Claim (quoted) | State | What the slice shows | Verdict |
+|---|---|---|---|
+| "`review_board` gains `reviews_only` ... refused in combination with any other board mode" | stated | reviewPages.test.ts: `reviewBoardArgs({reviewsOnly:true})` gives `["review","reviews","--json"]`. It throws "cannot be combined" for prState, number, repositoriesOnly, paged, cursor, updatedSince and badgeTarget. | consistent |
+| "the tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject, on ⌘1–⌘6 (D4)" | stated | ProjectNavigation.dom.test.tsx asserts the labels, titles `${MOD}${i+1}`, and `projectViewForKey` for 1 to 6. app-navigation.fixture presses ⌘3 and lands on Reviews. | consistent |
+| "Board columns: Running · Waiting on you · Behind · Published, plus Closed when 'Show closed' is on. A list view is also available." | stated | ReviewsView.dom.test "AC6 columns read ..." and the card/list parity test | consistent |
+| "Search, plus state / freshness / source filters." | stated | ReviewsView.dom.test: search by title and number, plus the state, freshness (including `unknown`) and source selects | consistent |
+| "The Review rules button moved here." | stated | ReviewBoard.dom.test asserts no "Review rules" button. ReviewsView.dom.test: "an empty list says so, and the Review rules moved to this toolbar" | consistent |
+| "The Review panel shows the rounds timeline and the review interface ... moved out of the PR panel into one shared component." | stated | ReviewDetail.dom.test.tsx is renamed to reviews/ReviewPanel.dom.test.tsx and renders ReviewPanel. ReviewsView.dom.test "AC7 the Review panel shows the rounds timeline and the review interface" | consistent |
+| "the 'Keryx review' tab is gone. For a PR that has a Review, the header offers 'Open in Reviews'; for a PR without one it keeps its launch action." | stated | ReviewsView.dom.test "AC7 the Pull requests panel has no review interface": tabs are Discussion, Checks and Automation; "Start review" shows with no runs; there is no "Open in Reviews" for an archived run; there is one for a live run | consistent |
+| "The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`." | stated | ReviewsView.dom.test AC8 cases: needs_answer, ready+pending, ready+null and stopped light it; ready+skipped, running, queued, published and closed do not | consistent |
+| "The Pull requests tab no longer lights from a local review." | stated | model.test.ts adds a `needsViewerAttention` test for awaitingAnswer/publicationPending → false. The ReviewBoard.dom.test signal test flips both to `toBeNull()` | consistent |
+| "relabelled 'New review round'. Its title names the round it follows" | stated | ReviewBoard.dom.test pins both titles: "Round 2 reviewed abcdef0 — ..." and the fallback "Reviewed abcdef0 — ..." | consistent (the conditional is my PC-003) |
+| "F-024: ... the outdated note shows once, on its own line." | stated | ReviewBoard.dom.test: `.review-note` count 1 on board and list, reason "No review requested". model.test.ts moves the outdated assertions from `laneReason` to `reviewNote` | consistent |
+| "SQL `attachBadges` stays in parity with `localBadge`, now including `outdated.round`" (Desktop side: `badgesEqual`) | stated | ReviewBoard.dom.test adds two `badgesEqual` cases for `round` | consistent |
+| "`needsViewerAttention` mutation check: 13 one-line mutations, including putting each removed local-review clause back." | stated | The new model.test.ts test pins both removed clauses as `false` | consistent (the mutation run was not repeated) |
+| Overlap: "`ReviewBoard.dom.test.tsx`: the Review rules tests moved to `src/reviews/ReviewsView.dom.test.tsx`, and three assertions now go to `onOpenInReviews`." | stated | Three rules tests moved: scrim, CRUD and previous-account. The focus-return part was dropped (testing-practices w1 F-005). The three calls were settled in wave 1. | consistent apart from the already-filed drop |
+| Overlap: "`App.tsx`, `AppShell.tsx`, `ProjectNavigation.dom.test.tsx`, `app-navigation.fixture.tsx`: the new tab and the D4 shortcut order" | stated | The slice shows both test files changing for the new tab | consistent |
+| Overlap section as a whole: "Expect conflicts in:" (list of files) | stated | `git merge-tree` of stage 1 and head reports a conflict in `apps/desktop/src/review/model.test.ts`, which the list does not name | **PC-005** |
+| "Desktop: `bun test src` passes 989 tests with 0 failures" | stated | The package has no Desktop test output | unverified here (journal-consistent, wave 1) |
+
+### Findings
+
+### [PC-005] The stage 1 overlap list omits `model.test.ts`, which conflicts
+- **Severity**: minor
+- **File**: apps/desktop/src/review/model.test.ts
+- **Problem**: The body's "Expected overlap with stage 1" section opens with "Expect conflicts in:". It names `apps/desktop/src/review/model.ts` ("stage 1 rewrites the lanes and quick filters; stage 2 removes the local-review clauses ... Keep both") and other test files, but not `model.test.ts`. Slice-03 changes that file in the same places stage 1 rewrites:
+  - the import line (`+import { EMPTY_FILTERS, filterReviews, laneReason, needsViewerAttention, ...`);
+  - the outdated-review tests (`laneReason(...)` → `reviewNote(...)`, and "No review requested").
+
+  Stage 1 also rewrites the import (adding `ROLE_LANES, STATUS_LANES, drawnLanes, newestFirst`) and the same outdated/base-moved tests. `git merge-tree --write-tree feat/desktop-review-v2-stage1 20e4281a2` reports `CONFLICT (content): Merge conflict in apps/desktop/src/review/model.test.ts`.
+- **Why it matters**: Whoever merges the second stage reads the list as the full set of conflicts and the guidance for each. For `model.test.ts` there is no guidance. The two sides disagree on what `laneReason` returns for an outdated card: stage 2 pins "No review requested", and stage 1 pins its own lane reasons. Resolving it by taking one side silently drops either the new `needsViewerAttention` test, which guards the "Pull requests tab no longer lights" claim, or stage 1's lane tests.
+- **Fix**: Add `apps/desktop/src/review/model.test.ts` to the overlap list, with the same "keep both" guidance as `model.ts`: keep stage 1's lane tests and stage 2's `needsViewerAttention` test and the `reviewNote` assertions.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Wave 3 (slice-03, the Desktop tests). Every PR #1304 claim this slice touches matches its tests: the reviews_only bridge refusals, the D4 tab order and shortcuts, the board columns, filters and list, Review rules moving to the Reviews toolbar, the Review panel built on the shared interface (ReviewDetail tests renamed to ReviewPanel), the PR panel without the Keryx review tab plus Open in Reviews, the Reviews indicator set, the Pull requests indicator no longer lighting from a local review, the 'New review round' title, F-024's single note line, and badgesEqual with round. One new minor finding: the 'Expected overlap with stage 1' list omits apps/desktop/src/review/model.test.ts, and an in-memory merge-tree against feat/desktop-review-v2-stage1 shows that file conflicts. The dropped Review rules focus-return test and the other test gaps are already filed (testing-practices w1, logic w3).",
+  "slices": ["slice-03"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "PC-005",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/model.test.ts",
+      "line": 3,
+      "quote": "+import { EMPTY_FILTERS, filterReviews, laneReason, needsViewerAttention, reviewLane, reviewNote, stateQuery } from \"./model\";",
+      "problem": "PR body, 'Expected overlap with stage 1': \"Expect conflicts in:\" names apps/desktop/src/review/model.ts but not model.test.ts. Slice-03 rewrites model.test.ts's import line and its outdated-review and base-moved tests (laneReason → reviewNote, 'No review requested'), and it adds the needsViewerAttention test. Stage 1 rewrites the same import and the same tests. `git merge-tree --write-tree feat/desktop-review-v2-stage1 20e4281a2` reports a content conflict in apps/desktop/src/review/model.test.ts.",
+      "impact": "Whoever merges the second stage treats the list as the full set of conflicts and the guidance for each. With no guidance for this file, resolving by taking one side drops either stage 2's needsViewerAttention test, which guards the 'Pull requests tab no longer lights from a local review' claim, or stage 1's lane tests.",
+      "suggested_fix": "Add apps/desktop/src/review/model.test.ts to the overlap list with 'keep both': keep stage 1's lane tests, and stage 2's needsViewerAttention test and reviewNote assertions.",
+      "evidence": "git diff -U0 a5d1ab236...feat/desktop-review-v2-stage1 -- model.test.ts: hunks @@ -3 +3,5 @@ (import) and @@ -85,7 / -94,7 @@ (outdated/base-moved tests). git diff -U0 a5d1ab236 20e4281a2 -- model.test.ts: @@ -3 +3 @@, @@ -71,3 @@, @@ -82 @@, @@ -97,4 +100,25 @@. merge-tree output: 'CONFLICT (content): Merge conflict in apps/desktop/src/review/model.test.ts'. pr-context.md:50-58 lists ReviewResults.tsx, model.ts, ReviewBoard.tsx, ReviewBoard.dom.test.tsx, App.tsx, AppShell.tsx, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx, review.css and implementation-plan.md only.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+### Not verified
+- No tests were run (exec budget 0). The Desktop "989 pass" claim has no test output in the package; research-evidence/verify-tests-to-run-1.txt is the root suite only.
+- The stage 1 comparison used the local branch `feat/desktop-review-v2-stage1`, which equals origin's per the identical diffstat. I did not check whether PR #1300 has commits that have not been pushed.
+- The mutation check (13 mutations) was not repeated.
+
+### Routing audit
+- graph_used: no. Not relevant: slice-03 is test files, and no document outside the diff describes them. The doc-staleness search for the user-visible changes was done in waves 1 and 2.
+- wiki_used: no. Not relevant, for the same reason; wave 1 searched the wiki for the changed labels and found nothing.
+- ctx_used: no. No code search was needed. The claims were settled from the slice and from git diffs, which are compact.
+- raw_rg_used: no. I used raw `grep` only on review-package files (evidence and earlier results) to de-duplicate, plus read-only `git diff`/`merge-tree`. Each is marked `keryx:raw`.

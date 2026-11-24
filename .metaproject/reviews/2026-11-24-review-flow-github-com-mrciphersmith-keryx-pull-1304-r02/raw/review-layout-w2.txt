@@ -1,0 +1,32 @@
+STATUS: DONE_WITH_CONCERNS
+
+Concern: exec_budget_s is 0, so nothing was measured in a real layout engine. Every conclusion below comes from reading the delta and the cascade. No finding is filed. Under Iron Law 1 an unmeasured observation could be at most `info`, and nothing in the slice-03 delta changes geometry enough to warrant one.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "slices": ["slice-03"],
+  "summary": "Delta round 2 (20e4281a2..f6971fd4a), slice-03 (Desktop: dev bridge, review.rs, App, platform/review, ReviewBoard, ReviewBrowserLink, ReviewDetail.css/.tsx, ReviewRuns, ReviewWorkspace, ReviewPanel, ReviewsView, reviews/model, AppShell), read in full (1781 lines). Wave 1 already settled the layout-relevant items here: `.review-workspace-block` (F-054), the select `title` mirror (F-055), the local.error banner placement (F-030) and the ReviewPanel no-card banner. I do not re-file them. Geometry deltas I checked in this slice: (1) The Review rules button can now render while the list failed to load (`rulesTarget` falls back to the board's identity). In that state the toolbar holds the same items as the populated state minus the count label, so its minimum width does not exceed the 648px already recorded at 560px in the PR body. No new overflow condition. (2) ReviewTile now omits the author `.flow-meta` row when `review.card` is null, and the list-view Author cell is empty. Such a card is one row shorter than its neighbours in the lane, which is the intended content change, not a sizing defect. (3) The state badge text now comes from `reviewStateLabel`, which adds 'Archived'. That is shorter than the existing longest label, 'Needs your answer', so the `.flow-card-top` badge gets no new width. (4) The revision-changed banner in ReviewWorkspace has a shorter text and a shorter button label ('Refresh' instead of 'Refresh board'), so it needs less inline space. (5) ReviewBrowserLink gains only click handlers, and ReviewDetail.css adds only the wave-1 rule. No new or changed sizing, overflow, logical-property or RTL-sensitive declaration appears elsewhere in the slice. Unmeasured: exec_budget_s 0. To settle it, run `bun run dev:browser` with a project whose Reviews list fails to load (an older CLI) at a 560px panel width and compare the toolbar's scrollWidth with its clientWidth. Then, with a populated list under Show closed, confirm that a card-less closed tile renders without the author row and leaves no gap.",
+  "findings": [],
+  "prior_dispositions": [],
+  "follow_ups": [
+    "Not measured: in dev:browser, check the Reviews toolbar in the list-load-error state, where the Review rules button is now shown, at 560px and 700px panel widths, and confirm it matches the populated-state wrap behaviour recorded in the PR body."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary (review-layout, round 2, wave 2)
+
+- Scope: slice-03 read in full. It is not the FIX slice, and the payload carries no prior_findings, so this reply gives no prior dispositions. The wave-1 layout reply (raw/review-layout-w1.txt) already closed F-054, F-055 and F-030 for the files this slice shares.
+- New findings: none. The layout-relevant changes in the delta are:
+  - the Review rules button in the list-error state (same item set as the populated toolbar);
+  - card-less tiles that drop the author row;
+  - the 'Archived' badge label (shorter than 'Needs your answer');
+  - a shorter revision-changed banner.
+  None of them adds a width floor, a collapse path or an RTL asymmetry.
+- Not verified: no measurement of any kind (exec_budget_s 0). The Rust and dev-bridge changes in the slice are outside this lens.
+
+Routing audit: graph_used: no (not-relevant: the slice file was given directly and its content is the scope); wiki_used: no (not-relevant: a geometry check of a diff); ctx_used: no (a single ~1.8k-line slice read with Read in bounded chunks; one grep for file headers in the slice); raw_rg_used: no (one raw grep/head over the slice file itself, not project code, with a keryx:raw marker).

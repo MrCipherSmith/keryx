@@ -1,0 +1,180 @@
+STATUS: DONE
+
+## Frontend Review (round 2, delta, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (worktree HEAD = f6971fd4a, verified)
+- Scope mode: explicit-hash-range, FIX slice `slice-01` (read in full)
+- Context read at head (beyond the slice): `apps/desktop/src/reviews/ReviewsView.tsx` (whole file), `apps/desktop/src/reviews/model.ts` (whole), `apps/desktop/src/App.tsx` 200-290 and 505-675, `apps/desktop/src/review/ReviewBoard.tsx` 160-184, 450-474, `apps/desktop/src/review/ReviewWorkspace.tsx` 85-149, `apps/desktop/src/reviews/ReviewPanel.tsx` 77-141, `apps/desktop/src/review/ReviewDetail.tsx` 170-189, `apps/desktop/src/review/SessionReviewActivity.tsx` 110-184, `ReviewsView.dom.test.tsx` 644-683 plus its test list; fix-round-1.md.
+- Project CLAUDE.md: no frontend overrides. The stack is React with hooks (no MobX stores in these files), so the MobX parts of the checklist do not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 2
+
+### Findings
+
+### [F-001] Closed Review panel stays open after "Show closed" is turned off and blames GitHub for the missing card
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:308 (toggle), :162 (selection kept), ReviewPanel.tsx:137-141 (banner)
+- **Rule**: canonical rubric (view state consistency / misleading state). No Parts A-C row covers it.
+- **Problem**: This delta stops reading PR cards for locally closed Reviews unless `--include-closed` is passed (readCards, `includeClosed ? rows : rows.filter(row => row.closedAt === null)`). The Reviews tab passes `showClosed` as that flag. Turning "Show closed" off re-reads the list. The load effect then keeps the selection because the closed Review is still in `snapshot.reviews` (`setSelected(current => current && snapshot.reviews.some(...) ? current : null)`), and nothing closes a selected closed or archived Review when the toggle turns off. The panel stays open on a Review the list now hides, and its card is now `null`. ReviewPanel renders the fallback "GitHub did not return this pull request, so its current range is unknown. Refresh the Reviews list to try again." with a Refresh button. Refresh cannot help, because the card is skipped on purpose. The same banner also flashes on the focus path: for a closed Review, the code calls `setShowClosed(true)` and `setSelected` together, so the panel opens on the old card-less snapshot until the includeClosed re-read lands.
+- **Why it matters**: The panel names the wrong cause and offers a remedy that does nothing. The user is left with a panel for a Review that is no longer in the list.
+- **Fix**: When `showClosed` turns false, drop a selection that `isClosedOrArchived`, for example in the toggle handler: `setShowClosed(v => { if (v) setSelected(s => s && !snapshot?.reviews.some(r => r.id === s.id && isClosedOrArchived(r)) ? s : null); return !v; })`. Also let the panel tell the two cases apart: for `review.state === "closed" && !review.card`, show "Turn on Show closed to load this pull request" instead of the GitHub-failure text. Add a DOM test: open a closed Review under Show closed, turn Show closed off, and expect the panel to close.
+
+### [F-002] Watcher-poll reload of the Reviews list is not visibility-gated (sibling of round-1 F-011)
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:199-204
+- **Problem**: The fix gated the running-Review interval on `document.visibilityState !== "hidden"` (:194), with the stated intent that "a hidden window reads for nobody". The new `reloadSignal` path calls `refresh()` on every completed PR-watcher poll with no such check. Each refresh runs one `keryx review reviews` read: an identity query, card batches and up to 25 compares. ReviewWatcher reads status every 60 s without a visibility check (ReviewWatcher.tsx:75) and signals whenever `lastSuccessAt` advances.
+- **Why it matters**: No concrete bug; this costs GitHub budget in a minimized window. It matches the Pull requests board, which already refreshes on the same signal, so the cost is at most doubled, not new.
+- **Fix**: Optional. Skip the refresh while hidden and refresh once on `visibilitychange` to visible, or record a "dirty" flag and refresh when the window becomes visible.
+
+### [F-003] Review rules fallback accepts the board's repository when the Reviews tab is on its default repository
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:274-276
+- **Problem**: When the list read fails, `rulesTarget` falls back to the board identity if `(!repo || boardRules.repo === repo)`. With `repo` undefined (the tab is on its default repository), any board repository passes. In a multi-repository project, a board switched to repository B therefore supplies B's rules dialog while the Reviews tab is meant to show the default repository.
+- **Why it matters**: The dialog edits rules for the repository it names, so the risk is low. It only applies when the list read has failed. Recorded so the choice is deliberate.
+- **Fix**: Optional. Accept the board identity only when it is the board's default repository, or pass the board's `repositories[0]` and compare against it.
+
+### Prior findings (round 1) — dispositions checked against the code at f6971fd
+- F-001 closed: the focus carries `{repo, repositoryId, number}` from both producers (ReviewBoard.tsx:462 and :557). ReviewsView switches with `focusRepo` and matches repo, repositoryId and number (:227-234). Test at ReviewsView.dom.test.tsx:447.
+- F-002 closed: ReviewWorkspace calls `onIntentConsumed` on every path that consumes or drops the intent (:136-142). ReviewsView clears the intent there and when the tab is deactivated (:255-256). Test at :431.
+- F-003 closed: App clears `reviewsFocus` through `reviewsFocusHandled(nonce)` (App.tsx:221-223). Pending state lives above the keyed list, and the `taken` ref guards against a replay (:91-104). `selectRepo` drops a pending request. Test at :461.
+- F-004 closed (code read in slice): `reviewNeedsViewer` lights `ready` only for `publication === "pending"`. An archived Review, or one whose card was not read, counts only `needs_answer`.
+- F-005 closed: `reviewedCommit` uses the domain `review.reviewed` (model.ts:54-57). `latestReviewed` was removed, and the three consumers (card, list row, panel header) call it.
+- F-006 closed (UI half): ReviewDetail `hasReview = local.runs.length > 0` (:177). Archived Reviews are listed under Show closed and labelled Archived, and the panel History reaches Restore (test :644).
+- F-007 closed: ReviewsView re-reads on `subscribeSessionReview` for its cwd (:198), on the watcher poll signal (:199-204), and on the running interval, which is no longer gated on `active`. The App comment was corrected. Tests at :288 and :341. Publishers are event-driven only (SessionReviewActivity continue/decide, App start), so there is no reload storm.
+- F-008 closed (Desktop consumers only): reviewedCommit no longer walks rounds in number order. I did not verify the backend `roundFor` A,B,A rule; that belongs to review-logic.
+- F-009 closed: `accessLost` calls `settlePending()` (:144).
+- F-011 closed: the interval skips a hidden document (:194). The un-gated watcher sibling is F-002 above (info).
+- F-012 closed: ReviewsView mounts only after the account read settles (App.tsx:640). The only remaining double read is on the error-then-success path, which is acceptable.
+- F-013 closed: `ReviewsTabIndicator` is declared in reviews/ReviewsView.tsx and AppShell imports it.
+- F-014 closed: without `onOpenInReviews`, view and answer open the PR panel with no intent (ReviewBoard.tsx:463).
+- F-017 closed: `rulesTarget` falls back to the board identity when the list read fails for a reason other than access (:274-276). Test at :634. See F-003 above (info).
+- F-018 closed: the desktop-app.md shortcut table and the Review rules path now read Reviews.
+- F-019 closed: cli-reference.md lists the three freshness kinds.
+- F-021 closed: specification.md records that version 1 was kept.
+- F-022 closed: rows are sorted by latest activity before the compare cap.
+- F-024 closed: `readCards` keeps the batches that succeeded. A Review without a card does not light the indicator unless it needs an answer.
+- F-025 closed: `compareHeads` has an overall deadline (`compareBudgetMs`), with a test.
+- F-026 closed (as seen in the slice): `assignReviews` caches the placed attempts per Review with narrow `json_extract` columns.
+- F-029 closed: the card button has no aria-label, so its content names it.
+- F-031 closed: the accessible name starts with the visible text "after <id>".
+- F-030 closed: the run-status error banner sits directly under the header actions in ReviewDetail.
+- F-032 closed: `launchAction` returns "New review round" (ReviewRuns.tsx:38).
+- F-033 closed: search matches the title, or the number anywhere.
+- F-041 closed: `restoreFocus` returns focus to search on an identity change. The test asserts "Search reviews" (:631).
+- F-048 closed: the panel link routes through `openPullRequestLink` and `openBrowser`.
+- F-049 closed: ReviewDetail no longer declares `onOpenReviewSession`.
+- F-050 closed: the fixture uses `nav .review-tab-dot:not(.reviews-tab-dot)`.
+- F-052 closed: the one-element loop was unrolled (slice).
+- F-054 closed: `.review-workspace-block` has a flex column with `gap: var(--sp-3)` (ReviewDetail.css:17).
+- F-055 closed: filter selects carry a `title` with the full selected label (test :684). Width was not measured.
+- F-056 closed: the card-less banner has a Refresh button (test :673).
+- F-059 closed: the implementation-plan stage 3 hand-off says «New review round».
+Not assessed in this lane: F-010, F-015, F-016, F-020, F-023, F-027, F-028, F-034–F-040, F-042–F-047, F-051, F-053, F-057, F-058, F-060 (backend, docs and test-practice findings).
+
+### Clean Areas
+- Component patterns: effects clean up (interval, subscription, keydown). Keys are stable (review.id, round.number). Effect order in the focus flow was traced, and the `refreshedFor`/`read.request` comparison cannot settle early: the load effect's cleanup increments the sequence, and the pending effect sees the closure's `loading: false` with `request === after`.
+- Re-render safety: the App ↔ board identity callback cannot loop, because `watcherTarget` is memoized (ReviewBoard.tsx:421) and `reviewsFocusHandled` compares nonces.
+- Intent lifecycle: consumed once on every ReviewWorkspace path; the PR panel accepts only `start`.
+- Accessibility: the card names come from their content; the rounds link name contains its visible text.
+- TypeScript: no `any`, no new `!` in production code, props are typed.
+
+### Not verified
+- Tests were not run (exec_budget_s 0). I relied on `research-evidence/verify-tests-to-run-1.txt` as stated in the brief.
+- Backend round placement (F-008 backend half, F-011 superseded rows) was not traced. The Rust bridge was not read.
+- Layer commands (gdgraph, wiki, memory) were not used. Consumer sets were enumerated with `keryx ctx rg --all` over apps/desktop/src.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-frontend",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 308,
+      "quote": "onClick={() => setShowClosed(value => !value)}",
+      "problem": "Turning Show closed off re-reads the list without closed Reviews' PR cards (new includeClosed card skip), but the selection of a closed Review is kept (it is still in snapshot.reviews), so the panel stays open on a Review the list hides and ReviewPanel shows 'GitHub did not return this pull request ... Refresh the Reviews list to try again' with a Refresh that cannot help. The same banner flashes on the Open-in-Reviews path for a closed Review until the includeClosed re-read lands.",
+      "impact": "Misleading cause and a dead-end remedy in the Review panel; panel open for a Review not in the list.",
+      "suggested_fix": "Drop a selected closed/archived Review when Show closed turns off; in ReviewPanel, for state closed with card null, say Show closed loads it instead of the GitHub-failure text. Add a DOM test (open closed Review under Show closed, turn it off, panel closes).",
+      "evidence": "ReviewsView.tsx:152 load(cwd, repo, expectedViewer, showClosed); :162 keeps selection if id in snapshot; :308 toggle has no selection handling; :238+:243 focus path sets showClosed and selected together; ReviewPanel.tsx:132-141 card null -> GitHub-failure banner; review-reviews.ts readCards filters rows by closedAt unless includeClosed; ReviewsView.dom.test.tsx:660-671 confirms closed cards are null without Show closed.",
+      "confidence": "high",
+      "reviewer": "review-frontend"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 199,
+      "quote": "lastSignal.current = reloadSignal;\n    refresh();",
+      "problem": "The watcher-poll reload is not visibility-gated, while the running interval next to it is (sibling of round-1 F-011).",
+      "impact": "Reviews list reads (identity, card batches, up to 25 compares) in a hidden window on each completed watcher poll; parity with the PR board's own refresh on that signal.",
+      "suggested_fix": "Skip refresh while document is hidden and refresh once on visibilitychange to visible.",
+      "evidence": "ReviewsView.tsx:194 gated interval vs :199-204 ungated signal; ReviewWatcher.tsx:48-49,75.",
+      "confidence": "medium",
+      "reviewer": "review-frontend"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 276,
+      "quote": "(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);",
+      "problem": "With the Reviews tab on its default repository (repo undefined) the rules fallback accepts whatever repository the board shows.",
+      "impact": "In a multi-repository project, after a failed list read, Review rules may open for the board's repository rather than the Reviews tab's default; the dialog names its target, so low risk.",
+      "suggested_fix": "Accept the board identity only when it is the default repository.",
+      "evidence": "ReviewsView.tsx:274-276; App.tsx:643 rulesTarget={boardIdentity}; ReviewBoard.tsx:466.",
+      "confidence": "medium",
+      "reviewer": "review-frontend"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-004", "disposition": "closed"},
+    {"id": "F-005", "disposition": "closed"},
+    {"id": "F-006", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"},
+    {"id": "F-008", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-014", "disposition": "closed"},
+    {"id": "F-017", "disposition": "closed"},
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"},
+    {"id": "F-021", "disposition": "closed"},
+    {"id": "F-022", "disposition": "closed"},
+    {"id": "F-024", "disposition": "closed"},
+    {"id": "F-025", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-029", "disposition": "closed"},
+    {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-032", "disposition": "closed"},
+    {"id": "F-033", "disposition": "closed"},
+    {"id": "F-041", "disposition": "closed"},
+    {"id": "F-048", "disposition": "closed"},
+    {"id": "F-049", "disposition": "closed"},
+    {"id": "F-050", "disposition": "closed"},
+    {"id": "F-052", "disposition": "closed"},
+    {"id": "F-054", "disposition": "closed"},
+    {"id": "F-055", "disposition": "closed"},
+    {"id": "F-056", "disposition": "closed"},
+    {"id": "F-059", "disposition": "closed"}
+  ],
+  "notes": "F-008 closed for the Desktop consumers only; backend roundFor not traced by this lane. Tests not run (exec budget 0). Routing audit: graph_used no (not-relevant: consumer sets enumerated with keryx ctx rg --all), wiki_used no (not-relevant: fix-round plan and decisions read directly), ctx_used yes, raw_rg_used no."
+}
+```
+
+Routing audit: graph_used: no (not-relevant; consumers were enumerated with `keryx ctx rg --all`), wiki_used: no (not-relevant; fix-round-1.md and the flow decisions were read directly), ctx_used: yes, raw_rg_used: no.

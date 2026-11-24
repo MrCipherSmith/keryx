@@ -1,0 +1,96 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` (PR #1304), round 2 delta 20e4281a2..f6971fd4a
+- Slice: slice-04 (read in full, 1849 lines). It holds Desktop tests (reviewPages, ReviewBoard, ReviewDetail, ReviewPanel, ReviewsView, reviews/model, ProjectNavigation, the app-navigation fixture), docs (cli-reference, desktop-app, desktop-metaproject guide, implementation-plan, specification), and partial hunks of src/commands/review-board.ts and src/commands/review-reviews.ts.
+- Scope mode: explicit-hash-range (supplied slice text)
+- Spec compliance gate: skipped. No issue or task was supplied for this wave. The plan and decisions were consulted only for settled behaviour.
+
+### Summary
+Slice-04 is mostly tests and docs for the round-1 fixes. I checked the tests' assertions against the production code they exercise: ReviewsView.tsx, reviews/model.ts, ReviewBoard.tsx openReview, review-entity reviewNeedsViewer, board-badges localBadge, review-reviews.ts readReviews/compareHeads, and App.tsx openInReviews, focus and identity wiring. The behaviour the tests pin down matches the code, and the docs match it too (⌘3 Reviews, ⌘4 Pull requests, ⌘6 Metaproject, `--include-closed`, indicator rules). I found one new minor issue. It is a sibling of degradation-w2 F-001 on another entry point, and it disproves that finding's "the board card still starts a review" mitigation. I did not re-file anything from waves 1 to 7.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [F-001] The board card's "View review result" for a superseded, never-started run sends the PR to a Reviews list that does not hold it (sibling of degradation-w2 F-001)
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewBoard.tsx:458-462 (behaviour pinned by slice-04 ReviewBoard.dom.test.tsx:85-105), with src/review/board-badges.ts:32-49
+- **Problem**: `localBadge` filters out only `existing`, archived and deleted runs. It does not filter a queued request that was superseded before it started (state `skipped`, phase `Superseded`). The head Reviews list does drop those rows (desk-run-store.ts:606 `NOT ${neverStarted("r.")}`). Suppose such a request is the only remaining run on the card's current range, for example after the run that superseded it on the same range finished and was deleted. Then `latest` is that request and `runState` is `"skipped"`. The card's action reads "View review result" (ReviewResults.tsx:36), and `openReview` classifies it as `kind: "view"` (ReviewBoard.tsx:458). In this delta, a view intent no longer opens the PR panel; it goes to `onOpenInReviews` (:462). The Reviews tab re-reads once and shows "Pull request #N has no Keryx review in this list." (ReviewsView.tsx:244-249).
+- **Why it matters**: degradation-w2 F-001 reported the same dead end on the PR panel's "Open in Reviews". It called the issue mild because "the board card's own review action still starts a review through the start intent". In this state that does not hold. Both PR-tab entry points lead to the dead end, the PR panel no longer offers Start (hasReview is true), and the Reviews tab does not list the Review. A new review for that revision cannot be started from the Desktop until the PR head moves. The trigger is rare: it needs a same-range supersede followed by deleting the superseding run.
+- **Fix**: Apply the fix suggested for degradation-w2 F-001 (one shared never-started predicate) to `localBadge` as well. Drop runs that are `skipped` with phase `Superseded` and never started (no `startedAt`, no result) before choosing `latest`, as reviewRows does. Add a board DOM case whose only run is such a request and assert that the card offers "Run review" and starts in the PR panel.
+- **Evidence**: code-trace. board-badges.ts:32 (filter), :37 (latest = same-range run), :49 (runState); ReviewResults.tsx:34-36 (label from runState); ReviewBoard.tsx:458-462 (kind "view" routed to Reviews); desk-run-store.ts:26-27 (neverStarted), :606 (reviewRows excludes it), :722-729 (a same-range manual start supersedes a queued request with other options); desk-run-lifecycle.ts:36-44 (delete is allowed on a finished run). I did not check that the superseded request's row actually reaches the badge SQL path (readLocalBadges / attachDeskRunBadges). The JS `localBadge` is stated to share its rules with SQL (board-badges.ts:30), but I did not read the SQL projection.
+
+### Async & Concurrency
+None detected. I checked these paths:
+- The ReviewsView focus hand-off: `taken` nonce, App drops on `onFocusHandled`, and pending sits above the repo key.
+- The `refreshedFor.after` against `sequence.current` ordering. The cleanup increment guarantees that the re-read request id exceeds `after`.
+- accessLost dropping pending.
+- The running interval skipped in a hidden window, and reloadSignal compared by ref.
+- compareHeads: the per-item deadline race and clearTimeout in `finally`.
+
+### Error Handling
+None detected. This covers the readCards batch failure (warning, other batches kept, access/configuration rethrown via stopOnError) and the non-access refresh failure keeping the last list.
+
+### Null / Undefined Safety
+None detected. Card-less Reviews go through `reviewTitle`, the `review.card &&` guards and `reviewNeedsViewer`'s `card === null` branch. An archived Review cannot be `needs_answer`, because desk-run-lifecycle.ts:36-39 refuses any decision on an unfinished run, so the archived-before-answer ordering in `reviewNeedsViewer` is consistent with the plan text.
+
+### Type Contract Violations
+None detected. `writeJson` / `writeSerialized` moved to board-github as `writeBoundJson` / `writeBoundJsonText`. Its only importers are review-board.ts (aliased) and review-reviews.ts. No module still imports the removed export from ./review-board.
+
+### Edge Cases
+None new. Archived handling in the column, label and filter is consistent across model.ts. The search for "#" alone matches no number, the same as the Pull requests board.
+
+### Not re-filed (raised in waves 1 to 7)
+- PR panel "Open in Reviews" for superseded-only runs: degradation-w2 F-001. F-001 above is its card-action sibling.
+- Show closed re-reads, hidden-tab reloads, and watcher-poll reloads without a visibility gate: degradation-w1 F-003, P2-001, highload I-001/I-002, F-002 (watcher poll).
+- Compare deadline not ending the gh children, card phase without a deadline, closed or archived rows taking compare slots: R2-BE-001, I-002, F-002.
+- The rules fallback when `repo` is undefined: F-003 (frontend/architecture).
+- A closed Review panel flashing "GitHub did not return this pull request": UX-002 / F-001 (Show closed off).
+- Docs drift (Review tab naming, migration rule exception, state table): PC-002, PC-W4-002, PC-W5-001.
+
+### Suggested Patches
+None. The fix belongs with the shared predicate proposed in degradation-w2 F-001.
+
+### Not verified
+- I ran no tests (exec budget 0). verify-tests-to-run-1.txt reports 194 root and 1008 Desktop tests passing at f6971fd.
+- I did not read the SQL badge projection (readLocalBadges / attachDeskRunBadges) for the superseded-row path in F-001.
+- I did not consult the layers block, gdgraph or wiki. Production files were read directly at head.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 (tests, docs and partial backend hunks of the round-1 fixes) is logically sound. The tests' assertions match the production code they exercise, and the docs match the code. One new minor: a board card whose only current-range run is a queued request superseded before it started shows 'View review result' and routes to the Reviews tab, which excludes such rows, so it dead-ends. This is a sibling of degradation-w2 F-001, and it disproves that finding's mitigation that the card still starts a review. Nothing from waves 1-7 re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "repo": "keryx",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 458,
+      "quote": "const kind = card.localReview?.awaitingAnswer ? \"answer\" : card.localReview?.active || card.localReview?.runState ? \"view\" : \"start\";",
+      "problem": "localBadge (board-badges.ts:32) does not filter a queued request superseded before it started (skipped/Superseded). When it is the only remaining run on the card's range (e.g. its same-range superseder finished and was deleted), runState is 'skipped', the card action is 'View review result', and openReview routes kind 'view' to onOpenInReviews. The Reviews list excludes never-started rows (desk-run-store.ts:606), so the tab re-reads and says the PR has no Keryx review.",
+      "impact": "Both PR-tab entry points (card action and PR panel 'Open in Reviews', degradation-w2 F-001) dead-end, and the Reviews tab does not list the Review. No new review for that revision can be started from the Desktop until the head moves. The trigger is rare.",
+      "suggested_fix": "Share one never-started predicate (as proposed for degradation-w2 F-001) and apply it in localBadge before choosing latest, so the card offers 'Run review' and starts in the PR panel. Add a board DOM case with a single superseded never-started run.",
+      "evidence": "board-badges.ts:32,37,49; ReviewResults.tsx:34-36; ReviewBoard.tsx:458-462; desk-run-store.ts:26-27,606,722-729; desk-run-lifecycle.ts:36-44. Not verified: the SQL badge projection path for this row.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "context-line",
+      "evidence_kind": "code-trace"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": ["Fold F-001 into the fix for degradation-w2 F-001: one never-started predicate for reviewRows, ReviewDetail hasReview and localBadge."],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

@@ -1,0 +1,1307 @@
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md
+@@ 1,14 @@
++# Acceptance Criteria
++
++- AC1: Opening a copy of a database created with main's schema migrates it in place: the number of attempts is unchanged, every attempt has exactly one Review keyed by repository id, PR number and viewer (case-insensitive), rounds are numbered by first appearance of a base..head pair in creation order, a continuation joins its predecessor's round, `previous_run_id` links each attempt to the one it follows, and a second open changes nothing. · sensitive: failure-scenario [verify: exec `bun test src/review/desk-run-store.test.ts`]
++- AC2: One PR with three historical runs on three ranges is one Review with rounds 1–3; a new attempt (start, retry on the same range, continuation, new head) is assigned its Review and round when it is recorded. [verify: exec `bun test src/review/desk-run-store.test.ts`]
++- AC3: A read-only store on an unmigrated database still returns badges and active numbers, and SQL `attachBadges` stays equal to `localBadge` for every query condition, including the round of an outdated result. [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]
++- AC4: `keryx review reviews --json` returns one summary per Review with state, freshness, rounds and latest findings; state and freshness follow the specification table, and a missing store returns an empty list without creating one. [verify: exec `bun test src/review/review-entity.test.ts src/commands/review-reviews.test.ts`]
++- AC5: The Desktop bridge builds `review reviews --json [--repo]` only for a reviews-only request and refuses any combination with other board modes. (Rust unit tests run in CI only; no local toolchain) [verify: judged]
++- AC6: The project tabs read Sessions, Flows, Reviews, Pull requests, Issues, Metaproject with shortcuts in that order, and the Reviews tab shows Reviews in the columns Running · Waiting on you · Behind · Published (· Closed when shown) with list view, search and filters. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/shell'`]
++- AC7: The Review panel shows the rounds timeline and the review interface (history, report, answer, publication, lifecycle); the Pull requests panel no longer contains it and offers "Open in Reviews" for a PR that has a Review. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/review'`]
++- AC8: The Reviews tab indicator lights for `needs_answer`, `ready` without a publication decision and `stopped`, and stays off otherwise; the Pull requests indicator no longer lights from a local review that waits on the user. · sensitive: mutation [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews src/review'`]
++- AC9: The attention-set logic in `ReviewBoard.tsx` is unchanged, and every line changed in `needsViewerAttention` is pinned by a test (each one-line mutation fails at least one test). · sensitive: mutation [verify: judged]
++- AC10: The outdated-review action reads "New review round" and names the round it follows; F-024's text comparison is gone and the outdated note appears once. [verify: exec `sh -c 'cd apps/desktop && bun test src/review'`]
++- AC11: The migration run on a copy of the local working database keeps every attempt and assigns each to one Review. (operator database; counts recorded in the journal, no data committed) [verify: judged]
++- AC12: Desktop and root test suites, typecheck and lint pass; CI is green or every failure is explained. [verify: invariant `sh -c 'bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit'`]
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/context.md
+@@ 1,37 @@
++# Context
++
++Base: `origin/main` at `a5d1ab236` (stage 0 merged, Flow 516, PR #1294). Branch `feat/desktop-review-v2-stage2`.
++
++## Sources of truth
++
++- `docs/requirements/keryx-desktop-review-v2/prd.md` — R4 (rest), R8, R12.
++- `docs/requirements/keryx-desktop-review-v2/specification.md` — «Сущности», «Состояние Review», «Хранение», «Экраны → Reviews», «Контракты данных», acceptance 11 and 16.
++- `docs/requirements/keryx-desktop-review-v2/implementation-plan.md` v0.1.3 — stage 2 row, «Передача следующим этапам», «Что этап 0 оставил в коде», D1–D6.
++- Flow 516 package: `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/` (journal, mutation list for the attention set).
++
++## Code map
++
++| Area | File | Notes |
++|---|---|---|
++| Attempt store | `src/review/desk-run-store.ts` | `runs` table, `requestAttempt` (inside the dispatch transaction), `recordExisting` (imported session packages), `history`, `attachBadges` (SQL projection), `readLocalBadges` opens the store **read-only** and must work on an unmigrated database |
++| Attempt types | `src/review/desk-run-types.ts` | `DeskRun`, `continuation.previousId` links only same-range continuations (O12) |
++| Badge rule | `src/review/board-badges.ts` | `localBadge`; SQL `attachBadges` must stay in parity (store test compares them per query condition) |
++| Store tests | `src/review/desk-run-store.test.ts`, `src/review/board-badges.test.ts` | parity fixture lives in the store test |
++| Board CLI | `src/commands/review-board.ts` | `keryx review board --json` modes; GitHub reads via `projectGithubConnection`, `boardGraphql`, `listActiveReviewCards` (`src/review/board.ts:201`) |
++| Rust bridge | `apps/desktop/src-tauri/src/review.rs` | `review_board` command builds CLI args in `board_read_args`; unit tests at the bottom. No local Rust toolchain: CI only |
++| Desktop platform | `apps/desktop/src/platform/review.ts`, `reviewRuns.ts` | `invoke("review_board", …)`, `invoke("review_run", …)` |
++| PR board | `apps/desktop/src/review/ReviewBoard.tsx` | attention set (`carriedAttention`, `seeded`, `seedFor`, seed load, `attentionPrs`, write-back, `stale`) — protected; indicator; toolbar holds `ProjectReviewRules` |
++| PR panel | `apps/desktop/src/review/ReviewDetail.tsx` | tabs Discussion / Checks / Keryx review / Automation; the Keryx review tab renders `ReviewRuns`, `ReviewRunDialog`, launch dialog |
++| PR card | `apps/desktop/src/review/ReviewResults.tsx`, `model.ts` | `needsViewerAttention` (local review clauses = deviation b), "Review again" label (decision d), `secondaryNote` (F-024) |
++| Shell | `apps/desktop/src/shell/AppShell.tsx`, `apps/desktop/src/App.tsx` | `View` union, tab list with shortcuts, `reviewIndicator` |
++| Toolbar CSS | `apps/desktop/src/styles/review.css` | container queries at 1100px and 760px (deviation c) |
++
++## Parallel stage 1 (PR #1300, branch `feat/desktop-review-v2-stage1`, not merged)
++
++Touches `ReviewBoard.tsx` (props, quick filters, grouping, focus, work row), `ReviewResults.tsx` (rewrites the card: removes the icon review action including "Review again", removes `secondaryNote`, adds `PrWorkRow`), `model.ts` (status/role lanes, quick filters, `laneReason`), `App.tsx`, `AppShell.tsx` (3 lines), `ProjectNavigation.dom.test.tsx`, `review.css`. It does not touch `ReviewDetail.tsx`, the store or the CLI. Stage 2 keeps its edits in those shared files to the minimum the stage needs; the expected conflicts are listed in the PR body.
++
++## Memory and constraints
++
++- `keryx` on PATH is an installed build, not the working tree (memory: stale-installed-keryx-binary). Exercise new CLI code with `bun src/cli.ts …` or tests.
++- No Rust toolchain on this Mac: `review.rs` changes are verified only by CI.
++- Agent conduct: no AI attribution, commits only at task boundaries by the orchestrator, no `git stash`, no `git add -A`.
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/description.md
+@@ 1,22 @@
++# Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab
++
++## Problem
++
++Desktop stores every review attempt as an independent row in `runs.sqlite` (`src/review/desk-run-store.ts`). Attempts of one PR are not grouped, a run has no link to the run of the previous round (spec O12), and the whole review interface (history, publication, rules) lives inside the Pull requests panel. Until a Reviews tab exists, stage 0 lets a local review that waits on the user light the Pull requests tab indicator (deviation (b) of the implementation plan), and the outdated-review action keeps the interim label "Review again" (decision (d)).
++
++Source: `docs/requirements/keryx-desktop-review-v2/` — PRD R8, the rest of R4, R12; specification sections «Сущности», «Хранение», «Reviews», «Контракты данных»; implementation plan v0.1.3, stage 2 row and «Передача следующим этапам».
++
++## Expected outcome
++
++- Every attempt in `runs.sqlite` belongs to exactly one Review (`reviews` table, key repository id + PR number + viewer, D3) and carries its round number and the id of the attempt it follows (`review_id`, `round`, `previous_run_id`). Existing databases are migrated in place; new attempts are assigned when they are recorded.
++- A project tab **Reviews** (order Sessions, Flows, Reviews, Pull requests, Issues, Metaproject — D4) shows one card per Review with its own columns, list view, filters and a panel with the rounds and the review interface moved out of the Pull requests panel (history, report, publication), and the Review rules button.
++- The Reviews tab indicator lights for `needs_answer`, `ready` without a publication decision and `stopped`. The Pull requests indicator no longer lights from a local review (closes deviation (b)).
++- The outdated-review action is relabelled to say it starts a new round of the same Review (decision (d)); the update round itself is stage 3.
++- F-024 (`secondaryNote` text comparison) is gone.
++
++## Out of scope
++
++- Update round, `keryx review advance`, `on_head_move` behaviour, publication variants for a moved head (stage 3). The `on_head_move` column is stored with default `ask` (D2) but nothing reads it yet.
++- Session-package registration and shared publication code (stage 4).
++- The PR card work row and its review link (stage 1, PR #1300); this flow exposes the round on the badge so stage 1's link can show it after both merge.
++- Persistent per-finding identity across rounds (`Finding` entity) beyond what round packages already record.
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md
+@@ 1,98 @@
++# Flow Journal
++
++- 2026-11-24T07:16:18.886Z - flow created
++- 2026-11-24T07:19:14.810Z - task-done: T1: Collect remaining context
++- 2026-11-24T07:19:15.191Z - task-done: T2: Implement per plan
++- 2026-11-24T07:19:15.510Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-24T07:19:15.823Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-24T07:19:16.212Z - task-added: T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity
++- 2026-11-24T07:19:16.529Z - task-added: T6: Reviews read model, keryx review reviews --json, bridge arg and platform call
++- 2026-11-24T07:19:16.834Z - task-added: T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator
++- 2026-11-24T07:19:17.196Z - task-added: T8: Pull requests board: indicator without local review, New review round label, F-024
++- 2026-11-24T07:19:17.519Z - task-added: T9: Migration on a copy of the local working database
++- 2026-11-24T07:19:17.861Z - task-added: T10: Test suites, typecheck and lint
++- 2026-11-24T07:19:18.248Z - task-added: T11: Reviews toolbar measurement at 1100/760/560px
++- 2026-11-24T07:19:18.561Z - task-added: T12: review-orchestrator on the PR
++- 2026-11-24T07:19:18.913Z - task-added: T13: Implementation plan stage 2 state, deviation b closed, CLI reference
++- 2026-11-24T07:19:31.529Z - frozen: 12 criteria; checksum recorded
++- 2026-11-24T07:19:31.820Z - started
++- 2026-11-24T07:19:40.519Z - task-attempt: T5: started (attempt 1) — 519-T5
++
++## 2026-11-24 · T5 accepted (DONE_WITH_CONCERNS)
++
++- Orchestrator re-ran `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts` (46 pass, 0 fail) and `bun run typecheck` (clean).
++- Concern: `desk-run-store.ts` is 854 lines (over the 800-line readability threshold). Moving the assignment logic to its own module is left as a follow-up.
++- Concern: each writable open takes a short immediate lock for the migration check; it is covered by the 8 s busy_timeout.
++- Concern: Desktop `badgesEqual` does not compare `outdated.round`. T8 handles this.
++- Behaviour, as the plan specifies: a range that comes back after other ranges (A, B, A) rejoins its first round as a retry. A row without `createdAt` sorts first.
++- `board-types.ts` touched: `outdated.round?` is required by `LocalBadge`.
++- Worker saw `src/review/layers-payload.test.ts` time out under the full `src/review` run. That test does not import the changed files. CI will tell; not verified against base.
++
++## 2026-11-24 · T9 migration on a copy of the local working database
++
++`sqlite3 .backup` copy of `~/.local/share/keryx/desktop-review/runs.sqlite` into the session scratchpad (not committed), opened twice with the new writable store:
++attempts before 17 / after 17; unassigned 0; reviews 13 = distinct (repo, pr, lower(viewer)) keys 13; dangling review ids 0; rounds: round 1 x 13, round 2 x 4. The second open changed nothing.
++- 2026-11-24T07:37:04.175Z - task-attempt: T6: started (attempt 1) — 519-T6
++- 2026-11-24T07:37:09.335Z - task-done: T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity
++- 2026-11-24T07:37:09.572Z - task-done: T9: Migration on a copy of the local working database
++
++## 2026-11-24 · T6 accepted (DONE_WITH_CONCERNS)
++
++- Orchestrator re-ran the review-entity, review-reviews, store and badge tests (69 pass, 0 fail), plus root and Desktop typecheck (clean). Rust `review.rs` is unverified locally; CI only.
++- Spec/plan disagreement on `budget`: the plan wins. A finished attempt with a reviewed range (completed, partial or budget) is `ready`/`published`.
++- Response keeps `version: 1`, the same key the board uses, so Desktop's `assertProtocol` is shared. The spec's "raise the protocol version" is not done; new command, own payload.
++- Comparisons run only for 40-char hex heads; `gh` returns only `status`/`ahead_by`; at most 25 per call, four at a time.
++- Operator question raised: what freshness to show when the PR head is unknown (card unreadable or PR missing). The worker returns `current`. See the answer below.
++- Rounds are listed newest first; state, source and latestRound come from the newest attempt; findings and publication from the newest finished, reviewed attempt.
++- 2026-11-24T07:51:43.210Z - task-done: T6: Reviews read model, keryx review reviews --json, bridge arg and platform call
++- 2026-11-24T07:51:43.524Z - task-attempt: T7: started (attempt 1) — 519-T7
++
++## 2026-11-24 · Operator answer: freshness when the PR head is unknown
++
++Answer (operator, AskUserQuestion in this session): add a freshness kind `unknown`. The card shows "head unknown" and the Review is not placed in Behind. This is a small spec change; it will be recorded in the plan's stage 2 state. It is implemented as a fix task on T6 output, together with T8.
++
++## 2026-11-24 · T7 accepted (DONE_WITH_CONCERNS)
++
++- Orchestrator re-ran `cd apps/desktop && bun test src` (987 pass, 0 fail) and `bunx tsc --noEmit` (clean). It checked that the `ReviewBoard.tsx` diff (13 lines) touches no attention-set identifier.
++- `ReviewRuns.dom.test.tsx` moved to `src/reviews/ReviewPanel.dom.test.tsx`; only the 8 tab-click lines were dropped. The Review rules tests moved to `ReviewsView.dom.test.tsx`.
++- Concerns: tests were not written red-first (the worker reported 8 mutations, each caught); `ReviewBoard.dom.test.tsx` will conflict with PR #1300; `ReviewDetail` still accepts the unused `onOpenReviewSession`; the toolbar is not re-measured (T11); the app makes one extra `review reviews` read at start; the spec's publication/author/Flow/period filters are not implemented (the plan narrows them to state/freshness/source plus search).
++- Operator questions raised for the worker's behaviour choices; answers below.
++
++## 2026-11-24 · Operator answers on T7 choices
++
++The operator answered in this session (AskUserQuestion), and every answer matches what T7 built:
++- PR panel button for a PR without a Review keeps the existing launch labels.
++- A Review hidden by filters, search or Show closed: the filters are cleared before it opens.
++- Leaving the tab unmounts the panel and keeps the selection.
++- The source label is 'Scheduled'.
++
++Not asked, kept as implemented because each keeps the previous PR-panel behaviour: an answer intent opens the waiting question directly; a PR missing from the list gets one re-read, then a notice; the list refreshes when the open panel sees a run change.
++- 2026-11-24T08:21:04.204Z - task-done: T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator
++- 2026-11-24T08:21:04.442Z - task-added: T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab
++- 2026-11-24T08:21:04.796Z - task-attempt: T8: started (attempt 1) — 519-T8
++- 2026-11-24T08:21:05.118Z - task-attempt: T14: started (attempt 1) — 519-T14
++- 2026-11-24T08:23:45.674Z - task-done: T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab
++
++## 2026-11-24 · T14 accepted, T8 accepted (DONE_WITH_CONCERNS)
++
++- T14: the freshness kind `unknown` is added in the CLI and the Reviews tab. The label is lowercase 'head unknown', matching its neighbours 'current' and 'behind N'. Tests: 25/0 backend, 48/0 reviews DOM.
++- T8: needsViewerAttention drops the local-review clauses, which closes deviation (b). The outdated action is labelled 'New review round'. F-024 (secondaryNote) is removed, and the outdated note now appears once, on its own line.
++- AC9 mutation check, run by the worker: 13 one-line mutations of needsViewerAttention (model.ts lines 39-43), including re-adding each removed clause. Each one failed at least one test. The file was restored byte-identical (cmp).
++- ReviewBoard.tsx: the only T8 edit is the `badgesEqual` line, which now also compares outdated.round. The orchestrator checked the diff; the attention-set code is unchanged.
++- Title wording without a round ('Reviewed abc1234 — start a new round on the current head') was the worker's choice. The orchestrator accepted it as plain and accurate, without an operator question.
++- The orchestrator re-ran apps/desktop `bun test src` (989 pass, 0 fail) and `tsc --noEmit` (clean).
++- 2026-11-24T08:26:21.029Z - task-done: T8: Pull requests board: indicator without local review, New review round label, F-024
++
++## 2026-11-24 · T11 Reviews toolbar measurement (orchestrator)
++
++The Reviews toolbar was measured in the browser dev build (`bun run dev:browser`) with KERYX_DATA_DIR set to a scratch copy of the working DB. That kept the operator's real store from being migrated. The board was the keryx repo on real GitHub; the list was empty because every Review in the copy belongs to another repository. Viewport 1700x900; the section width was forced through the panel widths.
++- First measurement: the row wrapped at 1180, 900, 820 and 760-560 px. The cause: the three filter selects had a fixed width under `flex: none`.
++- Fix in review.css: the Reviews selects get `flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem`.
++- After the fix: one row with nothing clipped at 760, 800, 820, 900, 1000, 1100, 1101, 1180 and 1380 px. Two rows at 700, 660, 620 and 560 px; three at 340 px. Nothing is clipped at any width.
++- At 560 px the toolbar needs 648 px even with every item at its minimum. One row there would require hiding a control. This is recorded as a known limit in the implementation plan, in the spirit of stage 0 deviation (c).
++- The PR toolbar was not re-measured: stage 2 only removed the Review rules button from it, which only shrinks it.
++- The live check also covered: tab order and the ⌘3 label, the Reviews tab loading `review reviews` against real GitHub through the working-tree CLI, and the empty state 'No Keryx reviews yet'. A 'Choose a GitHub account' prompt was dismissed with Later; no settings were changed.
++
++## 2026-11-24 · T13 docs
++
++implementation-plan.md 0.1.4 adds a «Состояние этапа 2» section; deviation (b) and F-024 are marked closed and decision (d) is relabelled. specification.md 0.1.3 adds the freshness kind `unknown`. The orchestrator corrected two lines with facts from the live check and the toolbar numbers.
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md
+@@ 1,92 @@
++# Plan
++
++Four implementation tasks in dependency order (T5 → T6 → T7 → T8), then verification, review and docs. Each implementation task owns a disjoint set of files except where noted.
++
++## T5 · Store: Review, rounds and attempts (`src/review/desk-run-store.ts`, `desk-run-types.ts`, `board-badges.ts`, tests)
++
++Schema (created by the writable constructor, idempotent):
++
++```sql
++CREATE TABLE IF NOT EXISTS reviews (
++  id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
++  closed_at TEXT, on_head_move TEXT NOT NULL DEFAULT 'ask' CHECK (on_head_move IN ('ask','follow','ignore')),
++  UNIQUE (repo, pr, viewer));
++-- runs gains, when missing (PRAGMA table_info): review_id TEXT, round INTEGER, previous_run_id TEXT
++CREATE INDEX IF NOT EXISTS review_rounds ON runs(review_id, round);
++```
++
++`repo` is the repository id, as in `runs.repo`. `viewer` keeps the NOCASE collation of `runs.viewer`, so `Me` and `me` are one Review (D3: the account is part of the key).
++
++Assignment rule — one function, used both for the migration of an existing database and after every insert (`requestAttempt`, `recordExisting`); it only touches rows with `review_id IS NULL`, so it is idempotent and never renumbers an assigned row. Unassigned rows are processed in `(json createdAt, rowid)` order:
++
++1. Review: the row of `reviews` for `(repo, pr, viewer)`, created with a random UUID when absent.
++2. Round and link:
++   - `continuation.previousId` names an assigned row of the same Review → that row's round; `previous_run_id` = `previousId`.
++   - else a row of the same Review already has the same `baseSha..headSha` → that round; `previous_run_id` = the newest attempt of that round (a retry).
++   - else a new round `max(round)+1` (1 for the first); `previous_run_id` = the newest attempt of the previous highest round, or NULL for round 1.
++3. The migration runs inside one immediate transaction in the writable constructor; the per-insert call runs inside the caller's transaction (`requestAttempt` is called inside the dispatch transaction; `recordExisting` gets its own `atomic`).
++
++A package imported later with an older `createdAt` gets the next round number instead of renumbering existing rounds: round numbers that were shown are never changed. This is recorded as a known limitation.
++
++Projection: `history()` and `decode()` add `reviewId`, `round`, `previousRunId` from the columns to each `DeskRun` (new optional fields in `desk-run-types.ts`); `save()` must not write them into `details`.
++
++Read-only stores (`readLocalBadges`, `readLocalActiveReviewNumbers`) open databases that may predate the migration: every query that reads the new columns checks `PRAGMA table_info(runs)` and substitutes `NULL` when they are absent. Read-only paths never migrate.
++
++Badge: `BadgeRun` gains `round?: number | null`; `localBadge` puts `round` on `outdated` (`outdated.round`, the round of the stale run) when known. `attachBadges` selects `r.round` (or NULL) and passes it through, so the parity test keeps holding for every query condition; extend the parity fixture with rows that carry rounds.
++
++Tests:
++- Migration test on a copy of a working database: a fixture built with **main's exact old DDL** (copy the `CREATE` statements from `a5d1ab236`) and representative rows — two PRs, two viewers including a case variant, three ranges on one PR in shuffled insert order, a continuation, an archived and a deleted decision, an `existing` package, queued/running/failed/completed states — copied to a temp dir, opened writable. Assert: attempt count unchanged; every run has a `review_id` that exists in `reviews` (exactly one Review per run); `(repo, pr, viewer)` maps to one Review; round numbers and `previous_run_id` per the rule; a second open changes nothing; the old read-only path (`attachBadges` through a read-only store) works on the unmigrated copy.
++- "One PR with three historical runs is one Review with rounds" (plan stage 2 exit criterion).
++- New-attempt assignment: start, retry on the same range, continuation, new head.
++- Parity test extended with rounds.
++
++## T6 · Reviews read model and CLI (`src/review/review-entity.ts` new, `src/commands/review-reviews.ts` new, review command router, `apps/desktop/src-tauri/src/review.rs`, `apps/desktop/src/platform/review.ts`)
++
++`DeskRunStore.reviewRows(repositoryId, viewer)` returns, per Review, its rounds and attempts without reports or session histories (ids, states, ranges, `result.reviewed`, coverage, findings counts, verdict, publication outcome, source, decision, options.flowId, usage totals, createdAt/finishedAt, pending-question flag, `closed_at`, `on_head_move`). Attempts with decision `archive`/`delete` are left out; a Review whose attempts are all left out is not listed.
++
++`review-entity.ts` (pure, unit-tested): `reviewState(latest attempt, closed)` per the specification table — `closed` (Review `closed_at`, or PR merged/closed) → `queued` → `running` (`running`/`cancelling`) or `needs_answer` (running manual attempt with a pending question) → `published` (finished attempt with `result.reviewed` and publication `published`) → `ready` (finished — `completed`/`partial`/`budget` — with `result.reviewed`) → `stopped` (anything else: `failed` incl. `recoverable`, `cancelled`, `blocked`, `skipped`, finished without a reviewed range). `freshness(reviewedHead, prHead, compare?)` → `current` | `behind {commits|null, rewritten}`. `reviewNeedsViewer(review)` → `needs_answer`, `ready` with publication not decided (`pending` or unknown), `stopped`.
++
++CLI `keryx review reviews --json [--repo owner/name]`: resolve the repository and GitHub connection like `review board`, read viewer login and repository id with one GraphQL query, list `reviewRows`, read the PR cards of those numbers with `listActiveReviewCards`, and for each Review whose last reviewed head differs from the PR head read `repos/{repo}/compare/{reviewed}...{head}` (at most 25 per call; failure → `commits: null` plus a warning). Output `{version: 1, repo, repositories, repositoryId, viewer, fetchedAt, reviews: ReviewSummary[], warnings}`; a `ReviewSummary` carries `id`, `number`, `card` (the PR `ReviewCard` or null), `state`, `freshness`, `onHeadMove`, `rounds` (number, base/head, `previousRunId` of its first attempt, attempts newest first), `latestRound`, `findings` of the latest reviewed round, `publication`, `source` (`manual` | `scheduled` | `existing`), `flowId`, `tokens`. A missing `runs.sqlite` returns an empty list and creates nothing. Update `BOARD_USAGE`/help and `docs/docs/cli-reference.md`.
++
++Rust: `review_board` gets `reviews_only: Option<bool>`; `board_read_args` returns `["review","reviews","--json"]` (+ `--repo <validated>`) and refuses any combination with state/number/repositories/paged/cursor/badges/updated_since. Add unit-test assertions next to the existing `board_args` tests. Platform: `fetchReviews(cwd, repo?)` in `apps/desktop/src/platform/review.ts`, plus the browser/dev mock if the platform layer has one.
++
++## T7 · Reviews tab (new `apps/desktop/src/reviews/`, `AppShell.tsx`, `App.tsx`, `ReviewDetail.tsx`, `ReviewBoard.tsx` props only)
++
++- Navigation (D4): `View` gains `"reviews"`; `PROJECT_VIEWS` order Sessions ⌘1, Flows ⌘2, Reviews ⌘3, Pull requests ⌘4, Issues ⌘5, Metaproject ⌘6; the existing key handling follows the list. Reviews has its own indicator dot (`reviewsIndicator: "attention" | null`, text "Review waiting on you").
++- `ReviewsView`: toolbar (heading + count, search by title/#number, filter selects for state, freshness, source, a "Show closed" toggle, Board/List, Refresh, **Review rules** — `ProjectReviewRules` moves here from the Pull requests toolbar); board columns in order Running (`queued`,`running`) · Waiting on you (`needs_answer`,`ready`,`stopped`) · Behind · Published · Closed (only when Show closed). Column choice order: `closed` → running → `needs_answer` → behind (any `behind` Review) → by state; `ready`/`published` that are behind go to Behind. Card: `#number title`, author, `Round N`, reviewed commit (7 chars) and "behind N" / "behind" / "current", findings by severity, publication state, source, Flow #id, tokens. List view: same fields as columns.
++- Panel (`ReviewPanel`): Rounds timeline (round number, range, attempts with state/coverage/created time, link to the previous attempt) and the review interface moved from the PR panel: `useReviewRuns` + `ReviewRuns` + `ReviewRunDialog` + `ReviewLaunchDialog` for the PR's current range, i.e. history, report, answer, cancel, continue, publication and lifecycle actions. Prefer extracting the existing block from `ReviewDetail.tsx` into one shared component (e.g. `review/ReviewWorkspace.tsx`) over copying it.
++- PR panel (`ReviewDetail.tsx`): the "Keryx review" tab and its dialogs leave; the header keeps the primary action — "Run review" opens the launch dialog as today when the PR has no Review, otherwise "Open in Reviews" (navigates to the Reviews tab with that Review selected). The Automation tab stays.
++- Cross-tab navigation: App holds `reviewsFocus {number, nonce}`; the PR board gets one new optional prop `onOpenInReviews(number)` passed to `ReviewDetail`, and the PR card's review action uses it for `view`/`answer` intents (start keeps opening the PR panel launch).
++- Indicator: `ReviewsView` reports `reviewNeedsViewer` over the loaded Reviews to App even while hidden (it stays mounted like the PR board); it reloads on mount, on Refresh, on tab activation and every 60 s while the tab is active and a Review is `queued`/`running`.
++- Toolbar: the Reviews toolbar reuses the `.flows-toolbar` pattern; check it stays on one row at 1100/760/560px panel widths with labels collapsing like the PR toolbar (re-measure; record numbers in the journal). Removing the rules button from the PR toolbar only shrinks it.
++- DOM tests (`apps/desktop/src/reviews/*.dom.test.tsx`): columns and their order, behind/published placement, filters and search, Show closed, panel rounds timeline, review interface present in the panel and absent from the PR panel, "Open in Reviews", indicator on `needs_answer`/`ready`+pending/`stopped` and off otherwise, navigation order and shortcuts.
++
++## T8 · Pull requests board (`model.ts`, `ReviewResults.tsx`, `ReviewBoard.dom.test.tsx`, `model.test.ts`)
++
++- Indicator (closes deviation b): `needsViewerAttention` drops the `localReview.awaitingAnswer` and `localReview.publicationPending` clauses. The attention-set code in `ReviewBoard.tsx` is not edited. Because the function feeds the attention set, run the stage-0 mutation list again for the lines this task changes (each changed line mutated → at least one test fails) and record it.
++- Label (decision d): the outdated-review action reads "New review round" with a title that names the round it follows when the badge carries it ("Round N reviewed abc1234 — start a new round on the current head"). No behaviour change: it still starts an ordinary review of the current range (the update round is stage 3).
++- F-024: `secondaryNote` and the text comparison go away. `laneReason` no longer falls back to the outdated note; the card and the list render the outdated note in its own line whenever the badge has one.
++- Tests: model tests for the indicator (a local review waiting on the user no longer counts; the GitHub conditions still do) and the reason/note split; DOM tests for the label and the single note.
++
++## State × event matrix (Reviews tab and the moved review interface)
++
++| state \ event | tab switch away/back | select another Review | Refresh / 60 s reload | account or repo change | unmount |
++|---|---|---|---|---|---|
++| loading (first) | spinner stays; result applied on return | — | — | drop the stale response | no state write after unmount |
++| loaded | list and selection kept | panel switches; the previous Review's run polling stops | list replaced; selection kept if the Review still exists, else panel closes | list cleared, panel closed, filters reset | — |
++| empty (no Reviews) | empty state "No Keryx reviews yet" | — | re-read | as loaded | — |
++| first load failed | error banner with Try again | — | retry; error stays inline until success | as loaded | — |
++| refresh failed | keep last list, banner "Last available list" | — | retry | as loaded | — |
++| access lost (`access:`/`configuration:`) | list and panel cleared, error shown | — | retry | — | — |
++
++Indicator cells: loaded with any Review needing the viewer → dot on; empty, failed first load or access lost → dot off; refresh failed keeps the last computed value.
++
++## Verification tasks
++
++T9 migration on a copy of the local working database (scratch copy, counts in the journal, no data committed); T10 test suites, typecheck, lint; T11 Reviews toolbar measurement; T12 review-orchestrator on the PR; T13 docs (implementation plan «Состояние этапа 2», deviation (b) closed, CLI reference).
++
++## Trade-offs
++
++- Extending `review_board` with a `reviews_only` mode instead of a new Tauri command avoids a command registration that cannot be compiled locally; CI is the only Rust check either way.
++- Freshness commit counts come from one compare call per behind Review; with no answer the Review shows "behind" without a number (spec allows `commits: null`).
++- Moving the review interface by extracting one shared component keeps one implementation of history/publication; the PR panel keeps only the launch path for a PR without a Review.
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/tasks.md
+@@ 1,20 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context (done in the orchestrating session: plan, spec, stage 1 diff) |
++| T2–T4 | — | Scaffold rows superseded by T5–T13 |
++| T5 | implement | Store: reviews table, rounds and attempts, migration and its test, badge round with parity |
++| T6 | implement | Reviews read model, `keryx review reviews --json`, bridge arg and platform call |
++| T7 | implement | Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator |
++| T8 | implement | Pull requests board: indicator without local review, "New review round" label, F-024 |
++| T9 | verify | Migration on a copy of the local working database |
++| T10 | verify | Test suites, typecheck and lint |
++| T11 | verify | Reviews toolbar measurement at 1100/760/560px |
++| T12 | review | review-orchestrator on the PR |
++| T13 | docs | Implementation plan stage 2 state, deviation (b) closed, CLI reference |
++
++Details for each implementation task are in `plan.md`.
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json
+@@ 1,493 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "519",
++  "slug": "desktop-review-v2-stage2",
++  "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
++  "status": "in-progress",
++  "createdAt": "2026-11-24T07:16:18.886Z",
++  "updatedAt": "2026-11-24T08:30:34.162Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:99b919f89c204f3a50d7753f24d9def4083b08c743e5c70040a7efbe750a73b5",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "Aleksandr Tsaitler",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T13"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T13"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T13"
++    },
++    {
++      "id": "T5",
++      "title": "Store: reviews table, rounds and attempts, migration and its test, badge round with parity",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:19:40.519Z",
++            "outcome": "started",
++            "detail": "519-T5"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "Reviews read model, keryx review reviews --json, bridge arg and platform call",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:37:04.175Z",
++            "outcome": "started",
++            "detail": "519-T6"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T6"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:51:43.524Z",
++            "outcome": "started",
++            "detail": "519-T7"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Pull requests board: indicator without local review, New review round label, F-024",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T7"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T08:21:04.796Z",
++            "outcome": "started",
++            "detail": "519-T8"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "Migration on a copy of the local working database",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T10",
++      "title": "Test suites, typecheck and lint",
++      "kind": "verify",
++      "status": "todo",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T11",
++      "title": "Reviews toolbar measurement at 1100/760/560px",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T7"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T12",
++      "title": "review-orchestrator on the PR",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [
++        "T10"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T13",
++      "title": "Implementation plan stage 2 state, deviation b closed, CLI reference",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T14",
++      "title": "Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T7"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T08:21:05.118Z",
++            "outcome": "started",
++            "detail": "519-T14"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-24T07:16:18.886Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-24T07:19:14.810Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-24T07:19:15.191Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-24T07:19:15.510Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-24T07:19:15.823Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-24T07:19:16.212Z",
++      "event": "task-added",
++      "detail": "T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity"
++    },
++    {
++      "at": "2026-11-24T07:19:16.529Z",
++      "event": "task-added",
++      "detail": "T6: Reviews read model, keryx review reviews --json, bridge arg and platform call"
++    },
++    {
++      "at": "2026-11-24T07:19:16.834Z",
++      "event": "task-added",
++      "detail": "T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator"
++    },
++    {
++      "at": "2026-11-24T07:19:17.196Z",
++      "event": "task-added",
++      "detail": "T8: Pull requests board: indicator without local review, New review round label, F-024"
++    },
++    {
++      "at": "2026-11-24T07:19:17.519Z",
++      "event": "task-added",
++      "detail": "T9: Migration on a copy of the local working database"
++    },
++    {
++      "at": "2026-11-24T07:19:17.861Z",
++      "event": "task-added",
++      "detail": "T10: Test suites, typecheck and lint"
++    },
++    {
++      "at": "2026-11-24T07:19:18.248Z",
++      "event": "task-added",
++      "detail": "T11: Reviews toolbar measurement at 1100/760/560px"
++    },
++    {
++      "at": "2026-11-24T07:19:18.561Z",
++      "event": "task-added",
++      "detail": "T12: review-orchestrator on the PR"
++    },
++    {
++      "at": "2026-11-24T07:19:18.913Z",
++      "event": "task-added",
++      "detail": "T13: Implementation plan stage 2 state, deviation b closed, CLI reference"
++    },
++    {
++      "at": "2026-11-24T07:19:31.529Z",
++      "event": "frozen",
++      "detail": "12 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-24T07:19:31.820Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-24T07:19:40.519Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 519-T5"
++    },
++    {
++      "at": "2026-11-24T07:37:04.175Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 519-T6"
++    },
++    {
++      "at": "2026-11-24T07:37:09.335Z",
++      "event": "task-done",
++      "detail": "T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity"
++    },
++    {
++      "at": "2026-11-24T07:37:09.572Z",
++      "event": "task-done",
++      "detail": "T9: Migration on a copy of the local working database"
++    },
++    {
++      "at": "2026-11-24T07:51:43.210Z",
++      "event": "task-done",
++      "detail": "T6: Reviews read model, keryx review reviews --json, bridge arg and platform call"
++    },
++    {
++      "at": "2026-11-24T07:51:43.524Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 519-T7"
++    },
++    {
++      "at": "2026-11-24T08:21:04.204Z",
++      "event": "task-done",
++      "detail": "T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator"
++    },
++    {
++      "at": "2026-11-24T08:21:04.442Z",
++      "event": "task-added",
++      "detail": "T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab"
++    },
++    {
++      "at": "2026-11-24T08:21:04.796Z",
++      "event": "task-attempt",
++      "detail": "T8: started (attempt 1) — 519-T8"
++    },
++    {
++      "at": "2026-11-24T08:21:05.118Z",
++      "event": "task-attempt",
++      "detail": "T14: started (attempt 1) — 519-T14"
++    },
++    {
++      "at": "2026-11-24T08:23:45.674Z",
++      "event": "task-done",
++      "detail": "T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab"
++    },
++    {
++      "at": "2026-11-24T08:26:21.029Z",
++      "event": "task-done",
++      "detail": "T8: Pull requests board: indicator without local review, New review round label, F-024"
++    },
++    {
++      "at": "2026-11-24T08:30:33.970Z",
++      "event": "task-done",
++      "detail": "T11: Reviews toolbar measurement at 1100/760/560px"
++    },
++    {
++      "at": "2026-11-24T08:30:34.162Z",
++      "event": "task-done",
++      "detail": "T13: Implementation plan stage 2 state, deviation b closed, CLI reference"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-run-store.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-run-store.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/review/review-entity.test.ts src/commands/review-reviews.test.ts"
++    },
++    "AC5": {
++      "kind": "judged"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/shell'"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/review'"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/review'"
++    },
++    "AC9": {
++      "kind": "judged"
++    },
++    "AC10": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/review'"
++    },
++    "AC11": {
++      "kind": "judged"
++    },
++    "AC12": {
++      "kind": "invariant",
++      "check": "sh -c 'bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit'"
++    }
++  }
++}
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T5.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/board-badges.ts",
++    "src/review/desk-run-store.test.ts",
++    "src/review/desk-run-store.ts",
++    "src/review/desk-run-types.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/desk-run-store.test.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-run-store.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T6.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src-tauri/src/review.rs",
++    "apps/desktop/src/platform/review.ts",
++    "src/commands/review-board.ts",
++    "src/commands/review-reviews.ts",
++    "src/review/review-entity.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src-tauri/src/review.rs",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "task-text:--json",
++      "tier": "must_read",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T7.implement.json
+@@ 1,106 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/review/ReviewBoard.tsx",
++    "apps/desktop/src/review/ReviewDetail.tsx",
++    "apps/desktop/src/reviews/ReviewsView.tsx",
++    "apps/desktop/src/shell/AppShell.tsx",
++    "apps/desktop/src/styles/review.css"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T8.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
++    "apps/desktop/src/review/ReviewResults.tsx",
++    "apps/desktop/src/review/model.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewBoard.dom.test.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}

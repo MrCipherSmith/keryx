@@ -1,6 +1,6 @@
 # Explore project knowledge in Keryx Desktop
 
-Open **Metaproject** in a project window, or press **⌘5**. Use **Graph** to
+Open **Metaproject** in a project window, or press **⌘6**. Use **Graph** to
 trace relationships between project objects and **Wiki** to read articles.
 Each view remembers its own search and selection. **Back** steps back through
 the items you selected, not only through view switches, and restores the

@@ -1,0 +1,18 @@
+{
+  "planKey": "230a1a6b89384a3e",
+  "dispatches": 31,
+  "minutes": [
+    16,
+    40
+  ],
+  "quote": "Review round 1 on PR #1304: keryx review plan proposes 11 reviewers, 31 dispatches, about 16–40 minutes. This session has already spent well past the 3 USD default ceiling on workers. Run the round?: yes",
+  "confirmedVia": "host-question",
+  "at": "2026-11-24T08:46:54.246Z",
+  "hostQuestion": {
+    "source": "claude-code",
+    "ref": "review-plan-r1",
+    "questionText": "Review round 1 on PR #1304: keryx review plan proposes 11 reviewers, 31 dispatches, about 16–40 minutes. This session has already spent well past the 3 USD default ceiling on workers. Run the round?",
+    "answerText": "yes",
+    "time": "2026-11-24T08:46:54.246Z"
+  }
+}

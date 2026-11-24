@@ -1,0 +1,791 @@
+--- apps/desktop/src/App.tsx
+@@ 195,218 @@
+   const s = useAcpSession(cwd);
+   const flows = useFlows(cwd);
+   const providers = useProvidersDialog();
+   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
+   const [view, setView] = useState<View>("session");
+   const settingsReturn = useRef<Exclude<View, "settings">>("session");
+   const settingsFocus = useRef<HTMLElement | null>(null);
+   const settingsProjectReturn = useRef(false);
+   const [settingsTab, setSettingsTab] = useState<"appearance" | "integrations">("appearance");
+   const [githubAccount, setGitHubAccount] = useState<ProjectGitHubAccount | null>(null);
+   const reviewViewer = githubAccount?.login ?? undefined;
+   const [reviewNotice, setReviewNotice] = useState<{ binding?: string; viewer?: string; indicator: ReviewTabIndicator }>();
+   const updateReviewNotice = useCallback((indicator: ReviewTabIndicator, viewer?: string) => {
+     setReviewNotice({ binding: reviewViewer, viewer, indicator });
+   }, [reviewViewer]);
+   const [reviewsNotice, setReviewsNotice] = useState<{ binding?: string; indicator: ReviewsTabIndicator }>();
+   const updateReviewsNotice = useCallback((indicator: ReviewsTabIndicator) => {
+     setReviewsNotice({ binding: reviewViewer, indicator });
+   }, [reviewViewer]);
+   const [reviewsFocus, setReviewsFocus] = useState<ReviewsFocus | null>(null);
+-  const openInReviews = useCallback((number: number, intent?: ReviewIntent) => {
+-    setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));
++  const focusNonce = useRef(0);
++  const openInReviews = useCallback((target: { repo: string; repositoryId: string; number: number }, intent?: ReviewIntent) => {
++    setReviewsFocus({ ...target, intent, nonce: ++focusNonce.current });
+     setView("reviews");
+
+--- apps/desktop/src/App.tsx
+@@ 638,645 @@
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+-        ) : (
++        ) : (githubAccount || githubAccountError) ? (
+           <ReviewsView key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} active={workView === "reviews"} cwd={cwd}
+-            focus={reviewsFocus} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
++            focus={reviewsFocus} onFocusHandled={reviewsFocusHandled} reloadSignal={watcherPolls}
++            rulesTarget={boardIdentity} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
+             onOpenReviewSession={openReviewWorkspace} onOpenFlow={(dir) => {
+               setLinkedFlow(dir);
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 436,458 @@
+     watchingTarget && watcherTarget && watchingTarget.repositoryId === watcherTarget.repositoryId &&
+     watchingTarget.viewer === watcherTarget.viewer ? "watching" : null;
+   useEffect(() => { onIndicatorChange?.(indicator, viewer); }, [indicator, viewer, onIndicatorChange]);
+   useEffect(() => () => onIndicatorChange?.(null), [onIndicatorChange]);
+ 
+   function applyFilters(next: Filters) {
+     setFilters(next);
+     if (filterKey.current) saveReviewFilters(filterKey.current, next);
+   }
+   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
+   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+   // the reset loads the open scope instead of this fresh one.
+   const shownNumbers = new Set(visible.map(c => c.number));
+   const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+   const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+   const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+   const hiddenText = `Show ${hiddenAttention} waiting on you`;
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
++  const boardRepo = snapshot?.repo, boardRepositoryId = snapshot?.repositoryId;
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 244,281 @@
+       <div className="sheet-head-row">
+         <span className="flow-id">{repo} #{card.number}</span>
+         <span className="grow" />
+         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close details"><Icon name="x" size={16} /></button>
+       </div>
+       <h2 className="sheet-title">{card.title}</h2>
+       <div className="sheet-actions review-detail-actions" onClick={followLink} onAuxClick={followLink}>
+         {hasReview && onOpenInReviews ? <button className="btn btn-sm btn-primary" onClick={onOpenInReviews}>Open in Reviews</button>
+           : card.state === "open" && <button className="btn btn-sm btn-primary" onClick={start}
+             disabled={local.working || !local.loaded || action.open || !!revisionChanged}>
+             {local.working ? "Updating review…" : !local.loaded && !local.error ? "Checking review…" : action.label}
+           </button>}
+         <div className="review-action-row">
+           <button className="btn review-icon-action" type="button" disabled={busy} aria-label="Refresh details"
+             title="Refresh details" onClick={() => setRefresh(n => n + 1)}><Icon name="refresh" /></button>
+           {onOpenSession && <button className="btn review-icon-action" type="button" aria-label="Open in Sessions"
+             title="Open in Sessions" onClick={onOpenSession}><Icon name="chat" /></button>}
+           <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request"><Icon name="external" /></ReviewBrowserLink>
+         </div>
+       </div>
++      {local.error && !local.staleRange && <p className="inline-banner tone-warn" role="alert">{local.error}</p>}
+       {associatedFlow ? (onOpenFlow ? <button className="link-btn review-associated-flow" onClick={() => onOpenFlow(associatedFlow.dir)}>Flow #{associatedFlow.id} · {associatedFlow.title}</button>
+         : <span className="review-associated-flow">Flow #{associatedFlow.id} · {associatedFlow.title}</span>)
+         : associatedFlowId && <span className="review-associated-flow">Flow #{associatedFlowId}</span>}
+     </header>
+     {data?.projectContext && <details className="review-flow-context">
+       <summary>{data.projectContext.totalFlows ? `Review context · ${data.projectContext.totalFlows} linked ${data.projectContext.totalFlows === 1 ? "Flow" : "Flows"}` : "Standalone review context"}</summary>
+       <code>keryx review pr-context --pr {card.url}</code>
+       {data.projectContext.flows.map(link => <article key={link.directory}>
+         <strong>Flow #{link.id} · {link.title}</strong>
+         {Object.entries(link.documents).map(([name, text]) => <details key={name}>
+           <summary>{name}</summary><pre>{text}</pre>
+         </details>)}
+       </article>)}
+     </details>}
+     <div className="tabs" role="group" aria-label="Pull request details">
+       <button className="tab" aria-pressed={tab === "discussion"} onClick={() => setTab("discussion")}>Discussion</button>
+       <button className="tab" aria-pressed={tab === "checks"} onClick={() => setTab("checks")}>Checks</button>
+
+--- apps/desktop/src/reviews/ReviewPanel.tsx
+@@ 24,51 @@
+ function Attempt({ attempt, scope, known }: { attempt: ReviewAttemptSummary; scope: string; known: ReadonlySet<string> }) {
+   const state = attempt.awaitingAnswer && attempt.state === "running" ? "Awaiting your answer" : ATTEMPT_STATE[attempt.state] ?? attempt.state;
+   const previous = attempt.previousRunId;
+   return <li id={attemptAnchor(scope, attempt.id)} tabIndex={-1} className="review-round-attempt">
+     <strong>{state}</strong>
+     <span>{attempt.coverage ? `Coverage ${attempt.coverage}` : "Coverage unconfirmed"}</span>
+     <time dateTime={attempt.createdAt} title={absoluteTime(attempt.createdAt)}>{relativeTime(attempt.createdAt)}</time>
+     <span className="mono" title={attempt.id}>Run {attempt.id.slice(0, 8)}</span>
+     {previous && (known.has(previous)
+-      ? <button type="button" className="link-btn" aria-label={`Go to the attempt this one follows, run ${previous.slice(0, 8)}`}
++      ? <button type="button" className="link-btn" aria-label={`after ${previous.slice(0, 8)} — go to the attempt this one follows`}
+         onClick={() => document.getElementById(attemptAnchor(scope, previous))?.focus()}>after {previous.slice(0, 8)}</button>
+       : <span className="mono" title={previous}>after {previous.slice(0, 8)}</span>)}
+   </li>;
+ }
+ 
+ function Rounds({ rounds }: { rounds: ReviewRound[] }) {
+   const scope = useId();
+   const known = useMemo(() => new Set(rounds.flatMap(round => round.attempts.map(attempt => attempt.id))), [rounds]);
+   return <section className="review-rounds" aria-label="Rounds">
+     <h3>Rounds</h3>
+     <ol>{rounds.map(round => <li key={round.number} className="review-round">
+       <div className="review-round-head">
+         <strong>Round {round.number}</strong>
+         <span className="mono" title={`${round.baseSha} → ${round.headSha}`}>{short(round.baseSha)} → {short(round.headSha)}</span>
+         <span>{round.attempts.length === 1 ? "1 attempt" : `${round.attempts.length} attempts`}</span>
+       </div>
+       <ul>{round.attempts.map(attempt => <Attempt key={attempt.id} attempt={attempt} scope={scope} known={known} />)}</ul>
+     </li>)}</ol>
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 14,20 @@
+ import type { ReviewIntent } from "../review/ReviewWorkspace";
+ import type { RunObserver } from "../review/useReviewRuns";
+-import type { ReviewsTabIndicator } from "../shell/AppShell";
+ import {
+-  COLUMNS, EMPTY_REVIEW_FILTERS, filterReviewList, filtersActive, findingsLabel, freshnessLabel, groupByColumn, isBehind,
+-  publicationLabel, reviewedCommit, reviewTitle, SOURCE_LABEL, STATE_LABEL, type ReviewColumn, type ReviewFilters,
++  COLUMNS, EMPTY_REVIEW_FILTERS, filterReviewList, filtersActive, findingsLabel, freshnessLabel, groupByColumn, isBehind, isClosedOrArchived,
++  publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL, STATE_LABEL, type ReviewColumn, type ReviewFilters,
+ } from "./model";
+ import { ReviewPanel } from "./ReviewPanel";
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 123,148 @@
+   const q = useDeferredValue(query);
+   const [showClosed, setShowClosed] = useState(false);
+   const [view, setView] = useState<"board" | "list">("board");
+   const [selected, setSelected] = useState<{ id: string; intent?: ReviewIntent | undefined } | null>(null);
+   const [notice, setNotice] = useState("");
+   const search = useRef<HTMLInputElement>(null);
++  const restoreFocus = useRef(false);
+ 
+   const resetView = useCallback(() => {
+     setFilters(EMPTY_REVIEW_FILTERS);
+     setQuery("");
+     setShowClosed(false);
+     setSelected(null);
+     setNotice("");
+   }, []);
+ 
+   const accessLost = useCallback((message: string) => {
+     sequence.current++;
+     identity.current = "";
+     resetView();
++    // A waiting "Open in Reviews" request goes with the list: a later Try again must not act on it.
++    settlePending();
+     setRead(old => ({ snapshot: null, error: message, loading: false, request: old.request }));
+-  }, [resetView]);
++  }, [resetView, settlePending]);
+ 
+   useEffect(() => {
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 154,167 @@
+       const next = JSON.stringify([snapshot.repositoryId, snapshot.viewer.toLowerCase()]);
+-      // Another account or repository: nothing chosen for the previous one carries over.
+-      if (identity.current && identity.current !== next) resetView();
++      // Another account or repository: nothing chosen for the previous one carries over. Focus held by a
++      // dialog or the panel that closes with it goes back to search.
++      if (identity.current && identity.current !== next) {
++        restoreFocus.current = inViewOverlay(document.activeElement);
++        resetView();
++      }
+       identity.current = next;
+       setSelected(current => current && snapshot.reviews.some(review => review.id === current.id) ? current : null);
+       setRead({ snapshot, error: "", loading: false, request });
+     }).catch((cause: unknown) => {
+       if (request !== sequence.current) return;
+       const message = errMessage(cause);
+       if (accessProblem(message)) {
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 196,213 @@
+-  }, [active, running, refresh]);
++  }, [running, refresh]);
++  // A review started or changed from a Session, and a completed PR watcher poll, can change what waits on the viewer.
++  useEffect(() => subscribeSessionReview(project => { if (project === cwd) refresh(); }), [cwd, refresh]);
++  const lastSignal = useRef(reloadSignal);
++  useEffect(() => {
++    if (lastSignal.current === reloadSignal) return;
++    lastSignal.current = reloadSignal;
++    refresh();
++  }, [reloadSignal, refresh]);
+ 
+   const indicator: ReviewsTabIndicator = snapshot?.reviews.some(reviewNeedsViewer) ? "attention" : null;
+   useEffect(() => { onIndicatorChange?.(indicator); }, [indicator, onIndicatorChange]);
+   useEffect(() => () => onIndicatorChange?.(null), [onIndicatorChange]);
+ 
+   useEffect(() => {
+     if (!active) return;
+     const focusSearch = (e: KeyboardEvent) => {
+       if (!overlayOpen() && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 226,235 @@
+     if (!pending || read.loading || (!snapshot && !read.error)) return;
+-    const found = snapshot?.reviews.find(review => review.number === pending.number);
++    const wanted = pending.repo.toLowerCase();
++    const shown = snapshot?.repo.toLowerCase();
++    if (shown !== wanted && repo?.toLowerCase() !== wanted) {
++      focusRepo(pending.repo);
++      return;
++    }
++    const found = snapshot && shown === wanted && (!pending.repositoryId || snapshot.repositoryId === pending.repositoryId)
++      ? snapshot.reviews.find(review => review.number === pending.number) : undefined;
+     if (found) {
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 242,246 @@
+       }
+       setSelected({ id: found.id, intent: pending.intent });
+-    } else if (pending.after === undefined) {
+-      setPending({ ...pending, after: sequence.current });
++    } else if (refreshedFor?.nonce !== pending.nonce) {
++      setRefreshedFor({ nonce: pending.nonce, after: sequence.current });
+       refresh();
+
+--- apps/desktop/src/reviews/model.ts
+@@ 45,57 @@
+   if (freshness.kind === "current") return "current";
+   if (freshness.kind === "unknown") return "head unknown";
+   if (!isBehind(freshness)) return "";
+   const amount = freshness.commits === null ? "behind" : `behind ${freshness.commits}`;
+   return freshness.rewritten ? `${amount} · history rewritten` : amount;
+ }
+ 
+-/** The newest attempt that produced a reviewed result, across rounds (rounds and attempts are newest first). */
+-export function latestReviewed(review: Pick<ReviewSummary, "rounds">): ReviewAttemptSummary | undefined {
+-  for (const round of review.rounds) {
+-    const attempt = round.attempts.find(item => item.reviewed !== null);
+-    if (attempt) return attempt;
+-  }
+-  return undefined;
++/** The reviewed head commit, short: the domain's reference range (the one freshness is measured from);
++ * the latest requested head when no attempt finished with a result. */
++export function reviewedCommit(review: Pick<ReviewSummary, "reviewed" | "rounds">): string {
++  const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? "";
++  return head.slice(0, 7);
+ }
+
+--- apps/desktop/src/reviews/model.ts
+@@ 103,106 @@
+   if (!text) return true;
+-  const number = text.replace(/^#/, "");
+-  if (/^\d+$/.test(number)) return String(review.number).startsWith(number);
+-  return reviewTitle(review).toLowerCase().includes(text);
++  return reviewTitle(review).toLowerCase().includes(text) || String(review.number).includes(text.replace(/^#(?=\d)/, ""));
+ }
+ 
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 199,254 @@
+ });
+ 
+ test("a changed GitHub account closes a filter dialog and removes the previous account's PR data", async () => {
+   let finish!: (value: ReviewBoardSnapshot) => void;
+   let calls = 0;
+   await render(async () => {
+     if (++calls === 1) return snapshot([pr]);
+     return new Promise((resolve) => { finish = resolve; });
+   });
+   await click(button("Refresh pull requests"));
+   await click(button("Filters"));
+   expect(document.body.textContent).toContain("Filter pull requests");
+   await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
+   expect(document.body.textContent).not.toContain("Filter pull requests");
+   expect(document.body.textContent).not.toContain(pr.title);
+   expect(document.body.textContent).toContain("Signed in as new-account");
+   expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+ });
+ 
+ test("a changed GitHub account returns focus to search from the portaled PR watcher dialog", async () => {
+-  for (const opener of ["PR watcher · Off"]) {
+-    let finish!: (value: ReviewBoardSnapshot) => void;
+-    let calls = 0;
+-    await render(async () => {
+-      if (++calls === 1) return snapshot([pr]);
+-      return new Promise((resolve) => { finish = resolve; });
+-    }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
+-    async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
+-    await click(button("Refresh pull requests"));
+-    await click(button(opener));
+-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+-    expect(dialog.parentElement?.parentElement).toBe(document.body);
+-    await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
+-    expect(dialog.contains(document.activeElement)).toBe(true);
+-    await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
+-    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+-  }
++  let finish!: (value: ReviewBoardSnapshot) => void;
++  let calls = 0;
++  await render(async () => {
++    if (++calls === 1) return snapshot([pr]);
++    return new Promise((resolve) => { finish = resolve; });
++  }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
++  async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
++  await click(button("Refresh pull requests"));
++  await click(button("PR watcher · Off"));
++  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
++  expect(dialog.parentElement?.parentElement).toBe(document.body);
++  await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
++  expect(dialog.contains(document.activeElement)).toBe(true);
++  await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
++  expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
++  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+ });
+ 
+ test("historical states are requested lazily and a merged pull request appears in Done", async () => {
+   const scopes: string[] = [];
+   const merged: ReviewCard = { ...pr, number: 301, state: "merged", title: "Merged colleague PR" };
+   await render(async (_cwd, state) => {
+     scopes.push(state);
+     return snapshot(state === "open" ? [pr] : [pr, merged]);
+   });
+   await click(button("Filters"));
+   await click(option("PR state", "Open"));
+   await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(scopes).toEqual(["open", "merged"]);
+   expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+   expect(document.body.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
+   expect(document.body.textContent).not.toContain(pr.title);
+ });
+ 
+
+--- apps/desktop/src/reviews/ReviewsView.dom.test.tsx
+@@ 126,130 @@
+   await render(async () => snapshot([item, review(8, { state: "published", publication: "published", freshness: { kind: "behind", commits: null, rewritten: false } })]));
+-  const tile = lane("Behind")!.querySelector(".review-summary-card")!;
++  const card6 = lane("Behind")!.querySelector(".review-summary-card")!;
+   for (const text of ["#6", "Change 6", "lee", "Round 2", "abcdef0", "behind 3", "1 blocker · 2 minor", "Not published", "Scheduled", "Flow #488", (15000).toLocaleString() + " tokens"]) {
+-    expect(tile.textContent).toContain(text);
++    expect(card6.textContent).toContain(text);
+   }
+
+--- docs/docs/cli-reference.md
+@@ 5195,5234 @@
+-Review carries its pull request card, its state (`queued`, `running`, `needs_answer`,
+-`stopped`, `ready`, `published` or `closed`), its freshness (`current`, or `behind` with
+-the number of new commits, `null` when unknown, and whether the branch was rewritten),
+-its rounds newest first with their attempts, the findings of the latest reviewed round,
+-the publication outcome, the source, the linked Flow and the total tokens. Reports and
+-reviewer sessions are not included. Archived and deleted attempts are left out. Commit
+-counts are read for up to 25 Reviews per call; the rest, and any comparison GitHub
+-refuses, show an unknown count and a warning. Without a local review store the list is
+-empty and no store is created.
++Review carries its pull request card (`null` when it could not be read), its state
++(`queued`, `running`, `needs_answer`, `stopped`, `ready`, `published` or `closed`), its
++freshness, the range its newest finished reviewed attempt covered (`reviewed`, or
++`null`), its rounds newest first with their attempts, the findings of the latest
++reviewed round, the publication outcome, the source, the linked Flow and the total
++tokens. Freshness has three kinds: `current`; `behind`, with the number of new commits
++(`commits`, `null` when the count is unknown) and whether the branch was rewritten
++(`rewritten`); and `unknown`, when the pull request's head cannot be read (its card was
++not loaded, or GitHub did not return the pull request). Reports and reviewer sessions
++are not included. Deleted attempts, and requests superseded before they started, are
++left out. Archived attempts stay in the rounds with `archived: true` and do not decide
++the state, findings or publication; a Review whose attempts are all archived is listed
++with `archived: true`. An interrupted attempt awaiting recovery reads as `failed`.
++Pull request cards are not read for Reviews closed locally (their `card` is `null`)
++unless `--include-closed` is given; Desktop passes it while **Show closed** is on. Commit counts are read for
++the first 25 Reviews behind their pull request in list order, within 60 seconds in all;
++the rest, any comparison GitHub refuses and any not answered in time show an unknown
++count and a warning. Without a local review store the list is empty and no store is
++created. An existing store is opened for writing, so a store that predates Reviews is
++migrated (attempts placed into Reviews and rounds) by the first list read.
+ 
+ `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
+ `keryx review accounts project --json` shows the current project's selection.
+ Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
+ for the project and its linked worktrees. Add `--repo owner/name` to check a connected
+ remote other than the default. The board, private review fetch and local watcher
+ use the selected account. The credentials stay in GitHub CLI.
+ Use `keryx review accounts bind --skip --json` to continue without a connection.
+ Changing or removing a connection pauses the project's watchers. Enable the
+ watcher manually after choosing an account.
+ 
+ `keryx review desk-run start --json --repo owner/name --repository-id ID --viewer LOGIN --number N --base SHA --head SHA`
+ requests review of a card’s displayed revision. With the same repository, viewer and PR flags, use
+ `status` to read progress and history, or `cancel --id UUID` to stop a specific attempt.
+ Manual reviews start without a token limit. For scheduled reviews, omit `budgetTokens` or set it to `null` for unlimited tokens. A positive integer sets the per-run cap, including values above 250,000. Saved rules retain their explicit limits. The time limit is configured independently.
+ 
+ Load a deferred report with `status --id UUID`. A retry creates a fresh attempt after an interrupted review. Keryx stores results locally. A later review can send excerpts from earlier reports and linked Flow evidence to the configured model provider as context.
+ 
+ `keryx review desk-publish --json --repo owner/name --repository-id ID --viewer LOGIN --number N --request <JSON>`
+ prepares the publication form for a local review attempt. Use `kind: preview` with
+
+--- docs/docs/desktop-app.md
+@@ 433,459 @@
+ ### Keyboard shortcuts
+ 
+ | Keys | Action |
+ |---|---|
+ | ⌘K | Command palette: commands, sessions, views |
+-| ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Review in the current project |
+-| ⌘4 / ⌘5 | Issues / Metaproject in the current project |
++| ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Reviews in the current project |
++| ⌘4 / ⌘5 / ⌘6 | Pull requests / Issues / Metaproject in the current project |
+ | ⌘, | Settings |
+ | ⌘N | New session |
+ | ⌘O | Open folder |
+ | ⌘F | Search flows (on the board) |
+ | Esc | Stop the running turn (in the composer) |
+ 
+ While a dialog is open the shortcuts are off.
+ 
+ ## Where things are
+ 
+ | What | Path |
+ |---|---|
+ | App settings | `~/Library/Application Support/dev.keryx.desktop/settings.json` |
+ | keryx output per window | `~/Library/Logs/dev.keryx.desktop/keryx-acp-<window>.log` |
+ | Sessions | the keryx session store, shared with `keryx shell` |
+ 
+ ## Troubleshooting
+ 
+ - **"cannot be opened" / "damaged"** — the app is quarantined; run the `xattr`
+   command from [Install](#from-a-built-dmg).
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 61,96 @@
+ 
+ - Один этап — один Flow через flow-orchestrator (`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`), ветка от свежего `main`, свой PR. Критерии приёмки замораживаются из строки этапа в таблице «Этапы» и из требований PRD, которые она называет.
+ - Входные документы: [PRD](prd.md) (R1–R12), [спецификация](specification.md), этот план, решения D1–D6 выше. Раздел спецификации «Основания» описывает код на коммите `1b994df18`, то есть до этапа 0; где этап 0 его изменил, верен раздел «Состояние этапа 0» этого плана.
+ - Ревью — review-orchestrator по PR. Составы раундов 3–5 этапа 0 были сокращены решением оператора, и такие пакеты не проходят гейт завершения инструмента; если нужен полный пакет, запускайте полный состав.
+ - Rust-часть Desktop (`apps/desktop/src-tauri`) локально не собирается — проверяется только в CI.
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+-- **Этап 2.** Начать с миграции запусков (`src/review/desk-run-store.ts`) в раунды и попытки на копии рабочей базы. После появления вкладки Reviews индикатор вкладки Pull requests перестаёт загораться от локального ревью — это снимает отклонение (b). Подпись «Review again» из решения (d) меняется вместе со связью раундов.
+-- **Этап 3.** Действие «Review again» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).
++- **Этап 2.** Начать с миграции запусков (`src/review/desk-run-store.ts`) в раунды и попытки на копии рабочей базы. После появления вкладки Reviews индикатор вкладки Pull requests перестаёт загораться от локального ревью — это снимает отклонение (b). Подпись «Review again» из решения (d) меняется на «New review round» вместе со связью раундов.
++- **Этап 3.** Действие «New review round» заменяется раундом обновления того же Review; диалог публикации получает варианты по D1; `on_head_move` по умолчанию `ask` (D2).
+ - **Этап 4.** Процедура «Head сдвинулся» добавляется в `review-orchestrator`; публикация из Desktop и из сессии использует общий код.
+ 
+ ### Что этап 0 оставил в коде и что нельзя сломать
+ 
+ - **Набор внимания вкладки Pull requests** (`carriedAttention`, `seeded`, `seedFor`, загрузка «seed», `attentionPrs`, обратная запись, флаг `stale` в `apps/desktop/src/review/ReviewBoard.tsx`). Его правили шесть раз, и три правки внесли новый дефект, который нашёл только следующий раунд ревью. Сейчас каждая защитная строка закреплена DOM-тестом: шестнадцать однострочных мутаций, каждая валит хотя бы один тест `ReviewBoard.dom.test.tsx`. Правило для следующих этапов: любое изменение этой логики сопровождается мутационной проверкой собственных строк, а не только зелёным набором тестов. На этапе 1 колонки перестают зависеть от Keryx, но индикатор остаётся — переносите его вместе с тестами.
+ - **Устаревший результат на карточке** (`localReview.outdated`, `reviewNote` и `laneReason` в `apps/desktop/src/review/model.ts`). SQL в `attachBadges` (`src/review/desk-run-store.ts`) обязан давать тот же результат, что `localBadge` (`src/review/board-badges.ts`); store-тест сравнивает их на фикстуре для каждого условия запроса.
+ - **Тулбар доски** (`apps/desktop/src/styles/review.css`): контейнерные запросы на 1100 и 760px, подсказка о скрытых запросах, голое число. Замеры — в отклонении (c); при добавлении элементов в тулбар перемеряйте.
+ 
+ ### Открытые заметки ревью этапа 0
+ 
+ - F-024 (info): вторая строка об устаревшем ревью отбрасывается сравнением текста с причиной (`secondaryNote` в `apps/desktop/src/review/ReviewResults.tsx`). Не исправлено сознательно; уйдёт вместе с переносом интерфейса ревью на этапе 2. Закрыто этапом 2: `secondaryNote` удалён, заметка об устаревшем ревью выводится одной отдельной строкой.
+ - Ни один сценарий этапа 0 не воспроизводился в приложении с реальными данными GitHub и не проверялся скринридером: покрытие — DOM-тесты, мутации и замеры разметки.
+ 
+ ## Зависимости
+ 
+ - Этап 0 независим и не меняет модель данных.
+ - Этап 1 не требует этапа 2: ссылка ревью на карточке на этом этапе строится из существующего `localReview` и открывает текущую панель ревью.
+ - Этап 3 требует этапа 2: раунд обновления принадлежит Review.
+ - Этап 4 требует этапов 2 и 3: сессия использует ту же команду обновления.
+ 
+
+--- docs/requirements/keryx-desktop-review-v2/specification.md
+@@ 206,246 @@
+ interface Review {
+   id: string;
+   key: { repositoryId: string; repo: string; number: number; viewer: string };
+   state: "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
+   freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean } | { kind: "unknown" };
+   onHeadMove: "ask" | "follow" | "ignore";
+   rounds: Round[];
+ }
+ 
+ interface Round {
+   number: number;
+   baseSha: string;
+   headSha: string;
+   mode: "first" | "delta" | "fallback-first";
+   previousRound?: number;
+   attempts: DeskRun[];           // существующий тип
+   publication?: "pending" | "published" | "skipped";
+ }
+ ```
+ 
+-Версия протокола ответов CLI повышается; Desktop проверяет её, как сегодня (`assertProtocol`).
++Этап 2 сохранил версию протокола ответов CLI: `review reviews` отвечает с `version: 1`, как доска, а новые поля только добавляются. Версия повышается вместе с первым несовместимым изменением ответа; Desktop проверяет её, как сегодня (`assertProtocol`).
+ 
+ ## Интеграции
+ 
+ - **GitHub** — без новых прав: чтение PR, Issue, обсуждений; публикация ревью как сегодня.
+ - **Flows** — Flow хранит Subject; действие «Исправить замечания» создаёт Flow.
+ - **Сессии (ACP)** — метаданные сессии несут Subject; `prepare_review` получает Subject из сессии.
+ - **Вотчер и правила** — события `push` для PR с Review ставят раунд обновления, а не независимый запуск.
+ 
+ ## Критерии приёмки
+ 
+ 1. Функция колонки PR не читает ни одного поля локального ревью; тест перебирает состояния локального ревью и получает одну и ту же колонку.
+ 2. Фильтрация PR не имеет ветки для активного ревью; тест с активным ревью и несовпадающим автором даёт пустой результат.
+ 3. После нового коммита карточка PR показывает ссылку «Ревью · отстаёт на N», а не теряет её.
+ 4. Раунд обновления после частичного прошлого раунда получает режим `delta` и непустой список прошлых находок.
+ 5. Раунд обновления при изменённых настройках запуска получает прошлые находки.
+ 6. Смена head на границе волны фиксируется в Review до завершения раунда.
+ 7. Диалог публикации при сдвинутом head содержит действие обновления; ответы по находкам сохраняются после обновления.
+ 8. Повторное «Открыть в сессии» для того же PR открывает существующую сессию; привязка к Subject переживает перезапуск приложения.
+ 9. Ревью, запущенное из привязанной сессии, появляется ссылкой на карточке PR.
+ 10. Пакет ревью, созданный в сессии, виден в `keryx review reviews --json` с источником `session` и публикуется через `desk-publish`.
+
+--- src/commands/review-reviews.test.ts
+@@ 177,280 @@
+ 
++test(`exactly ${MAX_REVIEW_COMPARES} Reviews behind are all compared without a warning`, async () => {
++  const heads: Record<number, { head: string }> = {};
++  withStore(store => {
++    for (let n = 1; n <= MAX_REVIEW_COMPARES; n++) {
++      attempt(store, { ...key, number: n }, first, done(first));
++      heads[n] = { head: prHead(n) };
++    }
++  });
++  const cmp = comparing();
++  const result = await readReviews(source(github(heads), cmp.compare));
++  expect(cmp.calls).toHaveLength(MAX_REVIEW_COMPARES);
++  expect(result.warnings).toEqual([]);
++});
++
++test("comparisons that outlast the deadline leave the count unknown with one warning", async () => {
++  withStore(store => {
++    attempt(store, key, first, done(first));
++    attempt(store, { ...key, number: 13 }, first, done(first));
++  });
++  const calls: string[] = [];
++  const compare: CompareHeads = (_base, head) => {
++    calls.push(head);
++    return head === sha("d") ? Promise.resolve({ status: "ahead", aheadBy: 1 }) : new Promise<ReviewCompare>(() => {});
++  };
++  const started = Date.now();
++  const result = await readReviews({ ...source(github({ 12: { head: sha("d") }, 13: { head: sha("e") } }), compare), compareBudgetMs: 50 });
++  expect(Date.now() - started).toBeLessThan(2000);
++  const byNumber = new Map(result.reviews.map(r => [r.number, r]));
++  expect(byNumber.get(12)?.freshness).toEqual({ kind: "behind", commits: 1, rewritten: false });
++  expect(byNumber.get(13)?.freshness).toEqual({ kind: "behind", commits: null, rewritten: false });
++  expect(result.warnings).toEqual(["Some commit counts took too long to read. Refresh to retry."]);
++});
++
++test("a reviewed head that is not a full object id is never sent to GitHub", async () => {
++  const named = { baseSha: sha("a"), headSha: "main" };
++  withStore(store => attempt(store, key, named, done(named)));
++  const cmp = comparing();
++  const result = await readReviews(source(github({ 12: { head: sha("d") } }), cmp.compare));
++  expect(cmp.calls).toHaveLength(0);
++  expect(result.reviews[0]?.freshness).toEqual({ kind: "behind", commits: null, rewritten: false });
++});
++
++test("a Review closed locally is not read from GitHub", async () => {
++  withStore(store => {
++    attempt(store, key, first, done(first));
++    attempt(store, { ...key, number: 13 }, first, done(first));
++  });
++  editStore("UPDATE reviews SET closed_at=? WHERE pr=?", ["2026-11-21T00:00:00Z", 12]);
++  const gh = github({ 12: { head: sha("d") }, 13: { head: sha("b") } });
++  const result = await readReviews(source(gh, comparing().compare));
++  const cardQueries = gh.queries.filter(text => text.includes("ReviewActivePulls"));
++  expect(cardQueries.join("\n")).not.toContain("p12:pullRequest");
++  expect(cardQueries.join("\n")).toContain("p13:pullRequest");
++  expect(new Map(result.reviews.map(r => [r.number, r.state])).get(12)).toBe("closed");
++  expect(result.reviews.find(r => r.number === 12)?.card).toBeNull();
++
++  // Opt-in for "Show closed": the closed Review's card is read too, and it still is not compared.
++  const shown = github({ 12: { head: sha("d") }, 13: { head: sha("b") } });
++  const cmp = comparing();
++  const withClosed = await readReviews({ ...source(shown, cmp.compare), includeClosed: true });
++  expect(shown.queries.filter(text => text.includes("ReviewActivePulls")).join("\n")).toContain("p12:pullRequest");
++  expect(withClosed.reviews.find(r => r.number === 12)).toMatchObject({ state: "closed", card: { number: 12, headSha: sha("d") } });
++  expect(cmp.calls).toHaveLength(0);
++});
++
++test("one failed card batch keeps the cards of the others; its Reviews do not count as waiting on the viewer", async () => {
++  const heads: Record<number, { head: string; state?: string }> = {};
++  withStore(store => {
++    for (let n = 1; n <= 25; n++) {
++      attempt(store, { ...key, number: n }, first, done(first));
++      heads[n] = { head: sha("b"), state: "MERGED" };
++    }
++  });
++  // Batches hold 20 numbers, newest PR first: 25..6 and 5..1. The second one fails.
++  const result = await readReviews(source(github(heads, "user", 3), comparing().compare));
++  const byNumber = new Map(result.reviews.map(r => [r.number, r]));
++  expect(byNumber.get(25)).toMatchObject({ state: "closed" });
++  expect(byNumber.get(6)).toMatchObject({ state: "closed" });
++  expect(byNumber.get(3)).toMatchObject({ card: null, state: "ready", publication: "pending" });
++  expect(result.reviews.filter(reviewNeedsViewer)).toEqual([]);
++  expect(result.warnings).toEqual(["Some pull requests could not be loaded. Refresh to retry."]);
++});
++
+ test("PRs that cannot be read leave cards empty with a warning; an access failure is not retained", async () => {
+   withStore(store => attempt(store, key, first, done(first)));
+   const failing = (message: string) => ({ ...github({}), query: async <T>(text: string): Promise<T> => {
+     if (text.includes("ReviewIdentity")) return { viewer: { login: "user" }, repository: { id: "gid" } } as T;
+     throw new Error(message);
+   } });
+   const result = await readReviews(source(failing("unavailable: GitHub is down"), comparing().compare));
+   expect(result.reviews[0]).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
+   expect(result.warnings).toEqual(["Some pull requests could not be loaded. Refresh to retry."]);
+   await expect(readReviews(source(failing("access: account changed"), comparing().compare))).rejects.toThrow("access:");
+ });
+ 
+ test("a PR GitHub does not return leaves its head unknown and is not compared", async () => {
+   withStore(store => {
+     attempt(store, key, first, done(first));
+     attempt(store, { ...key, number: 21 }, first, done(first));
+   });
+   const cmp = comparing();
+   const result = await readReviews(source(github({ 12: { head: sha("b") } }), cmp.compare));
+   const byNumber = new Map(result.reviews.map(r => [r.number, r]));
+
+--- src/commands/review-reviews.ts
+@@ 45,88 @@
+   const repositoryId = identity.repository?.id;
+   if (!viewer || !repositoryId) throw new Error("access: GitHub repository or account is unavailable.");
+   const snapshot: ReviewsSnapshot = { version: 1, repo, repositories, repositoryId, viewer, fetchedAt: new Date().toISOString(), reviews: [], warnings: [] };
+-  const rows = readReviewRows(repositoryId, viewer, root);
++  // Newest activity first: the list order, and the order the comparison cap follows.
++  const rows = readReviewRows(repositoryId, viewer, root)
++    .map(row => ({ row, at: latestActivity(row) }))
++    .sort((a, b) => b.at.localeCompare(a.at) || b.row.number - a.row.number)
++    .map(({ row }) => row);
+   if (!rows.length) return snapshot;
+ 
+-  const cards = new Map<number, ReviewCard>();
+-  try {
+-    for (const card of await listActiveReviewCards(snapshot, [...new Set(rows.map(row => row.number))], query)) cards.set(card.number, card);
+-  } catch (error) {
+-    if (cannotRetainData(error)) throw error;
+-    snapshot.warnings.push("Some pull requests could not be loaded. Refresh to retry.");
+-  }
++  const cards = await readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query);
+   const behind = rows.flatMap(row => {
+-    const card = cards.get(row.number) ?? null;
+-    const reviewed = referenceHead(row);
+-    return card && reviewed && reviewed !== card.headSha && !reviewClosed(row, card) && OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)
+-      ? [{ id: row.id, reviewed, head: card.headSha }] : [];
++    const pair = headComparison(row, cards.get(row.number) ?? null);
++    return pair && OBJECT_ID.test(pair.reviewed) && OBJECT_ID.test(pair.head) ? [{ id: row.id, ...pair }] : [];
+   });
+   if (behind.length > MAX_REVIEW_COMPARES) snapshot.warnings.push(`Commit counts are shown for ${MAX_REVIEW_COMPARES} Reviews behind their pull request. Refresh to read more.`);
++  const comparisons = await compareHeads(behind.slice(0, MAX_REVIEW_COMPARES), compare, compareBudgetMs, snapshot.warnings);
++  snapshot.reviews = rows.map(row => summarizeReview(row, cards.get(row.number) ?? null, comparisons.get(row.id)));
++  return snapshot;
++}
++
++/** PR cards of the given Reviews, in batches read a few at a time. A batch that fails leaves its
++ * Reviews without a card and adds one warning; the cards of the other batches are kept. */
++async function readCards(snapshot: ReviewsSnapshot, rows: ReviewRow[], query: Query): Promise<Map<number, ReviewCard>> {
++  const numbers = [...new Set(rows.map(row => row.number))];
++  const batches = Array.from({ length: Math.ceil(numbers.length / CARD_BATCH) }, (_, i) => numbers.slice(i * CARD_BATCH, (i + 1) * CARD_BATCH));
++  let unreadable = false;
++  const read = await mapPool(batches, CARD_PARALLEL, async batch => {
++    try { return await listActiveReviewCards(snapshot, batch, query); }
++    catch (error) {
++      if (cannotRetainData(error)) throw error;
++      unreadable = true;
++      return [];
++    }
++  }, { stopOnError: true });
++  if (unreadable) snapshot.warnings.push("Some pull requests could not be loaded. Refresh to retry.");
++  return new Map(read.flat().map(card => [card.number, card]));
++}
++
++type Pair = { id: string; reviewed: string; head: string };
++/** Compare each pair within one overall deadline. A failed or unfinished comparison leaves its count unknown. */
++async function compareHeads(pairs: Pair[], compare: CompareHeads, budgetMs: number, warnings: string[]): Promise<Map<string, ReviewCompare>> {
++  const deadline = Date.now() + budgetMs;
+   let failed = false;
+
+--- src/review/desk-run-store.ts
+@@ 191,200 @@
+       const reviewId = this.reviewFor(row.repo, row.pr, row.viewer);
+-      const { round, previous } = this.roundFor(reviewId, row);
++      let attempts = placed.get(reviewId);
++      if (!attempts) {
++        attempts = this.db.query<PlacedAttempt, [string]>(`SELECT rowid AS seq, id, round, json_extract(details,'$.createdAt') AS created,
++            json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head, ${neverStarted()} AS superseded
++          FROM runs WHERE review_id=? AND round IS NOT NULL`).all(reviewId);
++        placed.set(reviewId, attempts);
++      }
++      const { round, previous } = roundFor(attempts, row);
+       this.db.run("UPDATE runs SET review_id=?, round=?, previous_run_id=? WHERE rowid=? AND review_id IS NULL",
+
+--- src/review/review-entity.ts
+@@ 95,124 @@
+ 
+ const FINISHED: ReadonlySet<DeskRunState> = new Set(["completed", "partial", "budget"]);
+ 
+ /** The state of a Review, derived from its latest attempt. */
+ export function reviewState(latest: ReviewAttemptSummary, closed: boolean): ReviewState {
+   if (closed) return "closed";
+   if (latest.state === "queued") return "queued";
+   if (latest.state === "running" || latest.state === "cancelling") {
+     return latest.state === "running" && latest.source === "manual" && latest.awaitingAnswer ? "needs_answer" : "running";
+   }
+   if (FINISHED.has(latest.state) && latest.reviewed) return latest.publication === "published" ? "published" : "ready";
+   return "stopped";
+ }
+ 
+ /** Whether the PR head moved past the reviewed head. An unknown PR head is `unknown`; an unknown reviewed head cannot be behind. */
+ export function freshness(reviewedHead: string | null, prHead: string | null, compare?: ReviewCompare | null): ReviewFreshness {
+   if (!prHead) return { kind: "unknown" };
+-  if (!reviewedHead || reviewedHead === prHead || compare?.status === "identical") return { kind: "current" };
++  if (!headsDiffer(reviewedHead, prHead) || compare?.status === "identical") return { kind: "current" };
+   if (!compare) return { kind: "behind", commits: null, rewritten: false };
+   return { kind: "behind", commits: compare.aheadBy, rewritten: compare.status !== "ahead" };
+ }
+ 
+-export function reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication">): boolean {
+-  return review.state === "needs_answer" || review.state === "stopped" ||
+-    (review.state === "ready" && review.publication !== "skipped" && review.publication !== "published");
++/** A pending answer always waits on the viewer. Otherwise a Review whose PR card could not be read does not count
++ * (it may be merged or closed on GitHub), nor does an archived one; `stopped` and `ready` with a publication still
++ * to choose do. `ready` without a publication outcome (partial, budget, an imported package) has no decision to make. */
++export function reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication" | "card" | "archived">): boolean {
++  if (review.state === "needs_answer") return true;
++  if (review.archived || review.card === null) return false;
++  return review.state === "stopped" || (review.state === "ready" && review.publication === "pending");
+ }
+
+--- src/review/review-entity.test.ts
+@@ 97,129 @@
+ 
++test("reviewNeedsViewer: an unread PR card counts only a pending answer; an archived Review never counts", () => {
++  expect(reviewNeedsViewer({ card: null, archived: false, state: "needs_answer", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ card: null, archived: false, state: "stopped", publication: null })).toBe(false);
++  expect(reviewNeedsViewer({ card: null, archived: false, state: "ready", publication: "pending" })).toBe(false);
++  expect(reviewNeedsViewer({ card: card(), archived: true, state: "stopped", publication: null })).toBe(false);
++  expect(reviewNeedsViewer({ card: card(), archived: true, state: "ready", publication: "pending" })).toBe(false);
++});
++
++describe("headComparison decides which Reviews need a commit count", () => {
++  test("a reviewed head that differs from the open PR head", () => {
++    expect(headComparison(row([attempt()]), card({ headSha: sha("c") }))).toEqual({ reviewed: sha("b"), head: sha("c") });
++  });
++  test("nothing to compare: same head, unread card, closed Review or PR", () => {
++    expect(headComparison(row([attempt()]), card())).toBeNull();
++    expect(headComparison(row([attempt()]), null)).toBeNull();
++    expect(headComparison(row([attempt()], { closedAt: "2026-11-05T00:00:00Z" }), card({ headSha: sha("c") }))).toBeNull();
++    expect(headComparison(row([attempt()]), card({ headSha: sha("c"), state: "merged" }))).toBeNull();
++  });
++  test("summarizeReview reports behind exactly when a comparison is needed", () => {
++    const behindRow = row([attempt()]);
++    const prCard = card({ headSha: sha("c") });
++    expect(headComparison(behindRow, prCard)).not.toBeNull();
++    expect(summarizeReview(behindRow, prCard).freshness.kind).toBe("behind");
++    expect(headComparison(behindRow, card())).toBeNull();
++    expect(summarizeReview(behindRow, card()).freshness.kind).toBe("current");
++  });
++});
++
+ describe("summarizeReview", () => {
+   test("groups attempts into rounds, newest first, and reports the latest reviewed round", () => {
+     const first = attempt({ round: 1, findings: { blocker: 1, major: 0, minor: 0, info: 0 }, tokens: 100, createdAt: "2026-11-01T00:00:00.000Z" });
+     const second = attempt({ round: 2, previousRunId: first.id, headSha: sha("c"), reviewed: { baseSha: sha("a"), headSha: sha("c") },

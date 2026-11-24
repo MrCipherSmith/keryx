@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 1, slice-07)
+
+### Scope
+- PR #1304, branch feat/desktop-review-v2-stage2, delta 20e4281a2..f6971fd4a
+- Slice reviewed in full: slice-07 (second-look slice, 69 250 bytes)
+- Contents: Flow 519 metadata only - acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md, flow.json, resolved/T5-T8.implement.json. No executable code.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked, with the round-1 fixes in mind
+- Secrets and credentials: none in any file. No tokens, keys, connection strings or auth headers. The resolved/*.json files hold rule paths and sha256 hashes of bundled rule files only.
+- Personal data: flow.json `owner.value` names the owner as given with the `--owner` flag on `flow init`. That is the project's normal ownership record, not a secret. The journal names the operator database path in generic form (`~/.local/share/keryx/desktop-review/runs.sqlite`) and states that the T9 migration ran on a scratchpad copy with no data committed. That is consistent with agent conduct rule 4.
+- Statements about security-relevant design, with the code not in this slice (lead only, not verified here): plan.md says the Rust bridge validates `--repo` and refuses `reviews_only` combined with other board modes. It also says read-only stores never migrate, and that GitHub compare calls run only for 40-char hex heads, which limits what reaches the `repos/{repo}/compare/{a}...{b}` path. These are the right controls for argument and path injection into the CLI/gh call. Their implementation belongs to the code slices of this round.
+- Injection, auth/authz, IDOR, crypto, CSRF, path traversal, open redirect, React/NestJS patterns: not applicable. The slice holds no code.
+
+### Clean areas
+Secrets, logging/PII, injection, authz, crypto, path traversal, redirect, framework patterns. All were checked; none apply or none were found.
+
+### Not verified
+- The code that implements the controls described in plan.md (review.rs `board_read_args`, review-reviews.ts compare guard) is outside slice-07 and was not read in this wave.
+- History (git log/blame) was not needed: the slice has no code whose choices need a provenance check.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-07 (Flow 519 metadata: plan, journal, AC, flow.json, resolved rule lists) contains no executable code, no secrets and no sensitive personal data beyond the stated flow owner; no security findings.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-07"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: the slice is metadata only, with no code dependents); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read for payload and schema); raw_rg_used: no.

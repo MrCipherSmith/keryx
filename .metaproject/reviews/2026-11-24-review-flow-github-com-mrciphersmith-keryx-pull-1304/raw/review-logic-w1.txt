@@ -1,0 +1,132 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range; wave 1 = flow package (slice-01), checked against the code at head
+- Spec compliance gate: ran against the flow's acceptance-criteria.md and plan.md
+
+### Summary
+The flow package (description, context, plan, AC, tasks, journal, flow.json) is mostly consistent with what the branch does: the store schema, the assignment rule (continuation → retry on a known range → next round), the read-only NULL projection, `storedDetails` keeping placement out of `details`, the tab order and shortcuts, the "New review round" label and title, the F-024 removal and the `needsViewerAttention` change all match the plan. Two plan-level choices that the code implements faithfully produce wrong behaviour: "Open in Reviews" carries only a PR number across two tabs that select repositories independently, and the Reviews indicator treats an untracked publication as undecided, so it stays lit for Reviews where no publication decision exists or can be recorded. Test output for this round (`research-evidence/verify-tests-to-run-1.txt`) was not present when I read the package; nothing was run.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 1  |  info: 2
+
+### Spec Gaps (blocker)
+None detected. AC10's "names the round it follows" holds when the badge carries a round; the fallback without a round only occurs on an unmigrated read-only store.
+
+### Logic Bugs
+[F-001] Open in Reviews selects by PR number only, across two independently chosen repositories (major)
+[F-002] Reviews indicator stays lit for ready Reviews whose publication the store never tracks (major)
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+See F-002 (partial, budget, partial-coverage and existing attempts).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Flow package is internally consistent and matches the branch on the store, migration, badge round, tab order, label and F-024. Two plan-specified behaviours are wrong in practice: Open in Reviews carries only a PR number while the PR board and the Reviews tab pick repositories independently, and reviewNeedsViewer treats publication=null as undecided although the store returns null for partial, budget, partial-coverage and existing attempts, so the Reviews indicator and the Waiting-on-you column can never clear for them. Flow state also shows T12 running while its dependency T10 (tests, typecheck, lint) is still todo.",
+  "slices": [{"id": "slice-01", "coverage": "read in full; code cross-checked at head for store, review-entity, ReviewsView, App, ReviewBoard, ReviewDetail, ReviewResults, model.ts, board-badges", "status": "DONE"}],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));",
+      "problem": "Plan T7 specifies the cross-tab focus as `reviewsFocus {number, nonce}` and the code implements exactly that: `ReviewsFocus` has no repository, and ReviewsView matches `snapshot?.reviews.find(review => review.number === pending.number)`. But the Pull requests board and the Reviews tab each keep their own `repo` state with their own 'Base repository' selector (ReviewBoard.tsx ProjectBoard `selectRepo`, ReviewsView.tsx ReviewsView `selectRepo`).",
+      "impact": "Trigger: a project with more than one base repository; the user switches the Pull requests board to repository B and clicks View review / Answer question on a card, or Open in Reviews in the PR panel. The Reviews tab stays on its own repository A and either selects the Review of a different PR that happens to share the number in A (wrong Review opened, and an `answer` intent is applied to it), or shows 'Pull request #N has no Keryx review in this list' for a PR that does have one.",
+      "suggested_fix": "Carry the repository in the focus (`{repo: snapshot.repo, number, intent, nonce}` from ReviewBoard, App passing it through), and in ReviewsView call `selectRepo(focus.repo)` when it differs from the loaded `snapshot.repo` before matching, matching only when `snapshot.repo` equals the focus repo. Amend plan.md T7 and add a DOM test with two repositories.",
+      "evidence": "App.tsx:216 builds the focus from number+intent only; ReviewsView.tsx:24 `export interface ReviewsFocus { number: number; nonce: number; intent?: ReviewIntent | undefined }`; ReviewsView.tsx:160 match by number; ReviewsView.tsx:61 and :239-240 own repo state and selector; ReviewBoard.tsx:93 and :492-493 independent repo state and selector; ReviewBoard.tsx:456 and :549 pass only `card.number`. Plan slice: 'Cross-tab navigation: App holds `reviewsFocus {number, nonce}`'.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["apps/desktop/src/App.tsx:216", "apps/desktop/src/reviews/ReviewsView.tsx:24", "apps/desktop/src/reviews/ReviewsView.tsx:160", "apps/desktop/src/review/ReviewBoard.tsx:456", "apps/desktop/src/review/ReviewBoard.tsx:549"],
+        "enumeration_method": "keryx ctx rg --all 'onOpenInReviews\\(|setReviewsFocus\\(|review.number === pending.number|interface ReviewsFocus|selectRepo=' apps/desktop/src: one focus producer (App), two callers in ReviewBoard, one type and one consumer in ReviewsView; repo selectors confirmed by rg 'selectRepo|repositories' in both views."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "(review.state === \"ready\" && review.publication !== \"skipped\" && review.publication !== \"published\");",
+      "problem": "Plan T6 defines the indicator as `ready` with publication 'pending or unknown', and the code lights on publication === null. The store's `publication()` returns undefined unless the attempt is `completed` with coverage `complete` (desk-run-store.ts:407-408), and `reviewRows` sets it to null for `source === 'existing'`. So every Review whose newest reviewed attempt is `partial`, `budget`, completed with partial coverage, or an imported existing package is `ready` with publication null forever. `reviewState` can also never return `published` for these, because it reads the same null.",
+      "impact": "Trigger: a Review whose latest finished attempt ended `partial` or `budget`, or an imported session package. The Reviews tab indicator stays on and the Review sits in 'Waiting on you' with nothing to act on: the panel shows no 'Action required' (ReviewRuns marks pending only when `run.publication === \"pending\"`), and a partial result the user publishes through the offered draft (ReviewRuns allows `partial`) still reads ready/null, never Published. Only archiving or a new round clears it. The old PR-board badge did not have this: it excluded `existing` runs and lit only on `publication === \"pending\"`.",
+      "suggested_fix": "Either light only on `publication === \"pending\"` (the old `publicationPending` rule and the panel's 'Action required' rule), with null meaning 'no decision applies', or make `publication()` report receipts/skips for partial attempts and treat budget/existing explicitly. Amend plan.md T6 and AC8's wording, and add review-entity and ReviewsView tests for partial, budget and existing Reviews.",
+      "evidence": "review-entity.ts reviewNeedsViewer; review-entity.test.ts:89 pins `{state:'ready', publication:null}` → true; desk-run-store.ts:407-408 `if (state !== \"completed\" || coverage !== \"complete\" || ...) return;`; desk-run-store.ts reviewRows `const publication = reviewed && item.source !== \"existing\" ? this.publication(...) : undefined`; apps/desktop/src/review/ReviewRuns.tsx:103-105 draft offered for completed|partial, pending only on 'pending'; src/review/board-badges.ts:32 and :52 old badge excluded existing and required 'pending'.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["src/review/review-entity.ts reviewNeedsViewer", "src/review/review-entity.ts reviewState (published branch)", "src/review/desk-run-store.ts:407", "src/review/desk-run-store.ts reviewRows publication assignment", "apps/desktop/src/reviews/ReviewsView.tsx indicator (snapshot?.reviews.some(reviewNeedsViewer))"],
+        "enumeration_method": "Read every producer of ReviewAttemptSummary.publication (only reviewRows, which calls the one private publication()) and every consumer of ReviewSummary.publication in review-entity.ts (reviewState, reviewNeedsViewer); keryx ctx rg 'PublicationOutcome =' src/review shows the type has only pending|published|skipped, so null is the only 'unknown'."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json",
+      "line": null,
+      "quote": null,
+      "problem": "T12 (review-orchestrator, this run) dependsOn T10 (test suites, typecheck and lint), and T10 is still `todo`. The journal records test and typecheck re-runs per task but no lint run, and AC12 requires lint and a green or explained CI.",
+      "impact": "The flow's own ordering says the review runs on a verified tree; it is running before AC12's verification is recorded, so a lint or full-suite failure would arrive after the review round.",
+      "suggested_fix": "Run T10 (root and Desktop suites, typecheck, lint) and mark it done before closing T12, or record why the order was changed.",
+      "evidence": "flow.json tasks T10 status 'todo', T12 dependsOn ['T10']; journal.md has no lint entry; AC12 check `bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit`.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+      "line": null,
+      "quote": null,
+      "problem": "plan.md is stale against decisions the journal records: T6 still defines `freshness` as `current | behind` (T14 added `unknown`); T7 still asks for one toolbar row at 560px (T11 measured two and recorded a known limit); the journal's T5 note gives desk-run-store.ts as 854 lines, it is 912 at head after T6's reviewRows.",
+      "impact": "A later stage reading plan.md as the contract would miss the `unknown` freshness kind; no code defect.",
+      "suggested_fix": "Add a short 'Amendments' note to plan.md pointing at the T14 and T11 journal entries.",
+      "evidence": "plan.md T6 'freshness(...) → current | behind'; journal T14 and T11 entries; `wc -l src/review/desk-run-store.ts` = 912.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "return review.state === \"needs_answer\" || review.state === \"stopped\" ||",
+      "problem": "Per the spec table, `stopped` includes `cancelled`, so a review the user stopped themselves lights the Reviews indicator until it is archived or re-run.",
+      "impact": "Is it intended that a user's own Stop review leaves the tab indicator on?",
+      "suggested_fix": "Confirm with the spec owner; if not intended, exclude `cancelled` from the indicator (keeping it in the column).",
+      "evidence": "reviewState returns 'stopped' for any non-finished, non-live state; reviewNeedsViewer lights on 'stopped'; spec «Индикатор вкладки» line 179.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "question"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 2, "minor": 1, "info": 2}
+}
+```
+
+Notes on coverage:
+- Read in full: slice-01 (all flow package files). Cross-checked at head: desk-run-store.ts diff, review-entity.ts, ReviewsView.tsx (lines 25-240), App.tsx diff, ReviewBoard.tsx diff, ReviewDetail.tsx diff, ReviewResults.tsx diff, model.ts, board-badges.ts, desk-run-types.ts diff, AppShell PROJECT_VIEWS, ReviewRuns.tsx publication lines.
+- Not read: the payload file itself beyond the driver, pr-context.md, SKILL.detail.md (counterpart/round obligations), the review activity rule; the Rust bridge (review.rs) and the CLI command were not checked in this wave.
+- Test output for this round was not available (research-evidence held only ingest-screened.json). No command beyond read-only reads and `keryx ctx rg` was run.

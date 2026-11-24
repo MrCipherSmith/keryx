@@ -126,3 +126,29 @@
 .review-board .flows-toolbar .review-hidden-attention:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
 .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
 .session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }
+
+/* Reviews tab: shares the Pull requests toolbar rules above through .review-board (labels collapse at 1100px and 760px). */
+/* The filter selects shrink before the row wraps: a small basis decides the line break, they grow back to 9.5rem. */
+.reviews-board .flows-toolbar > select { flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem; }
+@container (max-width: 760px) {
+  .reviews-board .flows-toolbar > select { max-width: 6.5rem; }
+}
+.reviews-lane-running { background: var(--accent); }
+.reviews-lane-waiting { background: var(--warn); }
+.reviews-lane-behind { background: var(--info); }
+.reviews-lane-published { background: var(--ok); }
+.reviews-lane-closed { background: var(--fg-muted); }
+.review-summary-card[aria-current] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.review-summary-facts { flex-wrap: wrap; gap: 2px var(--sp-2); font-size: var(--fs-xs); color: var(--fg-muted); }
+.review-summary-facts .review-behind { color: var(--warn); }
+.reviews-table { min-width: 960px; }
+.reviews-table tr[aria-current] { background: var(--bg-selected); }
+.review-panel-facts { margin-top: var(--sp-1); }
+.review-rounds h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); }
+.review-rounds ol, .review-rounds ul { list-style: none; margin: 0; padding: 0; }
+.review-round { border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+.review-round + .review-round { margin-top: var(--sp-2); }
+.review-round-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); }
+.review-round-attempt { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px var(--sp-2); padding: var(--sp-1) 0 var(--sp-1) var(--sp-3); border-inline-start: 2px solid var(--border); margin-top: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.review-round-attempt strong { color: var(--fg); }
+.review-round-attempt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

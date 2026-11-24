@@ -1,0 +1,388 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304-r02",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1304",
+    "base": "20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b",
+    "head": "f6971fd4a6cd2031b2479509f6f8ada380f342e1"
+  },
+  "round": {
+    "number": 2,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304",
+    "range": {
+      "base": "20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b",
+      "head": "f6971fd4a6cd2031b2479509f6f8ada380f342e1"
+    },
+    "fixHunks": 33,
+    "newHunks": 251,
+    "priorFindings": 60,
+    "carried": 26,
+    "line": "round 2 (source: local-package; previous 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304 at 20e4281a2ac0; delta 20e4281a2ac0..f6971fd4a6cd)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/review/ReviewBoard.tsx",
+          "apps/desktop/src/review/ReviewDetail.tsx",
+          "apps/desktop/src/reviews/ReviewPanel.tsx",
+          "apps/desktop/src/reviews/ReviewsView.tsx",
+          "apps/desktop/src/reviews/model.ts",
+          "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+          "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+          "docs/docs/cli-reference.md",
+          "docs/docs/desktop-app.md",
+          "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+          "docs/requirements/keryx-desktop-review-v2/specification.md",
+          "src/commands/review-reviews.test.ts",
+          "src/commands/review-reviews.ts",
+          "src/review/desk-run-store.ts",
+          "src/review/review-entity.ts",
+          "src/review/review-entity.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-pr-contract",
+          "review-regression",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "F-001",
+          "F-002",
+          "F-003",
+          "F-004",
+          "F-005",
+          "F-007",
+          "F-008",
+          "F-009",
+          "F-010",
+          "F-011",
+          "F-012",
+          "F-013",
+          "F-014",
+          "F-015",
+          "F-017",
+          "F-018",
+          "F-019",
+          "F-021",
+          "F-022",
+          "F-025",
+          "F-026",
+          "F-028",
+          "F-030",
+          "F-031",
+          "F-033",
+          "F-037",
+          "F-038",
+          "F-039",
+          "F-041",
+          "F-045",
+          "F-046",
+          "F-047",
+          "F-053",
+          "F-059"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json"
+        ],
+        "depth": "light",
+        "roles": [
+          "review-logic",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "apps/desktop/dev/reviewBoard.ts",
+          "apps/desktop/src-tauri/src/review.rs",
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/platform/review.ts",
+          "apps/desktop/src/review/ReviewBoard.tsx",
+          "apps/desktop/src/review/ReviewBrowserLink.tsx",
+          "apps/desktop/src/review/ReviewDetail.css",
+          "apps/desktop/src/review/ReviewDetail.tsx",
+          "apps/desktop/src/review/ReviewRuns.tsx",
+          "apps/desktop/src/review/ReviewWorkspace.tsx",
+          "apps/desktop/src/reviews/ReviewPanel.tsx",
+          "apps/desktop/src/reviews/ReviewsView.tsx",
+          "apps/desktop/src/reviews/model.ts",
+          "apps/desktop/src/shell/AppShell.tsx"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "apps/desktop/src/platform/reviewPages.test.ts",
+          "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+          "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+          "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+          "apps/desktop/src/reviews/model.test.ts",
+          "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+          "apps/desktop/src/test/app-navigation.fixture.tsx",
+          "docs/docs/cli-reference.md",
+          "docs/docs/desktop-app.md",
+          "docs/docs/guides/desktop-metaproject.md",
+          "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+          "docs/requirements/keryx-desktop-review-v2/specification.md",
+          "src/commands/review-board.ts",
+          "src/commands/review-reviews.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          "src/commands/review-reviews.test.ts",
+          "src/review/board-github.ts",
+          "src/review/desk-run-store.ts",
+          "src/review/review-entity.ts",
+          "src/review/desk-run-store.test.ts",
+          "src/review/review-entity.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-06",
+        "files": [
+          "apps/desktop/src-tauri/src/review.rs",
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/review/ReviewBoard.tsx",
+          "apps/desktop/src/review/ReviewDetail.tsx",
+          "apps/desktop/src/review/ReviewResults.tsx",
+          "apps/desktop/src/review/model.ts",
+          "apps/desktop/src/platform/reviewPages.test.ts",
+          "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+          "apps/desktop/src/test/app-navigation.fixture.tsx",
+          "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+          "docs/requirements/keryx-desktop-review-v2/specification.md",
+          "src/review/desk-run-store.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-07",
+        "files": [
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/acceptance-criteria.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/context.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/description.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/journal.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/tasks.md",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/flow.json",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T5.implement.json",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T6.implement.json",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T7.implement.json",
+          ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/resolved/T8.implement.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-08",
+        "files": [
+          "apps/desktop/dev/reviewBoard.ts",
+          "apps/desktop/src-tauri/src/review.rs",
+          "apps/desktop/src/App.tsx",
+          "apps/desktop/src/platform/review.ts",
+          "apps/desktop/src/review/ReviewBoard.tsx",
+          "apps/desktop/src/review/ReviewDetail.tsx",
+          "apps/desktop/src/review/ReviewResults.tsx",
+          "apps/desktop/src/review/ReviewWorkspace.tsx",
+          "apps/desktop/src/review/model.ts",
+          "apps/desktop/src/reviews/ReviewPanel.tsx",
+          "apps/desktop/src/reviews/ReviewsView.tsx",
+          "apps/desktop/src/reviews/model.ts",
+          "apps/desktop/src/shell/AppShell.tsx",
+          "apps/desktop/src/styles/review.css"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-09",
+        "files": [
+          "apps/desktop/src/platform/reviewPages.test.ts",
+          "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+          "apps/desktop/src/review/model.test.ts",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+          "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+          "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+          "apps/desktop/src/test/app-navigation.fixture.tsx",
+          "docs/docs/cli-reference.md",
+          "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+          "docs/requirements/keryx-desktop-review-v2/specification.md",
+          "src/commands/review-reviews.test.ts",
+          "src/commands/review-reviews.ts",
+          "src/commands/review.ts",
+          "src/lib/group-subcommands.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-10",
+        "files": [
+          "src/review/board-badges.test.ts",
+          "src/review/desk-run-store.test.ts",
+          "src/review/review-entity.test.ts",
+          "src/review/board-badges.ts",
+          "src/review/board-types.ts",
+          "src/review/desk-run-store.ts",
+          "src/review/desk-run-types.ts",
+          "src/review/review-entity.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-backend",
+    "review-clean-code",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-pr-contract",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 69,
+  "minutes": {
+    "min": 36,
+    "max": 90
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 14
+    },
+    "new": {
+      "slices": 5,
+      "dispatches": 47
+    },
+    "secondLook": {
+      "slices": 4,
+      "dispatches": 8
+    }
+  },
+  "overThreshold": true,
+  "overReasons": [
+    "69 dispatches > 40"
+  ],
+  "planKey": "fd233a424328979f",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 207 changed file(s) but the package's recorded scope holds 40 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304-r02 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "confirm plan (card review_confirm_plan / keryx review confirm-plan)"
+}

@@ -1,0 +1,47 @@
+STATUS: DONE_WITH_CONCERNS
+
+Concern: exec_budget_s is 0, so nothing was measured in a real layout engine. Slice-04 contains no rendered-element sizing change: it holds tests, a test fixture, docs, requirements docs and backend CLI code. I file one unmeasured `info` about a test whose name makes a geometry claim that it cannot check.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "slices": ["slice-04"],
+  "summary": "Delta round 2 (20e4281a2..f6971fd4a), slice-04, read in full (1849 lines, 29 file hunks). It is not the FIX slice, so this reply gives no prior dispositions. Contents: Desktop tests (reviewPages.test.ts, ReviewBoard/ReviewDetail/ReviewPanel/ReviewsView DOM tests, reviews/model.test.ts, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx), docs (cli-reference.md, desktop-app.md, desktop-metaproject.md), requirements (implementation-plan.md 0.1.5, specification.md 0.1.4) and backend CLI (src/commands/review-board.ts, review-reviews.ts). No .css file and no non-test .tsx is in the slice, so no rendered box changes here. Layout-relevant items checked: (1) reviews/model.test.ts adds 'the Review panel's workspace block keeps the panel's 12px column gap', a regex over ReviewDetail.css source text. That pins the declaration but measures no geometry, so F-054's closure (wave 1) is still unmeasured. Filed as LY-001 info. (2) ReviewDetail.dom.test.tsx and ReviewsView.dom.test.tsx now place the run-status alert in `.sheet-head` and the detail-read alert in `.sheet-body`. These are DOM-position assertions under happy-dom that match the F-030 placement wave 1 closed, and they do not add a geometry claim. (3) The implementation-plan's toolbar measurement paragraph (Reviews toolbar: one row at 760-1380px, two rows at 700px and narrower, 648px needed at 560px) is unchanged in this delta. Stage-0 deviation (c) and its container-query numbers are unchanged, and protected stage-0 code is not touched by this slice. (4) The doc shortcut change ⌘5→⌘6 and the 'Reviews → Review rules' path are not geometry. Nothing was measured: exec_budget_s 0.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/model.test.ts",
+      "line": null,
+      "quote": "test(\"the Review panel's workspace block keeps the panel's 12px column gap\", () => {",
+      "problem": "The test name claims a rendered 12px gap. The body only regex-matches `.review-workspace-block { display:flex; flex-direction:column; ... gap: var(--sp-3) }` in the CSS source. It cannot detect a later rule that overrides the block, a `--sp-3` value other than 12px, or a parent that stops the block from stretching. So the F-054 fix (the gap between `.review-rounds` and `.desk-runs`) is still not measured in any engine.",
+      "impact": "Low. The declaration is pinned against accidental deletion, which is useful. The name, though, reads as a geometry guarantee that the suite does not give (layout-rendering.mdc Rule 1). A later cascade change could break the gap with this test still green.",
+      "suggested_fix": "Rename the test so it says what it checks (for example 'ReviewDetail.css declares the workspace block as a flex column with the --sp-3 gap'). Or settle the claim once in the dev:browser tier: open a Review with rounds and read `getComputedStyle(.review-workspace-block).rowGap` and the distance from the bottom of `.review-rounds` to the top of `.desk-runs`, both expected to be 12px.",
+      "evidence": "slice-04.diff lines 1138-1141 (model.test.ts hunk). Not measured: exec_budget_s 0, so no real-CSS run. Wave-1 layout reply raw/review-layout-w1.txt closed F-054 from reading the cascade only.",
+      "confidence": "high",
+      "reviewer": "review-layout",
+      "dedupe_key": "review-workspace-block-gap-source-regex-test",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [],
+  "follow_ups": [
+    "Not measured: in dev:browser with a populated Reviews list, read the computed row gap of .review-workspace-block and the .review-rounds to .desk-runs distance (expected 12px). That measurement would settle both F-054 and LY-001."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Summary (review-layout, round 2, wave 3)
+
+- Scope: slice-04 read in full. It holds tests, a fixture, docs, requirements docs and backend CLI code, and no rendered CSS or component markup. It is not the FIX slice, so no prior dispositions.
+- New: LY-001 (info, unmeasured). The new model.test.ts test is named after a rendered 12px gap but only regex-matches the CSS source text. Fix: rename it, or measure the gap once in dev:browser.
+- Checked, no finding:
+  - The alert-placement test changes (`.sheet-head` and `.sheet-body`) match F-030 as closed in wave 1.
+  - The toolbar measurement notes in implementation-plan.md and the stage-0 toolbar container-query deviation are unchanged.
+  - The doc edits (⌘6, the Reviews → Review rules path) do not touch geometry.
+- Not verified: no measurement of any kind (exec_budget_s 0). The backend CLI hunks are outside this lens.
+
+Routing audit: graph_used: no (not-relevant: the slice file was given directly and is the whole scope); wiki_used: no (not-relevant: a geometry check of test and doc hunks); ctx_used: yes (`keryx ctx rg` for the slice's file headers and for cross-wave mentions in raw/, `keryx ctx read` for layout-rendering.mdc and the finding schema); raw_rg_used: no.

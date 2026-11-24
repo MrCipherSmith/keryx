@@ -1,0 +1,67 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- PR #1304, round 2 (delta round), wave 4
+- Delta: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1
+- Scope mode: explicit-hash-range, supplied slices only (slice-05, slice-06). Not the FIX slice, so there are no prior dispositions.
+- Slices read in full: slice-05 (1160 lines), slice-06 (843 lines)
+
+What these slices hold, from the frontend lens:
+- slice-05 is root CLI and domain code: review-reviews tests, board-github `writeBoundJson`, desk-run-store (`neverStarted`, module-level `roundFor`, `publication()` for every finished state, `reviewRows` keeping archived attempts), and review-entity (`archived` and `reviewed` on the summary, `stateAttempts`/`stateAttempt`, `headComparison`, the `reviewNeedsViewer` Pick widened to `card` and `archived`). The only frontend-facing part is the review-entity contract, which Desktop imports directly.
+- slice-06 is removal residue: imports, props and tests taken out of App.tsx, ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, review/model.ts, ReviewBoard/ReviewPanel dom tests and app-navigation.fixture. It also has removed lines from Rust review.rs tests, docs and desk-run-store.ts. The slice adds no new Desktop code.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None new in these slices.
+
+Already raised in waves 1-3 and not re-filed. Slice-05 changes the contract these consumers read.
+- `reviewedCommit` falls back to `rounds[0].headSha` (archived attempts included) while the domain's `referenceHead` uses unarchived attempts: review-architecture-w1 F-002, review-logic-w1, review-degradation-w1, review-testing-practices-w1 R2-M01.
+- The `reviewState` doc after `stateAttempt`: review-clean-code-w1.
+- Fixture shape for the archived attempt that carries `publication: "published"`: review-testing-practices-w3.
+
+### Contract consumers checked (Desktop side of slice-05)
+- `reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication" | "card" | "archived">)`. Its only Desktop caller, ReviewsView.tsx:206 `snapshot?.reviews.some(reviewNeedsViewer)`, passes the full `ReviewSummary`, so it type-checks. An older CLI that sends no `archived` reads it as falsy, and the function stays correct.
+- `ReviewSummary.archived: boolean` and `reviewed: DeskRevision | null`. Desktop `reviews/model.ts` reads `archived` as optional (`{ archived?: boolean }`, `!!review.archived`) and `reviewed` with `?.`. A payload without these fields still renders: not archived, and the fallback commit is shown.
+- `ReviewAttemptSummary.archived`. Only ReviewPanel's Attempt uses it, and that sits outside these slices (the missing "Archived" label is covered in review-degradation-w1).
+
+### Removal residue checked (slice-06)
+- ReviewDetail drops the "Keryx review" tab, `ReviewRunHistory`, `onOpenReviewSession`, `publishCommand` and the `githubPrUrl`/`openPullRequest` choice. At head, link opening goes through `openReviewLink`. `hasReview = local.runs.length > 0`, which counts an archived run, as decided. Nothing at head still refers to a removed symbol, and CI at f6971fd (typecheck included, 30 checks green) confirms it.
+- ReviewBoard drops `ProjectReviewRules` from the toolbar and the `DeskRun`/`DeskRunKey` props. At head, rules are offered from the Reviews tab through `onIdentityChange`, and `rulesCommand` is still passed to ReviewDetail for PR automation, so nothing is left unused.
+- review/model.ts `laneReason` no longer falls back to `reviewNote`, and ReviewResults drops `secondaryNote`. ReviewTile and the list row (ReviewResults.tsx:61,110) render `reviewNote` on its own line. The reason can no longer be the note, so dropping the de-duplication cannot show the same text twice.
+- In the dom tests, the removed `click("Keryx review")` steps match the removed tab. The removed rules-dialog tests belong to the toolbar rules entry, which this round moved to the Reviews tab.
+
+### Clean Areas
+- observer/MobX: these slices have no MobX store or observer component. Desktop uses React state hooks only.
+- API in components: no new IO in components. `openReviewLink` lives in ReviewBrowserLink, a platform wrapper.
+- useEffect cleanup, keys, accessibility: no new effects, lists or interactive elements in these slices.
+- TypeScript safety: no new `any`, and no non-null assertion in production code. Test-only `!` fits the test conventions.
+- Public modifiers and inter-store callbacks: not applicable (no stores).
+
+### Not verified
+- I ran no tests (exec budget 0). I relied on the recorded run at f6971fd (194 root + 1008 Desktop tests, 0 fail) and on CI being green. I did not re-read verify-tests-to-run-1.txt.
+- I did not run `keryx gdgraph affected` or `keryx test related`. I enumerated the consumers of `reviewNeedsViewer` and `archived` with `keryx ctx rg --all` over apps/desktop/src and src.
+- For the removal residue I checked the head code of App.tsx, ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx and reviews/model.ts against the delta. I did not re-read ReviewPanel.tsx or ReviewsView.tsx in full; they sit in other slices.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Slices 05 and 06 add no new frontend finding. slice-05 is CLI/domain code. Its Desktop-facing contract changes (reviewNeedsViewer Pick widened to card/archived, ReviewSummary.archived/reviewed, ReviewAttemptSummary.archived) type-check at the only callers and degrade safely for a payload without the new fields. slice-06 is removal residue (Keryx review tab, ReviewRunHistory, ProjectReviewRules toolbar entry, onOpenReviewSession, secondaryNote, laneReason note fallback). Nothing at head still refers to a removed symbol, and the note cannot be shown twice. The reviewedCommit archived-fallback issue is already filed in waves 1-3 and is not re-filed.",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: I enumerated consumers with keryx ctx rg --all over apps/desktop/src and src) · wiki_used: no (not-relevant: intent comes from the plan and from the operator decisions in fix-round-1) · ctx_used: yes (keryx ctx rg over the earlier wave results and over consumers, keryx ctx read of review-entity.ts and the schema) · raw_rg_used: no. One raw `git diff` of the delta's frontend files used the keryx:raw escape marker, because the exact hunks were needed to read the removal residue against head.

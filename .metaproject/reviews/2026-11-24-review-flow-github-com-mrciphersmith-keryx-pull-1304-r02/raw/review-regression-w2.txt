@@ -1,0 +1,70 @@
+STATUS: DONE
+
+review-regression, round 2 (delta 20e4281a2..f6971fd4a), wave 2, slice-03 (not the FIX slice; prior_findings empty in the payload).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-03"],
+  "findings": [],
+  "summary": "No regression at major or above in slice-03. Each changed contract was followed to its callers at f6971fd4a, and none of them breaks."
+}
+```
+
+## What was checked (code at f6971fd4a; slice-03 read in full)
+
+Each changed contract was followed to its consumers:
+
+- `onOpenInReviews(number, intent)` became `(target{repo, repositoryId, number}, intent)` in ReviewBoard.tsx.
+  - The only production caller is App.tsx:216 `openInReviews`, which has the same new signature.
+  - The panel call in ReviewBoard passes `snapshot.repo/repositoryId`, and the card call passes `boardRepo/boardRepositoryId` (ReviewBoard.tsx:456).
+  - The fallback `setSelected({number})` drops a non-start intent that ReviewDetail ignored before (ReviewDetail.tsx:170 keeps only `start`). Behaviour is unchanged.
+- `onOpenReviewSession` was removed from ReviewBoard and ReviewDetail props.
+  - App no longer passes it to the board.
+  - At base, ReviewDetail already only accepted it and never read it. The Reviews tab still gets `openReviewWorkspace` (App.tsx:644).
+- `ReviewsTabIndicator` moved from shell/AppShell.tsx to reviews/ReviewsView.tsx. `keryx ctx rg` over apps and src finds every importer updated: App, AppShell, ProjectNavigation.dom.test, ReviewsView.dom.test. Nothing still imports it from AppShell.
+- `ReviewWatcher onPollCompleted` changed from `refresh` to `watcherPolled`.
+  - ReviewWatcher.tsx:66 lists `onPollCompleted` in an effect's deps. `watcherPolled` depends only on `refresh` (a stable useCallback) and App's `noteWatcherPoll` (a stable useCallback).
+  - So the watcher effect re-runs no more often than before. Its only mount is ReviewBoard.tsx:487.
+- `onIdentityChange`: `watcherTarget` is useMemo'd (ReviewBoard.tsx:421), so App's `setBoardIdentity` does not loop.
+- The ReviewDetail `local.error` banner moved into the header block (ReviewDetail.tsx:264). It was not removed, so start errors in the PR panel are still shown.
+- ReviewDetail `hasReview` is now `local.runs.length > 0`, part of the operator-settled F-006 fix.
+  - For a PR whose runs are all archived, the panel offers "Open in Reviews" instead of the launch button.
+  - The board card's start intent still starts the review through ReviewDetail.tsx:189-199, because that effect does not read `hasReview`.
+  - The Review panel's ReviewWorkspace offers start / "New review round", because `launchAction` excludes archived runs.
+  - No start path is lost.
+- `launchAction` relabelled "Review again" to "New review round". No code matches on the label string; only ReviewBoard.dom.test asserts that "Review again" is absent.
+- `ReviewBrowserLink` gained an optional `onOpen`. Its graph dependents are DiscussionMarkdown, ReviewChecks, ReviewDetail, ReviewResults and ReviewPanel. Only ReviewPanel passes `onOpen`. For the others the anchor renders with `onClick/onAuxClick` undefined, as before. ReviewDetail's own link is still handled by the parent `followLink` (ReviewDetail.tsx:250).
+- `fetchReviews` takes a new optional 4th parameter, and `includeClosed` is in the read key. Its only caller is ReviewsView. The dev bridge (apps/desktop/dev/reviewBoard.ts) and the Rust `board_read_args` refuse `includeClosed` outside the reviews-only read. `board_read_args` has one production call (review.rs:156), updated together with every unit-test call.
+- `ReviewWorkspace` has one mount (ReviewPanel.tsx:132).
+  - The new `onIntentConsumed` fires once, on both the drop path and the act path.
+  - Its key does not include the intent, so `consumeIntent` stripping the intent does not remount the interface or replay the intent.
+- `reviewColumn`, `filterReviewList`, `reviewStateLabel` and `isClosedOrArchived` in reviews/model.ts: the dependents are ReviewPanel, ReviewsView and model.test only. The `archived` parameter is optional, so existing calls type-check unchanged.
+
+## Protected stage-0 code
+
+- Attention set in ReviewBoard.tsx: the slice's ReviewBoard hunks touch only Props, `openReview`, `watcherPolled`, `onIdentityChange` and the ReviewDetail props. `carriedAttention`, `attentionNumbers`, `holdsAllOpen` and `badgesEqual` are unchanged.
+- attachBadges/localBadge parity: not in this slice. Wave 1 covered it (raw/review-regression-w1.txt).
+- Toolbar container queries: review.css is not in this slice. The Reviews toolbar adds only `title` attributes and an options map. ReviewDetail.css adds only `.review-workspace-block`.
+
+## Already raised in wave 1 (not re-filed)
+
+These were filed below major by other lenses:
+
+- Show-closed re-read cost.
+- The state filter versus "Archived".
+- The rules fallback without a repo check.
+- The watcher-poll reload not being visibility-gated.
+- The double read when opening a closed Review.
+
+## Coverage and limits
+
+- The payload carries no computed blast-radius record, so there is no capped set and no dropped files to report. I walked dependents with `keryx gdgraph affected --data-dir <package>/layers/graph` for ReviewBrowserLink.tsx, ReviewRuns.tsx and reviews/model.ts, and used `keryx ctx rg` for the changed symbols. The graph could not say whether it is stale.
+- The graph does not see the runtime edge from the Tauri `invoke("review_board", {includeClosed})` call to the Rust `include_closed` parameter, so that chain was read by hand.
+  - It relies on Tauri's default camelCase mapping of command arguments.
+  - The Rust code is not compiled locally (CI only).
+- No tests were run (exec budget 0). I relied on research-evidence/verify-tests-to-run-1.txt as stated in the dispatch.
+
+routing audit: graph_used: yes (gdgraph affected over the package graph); wiki_used: no (not-relevant, the plan and fix-round notes state the intent); ctx_used: yes (keryx ctx rg/run); raw_rg_used: yes. Plain grep was run once over the package's raw/*.txt to list wave-1 findings, because ctx rg skips the hidden .metaproject path; it was never run over project code.

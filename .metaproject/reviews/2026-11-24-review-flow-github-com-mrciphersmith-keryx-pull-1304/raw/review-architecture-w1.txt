@@ -1,0 +1,132 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9` (head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`)
+- Scope mode: explicit-hash-range, supplied slice text (slice-02, read in full)
+- Stack detected: React (no MobX: hook-state components) + Tauri Rust bridge + dev-server bridge mirror
+
+### Summary
+Slice-02 adds a `reviews/` feature (ReviewsView, ReviewPanel, presentation model), extracts the Keryx review interface from the PR detail panel into a shared `review/ReviewWorkspace.tsx`, routes PR-card view/answer actions to the Reviews tab, and adds a `reviews_only` mode to the `review_board` bridge (Rust and dev mirror, with matching refusals). Layering is sound: the domain rule for the indicator (`reviewNeedsViewer`) stays in root `src/review/review-entity.ts`, which has only type imports, so the desktop bundle pulls no Node/SQLite code; the desktop `reviews/model.ts` holds only presentation mapping; I/O stays in `platform/review.ts`. Overloading `review_board` instead of registering a new Tauri command is a decision recorded in the flow plan (plan.md:90), so it is not raised. No blocker or major findings. Two minor findings on dependency direction and a hidden required dependency, and three info notes.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 3
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+[F-001] (minor) `ReviewsTabIndicator` is declared in the shell and imported by the feature, the reverse of the existing PR-tab pattern. `apps/desktop/src/reviews/ReviewsView.tsx` imports `ReviewsTabIndicator` from `../shell/AppShell`. The sibling `ReviewTabIndicator` is declared by the feature (`review/ReviewBoard.tsx`) and imported by the shell (`AppShell.tsx` imports `../review/ReviewBoard`). So the shell now depends on `review/` for one indicator, and `reviews/` depends on the shell for the other. It is type-only and has no runtime cycle today. But a feature that depends on the app shell cannot be rendered or tested without the shell's module, and the two tabs now use opposite rules. Fix: declare `ReviewsTabIndicator` in `reviews/ReviewsView.tsx` (or `reviews/model.ts`), import it into `AppShell.tsx` the way `ReviewTabIndicator` is, and update `ReviewsView.dom.test.tsx`.
+
+### Module Boundary Violations
+[F-002] (minor) The PR feature now needs the Reviews tab to work, but its props do not say so. `onOpenInReviews` is optional on `ReviewBoard`/`ReviewDetail`. When it is absent, `openReview` in `ReviewBoard.tsx` still calls `setSelected` with a `view`/`answer` intent, and `ReviewDetail.tsx` now drops every non-`start` intent (`reviewIntent?.kind === "start" ? reviewIntent : undefined`). In that case "View review"/"Answer question" opens a panel with no review interface, and for a PR with a Review the primary button is the disabled launch action. App.tsx always passes the callback, so production is not affected today. The weakness is the contract: the fallback branch is dead code that looks supported. Fix: make `onOpenInReviews` required on both Props, or route only `start` through `setSelected` and leave the view/answer actions out when the callback is absent.
+
+### Design Pattern Misuse
+[F-004] (info) `review/ReviewWorkspace.tsx`, the shared review interface now also rendered by `reviews/ReviewPanel.tsx`, imports `./ReviewDetail.css`, the PR detail panel's stylesheet. `SessionReviewActivity.tsx` does the same, but that import predates this PR. The shared component therefore depends on its former host's styles. Consider moving the workspace rules into their own stylesheet (or `styles/review.css`) when it next changes.
+
+[F-005] (info) The extraction is partial. `ReviewDetail.tsx` keeps its own copy of the `start` callback, the `initialLaunch` consume-once effect, the `associatedFlowId/associatedFlow` derivation and the revision-changed banner, alongside the same logic in `ReviewWorkspace.tsx` (only `RunLaunchDialog` is shared). This is a duplication concern that belongs to review-clean-code. It is noted here only because it weakens the "one shared component" boundary the PR describes.
+
+### Dependency Inversion
+None detected. The I/O seams (`load`, `runCommand`, `publishCommand`, `rulesCommand`) are injected as props with platform defaults, which matches the existing board.
+
+### Framework-Specific (NestJS / React+MobX)
+[F-003] (info) `ReviewDetail` Props keep `onOpenReviewSession` ("Accepted from the board"), but the component no longer reads it, and `ReviewBoard.tsx` still forwards it. That leaves a dead edge in the component interface. Remove it from `ReviewDetail` Props and from the `ReviewBoard` call site, since `ReviewsView` now receives it directly from App.
+
+### Not verified / inputs
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present when checked (only `ingest-screened.json`), so no test results inform this review.
+- Rust compiled behaviour was not checked: there is no toolchain and the role is read-only. Arg-builder parity between `review.rs` and `dev/reviewBoard.ts` was checked by reading only.
+- History (git log/blame) was not read. It was not needed for these findings.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 layering is sound. The domain rule stays in a type-only root module, presentation mapping is in reviews/model.ts, I/O is in platform/review.ts, and the reviews_only bridge mode is a recorded plan decision. Two minor findings: the Reviews indicator type is declared in the shell and imported by the feature, inverting the PR tab's pattern; and the optional onOpenInReviews hides a now-required dependency of the PR panel. Three info notes: a dead prop, a shared CSS coupling, and partial extraction.",
+  "slices": [{"id": "slice-02", "status": "DONE", "coverage": "read in full"}],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "import type { ReviewsTabIndicator } from \"../shell/AppShell\";",
+      "problem": "The feature module reviews/ imports its indicator type from the app shell (shell/AppShell.tsx). The existing PR tab does the reverse: ReviewTabIndicator is declared in review/ReviewBoard.tsx and the shell imports it. Feature-to-shell dependency direction is inverted for the new tab.",
+      "impact": "The Reviews feature cannot be built or tested apart from the shell module, and the two sibling tabs follow opposite dependency rules, so the next tab has no clear pattern to copy. Type-only today, so there is no runtime cycle.",
+      "suggested_fix": "Declare `export type ReviewsTabIndicator = \"attention\" | null;` in reviews/ReviewsView.tsx (or reviews/model.ts), and have AppShell.tsx import it the same way it imports ReviewTabIndicator from review/ReviewBoard. Update reviews/ReviewsView.dom.test.tsx.",
+      "evidence": "slice-02: ReviewsView.tsx imports ../shell/AppShell. AppShell.tsx declares ReviewsTabIndicator and imports ReviewTabIndicator from ../review/ReviewBoard. A search for `from \"../shell/` in apps/desktop/src finds only reviews/ReviewsView.tsx, reviews/ReviewsView.dom.test.tsx, and the pre-existing platform/projects.ts.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "reviews-indicator-type-in-shell"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "else setSelected({ number: card.number, reviewIntent });",
+      "problem": "The PR panel's review interface moved to the Reviews tab, so the PR feature now depends on the Reviews tab. But `onOpenInReviews` stays optional on ReviewBoard and ReviewDetail Props. Without it, openReview falls back to setSelected with a view/answer intent, which ReviewDetail now discards (`reviewIntent?.kind === \"start\" ? reviewIntent : undefined`). The panel then shows no review interface and a disabled launch button for a PR that has a Review.",
+      "impact": "A required dependency is typed as optional, and the fallback branch is dead code that looks supported. App.tsx always passes the callback, so there is no production defect today. Any other host of ReviewBoard, such as tests or a future embedding, would get a silently broken view/answer action.",
+      "suggested_fix": "Make onOpenInReviews required on ReviewBoard and ReviewDetail Props. Alternatively, keep it optional but route only `start` through setSelected, and do not render the view/answer card action when the callback is absent.",
+      "evidence": "slice-02: ReviewBoard.tsx openReview (`if (kind !== \"start\" && onOpenInReviews) ... else setSelected(...)`). ReviewDetail.tsx initialLaunch filters kind === \"start\". ReviewDetail renders `Open in Reviews` only when `hasReview && onOpenInReviews`, and otherwise renders the launch button disabled by `action.open`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "dedupe_key": "optional-onOpenInReviews-hidden-dependency"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": null,
+      "quote": "/** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */",
+      "problem": "ReviewDetail keeps the onOpenReviewSession prop but no longer reads it, and ReviewBoard.tsx still forwards it.",
+      "impact": "A dead edge in the component interface: it suggests the PR panel can open review sessions, which it no longer does.",
+      "suggested_fix": "Remove onOpenReviewSession from ReviewDetail Props and from the ReviewBoard call site. ReviewsView receives it from App directly.",
+      "evidence": "slice-02 ReviewDetail.tsx: the prop was removed from the ReviewDetailSheet destructuring. Search: onOpenReviewSession appears in ReviewDetail.tsx only at its Props declaration.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "import \"./ReviewDetail.css\";",
+      "problem": "The shared review interface, now also rendered inside reviews/ReviewPanel, depends on the PR detail panel's stylesheet.",
+      "impact": "Restyling or removing the PR detail panel's CSS silently affects the Reviews tab.",
+      "suggested_fix": "Move the rules the workspace uses into its own stylesheet (or styles/review.css) when it next changes.",
+      "evidence": "Search for ReviewDetail.css: imported by ReviewDetail.tsx, ReviewWorkspace.tsx (new) and SessionReviewActivity.tsx (pre-existing).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": null,
+      "quote": "// A board start is tied to the clicked revision, and consumed once after status resolves.",
+      "problem": "The extraction is partial. ReviewDetail keeps its own start callback, initialLaunch consume-once effect, associatedFlow derivation and revision-changed banner, alongside the same logic in ReviewWorkspace.tsx. Only RunLaunchDialog is shared.",
+      "impact": "The 'one shared component' boundary is weaker than described, and a fix to launch gating has to be made in two places. The duplication itself is review-clean-code's to rate.",
+      "suggested_fix": "Leave the rating to review-clean-code. If kept, consider a small shared hook for the consume-once launch intent.",
+      "evidence": "slice-02: ReviewDetail.tsx useEffect on initialLaunch, and ReviewWorkspace.tsx useEffect on initialLaunch with the same guard structure.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 3},
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice text plus keryx ctx rg settled every import question; the package graph was not needed for any claim). wiki_used: no (not-relevant: the plan and PR context carried the design decisions). ctx_used: yes (keryx ctx rg for imports, shell dependents, CSS importers, prop uses and plan decisions). raw_rg_used: no.

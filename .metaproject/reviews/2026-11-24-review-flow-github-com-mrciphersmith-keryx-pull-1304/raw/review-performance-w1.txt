@@ -1,0 +1,83 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b; wave 1, slice-02 read in full (2402 lines: apps/desktop dev/reviewBoard.ts, src-tauri review.rs, App.tsx, platform/review.ts, review/ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, ReviewWorkspace.tsx, review/model.ts, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx, styles/review.css).
+- Context read outside the slice: apps/desktop/src/review/useReviewRuns.ts:80-104 (run polling cadence), src/commands/review-reviews.ts:10-79 (cost of one `keryx review reviews` call), apps/desktop/src/App.tsx:242-262 (GitHub account load).
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present when this review ran; not read.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [F-001] Reviews list is read twice at every project window open
+- Severity: minor
+- File: apps/desktop/src/App.tsx (ReviewsView mount)
+- Hot path: once per project window open (and per project switch), not per render.
+- Problem: `githubAccount` starts `null` and loads asynchronously (App.tsx `refreshGitHubAccount`). On first render `reviewViewer` is undefined, so the always-mounted `<ReviewsView key={reviewViewer ?? "active-gh"}>` mounts and its effect starts `fetchReviews`. When the account resolves with a login, the key changes, the view remounts and reads again. The read lane key includes `expectedViewer`, so the second read is not deduplicated. Each `keryx review reviews` call is a CLI spawn, a GraphQL identity query, a batched card read, and up to 25 REST compares (`MAX_REVIEW_COMPARES`, 4 in parallel).
+- Why it matters: one wasted CLI spawn and GitHub round-trip set per window open, on top of the PR board, which already does the same thing (pre-existing, outside this diff). It also counts against the GitHub rate limit.
+- Fix: render ReviewsView only once the account read has settled, for example `githubAccount !== null &&`, or the same gate the board would use. Alternatively, skip the load while `expectedViewer` is undefined and an account read is still pending.
+- Confidence: medium. Mount order and key change were read from code and not observed at runtime. The first read might also fail fast if project registration has not finished yet; it is still a wasted spawn either way.
+
+### [F-002] Every visit to the Reviews tab and every run-state transition re-reads the whole list
+- Severity: info
+- File: apps/desktop/src/reviews/ReviewsView.tsx
+- Hot path: tab switch (user-paced) and a run's state, publication or decision transition while the panel is open. Not per keystroke and not per render.
+- Problem: the "read again whenever the tab is shown again" effect, plus `observeRuns` → `refresh()`, each trigger a full `keryx review reviews` read (bounded as in F-001). Rapid tab toggling re-reads every time; there is no minimum age.
+- Why it matters: the cost is bounded (≤25 compares, at most 1/60 s polling and only while the tab is active and a run is queued or running). This is noted only as a possible throttle, for example skipping a tab-show refresh when the snapshot is younger than N seconds.
+- Fix: optional. Compare `snapshot.fetchedAt` to now before the tab-show refresh.
+
+### Clean Areas
+- CLI/TUI hot paths: `projectViewForKey` is an O(1) regex check plus an index per keydown. The keydown listeners in ReviewsView are cleaned up and gated on `active`.
+- Polling: the RUNNING_RELOAD_MS interval is cleared, and runs only while active and running. ReviewWorkspace's `useReviewRuns(..., true)` polls at 15 s/3 s, as the old board "Keryx review" tab did. The board panel and the Reviews panel are each rendered only while their tab is active, so the same PR is never double-polled. ReviewDetail now passes visible=false, so it polls less than before.
+- Re-renders: `ReviewList` is memoized, and its inputs (`visible` useMemo, stable `openReview`, primitive props) are stable. `target` and `subject` are memoized by fields. `Rounds.known` is memoized. `observeRuns` uses JSON.stringify of a small runs array per poll, which is negligible.
+- Memory: `seenRuns` Map is keyed by PR number and bounded by reviews viewed in one mount. All intervals and listeners have cleanup.
+- Bundle: no new heavy imports. Rust/TS argument builders are O(1).
+- Pagination: the CLI side caps compares at 25 (outside the slice; read for context only).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-02 (desktop Reviews tab, ReviewWorkspace extraction, board changes) has no blocker or major performance problems. Polling and listeners are cleaned up and gated on the active tab, and the list and memoization are sound. Minor: the always-mounted ReviewsView reads the list twice at window open because its key changes from 'active-gh' to the login once the account resolves. Info: there is no minimum age on the tab-show re-read. Test output was not available.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "<ReviewsView key={reviewViewer ?? \"active-gh\"} expectedViewer={reviewViewer} active={workView === \"reviews\"} cwd={cwd}",
+      "problem": "githubAccount starts null and resolves asynchronously, so the always-mounted ReviewsView first mounts under key 'active-gh' and starts fetchReviews. Once the login arrives, the key changes and the view remounts and reads again. The read-lane key includes expectedViewer, so the second read is not deduplicated.",
+      "impact": "Every project window open (or project switch) spends one extra CLI spawn: a GraphQL identity query, a card read, and up to 25 REST compares, also counted against the GitHub rate limit. Happens once per open, not on a hot path.",
+      "suggested_fix": "Mount ReviewsView only after the account read has settled (e.g. githubAccount !== null), or skip the load while expectedViewer is undefined and an account read is pending.",
+      "evidence": "App.tsx: useState<ProjectGitHubAccount|null>(null) and async refreshGitHubAccount (lines ~242-262). ReviewsView key={reviewViewer ?? 'active-gh'} in the diff. RepositoryReviews load effect deps [cwd, repo, expectedViewer, attempt, ...]. fetchReviews lane key JSON.stringify([cwd, expectedViewer, repo]). src/commands/review-reviews.ts:33-71 per-call cost. ReviewBoard uses the same pre-existing pattern.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "if (active && !wasActive.current) refresh();",
+      "problem": "Each Reviews tab show and each observed run-state transition triggers a full list re-read, with no minimum snapshot age.",
+      "impact": "Cost is bounded (at most 25 compares per read, user-paced triggers), so nothing is required. Fast tab toggling re-reads each time.",
+      "suggested_fix": "Optional: skip the tab-show refresh when snapshot.fetchedAt is younger than a few seconds.",
+      "evidence": "ReviewsView wasActive effect, observeRuns -> refresh(), RUNNING_RELOAD_MS interval; src/commands/review-reviews.ts MAX_REVIEW_COMPARES=25, COMPARE_PARALLEL=4.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "degradation_class": "performance"
+    }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; slice text supplied, and the two context reads were named files), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

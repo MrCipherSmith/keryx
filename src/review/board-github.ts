@@ -100,6 +100,21 @@ export function verifyGithubBindingUnchanged(connection: GithubConnection): void
   withCurrentGithubBinding(connection, () => undefined);
 }
 
+/** Write one JSON payload for the Desktop hosts, which read through a pipe. The GitHub binding is checked again at
+ * this publication boundary (optional API reads may have turned their errors into warnings), and the call returns
+ * only after the whole payload is handed to the pipe, so even a large history is flushed before the command exits. */
+export function writeBoundJson(result: unknown, auth: GithubConnection): Promise<void> {
+  return writeBoundJsonText(JSON.stringify(result), auth);
+}
+export function writeBoundJsonText(json: string, auth: GithubConnection): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    // Concurrent writers stay excluded until the complete payload is handed to the pipe.
+    withCurrentGithubBinding(auth, () => {
+      process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
+    });
+  });
+}
+
 export async function projectGithubConnection(
   cwd: string, env: NodeJS.ProcessEnv = process.env, expectedViewer?: string,
 ): Promise<GithubConnection> {

@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: a5d1ab236fe85dee62a758a19390049dde4eb7f9..20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (diff mode, supplied slice)
+- Slice read in full: slice-04 (1414 lines). Files: docs/docs/cli-reference.md, docs/requirements/keryx-desktop-review-v2/implementation-plan.md, docs/requirements/keryx-desktop-review-v2/specification.md, src/commands/review-board.ts, src/commands/review-reviews.ts (new), src/commands/review-reviews.test.ts (new), src/commands/review.ts, src/lib/group-subcommands.ts, src/review/board-badges.test.ts, src/review/desk-run-store.test.ts, src/review/review-entity.test.ts (new).
+- Context checked at head, with `keryx ctx rg`: how Desktop reads the two contract changes in this slice. (1) `outdated.round` is declared in src/review/board-types.ts:18, compared in apps/desktop/src/review/ReviewBoard.tsx:63 and rendered in apps/desktop/src/review/ReviewResults.tsx:38. (2) `freshness.kind === "unknown"` is handled in apps/desktop/src/reviews/model.ts:46 ("head unknown") and in the ReviewsView.tsx freshness filter.
+- Earlier waves' raw findings were read for this reviewer (review-frontend w1, w2). None is re-filed here.
+
+### Notes on inputs
+- slice-04 holds no React components, hooks, JSX or MobX stores. It holds CLI and backend TypeScript, their bun tests, and docs. The frontend laws (observer, actions, View-Store boundary, API calls in components, `public`/`private` on store members) have nothing in this slice to apply to. apps/desktop uses React state and hooks and has no MobX, as w1 recorded.
+- The React rule file named in the payload (`.metaproject/rules/stacks/react/code-style-patterns.mdc`) is absent from this tree, as w1 recorded. That did not matter here because the slice contains no component code.
+- The CLI contract that the Desktop Reviews tab reads matches what it renders. The `ReviewsSnapshot` keys (version, repo, repositories, repositoryId, viewer, fetchedAt, reviews, warnings) are fixed by a test. The three-kind freshness union, including `unknown`, has a Desktop branch. The optional `outdated.round` keeps the stage-0 "Reviewed <sha>" title when it is absent, because ReviewResults.tsx:38 checks `outdated.round` before saying "Round N reviewed".
+- Backend correctness, including the compare cap, warnings, sorting and the migration rule, is outside the frontend lens. I did not assess it beyond the contract check above. It belongs to review-logic and review-architecture.
+- Test output `research-evidence/verify-tests-to-run-1.txt` is not present. The directory holds only ingest-screened.json. No tests were run (read-only, exec_budget_s 0), so pass/fail at head is not verified.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- Component patterns, effects, keys and accessibility: not applicable, because the slice contains no component code.
+- MobX store patterns: not applicable, because the project has no MobX.
+- TypeScript safety in the slice's TS: no `any`. The non-null `!` uses are confined to tests. The casts in review-reviews.ts (`repo.split("/") as [string, string]`, the ReviewCompare status cast) come after validation by `selectRepository` and the `compareStates`/`Number.isSafeInteger` guard in `parseCompare`.
+- Desktop contract consumption of `outdated.round` and `freshness.kind: "unknown"`, which this slice introduces on the CLI side and in the spec: handled at the sites listed under Scope.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "slices": ["slice-04"],
+  "summary": "slice-04 contains no frontend code: CLI/backend TS (review-reviews command, desk-run-store and review-entity tests, badge round), docs and help text. No React or MobX patterns to review. The Desktop consumers of the two contract changes (outdated.round, freshness kind 'unknown') were checked at head and handle both. No findings. Test output file not available; no tests run.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice has no frontend code, and the two Desktop consumers were found by a targeted search); wiki_used: no (not-relevant: plan and spec text are in the slice itself); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.

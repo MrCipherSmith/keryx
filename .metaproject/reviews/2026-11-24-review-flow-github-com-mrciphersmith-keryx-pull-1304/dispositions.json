@@ -1,0 +1,677 @@
+[
+ {
+  "id": "review-logic-w1:F-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-001."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001)."
+ },
+ {
+  "id": "review-regression-w1:RR-001",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001)."
+ },
+ {
+  "id": "review-degradation-w1:F-002",
+  "status": "finding",
+  "finding": "F-001",
+  "evidence": "report.md F-001 / canonical-findings.json F-001; fix row FB-1 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-001 (merged at consolidation; primary review-logic-w1:F-001)."
+ },
+ {
+  "id": "review-frontend-w1:F-001",
+  "status": "finding",
+  "finding": "F-002",
+  "evidence": "report.md F-002 / canonical-findings.json F-002; fix row FB-2 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-002."
+ },
+ {
+  "id": "review-frontend-w1:F-002",
+  "status": "finding",
+  "finding": "F-003",
+  "evidence": "report.md F-003 / canonical-findings.json F-003; fix row FB-3 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-003."
+ },
+ {
+  "id": "review-logic-w1:F-002",
+  "status": "finding",
+  "finding": "F-004",
+  "evidence": "report.md F-004 / canonical-findings.json F-004; fix row FA-2 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-004."
+ },
+ {
+  "id": "review-logic-w2:F-001",
+  "status": "finding",
+  "finding": "F-005",
+  "evidence": "report.md F-005 / canonical-findings.json F-005; fix row FA-3 (85fa985c1), FB-6 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-005."
+ },
+ {
+  "id": "review-degradation-w1:F-001",
+  "status": "finding",
+  "finding": "F-006",
+  "evidence": "report.md F-006 / canonical-findings.json F-006; fix row FA-4 (85fa985c1), FB-5 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-006."
+ },
+ {
+  "id": "review-regression-w1:RR-002",
+  "status": "finding",
+  "finding": "F-007",
+  "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-007."
+ },
+ {
+  "id": "review-degradation-w1:F-003",
+  "status": "finding",
+  "finding": "F-007",
+  "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-007 (merged at consolidation; primary review-regression-w1:RR-002)."
+ },
+ {
+  "id": "review-frontend-w1:F-004",
+  "status": "finding",
+  "finding": "F-007",
+  "evidence": "report.md F-007 / canonical-findings.json F-007; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-007 (merged at consolidation; primary review-regression-w1:RR-002)."
+ },
+ {
+  "id": "review-logic-w5:F-001",
+  "status": "finding",
+  "finding": "F-008",
+  "evidence": "report.md F-008 / canonical-findings.json F-008; fix row FA-1 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-008."
+ },
+ {
+  "id": "review-logic-w2:F-003",
+  "status": "finding",
+  "finding": "F-009",
+  "evidence": "report.md F-009 / canonical-findings.json F-009; fix row FB-3 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-009."
+ },
+ {
+  "id": "review-logic-w4:F-002",
+  "status": "finding",
+  "finding": "F-010",
+  "evidence": "report.md F-010 / canonical-findings.json F-010; fix row FA-2 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-010."
+ },
+ {
+  "id": "review-highload-w1:F-001",
+  "status": "finding",
+  "finding": "F-011",
+  "evidence": "report.md F-011 / canonical-findings.json F-011; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-011."
+ },
+ {
+  "id": "review-performance-w1:F-001",
+  "status": "finding",
+  "finding": "F-012",
+  "evidence": "report.md F-012 / canonical-findings.json F-012; fix row FB-4 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-012."
+ },
+ {
+  "id": "review-architecture-w1:F-001",
+  "status": "finding",
+  "finding": "F-013",
+  "evidence": "report.md F-013 / canonical-findings.json F-013; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-013."
+ },
+ {
+  "id": "review-architecture-w1:F-002",
+  "status": "finding",
+  "finding": "F-014",
+  "evidence": "report.md F-014 / canonical-findings.json F-014; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-014."
+ },
+ {
+  "id": "review-architecture-w2:F-001",
+  "status": "finding",
+  "finding": "F-015",
+  "evidence": "report.md F-015 / canonical-findings.json F-015; fix row FA-5 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-015."
+ },
+ {
+  "id": "review-architecture-w2:F-002",
+  "status": "finding",
+  "finding": "F-016",
+  "evidence": "report.md F-016 / canonical-findings.json F-016; fix row FA-6 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-016."
+ },
+ {
+  "id": "review-degradation-w1:F-004",
+  "status": "finding",
+  "finding": "F-017",
+  "evidence": "report.md F-017 / canonical-findings.json F-017; fix row FB-10 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-017."
+ },
+ {
+  "id": "review-degradation-w1:F-005",
+  "status": "finding",
+  "finding": "F-018",
+  "evidence": "report.md F-018 / canonical-findings.json F-018; fix row FA-15 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-018."
+ },
+ {
+  "id": "review-degradation-w2:F-001",
+  "status": "finding",
+  "finding": "F-019",
+  "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-019."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-001",
+  "status": "finding",
+  "finding": "F-019",
+  "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-019 (merged at consolidation; primary review-degradation-w2:F-001)."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-002",
+  "status": "finding",
+  "finding": "F-020",
+  "evidence": "report.md F-020 / canonical-findings.json F-020; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-020."
+ },
+ {
+  "id": "review-highload-w2:F-004",
+  "status": "finding",
+  "finding": "F-020",
+  "evidence": "report.md F-020 / canonical-findings.json F-020; fix row FA-13 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-020 (merged at consolidation; primary review-pr-contract-w1:PC-002)."
+ },
+ {
+  "id": "review-degradation-w2:F-002",
+  "status": "finding",
+  "finding": "F-021",
+  "evidence": "report.md F-021 / canonical-findings.json F-021; fix row FA-14 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-021."
+ },
+ {
+  "id": "review-highload-w2:F-001",
+  "status": "finding",
+  "finding": "F-022",
+  "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-022."
+ },
+ {
+  "id": "review-degradation-w2:F-003",
+  "status": "finding",
+  "finding": "F-022",
+  "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-022 (merged at consolidation; primary review-highload-w2:F-001)."
+ },
+ {
+  "id": "review-highload-w2:F-002",
+  "status": "finding",
+  "finding": "F-023",
+  "evidence": "report.md F-023 / canonical-findings.json F-023; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-023."
+ },
+ {
+  "id": "review-performance-w2:F-001",
+  "status": "finding",
+  "finding": "F-023",
+  "evidence": "report.md F-023 / canonical-findings.json F-023; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-023 (merged at consolidation; primary review-highload-w2:F-002)."
+ },
+ {
+  "id": "review-logic-w4:F-001",
+  "status": "finding",
+  "finding": "F-024",
+  "evidence": "report.md F-024 / canonical-findings.json F-024; fix row FA-7 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-024."
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "status": "finding",
+  "finding": "F-025",
+  "evidence": "report.md F-025 / canonical-findings.json F-025; fix row FA-9 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-025."
+ },
+ {
+  "id": "review-performance-w3:F-001",
+  "status": "finding",
+  "finding": "F-026",
+  "evidence": "report.md F-026 / canonical-findings.json F-026; fix row FA-10 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-026."
+ },
+ {
+  "id": "review-degradation-w3:F-002",
+  "status": "finding",
+  "finding": "F-026",
+  "evidence": "report.md F-026 / canonical-findings.json F-026; fix row FA-10 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-026 (merged at consolidation; primary review-performance-w3:F-001)."
+ },
+ {
+  "id": "review-degradation-w3:F-001",
+  "status": "finding",
+  "finding": "F-027",
+  "evidence": "report.md F-027 / canonical-findings.json F-027; fix row FA-17 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-027."
+ },
+ {
+  "id": "review-logic-w5:F-002",
+  "status": "finding",
+  "finding": "F-028",
+  "evidence": "report.md F-028 / canonical-findings.json F-028; fix row FA-11 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-028."
+ },
+ {
+  "id": "review-frontend-w1:F-003",
+  "status": "finding",
+  "finding": "F-029",
+  "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-029."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-004",
+  "status": "finding",
+  "finding": "F-029",
+  "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-029 (merged at consolidation; primary review-frontend-w1:F-003)."
+ },
+ {
+  "id": "review-frontend-w2:F-002",
+  "status": "finding",
+  "finding": "F-029",
+  "evidence": "report.md F-029 / canonical-findings.json F-029; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-029 (merged at consolidation; primary review-frontend-w1:F-003)."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-002",
+  "status": "finding",
+  "finding": "F-030",
+  "evidence": "report.md F-030 / canonical-findings.json F-030; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-030."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-003",
+  "status": "finding",
+  "finding": "F-031",
+  "evidence": "report.md F-031 / canonical-findings.json F-031; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-031."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-005",
+  "status": "finding",
+  "finding": "F-032",
+  "evidence": "report.md F-032 / canonical-findings.json F-032; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-032."
+ },
+ {
+  "id": "review-logic-w2:F-002",
+  "status": "finding",
+  "finding": "F-033",
+  "evidence": "report.md F-033 / canonical-findings.json F-033; fix row FB-11 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-033."
+ },
+ {
+  "id": "review-pr-contract-w4:PC-006",
+  "status": "finding",
+  "finding": "F-034",
+  "evidence": "report.md F-034 / canonical-findings.json F-034; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-034."
+ },
+ {
+  "id": "review-pr-contract-w3:PC-005",
+  "status": "finding",
+  "finding": "F-035",
+  "evidence": "report.md F-035 / canonical-findings.json F-035; no fix row in fix-round-1.md; open for the delta round",
+  "reason": "Primary record of canonical F-035."
+ },
+ {
+  "id": "review-logic-w1:F-003",
+  "status": "finding",
+  "finding": "F-036",
+  "evidence": "report.md F-036 / canonical-findings.json F-036; no fix row in fix-round-1.md; open for the delta round",
+  "reason": "Primary record of canonical F-036."
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "finding": "F-037",
+  "evidence": "report.md F-037 / canonical-findings.json F-037; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-037."
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "finding": "F-038",
+  "evidence": "report.md F-038 / canonical-findings.json F-038; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-038."
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "finding": "F-039",
+  "evidence": "report.md F-039 / canonical-findings.json F-039; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-039."
+ },
+ {
+  "id": "review-testing-practices-w1:F-004",
+  "status": "finding",
+  "finding": "F-040",
+  "evidence": "report.md F-040 / canonical-findings.json F-040; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-040."
+ },
+ {
+  "id": "review-testing-practices-w1:F-005",
+  "status": "finding",
+  "finding": "F-041",
+  "evidence": "report.md F-041 / canonical-findings.json F-041; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-041."
+ },
+ {
+  "id": "review-testing-practices-w2:F-001",
+  "status": "finding",
+  "finding": "F-042",
+  "evidence": "report.md F-042 / canonical-findings.json F-042; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-042."
+ },
+ {
+  "id": "review-testing-practices-w2:F-002",
+  "status": "finding",
+  "finding": "F-043",
+  "evidence": "report.md F-043 / canonical-findings.json F-043; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-043."
+ },
+ {
+  "id": "review-testing-practices-w2:F-003",
+  "status": "finding",
+  "finding": "F-044",
+  "evidence": "report.md F-044 / canonical-findings.json F-044; fix row FA-1 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-044."
+ },
+ {
+  "id": "review-testing-practices-w2:F-004",
+  "status": "finding",
+  "finding": "F-045",
+  "evidence": "report.md F-045 / canonical-findings.json F-045; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-045."
+ },
+ {
+  "id": "review-testing-practices-w2:F-005",
+  "status": "finding",
+  "finding": "F-046",
+  "evidence": "report.md F-046 / canonical-findings.json F-046; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-046."
+ },
+ {
+  "id": "review-testing-practices-w2:F-006",
+  "status": "finding",
+  "finding": "F-047",
+  "evidence": "report.md F-047 / canonical-findings.json F-047; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-047."
+ },
+ {
+  "id": "review-security-code-w1:fu1",
+  "status": "finding",
+  "finding": "F-048",
+  "evidence": "report.md F-048 / canonical-findings.json F-048; no fix row in fix-round-1.md; open for the delta round",
+  "reason": "Primary record of canonical F-048."
+ },
+ {
+  "id": "review-architecture-w1:F-003",
+  "status": "finding",
+  "finding": "F-049",
+  "evidence": "report.md F-049 / canonical-findings.json F-049; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-049."
+ },
+ {
+  "id": "review-frontend-w1:F-005",
+  "status": "finding",
+  "finding": "F-049",
+  "evidence": "report.md F-049 / canonical-findings.json F-049; fix row FB-7 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Same defect as canonical F-049 (merged at consolidation; primary review-architecture-w1:F-003)."
+ },
+ {
+  "id": "review-frontend-w2:F-001",
+  "status": "finding",
+  "finding": "F-050",
+  "evidence": "report.md F-050 / canonical-findings.json F-050; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-050."
+ },
+ {
+  "id": "review-logic-w3:F-001",
+  "status": "finding",
+  "finding": "F-051",
+  "evidence": "report.md F-051 / canonical-findings.json F-051; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-051."
+ },
+ {
+  "id": "review-testing-practices-w1:F-006",
+  "status": "finding",
+  "finding": "F-052",
+  "evidence": "report.md F-052 / canonical-findings.json F-052; fix row FB-12 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-052."
+ },
+ {
+  "id": "review-testing-practices-w2:F-007",
+  "status": "finding",
+  "finding": "F-053",
+  "evidence": "report.md F-053 / canonical-findings.json F-053; fix row FA-12 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-053."
+ },
+ {
+  "id": "review-layout-w1:LY-001",
+  "status": "finding",
+  "finding": "F-054",
+  "evidence": "report.md F-054 / canonical-findings.json F-054; fix row FB-9 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-054."
+ },
+ {
+  "id": "review-layout-w1:LY-002",
+  "status": "finding",
+  "finding": "F-055",
+  "evidence": "report.md F-055 / canonical-findings.json F-055; fix row FB-9 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-055."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-007",
+  "status": "finding",
+  "finding": "F-056",
+  "evidence": "report.md F-056 / canonical-findings.json F-056; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-056."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-008",
+  "status": "finding",
+  "finding": "F-057",
+  "evidence": "report.md F-057 / canonical-findings.json F-057; fix row FB-8 (98c7b37a1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-057."
+ },
+ {
+  "id": "review-logic-w1:F-004",
+  "status": "finding",
+  "finding": "F-058",
+  "evidence": "report.md F-058 / canonical-findings.json F-058; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-058."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-004",
+  "status": "finding",
+  "finding": "F-059",
+  "evidence": "report.md F-059 / canonical-findings.json F-059; fix row FA-16 (85fa985c1) in .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+  "reason": "Primary record of canonical F-059."
+ },
+ {
+  "id": "review-pr-contract-w1:PC-003",
+  "status": "finding",
+  "finding": "F-060",
+  "evidence": "report.md F-060 / canonical-findings.json F-060; no fix row in fix-round-1.md; open for the delta round",
+  "reason": "Primary record of canonical F-060."
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w1.txt F-004 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: ReviewWorkspace depending on the PR panel stylesheet is a structure note with no user-visible defect."
+ },
+ {
+  "id": "review-architecture-w1:F-005",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w1.txt F-005 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: the partial extraction of ReviewDetail is a structure note; the reviewer names no failing behaviour."
+ },
+ {
+  "id": "review-architecture-w2:F-003",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w2.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: structural typing of ReviewsSnapshot works as written; a typing note, no defect."
+ },
+ {
+  "id": "review-architecture-w3:F-001",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w3.txt F-001 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: the round rule written as SQL in the store is a placement note; journal.md T5 records moving assignment logic as a follow-up."
+ },
+ {
+  "id": "review-architecture-w3:F-002",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w3.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: the reviewer states the requestAttempt details write is correct; consistency note only."
+ },
+ {
+  "id": "review-architecture-w3:F-003",
+  "status": "out-of-scope",
+  "evidence": "raw/review-architecture-w3.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: transaction-ownership note; the reviewer names no failing caller."
+ },
+ {
+  "id": "review-highload-w1:F-002",
+  "status": "out-of-scope",
+  "evidence": "raw/review-highload-w1.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: one list read per project window at open is by design (keeps the indicator current); no defect claimed."
+ },
+ {
+  "id": "review-logic-w1:F-005",
+  "status": "out-of-scope",
+  "evidence": "raw/review-logic-w1.txt F-005 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: a cancelled Review lighting the indicator follows the spec table (stopped includes cancelled); spec-conformant observation."
+ },
+ {
+  "id": "review-performance-w1:F-002",
+  "status": "out-of-scope",
+  "evidence": "raw/review-performance-w1.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: full re-read per tab show is a cost note with no measured impact; not acted on."
+ },
+ {
+  "id": "review-performance-w2:F-002",
+  "status": "out-of-scope",
+  "evidence": "raw/review-performance-w2.txt F-002 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: re-fetching immutable compares (max 25 per read) is a cost note; not acted on."
+ },
+ {
+  "id": "review-performance-w2:F-003",
+  "status": "out-of-scope",
+  "evidence": "raw/review-performance-w2.txt F-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: comparator flattening is a micro-cost note; not acted on."
+ },
+ {
+  "id": "review-layout-w1:LY-003",
+  "status": "out-of-scope",
+  "evidence": "raw/review-layout-w1.txt LY-003 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: the fixed 560 px Review panel (no resize separator) is a design gap the reviewer marks UNVERIFIED; not acted on."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-006",
+  "status": "out-of-scope",
+  "evidence": "raw/review-ui-ux-w1.txt UX-006 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: same observation as LY-003: the Review panel has no resizable separator; design note, not acted on."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-009",
+  "status": "out-of-scope",
+  "evidence": "raw/review-ui-ux-w1.txt UX-009 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: the reviewer marks it unverified (:focus-visible after a mouse click); no defect established."
+ },
+ {
+  "id": "review-ui-ux-w1:UX-010",
+  "status": "out-of-scope",
+  "evidence": "raw/review-ui-ux-w1.txt UX-010 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: hidden-count visibility in the closed toggle is a UX suggestion; not acted on."
+ },
+ {
+  "id": "review-testing-practices-w1:F-007",
+  "status": "out-of-scope",
+  "evidence": "raw/review-testing-practices-w1.txt F-007 (severity info); fix-round-1.md has no row for it; report.md \"Info not acted on\"",
+  "reason": "Info observation not acted on in round 1: three untested label branches are a coverage note; not in fix round 1."
+ },
+ {
+  "id": "review-highload-w2:fu1",
+  "status": "finding",
+  "finding": "F-020",
+  "evidence": "report.md F-020; fix row FA-13 (85fa985c1) documents the writable open in docs/docs/cli-reference.md",
+  "reason": "The follow-up is the busy-timeout side of the writable store open on the read lane, recorded as canonical F-020; the race itself was not probed and stays with F-020 for the delta round."
+ },
+ {
+  "id": "review-security-code-w2:fu1",
+  "status": "finding",
+  "finding": "F-020",
+  "evidence": "report.md F-020; fix row FA-13 (85fa985c1)",
+  "reason": "Same concern as review-highload-w2:fu1 (migration on the read lane racing a writer), carried by canonical F-020; not probed."
+ },
+ {
+  "id": "review-layout-w1:fu1",
+  "status": "narrowed",
+  "evidence": "journal.md T11 (toolbar measured live at 340-1380 px, empty list); fix rows FB-9 (98c7b37a1) for LY-001/LY-002; journal.md T16 concern \"no live render of the FB-9 CSS\"",
+  "reason": "The toolbar half was measured live in T11; LY-001/LY-002 were acted on in FB-9 (canonical F-054, F-055); LY-003 is recorded as an info not acted on.",
+  "remains": "No live render of a non-empty Reviews list was made: Review panel spacing, selected-filter text at 760/700/560 px and the board at 280 px with the panel open are still unmeasured, before and after FB-9."
+ },
+ {
+  "id": "review-testing-practices-w1:fu2",
+  "status": "refuted",
+  "evidence": "CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry)",
+  "reason": "The follow-up asked to confirm the slice suites are green at head; CI at the reviewed head ran the full core and Desktop suites green, so the absent file left no open doubt about them."
+ },
+ {
+  "id": "review-testing-practices-w2:fu2",
+  "status": "refuted",
+  "evidence": "CI at the reviewed head 20e4281a2: run 45356890932 'CI' success (Core tests 1/4-4/4 offline success, 'Lint and typecheck' success), run 45356891075 'Desktop Check' success (gh run list --commit 20e4281a2...). research-evidence/verify-tests-to-run-1.txt: 2014 pass / 18 fail, every failure a 5-9 s timeout in a suite outside the PR (journal.md 2026-11-24 round-1 entry). The four named suites are not in the tests-to-run command; they ran in the CI core shards.",
+  "reason": "The named suites (review-reviews, review-entity, desk-run-store, board-badges tests) are green at the reviewed head per CI."
+ },
+ {
+  "id": "review-degradation-w4:F-001",
+  "status": "finding",
+  "finding": "F-019",
+  "evidence": "report.md F-019 / canonical-findings.json F-019; fix row FA-13 (85fa985c1)",
+  "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-001 unchanged on the slice-04 retry (same defect); canonical F-019."
+ },
+ {
+  "id": "review-degradation-w4:F-002",
+  "status": "finding",
+  "finding": "F-021",
+  "evidence": "report.md F-021 / canonical-findings.json F-021; fix row FA-14 (85fa985c1)",
+  "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-002 unchanged on the slice-04 retry (same defect); canonical F-021."
+ },
+ {
+  "id": "review-degradation-w4:F-003",
+  "status": "finding",
+  "finding": "F-022",
+  "evidence": "report.md F-022 / canonical-findings.json F-022; fix row FA-8 (85fa985c1)",
+  "reason": "raw/review-degradation-w4.txt re-files review-degradation-w2:F-003 unchanged on the slice-04 retry (same defect); canonical F-022."
+ },
+ {
+  "id": "review-testing-practices-w2:fu1",
+  "status": "narrowed",
+  "evidence": "research-evidence/mutation-1.json/.md (mutants-root.json from research-evidence/mutants.json; head 20e4281a2; baseline exit 0): killed 17, survived 12, invalid 2 (S03, S04); research-evidence/mutation-3.json/.md (S03, S04 re-run with exact anchors from research-evidence/mutants-root-exact.json, head 20e4281a2): survived 2",
+  "reason": "The 31 proposed root mutants were run. Survivors mapped to the findings they evidence: B02 -> F-045; B09 -> F-047; B05 -> F-053; B07 -> F-053; B08 -> F-053; E05 -> F-004; S05 -> F-004; E06 -> F-046; E07 -> F-042; S02 -> F-044; S03 -> F-043, S04 -> F-043 (re-run in mutation-3 with exact anchors after mutation-1 refused them as ambiguous). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured.",
+  "remains": "Survivors with no matching finding: B01 (empty-rows early return), S01 (previous-round lookup not scoped by review_id). Re-running all survivors at the fix head is open for the delta round."
+ },
+ {
+  "id": "review-testing-practices-w1:fu1",
+  "status": "narrowed",
+  "evidence": "research-evidence/mutation-2.json/.md (mutants-desktop.json; head 20e4281a2; baseline exit 0; supersedes the refused mutation-baseline-1/2): killed 17, survived 12",
+  "reason": "The 29 proposed Desktop mutants were run. Survivors mapped to the findings they evidence: M08 -> F-038; M09 -> F-038; M26 -> F-040; M28 -> F-039; M29 -> F-039; M18 evidences the info observation review-testing-practices-w1:F-007 (untested label branches, not acted on). The pass ran at the reviewed head 20e4281a2, not at the fix head; whether the fixture rows in 85fa985c1/98c7b37a1 kill these survivors is not measured.",
+  "remains": "Survivors with no matching finding: M11, M12 (ReviewDetail launch-button disabled/visibility conditions), M13 (outdated round title only for New review round), M20 (Show closed filter), M24 (filters cleared before opening a hidden Review), M25 (no notice on a read error). Re-running survivors at the fix head is open for the delta round."
+ }
+]

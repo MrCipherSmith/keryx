@@ -89,7 +89,8 @@ test("late PR detail and identity mismatches never expose another request's disc
   expect(document.body.textContent).toContain("Comment for PR 3");
   expect(document.body.textContent).not.toContain("Comment for PR 2");
   await show(3, async () => ({ ...detail(3), repositoryId: "replacement" }));
-  expect(document.querySelector('[role="alert"]')?.textContent).toContain("Refresh the board");
+  // The detail read's error sits in the body; the header holds the run-status banner next to the primary action.
+  expect(document.querySelector('.sheet-body [role="alert"]')?.textContent).toContain("Refresh the board");
   expect(document.body.textContent).not.toContain("Comment for PR 3");
 });
 

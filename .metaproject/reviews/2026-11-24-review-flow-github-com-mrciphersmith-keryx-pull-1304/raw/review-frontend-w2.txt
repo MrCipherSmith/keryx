@@ -1,0 +1,87 @@
+STATUS: DONE
+
+## Frontend Review
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: a5d1ab236fe85dee62a758a19390049dde4eb7f9..20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (diff mode, supplied slice)
+- Slice read in full: slice-03 (1818 lines: platform/reviewPages.test.ts, review/ReviewBoard.dom.test.tsx, review/model.test.ts, reviews/ReviewPanel.dom.test.tsx, reviews/ReviewsView.dom.test.tsx (new), shell/ProjectNavigation.dom.test.tsx, test/app-navigation.fixture.tsx)
+- Context read at head: shell/AppShell.tsx (PROJECT_VIEWS, projectViewForKey, nav dot markup lines 150-189), App.tsx shortcut handler (`e.metaKey || e.ctrlKey`), raw/review-frontend-w1.txt and raw/review-testing-practices-w1.txt (wave 1 findings on this slice, not re-filed).
+
+### Notes on inputs
+- slice-03 is test code only. apps/desktop uses React state and hooks, with no MobX, so the MobX laws have nothing to apply to. The React rule file named in the payload (`.metaproject/rules/stacks/react/code-style-patterns.mdc`) is absent from this tree, as wave 1 noted, so the canonical rubric was applied.
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present (the directory holds only ingest-screened.json). No tests were run (read-only, exec_budget_s 0). Pass/fail at head is not verified.
+- review-testing-practices w1 already covered this slice's coverage gaps (Round `toContain("2")`, one-sided intent routing, App handoff, refresh-on-mutation, dropped focus-return, indentation, label branches). None of those is re-filed here.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 2
+
+### [F-001] info: the fixture's `reviewDot()` helper also matches the Reviews tab dot, and that dot comes first in the nav
+- Severity: info
+- File: apps/desktop/src/test/app-navigation.fixture.tsx
+- Observation: `const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");` is meant to read the Pull requests dot. AppShell renders the Reviews dot as `className="review-tab-dot reviews-tab-dot"` with the same `data-indicator="attention"` value, and Reviews (MOD+3) now precedes Pull requests (MOD+4) in `PROJECT_VIEWS`. Once the Reviews dot is lit, `querySelector` returns it first. The assertions at lines 186 ("Review requests reach the navigation on Sessions") and 209 ("Flows keeps the project notice") would then pass on the Reviews dot even if the PR dot were gone. Today the reviewsOnly mock always returns `reviews: []`, so the helper does read the PR dot. This is latent: it breaks if the mock gains a waiting Review, which testing-practices w1 F-003 suggests.
+- Fix: scope the helper to the PR tab, for example `.review-tab-dot:not(.reviews-tab-dot)`, or select the button whose label starts with "Pull requests".
+
+### [F-002] info: if wave 1's aria-label fix is taken, four ReviewsView test selectors must change with it
+- Severity: info
+- File: apps/desktop/src/reviews/ReviewsView.dom.test.tsx
+- Observation: the new suite opens Review cards through `[aria-label^="Open review of #N"]` at four sites (state-matrix tests ×3, AC7 rounds test). review-frontend w1 F-003 proposes removing or rewording that aria-label. The tests would then fail to find the card and look like a regression. This is a coordination note for whoever fixes F-003, not a new defect.
+- Fix: when F-003 is addressed, switch these selectors to the card's content (for example `.review-summary-card` filtered by `.flow-id` text) or to the new accessible name.
+
+### Clean Areas
+- Effects and timers in tests: the setInterval shims restore the originals in `finally` (ReviewsView reload test, ReviewPanel polling test). `beforeEach` renders null between ReviewsView tests, and every suite unmounts in `afterAll`.
+- Keyboard: the fixture's MOD+3 dispatch uses `metaKey`, and App accepts `metaKey || ctrlKey`, so it is platform-neutral. ProjectNavigation pins the tab order and shortcuts against `PROJECT_VIEWS` and `projectViewForKey`, including out-of-range keys.
+- Accessibility assertions: the Reviews tab's sr-only notice ("Reviews, Review waiting on you") and its title suffix are pinned. Portaled rules dialog placement, focus trap and `aria-invalid`/`aria-describedby` on the rule form moved intact from ReviewBoard to ReviewsView.
+- Stale-response guards: the late-project-response test and the late-PR-status test in ReviewPanel cover the async race at the component level. The previous-account rules test covers the account change.
+- TypeScript in tests: no `any`. Casts are confined to fixture fabrication (`as unknown as ReviewSummary["freshness"]` for the deliberate unknown freshness kind). The non-null `!` are on test-controlled DOM lookups.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "slices": ["slice-03"],
+  "summary": "slice-03 (Desktop tests only): no blocker, major or minor. Two info: the app-navigation fixture's reviewDot() selector also matches the Reviews dot, which now precedes the PR tab (latent false pass); ReviewsView tests locate cards by the aria-label that w1 F-003 proposes to change. No MobX in apps/desktop; the React rule file is absent, so the canonical rubric was applied. Wave 1 testing-practices findings on this slice not re-filed. Test output file not available; no tests run.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "line": 185,
+      "quote": "const reviewDot = () => host.querySelector(\"nav .review-tab-dot\")?.getAttribute(\"data-indicator\");",
+      "problem": "The helper meant for the Pull requests dot also matches the Reviews dot (class \"review-tab-dot reviews-tab-dot\", same data-indicator value). Reviews precedes Pull requests in the nav, so querySelector returns the Reviews dot first once it is lit.",
+      "impact": "Latent: the assertions at lines 186 and 209 would pass on the Reviews dot even if the PR dot disappeared. Today the reviewsOnly mock returns no reviews, so the helper still reads the PR dot.",
+      "suggested_fix": "Scope the helper: `nav .review-tab-dot:not(.reviews-tab-dot)`, or select within the button labelled Pull requests.",
+      "evidence": "AppShell.tsx:175 `<span className={id === \"reviews\" ? \"review-tab-dot reviews-tab-dot\" : \"review-tab-dot\"}`; PROJECT_VIEWS order session, flows, reviews, review; fixture line 78 returns `reviews: []`.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "fixture-review-dot-selector-ambiguous",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": 1304,
+      "quote": "await click(document.body.querySelector<HTMLButtonElement>('[aria-label^=\"Open review of #4\"]')!);",
+      "problem": "Four ReviewsView tests find the card through its aria-label, which review-frontend w1 F-003 proposes to remove or reword.",
+      "impact": "Coordination only: fixing F-003 will break these selectors (the non-null lookup throws), and the failure will look like a regression.",
+      "suggested_fix": "When F-003 is fixed, locate cards by content (.review-summary-card with matching .flow-id) or by the new accessible name.",
+      "evidence": "slice-03 ReviewsView.dom.test.tsx lines 1304, 1325, 1331, 1401 (slice numbering).",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "reviews-tests-depend-on-card-aria-label",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: a bounded test slice; production neighbours were named and read directly); wiki_used: no (not-relevant: plan and PR context set the intent, and wave 1 already read them); ctx_used: yes (keryx ctx rg / keryx ctx read); raw_rg_used: no.

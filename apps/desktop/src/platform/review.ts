@@ -4,12 +4,14 @@ import type { DeskRunKey } from "../../../../src/review/desk-run-types";
 import { invoke } from "./backend";
 import type { ReviewBoardSnapshot, ReviewBoardState } from "../review/types";
 import type { ReviewDetailSnapshot } from "../../../../src/review/board-detail-types";
+import type { ReviewsSnapshot } from "../../../../src/review/review-entity";
 
 import { ReviewReadLane } from "./reviewReadLane";
 
 const repositories = new ReviewReadLane<string[]>();
 const boards = new ReviewReadLane<ReviewBoardSnapshot>();
 const details = new ReviewReadLane<ReviewDetailSnapshot>();
+const reviewLists = new ReviewReadLane<ReviewsSnapshot>();
 
 export function fetchReviewRepositories(cwd: string): Promise<string[]> {
   return repositories.read(cwd, () => invoke("review_board", { cwd, repositoriesOnly: true }));
@@ -108,6 +110,16 @@ export async function fetchReviewBadges(cwd: string, key: Omit<DeskRunKey, "numb
     combined.cards.push(...result.cards);
   }
   return combined;
+}
+
+/** This account's local Reviews of the project's repository, with state, freshness and rounds. `includeClosed` also
+ * reads the PR cards of Reviews closed locally (for "Show closed"); without it they come without a card. */
+export async function fetchReviews(cwd: string, repo?: string, expectedViewer?: string, includeClosed = false): Promise<ReviewsSnapshot> {
+  const result = await reviewLists.read(JSON.stringify([cwd, expectedViewer, repo, includeClosed]),
+    () => invoke("review_board", { cwd, reviewsOnly: true, ...(repo && { repo }), ...(includeClosed && { includeClosed: true }) }));
+  assertProtocol(result);
+  verifyProjectViewer(result.viewer, expectedViewer);
+  return result;
 }
 
 export async function fetchReviewDetail(cwd: string, repo: string, number: number, expectedViewer?: string): Promise<ReviewDetailSnapshot> {

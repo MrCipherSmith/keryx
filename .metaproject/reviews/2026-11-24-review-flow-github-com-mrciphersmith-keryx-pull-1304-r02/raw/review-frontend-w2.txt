@@ -1,0 +1,104 @@
+STATUS: DONE
+
+## Frontend Review (review-frontend, round 2, wave 2)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (delta round)
+- Slice: slice-03 (kind `new`, not the FIX slice), read in full (1782 lines, 14 files)
+- Scope mode: explicit-hash-range, supplied slice text; claims checked against the files at HEAD (f6971fd)
+- Changed files reviewed: 14 (dev/reviewBoard.ts, src-tauri/src/review.rs for the TS/Rust argument parity only, App.tsx, platform/review.ts, ReviewBoard.tsx, ReviewBrowserLink.tsx, ReviewDetail.css, ReviewDetail.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts, AppShell.tsx)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+No new defect at blocker, major or minor in my lens. The slice's hunks are mostly the round-1 fixes (also in slice-01). Wave 1 already covered the Desktop issues they leave. I cite those and do not file them again.
+
+### Findings
+
+### [FE2-001] The Review panel's "Open pull request" has no in-flight guard; the PR panel's link handler has one
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewPanel.tsx (`openPullRequestLink`)
+- **Rule**: canonical rubric (no row covers it): an observation with no concrete bug beyond a duplicate open
+- **Problem**: T17 (8d95e651a) routes the header link through `onOpen={openPullRequestLink}`, and that function calls `openBrowser(url)` on every click and middle-click. The sibling handler in the PR panel, `ReviewDetail.followLink`, drops a second open while one is pending (`openingLink` ref, lines 128/156-161). This path has no such guard.
+- **Why it matters**: a quick double-click opens the PR twice in the system browser. Nothing is corrupted. The two surfaces now share `openReviewLink` but behave differently on a repeated click.
+- **Fix**: keep an `opening` ref in `ReviewPanel` (or in `ReviewBrowserLink` when `onOpen` is passed), as `followLink` does. Optional.
+
+### Related findings already raised in wave 1 (not filed again)
+- review-frontend-w1 F-001 / review-ui-ux-w1: a closed Review selected through "Open in Reviews", or left open after Show closed is off, briefly shows the "GitHub did not return this pull request … Refresh" banner. A refresh without `includeClosed` can never return its card. The new Refresh button in the ReviewPanel no-card banner (slice-03 ReviewPanel hunk) belongs to the same finding.
+- review-frontend-w1 F-002 / review-highload-w1 F-003 / review-performance-w1 I-001: the hidden-tab reloads (60 s running interval, `reloadSignal`).
+- review-frontend-w1 F-003 / review-architecture-w1 F-003 / review-logic-w1 F-005 / review-style-w1 F-001,F-002: the `rulesTarget` fallback from the board identity.
+- review-ui-ux-w1: archived Reviews read "Archived", but the state filter matches their underlying state.
+
+### Clean Areas (checked, nothing to report)
+- **MobX laws 1-5**: not applicable. The changed Desktop code has no MobX store: it uses React hooks and `useState`/`useRef`, the project's standing pattern. Platform IO goes through injected `platform/*` functions with test seams (`load`, `runCommand`, `openBrowser`), as elsewhere in Desktop. That is the project convention, so I do not report it as an API call in a component.
+- **Focus hand-off (App → ReviewsView → RepositoryReviews)**:
+  - The request is taken once (`taken` nonce ref plus `onFocusHandled`, which clears App state). It lives above the keyed `RepositoryReviews`, so it survives the `focusRepo` remount. `selectRepo`/`accessLost` drop it.
+  - `ReviewsView` is keyed by viewer in App, so an account switch drops a waiting request.
+  - `refreshedFor` is keyed by nonce and compares `read.request > after`, so there is no reload loop. I traced three paths: an error with no snapshot, a canonical repo name that differs, and a `repositoryId` mismatch. Each ends after one refresh with `settlePending()`.
+- **Intent consumption**:
+  - `ReviewWorkspace` calls `onIntentConsumed` through a ref on both the drop path and the act path.
+  - `consumeIntent` strips only `intent` and keeps the selection.
+  - Leaving the tab consumes it too. A `ReviewWorkspace` remount from a moved head (key carries the shas) therefore gets no stale intent.
+- **Effect hygiene**:
+  - `watcherTarget` is `useMemo`'d, so `onIdentityChange` (App's `setBoardIdentity`, stable) cannot loop.
+  - `watcherPolled`, `openReview`, `noteWatcherPoll`, `reviewsFocusHandled` and `openPullRequestLink` have correct dependency arrays.
+  - `lastSignal` starts at the mount value, so mounting does not reload.
+  - The interval clears on `running`/unmount.
+  - `mounted` ref guards the toast after unmount, and is set and cleared inside the existing layout effect (safe under StrictMode re-run).
+- **ReviewBrowserLink**:
+  - `onOpen` handles button 0 (click, including keyboard Enter) and button 1 (auxclick). `preventDefault` stops webview navigation. Without `onOpen` it falls back to the parent handler.
+  - I enumerated every live review link (`keryx ctx rg "ReviewBrowserLink|<a |followLink|DiscussionMarkdown|openReviewLink" apps/desktop/src`). Links inside the moved review interface (ReviewRuns, ReviewRunDialog, ReviewPublishDialog) are either href-stripped (`ReviewReportMarkdown` removes every `href`) or buttons calling `openExternal`. The Review panel therefore has no other dead link after T17. `ReviewDetail`'s header link is still covered by the `sheet-actions` `followLink`.
+- **Keys/lists**: `FRESHNESS_LABEL` options, STATES, SOURCE_LABEL and review tiles/rows have stable keys.
+- **TypeScript**:
+  - No `any`, no new `!`.
+  - `useRef<number>()` without an argument is valid on @types/react 18 (package.json `^18`) and matches four existing sites.
+  - Optional props are typed `| undefined` under `exactOptionalPropertyTypes`.
+  - `...(includeClosed && { includeClosed: true })` is valid.
+- **TS/Rust argument parity** (`dev/reviewBoard.ts` vs `board_read_args`): `includeClosed` is refused outside the Reviews list in both, and `--include-closed` is appended last in both. The `fetchReviews` cache key includes `includeClosed`.
+- **Protected stage-0 code**: the attention set (`carriedAttention`/`attentionNumbers`/`holdsAllOpen`) and the `attachBadges`/`localBadge` path are untouched in this slice. The only ReviewDetail.css change adds `.review-workspace-block`. The `@container (max-width: 680px)` toolbar queries are unchanged.
+
+### Not verified
+- No tests were run (`exec_budget_s: 0`). I relied on `research-evidence/verify-tests-to-run-1.txt` (194 root + 1008 Desktop, 0 fail at f6971fd) and did not re-check it.
+- The Rust changes were read for argument parity only. There is no local Rust toolchain, so `cargo test` for `board_read_args` is verifiable only in CI.
+- I did not type-check (`tsc --noEmit`). The TypeScript judgments above come from reading the code.
+- Git history (blame/log -L) was not read for the slice's choices, apart from the commit list of the range.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Delta round 2, wave 2, slice-03 (new) read in full and checked against HEAD f6971fd. No new blocker/major/minor in the frontend lens. The focus hand-off, the once-only intent, the effect dependencies, ReviewBrowserLink onOpen and the TS/Rust includeClosed parity are correct. One info: the Review panel's PR link has no in-flight guard, unlike ReviewDetail.followLink. The Desktop issues the slice still has were already raised in wave 1 and are cited, not re-filed.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "FE2-001",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "  const openPullRequestLink = useCallback((url: string) => {\n    void openBrowser(url).catch(cause => {",
+      "problem": "T17 routes the Review panel's 'Open pull request' through openPullRequestLink, which calls openBrowser on every click/middle-click. ReviewDetail.followLink, which now shares openReviewLink, drops a repeat open while one is pending (openingLink ref). The Review panel has no such guard.",
+      "impact": "A quick double-click opens the PR twice in the system browser. Nothing is corrupted. The two panels behave differently on a repeated click.",
+      "suggested_fix": "Keep an in-flight ref in ReviewPanel (or in ReviewBrowserLink when onOpen is passed) as ReviewDetail.followLink does.",
+      "evidence": "ReviewPanel.tsx:93-97 (no guard); ReviewDetail.tsx:128,156-161 (openingLink guard).",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "blocking_merge": false
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+## Routing audit
+- graph_used: no. Not needed: the slice names its files, and I enumerated the link sites with ctx rg.
+- wiki_used: no (not-relevant). Intent came from the PR context, plan comments and code comments.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx run -- git diff --stat / git log`, `keryx ctx read`)
+- raw_rg_used: no. Raw `find`/`grep`/`python3` were used only on the review package's own JSON/raw files to list them and extract titles and schema fields, marked `# keryx:raw`.

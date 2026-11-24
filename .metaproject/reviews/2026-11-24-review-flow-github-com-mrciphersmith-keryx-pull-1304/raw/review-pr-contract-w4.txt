@@ -1,0 +1,94 @@
+STATUS: DONE_WITH_CONCERNS
+
+## review-pr-contract · round 1 · wave 4
+
+### Scope
+- Read in full: the skill, `.metaproject/index.md`, the driver, `pr-context.md`, slice-04 (all 1414 lines). Slice-04 holds cli-reference.md, implementation-plan.md, specification.md, src/commands/review-board.ts (`writeJson` export), review-reviews.ts and its test, review.ts routing and help, group-subcommands.ts, board-badges.test.ts, desk-run-store.test.ts and review-entity.test.ts.
+- To settle "rest of R4", I also read the following at head 20e4281a2, read-only: the PRD R4 line (docs/requirements/keryx-desktop-review-v2/prd.md:40), the flow's acceptance-criteria.md, plan.md and description.md, and a filtered `git diff -U2 a5d1ab236 20e4281a2` of ReviewDetail.tsx, ReviewResults.tsx and ReviewBoard.tsx for "Open in Reviews", "round" and "behind". I also ran `keryx ctx rg` for `behind|commits` in src/review/board-badges.ts and board-types.ts, and got no match.
+- Test output: `research-evidence/verify-tests-to-run-1.txt` covers the root suite: 2014 pass and 18 fail, all timeouts or path refusals in other files. None of the 18 failures is in the four files the body names (desk-run-store, board-badges, review-entity, review-reviews tests). So the body's "Root: bun test ... pass" is not contradicted. The Desktop count (989) is not in that file and was not re-checked. Nothing was executed.
+- Earlier findings I did not file again:
+  - degradation w2 F-001: cli-reference omits `unknown` freshness. This is the same as my PC-001.
+  - degradation w2 F-002: the spec still says the protocol version is raised in stage 2, while the code keeps `version: 1`.
+  - degradation w2 F-003: the compare cap follows PR-number order.
+  - performance w2 F-001 to F-003.
+  - logic w4 F-002: `stopped` comes from the latest attempt alone.
+  - degradation w3 F-001: a late import gets the next round.
+  - my PC-001 to PC-005.
+
+### Checklist form (claims that touch slice-04)
+The PR body has no checkbox checklist, so each claim is a row.
+
+| Claim (quoted) | State | What the slice shows | Verdict |
+|---|---|---|---|
+| "Sources: ... (PRD R8, rest of R4, R12 ...)" | stated | The PR card and panel show no review link with state and round. The panel offers a bare "Open in Reviews" (ReviewDetail.tsx). The card's outdated action title carries `outdated.round`. The badge has no behind field. The plan's stage-2 row and hand-off promise a round and behind on the card link. | disagreement, PC-006 |
+| "`keryx review reviews --json [--repo owner/name]` lists Reviews with state, freshness, rounds, latest findings, publication, source, Flow and tokens" | stated | review-reviews.ts plus the test "one summary per Review ...": state, freshness, latestRound, findings, publication, source, tokens and `flowId` (review-entity.test). cli-reference.md:5196-5205 matches. | consistent |
+| "one compare call per Review that is behind, capped at 25" | stated | `MAX_REVIEW_COMPARES = 25`. The test "at most 25 comparisons per call" gives 25 calls and 2 null counts. | consistent |
+| "A missing store gives an empty list and creates nothing" | stated | The test "a missing store returns an empty list without creating one or reading PRs": no runs.sqlite file, and 1 query (identity only) | consistent |
+| "Freshness is `current`, `behind {commits, rewritten}`, or `unknown` when the PR head cannot be read; `unknown` is an operator decision recorded in the spec" | stated | specification.md freshness paragraph and the `Review.freshness` union both add `unknown`. review-entity.test covers "unknown when the PR head is unknown". cli-reference does not mention it (PC-001, already filed). | consistent (doc gap already filed) |
+| "Existing databases are migrated in place when opened for writing ... Read-only badge reads still work on an unmigrated database" | stated | desk-run-store.test "opening a copy of main's database migrates it in place ... once": the read-only reader leaves no `review_id` and no `reviews` table, and the second open is unchanged | consistent (read-path migration: PC-002, already filed) |
+| "a continuation joins its predecessor's round; the same base..head joins its existing round as a retry; any other range opens the next round; `previous_run_id` links each attempt" | stated | Fixture placements a1 to a8, and the test "a new attempt is assigned ... start, retry, continuation and new head" | consistent |
+| "SQL `attachBadges` stays in parity with `localBadge`, now including `outdated.round`" | stated | Every badge test in desk-run-store.test now expects `round: 1 or 2` and keeps the `toEqual(localBadge(...))` assertion. board-badges.test pins round present, null and absent. | consistent |
+| "Migration test on a fixture built with main's exact old DDL" | stated | `MAIN_DDL` in desk-run-store.test. degradation w2 checked it against base a5d1ab236 desk-run-store.ts:91-113. | consistent |
+| "Root: `bun test src/review/desk-run-store.test.ts ... review-reviews.test.ts` pass" | stated | verify-tests-to-run-1.txt: none of the 18 failures is in these files | not contradicted |
+| "`bun run lint` [is] clean" | stated | No lint output in the package | unverified (logic F-003, already filed) |
+| "the outdated-review action ... relabelled 'New review round'" (plan (d) note in slice) | stated | implementation-plan.md (d) adds "(на этапе 2 подпись — «New review round»)". Deviation (b) and F-024 are marked closed. | consistent (stage-3 hand-off label: PC-004, already filed) |
+| "Spec filters not built in this stage: publication, PR author, Flow, period" | stated | implementation-plan.md stage-2 state says the same | consistent |
+
+### [PC-006] The PR claims "rest of R4", but no PR-card or panel review link shows state, round or behind; the stage-2 state section does not record the gap
+
+- **Severity**: minor
+- **File**: docs/requirements/keryx-desktop-review-v2/implementation-plan.md:29
+- **Problem**: The PR body's Sources line reads "PRD R8, rest of R4, R12". PRD R4 (prd.md:40) asks the PR card and panel to show a review link with "состояние и номер раунда". The plan's stage table is unchanged context in this diff. Its row 2 (implementation-plan.md:12) has stage 2 deliver "Ссылка ревью на карточке PR с раундом и отставанием". The hand-off (line 67) says stage 2 "добавляет к ссылке раунд и отставание". The diff does neither:
+  - The PR panel gets a bare "Open in Reviews" button, with no state and no round (ReviewDetail.tsx, `hasReview && onOpenInReviews ? <button ...>Open in Reviews</button>`).
+  - The card only puts `outdated.round` into the outdated action's title, and only for a stale result.
+  - `LocalBadge` has no behind or commit-count field (`keryx ctx rg "behind|commits"` in board-badges.ts and board-types.ts finds nothing).
+
+  The flow's own description.md:21 defers the work row and its review link to stage 1 (PR #1300). But the "Состояние этапа 2" section that this diff adds lists the filters it did not build, not this. The PR body likewise names only the filters under "Not verified".
+- **Why it matters**: Stage 3 starts only after stage 2 merges (plan line 68). The plan table, the hand-off and the body's "rest of R4" all tell a stage-3 agent, or the operator closing stage 2, that the card link with round and behind exists. It does not. The stage 1 overlap note covers only the round of an outdated result, so even after both PRs merge the behind count has no source on the card.
+- **Fix**:
+  - Either add a line to "Состояние этапа 2" and to the PR body's "Not verified / not built" list: the PR-card and panel review link with state, round and behind (R4 remainder) is not in this stage. Only `outdated.round` is exposed on the badge, and behind is not. Name who owns the rest: stage 1's work row after merge, or a follow-up.
+  - Or change "rest of R4" in the body to what was delivered.
+
+### Not covered
+- The Desktop suite count and lint claims: no output in the package.
+- Rust `reviews_only` (review.rs): CI only, as the body says. I did not re-read it in this wave; wave 1 covered it.
+- Graph and wiki layers were not consulted for new documentation. The changed behaviour in this slice is the CLI listing, and its docs (cli-reference, spec, plan) are in the diff itself. Stale docs outside the diff were enumerated in wave 1 (degradation F-005).
+
+### Routing audit
+graph_used: no (not-relevant; documents in the diff, and the PR-card check used a filtered diff), wiki_used: no (not-relevant; PRD read directly), ctx_used: yes (`keryx ctx rg`, `keryx ctx read`), raw_rg_used: no. Raw `grep`/`sed`/`cat` were used only for small filtered excerpts, with escape markers.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "round": 1,
+  "wave": 4,
+  "slices": ["slice-04"],
+  "summary": "slice-04 claims checked against the CLI, store, badge and entity tests and the stage-2 docs. All consistent except one new minor finding: the body claims 'rest of R4', but no PR-card or panel review link shows state, round or behind, and the new 'Состояние этапа 2' section does not record that gap. Already-filed items were not re-filed: cli-reference unknown freshness, protocol version in spec, compare-cap order, read-path migration. The root tests named in the body show no failure in verify-tests-to-run-1.txt. The Desktop count and lint were not verified.",
+  "findings": [
+    {
+      "id": "PC-006",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "line": 29,
+      "quote": "Sources: `docs/requirements/keryx-desktop-review-v2/` (PRD R8, rest of R4, R12; implementation plan stage 2).",
+      "problem": "The PR body claims the rest of R4. R4 (prd.md:40) asks for a review link on the PR card and panel with state and round. The plan's stage-2 row (implementation-plan.md:12) and hand-off (line 67) promise the round and behind on that link. The diff adds only a bare 'Open in Reviews' button in the PR panel and `outdated.round` in the outdated action title. LocalBadge has no behind field. The new 'Состояние этапа 2' section and the body's 'Not verified' list name the missing filters but not this gap. Only the flow's description.md:21 defers it to stage 1.",
+      "impact": "A stage-3 agent or the operator closing stage 2 reads the plan and the body as saying the card link with round and behind exists. It does not, and even after stage 1 merges the behind count has no source on the badge.",
+      "suggested_fix": "Record in 'Состояние этапа 2' and in the PR body that the R4 remainder (card and panel review link with state, round and behind) is not in this stage, that only outdated.round is on the badge, and who owns the rest. Or narrow 'rest of R4' to what was delivered.",
+      "evidence": "Read prd.md:40, implementation-plan.md:12, :29-52 and :67 at head. Filtered `git diff a5d1ab236 20e4281a2` of ReviewDetail.tsx, ReviewResults.tsx and ReviewBoard.tsx: 'Open in Reviews' has no state or round, and the only round use is the outdated action title. `keryx ctx rg 'behind|commits'` in board-badges.ts and board-types.ts: no match. Flow description.md:21 defers the work row to stage 1.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "not_verified": [
+    "Desktop 'bun test src passes 989 tests' and 'bun run lint is clean': no output in the package",
+    "Rust reviews_only bridge: CI only, not re-read in this wave"
+  ]
+}
+```
+
+Summary: all of slice-04's claims hold except one. The body says it delivers the "rest of R4", but it does not add the PR-card or panel review link with round and behind, and the new stage-2 state section does not say so (PC-006, minor). Items earlier waves filed were not re-filed.

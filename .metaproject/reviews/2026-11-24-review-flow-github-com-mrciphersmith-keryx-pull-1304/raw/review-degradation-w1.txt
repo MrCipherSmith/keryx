@@ -1,0 +1,107 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 1, wave 1. Slice read in full: slice-02 (2402 lines). Read-only; no code was run.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": [{"id": "slice-02", "coverage": "read in full, all 2402 lines", "status": "DONE"}],
+  "summary": "Compared slice-02 with base a5d1ab236 for behaviour, defaults, speed and structure. 2 major, 3 minor. (1) Archived attempts can no longer be reached. On base, the PR panel's History menu listed every run, archived ones included, and offered Restore/Delete. On head that menu exists only inside the Reviews panel, and the Reviews list leaves out archived attempts. So when every attempt of a PR is archived, the PR has no entry point to its history, even though the archive text says 'It remains available in History'. (2) The cross-tab focus carries only the PR number. 'View review', 'Answer question' and 'Open in Reviews' from the Pull requests board can therefore open another repository's Review, or say there is none, when the two tabs have different repositories selected. (3) The Reviews indicator is never re-read while its tab is hidden. (4) The Review rules button now depends on a successful `review reviews` read. (5) The user docs still list the old shortcuts and the removed 'Keryx review' tab. Verified clean: needsViewerAttention (consumers ReviewBoard.tsx attentionNumbers and attentionPrs; the clause removals are described in the PR, reviewLane is unchanged and still puts awaitingAnswer cards in the attention lane, which is described stage-1 overlap). laneReason/reviewNote (consumers ReviewResults.tsx tile and list; the note now always shows on its own line and the reason falls through to decision/draft; described as F-024). badgesEqual adds outdated.round (only consumers are ReviewBoard updateRunSummary and the badge poll; this only adds a field to the comparison). ReviewIntent moved to ReviewWorkspace and is re-exported from ReviewDetail (consumers App, ReviewBoard, ReviewsView, ReviewPanel all type-only). PROJECT_VIEWS and projectViewForKey (App keydown and palette, AppShell nav; ⌘1-⌘6 follow the array; D4 is described). ReviewDetail useReviewRuns visible=false: the hook still reads once on mount and polls every 3s while a run is active (useReviewRuns.ts poll effect), so following an active run is unchanged. ReviewDetail start path: the start intent is still consumed once after status resolves; base did the same. Rust and dev arg builder for reviews_only: the refusals match each other, and `updated_since` is refused when reviews_only is set in both. ReviewWorkspace is a lift of the removed ReviewDetail block; I compared the moved code with the deleted lines, and the only changes are onClose→onLeave and revisionChanged=local.staleRange (the board-data head check moved to the panel). Consumer enumeration was search-derived: the payload carried no graph `layers` consumer list for this slice, so I used `keryx ctx rg` over apps/desktop/src for every changed export. That list was not capped. Acceptance criteria came from the payload. Test output research-evidence/verify-tests-to-run-1.txt did not exist when I read the package, so no test result is cited.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": null,
+      "quote": "  const hasReview = local.runs.some(run => !reviewIsArchived(run));",
+      "problem": "When every attempt of a PR is archived, the user can no longer view, restore or delete those attempts from Desktop. Base ReviewDetail.tsx:290 always rendered `<ReviewRunHistory runs={local.runs} .../>` in the panel header. The status read in desk-run-store.ts:431 excludes only 'delete', so that list included archived runs, and ReviewLifecycle.tsx:55 offers [restore, delete] for an archived run. Head removes the History menu from the PR panel. The only remaining ReviewRunHistory is in ReviewWorkspace.tsx:158, which only ReviewPanel renders, and only for a Review in the Reviews list. That list comes from DeskRunStore.reviewRows, whose query at desk-run-store.ts:586 filters `NOT IN ('archive','delete')`; its doc comment says a Review with no other attempt is left out. In the PR panel, `hasReview` is false when every run is archived, so 'Open in Reviews' does not show either. An open PR shows only 'Start review'/'Review again'; a closed or merged PR shows no review action at all.",
+      "impact": "After archiving a PR's only attempt, the user cannot restore or delete it, or open its report, anywhere in Desktop. The archive action's own text promises 'It remains available in History.' (ReviewLifecycle.tsx:20). This is a lost result for a user-initiated, supposedly reversible action.",
+      "suggested_fix": "Keep a History entry in the PR panel when `local.runs` holds only archived runs: render ReviewRunHistory plus a ReviewRunDialog for the selected run. Or have reviewRows keep a Review whose attempts are all archived, marked as such, so the Reviews panel can show its History. Add a DOM test: a PR with one archived run can still reach Restore.",
+      "evidence": "base-diff: read base ReviewDetail.tsx (git show a5d1ab236) line 290 `<ReviewRunHistory runs={local.runs} onSelect={setSessionId} />` and head slice lines 1123/1132 (history removed; hasReview gate). Consumer trace: grep `<ReviewRunHistory|<ReviewWorkspace|<ReviewPanel` over apps/desktop/src found the only head sites at ReviewWorkspace.tsx:158 ← ReviewPanel.tsx:117 ← ReviewsView.tsx:263. ReviewsView lists `review reviews` output, which reads reviewRows (desk-run-store.ts:561-586, archived excluded). Refute: checked whether the Reviews list or the PR panel exposes archived-only PRs some other way. The panel shows Open in Reviews only when hasReview is true, the list query excludes archived rows, and launchAction (ReviewRuns.tsx:27) also ignores archived runs. No guard found, and the PR description does not mention archived history.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/desktop/src/review/ReviewDetail.tsx:hasReview/Open in Reviews gate", "src/review/desk-run-store.ts:586 reviewRows archive filter", "apps/desktop/src/review/ReviewWorkspace.tsx:158 (only remaining ReviewRunHistory)"],
+        "enumeration_method": "keryx ctx rg '<ReviewRunHistory|<ReviewWorkspace|<ReviewRuns |<ReviewPanel' over apps/desktop/src (complete, 6 matches): every route to a run history on head, followed to its data source"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "    const found = snapshot?.reviews.find(review => review.number === pending.number);",
+      "problem": "Board actions now hand the Review to the Reviews tab by PR number only: 'View review', 'View review result', 'Answer question' (ReviewBoard openReview → onOpenInReviews(card.number, intent)) and the panel's 'Open in Reviews' (onOpenInReviews(card.number)). App.openInReviews stores `{ number, intent, nonce }`, and ReviewsFocus has no repository. The Pull requests board (ProjectBoard `repo` state) and the Reviews tab (ReviewsView `repo` state) each keep their own base-repository selection. When the project has more than one repository (snapshot.repositories.length > 1) and the two tabs differ, the focus effect matches `review.number === pending.number` against the other repository's list. It then opens that repository's Review of the same PR number, or after one refresh shows 'Pull request #N has no Keryx review in this list.' On base, the same click opened the review interface of the clicked PR in its own repository, inside the PR panel.",
+      "impact": "Wrong result: the panel shows another repository's PR, rounds and report under the same number. Its primary action (ReviewWorkspace launch, 'Start review'/'Review again') acts on that other PR. In the other branch, the user is told the PR has no review when it does have one. The intent's base/head check in ReviewWorkspace drops the intent, so no answer dialog opens on the wrong run. It does not stop the wrong Review from being shown.",
+      "suggested_fix": "Carry the repository, or repositoryId, in ReviewsFocus: openInReviews(number, intent, repo) from ReviewBoard using snapshot.repo. In ReviewsView, call selectRepo(focus.repo) when it differs from the current list, and match on repositoryId plus number. Add a DOM test with two repositories that share a PR number.",
+      "evidence": "consumer-trace: ReviewBoard.tsx openReview (slice 778-781) → App.tsx openInReviews (slice 321-324, stores number and intent only) → ReviewsView focus effect (slice 1887-1909, number-only match). Repository state: ReviewBoard.tsx ProjectBoard `useState<string>()` repo (slice 726-729) versus ReviewsView `useState<string>()` repo (slice 1791-1794), with independent selects (slice 816-817 and 1971-1972). Both default to the CLI's default repository (no --repo), so they diverge only after a user picks a repository. Refute: looked for any sync of the repo between the tabs, or a repo field in ReviewsFocus. Found none. The intent sha check in ReviewWorkspace (slice 1464-1465) only drops the intent and still selects the Review.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/desktop/src/review/ReviewBoard.tsx:openReview onOpenInReviews(card.number, reviewIntent)", "apps/desktop/src/review/ReviewBoard.tsx:ReviewDetail onOpenInReviews(card.number)", "apps/desktop/src/App.tsx:openInReviews", "apps/desktop/src/reviews/ReviewsView.tsx:focus match by number"],
+        "enumeration_method": "keryx ctx rg 'onOpenInReviews=|ReviewsFocus|ReviewIntent' over apps/desktop/src: every producer and consumer of the cross-tab focus"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "    const timer = window.setInterval(refresh, RUNNING_RELOAD_MS);",
+      "problem": "The awaiting-answer and publication-pending signal moved from the Pull requests indicator to the Reviews indicator. The Reviews list is re-read only on mount, when the tab is shown again, every 60s while the Reviews tab is active and a Review runs, and after a panel mutation. It is never re-read while the tab is hidden. On base, while the user stayed on the Pull requests tab, the 6s badge poll (ReviewBoard.tsx:330-367) moved a finished run to awaitingAnswer or publicationPending and lit the PR tab dot within seconds. On head the same card changes to 'Awaiting your answer', but no tab indicator lights until the user opens Reviews. App.tsx says the view is mounted 'so the Reviews indicator stays current on every tab', which the code does not do. The indicator also stays lit after an answer given from Sessions or the PR board.",
+      "impact": "The tab indicator meant to tell the user that a review waits on them stays stale, so the user is not told. The card text still shows the state, so the information is not lost.",
+      "suggested_fix": "Re-read the Reviews list when the PR board's badge poll or the session-review subscription (subscribeSessionReview) sees a run change state. Or poll it at a low rate while hidden and any Review is queued or running. Either way, correct the App.tsx comment.",
+      "evidence": "consumer-trace: ReviewsView load effect deps [cwd, repo, expectedViewer, attempt, load, ...] (slice 1827-1849); `refresh` callers are the wasActive transition (1852-1856), the interval gated by `active && running` (1860-1864), the focus pending effect (1904) and observeRuns (1917, which only the panel fires, and the panel renders only when active). Base comparison: ReviewBoard badge poll with tabActive at ReviewBoard.tsx:330-367 feeds attentionPrs, which on base included awaitingAnswer and publicationPending through needsViewerAttention (slice 1548). Refute: on base the PR indicator was also stale while the user was on Sessions, so the regression is limited to the user being on the PR tab and to the 60s versus 6s cadence on the Reviews tab.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "{active && target && <ProjectReviewRules key={\"rules-\" + JSON.stringify(target)} cwd={cwd} target={target} command={rulesCommand} onAccessLost={accessLost} />}",
+      "problem": "On base, the Review rules button showed once the PR board snapshot loaded (`tabActive && watcherTarget`). On head it shows only after a successful `keryx review reviews --json` read (`target` comes from the Reviews snapshot). If the configured Keryx CLI predates `review reviews`, or the first list read fails with an unavailable error, `snapshot` stays null. Review rules then cannot be reached anywhere in Desktop, while the Pull requests board, which rules are about, still works.",
+      "impact": "Rule management (automatic reviews on request or new head) is lost when the CLI is older than the app, or until a retry succeeds.",
+      "suggested_fix": "Build the rules target from the identity the board or project already knows (repo, repositoryId, viewer) and do not require a Reviews snapshot. Or keep the target from the last successful read and show the button with a warning.",
+      "evidence": "base-diff: slice line 802 (removed `{tabActive && watcherTarget && <ProjectReviewRules .../>}` from ReviewBoard) versus slice line 1959 (head, gated on `target` derived from the snapshot at 1921-1922). ReviewsView sets a null snapshot on a first-load failure (1846, `old.snapshot` is null). Refute: no other ProjectReviewRules mount was found on head; the PR description says only that the button 'moved here'.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "docs/docs/desktop-app.md",
+      "line": null,
+      "quote": "| ⌘4 / ⌘5 | Issues / Metaproject in the current project |",
+      "problem": "The change renumbers the project tabs (⌘3 Reviews, ⌘4 Pull requests, ⌘5 Issues, ⌘6 Metaproject), moves Review rules to the Reviews tab and removes the PR panel's 'Keryx review' tab. The user docs, unchanged in this PR, still say ⌘3 Review, ⌘4 Issues, ⌘5 Metaproject (desktop-app.md:437-438), '⌘5' for Metaproject (desktop-app.md:426, guides/desktop-metaproject.md:3), 'Review → Review rules → New rule' (desktop-app.md:156) and 'Under **Keryx review**' (desktop-app.md:168).",
+      "impact": "Docs that were correct on base are wrong on head. A user who presses ⌘5 for Metaproject lands in Issues.",
+      "suggested_fix": "Update the shortcut table and the Metaproject guide to the D4 order, point Review rules at the Reviews tab, and describe the Review panel in place of the 'Keryx review' tab.",
+      "evidence": "base-diff: AppShell.tsx PROJECT_VIEWS head (slice 2208-2218) versus base (⌘3 review, ⌘4 issues, ⌘5 metaproject). `keryx ctx rg` found the stale lines in docs/docs/desktop-app.md:156,168,426,437,438 and docs/docs/guides/desktop-metaproject.md:3. `git diff --stat base..head` over both doc files is empty.",
+      "confidence": "high",
+      "reviewer": "review-degradation"
+    }
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 2, "minor": 3, "info": 0}
+}
+```
+
+Notes
+- Test output (research-evidence/verify-tests-to-run-1.txt) was not present when I read the package, so no red-test or probe evidence is used.
+- The payload had no graph consumer list for this slice. I enumerated consumers with `keryx ctx rg` over apps/desktop/src (search-derived, not capped).
+- Not verified: the Rust bridge (no toolchain, read only), and runtime behaviour of any finding (read-only lane).
+
+Routing audit: graph_used: no (the payload carried no layers block, and I did not query the review package graph; consumers came from search). wiki_used: not-relevant (behaviour was settled from code and the PR body). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no (two short sed range reads and one grep over `git show` output, each with a stated reason).

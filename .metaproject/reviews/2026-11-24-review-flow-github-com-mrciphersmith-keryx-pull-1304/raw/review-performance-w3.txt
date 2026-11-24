@@ -1,0 +1,71 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage2`, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, diff mode, round 1 wave 3.
+- Slice read in full: slice-05 (923 lines): src/review/board-badges.ts, board-types.ts, desk-run-store.ts (migration, assignReviews/reviewFor/roundFor, save/recordExisting/requestAttempt, history, attachBadges, reviewRows, readReviewRows), desk-run-types.ts, review-entity.ts.
+- Context outside the slice: line numbers of desk-run-store.ts in the working tree (at head) via `keryx ctx rg`; earlier waves' raw results (performance w1/w2, highload w1/w2) to avoid re-filing.
+- Earlier-wave findings that this slice also touches and that are NOT re-filed: performance-w2 F-001 (reviewRows has no bound and calls publication() per completed attempt), highload-w2 (readReviewRows opens the store writable, so every read pays CREATE IF NOT EXISTS plus an immediate transaction).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+### [F-001] roundFor's retry lookup parses the full `details` (report included) of every attempt of the Review, once per unassigned row
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:192 (roundFor), called from assignReviews:161 via the constructor migration (:138-142), recordExisting (:397) and requestAttempt (:741)
+- **Hot path**: once per writable open of a pre-Reviews store (migration of every row), and once per new attempt row (dispatch, history import). Not a per-keystroke or per-render path.
+- **Problem**: the retry query filters `WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?`. The `review_rounds(review_id, round)` index narrows to the Review's rows, but every one of them is then JSON-parsed in full, and `details` embeds `result.report` (history() caps inline previews at 512 KiB, so reports of that size exist). In the migration loop this runs once per pending row, so the cost per Review is O(k^2) full-document parses for k attempts, all inside the immediate write transaction the constructor opens.
+- **Why it matters**: for a long-lived PR with many scheduled attempts (e.g. 50 attempts with ~100 KB reports: ~1,250 parses, ~125 MB of JSON) the first open after upgrade holds the write lock noticeably longer while other windows wait on busy_timeout (8 s). After migration each dispatch pays one O(k) scan of full documents. Estimated, not measured; real attempt counts and report sizes per PR are not in the payload, and whether Bun's bundled SQLite JSON parse cache softens this was not verified.
+- **Fix**: in assignReviews keep an in-memory map `(reviewId, base, head) -> round` and `(reviewId) -> max round` across the loop (seeded by one query per Review), so a migration parses each row once; or select `json_extract` of base/head only via a narrow query `SELECT round, json_extract(details,'$.baseSha'), json_extract(details,'$.headSha') FROM runs WHERE review_id=?` once per Review and match in JS. Persisting base/head as columns alongside `round` would remove the JSON parse entirely.
+
+### Clean Areas
+- board-badges.ts / board-types.ts: `round` is one optional field on the outdated badge; no added per-card work.
+- attachBadges: `${this.placement("r.").round}` adds one column read on already-kept rows; `placement()` caches its pragma_table_info probe in `this.placed`.
+- history(): placement computed once per call; three projected columns, no extra JSON parse.
+- reviewRows: one indexed join (reviews UNIQUE(repo,pr,viewer) prefix, runs by review_rounds); no reports or sessions read. The per-attempt publication() file reads are performance-w2 F-001, not re-filed.
+- recordExisting now batches its inserts in one transaction (an improvement over per-row autocommit); assignReviews touches only `review_id IS NULL` rows, index-served.
+- review-entity.ts: roundsOf, summarizeReview, newest, token reduce are single passes over a Review's attempts.
+- Memory: no unbounded caches or listeners added. React/bundle/pagination lenses: not applicable to this slice (no UI code).
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "slice-05: Review placement columns, migration and reviewRows are index-served and bounded per call; one minor: roundFor's retry lookup JSON-parses every attempt's full details (report included) per unassigned row, quadratic per Review during migration inside the immediate write transaction.",
+  "slices": ["slice-05"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 192,
+      "quote": "WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?",
+      "problem": "For each unassigned row, roundFor's retry query JSON-parses the full details of every attempt of the Review (details embeds result.report). The migration loop in assignReviews therefore does O(k^2) full-document parses per Review of k attempts, inside the constructor's immediate write transaction; each later dispatch and history import pays an O(k) full-document scan.",
+      "impact": "Longer write-lock hold on the first writable open after upgrade (other windows wait on busy_timeout 8 s) and extra per-dispatch cost that grows with attempts x report size. Estimated (e.g. 50 attempts x 100 KB reports ~ 125 MB parsed once); not measured.",
+      "suggested_fix": "Keep (reviewId, base, head) -> round and reviewId -> max round in memory across the assignReviews loop, seeded by one narrow query per Review, or persist base/head as columns next to round so the lookup needs no JSON parse.",
+      "evidence": "slice-05 desk-run-store.ts roundFor retry query (head line 192), assignReviews loop (161-172), constructor atomic migration (138-142), requestAttempt (741), recordExisting (397); history() 524288-char report preview cap shows reports of that size are stored in details.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "assign-reviews-retry-parses-full-details",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "not_verified": [
+    "No timing measured (exec_budget_s 0); cost figures are estimates.",
+    "Bun's bundled SQLite version and its JSON parse cache were not checked.",
+    "Test output verify-tests-to-run-1.txt is not present in research-evidence.",
+    "Git history of the touched lines was not read; not needed for this finding.",
+    ".metaproject/index.md was not read: bounded slice review, no codebase navigation beyond line lookups."
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice supplied in full, line numbers located by ctx rg); wiki_used: no (not-relevant: slice and earlier waves state intent); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.

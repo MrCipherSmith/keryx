@@ -1,0 +1,123 @@
+STATUS: DONE
+
+Verifier: review-verifier (round 1, Wave C). Head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, read-only.
+Method note: the dispatch forbade running tests, so no `execution` method was available. Every verdict
+below is a `site-check` extended by a line-by-line trace of the trigger path through the code at head.
+None of the four was reproduced by running anything; the red probes below are what would do that.
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "4 major findings checked by site-check + code trace (no execution allowed): 4 confirmed; review-logic F-001 confirmed with a narrower outcome (its 'answer intent applied to the wrong Review' half is stopped by the SHA guard in ReviewWorkspace). No severity change is expressible in this schema; narrowing is recorded in prose.",
+  "verifications": [
+    {
+      "finding": "review-frontend#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Trace at head: ReviewsView.tsx:169 setSelected({ id: found.id, intent: pending.intent }); nothing clears selected.intent — the only setSelected calls are :84 (resetView), :104 (load keeps `current` whole, intent included), :169, :194, :266. ReviewsView.tsx:263 renders ReviewPanel only under `active && review && target`, so deactivation unmounts it; App.tsx:631 active={workView === 'reviews'}. ReviewPanel.tsx:117-118 passes reviewIntent into ReviewWorkspace; ReviewWorkspace.tsx:89 `initialLaunch = useRef(reviewIntent)` is re-seeded on every mount, and the effect at :127-142 calls setSessionId(action.sessionId) at :138 for kind 'answer' when a run has pendingManualQuestions. Guards found that narrow but do not prevent it: :130-131 drop the intent if the card's base/head moved or status errored; :137 requires a pending question. ReviewBoard.tsx:314-315 clears selection on deactivation; ReviewsView has no equivalent."
+    },
+    {
+      "finding": "review-frontend#F-002",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Trace at head: ReviewsView.tsx:61 keys RepositoryReviews by [cwd, viewer, repo]; :239-240 Base repository select calls selectRepo -> new key -> remount. App.tsx:631 keys ReviewsView by reviewViewer (account change remounts). App.tsx:214-216 reviewsFocus is only ever set (nonce+1), never reset to null (grep of App.tsx shows no other setReviewsFocus). ReviewsView.tsx:155-157 effect with deps [focusNonce] runs on mount, so a remount with the same focus prop calls setPending again; :158-176 then selects the new repository's Review with that number (:169) or refreshes once and sets the 'has no Keryx review' notice (:175). No handled-nonce memory exists outside the keyed child."
+    },
+    {
+      "finding": "review-logic#F-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Sites exist as named: App.tsx:215-216 focus = {number, intent, nonce}; ReviewsView.tsx:24 ReviewsFocus has no repo; :160 match by review.number only; ReviewsView.tsx:60 and ReviewBoard.tsx:92 hold independent `repo` state, selectors at ReviewsView.tsx:239-240 and ReviewBoard.tsx:493/504; ReviewBoard.tsx:456 and :549 pass only card.number. A board on repository B and a Reviews tab on A therefore match A's #N or report it missing. NARROWER than stated: the 'answer intent is applied to the wrong Review' half is guarded — ReviewWorkspace.tsx:130-132 discards an intent whose baseSha/headSha differ from the opened card, and ReviewBoard.tsx:456 never forwards 'start'. Remaining outcome: wrong Review selected and its panel opened, or a false 'no Keryx review' notice, only in projects with more than one base repository (selector rendered only when repositories.length > 1)."
+    },
+    {
+      "finding": "review-logic#F-002",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Trace at head: desk-run-store.ts:407-408 publication() returns undefined unless state === 'completed' && coverage === 'complete' && UUID id; :597 reviewRows skips it for source 'existing'; :602 stores publication ?? null. review-entity.ts:90 FINISHED = completed|partial|budget; :99 reviewState returns 'ready' for these (never 'published' when publication is null); :161 summary publication = reviewed?.publication ?? null; :111-113 reviewNeedsViewer is true for ready with publication not skipped/published, i.e. null. ReviewsView.tsx:134 lights the indicator from reviewNeedsViewer. review-entity.test.ts:89 pins ready/null -> true. apps/desktop/src/review/ReviewRuns.tsx:103-105 offers the publish draft for 'partial' but shows Action required only on publication === 'pending', so a partial attempt the user publishes still reads null from :407 and stays ready + attention."
+    }
+  ],
+  "stats": { "confirmed": 4, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
+```
+
+# Verification Report
+
+## Method mix
+- execution: 0 (dispatch forbade running tests)
+- site-check with code trace: 4
+- reasoning (capped to unverifiable): 0
+- not checked: 0
+
+## Per-finding claims
+
+### review-frontend F-001 — confirmed, severity after verification: major
+Path: ReviewsView.tsx:169 stores intent -> :104 keeps it on every reload -> :263 unmounts the panel when
+inactive and remounts it on return -> ReviewPanel.tsx:117-118 -> ReviewWorkspace.tsx:89 re-seeds
+initialLaunch -> :127-142 replays, :138 setSessionId opens the run/answer view again.
+Narrowing guards (not preventing): ReviewWorkspace.tsx:130-131 (range moved or status error), :137 (a
+question must still be pending). So it repeats while the question is pending and the PR range is unchanged,
+which is exactly the reviewer's stated outcome.
+Red probe: ReviewsView DOM test. `load` returns one Review #7 (ready/running, manual source); `runCommand`
+status returns a running manual attempt with a pending manual question on base/head matching the card.
+Render with active=true and focus={number:7, nonce:1, intent:{kind:"answer", baseSha, headSha}}; assert the
+session/answer view opens; close it; rerender active=false; rerender active=true (same focus); assert the
+session/answer view is NOT shown. Fails today.
+
+### review-frontend F-002 — confirmed, severity after verification: major
+Path: App.tsx:216 sets reviewsFocus, never cleared -> user changes Base repository (ReviewsView.tsx:240) ->
+:61 key changes -> RepositoryReviews remounts -> :155-157 mount effect setPending(focus) -> :158-176 selects
+the new repo's #N (:169) or, if absent, refreshes and shows the notice (:175). Account switch reaches the
+same effect via App.tsx:631 key={reviewViewer}.
+Red probe: ReviewsView DOM test with `load(cwd, repo)` returning repositories ["a/x","b/y"], each with a
+Review #7. Render with focus={number:7, nonce:1}; wait for A#7's panel; close the panel; change the
+"Base repository" select to "b/y"; after the reload assert no ReviewPanel is open and no "has no Keryx
+review" notice is present. Fails today (B#7 opens). Variant: Review #7 only in A -> assert no notice after
+switching to B.
+
+### review-logic F-001 — confirmed (narrower), severity after verification: major
+Path: ReviewBoard.tsx:92 own repo (user picks B at :493/:504) -> :456 / :549 onOpenInReviews(card.number) ->
+App.tsx:216 focus without repo -> ReviewsView.tsx:60 its own repo (default A) -> :160 match by number.
+Guard found: ReviewWorkspace.tsx:130-132 discards an answer/view intent whose base/head SHAs differ from the
+matched card, so the intent is not applied to another PR's Review; and ReviewBoard.tsx:456 never forwards
+`start`. What remains is a wrong Review selected and its panel opened, or a false "no Keryx review" notice,
+in multi-repository projects only. It still names a trigger and a wrong user-visible outcome, so major holds.
+Red probe: ReviewsView DOM test with focus carrying a repository (after the fix's shape change) — or, before
+the fix, an App-level test: ReviewBoard switched to "b/y", click "View review" on #7; assert the Reviews tab
+calls `load` with "b/y" and opens B's Review. Today `load` is called with the Reviews tab's own repo and A's
+#7 opens (or the notice appears when A has no #7).
+
+### review-logic F-002 — confirmed, severity after verification: major
+Path: desk-run-store.ts:407-408 early return for partial / budget / coverage !== complete; :597 skip for
+`existing`; :602 -> null. review-entity.ts:99 -> ready; :161 -> publication null; :111-113 -> true;
+ReviewsView.tsx:134 indicator "attention". No branch clears it except archive/delete (reviewRows WHERE at
+desk-run-store.ts ~:588) or a newer attempt.
+Red probes:
+1. review-entity.test.ts: summarizeReview of a row whose only attempt is {state:"partial", reviewed:{...},
+   publication:null, source:"manual"}; assert reviewNeedsViewer(summary) is false (or whatever the decided
+   "no decision applies" semantics are). Same for state "budget" and source "existing". Fails today
+   (and line 89 of the existing test pins the current behaviour, so it must change with the fix).
+2. desk-run-store test: insert a `partial` attempt with a reviewed range and write a publication receipt
+   with a url into its run directory; assert reviewRows(...)[0].attempts[0].publication === "published".
+   Today it is null because publication() returns before reading the receipt.
+
+## Refuted
+None.
+
+## Not verified
+- Nothing was executed; all four verdicts rest on reading the trigger path at head. The probes above are
+  the executions that would settle them.
+- For F-001 (frontend) I did not read the session/answer dialog component itself; I verified that
+  setSessionId(action.sessionId) is the call that opens it (ReviewWorkspace.tsx:138, same call the manual
+  launch() at :148 uses).
+
+## Prose note (not a finding)
+ReviewWorkspace.tsx:139-140 replays a `start` intent too (`next.kind === "start" && !action.open`). Only
+ReviewDetail on the PR board passes `start`, and ReviewBoard clears its selection on deactivation
+(ReviewBoard.tsx:314-315), so no replay path was found for `start` in this round. If a fix for frontend
+F-001 routes `start` through ReviewsView, the same consumed-intent rule must cover it. Route to the next
+round if wanted.
+
+Routing audit: graph_used: no (not-relevant: every site was named with file:line by the findings);
+wiki_used: no (not-relevant: verification of named code paths); ctx_used: yes (keryx ctx read/rg for raw
+review files and the claim schema); raw_rg_used: no (single-file grep/sed with `keryx:raw` markers to get
+exact line numbers for claims).

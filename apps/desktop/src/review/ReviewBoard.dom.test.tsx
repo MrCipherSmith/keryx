@@ -52,8 +52,8 @@ const watcherOff: ReviewWatcherSnapshot = { version: 1, state: "disabled", insta
   lastAttemptAt: null, lastSuccessAt: null, lastError: null, events: [] };
 const watcherDisabled = async () => watcherOff;
 
-function render(load: typeof fetchReviewBoard, cwd = "/project", key = ++renderKey, listRepositories: typeof fetchReviewRepositories = async () => [], loadDetail?: typeof fetchReviewDetail, runCommand?: typeof reviewRun, watcherCommand: typeof reviewWatcher = watcherDisabled, rulesCommand?: typeof reviewRules) {
-  return act(async () => { root.render(createElement(ReviewBoard, { key, cwd, flows: [], onOpenFlow: () => {}, load, listRepositories, loadDetail, runCommand, watcherCommand, rulesCommand })); });
+function render(load: typeof fetchReviewBoard, cwd = "/project", key = ++renderKey, listRepositories: typeof fetchReviewRepositories = async () => [], loadDetail?: typeof fetchReviewDetail, runCommand?: typeof reviewRun, watcherCommand: typeof reviewWatcher = watcherDisabled, rulesCommand?: typeof reviewRules, extra: Partial<Parameters<typeof ReviewBoard>[0]> = {}) {
+  return act(async () => { root.render(createElement(ReviewBoard, { key, cwd, flows: [], onOpenFlow: () => {}, load, listRepositories, loadDetail, runCommand, watcherCommand, rulesCommand, ...extra })); });
 }
 
 const click = (el: HTMLElement) => act(async () => { el.click(); });
@@ -219,25 +219,23 @@ test("a changed GitHub account closes a filter dialog and removes the previous a
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
 });
 
-test("a changed GitHub account returns focus to search from the portaled PR watcher and Review rules dialogs", async () => {
-  for (const opener of ["PR watcher · Off", "Review rules"]) {
-    let finish!: (value: ReviewBoardSnapshot) => void;
-    let calls = 0;
-    await render(async () => {
-      if (++calls === 1) return snapshot([pr]);
-      return new Promise((resolve) => { finish = resolve; });
-    }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
-    async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
-    await click(button("Refresh pull requests"));
-    await click(button(opener));
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.parentElement?.parentElement).toBe(document.body);
-    await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
-    expect(dialog.contains(document.activeElement)).toBe(true);
-    await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
-    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
-  }
+test("a changed GitHub account returns focus to search from the portaled PR watcher dialog", async () => {
+  let finish!: (value: ReviewBoardSnapshot) => void;
+  let calls = 0;
+  await render(async () => {
+    if (++calls === 1) return snapshot([pr]);
+    return new Promise((resolve) => { finish = resolve; });
+  }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
+  async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
+  await click(button("Refresh pull requests"));
+  await click(button("PR watcher · Off"));
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.parentElement?.parentElement).toBe(document.body);
+  await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
+  expect(dialog.contains(document.activeElement)).toBe(true);
+  await act(async () => { finish({ ...snapshot([]), viewer: "new-account" }); });
+  expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
 });
 
 test("historical states are requested lazily and a merged pull request appears in Merged", async () => {
@@ -444,70 +442,12 @@ test("toolbar dialogs render under document.body so the board's containment cann
   const backend = rulesBackend([]);
   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
   const trapped = (dialog: Element | null) => !dialog || dialog.closest(".review-board") !== null || dialog.closest(".overlay")?.parentElement !== document.body;
-  await click(button("Review rules"));
-  expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
-  expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
-  await click(button("Close"));
-  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  // Review rules moved to the Reviews toolbar (src/reviews/ReviewsView.dom.test.tsx).
+  expect([...document.body.querySelectorAll("button")].some(b => b.getAttribute("aria-label") === "Review rules")).toBe(false);
   await click(button("PR watcher · Off"));
   expect(trapped(document.body.querySelector('[role="dialog"]'))).toBe(false);
   expect(document.body.querySelector('.review-board [role="dialog"]')).toBeNull();
   expect(button("PR watcher · Off").getAttribute("title")).toBe("PR watcher · Off");
-});
-
-test("project rule previews its scope and budgets, can be disabled, edited and deleted", async () => {
-  const backend = rulesBackend([]);
-  await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
-  await click(button("Review rules"));
-  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-  expect(document.activeElement).toBe(dialog);
-  dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(button("Close"));
-  await click(button("New rule"));
-  const field = (text: string) => Array.from(document.body.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
-  const fill = (text: string, value: string) => act(async () => {
-    const input = field(text);
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  expect(field("Token limit (optional)").value).toBe("");
-  expect(field("Token limit (optional)").required).toBe(false);
-  await fill("Rule name", "   ");
-  await click(button("Save rule"));
-  const name = field("Rule name");
-  expect(document.activeElement).toBe(name);
-  expect(name.getAttribute("aria-invalid")).toBe("true");
-  expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a rule name.");
-  expect(backend.actions.some(action => action.kind === "save")).toBe(false);
-  await fill("Rule name", automationRule.name);
-  expect(name.hasAttribute("aria-invalid")).toBe(false);
-  await click(button("Save rule"));
-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { budgetTokens: null } });
-  await click(button("Edit"));
-  await fill("Requested reviewer", "org/team");
-  await fill("Time limit (minutes)", "15");
-  await fill("Token limit (optional)", "300000");
-  expect(field("Token limit (optional)").checkValidity()).toBe(true);
-  await fill("Token limit (optional)", "50000");
-  expect(document.body.querySelector('[aria-label="Rule preview"]')?.textContent).toContain("org/team once CI passes for that commit");
-  await click(button("Save rule"));
-  const creation = backend.actions.at(-1);
-  expect(creation?.kind).toBe("save");
-  if (creation?.kind !== "save") throw new Error("rule save missing");
-  expect(creation.rule.id.length).toBeGreaterThan(0);
-  expect(creation.rule).toEqual({ ...automationRule, id: creation.rule.id });
-  await click(button("Disable"));
-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { enabled: false } });
-  await click(button("Edit"));
-  expect(field("Token limit (optional)").value).toBe("50000");
-  await fill("Token limit (optional)", "");
-  await fill("PR author", "jo");
-  await click(button("Save rule"));
-  expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { author: "jo", enabled: false, budgetTokens: null } });
-  expect(document.body.textContent).toContain("No token limit");
-  await click(button("Delete")); await click(button("Confirm delete"));
-  expect(backend.actions.at(-1)?.kind).toBe("delete");
-  expect(document.body.textContent).toContain("No automatic review rules");
 });
 
 test("PR mode pins an enabled rule, preserves manual launch and scopes its history to the open card", async () => {
@@ -534,21 +474,6 @@ test("PR mode pins an enabled rule, preserves manual launch and scopes its histo
     expect(backend.actions.at(-1)).toEqual({ kind: "mode", number: 101, choice: value === "auto/rule-1" ? { mode: "auto", ruleId: "rule-1" } : { mode: value } });
     expect(button("Start review").disabled).toBe(false);
   }
-});
-
-test("a rules dialog pending for a previous account cannot expose that account's rules or change repository state", async () => {
-  let resolveRules!: (s: ReviewRuleSnapshot) => void;
-  const old = () => new Promise<ReviewRuleSnapshot>(resolve => { resolveRules = resolve; });
-  const board = snapshot([pr]);
-  const load: typeof fetchReviewBoard = async () => ({ ...board });
-  await render(load, "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, old);
-  await click(button("Review rules"));
-  expect(document.body.querySelector('[aria-label="Loading rules"]')).not.toBeNull();
-  board.viewer = "other";
-  await click(button("Refresh pull requests"));
-  await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
-  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-  expect(document.body.textContent).not.toContain("Previous account secret rule");
 });
 
 test("project tabs reuse prefetched cards until refresh and evict them on denied access", async () => {
@@ -754,7 +679,8 @@ test("board and list expose GitHub state and pending requests separately and run
     const tags = [...document.body.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
     expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
     await click(button("Run review for #105"));
-    expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+    // The review interface moved to the Reviews tab: the PR panel launches without a review tab.
+    expect([...document.body.querySelectorAll("button")].some(b => b.textContent === "Keryx review")).toBe(false);
     expect(starts).toHaveLength(mode === "Board" ? 1 : 2);
     await click(button("Close details"));
   }
@@ -814,19 +740,47 @@ test("a badge whose only change is the outdated review counts as changed", () =>
   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
   expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
+  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed", round: 2 } })).toBe(false);
+  expect(badgesEqual({ ...a, outdated: { ...a.outdated, round: 2 } }, { ...a, outdated: { headSha: "aaa", state: "completed", round: 2 } })).toBe(true);
   expect(badgesEqual(a, base)).toBe(false);
   expect(badgesEqual(base, a)).toBe(false);
 });
 
-test("opening a running review from its badge action only reads the run", async () => {
+test("opening a running review from its badge action shows it in Reviews and starts nothing", async () => {
   const calls: string[] = [];
+  const opened: unknown[] = [];
   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+    async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; }, watcherDisabled, undefined,
+    { onOpenInReviews: (target, intent) => { opened.push([target, intent]); } });
+  await click(button("Review · running for #101"));
+  // The Reviews tab keeps its own base repository, so the request names the board's.
+  expect(opened).toEqual([[{ repo: "org/repo", repositoryId: "repo1", number: 101 }, { kind: "view", baseSha: pr.baseSha, headSha: pr.headSha }]]);
+  expect(document.body.querySelector(".review-detail-panel")).toBeNull();
+  expect(calls).toEqual([]);
+});
+
+test("with Reviews wired, a start action stays in the PR panel; without it, a view action opens the PR panel and starts nothing", async () => {
+  const detail: typeof fetchReviewDetail = async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+    headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] });
+  for (const card of [pr, { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } }]) {
+    const calls: string[] = [];
+    const opened: unknown[] = [];
+    await render(async () => snapshot([card]), "/project", ++renderKey, undefined, detail,
+      async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; }, watcherDisabled, undefined,
+      { onOpenInReviews: (target, intent) => { opened.push([target, intent]); } });
+    await click(button((card.localReview ? "Review · outdated" : "Run review") + " for #101"));
+    expect(opened).toEqual([]);
+    expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
+    expect(calls).toContain("start");
+  }
+  const calls: string[] = [];
+  await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey, undefined, detail,
     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
   await click(button("Review · running for #101"));
-  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
-  expect(calls).toEqual(["status"]);
+  expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
+  expect(calls).not.toContain("start");
 });
 
 test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
@@ -929,15 +883,21 @@ test("a merged PR awaiting a Keryx answer stays actionable when the merged state
     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
   });
   saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+  const opened: unknown[] = [];
   for (const mode of ["Board", "List"]) {
-    await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
+    await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command, watcherDisabled, undefined,
+      { onOpenInReviews: (target, intent) => { opened.push([target.number, intent]); } });
     await click(button(mode));
     if (mode === "Board") expect(document.body.querySelector('[aria-label="Merged"]')?.textContent).toContain("#" + pr.number);
     else expect(document.body.querySelector("tbody")?.textContent).toContain("#" + pr.number);
+    // The question itself is answered in the Review panel (src/reviews/ReviewsView.dom.test.tsx, answer intent);
+    // the PR panel does not open, so nothing here can launch a review.
     await click(button("Review · needs your answer for #" + pr.number));
-    expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+    expect(document.body.querySelector(".review-detail-panel")).toBeNull();
   }
-  expect(actions).not.toContain("start");
+  expect(opened).toEqual([0, 1].map(() => [pr.number, { kind: "answer", baseSha: pr.baseSha, headSha: pr.headSha }]));
+  // Only badge polling reads the run status.
+  expect(actions.every(kind => kind === "status")).toBe(true);
 });
 
 test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
@@ -956,18 +916,25 @@ test("Review tab signal follows unfiltered open requests to the viewer and backg
   };
   let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
   const watch = async () => status;
+  let polls = 0;
+  const identities: unknown[] = [];
   const show = (active: boolean, cwd = "/project", expectedViewer = "ann") => act(async () => root.render(createElement(ReviewBoard, {
     key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
-    listRepositories: async () => [],
+    listRepositories: async () => [], onWatcherPoll: () => { polls++; }, onIdentityChange: target => { identities.push(target); },
   })));
   await show(false);
   expect(seen.at(-1)).toBe("watching");
   expect(reads).toBe(1);
+  // The board's identity is shared, so the Reviews tab can offer Review rules without its own list.
+  expect(identities.at(-1)).toEqual({ repo: "org/repo", repositoryId: "repo1", viewer: "ann" });
   cards = [mine, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
   status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
+  expect(polls).toBe(0);
   await act(async () => { window.dispatchEvent(new Event("focus")); });
   expect(seen.at(-1)).toBe("attention");
   expect(reads).toBe(2);
+  // A completed background poll is shared with the Reviews tab, which keeps its indicator current while hidden.
+  expect(polls).toBe(1);
   await show(true);
   await click(button("Filters"));
   await click(option("Author", "bob"));
@@ -993,7 +960,7 @@ test("Review tab signal follows unfiltered open requests to the viewer and backg
   expect(seen.at(-1)).toBeNull();
 });
 
-test("the tab signal is attention only for requests, owned changes, unread replies or Keryx decisions concerning the viewer", async () => {
+test("the tab signal is attention only for requests, owned changes or unread replies concerning the viewer, not for a local review waiting on them", async () => {
   const base: ReviewCard = { ...pr, reviewers: [], decision: null };
   async function signal(cards: ReviewCard[]) {
     const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
@@ -1010,8 +977,9 @@ test("the tab signal is attention only for requests, owned changes, unread repli
   expect(await signal([{ ...base, reviewers: ["bob", "ANN"] }])).toBe("attention");
   expect(await signal([{ ...base, author: "Ann", decision: "CHANGES_REQUESTED" }])).toBe("attention");
   expect(await signal([{ ...base, author: "ann", decision: "REVIEW_REQUIRED" }])).toBeNull();
-  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBe("attention");
-  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBe("attention");
+  // A Keryx question or publication decision lights the Reviews tab, not this one.
+  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBeNull();
+  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBeNull();
   expect(await signal([{ ...base, state: "merged", reviewers: ["ann"] }])).toBeNull();
   expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBe("attention");
   markRepliesRead("ann", "repo1", base.number, ["unread-1"]);

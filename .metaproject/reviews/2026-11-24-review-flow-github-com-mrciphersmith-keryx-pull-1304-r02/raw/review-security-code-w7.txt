@@ -1,0 +1,52 @@
+STATUS: DONE
+
+## Security Review — round 2 (delta), wave 7
+
+### Scope
+- PR #1304, delta 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1
+- Slices reviewed: slice-05 (read in full, 1160 lines) and slice-06 (read in full, 842 lines)
+- slice-05: src/commands/review-reviews.test.ts, src/review/board-github.ts (writeBoundJson / writeBoundJsonText), src/review/desk-run-store.ts (neverStarted, roundFor, assignReviews, publication(), reviewRows, previousAttempt), src/review/review-entity.ts (stateAttempts, stateAttempt, headComparison, summarizeReview), and their tests.
+- slice-06: apps/desktop/src-tauri/src/review.rs (board_read_args), App.tsx, ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, review/model.ts, Desktop DOM tests and fixtures, review-v2 implementation-plan.md / specification.md, and removed-only hunks of desk-run-store.ts.
+- Context read at head f6971fd beyond the slices: the full review.rs delta (`git diff` of that one file, 42 lines), apps/desktop/src/review/ReviewBrowserLink.tsx (whole file), the followLink / openReviewLink sites in ReviewDetail.tsx, and raw/review-security-code-w1..w6.txt.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Checked and clean
+- SQL injection (desk-run-store.ts): the new `neverStarted(r)` helper interpolates only the compile-time alias literals `""` and `"r."`. `placement(alias)` interpolates column names or `NULL` from the constant `reviewColumns`. Every value (repo, pr, viewer, ids, SHAs) still binds through `?` parameters in `reviewRows`, `assignReviews` and `previousAttempt`. The test-only `editStore` helper also binds its parameters.
+- Path traversal (`publication()`): files are still read only under `directory(id)`, and only after `id` matches the UUID regex. The relaxed gate, which now admits partial and budget attempts, did not weaken that check. `transcriptUpdatedAt` keeps its own UUID check and lstat checks.
+- Authorization / IDOR: `reviewRows` now returns archived attempts, but the query is still filtered by `v.repo=?` and `v.viewer=?` and receives the GitHub-verified repositoryId and viewer, so archived attempts of another account or repository stay out of reach. Deleted attempts are still excluded. Imported (`existing`) and archived attempts are never offered for publication. Reports and reviewer sessions are still not selected, and the test asserts `private report body` is absent from the payload.
+- Publication boundary: `writeBoundJson` re-checks the GitHub binding generation inside `withCurrentGithubBinding` before stdout is written. A throw inside the Promise executor rejects the promise. This was already cleared in wave 6 and is unchanged here.
+- Tauri argument building (review.rs): `include_closed` is a bool that adds only the fixed literal `--include-closed`, and only in the Reviews-list branch. Otherwise the call is refused. No user string reaches argv through it. Tests cover the refused combinations.
+- Desktop link handling (ReviewDetail.tsx): `followLink` now opens through `openReviewLink`, after `reviewUrl` accepts only `https:` URLs without username or password. A pull request URL goes to `openPullRequest`, any other URL to `openExternal`, and `preventDefault` stops in-app navigation. No `javascript:` or `file:` URL can reach the opener.
+- Removed test "a rules dialog pending for a previous account cannot expose that account's rules" (ReviewBoard.dom.test.tsx): the behaviour moved with the rules UI to the Reviews tab. Wave 6 (raw/review-security-code-w6.txt) recorded the equivalent assertion in ReviewsView.dom.test.tsx, so cross-account leak coverage is not lost.
+- XSS / eval: no `dangerouslySetInnerHTML`, `eval` or `new Function` added. Removed code (`secondaryNote`, `reviewNote` in laneReason, the PR-panel review tab) has no security role.
+- Secrets / PII: fixtures use placeholder logins and repeated-character SHAs. No tokens appear in docs, tests or the changed code.
+- Not applicable in these slices: crypto, CSRF, open redirect, NestJS.
+
+### Not verified
+- No tests were run (exec budget 0). The package's test log reports 194 root and 1008 Desktop tests passing at f6971fd.
+- Rust was not compiled: no local Rust toolchain. CI at f6971fd reports 30 checks with 0 failed.
+- slice-06 shows only removed lines for some hunks, for example ReviewDetail.tsx imports and the review.rs signature. Their head forms were read directly, as listed above.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-05 and slice-06 have no security findings. New SQL fragments interpolate only constant aliases and column names, and all values stay bound parameters. publication() still reads only UUID-validated attempt directories. reviewRows now returns archived attempts, but only for the verified repository and viewer, and it never returns reports or deleted attempts. include_closed in the Tauri bridge is a boolean that adds a fixed flag. Review links still pass an https-only check before they reach the system browser.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-05", "slice-06"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: bounded delta slices; the two context files were named and read directly), wiki_used: no (not-relevant: delta review of supplied slices), ctx_used: yes (keryx ctx rg over the raw results and the link-handling sites, keryx ctx read of ReviewBrowserLink.tsx), raw_rg_used: no (one raw `git diff` of review.rs, marked keryx:raw, because the slice held only removed lines of that file).

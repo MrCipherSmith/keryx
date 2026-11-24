@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { ReviewCard } from "./types";
 import type { LocalBadge } from "../../../../src/review/board-badges";
 import {
-  EMPTY_FILTERS, ROLE_LANES, STATUS_LANES, drawnLanes, filterReviews, laneReason, newestFirst, reviewLane, reviewNote, stateQuery,
+  EMPTY_FILTERS, ROLE_LANES, STATUS_LANES, drawnLanes, filterReviews, laneReason, needsViewerAttention, newestFirst, reviewLane, reviewNote, stateQuery,
   type Filters,
 } from "./model";
 
@@ -192,4 +192,34 @@ test("the outdated-review text stays available for the work row and names the re
   expect(reviewNote(stale("completed", "abcdef0123456"))).toBe("Review predates base update · abcdef0");
   expect(reviewNote(stale("partial", "abcdef0123456"))).toBe("Partial review predates base update · abcdef0");
   expect(reviewNote(pr)).toBeNull();
+});
+
+test("a review of the current head under an older base says the base moved, not that the head is outdated", () => {
+  const baseMoved = (state: "completed" | "partial" | "budget") =>
+    ({ ...quiet(pr), headSha: "abcdef0123456", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+  expect(reviewNote(baseMoved("completed"))).toBe("Review predates base update · abcdef0");
+  expect(reviewNote(baseMoved("partial"))).toBe("Partial review predates base update · abcdef0");
+  expect(reviewNote(baseMoved("budget"))).toBe("Partial review predates base update · abcdef0");
+  expect(reviewNote({ ...baseMoved("completed"), headSha: "fedcba9876543" })).toBe("Outdated review · abcdef0");
+  expect(laneReason(baseMoved("completed"))).toBe("No review requested");
+});
+
+test("the Pull requests indicator counts GitHub reasons only: a local review waiting on the viewer no longer counts", () => {
+  const open = quiet(pr);
+  // A Keryx question or publication decision is the Reviews tab's indicator now.
+  expect(needsViewerAttention({ ...open, localReview: { active: true, ready: false, awaitingAnswer: true } }, "ann", 0)).toBe(false);
+  expect(needsViewerAttention({ ...open, localReview: { active: false, ready: true, publicationPending: true } }, "ann", 0)).toBe(false);
+  expect(needsViewerAttention(open, "ann", 0)).toBe(false);
+  // Requested from the viewer's login, case-insensitive on both sides; teams and other logins do not match.
+  expect(needsViewerAttention({ ...open, reviewers: ["bob", "ANN"] }, "ann", 0)).toBe(true);
+  expect(needsViewerAttention({ ...open, reviewers: ["ann"] }, "Ann", 0)).toBe(true);
+  expect(needsViewerAttention({ ...open, reviewers: ["bob", "example/team"] }, "ann", 0)).toBe(false);
+  // The viewer's own change with requested changes.
+  expect(needsViewerAttention({ ...open, author: "Ann", decision: "CHANGES_REQUESTED" }, "ann", 0)).toBe(true);
+  expect(needsViewerAttention({ ...open, author: "ann", decision: "REVIEW_REQUIRED" }, "ann", 0)).toBe(false);
+  expect(needsViewerAttention({ ...open, author: "bob", decision: "CHANGES_REQUESTED" }, "ann", 0)).toBe(false);
+  // Unread replies addressed to the viewer.
+  expect(needsViewerAttention(open, "ann", 1)).toBe(true);
+  // Only open pull requests count.
+  expect(needsViewerAttention({ ...open, state: "merged", reviewers: ["ann"] }, "ann", 1)).toBe(false);
 });

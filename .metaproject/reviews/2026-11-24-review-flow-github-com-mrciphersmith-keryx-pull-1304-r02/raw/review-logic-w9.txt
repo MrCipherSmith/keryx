@@ -1,0 +1,105 @@
+STATUS: DONE
+
+## Logic Review (round 2, wave 9)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-2 delta of PR #1304
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range`. Slices: slice-05 and slice-06, read in full.
+- Spec compliance gate: skipped. This is a delta round with no issue or task attached. The operator decisions in fix-round-1.md (FA-6, D-R1, FA-11) are treated as settled.
+
+slice-06 is a lossy view. Several of its hunks show only `-` lines, without the matching `+` lines: the `board_read_args` signature, the App.tsx import, the ReviewBoard `RepositoryBoard` signature, `secondaryNote`/`reviewNote` in ReviewResults.tsx/model.ts, and the ReviewBoard dom tests. I checked each slice-06 file against `git diff 20e4281a2..f6971fd4a`. The real delta for ReviewResults.tsx and review/model.ts in this range is empty. The removals the slice shows there come from the wider PR, not from this round.
+
+### Summary
+The round-1 fixes in these slices hold up under a logic read:
+- `roundFor` now groups placed attempts in memory. Retries join only the highest round, and a request superseded before it started is skipped for numbering.
+- `publication()` now reports a receipt or skip marker for partial and budget results. Only a complete review is `pending`.
+- `stateAttempts`/`stateAttempt` keep archived attempts and failed retries from overriding an accepted result.
+- `writeBoundJson` moved into board-github.ts.
+- On the Desktop side: the `include_closed` bridge flag, and the board passes its repository identity to the Reviews tab.
+
+I traced these through `requestAttempt`, which supersedes the queued request before it inserts the new row and calls `assignReviews`. I also traced `history`/`annotate`, `localBadge` (it acts only on `pending`, which is unchanged for completed results) and `ReviewRuns`. No new blocker or major. One info note.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected. These were checked and are sound:
+- `roundFor`: `linked` is looked up before superseded rows are filtered out, so a continuation keeps its predecessor's round. `previous` is the newest counted attempt of the top round. Ties are broken by `seq`, and a null `created` compares as "".
+- In one `assignReviews` call, a row placed earlier in that call carries its `superseded` flag from the pending query. Nothing changes that flag inside the transaction.
+- `requestAttempt` calls `end(queued, {state:'skipped', phase:'Superseded', result:null})` before the INSERT. So `neverStarted` is already true for the old row when the new row is placed. This matches the test "a queued request superseded before it started keeps no round".
+- `stateAttempt` and `reference` agree. When `settled` is an accepted result, it is the newest accepted result in the latest round, and that is also `newest(attempts, reviewedResult)`. The only exception is imported history placed after newer rounds, a documented known limitation.
+
+### Async & Concurrency
+See [F-001] (info).
+
+#### [F-001] `writeBoundJsonText` says concurrent writers stay excluded until the payload reaches the pipe; the binding transaction commits as soon as `write()` returns
+- **Severity**: info
+- **File**: src/review/board-github.ts:262-272 (moved verbatim from src/commands/review-board.ts, FA-6)
+- **Problem**: `withCurrentGithubBinding` runs `watcherTransaction`, which is synchronous (bun:sqlite, src/review/watcher-db.ts:6). The callback only calls `process.stdout.write(json + "\n", cb)` and returns. The transaction commits right then, while the promise resolves later in the write callback. A payload larger than the pipe buffer is still being flushed after the commit. So a binding change in that window is not excluded, contrary to the comment "Concurrent writers stay excluded until the complete payload is handed to the pipe". The binding check itself is correct when the write is queued.
+- **Why it matters**: nothing observable on a named input. The payload was read and checked under a binding that was current when it was queued. This is a comment that overstates a guarantee. The text predates this round; FA-6 only moved it, which is why it falls in the delta.
+- **Fix**: describe what the code guarantees, for example: "The binding is checked again at this publication boundary, while the payload is queued. The promise settles once the stream has flushed it." Or drop the exclusion sentence.
+
+### Error Handling
+None detected. If `withCurrentGithubBinding` throws inside the Promise executor (binding changed, or `stdout.write` throws synchronously), the promise rejects. `publication()` still swallows only a malformed receipt, as before.
+
+### Null / Undefined Safety
+None detected. `summarizeReview` guards `latest`/`settled`. `inTop.reduce` without a seed runs only when `top !== null`, so `inTop` is non-empty.
+
+### Type Contract Violations
+None new. The `Pending` type includes `round`, but the query does not select it; this is already filed as R2-BE-W4-001.
+
+### Edge Cases
+None new. Already filed in waves 1–8 and not re-filed:
+- archived attempts in the Rounds timeline, and `latestRound` read from a different set (architecture F-001)
+- a fully archived published Review reads as `ready` with `publication: null` (R2-BE-006)
+- `headComparison` vs `freshness` (logic-w4 F-002, R2-BE-002)
+- `closed_at` has no writer (logic-w4 F-001)
+- the board or PR panel routes a superseded-only Review to the Reviews tab (logic-w8 F-001, degradation F-001)
+- a cancelled-before-dispatch request still opens a round (logic-w5 F-001)
+- the Review rules fallback can target the board's repository (logic-w4 F-005)
+
+### Suggested Patches
+```diff
+-    // Concurrent writers stay excluded until the complete payload is handed to the pipe.
++    // The binding is checked again while the payload is queued; the promise settles once the stream has flushed it.
+```
+
+### Not read / not verified
+- I did not run any tests (exec budget 0). I relied on research-evidence/verify-tests-to-run-1.txt (0 fail at f6971fd) and did not open it.
+- ReviewsView.tsx was read only in its focus-handling hunk, as context for ReviewBoard/App props. It belongs to another slice and I did not review it.
+- I did not check whether Bun's `process.stdout.write` to a pipe completes synchronously. F-001 assumes the general case, where a payload larger than the pipe buffer cannot.
+- Rust: I read the `review.rs` delta (`include_closed` guard and tests). Rust cannot be built locally; CI is green at f6971fd.
+
+### Routing audit
+- graph_used: no. The delta files were already known from the driver and plan.json, and the callers I needed (`requestAttempt`, `localBadge`, `ReviewRuns`, `watcherTransaction`) were found with `keryx ctx rg`.
+- wiki_used: no. Not relevant: the intent comes from the plan, fix-round-1.md and the code comments.
+- ctx_used: yes (`keryx ctx rg`)
+- raw_rg_used: yes, and raw `git diff`/`sed`/`grep` with `# keryx:raw` markers. Reasons: I needed the exact delta text of files that slice-06 rendered lossily, and a compact list of finding titles across the 70 raw files from waves 1–8 to avoid re-filing.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "category": "async",
+      "title": "writeBoundJsonText says concurrent writers stay excluded until the payload reaches the pipe; the binding transaction commits as soon as write() returns",
+      "file": "src/review/board-github.ts",
+      "line": 268,
+      "problem": "withCurrentGithubBinding runs the synchronous watcherTransaction, and its callback only queues process.stdout.write and returns. The transaction commits before the write callback, so a large payload is flushed after the commit, and a binding change in that window is not excluded, contrary to the comment.",
+      "why_it_matters": "Nothing observable: the payload was checked under the binding that was current when it was queued. The comment overstates the guarantee. The text was moved verbatim by FA-6.",
+      "suggested_fix": "Say the binding is checked while the payload is queued and the promise settles after the flush, or drop the exclusion sentence."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```

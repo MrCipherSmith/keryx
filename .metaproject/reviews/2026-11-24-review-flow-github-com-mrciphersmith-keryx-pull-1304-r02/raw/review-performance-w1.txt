@@ -1,0 +1,114 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1304, branch `feat/desktop-review-v2-stage2`, round 2 (delta / FIX slice), range 20e4281a2..f6971fd4a, mode explicit-hash-range. Slice read in full: slice-01 (28 code files in the delta, plus docs).
+- To check the claims, I read these head files outside the slice: `apps/desktop/src/reviews/ReviewsView.tsx:30-279`, `apps/desktop/src/App.tsx:218-277` and `:630-699`, `apps/desktop/src/review/ReviewWatcher.tsx:20-89`, `apps/desktop/src/review/SessionReviewActivity.tsx:110-179`, `apps/desktop/src/platform/reviewReadLane.ts`, `src/commands/review-reviews.ts` (whole file), `src/review/desk-run-store.ts:100-209`, `:418-435` and `:580-629`.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 2
+
+### Prior dispositions (performance and highload findings this slice touches, plus the refresh-channel and focus findings I checked against code)
+- F-011 closed: `ReviewsView.tsx:194` skips the 60 s reload when `document.visibilityState === "hidden"`. The fix also removed the `active` gate on purpose (FB-4, a settled decision), so the reload runs on a hidden tab but not in a hidden window.
+- F-012 closed: `App.tsx:640` mounts ReviewsView only once `githubAccount || githubAccountError` has settled. The key `reviewViewer ?? "active-gh"` is a string, so the account re-read on window focus (`App.tsx:268-275`) does not remount it.
+- F-022 partial: `review-reviews.ts:48-51` now sorts rows by latest activity (then number) before `behind.slice(0, 25)`, and a test pins the boundary at exactly 25. The warning still says "Refresh to read more." (`:58`), but a refresh compares the same first 25 again, so the rest are never read. The pick order is fixed; the misleading text is not. Display only.
+- F-023 partial: Reviews closed locally are skipped unless `--include-closed` is set (`:56`), and card batches run through `mapPool` with 3 in parallel (`:67-80`). Reviews whose PR is merged or closed on GitHub but not closed locally are still read on every call. That was the growth source the finding named. This fix round also makes the call more frequent: every PR-watcher poll, every session-review event, and every 60 s on a hidden tab while a Review runs (`ReviewsView.tsx:192-204`). The cost is still linear in lifetime history. It is minor at today's sizes; I am not re-filing it as a new finding.
+- F-025 closed: the compare phase has an overall deadline (`REVIEW_COMPARE_BUDGET_MS = 60_000`, `compareHeads` at `:85-108`), late compares are reported as unknown with one warning, and a test runs with a 50 ms budget. A residual is noted in I-002.
+- F-026 closed: `assignReviews` (`desk-run-store.ts:183-204`) reads each Review's placed attempts once per call, extracting only base, head and createdAt with `json_extract`, and keeps them in memory. `roundFor` now works on that array. This removes the O(k^2) parse of full documents.
+- F-007 closed: ReviewsView reloads on `subscribeSessionReview` (`:198`) and on the PR watcher's `reloadSignal` (`:199-204`). The signal is wired in `App.tsx:225-226`, `:642` and `ReviewBoard.tsx:465`. The publish sites are user actions only (`SessionReviewActivity.tsx:138`, `:156`, `App.tsx:683`), and watcher polls fire only when `lastSuccessAt` changes (`ReviewWatcher.tsx:48`), so neither is a hot loop. Overlapping reloads with the same key share one in-flight read (`reviewReadLane.ts:13-14`), so they cannot pile up.
+- F-001 closed: the focus carries the repository and repositoryId (`App.tsx` openInReviews, `ReviewBoard.tsx:456-464`). ReviewsView switches to that repository first and then matches repo, id and number (`ReviewsView.tsx:226-234`).
+- F-003 closed: the pending focus is lifted above the keyed child (`ReviewsView.tsx:91-111`), deduplicated by the `taken` nonce, and App clears it through `onFocusHandled` (`App.tsx:221-223`).
+- F-009 closed: `accessLost` calls `settlePending()` (`ReviewsView.tsx:144`).
+- F-002 closed: `consumeIntent` strips the intent when the tab is left (`ReviewsView.tsx:255-256`).
+I did not assess the other prior findings (logic, UX, testing, architecture and docs lenses); their reviewers own them.
+
+### Findings
+
+### [I-001] The PR watcher poll now triggers two full list reads, each with its own identity query
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewBoard.tsx:465 / apps/desktop/src/reviews/ReviewsView.tsx:199-204
+- **Hot path**: once per completed background watcher poll (watcher interval, default 5 min, minimum 1 min), only while the window is visible.
+- **Problem**: `watcherPolled` refreshes the PR board and also bumps `reloadSignal`, which makes ReviewsView spawn `keryx review reviews`. That command repeats the `ReviewIdentity` GraphQL query, then reads PR cards (see F-023) and up to 25 compares.
+- **Why it matters**: this is the design FB-4 chose, at a low frequency, so it is not a defect. It is recorded because it compounds with F-023: the cost per poll grows with the number of Reviews.
+- **Fix**: none required. If F-023 is taken further, skipping cards of PRs already known to be merged would also cut this cost.
+
+### [I-002] A compare cut off by the deadline is abandoned, not cancelled, and the card phase has no deadline of its own
+- **Severity**: info
+- **File**: src/commands/review-reviews.ts:85-108, :67-80
+- **Hot path**: once per `review reviews` call, and only when GitHub stalls.
+- **Problem**: `Promise.race([compare(...), expired])` stops waiting, but the `gh` child keeps running until its own 18 s timeout (`board-github.ts:133`). Whether this keeps the CLI process alive after the JSON is written is NOT verified: I did not trace the CLI exit path. Card batches have no overall deadline. The worst case is 18 s for identity, plus ceil(ceil(N/20)/3) × 18 s for cards, plus 60 s for compares, plus up to 18 s of tail. That exceeds the Desktop host's 150 s bound only with more than about 180 Reviews that are not closed locally and every call stalling to its timeout.
+- **Why it matters**: degenerate case only. F-025's compare-phase deadline is in place.
+- **Fix**: optional. Pass an AbortSignal or a shorter timeout to `boardGh` for compares, or give the card phase the same deadline.
+
+### Clean Areas
+- CLI/TUI hot paths: no per-keystroke work was added. `matchesSearch` (model.ts) runs one small regex replace per Review behind `useDeferredValue`.
+- React re-renders: `boardRepo`/`boardRepositoryId` keep `openReview` stable. `watcherTarget` is memoised on primitives, so `onIdentityChange` and App's `setBoardIdentity` fire only when the identity changes. `known` in ReviewPanel is memoised.
+- Memory leaks: the new subscription (`subscribeSessionReview`) returns its unsubscribe from the effect. Intervals are cleared. `seenRuns` is a per-number Map bounded by the Review count.
+- N+1 / indexes: `assignReviews` makes one query per Review, not per row. The `review_rounds(review_id, round)` index backs that query.
+- Redundant API calls: concurrent list reads share one in-flight promise (`ReviewReadLane`), and `includeClosed` is part of the lane key.
+- Synchronous blocking: the `publication()` receipt read and `existsSync` per finished attempt run in the short-lived CLI, off any interactive path. Since FA-2 they also run for partial and budget attempts, a small linear addition.
+- Bundle imports: none added.
+
+### Not verified
+- No timings. The budget is 0 s of execution, so every cost above is reasoned from call counts. I did not trace whether the CLI exits while an abandoned `gh` child is still running (I-002). I did not run `keryx gdgraph affected` or `keryx test related`: their output was not needed to settle any claim.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Delta round: no blocker, major or minor performance finding. F-011, F-012, F-025, F-026 and F-007 are closed against the code. F-022 (warning text still promises 'Refresh to read more') and F-023 (merged-on-GitHub Reviews still re-read on every call, now more often) are partial. Two info notes: two full reads per watcher poll; compares abandoned rather than cancelled at the deadline, and no deadline on the card phase.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "I-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 465,
+      "quote": "const watcherPolled = useCallback(() => { refresh(); onWatcherPoll?.(); }, [refresh, onWatcherPoll]);",
+      "problem": "Each completed PR-watcher poll now refreshes the PR board and also triggers a full `keryx review reviews` read (reloadSignal), which repeats the identity GraphQL query, reads PR cards and runs up to 25 compares.",
+      "impact": "Once per watcher interval (default 5 min, minimum 1 min) while the window is visible. This is the design FB-4 chose; the cost grows with the number of Reviews because of F-023.",
+      "suggested_fix": "None required. If F-023 is pursued, skipping cards of PRs already known to be merged also cuts this cost.",
+      "evidence": "ReviewBoard.tsx:465, App.tsx:225-226 and :642, ReviewsView.tsx:199-204, ReviewWatcher.tsx:48 and :73-83, review-reviews.ts:41-61.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "I-002",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": 92,
+      "quote": "const result = await Promise.race([compare(reviewed, head), expired]);",
+      "problem": "A compare cut off by the deadline is abandoned, not cancelled: its gh child runs until boardGh's 18 s timeout. Card batches have no overall deadline.",
+      "impact": "Degenerate case only. The 150 s host bound is exceeded only with more than about 180 Reviews not closed locally and every GitHub call stalling to its timeout. Whether the abandoned child delays CLI exit was not verified.",
+      "suggested_fix": "Optional: give boardGh an AbortSignal or a shorter compare timeout, and put the card phase under the same deadline.",
+      "evidence": "review-reviews.ts:67-80 and :85-108; board-github.ts:132-139 (timeout = 18_000).",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-022", "disposition": "partial"},
+    {"id": "F-023", "disposition": "partial"},
+    {"id": "F-025", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"},
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"}
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "F-022 residual: the warning 'Refresh to read more.' (review-reviews.ts:58) promises something a refresh does not do; reword it or rotate the compared window.",
+    "F-023 residual: Reviews whose PR is merged or closed on GitHub are re-read on every call; this fix round made the call more frequent (watcher poll, session event, 60 s hidden-tab reload while running)."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: delta of known files; consumers enumerated with keryx ctx rg --all) · wiki_used: no (not-relevant: the fix ledger and plan give the intent) · ctx_used: yes (keryx ctx rg/read) · raw_rg_used: no (one raw `git diff` of 3 small files, marked keryx:raw).

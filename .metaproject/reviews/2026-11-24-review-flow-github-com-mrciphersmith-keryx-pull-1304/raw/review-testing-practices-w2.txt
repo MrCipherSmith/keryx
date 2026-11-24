@@ -1,0 +1,204 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 1, wave 2. I read slice-04 in full: the docs hunks, src/commands/review-reviews.ts and its test, review.ts, group-subcommands.ts, review-board.ts, board-badges.test.ts, desk-run-store.test.ts and review-entity.test.ts. I also read the production gates those tests pin, from `git show 20e4281a2:src/review/review-entity.ts` (full file) and `git diff a5d1ab236 20e4281a2` of src/review/desk-run-store.ts, board-badges.ts, board-types.ts and desk-run-types.ts. I checked wave-1 raw results so nothing is filed twice. review-logic-w1 F-002 (publication null keeps `ready` Reviews lit) is that reviewer's finding and is not repeated here.
+
+Concerns:
+- The mutation pass was NOT run. allowed_tools is read-only and exec_budget_s is 0, so the skill allows no mutant to execute. The 31 candidates below are proposals for `keryx review mutate`, and none has a result: 0 of 31 run, 31 not reached. AC1-AC4 (migration, rounds, read-only store, CLI list) rest on these suites, so their mutation verdicts depend on that run.
+- research-evidence/verify-tests-to-run-1.txt was not present (the directory holds only ingest-screened.json), so I saw no test output for this round.
+- Every "unpinned" statement below comes from reading the fixtures against the gate. None is a mutation result.
+
+## Mutation table
+
+Not run (read-only dispatch). Every row's result is "not run". The nearest suites are src/commands/review-reviews.test.ts (RR), src/review/review-entity.test.ts (RE), src/review/desk-run-store.test.ts (DS) and src/review/board-badges.test.ts (BB).
+
+| id | file | mutation | suite | result | lead from reading |
+|---|---|---|---|---|---|
+| B01 | src/commands/review-reviews.ts | delete `if (!rows.length) return snapshot;` | RR | not run | likely pinned (queries length 1) |
+| B02 | src/commands/review-reviews.ts | drop both `OBJECT_ID.test(...)` terms | RR | not run | no fixture reaches it (F-004) |
+| B03 | src/commands/review-reviews.ts | drop `&& !reviewClosed(row, card)` | RR | not run | pinned by the merged #20 test (calls length 1) |
+| B04 | src/commands/review-reviews.ts | drop `reviewed !== card.headSha &&` | RR | not run | pinned by the unknown-head test (calls 0) |
+| B05 | src/commands/review-reviews.ts | `>` -> `>=` on MAX_REVIEW_COMPARES | RR | not run | no fixture at exactly 25 (F-007) |
+| B06 | src/commands/review-reviews.ts | delete `if (cannotRetainData(error)) throw error;` | RR | not run | pinned by the access test |
+| B07 | src/commands/review-reviews.ts | drop the `b.number - a.number` tie-break | RR | not run | no fixture (F-007) |
+| B08 | src/commands/review-reviews.ts | drop `!Number.isSafeInteger(value.ahead_by) \|\|` | RR | not run | -1 is still refused by `< 0`; no non-number fixture (F-007) |
+| B09 | src/commands/review-reviews.ts | `allowPositionals: false` -> `true` | RR | not run | the assertion cannot fail (F-006) |
+| B10 | src/commands/review-reviews.ts | delete `if (!values.json) throw new Error(REVIEWS_USAGE);` | RR | not run | pinned (`[]` rejects with the usage) |
+| E01 | src/review/review-entity.ts | drop `latest.state === "running" &&` in needs_answer | RE | not run | pinned (cancelling + awaiting) |
+| E02 | src/review/review-entity.ts | drop `&& latest.source === "manual"` | RE | not run | pinned (scheduled + awaiting) |
+| E03 | src/review/review-entity.ts | drop `\|\| compare?.status === "identical"` | RE | not run | pinned (identical -> current) |
+| E04 | src/review/review-entity.ts | `rewritten: status !== "ahead"` -> `status === "diverged"` | RE | not run | pinned (behind/0 -> rewritten) |
+| E05 | src/review/review-entity.ts | drop `&& review.publication !== "published"` | RE | not run | no ready+published fixture; looks unreachable (info) |
+| E06 | src/review/review-entity.ts | latestReviewed: drop `FINISHED.has(a.state) &&` | RE | not run | no fixture (F-005) |
+| E07 | src/review/review-entity.ts | referenceHead: drop the `?? latestAttempt(row)?.headSha` fallback | RE, RR | not run | fixtures cannot tell (F-001) |
+| E08 | src/review/review-entity.ts | reviewClosed: drop `row.closedAt !== null \|\|` | RE | not run | pinned (closedAt fixture) |
+| E09 | src/review/review-entity.ts | `source: latest.source` -> `source: row.attempts[0]!.source` | RE | not run | pinned (scheduled retry) |
+| S01 | src/review/desk-run-store.ts | linked predecessor: drop `AND review_id=?` | DS | not run | no cross-Review continuation fixture |
+| S02 | src/review/desk-run-store.ts | retry only into the latest round (A,B,A joins a new round) | DS | not run | no A,B,A fixture (F-003) |
+| S03 | src/review/desk-run-store.ts | reviewRows: `NOT IN ('archive','delete')` -> `NOT IN ('archive')` | RR | not run | no deleted-attempt fixture (F-002) |
+| S04 | src/review/desk-run-store.ts | reviewRows: `CASE WHEN r.state='recoverable' ...` -> `r.state` | RR | not run | no recoverable fixture (F-002) |
+| S05 | src/review/desk-run-store.ts | reviewRows: drop `&& item.source !== "existing"` | RR | not run | no existing-source Review fixture |
+| S06 | src/review/desk-run-store.ts | readReviewRows: delete the existsSync gate | RR | not run | pinned (store not created) |
+| S07 | src/review/desk-run-store.ts | placement: always the real column, never NULL | DS | not run | pinned (read-only unmigrated copy) |
+| S08 | src/review/desk-run-store.ts | new round: `previous: null` | DS | not run | pinned (a3 -> a2) |
+| S09 | src/review/desk-run-store.ts | request: delete `this.assignReviews();` | DS | not run | pinned (place(first)) |
+| S10 | src/review/desk-run-store.ts | storedDetails: keep placement fields in details | DS | not run | pinned (details lack the fields; forged import) |
+| S11 | src/review/desk-run-store.ts | recordExisting: delete `this.assignReviews();` | DS | not run | pinned (imported placement) |
+| G01 | src/review/board-badges.ts | `...(typeof stale.round === "number" && {round})` -> `round: stale.round` | BB | not run | pinned (`not.toHaveProperty("round")`) |
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "The backend test hunks of PR #1304 (slice-04) are well built. They use temp-dir stores, inject GitHub query and compare doubles with no real network, include a verbatim main-DDL migration fixture with shuffled inserts and a case-variant viewer, check that reopening is idempotent, and compare SQL badges against localBadge. The mutation pass was not run because the dispatch is read-only: 31 candidates are listed, 0 run. Reading the fixtures against their gates gives six minor findings and one info. (1) The referenceHead fallback fixtures cannot distinguish their branch. (2) No fixture shows deleted or recoverable attempts in the Reviews list. (3) The documented A,B,A rule has no fixture. (4) The OBJECT_ID guard on the gh compare path is unpinned. (5) latestReviewed's finished-state filter is unpinned. (6) The positional-argument rejection assertion cannot fail.",
+  "slices": [{"id": "slice-04", "coverage": "read in full; production gates read at head (review-entity.ts full, desk-run-store/board-badges/types diff a5d1ab236..20e4281a2)", "status": "DONE"}],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": [
+    "Run the 31 mutant_candidates through `keryx review mutate`; this read-only dispatch could not run them. Previous-round gates: none (round 1).",
+    "verify-tests-to-run-1.txt was absent; confirm src/commands/review-reviews.test.ts, src/review/review-entity.test.ts, src/review/desk-run-store.test.ts and src/review/board-badges.test.ts are green at head."
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/review-entity.test.ts",
+      "line": 124,
+      "quote": "test(\"without a reviewed round freshness compares the requested head and findings stay unknown\", () => {",
+      "problem": "Branch under test: the name says freshness compares the requested head, but the fixture's requested head (sha b) equals the PR head (sha b). referenceHead's fallback `?? latestAttempt(row)?.headSha` and its absence give the same answer: freshness(b, b) and freshness(null, b) are both `current`. The CLI fixture for #15 (running on b, PR head b) in review-reviews.test.ts:110 has the same shape. No fixture has an unreviewed Review whose requested head differs from the PR head.",
+      "impact": "Without the fallback, a running or failed first round on an old head reads `current` instead of `behind`, which drops it out of the Behind column, and the suite stays green. The test reads as coverage of that case.",
+      "suggested_fix": "In review-entity.test.ts, use `const running = attempt({ state: \"running\", reviewed: null, findings: null, publication: null, headSha: sha(\"c\") })` with `card({ headSha: sha(\"d\") })`, and expect `freshness: { kind: \"behind\", commits: null, rewritten: false }`. Keep one equal-head case for `current`.",
+      "evidence": "review-entity.ts:124 `return latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null;` and :106 `if (!reviewedHead || reviewedHead === prHead ...) return { kind: \"current\" }`. Candidate E07, not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": null,
+      "quote": "WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')",
+      "problem": "tdd-workflow rule (new logic gets a test): reviewRows leaves out deleted attempts and maps `recoverable` to `failed`. The CLI docs promise both: \"Archived and deleted attempts are left out\", and \"An interrupted attempt ... reads as failed\". Only the archive half has a fixture (#14 in review-reviews.test.ts). A ctx rg for reviewRows|readReviewRows|recoverable over the three new or changed backend test files finds nothing.",
+      "impact": "If the 'delete' term or the recoverable CASE is dropped, a deleted attempt comes back into the Reviews list, or an interrupted attempt reads as `recoverable`. reviewState then has no branch for that value and falls to `stopped` by accident. Both regressions leave the suite green.",
+      "suggested_fix": "In the 'one summary per Review' test, add a deleted attempt on another PR and expect it to be absent. Add a row whose state column is 'recoverable' (as in the existing recovery tests) and expect `rounds[0].attempts[0].state === \"failed\"`.",
+      "evidence": "Candidates S03 and S04, not run. Search: keryx ctx rg --all 'reviewRows|readReviewRows|recoverable' on src/review/desk-run-store.test.ts, src/commands/review-reviews.test.ts and src/review/review-entity.test.ts: none.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.test.ts",
+      "line": null,
+      "quote": "a5: [3, \"a4\"], a6: [3, \"a5\"], a7: [4, \"a6\"], a8: [5, \"a7\"],",
+      "problem": "The plan's assignment rule, \"Диапазон, вернувшийся после других (A, B, A), присоединяется к своему первому раунду как повтор\", has no fixture. The migration fixture uses heads 1,1,2,2,3,3,4,5, and the live-assignment test uses revision, next, d: every range repeats only inside its own latest round. roundFor's retry query (`ORDER BY round DESC LIMIT 1` over all rounds) is what implements A,B,A. A narrower retry, matching only the latest round, would pass every existing case.",
+      "impact": "A later edit to roundFor could put a returning range into a new round. That breaks the documented rule and renumbers history the way the plan forbids, and the suite stays green.",
+      "suggested_fix": "Add to the live-assignment test: request on revision, then next, then revision again, and expect the third to be placed `[review, 1, <newest of round 1>]`. Optionally add the same A,B,A sequence to writeMainFixture.",
+      "evidence": "implementation-plan.md stage 2 'Хранилище' bullet; desk-run-store.ts roundFor `const retry = ... WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ? ORDER BY round DESC LIMIT 1`. Candidate S02, not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 53,
+      "quote": "? [{ id: row.id, reviewed, head: card.headSha }] : [];",
+      "problem": "The behind filter keeps a pair only when `OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)`. The comment explains why: both heads go into a GitHub API path. Every fixture uses `sha(c) = c.repeat(40)` with hex letters, so no input separates this guard from the conditions beside it.",
+      "impact": "If the guard is dropped, a malformed stored or card head reaches `repos/${repo}/compare/${base}...${head}` unchecked, and no test turns red.",
+      "suggested_fix": "Add a review-reviews.test.ts case with a stored run whose headSha is not a 40-hex id (for example \"main\") and a PR head that differs. Expect `cmp.calls` to have length 0 and freshness `behind` with `commits: null`.",
+      "evidence": "review-reviews.ts:16 `const OBJECT_ID = /^[0-9a-f]{40}$/;` and :53; test helper `const sha = (c: string) => c.repeat(40)`. Candidate B02, not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": 120,
+      "quote": "const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);",
+      "problem": "latestReviewed requires both a finished state and a reviewed range, but every summarizeReview fixture that has a non-finished attempt also gives it `reviewed: null`. The `FINISHED.has` term is never separated from `a.reviewed !== null`. The store can hold a failed attempt with a recorded reviewed range: desk-run-store.test.ts builds one (`run(filtered, d, \"failed\", d)`).",
+      "impact": "If the term is dropped, a newer failed attempt with a range takes over the Review's findings, publication and reference head (and so freshness), and the suite stays green. Whether the executor emits such a row in production was not verified.",
+      "suggested_fix": "In the summarizeReview grouping test, give `retry` a `reviewed: { baseSha: sha(\"a\"), headSha: sha(\"e\") }` and findings that differ. Expect `findings` and `publication` to stay those of `second`, and freshness to be computed from sha c.",
+      "evidence": "review-entity.test.ts 'groups attempts into rounds' (retry: state failed, reviewed null); desk-run-store.test.ts 'Finished-state filter: a newer failed run with a recorded result'. Candidate E06, not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.test.ts",
+      "line": 214,
+      "quote": "await expect(runReviewReviews([\"--json\", \"extra\"], root)).rejects.toThrow();",
+      "problem": "This assertion cannot fail. `root` is a fresh tmpdir, not a Git checkout. If parseArgs accepted the positional, runReviewReviews would go on to `reviewRepositories(root)`, which throws \"configuration: Open a Git project with a GitHub.com remote.\", and `rejects.toThrow()` with no message accepts that. The same test's `--state` case avoids this by matching \"--state\".",
+      "impact": "If `allowPositionals` is flipped, extra arguments are silently ignored, and the test stays green while it also spawns git.",
+      "suggested_fix": "Match parseArgs's error, for example `.rejects.toThrow(/positional|Unexpected argument/i)`, or assert the rejection is not the `configuration:` error.",
+      "evidence": "board-github.ts:61-68 reviewRepositories throws on any git failure; review-reviews.ts parseArgs `allowPositionals: false`. Candidate B09, not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "if (behind.length > MAX_REVIEW_COMPARES) snapshot.warnings.push(",
+      "problem": "Small edges have no fixture. (a) The cap boundary: only 27 is tested, so `>` versus `>=` at exactly 25 is unpinned. (b) The `b.number - a.number` sort tie-break. (c) parseCompare's `Number.isSafeInteger` against a non-number such as \"2\" (-1 is still refused by `< 0`). (d) The real compare closure in runReviewReviews (gh path, `--jq`, base/head order) is not exercised.",
+      "impact": "Low. These are edges and CLI wiring, and the core paths are pinned.",
+      "suggested_fix": "Add a 25-row cap case expecting no warning; a parseCompare case with `\"ahead_by\":\"2\"`; optionally two Reviews with an equal latest createdAt.",
+      "evidence": "Candidates B05, B07 and B08, not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "B01", "file": "src/commands/review-reviews.ts", "anchor": "  if (!rows.length) return snapshot;\n", "replacement": "", "kind": "behavior"},
+    {"id": "B02", "file": "src/commands/review-reviews.ts", "anchor": " && OBJECT_ID.test(reviewed) && OBJECT_ID.test(card.headSha)", "replacement": "", "kind": "behavior"},
+    {"id": "B03", "file": "src/commands/review-reviews.ts", "anchor": " && !reviewClosed(row, card)", "replacement": "", "kind": "behavior"},
+    {"id": "B04", "file": "src/commands/review-reviews.ts", "anchor": "reviewed !== card.headSha && ", "replacement": "", "kind": "behavior"},
+    {"id": "B05", "file": "src/commands/review-reviews.ts", "anchor": "if (behind.length > MAX_REVIEW_COMPARES)", "replacement": "if (behind.length >= MAX_REVIEW_COMPARES)", "kind": "behavior"},
+    {"id": "B06", "file": "src/commands/review-reviews.ts", "anchor": "    if (cannotRetainData(error)) throw error;\n", "replacement": "", "kind": "behavior"},
+    {"id": "B07", "file": "src/commands/review-reviews.ts", "anchor": " || b.number - a.number", "replacement": "", "kind": "behavior"},
+    {"id": "B08", "file": "src/commands/review-reviews.ts", "anchor": "!Number.isSafeInteger(value.ahead_by) || ", "replacement": "", "kind": "behavior"},
+    {"id": "B09", "file": "src/commands/review-reviews.ts", "anchor": "allowPositionals: false", "replacement": "allowPositionals: true", "kind": "behavior"},
+    {"id": "B10", "file": "src/commands/review-reviews.ts", "anchor": "  if (!values.json) throw new Error(REVIEWS_USAGE);\n", "replacement": "", "kind": "behavior"},
+    {"id": "E01", "file": "src/review/review-entity.ts", "anchor": "latest.state === \"running\" && latest.source === \"manual\" && latest.awaitingAnswer", "replacement": "latest.source === \"manual\" && latest.awaitingAnswer", "kind": "behavior"},
+    {"id": "E02", "file": "src/review/review-entity.ts", "anchor": " && latest.source === \"manual\" && latest.awaitingAnswer", "replacement": " && latest.awaitingAnswer", "kind": "behavior"},
+    {"id": "E03", "file": "src/review/review-entity.ts", "anchor": " || compare?.status === \"identical\"", "replacement": "", "kind": "behavior"},
+    {"id": "E04", "file": "src/review/review-entity.ts", "anchor": "rewritten: compare.status !== \"ahead\"", "replacement": "rewritten: compare.status === \"diverged\"", "kind": "behavior"},
+    {"id": "E05", "file": "src/review/review-entity.ts", "anchor": " && review.publication !== \"published\")", "replacement": ")", "kind": "behavior"},
+    {"id": "E06", "file": "src/review/review-entity.ts", "anchor": "newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null)", "replacement": "newest(row.attempts, a => a.reviewed !== null)", "kind": "behavior"},
+    {"id": "E07", "file": "src/review/review-entity.ts", "anchor": "latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null", "replacement": "latestReviewed(row)?.reviewed?.headSha ?? null", "kind": "behavior"},
+    {"id": "E08", "file": "src/review/review-entity.ts", "anchor": "return row.closedAt !== null || ", "replacement": "return ", "kind": "behavior"},
+    {"id": "E09", "file": "src/review/review-entity.ts", "anchor": "    source: latest.source,\n", "replacement": "    source: row.attempts[0]!.source,\n", "kind": "behavior"},
+    {"id": "S01", "file": "src/review/desk-run-store.ts", "anchor": "\"SELECT round FROM runs WHERE id=? AND review_id=? AND round IS NOT NULL\").get(run.previousId, reviewId)", "replacement": "\"SELECT round FROM runs WHERE id=? AND round IS NOT NULL\").get(run.previousId)", "kind": "behavior"},
+    {"id": "S02", "file": "src/review/desk-run-store.ts", "anchor": "    if (retry) return { round: retry.round, previous: newest(retry.round) };", "replacement": "    if (retry && retry.round === (this.db.query<{ round: number | null }, [string]>(\"SELECT max(round) AS round FROM runs WHERE review_id=?\").get(reviewId)?.round ?? null)) return { round: retry.round, previous: newest(retry.round) };", "kind": "behavior"},
+    {"id": "S03", "file": "src/review/desk-run-store.ts", "anchor": "NOT IN ('archive','delete')", "replacement": "NOT IN ('archive')", "kind": "behavior"},
+    {"id": "S04", "file": "src/review/desk-run-store.ts", "anchor": "CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state", "replacement": "r.state AS state", "kind": "behavior"},
+    {"id": "S05", "file": "src/review/desk-run-store.ts", "anchor": "reviewed && item.source !== \"existing\" ? this.publication", "replacement": "reviewed ? this.publication", "kind": "behavior"},
+    {"id": "S06", "file": "src/review/desk-run-store.ts", "anchor": "  if (!existsSync(path.join(root, \"runs.sqlite\"))) return [];\n", "replacement": "", "kind": "behavior"},
+    {"id": "S07", "file": "src/review/desk-run-store.ts", "anchor": "const column = (name: string) => (this.placed ? alias + name : \"NULL\");", "replacement": "const column = (name: string) => alias + name;", "kind": "behavior"},
+    {"id": "S08", "file": "src/review/desk-run-store.ts", "anchor": "previous: last === null ? null : newest(last) };", "replacement": "previous: null };", "kind": "behavior"},
+    {"id": "S09", "file": "src/review/desk-run-store.ts", "anchor": "    this.assignReviews();\n    return { id: run.id, reused: false };", "replacement": "    return { id: run.id, reused: false };", "kind": "behavior"},
+    {"id": "S10", "file": "src/review/desk-run-store.ts", "anchor": "JSON.stringify({ ...run, ...extra, reviewId: undefined, round: undefined, previousRunId: undefined });", "replacement": "JSON.stringify({ ...run, ...extra });", "kind": "behavior"},
+    {"id": "S11", "file": "src/review/desk-run-store.ts", "anchor": "      );\n      this.assignReviews();\n    });", "replacement": "      );\n    });", "kind": "behavior"},
+    {"id": "G01", "file": "src/review/board-badges.ts", "anchor": "...(typeof stale.round === \"number\" && { round: stale.round })", "replacement": "round: stale.round", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 6, "info": 1}
+}
+```
+
+## Summary
+
+- No blocker or major findings. The backend suites use temp-dir stores and injected GitHub doubles with no network, sleeps or real clock. The migration test replays main's DDL verbatim, shuffles insert order, includes a case-variant viewer, and checks the read-only path and idempotent reopening. Every changed badge expectation is cross-checked against localBadge.
+- F-001: the referenceHead fallback fixtures cannot tell whether the fallback ran, because the requested head equals the PR head.
+- F-002: no fixture shows deleted or recoverable attempts in the Reviews list.
+- F-003: the plan's A,B,A round rule has no fixture.
+- F-004: the OBJECT_ID guard on the gh compare path is unpinned.
+- F-005: latestReviewed's finished-state filter is unpinned.
+- F-006: the positional-argument rejection assertion cannot fail.
+- F-007 (info): small edges (the cap boundary, the sort tie-break, parseCompare type checking, the CLI compare wiring) have no fixture.
+- Mutation pass: not run (read-only dispatch). 31 candidates, 0 run, 31 not reached.
+- Test output: research-evidence/verify-tests-to-run-1.txt was not present.
+
+Routing audit: graph_used: no (not-relevant: the driver handed a bounded slice and the production files are named in it). wiki_used: no (not-relevant: a testing-practice review of named files; the plan text in the slice supplied the documented rules). ctx_used: yes (`keryx ctx rg` to search wave-1 raw results and the tests, `keryx ctx read` for review-logic-w1). Raw `git show`/`git diff` ran with a `keryx:raw` marker to get the exact production lines for mutant anchors. raw_rg_used: no.

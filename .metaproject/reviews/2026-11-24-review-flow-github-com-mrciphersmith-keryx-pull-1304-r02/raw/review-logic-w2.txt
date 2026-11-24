@@ -1,0 +1,65 @@
+STATUS: DONE
+
+## Logic Review (round 2, wave 2)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (delta round)
+- Slice: slice-07 (read in full, 1331 lines)
+- Scope mode: explicit-hash-range, supplied slice text
+- Spec compliance gate: ran against the flow's acceptance-criteria.md and plan.md (both are in this slice)
+
+### Summary
+Slice-07 holds no executable code. It is the Flow 519 folder: acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md, flow.json and resolved/T5–T8.implement.json. I read it for logic contradictions between the stated rules, the recorded facts and the acceptance criteria. I found no new defect in this lens. Two points the slice bears on are already filed, so I do not re-file them:
+- AC10 says the outdated-review action "names the round it follows". The journal records that the title drops the round when the badge has no `outdated.round`. The code at f6971fd is apps/desktop/src/review/ReviewResults.tsx:38, which falls back to "Reviewed <sha> — start a new round…". Round 1 filed this as F-060, and review-pr-contract-w1 keeps it open as deferred.
+- Two plan rules are recorded as decisions and settled: a range that comes back (A, B, A) rejoins its first round as a retry, and a package imported later with an older createdAt gets the next round number. I checked that they agree with each other. Neither one renumbers a round that was already shown, which matches the plan's idempotency claim that only rows with review_id IS NULL are touched.
+
+Internal consistency checks that pass:
+- The T9 migration counts add up: 17 attempts = 13 × round 1 + 4 × round 2. There are 13 reviews for 13 distinct keys, 0 dangling review ids and 0 unassigned rows.
+- The flow.json acKinds checks match the [verify:] commands in acceptance-criteria.md for AC2–AC12.
+- The task dependsOn edges in flow.json follow the plan's order T5 → T6 → T7 → T8, with T9 after T5, T11 after T7 and T13 after T8.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected in this slice. AC10's round naming is F-060, which is already open.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. This slice has no code.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Not verified
+- flow.json appears in the slice only in hunks; some lines were elided, for example T10's status. I did not read the full file at f6971fd.
+- No tests were run (exec_budget 0).
+- I did not use the layers commands (gdgraph, wiki, memory): the slice has no code that needs a dependency lookup.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-07"],
+  "summary": "slice-07 is the Flow 519 metadata folder, with no executable code. No new logic findings. The AC10 'names the round it follows' gap is already F-060 (open, deferred). The settled round-assignment rules are internally consistent, and so are the T9 counts.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice holds no code). wiki_used: no (not-relevant). ctx_used: yes (keryx ctx rg, keryx ctx read/show). raw_rg_used: no.

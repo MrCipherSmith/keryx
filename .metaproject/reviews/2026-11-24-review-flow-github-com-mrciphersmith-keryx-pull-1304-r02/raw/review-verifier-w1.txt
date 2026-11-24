@@ -1,0 +1,68 @@
+STATUS: DONE
+
+Adversarial verification of review-testing-practices-w1 F-001 (major), PR #1304 round 2, head f6971fd4a.
+
+## 1. Exact lines
+
+src/commands/review-reviews.test.ts:192-209
+  192 test("comparisons that outlast the deadline leave the count unknown with one warning", async () => {
+  200     return head === sha("d") ? Promise.resolve({ status: "ahead", aheadBy: 1 }) : new Promise<ReviewCompare>(() => {});
+  202   const started = Date.now();
+  203   const result = await readReviews({ ...source(github({ 12: { head: sha("d") }, 13: { head: sha("e") } }), compare), compareBudgetMs: 50 });
+  204   expect(Date.now() - started).toBeLessThan(2000);
+  206   expect(byNumber.get(12)?.freshness).toEqual({ kind: "behind", commits: 1, rewritten: false });
+  207   expect(byNumber.get(13)?.freshness).toEqual({ kind: "behind", commits: null, rewritten: false });
+  208   expect(result.warnings).toEqual(["Some commit counts took too long to read. Refresh to retry."]);
+
+src/commands/review-reviews.ts:
+  14  export const REVIEW_COMPARE_BUDGET_MS = 60_000;
+  87  const deadline = Date.now() + budgetMs;
+  91  const left = deadline - Date.now();
+  92  if (left <= 0) { late = true; return null; }
+  94  const expired = new Promise<"late">(resolve => { timer = setTimeout(() => resolve("late"), left); });
+  96  const result = await Promise.race([compare(reviewed, head), expired]);
+  97  if (result === "late") { late = true; return null; }
+  103 } finally { clearTimeout(timer); }
+
+The finding's line reference "slice-01 lines 557-574" is a diff-slice offset; in the head file the test is at 192-209 and the elapsed assertion at 204 (the class_scope entry "202-204" is correct).
+
+## 2. Project rule
+
+.metaproject/rules/core/tdd-workflow.mdc:20
+  "5. **A unit test uses no real network and no wall-clock time**; fake both."
+.metaproject/rules/core/tdd-workflow.mdc:33 (severity table)
+  "| Real network or wall-clock dependence in a unit test (Rule 5) | a real call or a time-based assertion is reachable | `major` | a faked clock or a mocked boundary |"
+
+## 3. Verdict
+
+CONFIRMED, severity major (by the project table, which the reviewer is required to apply verbatim).
+- Line 204 is a time-based assertion on real elapsed time; line 203 drives a real 50 ms setTimeout through compareHeads. No fake clock is installed. Both match the table's "finding when" column, and neither matches the "not a finding" column. The table gives no lower severity for this row.
+
+Part of the stated impact is overstated (does not change the verdict):
+- The claim that head d can be reported late if 50 ms pass before its task runs is effectively unreachable. mapPool (src/lib/map-pool.ts:10) starts both workers synchronously inside Array.from, so `left` at line 91 is computed in the same synchronous run as line 87 (left = 50 unless a >=50 ms stop-the-world pause hits between two adjacent statements). Then Promise.race against an already-resolved Promise.resolve settles in a microtask, which always precedes the timer macrotask even if left were 1 ms. So `commits: 1` is not a realistic flake source.
+- The reachable flake source is line 204 alone: it bounds the whole readReviews call (SQLite store open, card read, compare) at 2 s, tighter than bun's default 5 s per-test timeout. Observed run: 16 tests in 8.79 s (about 0.55 s per test average), so a single test approaching 2 s under heavy machine load is plausible, not demonstrated.
+
+Is the elapsed assertion needed to catch a broken deadline? No, for the realistic breaks:
+- Deadline removed (no race / timer never resolves): head e's compare never settles, readReviews never resolves, bun's 5 s per-test timeout fails the test. Line 207/208 also could not pass.
+- compareBudgetMs ignored (falls back to REVIEW_COMPARE_BUDGET_MS = 60_000): readReviews takes 60 s, bun timeout fails the test.
+- Mutant R2-R08 (late flag not set on timeout): line 208 fails (warning missing).
+- The only breaks caught by line 204 and by nothing else are a deadline that fires late but within 2-5 s (for example the budget scaled by 40-100x). That is a narrow, unlikely mutant class. The reviewer's suggested fix (drop line 204, rely on the per-test timeout, control the deadline via fake timers or a seam) loses essentially no detection power.
+- Note: the `left <= 0` branch (R2-R07) is not driven by this test at all, as the reviewer already says; a deterministic clock would make it drivable.
+
+Class scope: apps/desktop/src/test/app-navigation.fixture.tsx:278-280 is a real-sleep poll loop (`setTimeout(resolve, 10)` up to 50 times) followed by assertions at 281-282. That is Rule 6 (sleep / fixed delay for async work, always major) rather than a Rule 5 time-based assertion: there is no elapsed-time assertion, the loop exits on the awaited DOM state, and a 500 ms cap just falls through to the assertions. It is a bounded wait on the proving state with a real-time cap, and it copies the base loop at :143-145 (Date.now() deadline, 2500 ms). Listing it as class scope is reasonable; its severity should be judged under Rule 6 separately, and its cap (500 ms) is the tighter, more load-sensitive one.
+
+```json
+{"finding":"testing-practices-w1 F-001","verdict":"CONFIRMED","severity":"major","evidence":["src/commands/review-reviews.test.ts:202-204 real Date.now() elapsed assertion < 2000 ms with compareBudgetMs: 50","src/commands/review-reviews.ts:87,91,94 Date.now() deadline and real setTimeout(left)","tdd-workflow.mdc:20 Rule 5; :33 table row: time-based assertion reachable -> major","src/lib/map-pool.ts:10 workers start synchronously, so the head-d late path claimed in impact is effectively unreachable; only line 204 is a realistic flake source","bun test src/commands/review-reviews.test.ts: 16 pass, 0 fail, 8.79 s"],"red_probe":"Not run (no edits allowed). Reasoned: removing the deadline or ignoring compareBudgetMs (60_000 default) makes readReviews outlast bun's 5 s default per-test timeout, so the test still fails without line 204; line 204 adds detection only for a deadline firing between 2 s and 5 s."}
+```
+
+## 4. Test run
+
+`keryx ctx run -- bun test src/commands/review-reviews.test.ts` from the worktree root: 16 pass, 0 fail, 67 expect() calls, 8.79 s (bun 1.4.4). Per-test durations were not captured.
+
+## Not verified
+
+- No mutant or red probe was executed (read-only lane); the "still caught without line 204" conclusion is by reading the code and bun's default 5 s timeout. I did not confirm no bunfig.toml/CLI override of the timeout beyond a search of bunfig.toml and package.json for "timeout" (no hits).
+- Per-test timing of the deadline test under load was not measured; the 2 s flake is plausible, not reproduced.
+- The fixture loop was read, not run.
+
+Routing audit: graph_used: no (not-relevant: files named in the finding). wiki_used: no (not-relevant: rule file named). ctx_used: yes (keryx ctx rg, keryx ctx run). raw_rg_used: no.

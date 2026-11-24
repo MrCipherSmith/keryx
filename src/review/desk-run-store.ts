@@ -11,6 +11,7 @@ import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "
 import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
 import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
+import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
 import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
 export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
@@ -22,6 +23,11 @@ const unsettledStates = "('running', 'cancelling', 'recoverable')";
 const questionRows = `SELECT run_id, question_id, question, answer, 0 AS reviewer, rowid AS seq FROM review_questions
   UNION ALL SELECT run_id, question_id, question, answer, 1 AS reviewer, rowid AS seq FROM reviewer_questions`;
 const scheduledReservation = "state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled'";
+/** A queued request superseded before it ever started: it spent nothing and is not an attempt of its Review. */
+const neverStarted = (r = "") => `(${r}state='skipped' AND coalesce(json_extract(${r}details,'$.phase'),'')='Superseded'
+  AND json_extract(${r}details,'$.startedAt') IS NULL AND json_extract(${r}details,'$.result') IS NULL
+  AND json_extract(${r}details,'$.usage') IS NULL)`;
+const FINISHED_STATES: ReadonlySet<DeskRun["state"]> = new Set(["completed", "partial", "budget"]);
 type ScheduledLink = { project: string; runId: string };
 const linkedUnsettledRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
   AND state IN ${unsettledStates} AND json_extract(details,'$.source')='scheduled'
@@ -35,14 +41,30 @@ export interface Attempt {
   pid: number | null;
   workerIdentity?: ProcessIdentity | undefined;
 }
+// An attempt's Review placement lives in these columns only; `details` never carries it.
+const reviewColumns = [["review_id", "TEXT"], ["round", "INTEGER"], ["previous_run_id", "TEXT"]] as const;
+const storedDetails = (run: DeskRun, extra?: object) =>
+  JSON.stringify({ ...run, ...extra, reviewId: undefined, round: undefined, previousRunId: undefined });
+type Placement = { reviewId?: string | null | undefined; round?: number | null | undefined; previousRunId?: string | null | undefined };
+/** A row read from a store that predates Reviews has no placement and the run stays as it was. */
+function place(run: DeskRun, { reviewId, round, previousRunId }: Placement) {
+  if (typeof reviewId !== "string") return;
+  run.reviewId = reviewId;
+  if (typeof round === "number") run.round = round;
+  run.previousRunId = previousRunId ?? null;
+}
 interface Row {
   request: string;
   details: string;
   pid: number | null;
   cwd: string;
+  review_id?: string | null;
+  round?: number | null;
+  previous_run_id?: string | null;
 }
 const decode = (row: Row): Attempt => {
   const { workerIdentity, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity };
+  place(run, { reviewId: row.review_id, round: row.round, previousRunId: row.previous_run_id });
   return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity };
 };
 const alive = (pid: number) => {
@@ -77,8 +99,25 @@ function finalizeReviewerProgress(run: DeskRun) {
   Object.assign(progress, summary, { completed: progress.completed ?? summary.completed });
 }
 
+type PlacedAttempt = { seq: number; id: string; round: number; created: string | null; base: string | null; head: string | null; superseded: number };
+/** Rounds follow time. A continuation joins its predecessor's round; an attempt repeating the current highest
+ * round's range is a retry in it; any other attempt, a return to an earlier range included, opens the next round.
+ * A request superseded before it started counts for none of this, so the next request takes its round. */
+function roundFor(placed: PlacedAttempt[], run: { base: string | null; head: string | null; previousId: string | null }) {
+  const linked = run.previousId === null ? undefined : placed.find(attempt => attempt.id === run.previousId);
+  if (linked) return { round: linked.round, previous: linked.id };
+  const counted = placed.filter(attempt => !attempt.superseded);
+  const top = counted.reduce<number | null>((max, attempt) => max === null || attempt.round > max ? attempt.round : max, null);
+  if (top === null) return { round: 1, previous: null };
+  const inTop = counted.filter(attempt => attempt.round === top);
+  const previous = inTop.reduce((a, b) => ((b.created ?? "") > (a.created ?? "") || (b.created === a.created && b.seq > a.seq) ? b : a)).id;
+  const retry = inTop.some(attempt => attempt.base === run.base && attempt.head === run.head);
+  return { round: retry ? top : top + 1, previous };
+}
+
 export class DeskRunStore {
   private readonly db: Database;
+  private placed?: boolean;
   constructor(readonly root = deskRunRoot(), readOnly = false) {
     if (readOnly) {
       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
@@ -110,12 +149,70 @@ export class DeskRunStore {
     CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
     CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE ${scheduledReservation};
     CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ${liveStates};
-    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`);
+    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+      closed_at TEXT, on_head_move TEXT NOT NULL DEFAULT 'ask' CHECK (on_head_move IN ('ask','follow','ignore')),
+      UNIQUE (repo, pr, viewer)
+    );`);
+    // One immediate transaction, so two windows opening an older database cannot both add the columns.
+    this.atomic(() => {
+      const present = this.runColumns();
+      for (const [name, type] of reviewColumns) if (!present.has(name)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${name} ${type}`);
+      this.db.exec("CREATE INDEX IF NOT EXISTS review_rounds ON runs(review_id, round)");
+      this.assignReviews();
+    });
   }
 
   close() {
     this.db.close();
   }
+  private runColumns() {
+    return new Set(this.db.query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')").all().map(c => c.name));
+  }
+  /** A read-only store may open a database that predates Reviews; it reads absent columns as NULL and never migrates. */
+  private placement(alias = "") {
+    this.placed ??= reviewColumns.every(([name]) => this.runColumns().has(name));
+    const column = (name: string) => (this.placed ? alias + name : "NULL");
+    return { reviewId: column("review_id"), round: column("round"), previousRunId: column("previous_run_id") };
+  }
+
+  /** Place every attempt without a Review, in creation order. Runs inside the caller's transaction and
+   * touches only unassigned rows, so a round number once shown is never renumbered. Each Review's placed
+   * attempts are read once per call and kept in memory while its pending rows are placed. */
+  private assignReviews() {
+    type Pending = PlacedAttempt & { repo: string; pr: number; viewer: string; previousId: string | null };
+    const pending = this.db.query<Pending, []>(`SELECT rowid AS seq, id, repo, pr, viewer, json_extract(details,'$.createdAt') AS created,
+        json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head,
+        json_extract(details,'$.continuation.previousId') AS previousId, ${neverStarted()} AS superseded
+      FROM runs WHERE review_id IS NULL ORDER BY json_extract(details,'$.createdAt'), rowid`).all();
+    const placed = new Map<string, PlacedAttempt[]>();
+    for (const row of pending) {
+      const reviewId = this.reviewFor(row.repo, row.pr, row.viewer);
+      let attempts = placed.get(reviewId);
+      if (!attempts) {
+        attempts = this.db.query<PlacedAttempt, [string]>(`SELECT rowid AS seq, id, round, json_extract(details,'$.createdAt') AS created,
+            json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head, ${neverStarted()} AS superseded
+          FROM runs WHERE review_id=? AND round IS NOT NULL`).all(reviewId);
+        placed.set(reviewId, attempts);
+      }
+      const { round, previous } = roundFor(attempts, row);
+      this.db.run("UPDATE runs SET review_id=?, round=?, previous_run_id=? WHERE rowid=? AND review_id IS NULL",
+        [reviewId, round, previous, row.seq]);
+      attempts.push({ ...row, round });
+    }
+  }
+
+  /** The account is part of the key: the viewer column compares case-insensitively. */
+  private reviewFor(repo: string, pr: number, viewer: string): string {
+    const existing = this.db.query<{ id: string }, [string, number, string]>(
+      "SELECT id FROM reviews WHERE repo=? AND pr=? AND viewer=?").get(repo, pr, viewer);
+    if (existing) return existing.id;
+    const id = randomUUID();
+    this.db.run("INSERT INTO reviews (id,repo,pr,viewer) VALUES (?,?,?,?)", [id, repo, pr, viewer]);
+    return id;
+  }
+
   atomic<T>(fn: () => T) {
     return this.db.transaction(fn).immediate();
   }
@@ -265,7 +362,7 @@ export class DeskRunStore {
     this.db.run("UPDATE runs SET state=?, pid=?, details=? WHERE id=?", [
       a.run.state,
       a.pid,
-      JSON.stringify({ ...a.run, workerIdentity: a.workerIdentity }),
+      storedDetails(a.run, { workerIdentity: a.workerIdentity }),
       a.run.id,
     ]);
   }
@@ -297,8 +394,8 @@ export class DeskRunStore {
   }
 
   recordExisting(cwd: string, key: DeskRunKey, runs: DeskRun[]) {
-    for (const run of runs) {
-      this.db.run(
+    this.atomic(() => {
+      for (const run of runs) this.db.run(
         `INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET details=excluded.details
         WHERE json_extract(runs.details,'$.source')='existing' AND json_extract(runs.details,'$.decision') IS NULL`,
@@ -310,10 +407,11 @@ export class DeskRunStore {
           run.state,
           cwd,
           JSON.stringify(key),
-          JSON.stringify(run),
+          storedDetails(run),
         ],
       );
-    }
+      this.assignReviews();
+    });
   }
 
   reportForSearch(key: DeskRunKey, id: string): string | undefined {
@@ -322,15 +420,18 @@ export class DeskRunStore {
     ).get(key.repositoryId, key.number, key.viewer, id)?.report ?? undefined;
   }
 
+  /** A finished attempt with a reviewed range reports a recorded outcome (receipt or skip marker), whatever its
+   * coverage; only a complete review without one is `pending`, because only it is offered for publication. */
   private publication(id: string, state: DeskRun["state"], coverage: string | null | undefined): PublicationOutcome | undefined {
-    if (state !== "completed" || coverage !== "complete" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+    if (!FINISHED_STATES.has(state) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
     const directory = this.directory(id);
     const receipt = readConfigFile(path.join(directory, PUBLICATION_RECEIPT));
     if (receipt.ok) {
       try { if (typeof JSON.parse(receipt.text)?.url === "string") return "published"; }
       catch { /* Receipt without a confirmed URL needs operator attention. */ }
     }
-    return existsSync(path.join(directory, PUBLICATION_SKIPPED)) ? "skipped" : "pending";
+    if (existsSync(path.join(directory, PUBLICATION_SKIPPED))) return "skipped";
+    return state === "completed" && coverage === "complete" ? "pending" : undefined;
   }
 
   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
@@ -338,10 +439,12 @@ export class DeskRunStore {
     // Return small recent reports inline and load the rest by attempt id.
     const reportSelect =
       id === undefined ? "CASE WHEN cumulative <= 131072 THEN report ELSE '' END" : "substr(report,1,524288)";
-    type Item = { details: string; state: string; bytes: number; chars: number; report: string };
+    type Item = Placement & { details: string; state: string; bytes: number; chars: number; report: string };
     const selected = id === undefined ? "" : " AND id=?";
+    const placement = this.placement();
     const sql = `WITH scoped AS (
         SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
+          ${placement.reviewId} AS reviewId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?
           AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'${selected}
@@ -349,7 +452,7 @@ export class DeskRunStore {
         SELECT *,length(CAST(report AS BLOB)) AS bytes,
           sum(length(CAST(report AS BLOB))) OVER (ORDER BY created DESC,seq DESC) AS cumulative
         FROM scoped
-      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report
+      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report,reviewId,round,previousRunId
         FROM measured ORDER BY created DESC,seq DESC`;
     const params = [key.repositoryId, key.number, key.viewer];
     if (id !== undefined) params.push(id);
@@ -358,6 +461,7 @@ export class DeskRunStore {
       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
     const runs = rows.map((row) => {
       const run = JSON.parse(row.details) as DeskRun;
+      place(run, row);
       if (row.state === "recoverable") {
         run.state = "failed";
         run.phase = "Interrupted";
@@ -387,7 +491,8 @@ export class DeskRunStore {
 
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
-      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
+      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null;
+      round: number | null };
     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
     // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
     // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
@@ -430,6 +535,7 @@ export class DeskRunStore {
         json_extract(r.details,'$.result.coverage') AS coverage,
         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+        ${this.placement("r.").round} AS round,
         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
         json_extract(r.details,'$.reviewerProgress.finished') AS finished,
         json_extract(r.details,'$.reviewerProgress.wave') AS wave,
@@ -471,6 +577,58 @@ export class DeskRunStore {
     }
   }
 
+  /** Every Review of one account in one repository with its attempts, oldest first. Archived attempts are kept and
+   * flagged; deleted attempts and requests superseded before they started are left out, and so is a Review with no
+   * other attempt. No reports or reviewer sessions are read. */
+  reviewRows(repositoryId: string, viewer: string): ReviewRow[] {
+    type Item = {
+      reviewId: string; number: number; viewer: string; closedAt: string | null; onHeadMove: ReviewOnHeadMove;
+      id: string; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
+      baseSha: string; headSha: string; reviewedBase: string | null; reviewedHead: string | null;
+      coverage: ReviewAttemptSummary["coverage"]; findings: string | null; verdict: string | null; decision: ReviewAttemptSummary["decision"];
+      flowId: string | null; tokens: number | null; awaitingAnswer: number; createdAt: string; finishedAt: string | null;
+    };
+    const placement = this.placement("r.");
+    const rows = this.db.query<Item, [string, string]>(`
+      SELECT v.id AS reviewId, v.pr AS number, v.viewer AS viewer, v.closed_at AS closedAt, v.on_head_move AS onHeadMove,
+        r.id, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+        CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+        json_extract(r.details,'$.source') AS source,
+        json_extract(r.details,'$.baseSha') AS baseSha, json_extract(r.details,'$.headSha') AS headSha,
+        json_extract(r.details,'$.result.reviewed.baseSha') AS reviewedBase, json_extract(r.details,'$.result.reviewed.headSha') AS reviewedHead,
+        json_extract(r.details,'$.result.coverage') AS coverage, json_extract(r.details,'$.result.findings') AS findings,
+        json_extract(r.details,'$.result.verdict') AS verdict, json_extract(r.details,'$.decision.action') AS decision,
+        json_extract(r.details,'$.options.flowId') AS flowId, json_extract(r.details,'$.usage.total.totalTokens') AS tokens,
+        CASE WHEN r.state='running' AND json_extract(r.details,'$.source')='manual'
+          THEN EXISTS(SELECT 1 FROM (${questionRows}) q WHERE q.run_id=r.id AND q.answer IS NULL) ELSE 0 END AS awaitingAnswer,
+        json_extract(r.details,'$.createdAt') AS createdAt, json_extract(r.details,'$.finishedAt') AS finishedAt
+      FROM reviews v JOIN runs r ON ${placement.reviewId}=v.id
+      WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'')!='delete' AND NOT ${neverStarted("r.")}
+      ORDER BY v.pr DESC, v.id, json_extract(r.details,'$.createdAt'), r.rowid`).all(repositoryId, viewer);
+    const reviews = new Map<string, ReviewRow>();
+    for (const item of rows) {
+      let review = reviews.get(item.reviewId);
+      if (!review) {
+        review = { id: item.reviewId, repositoryId, number: item.number, viewer: item.viewer, closedAt: item.closedAt,
+          onHeadMove: item.onHeadMove, attempts: [] };
+        reviews.set(item.reviewId, review);
+      }
+      const reviewed = item.reviewedBase && item.reviewedHead ? { baseSha: item.reviewedBase, headSha: item.reviewedHead } : null;
+      const archived = item.decision === "archive";
+      // An imported package and an archived attempt are never offered for publication.
+      const publication = reviewed && item.source !== "existing" && !archived ? this.publication(item.id, item.state, item.coverage) : undefined;
+      review.attempts.push({
+        id: item.id, round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
+        baseSha: item.baseSha, headSha: item.headSha, reviewed, coverage: item.coverage,
+        findings: item.findings === null ? null : JSON.parse(item.findings) as ReviewAttemptSummary["findings"],
+        verdict: item.verdict, publication: publication ?? null, decision: item.decision, flowId: item.flowId,
+        tokens: Number.isSafeInteger(item.tokens) ? item.tokens : null, awaitingAnswer: !!item.awaitingAnswer, archived,
+        createdAt: item.createdAt, finishedAt: item.finishedAt,
+      });
+    }
+    return [...reviews.values()];
+  }
+
   activeReviewNumbers({ repositoryId, viewer }: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
     return this.db.query<{ pr: number }, [string, string]>(`
       SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
@@ -504,9 +662,7 @@ export class DeskRunStore {
        FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
          AND json_extract(details,'$.headSha')=? AND (${storedKey}=? OR ?=1) AND json_extract(details,'$.source') IN ('manual','scheduled')
          AND (?=1 OR coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete'))
-         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
-           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
-           AND json_extract(details,'$.usage') IS NULL)
+         AND NOT ${neverStarted()}
        ORDER BY rowid DESC LIMIT 1`,
       )
       .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha, effectiveOptionsKey ?? deskOptionsKey(options), anyOptions ? 1 : 0, anyOptions ? 1 : 0);
@@ -601,6 +757,8 @@ export class DeskRunStore {
       JSON.stringify(key),
       JSON.stringify(run),
     ]);
+    // Inside the caller's dispatch transaction: no transaction of its own.
+    this.assignReviews();
     return { id: run.id, reused: false };
   }
 
@@ -758,6 +916,14 @@ export function readLocalActiveReviewNumbers(key: Pick<DeskRunKey, "repositoryId
   if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return [];
   const store = new DeskRunStore(deskRunRoot(), true);
   try { return store.activeReviewNumbers(key); } finally { store.close(); }
+}
+
+/** A missing store has no Reviews and is not created. An existing store is opened writable, so a database
+ * that predates Reviews is migrated before it is read. */
+export function readReviewRows(repositoryId: string, viewer: string, root = deskRunRoot()): ReviewRow[] {
+  if (!existsSync(path.join(root, "runs.sqlite"))) return [];
+  const store = new DeskRunStore(root);
+  try { return store.reviewRows(repositoryId, viewer); } finally { store.close(); }
 }
 
 export function attachDeskRunBadges(snapshot: ReviewBoardSnapshot) {

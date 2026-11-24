@@ -1,0 +1,81 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-regression, round 1, wave 1, scope B (blast radius), slice-02 read in full (2402 lines).
+
+Short summary: I found 2 regressions, both `major`. Both come from moving the "view" and "answer" Review actions, and the attention signal for local reviews, from the Pull requests tab to the new Reviews tab.
+1. "Open in Reviews" hands over only the PR number, not the repository. The Reviews tab keeps its own repository choice, separate from the Pull requests tab. When the two tabs show different repositories, "View review", "Answer question" or the panel's "Open in Reviews" opens the Review of a different PR that has the same number, or shows "has no Keryx review in this list".
+2. The Reviews tab's attention indicator only reloads when the tab is opened, or every 60 s while the tab is open and a review is running. Before this change, the PR watcher's 60 s poll refreshed the board on every tab, and session-review snapshots also updated it, so the Pull requests indicator lit while the user was on another tab. The change removed awaiting-answer and publication-pending from that indicator, so a scheduled or session-started review that now waits on the user lights no tab until the user opens Reviews.
+
+Coverage: the blast-radius record reports `droppedByCap: 86`, plus 1 generated file dropped by pre-filter and 114 test consumers dropped. The 40-file set is therefore NOT complete, and I did not sweep the dropped files. 15 of the 48 changed files are non-code (Markdown/JSON) and have no graph node, so for those the radius could not answer the question. Their records say unresolved, not clean. Runtime edges are not in the graph: the Tauri `review_board` command string, the CLI argv `review reviews`, and the `publishSessionReview` bus. I checked those by reading the code: `board_read_args` has one production caller (`review_board`), and `reviewBoardArgs` changes in step with it.
+
+Checked and not a regression:
+- `needsViewerAttention` now ignores awaitingAnswer and publicationPending. Its callers are ReviewBoard (attention set and hidden-attention hint) and model.test.ts. AC8 intends this change. `reviewLane` and `attentionReason` still put those cards in the attention lane.
+- `ReviewDetail` dropped the `publishCommand` prop and the "Keryx review" tab. Its only production caller is ReviewBoard (App.tsx), and it no longer passes `publishCommand`.
+- `useReviewRuns(..., visible=false)` still reads status once on mount, so `hasReview` and `loaded` resolve.
+- Readers of an unmigrated DB: `readReviewRows` opens the store for writing and migrates it, so older runs still appear as Reviews.
+- `ReviewIntent` is re-exported from ReviewDetail, so importers still compile.
+
+Out of scope B (outside-set, raise under scope A if wanted): `docs/docs/desktop-app.md:437-438` and `:426`, and `docs/docs/guides/desktop-metaproject.md:3`, still document ⌘3 as Review and ⌘5 as Metaproject. This PR renumbers them to ⌘3 Reviews, ⌘4 Pull requests, ⌘5 Issues, ⌘6 Metaproject (AppShell `PROJECT_VIEWS` / `projectViewForKey`).
+
+Test output `research-evidence/verify-tests-to-run-1.txt` was not present when I looked, so it was not read. No tests were run (exec_budget_s 0).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Two major regressions from moving Review view/answer and local-review attention to the Reviews tab: (1) openInReviews/ReviewsFocus carries only the PR number, so with different repositories selected in the two tabs the action opens the wrong PR's Review or reports none; (2) the Reviews tab indicator does not reload while the tab is hidden, so attention that the PR-watcher poll and session-review snapshots used to surface on the Pull requests tab now lights no tab. The blast-radius set was capped (86 dropped by cap, 114 test consumers dropped); 15 non-code changed files are unresolved by the graph; the test output file was not available.",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "RR-001",
+      "severity": "major",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "const found = snapshot?.reviews.find(review => review.number === pending.number);",
+      "problem": "The changed ReviewBoard.openReview / ReviewDetail 'Open in Reviews' now route view and answer actions through App.tsx openInReviews(number, intent) → ReviewsFocus { number, nonce, intent }. No repository travels with them. ReviewsView (RepositoryReviews) keeps its own `repo` state, separate from the PR board's ProjectBoard `repo` state, and matches the focus by `review.number` alone.",
+      "impact": "Trigger: in a project with more than one base repository, the user picks repository B on the Pull requests tab while the Reviews tab is on A (its default or an earlier choice), then clicks 'View review' or 'Answer question' on PR #N, or 'Open in Reviews' in the PR panel. Outcome: if A has a Review for #N, the Reviews tab opens that other PR's Review panel. Otherwise it reports 'Pull request #N has no Keryx review in this list.' The answer intent is dropped because its SHAs do not match. Before this change the same click opened the correct PR's review interface inside ReviewDetail.",
+      "suggested_fix": "Carry the repository in the focus request (openInReviews(repo, number, intent), with ReviewsFocus.repo). In ReviewsView, switch `selectRepo` to that repository before matching, and match on repositoryId or repo plus number.",
+      "evidence": "slice-02: App.tsx openInReviews sets only { number, intent, nonce }. ReviewsView keys RepositoryReviews by [cwd, viewer, repo] with `const [repo, setRepo] = useState<string>()`, independent of ReviewBoard's ProjectBoard `repo`. The pending-focus effect does `snapshot?.reviews.find(review => review.number === pending.number)`. ReviewBoard openReview calls onOpenInReviews(card.number, reviewIntent) for kind view/answer. ReviewDetail passes `onOpenInReviews && (() => onOpenInReviews(card.number))`. ReviewWorkspace drops an intent whose baseSha/headSha differ from the card's.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/reviews/ReviewsView.tsx (pending-focus effect: find by review.number)",
+          "apps/desktop/src/App.tsx (openInReviews builds ReviewsFocus without repo)",
+          "apps/desktop/src/review/ReviewBoard.tsx (openReview → onOpenInReviews(card.number, reviewIntent))",
+          "apps/desktop/src/review/ReviewBoard.tsx (ReviewDetail onOpenInReviews={() => onOpenInReviews(card.number)})"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/desktop/src for onOpenInReviews|openInReviews|ReviewsFocus|reviewsFocus, plus slice-02: every producer of the focus request (ReviewBoard card action, ReviewDetail button via ReviewBoard) and its one consumer (ReviewsView pending effect). There are no other callers."
+      }
+    },
+    {
+      "id": "RR-002",
+      "severity": "major",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "const indicator: ReviewsTabIndicator = snapshot?.reviews.some(reviewNeedsViewer) ? \"attention\" : null;",
+      "problem": "The change removes awaitingAnswer and publicationPending from needsViewerAttention (apps/desktop/src/review/model.ts), so the Pull requests indicator no longer reflects a local review waiting on the user. The new ReviewsTabIndicator is computed from the ReviewsView snapshot, which reloads only on mount, when the tab is shown again, and every RUNNING_RELOAD_MS while the tab is active and a Review is running. It does not follow the PR watcher poll (ReviewWatcher onPollCompleted, a 60 s interval that runs on every tab) or publishSessionReview snapshots. Those are the two channels that used to update the board's badges, and therefore the tab dot, while the user was on another tab.",
+      "impact": "Trigger: the user is on Sessions, Flows or Issues while a watcher-scheduled review finishes and waits for a publication decision or an answer, or a session-started review is published. Outcome: no tab indicator lights until the user opens the Reviews tab. Before, the Pull requests tab dot lit after the next watcher poll or session snapshot. The App comment says the view is 'Mounted like the PR board, so the Reviews indicator stays current on every tab', but nothing reloads it while hidden.",
+      "suggested_fix": "Reload the Reviews list while hidden on the same signals the board used: subscribe to subscribeSessionReview, and to the watcher's completed-poll signal (or a low-frequency interval not gated on `active`). Alternatively, keep the PR-board signal as a trigger that refreshes ReviewsView.",
+      "evidence": "slice-02: needsViewerAttention drops `|| !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending`. In ReviewsView the load effect depends on [cwd, repo, expectedViewer, attempt, ...]. `refresh()` is called only from the active-transition effect, the `if (!active || !running) return;` interval, the focus effect, observeRuns and buttons. Repository: ReviewWatcher.tsx polls status every 60000 ms with no `active` gate and calls onPollCompleted, which ReviewBoard wires to `refresh`. ReviewBoard subscribes to subscribeSessionReview → updateRunSummary on every tab. ReviewsView has neither subscription.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/reviews/ReviewsView.tsx (indicator derived from a snapshot not reloaded while hidden)",
+          "apps/desktop/src/review/ReviewBoard.tsx (attentionPrs/indicator no longer include awaiting/publication via needsViewerAttention)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/desktop/src for subscribeSessionReview|publishSessionReview|onPollCompleted|needsViewerAttention. Indicator producers are ReviewBoard (PR tab) and ReviewsView (Reviews tab). Refresh channels that run while hidden: ReviewWatcher interval → ReviewBoard refresh, and SessionReviewActivity/App publishSessionReview → ReviewBoard updateRunSummary. ReviewsView wires neither."
+      }
+    }
+  ],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: yes (blast-radius.json, computed from the code graph at head); wiki_used: not-relevant (the regression check is answered from code and AC8); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

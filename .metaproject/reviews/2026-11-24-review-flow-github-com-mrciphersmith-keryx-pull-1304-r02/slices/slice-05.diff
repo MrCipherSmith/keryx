@@ -1,0 +1,1159 @@
+--- src/commands/review-reviews.test.ts
+@@ 1,176 @@
+ import { Database } from "bun:sqlite";
+ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { PUBLICATION_RECEIPT } from "../review/desk-publication-types";
+ import { DeskRunStore } from "../review/desk-run-store";
+ import type { DeskFinish, DeskRunKey } from "../review/desk-run-types";
+-import type { ReviewCompare } from "../review/review-entity";
++import * as boardGithub from "../review/board-github";
++import { reviewNeedsViewer, type ReviewCompare } from "../review/review-entity";
++import * as boardCommand from "./review-board";
+ import { MAX_REVIEW_COMPARES, parseCompare, readReviews, REVIEWS_USAGE, runReviewReviews, type CompareHeads } from "./review-reviews";
+ 
+ const sha = (c: string) => c.repeat(40);
+ const key: DeskRunKey = { repo: "org/repo", repositoryId: "gid", viewer: "user", number: 12 };
+ const first = { baseSha: sha("a"), headSha: sha("b") };
+ const second = { baseSha: sha("a"), headSha: sha("c") };
+ const done = (reviewed: typeof first, findings = { blocker: 0, major: 1, minor: 0, info: 0 }): DeskFinish => ({
+   state: "completed", phase: "Complete", reason: "Done",
+   result: { reviewed, coverage: "complete", verdict: "COMMENT", report: "private report body", findings },
+   usage: { total: { totalTokens: 120 }, coordinator: {}, reviewers: [], partial: false },
+ });
+ 
+ let root: string;
+ beforeEach(() => { root = mkdtempSync(path.join(tmpdir(), "keryx-reviews-")); });
+ afterEach(() => rmSync(root, { recursive: true, force: true }));
+ 
+ function withStore<T>(fn: (store: DeskRunStore) => T): T {
+   const store = new DeskRunStore(root);
+   try { return fn(store); } finally { store.close(); }
+ }
+ /** Request, start and optionally finish one attempt. */
+ function attempt(store: DeskRunStore, k: DeskRunKey, revision: typeof first, finish?: DeskFinish) {
+   const id = store.atomic(() => store.request("/project", k, revision))!;
+   const a = store.byId(id)!;
+   a.run.state = "running";
+   a.pid = null;
+   store.save(a);
+   if (finish) store.end(a, finish);
+   return id;
+ }
+ 
+ function prCard(number: number, headSha: string, state = "OPEN") {
+   const none = { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] };
+   return { number, title: `PR ${number}`, state, isDraft: false, author: { login: "author" }, headRefOid: headSha, baseRefOid: sha("a"),
+     updatedAt: "2026-11-20T00:00:00Z", reviewDecision: null, assignees: none, reviewRequests: none,
+     commits: { nodes: [{ commit: { oid: headSha, statusCheckRollup: null } }] } };
+ }
+-/** A GitHub double: identity, then PR cards by number. Records every query. */
+-function github(heads: Record<number, { head: string; state?: string }>, viewer = "user") {
++/** A GitHub double: identity, then PR cards by number. Records every query; `fails` refuses a card batch holding that PR. */
++function github(heads: Record<number, { head: string; state?: string }>, viewer = "user", fails?: number) {
+   const queries: string[] = [];
+   const query = async <T>(text: string): Promise<T> => {
+     queries.push(text);
+     if (text.includes("ReviewIdentity")) return { viewer: { login: viewer }, repository: { id: "gid" } } as T;
++    if (fails !== undefined && text.includes(`p${fails}:pullRequest`)) throw new Error("unavailable: GitHub returned 502");
+     if (text.includes("ReviewActivePulls")) {
+       const repository: Record<string, unknown> = { id: "gid" };
+       for (const [, n] of text.matchAll(/p(\d+):pullRequest/g)) {
+         const pr = heads[Number(n)];
+         repository[`p${n}`] = pr ? prCard(Number(n), pr.head, pr.state) : null;
+       }
+       return { viewer: { login: viewer }, repository } as T;
+     }
+     throw new Error(`unexpected query ${text.slice(0, 40)}`);
+   };
+   return { query, queries };
+ }
+ const comparing = (result: ReviewCompare | Error = { status: "ahead", aheadBy: 2 }) => {
+   const calls: [string, string][] = [];
+   const compare: CompareHeads = async (base, head) => {
+     calls.push([base, head]);
+     if (result instanceof Error) throw result;
+     return result;
+   };
+   return { compare, calls };
+ };
+ const source = (gh: ReturnType<typeof github>, compare: CompareHeads) =>
+   ({ repo: "org/repo", repositories: ["org/repo"], query: gh.query, compare, root });
++/** Rewrite stored rows directly: an attempt's creation time, or a Review's local close. */
++function editStore(sql: string, params: (string | number)[]) {
++  const db = new Database(path.join(root, "runs.sqlite"));
++  try { db.run(sql, params); } finally { db.close(); }
++}
++const prHead = (n: number) => n.toString(16).padStart(2, "0").repeat(20);
+ 
+ test("a missing store returns an empty list without creating one or reading PRs", async () => {
+   const gh = github({});
+   const cmp = comparing();
+   const result = await readReviews(source(gh, cmp.compare));
+   expect(result).toMatchObject({ version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "gid", viewer: "user", reviews: [], warnings: [] });
+   expect(Object.keys(result)).toEqual(["version", "repo", "repositories", "repositoryId", "viewer", "fetchedAt", "reviews", "warnings"]);
+   expect(existsSync(path.join(root, "runs.sqlite"))).toBe(false);
+   expect(gh.queries).toHaveLength(1);
+   expect(cmp.calls).toHaveLength(0);
+ });
+ 
+ test("one summary per Review with state, freshness, rounds and latest findings; no reports", async () => {
+   const ids = withStore(store => {
+     const r1 = attempt(store, key, first, done(first, { blocker: 1, major: 0, minor: 0, info: 0 }));
+     const r2 = attempt(store, key, second, done(second));
+     mkdirSync(store.directory(r2), { recursive: true });
+     writeFileSync(path.join(store.directory(r2), PUBLICATION_RECEIPT), JSON.stringify({ url: "https://github.com/org/repo/pull/12#r" }));
+-    // Another viewer's Review and an archived attempt stay out of this account's list.
++    // Another viewer's Review and a deleted attempt stay out of this account's list; an archived one is kept, flagged.
+     attempt(store, { ...key, viewer: "colleague", number: 13 }, first, done(first));
+     const archived = attempt(store, { ...key, number: 14 }, first, done(first));
+     const a = store.byId(archived)!;
+     a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
+     store.save(a);
++    const deleted = attempt(store, { ...key, number: 16 }, first, done(first));
++    const d = store.byId(deleted)!;
++    d.run.decision = { action: "delete", reason: "noise", at: "2026-11-20T00:00:00Z" };
++    store.save(d);
+     const running = attempt(store, { ...key, number: 15 }, first);
+     store.openQuestion(running, { id: "q1", question: "Which?", options: [{ id: "a", label: "A", description: "" }], allowFreeform: false });
+     return { r1, r2, running };
+   });
+-  const gh = github({ 12: { head: sha("d") }, 15: { head: sha("b") } });
++  const gh = github({ 12: { head: sha("d") }, 14: { head: sha("b") }, 15: { head: sha("b") }, 16: { head: sha("b") } });
+   const cmp = comparing({ status: "ahead", aheadBy: 3 });
+   const result = await readReviews(source(gh, cmp.compare));
+ 
+-  expect(result.reviews.map(r => r.number)).toEqual([15, 12]);
+-  const [waiting, published] = result.reviews;
++  expect(result.reviews.map(r => r.number)).toEqual([15, 14, 12]);
++  const [waiting, archivedReview, published] = result.reviews;
++  expect(archivedReview).toMatchObject({ archived: true, state: "ready", reviewed: first });
++  expect(archivedReview!.rounds[0]!.attempts[0]).toMatchObject({ archived: true, decision: "archive" });
++  expect(reviewNeedsViewer(archivedReview!)).toBe(false);
+   expect(waiting).toMatchObject({ state: "needs_answer", freshness: { kind: "current" }, latestRound: 1, findings: null });
+   expect(published).toMatchObject({
+     state: "published", latestRound: 2, tokens: 240, source: "manual", onHeadMove: "ask", closedAt: null,
+     findings: { blocker: 0, major: 1, minor: 0, info: 0 }, publication: "published",
+-    freshness: { kind: "behind", commits: 3, rewritten: false },
++    freshness: { kind: "behind", commits: 3, rewritten: false }, reviewed: second, archived: false,
+   });
+   expect(published!.card?.headSha).toBe(sha("d"));
+   expect(published!.rounds.map(r => [r.number, r.headSha, r.previousRunId])).toEqual([[2, sha("c"), ids.r1], [1, sha("b"), null]]);
+   expect(published!.rounds[0]!.attempts.map(a => a.id)).toEqual([ids.r2]);
+   expect(cmp.calls).toEqual([[sha("c"), sha("d")]]);
+   expect(JSON.stringify(result)).not.toContain("private report body");
+   expect(JSON.stringify(result)).not.toContain("reviewerProgress");
+ });
+ 
+ test("a failed comparison leaves the count unknown and warns; a closed PR is not compared", async () => {
+   withStore(store => {
+     attempt(store, key, first, done(first));
+     attempt(store, { ...key, number: 20 }, first, done(first));
+   });
+   const cmp = comparing(new Error("unavailable: rate limit"));
+   const result = await readReviews(source(github({ 12: { head: sha("d") }, 20: { head: sha("e"), state: "MERGED" } }), cmp.compare));
+   const byNumber = new Map(result.reviews.map(r => [r.number, r]));
+   expect(byNumber.get(12)).toMatchObject({ state: "ready", freshness: { kind: "behind", commits: null, rewritten: false } });
+   expect(byNumber.get(20)).toMatchObject({ state: "closed", freshness: { kind: "behind", commits: null } });
+   expect(cmp.calls).toHaveLength(1);
+   expect(result.warnings).toEqual(["Some commit counts could not be read. Refresh to retry."]);
+ });
+ 
+-test(`at most ${MAX_REVIEW_COMPARES} comparisons per call`, async () => {
++test(`at most ${MAX_REVIEW_COMPARES} comparisons per call, for the Reviews with the newest activity`, async () => {
+   const heads: Record<number, { head: string }> = {};
+-  withStore(store => {
++  const ids = withStore(store => {
++    const created: Record<number, string> = {};
+     for (let n = 1; n <= MAX_REVIEW_COMPARES + 2; n++) {
+-      attempt(store, { ...key, number: n }, first, done(first));
+-      heads[n] = { head: sha("d") };
++      created[n] = attempt(store, { ...key, number: n }, first, done(first));
++      heads[n] = { head: prHead(n) };
+     }
++    return created;
+   });
++  // The lowest PR numbers have the newest activity, so they are listed first and are the ones compared.
++  for (const [n, id] of Object.entries(ids)) {
++    editStore("UPDATE runs SET details=json_set(details,'$.createdAt',?) WHERE id=?", [`2026-11-${String(40 - Number(n)).padStart(2, "0")}T00:00:00.000Z`, id]);
++  }
+   const cmp = comparing();
+   const result = await readReviews(source(github(heads), cmp.compare));
+   expect(result.reviews).toHaveLength(MAX_REVIEW_COMPARES + 2);
+-  expect(cmp.calls).toHaveLength(MAX_REVIEW_COMPARES);
+-  expect(result.reviews.filter(r => r.freshness.kind === "behind" && r.freshness.commits === null)).toHaveLength(2);
++  expect(result.reviews.map(r => r.number).slice(0, 3)).toEqual([1, 2, 3]);
++  expect(cmp.calls.map(([, head]) => parseInt(head.slice(0, 2), 16)).sort((a, b) => a - b))
++    .toEqual(Array.from({ length: MAX_REVIEW_COMPARES }, (_, i) => i + 1));
++  expect(result.reviews.filter(r => r.freshness.kind === "behind" && r.freshness.commits === null).map(r => r.number)).toEqual([26, 27]);
+   expect(result.warnings).toHaveLength(1);
+ });
+
+--- src/commands/review-reviews.test.ts
+@@ 291,329 @@
+ test("a store that predates Reviews is migrated when it is read", async () => {
+   mkdirSync(root, { recursive: true });
+   const db = new Database(path.join(root, "runs.sqlite"));
+   db.exec(`CREATE TABLE runs (id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+     state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL)`);
+   const details = { id: "old-run", source: "manual", ...first, state: "failed", phase: "Failed", reason: "x",
+     createdAt: "2026-10-01T00:00:00.000Z", startedAt: null, finishedAt: null, result: null };
+   db.run("INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)",
+     ["old-run", "gid", 12, "USER", "failed", "/p", JSON.stringify(key), JSON.stringify(details)]);
+   db.close();
+   const result = await readReviews(source(github({ 12: { head: sha("b") } }), comparing().compare));
+   expect(result.reviews).toHaveLength(1);
+   expect(result.reviews[0]).toMatchObject({ number: 12, state: "stopped", latestRound: 1 });
+   expect(result.reviews[0]!.rounds[0]!.attempts.map(a => a.id)).toEqual(["old-run"]);
+ });
+ 
+ test("parseCompare reads only a known status and a non-negative count", () => {
+   expect(parseCompare('{"status":"diverged","ahead_by":2}')).toEqual({ status: "diverged", aheadBy: 2 });
+   expect(() => parseCompare('{"status":"weird","ahead_by":2}')).toThrow("unavailable:");
+   expect(() => parseCompare('{"status":"ahead","ahead_by":-1}')).toThrow("unavailable:");
++  expect(() => parseCompare('{"status":"ahead","ahead_by":"2"}')).toThrow("unavailable:");
+ });
+ 
+ test("the command needs --json, refuses unknown flags and prints its usage on --help", async () => {
+   const log = spyOn(console, "log").mockImplementation(() => {});
+   try {
+     await runReviewReviews(["--help"], root);
+     expect(log).toHaveBeenLastCalledWith(REVIEWS_USAGE);
+   } finally { log.mockRestore(); }
+   await expect(runReviewReviews([], root)).rejects.toThrow(REVIEWS_USAGE);
+   await expect(runReviewReviews(["--json", "--state", "open"], root)).rejects.toThrow("--state");
+-  await expect(runReviewReviews(["--json", "extra"], root)).rejects.toThrow();
++  await expect(runReviewReviews(["--json", "--include-closed=yes"], root)).rejects.toThrow("--include-closed");
++  await expect(runReviewReviews(["--json", "extra"], root)).rejects.toThrow(/positional/i);
++});
++
++test("the GitHub-bound JSON writer lives with the GitHub binding; the board command keeps its own private", () => {
++  expect(typeof boardGithub.writeBoundJson).toBe("function");
++  expect(Object.keys(boardCommand)).not.toContain("writeJson");
+ });
+
+--- src/review/board-github.ts
+@@ 83,137 @@
+ export interface GithubConnection {
+   login: string | null;
+   env: NodeJS.ProcessEnv;
+   binding?: { project: string; generation: number | null };
+ }
+ 
+ export function withCurrentGithubBinding<T>(connection: GithubConnection, useConnection: () => T): T {
+   if (!connection.binding) return useConnection();
+   const { project, generation } = connection.binding;
+   return watcherTransaction((db) => {
+     if ((projectGithubBinding(project, db)?.generation ?? null) !== generation)
+       throw new Error("access: The project's GitHub account changed. Refresh Review.");
+     return useConnection();
+   });
+ }
+ 
+ export function verifyGithubBindingUnchanged(connection: GithubConnection): void {
+   withCurrentGithubBinding(connection, () => undefined);
+ }
+ 
++/** Write one JSON payload for the Desktop hosts, which read through a pipe. The GitHub binding is checked again at
++ * this publication boundary (optional API reads may have turned their errors into warnings), and the call returns
++ * only after the whole payload is handed to the pipe, so even a large history is flushed before the command exits. */
++export function writeBoundJson(result: unknown, auth: GithubConnection): Promise<void> {
++  return writeBoundJsonText(JSON.stringify(result), auth);
++}
++export function writeBoundJsonText(json: string, auth: GithubConnection): Promise<void> {
++  return new Promise<void>((resolve, reject) => {
++    // Concurrent writers stay excluded until the complete payload is handed to the pipe.
++    withCurrentGithubBinding(auth, () => {
++      process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
++    });
++  });
++}
++
+ export async function projectGithubConnection(
+   cwd: string, env: NodeJS.ProcessEnv = process.env, expectedViewer?: string,
+ ): Promise<GithubConnection> {
+   const project = await reviewGitCommonDir(cwd, env);
+   if (!project) throw new Error("configuration: Open a Git project to connect GitHub.");
+   const binding = projectGithubBinding(project);
+   if (binding?.login === null) throw new Error(projectNotConnected);
+   const login = binding?.login ?? null;
+   if (login && expectedViewer && login.toLowerCase() !== expectedViewer.toLowerCase())
+     throw new Error("access: The project's GitHub account changed. Refresh Review.");
+   return { login, env: login ? await namedGithubEnvironment(cwd, login, env) : env,
+     binding: { project, generation: binding?.generation ?? null } };
+ }
+ 
+ export async function boardGh(
+   cwd: string, args: string[], connection?: GithubConnection, timeout = 18_000,
+ ): Promise<string> {
+   const auth = connection ?? await projectGithubConnection(cwd);
+   const gh = reviewTool("gh", auth.env);
+   let output: string;
+
+--- src/review/desk-run-store.ts
+@@ 6,50 @@
+ import { localBadge, type BadgeCard } from "./board-badges";
+ import type { ReviewBoardSnapshot } from "./board-types";
+ import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
+ import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
+ import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
+ import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
+ import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
+ import { summarizeReviewerAssignments } from "./reviewer-activity";
+ import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
+ import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
+ 
+ export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
+ export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
+ const maxScheduledWorkers = 4;
+ const liveStates = "('running', 'cancelling')";
+ const unsettledStates = "('running', 'cancelling', 'recoverable')";
+ // Keep the coordinator slot intact for workers running an older binary.
+ const questionRows = `SELECT run_id, question_id, question, answer, 0 AS reviewer, rowid AS seq FROM review_questions
+   UNION ALL SELECT run_id, question_id, question, answer, 1 AS reviewer, rowid AS seq FROM reviewer_questions`;
+ const scheduledReservation = "state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled'";
++/** A queued request superseded before it ever started: it spent nothing and is not an attempt of its Review. */
++const neverStarted = (r = "") => `(${r}state='skipped' AND coalesce(json_extract(${r}details,'$.phase'),'')='Superseded'
++  AND json_extract(${r}details,'$.startedAt') IS NULL AND json_extract(${r}details,'$.result') IS NULL
++  AND json_extract(${r}details,'$.usage') IS NULL)`;
++const FINISHED_STATES: ReadonlySet<DeskRun["state"]> = new Set(["completed", "partial", "budget"]);
+ type ScheduledLink = { project: string; runId: string };
+ const linkedUnsettledRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
+   AND state IN ${unsettledStates} AND json_extract(details,'$.source')='scheduled'
+   AND json_extract(details,'$.schedule.project')=?`;
+ const linkParams = (key: DeskRunKey, link: ScheduledLink): [string, string, number, string, string] =>
+   [link.runId, key.repositoryId, key.number, key.viewer, link.project];
+ export interface Attempt {
+   key: DeskRunKey;
+   cwd: string;
+   run: DeskRun;
+   pid: number | null;
+   workerIdentity?: ProcessIdentity | undefined;
+ }
+ // An attempt's Review placement lives in these columns only; `details` never carries it.
+ const reviewColumns = [["review_id", "TEXT"], ["round", "INTEGER"], ["previous_run_id", "TEXT"]] as const;
+ const storedDetails = (run: DeskRun, extra?: object) =>
+   JSON.stringify({ ...run, ...extra, reviewId: undefined, round: undefined, previousRunId: undefined });
+ type Placement = { reviewId?: string | null | undefined; round?: number | null | undefined; previousRunId?: string | null | undefined };
+ /** A row read from a store that predates Reviews has no placement and the run stays as it was. */
+ function place(run: DeskRun, { reviewId, round, previousRunId }: Placement) {
+
+--- src/review/desk-run-store.ts
+@@ 82,137 @@
+   // retain the conservative numeric check.
+   return alive(pid) || (process.platform !== "win32" && alive(-pid));
+ }
+ 
+ // A dead worker can leave its last session checkpoints in both current and older history rows.
+ function finalizeReviewerProgress(run: DeskRun) {
+   const progress = run.reviewerProgress;
+   if (!progress) return;
+   if (["running", "cancelling", "queued"].includes(run.state)) {
+     if (progress.completed === undefined && progress.sessions.length) progress.completed = summarizeReviewerAssignments(progress.sessions).completed;
+     return;
+   }
+   for (const session of progress.sessions) {
+     if (session.state === "running" || session.state === "planned") session.state = "unknown";
+   }
+   const summary = summarizeReviewerAssignments(progress.sessions);
+   // Only the verified queue knows which observed sessions belong to the plan.
+   Object.assign(progress, summary, { completed: progress.completed ?? summary.completed });
+ }
+ 
++type PlacedAttempt = { seq: number; id: string; round: number; created: string | null; base: string | null; head: string | null; superseded: number };
++/** Rounds follow time. A continuation joins its predecessor's round; an attempt repeating the current highest
++ * round's range is a retry in it; any other attempt, a return to an earlier range included, opens the next round.
++ * A request superseded before it started counts for none of this, so the next request takes its round. */
++function roundFor(placed: PlacedAttempt[], run: { base: string | null; head: string | null; previousId: string | null }) {
++  const linked = run.previousId === null ? undefined : placed.find(attempt => attempt.id === run.previousId);
++  if (linked) return { round: linked.round, previous: linked.id };
++  const counted = placed.filter(attempt => !attempt.superseded);
++  const top = counted.reduce<number | null>((max, attempt) => max === null || attempt.round > max ? attempt.round : max, null);
++  if (top === null) return { round: 1, previous: null };
++  const inTop = counted.filter(attempt => attempt.round === top);
++  const previous = inTop.reduce((a, b) => ((b.created ?? "") > (a.created ?? "") || (b.created === a.created && b.seq > a.seq) ? b : a)).id;
++  const retry = inTop.some(attempt => attempt.base === run.base && attempt.head === run.head);
++  return { round: retry ? top : top + 1, previous };
++}
++
+ export class DeskRunStore {
+   private readonly db: Database;
+   private placed?: boolean;
+   constructor(readonly root = deskRunRoot(), readOnly = false) {
+     if (readOnly) {
+       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
+       this.db.exec("PRAGMA busy_timeout=8000");
+       return;
+     }
+     ensureKeryxConfigDir(root);
+     this.db = new Database(path.join(root, "runs.sqlite"));
+     this.db.exec("PRAGMA busy_timeout=8000");
+     this.db.exec(`CREATE TABLE IF NOT EXISTS runs (
+       id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+       state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL
+     );
+     CREATE TABLE IF NOT EXISTS review_questions (
+       run_id TEXT PRIMARY KEY, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT
+     );
+     CREATE TABLE IF NOT EXISTS reviewer_questions (
+
+--- src/review/desk-run-store.ts
+@@ 161,190 @@
+       for (const [name, type] of reviewColumns) if (!present.has(name)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${name} ${type}`);
+       this.db.exec("CREATE INDEX IF NOT EXISTS review_rounds ON runs(review_id, round)");
+       this.assignReviews();
+     });
+   }
+ 
+   close() {
+     this.db.close();
+   }
+   private runColumns() {
+     return new Set(this.db.query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')").all().map(c => c.name));
+   }
+   /** A read-only store may open a database that predates Reviews; it reads absent columns as NULL and never migrates. */
+   private placement(alias = "") {
+     this.placed ??= reviewColumns.every(([name]) => this.runColumns().has(name));
+     const column = (name: string) => (this.placed ? alias + name : "NULL");
+     return { reviewId: column("review_id"), round: column("round"), previousRunId: column("previous_run_id") };
+   }
+ 
+   /** Place every attempt without a Review, in creation order. Runs inside the caller's transaction and
+-   * touches only unassigned rows, so a round number once shown is never renumbered. */
++   * touches only unassigned rows, so a round number once shown is never renumbered. Each Review's placed
++   * attempts are read once per call and kept in memory while its pending rows are placed. */
+   private assignReviews() {
+-    type Pending = { seq: number; repo: string; pr: number; viewer: string; base: string | null; head: string | null; previousId: string | null };
+-    const pending = this.db.query<Pending, []>(`SELECT rowid AS seq, repo, pr, viewer,
++    type Pending = PlacedAttempt & { repo: string; pr: number; viewer: string; previousId: string | null };
++    const pending = this.db.query<Pending, []>(`SELECT rowid AS seq, id, repo, pr, viewer, json_extract(details,'$.createdAt') AS created,
+         json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head,
+-        json_extract(details,'$.continuation.previousId') AS previousId
++        json_extract(details,'$.continuation.previousId') AS previousId, ${neverStarted()} AS superseded
+       FROM runs WHERE review_id IS NULL ORDER BY json_extract(details,'$.createdAt'), rowid`).all();
++    const placed = new Map<string, PlacedAttempt[]>();
+     for (const row of pending) {
+
+--- src/review/desk-run-store.ts
+@@ 201,235 @@
+         [reviewId, round, previous, row.seq]);
++      attempts.push({ ...row, round });
+     }
+   }
+ 
+   /** The account is part of the key: the viewer column compares case-insensitively. */
+   private reviewFor(repo: string, pr: number, viewer: string): string {
+     const existing = this.db.query<{ id: string }, [string, number, string]>(
+       "SELECT id FROM reviews WHERE repo=? AND pr=? AND viewer=?").get(repo, pr, viewer);
+     if (existing) return existing.id;
+     const id = randomUUID();
+     this.db.run("INSERT INTO reviews (id,repo,pr,viewer) VALUES (?,?,?,?)", [id, repo, pr, viewer]);
+     return id;
+   }
+ 
+-  /** A continuation joins its predecessor's round; a known range is a retry in its round; any other range opens the next round. */
+-  private roundFor(reviewId: string, run: { base: string | null; head: string | null; previousId: string | null }) {
+-    const newest = (round: number) => this.db.query<{ id: string }, [string, number]>(`SELECT id FROM runs
+-      WHERE review_id=? AND round=? ORDER BY json_extract(details,'$.createdAt') DESC, rowid DESC LIMIT 1`).get(reviewId, round)?.id ?? null;
+-    const linked = run.previousId === null ? null : this.db.query<{ round: number }, [string, string]>(
+-      "SELECT round FROM runs WHERE id=? AND review_id=? AND round IS NOT NULL").get(run.previousId, reviewId);
+-    if (linked) return { round: linked.round, previous: run.previousId };
+-    const retry = this.db.query<{ round: number }, [string, string | null, string | null]>(`SELECT round FROM runs
+-      WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?
+-      ORDER BY round DESC LIMIT 1`).get(reviewId, run.base, run.head);
+-    if (retry) return { round: retry.round, previous: newest(retry.round) };
+-    const last = this.db.query<{ round: number | null }, [string]>(
+-      "SELECT max(round) AS round FROM runs WHERE review_id=?").get(reviewId)?.round ?? null;
+-    return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };
+-  }
+   atomic<T>(fn: () => T) {
+     return this.db.transaction(fn).immediate();
+   }
+   directory(id: string) {
+     return path.join(this.root, "attempts", id);
+   }
+ 
+   private transcriptUpdatedAt(id: string): string | undefined {
+     if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) return;
+     const directory = this.directory(id);
+     const run = path.join(directory, "run");
+     try {
+       if (!lstatSync(directory).isDirectory() || !lstatSync(run).isDirectory()) return;
+       const log = lstatSync(path.join(run, "events.ndjson"));
+       if (log.isFile() && log.size > 0) return log.mtime.toISOString();
+     } catch { /* The transcript may not exist yet. */ }
+   }
+ 
+   byId(id: string): Attempt | undefined {
+     const row = this.db.query<Row, [string]>("SELECT * FROM runs WHERE id=?").get(id);
+
+--- src/review/desk-run-store.ts
+@@ 403,454 @@
+           run.id,
+           key.repositoryId,
+           key.number,
+           key.viewer,
+           run.state,
+           cwd,
+           JSON.stringify(key),
+           storedDetails(run),
+         ],
+       );
+       this.assignReviews();
+     });
+   }
+ 
+   reportForSearch(key: DeskRunKey, id: string): string | undefined {
+     return this.db.query<{ report: string | null }, [string, number, string, string]>(
+       "SELECT json_extract(details,'$.result.report') AS report FROM runs WHERE repo=? AND pr=? AND viewer=? AND id=?",
+     ).get(key.repositoryId, key.number, key.viewer, id)?.report ?? undefined;
+   }
+ 
++  /** A finished attempt with a reviewed range reports a recorded outcome (receipt or skip marker), whatever its
++   * coverage; only a complete review without one is `pending`, because only it is offered for publication. */
+   private publication(id: string, state: DeskRun["state"], coverage: string | null | undefined): PublicationOutcome | undefined {
+-    if (state !== "completed" || coverage !== "complete" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
++    if (!FINISHED_STATES.has(state) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+     const directory = this.directory(id);
+     const receipt = readConfigFile(path.join(directory, PUBLICATION_RECEIPT));
+     if (receipt.ok) {
+       try { if (typeof JSON.parse(receipt.text)?.url === "string") return "published"; }
+       catch { /* Receipt without a confirmed URL needs operator attention. */ }
+     }
+-    return existsSync(path.join(directory, PUBLICATION_SKIPPED)) ? "skipped" : "pending";
++    if (existsSync(path.join(directory, PUBLICATION_SKIPPED))) return "skipped";
++    return state === "completed" && coverage === "complete" ? "pending" : undefined;
+   }
+ 
+   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
+     // Keep periodic IPC responses bounded. The database retains full reports.
+     // Return small recent reports inline and load the rest by attempt id.
+     const reportSelect =
+       id === undefined ? "CASE WHEN cumulative <= 131072 THEN report ELSE '' END" : "substr(report,1,524288)";
+     type Item = Placement & { details: string; state: string; bytes: number; chars: number; report: string };
+     const selected = id === undefined ? "" : " AND id=?";
+     const placement = this.placement();
+     const sql = `WITH scoped AS (
+         SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
+           ${placement.reviewId} AS reviewId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+           coalesce(json_extract(details,'$.result.report'),'') AS report
+         FROM runs WHERE repo=? AND pr=? AND viewer=?
+           AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'${selected}
+       ), measured AS (
+         SELECT *,length(CAST(report AS BLOB)) AS bytes,
+           sum(length(CAST(report AS BLOB))) OVER (ORDER BY created DESC,seq DESC) AS cumulative
+         FROM scoped
+
+--- src/review/desk-run-store.ts
+@@ 560,685 @@
+         if (!runs.length) byPr.set(row.pr, runs);
+         // localBadge reads a publication only for a run that reviewed the card's own range.
+         const card = cardByPr.get(row.pr);
+         const publication = row.base && row.head && card?.baseSha === row.base && card.headSha === row.head &&
+           this.publication(row.id, row.state, row.coverage);
+         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
+           ...(publication && { publication }),
+           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
+           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
+           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,
+             ...(row.completed !== null && { completed: row.completed }),
+           } });
+       }
+       for (const card of cards) {
+         const runs = byPr.get(card.number);
+         if (runs) card.localReview = localBadge(runs, card);
+       }
+     }
+   }
+ 
+-  /** Every Review of one account in one repository with its visible attempts, oldest first. Archived and deleted
+-   * attempts are left out, and so is a Review with no other attempt. No reports or reviewer sessions are read. */
++  /** Every Review of one account in one repository with its attempts, oldest first. Archived attempts are kept and
++   * flagged; deleted attempts and requests superseded before they started are left out, and so is a Review with no
++   * other attempt. No reports or reviewer sessions are read. */
+   reviewRows(repositoryId: string, viewer: string): ReviewRow[] {
+     type Item = {
+       reviewId: string; number: number; viewer: string; closedAt: string | null; onHeadMove: ReviewOnHeadMove;
+       id: string; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
+       baseSha: string; headSha: string; reviewedBase: string | null; reviewedHead: string | null;
+       coverage: ReviewAttemptSummary["coverage"]; findings: string | null; verdict: string | null; decision: ReviewAttemptSummary["decision"];
+       flowId: string | null; tokens: number | null; awaitingAnswer: number; createdAt: string; finishedAt: string | null;
+     };
+     const placement = this.placement("r.");
+     const rows = this.db.query<Item, [string, string]>(`
+       SELECT v.id AS reviewId, v.pr AS number, v.viewer AS viewer, v.closed_at AS closedAt, v.on_head_move AS onHeadMove,
+         r.id, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+         json_extract(r.details,'$.source') AS source,
+         json_extract(r.details,'$.baseSha') AS baseSha, json_extract(r.details,'$.headSha') AS headSha,
+         json_extract(r.details,'$.result.reviewed.baseSha') AS reviewedBase, json_extract(r.details,'$.result.reviewed.headSha') AS reviewedHead,
+         json_extract(r.details,'$.result.coverage') AS coverage, json_extract(r.details,'$.result.findings') AS findings,
+         json_extract(r.details,'$.result.verdict') AS verdict, json_extract(r.details,'$.decision.action') AS decision,
+         json_extract(r.details,'$.options.flowId') AS flowId, json_extract(r.details,'$.usage.total.totalTokens') AS tokens,
+         CASE WHEN r.state='running' AND json_extract(r.details,'$.source')='manual'
+           THEN EXISTS(SELECT 1 FROM (${questionRows}) q WHERE q.run_id=r.id AND q.answer IS NULL) ELSE 0 END AS awaitingAnswer,
+         json_extract(r.details,'$.createdAt') AS createdAt, json_extract(r.details,'$.finishedAt') AS finishedAt
+       FROM reviews v JOIN runs r ON ${placement.reviewId}=v.id
+-      WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')
++      WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'')!='delete' AND NOT ${neverStarted("r.")}
+       ORDER BY v.pr DESC, v.id, json_extract(r.details,'$.createdAt'), r.rowid`).all(repositoryId, viewer);
+     const reviews = new Map<string, ReviewRow>();
+     for (const item of rows) {
+       let review = reviews.get(item.reviewId);
+       if (!review) {
+         review = { id: item.reviewId, repositoryId, number: item.number, viewer: item.viewer, closedAt: item.closedAt,
+           onHeadMove: item.onHeadMove, attempts: [] };
+         reviews.set(item.reviewId, review);
+       }
+       const reviewed = item.reviewedBase && item.reviewedHead ? { baseSha: item.reviewedBase, headSha: item.reviewedHead } : null;
+-      const publication = reviewed && item.source !== "existing" ? this.publication(item.id, item.state, item.coverage) : undefined;
++      const archived = item.decision === "archive";
++      // An imported package and an archived attempt are never offered for publication.
++      const publication = reviewed && item.source !== "existing" && !archived ? this.publication(item.id, item.state, item.coverage) : undefined;
+       review.attempts.push({
+         id: item.id, round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
+         baseSha: item.baseSha, headSha: item.headSha, reviewed, coverage: item.coverage,
+         findings: item.findings === null ? null : JSON.parse(item.findings) as ReviewAttemptSummary["findings"],
+         verdict: item.verdict, publication: publication ?? null, decision: item.decision, flowId: item.flowId,
+-        tokens: Number.isSafeInteger(item.tokens) ? item.tokens : null, awaitingAnswer: !!item.awaitingAnswer,
++        tokens: Number.isSafeInteger(item.tokens) ? item.tokens : null, awaitingAnswer: !!item.awaitingAnswer, archived,
+         createdAt: item.createdAt, finishedAt: item.finishedAt,
+       });
+     }
+     return [...reviews.values()];
+   }
+ 
+   activeReviewNumbers({ repositoryId, viewer }: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
+     return this.db.query<{ pr: number }, [string, string]>(`
+       SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
+         AND state IN ('queued','running','cancelling')
+         AND json_extract(details,'$.source') IN ('manual','scheduled')
+         AND coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete')
+       ORDER BY pr DESC
+     `).all(repositoryId, viewer).map(({ pr }) => pr);
+   }
+ 
+   private matchesManualOptions(run: DeskRun, options?: DeskReviewOptions, effectiveOptionsKey?: string): boolean {
+     return effectiveOptionsKey === undefined
+       ? deskOptionsKey(run.options) === deskOptionsKey(options)
+       : (run.effectiveOptionsKey ?? deskOptionsKey(run.options)) === effectiveOptionsKey;
+   }
+ 
+   private previousAttempt(key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, anyOptions = false, effectiveOptionsKey?: string) {
+     const storedKey = effectiveOptionsKey === undefined
+       ? "coalesce(json_extract(details,'$.options'),'')"
+       : "coalesce(json_extract(details,'$.effectiveOptionsKey'),json_extract(details,'$.options'),'')";
+     return this.db
+       .query<
+         { id: string; state: string; complete: number; retryable: number | null; attempt: number | null },
+         [string, string, number, string, string, string, string, number, number]
+       >(
+         `SELECT id,state,json_extract(details,'$.retryableBeforeSpend') AS retryable,
+          json_extract(details,'$.preflightAttempt') AS attempt,
+          (json_extract(details,'$.scope')=? AND json_extract(details,'$.result.coverage')='complete'
+           AND json_extract(details,'$.result.reviewed.baseSha')=json_extract(details,'$.baseSha')
+           AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
+        FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
+          AND json_extract(details,'$.headSha')=? AND (${storedKey}=? OR ?=1) AND json_extract(details,'$.source') IN ('manual','scheduled')
+          AND (?=1 OR coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete'))
+-         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
+-           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
+-           AND json_extract(details,'$.usage') IS NULL)
++         AND NOT ${neverStarted()}
+        ORDER BY rowid DESC LIMIT 1`,
+       )
+       .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha, effectiveOptionsKey ?? deskOptionsKey(options), anyOptions ? 1 : 0, anyOptions ? 1 : 0);
+   }
+ 
+   /** Check only local scheduler occupancy, without reading private review output. */
+   private scheduledCapacityReached(): boolean {
+     const runs = this.db.query<{ id: string; pid: number | null; workerIdentity: string | null }, []>(
+       `SELECT id, pid, json_extract(details,'$.workerIdentity') AS workerIdentity FROM runs
+        WHERE ${scheduledReservation}`,
+     );
+     let reserved = 0;
+     for (const row of runs.iterate()) {
+       try {
+         if (row.pid != null && !processMayRemain(row.pid, row.workerIdentity
+           ? JSON.parse(row.workerIdentity) as ProcessIdentity : undefined) && !this.childMayRemain(row.id)) continue;
+       } catch { /* Unknown process ownership still reserves a slot. */ }
+       if (++reserved === maxScheduledWorkers) return true;
+     }
+     return false;
+
+--- src/review/review-entity.ts
+@@ 15,94 @@
+ /** One attempt as the Reviews list reads it: no report and no reviewer session history. */
+ export interface ReviewAttemptSummary {
+   id: string;
+   round: number;
+   previousRunId: string | null;
+   /** An interrupted attempt awaiting recovery reads as `failed`, as in the attempt history. */
+   state: DeskRunState;
+   source: ReviewSource;
+   baseSha: string;
+   headSha: string;
+   reviewed: DeskRevision | null;
+   coverage: DeskResult["coverage"] | null;
+   findings: DeskResult["findings"] | null;
+   verdict: string | null;
+   publication: PublicationOutcome | null;
+   decision: DeskReviewAction | null;
+   flowId: string | null;
+   /** Total tokens the attempt reported, when known. */
+   tokens: number | null;
+   awaitingAnswer: boolean;
++  /** Archived by the viewer: still listed, but never the attempt state, findings or publication come from. */
++  archived: boolean;
+   createdAt: string;
+   finishedAt: string | null;
+ }
+ 
+-/** A stored Review with its visible attempts, oldest first. */
++/** A stored Review with its visible attempts (archived ones flagged, deleted ones left out), oldest first. */
+ export interface ReviewRow {
+   id: string;
+   repositoryId: string;
+   number: number;
+   viewer: string;
+   closedAt: string | null;
+   onHeadMove: ReviewOnHeadMove;
+   attempts: ReviewAttemptSummary[];
+ }
+ 
+ export interface ReviewRound {
+   number: number;
+   baseSha: string;
+   headSha: string;
+   /** The attempt the round's first attempt follows; null for round 1. */
+   previousRunId: string | null;
+   /** Newest first. */
+   attempts: ReviewAttemptSummary[];
+ }
+ 
+ export interface ReviewSummary {
+   id: string;
+   number: number;
+   card: ReviewCard | null;
+   state: ReviewState;
+   freshness: ReviewFreshness;
+   onHeadMove: ReviewOnHeadMove;
+   closedAt: string | null;
+   /** Newest round first. */
+   rounds: ReviewRound[];
+   latestRound: number;
++  /** The range the reference attempt (the newest finished attempt with a reviewed range) reviewed; null without one. */
++  reviewed: DeskRevision | null;
++  /** Every attempt is archived: the Review is kept for restore or delete, and its state is its last attempt's. */
++  archived: boolean;
+   /** Findings of the latest round that produced a reviewed result. */
+   findings: DeskResult["findings"] | null;
+   publication: PublicationOutcome | null;
+   source: ReviewSource;
+   flowId: string | null;
+   tokens: number | null;
+ }
+ 
+ export interface ReviewsSnapshot {
+   version: 1;
+   repo: string;
+   repositories: string[];
+   repositoryId: string;
+   viewer: string;
+   fetchedAt: string;
+   reviews: ReviewSummary[];
+   warnings: string[];
+ }
+
+--- src/review/review-entity.ts
+@@ 125,204 @@
+ 
+-const latestAttempt = (row: ReviewRow) => row.attempts[row.attempts.length - 1];
++const reviewedResult = (attempt: ReviewAttemptSummary) => FINISHED.has(attempt.state) && attempt.reviewed !== null;
++const live = (attempt: ReviewAttemptSummary) => ["queued", "running", "cancelling"].includes(attempt.state);
+ function newest(attempts: ReviewAttemptSummary[], wanted: (attempt: ReviewAttemptSummary) => boolean) {
+   for (let i = attempts.length - 1; i >= 0; i--) if (wanted(attempts[i]!)) return attempts[i];
+ }
+-const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);
++/** The attempts the Review's state, findings and publication come from: the unarchived ones, or all when every one is archived. */
++function stateAttempts(row: ReviewRow): ReviewAttemptSummary[] {
++  const kept = row.attempts.filter(attempt => !attempt.archived);
++  return kept.length ? kept : row.attempts;
++}
+ 
+ /** The head a Review last checked: the newest reviewed result, else the newest requested range. */
+ export function referenceHead(row: ReviewRow): string | null {
+-  return latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null;
++  const attempts = stateAttempts(row);
++  return newest(attempts, reviewedResult)?.reviewed?.headSha ?? attempts[attempts.length - 1]?.headSha ?? null;
++}
++
++/** The attempt the Review's state comes from: the latest one, unless it stopped in a round that already holds an
++ * accepted (finished, reviewed) result — then that result's attempt, so a failed retry does not undo it. */
++function stateAttempt(attempts: ReviewAttemptSummary[]): ReviewAttemptSummary | undefined {
++  const latest = attempts[attempts.length - 1];
++  if (!latest || live(latest) || reviewedResult(latest)) return latest;
++  return newest(attempts, a => a.round === latest.round && reviewedResult(a)) ?? latest;
+ }
+ 
+ export function reviewClosed(row: ReviewRow, card: ReviewCard | null): boolean {
+   return row.closedAt !== null || card?.state === "merged" || card?.state === "closed";
+ }
+ 
++/** The (reviewed head, PR head) pair whose commit count freshness needs, or null when there is nothing to count:
++ * the heads are equal or unknown, or the Review is closed. The one rule for the command's comparisons and for `freshness`. */
++export function headComparison(row: ReviewRow, card: ReviewCard | null): { reviewed: string; head: string } | null {
++  const reviewed = referenceHead(row);
++  const head = card?.headSha ?? null;
++  return reviewed && head && headsDiffer(reviewed, head) && !reviewClosed(row, card) ? { reviewed, head } : null;
++}
++const headsDiffer = (reviewed: string | null, head: string | null) => !!reviewed && !!head && reviewed !== head;
++
+ function roundsOf(attempts: ReviewAttemptSummary[]): ReviewRound[] {
+   const byNumber = new Map<number, ReviewAttemptSummary[]>();
+   for (const attempt of attempts) {
+     const list = byNumber.get(attempt.round) ?? [];
+     if (!list.length) byNumber.set(attempt.round, list);
+     list.push(attempt);
+   }
+   return [...byNumber].sort(([a], [b]) => b - a).map(([number, list]) => {
+     const first = list[0]!; // Every map entry holds at least the attempt that created it.
+     return { number, baseSha: first.baseSha, headSha: first.headSha, previousRunId: first.previousRunId, attempts: [...list].reverse() };
+   });
+ }
+ 
+ /** Summarize one stored Review. `row.attempts` must be non-empty and oldest first. */
+ export function summarizeReview(row: ReviewRow, card: ReviewCard | null, compare?: ReviewCompare | null): ReviewSummary {
+-  const latest = latestAttempt(row);
+-  if (!latest) throw new Error(`invalid: Review ${row.id} has no visible attempts.`);
+-  const reviewed = latestReviewed(row);
+-  const tokens = row.attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
++  const attempts = stateAttempts(row);
++  const latest = attempts[attempts.length - 1];
++  const settled = stateAttempt(attempts);
++  if (!latest || !settled) throw new Error(`invalid: Review ${row.id} has no visible attempts.`);
++  const reference = newest(attempts, reviewedResult);
++  const tokens = attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
+   return {
+     id: row.id,
+     number: row.number,
+     card,
+-    state: reviewState(latest, reviewClosed(row, card)),
++    state: reviewState(settled, reviewClosed(row, card)),
+     freshness: freshness(referenceHead(row), card?.headSha ?? null, compare),
+     onHeadMove: row.onHeadMove,
+     closedAt: row.closedAt,
+     rounds: roundsOf(row.attempts),
+     latestRound: latest.round,
+-    findings: reviewed?.findings ?? null,
+-    publication: reviewed?.publication ?? null,
++    reviewed: reference?.reviewed ? { baseSha: reference.reviewed.baseSha, headSha: reference.reviewed.headSha } : null,
++    archived: attempts.every(attempt => attempt.archived),
++    findings: reference?.findings ?? null,
++    publication: reference?.publication ?? null,
+     source: latest.source,
+-    flowId: newest(row.attempts, a => a.flowId !== null)?.flowId ?? null,
++    flowId: newest(attempts, a => a.flowId !== null)?.flowId ?? null,
+     tokens,
+   };
+ }
+
+
+--- src/review/desk-run-store.test.ts
+@@ 1,28 @@
+ import { Database } from "bun:sqlite";
+ import { afterEach, beforeEach, expect, test } from "bun:test";
+ import { copyFileSync, existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { readProcessIdentity } from "../lib/hub-machine/process-identity";
+ import { deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
++import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED } from "./desk-publication-types";
+ import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
+ import type { DeskFinish } from "./desk-run-types";
+ import { applyDeskLifecycle } from "./desk-run-lifecycle";
+ 
+ const key = {
+   repo: "org/repo",
+   repositoryId: "gid",
+   viewer: "user",
+   number: 12,
+ };
+ const other = { ...key, viewer: "colleague" };
+ const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+ const next = { ...revision, headSha: "c".repeat(40) };
+ let directory: string;
+ let store: DeskRunStore;
+ beforeEach(() => {
+   directory = mkdtempSync(path.join(tmpdir(), "keryx-review-attempt-"));
+   store = new DeskRunStore(directory);
+ });
+ afterEach(() => {
+
+--- src/review/desk-run-store.test.ts
+@@ 939,1043 @@
+ 
+   // The account is part of the key, case-insensitively.
+   const upper = store.request("/project", { ...key, viewer: "USER" }, { ...next, headSha: "d".repeat(40) })!;
+   expect(place(upper)).toEqual([review, 3, moved]);
+   const colleague = store.request("/project", other, revision)!;
+   expect(store.byId(colleague)?.run.reviewId).not.toBe(review);
+   expect(place(colleague).slice(1)).toEqual([1, null]);
+ 
+   // The projection is read from the columns and never written back into details.
+   const saved = store.byId(moved)!;
+   saved.run.reason = "saved again";
+   store.save(saved);
+   expect(place(moved)).toEqual([review, 2, continued]);
+   const db = new Database(path.join(directory, "runs.sqlite"), { readonly: true });
+   try {
+     const details = db.query<{ details: string }, []>("SELECT details FROM runs").all().map(row => JSON.parse(row.details) as object);
+     expect(details).toHaveLength(7);
+     for (const stored of details) for (const field of ["reviewId", "round", "previousRunId"]) expect(stored).not.toHaveProperty(field);
+   } finally { db.close(); }
+ });
++
++const placeOf = (id: string) => {
++  const run = store.byId(id)?.run;
++  return [run?.round, run?.previousRunId];
++};
++
++test("a return to an earlier range (A, B, A) opens the next round; a retry joins only the current highest round", () => {
++  const a = store.request("/project", key, revision)!;
++  store.end(store.byId(a)!, { ...finish, state: "partial" });
++  const b = store.atomic(() => store.request("/project", key, next))!;
++  store.end(store.byId(b)!, { ...finish, result: { ...finish.result!, reviewed: next } });
++  const back = store.atomic(() => store.request("/project", key, revision))!;
++  expect(placeOf(back)).toEqual([3, b]);
++  store.end(store.byId(back)!, { ...finish, state: "failed", result: null });
++  const retry = store.atomic(() => store.request("/project", key, revision))!;
++  expect(placeOf(retry)).toEqual([3, back]);
++  const row = store.reviewRows("gid", "user")[0]!;
++  expect(row.attempts.map(attempt => [attempt.id, attempt.round])).toEqual([[a, 1], [b, 2], [back, 3], [retry, 3]]);
++});
++
++test("a queued request superseded before it started keeps no round: the next request takes its round and links past it", () => {
++  const running = started();
++  const queued = store.atomic(() => store.request("/project", key, next))!;
++  expect(placeOf(queued)).toEqual([2, running.run.id]);
++  const third = { ...revision, headSha: "d".repeat(40) };
++  const latest = store.atomic(() => store.request("/project", key, third))!;
++  expect(store.byId(queued)?.run).toMatchObject({ state: "skipped", phase: "Superseded" });
++  expect(placeOf(latest)).toEqual([2, running.run.id]);
++  // The never-started request is not an attempt of the Review.
++  expect(store.reviewRows("gid", "user")[0]!.attempts.map(attempt => attempt.id)).toEqual([running.run.id, latest]);
++});
++
++test("history imported later is numbered when it is recorded, even when it is older than placed rounds (known limitation)", () => {
++  const desktop = store.request("/project", key, revision)!;
++  store.end(store.byId(desktop)!, finish);
++  const older = { ...store.byId(desktop)!.run, id: "older-package", source: "existing" as const, ...next,
++    createdAt: "2020-01-01T00:00:00.000Z", result: { ...finish.result!, reviewed: next } };
++  store.recordExisting("/project", key, [older]);
++  expect(placeOf("older-package")).toEqual([2, desktop]);
++});
++
++test("reviewRows reads a publication outcome for every finished reviewed attempt and keeps archived attempts flagged", () => {
++  const finished = (rev: typeof revision, state: DeskFinish["state"], coverage: "complete" | "partial" = "complete") => {
++    const id = store.atomic(() => store.request("/project", key, rev))!;
++    store.end(store.byId(id)!, { ...finish, state, result: { ...finish.result!, reviewed: rev, coverage } });
++    return id;
++  };
++  const published = finished(revision, "partial", "partial");
++  mkdirSync(store.directory(published), { recursive: true });
++  writeFileSync(path.join(store.directory(published), PUBLICATION_RECEIPT), JSON.stringify({ url: "https://github.com/org/repo/pull/12#r" }));
++  const skipped = finished(next, "budget", "partial");
++  mkdirSync(store.directory(skipped), { recursive: true });
++  writeFileSync(path.join(store.directory(skipped), PUBLICATION_SKIPPED), "");
++  const undecided = finished({ ...revision, headSha: "d".repeat(40) }, "partial", "partial");
++  const pending = finished({ ...revision, headSha: "e".repeat(40) }, "completed");
++  const archived = finished({ ...revision, headSha: "f".repeat(40) }, "completed");
++  const a = store.byId(archived)!;
++  a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
++  store.save(a);
++  const deleted = finished({ ...revision, headSha: "9".repeat(40) }, "completed");
++  const d = store.byId(deleted)!;
++  d.run.decision = { action: "delete", reason: "noise", at: "2026-11-20T00:00:00Z" };
++  store.save(d);
++  const attempts = store.reviewRows("gid", "user")[0]!.attempts;
++  expect(attempts.map(attempt => [attempt.id, attempt.publication, attempt.archived])).toEqual([
++    [published, "published", false], [skipped, "skipped", false], [undecided, null, false], [pending, "pending", false], [archived, null, true],
++  ]);
++  // The attempt history reads the same outcome.
++  expect(store.history(key).runs.find(run => run.id === published)?.publication).toBe("published");
++});
++
++test("a Review whose attempts are all archived is still listed; an interrupted attempt reads as failed", () => {
++  const id = store.request("/project", key, revision)!;
++  store.end(store.byId(id)!, finish);
++  const a = store.byId(id)!;
++  a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
++  store.save(a);
++  const interrupted = store.request("/project", { ...key, number: 13 }, revision)!;
++  const db = new Database(path.join(directory, "runs.sqlite"));
++  try { db.run("UPDATE runs SET state='recoverable' WHERE id=?", [interrupted]); } finally { db.close(); }
++  const rows = store.reviewRows("gid", "user");
++  expect(rows.map(row => [row.number, row.attempts.map(attempt => [attempt.id, attempt.archived, attempt.state])])).toEqual([
++    [13, [[interrupted, false, "failed"]]], [12, [[id, true, "completed"]]],
++  ]);
++});
+
+--- src/review/review-entity.test.ts
+@@ 1,33 @@
+ import { describe, expect, test } from "bun:test";
+ import type { ReviewCard } from "./board-types";
+-import { freshness, reviewNeedsViewer, reviewState, summarizeReview, type ReviewAttemptSummary, type ReviewRow } from "./review-entity";
++import { freshness, headComparison, reviewNeedsViewer, reviewState, summarizeReview, type ReviewAttemptSummary, type ReviewRow } from "./review-entity";
+ 
+ const sha = (c: string) => c.repeat(40);
+ let seq = 0;
+ function attempt(overrides: Partial<ReviewAttemptSummary> = {}): ReviewAttemptSummary {
+   seq++;
+   return {
+     id: `run-${seq}`, round: 1, previousRunId: null, state: "completed", source: "manual",
+     baseSha: sha("a"), headSha: sha("b"), reviewed: { baseSha: sha("a"), headSha: sha("b") },
+     coverage: "complete", findings: { blocker: 0, major: 1, minor: 2, info: 0 }, verdict: "COMMENT",
+-    publication: "pending", decision: null, flowId: null, tokens: null, awaitingAnswer: false,
++    publication: "pending", decision: null, flowId: null, tokens: null, awaitingAnswer: false, archived: false,
+     createdAt: `2026-11-2${seq % 10}T00:00:00.000Z`, finishedAt: null,
+     ...overrides,
+   };
+ }
+ function row(attempts: ReviewAttemptSummary[], overrides: Partial<ReviewRow> = {}): ReviewRow {
+   return { id: "review-1", repositoryId: "gid", number: 12, viewer: "me", closedAt: null, onHeadMove: "ask", attempts, ...overrides };
+ }
+ const card = (overrides: Partial<ReviewCard> = {}): ReviewCard => ({
+   number: 12, title: "PR", url: "https://github.com/org/repo/pull/12", state: "open", draft: false, author: "a",
+   assignees: [], reviewers: [], decision: null, ci: "none", baseSha: sha("a"), headSha: sha("b"), updatedAt: "now", ...overrides,
+ });
+ 
+ describe("reviewState follows the specification table", () => {
+   test("closed wins over every attempt state", () => {
+     expect(reviewState(attempt({ state: "running" }), true)).toBe("closed");
+     expect(reviewState(attempt(), true)).toBe("closed");
+   });
+   test("queued, running and cancelling", () => {
+     expect(reviewState(attempt({ state: "queued", reviewed: null }), false)).toBe("queued");
+     expect(reviewState(attempt({ state: "running", reviewed: null }), false)).toBe("running");
+
+--- src/review/review-entity.test.ts
+@@ 65,96 @@
+   });
+   test("unknown when the PR head is unknown, whatever the comparison says", () => {
+     expect(freshness(sha("b"), null)).toEqual({ kind: "unknown" });
+     expect(freshness(null, null)).toEqual({ kind: "unknown" });
+     expect(freshness(sha("b"), null, { status: "ahead", aheadBy: 3 })).toEqual({ kind: "unknown" });
+   });
+   test("behind with the commit count when the PR head descends from the reviewed head", () => {
+     expect(freshness(sha("b"), sha("c"), { status: "ahead", aheadBy: 3 })).toEqual({ kind: "behind", commits: 3, rewritten: false });
+   });
+   test("rewritten when the reviewed head is no longer an ancestor", () => {
+     expect(freshness(sha("b"), sha("c"), { status: "diverged", aheadBy: 2 })).toEqual({ kind: "behind", commits: 2, rewritten: true });
+     expect(freshness(sha("b"), sha("c"), { status: "behind", aheadBy: 0 })).toEqual({ kind: "behind", commits: 0, rewritten: true });
+   });
+   test("an unknown count without a comparison", () => {
+     expect(freshness(sha("b"), sha("c"))).toEqual({ kind: "behind", commits: null, rewritten: false });
+     expect(freshness(sha("b"), sha("c"), null)).toEqual({ kind: "behind", commits: null, rewritten: false });
+     expect(freshness(sha("b"), sha("c"), { status: "identical", aheadBy: 0 })).toEqual({ kind: "current" });
+   });
+ });
+ 
+-test("reviewNeedsViewer: needs_answer, undecided ready and stopped", () => {
+-  expect(reviewNeedsViewer({ state: "needs_answer", publication: null })).toBe(true);
+-  expect(reviewNeedsViewer({ state: "stopped", publication: null })).toBe(true);
+-  expect(reviewNeedsViewer({ state: "ready", publication: "pending" })).toBe(true);
+-  expect(reviewNeedsViewer({ state: "ready", publication: null })).toBe(true);
+-  expect(reviewNeedsViewer({ state: "ready", publication: "skipped" })).toBe(false);
++test("reviewNeedsViewer: needs_answer, ready with a pending publication and stopped", () => {
++  const open = { card: card(), archived: false };
++  expect(reviewNeedsViewer({ ...open, state: "needs_answer", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ ...open, state: "stopped", publication: null })).toBe(true);
++  expect(reviewNeedsViewer({ ...open, state: "ready", publication: "pending" })).toBe(true);
++  // No publication decision applies (partial, budget or an imported package): nothing waits on the viewer.
++  expect(reviewNeedsViewer({ ...open, state: "ready", publication: null })).toBe(false);
++  expect(reviewNeedsViewer({ ...open, state: "ready", publication: "skipped" })).toBe(false);
+   for (const state of ["queued", "running", "published", "closed"] as const) {
+-    expect(reviewNeedsViewer({ state, publication: "pending" })).toBe(false);
++    expect(reviewNeedsViewer({ ...open, state, publication: "pending" })).toBe(false);
+   }
+ });
+
+--- src/review/review-entity.test.ts
+@@ 130,201 @@
+       findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", tokens: 50, flowId: "519", createdAt: "2026-11-02T00:00:00.000Z" });
+     const retry = attempt({ round: 2, previousRunId: second.id, headSha: sha("c"), state: "failed", reviewed: null, findings: null,
+       publication: null, source: "scheduled", createdAt: "2026-11-03T00:00:00.000Z" });
+     const summary = summarizeReview(row([first, second, retry]), card({ headSha: sha("d") }), { status: "ahead", aheadBy: 4 });
++    // The round already holds an accepted, published result: a failed retry in it does not turn the Review stopped.
+     expect(summary).toMatchObject({
+-      id: "review-1", number: 12, state: "stopped", latestRound: 2, source: "scheduled", flowId: "519", tokens: 150,
++      id: "review-1", number: 12, state: "published", latestRound: 2, source: "scheduled", flowId: "519", tokens: 150,
+       findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", onHeadMove: "ask", closedAt: null,
+-      freshness: { kind: "behind", commits: 4, rewritten: false },
++      freshness: { kind: "behind", commits: 4, rewritten: false }, reviewed: { baseSha: sha("a"), headSha: sha("c") }, archived: false,
+     });
+     expect(summary.card?.number).toBe(12);
+     expect(summary.rounds.map(r => r.number)).toEqual([2, 1]);
+     expect(summary.rounds[0]).toMatchObject({ baseSha: sha("a"), headSha: sha("c"), previousRunId: first.id });
+     expect(summary.rounds[0]!.attempts.map(a => a.id)).toEqual([retry.id, second.id]);
+     expect(summary.rounds[1]!.previousRunId).toBeNull();
+   });
+ 
+   test("a Review closed locally or by its PR is closed; an unread PR leaves it open", () => {
+     expect(summarizeReview(row([attempt()], { closedAt: "2026-11-05T00:00:00Z" }), card()).state).toBe("closed");
+     expect(summarizeReview(row([attempt()]), card({ state: "merged" })).state).toBe("closed");
+     expect(summarizeReview(row([attempt()]), card({ state: "closed" })).state).toBe("closed");
+     const unread = summarizeReview(row([attempt()]), null);
+     expect(unread).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
+   });
+ 
+   test("without a reviewed round freshness compares the requested head and findings stay unknown", () => {
+     const running = attempt({ state: "running", reviewed: null, findings: null, publication: null, headSha: sha("b") });
+     const summary = summarizeReview(row([running]), card({ headSha: sha("b") }));
+-    expect(summary).toMatchObject({ state: "running", findings: null, publication: null, tokens: null, freshness: { kind: "current" } });
++    expect(summary).toMatchObject({ state: "running", findings: null, publication: null, tokens: null, freshness: { kind: "current" }, reviewed: null });
++  });
++
++  test("without a reviewed round freshness compares the requested head with a different PR head", () => {
++    const running = attempt({ state: "running", reviewed: null, findings: null, publication: null, headSha: sha("c") });
++    expect(summarizeReview(row([running]), card({ headSha: sha("d") })).freshness).toEqual({ kind: "behind", commits: null, rewritten: false });
++  });
++
++  test("a stopped attempt in a round without an accepted result is stopped", () => {
++    const first = attempt({ round: 1, createdAt: "2026-11-01T00:00:00.000Z" });
++    const moved = attempt({ round: 2, headSha: sha("c"), state: "cancelled", reviewed: null, findings: null, publication: null, createdAt: "2026-11-02T00:00:00.000Z" });
++    expect(summarizeReview(row([first, moved]), card({ headSha: sha("c") }))).toMatchObject({ state: "stopped", latestRound: 2 });
++  });
++
++  test("a failed attempt carrying a reviewed range is not the reference: findings, publication, reviewed and freshness stay the finished one's", () => {
++    const second = attempt({ round: 1, findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", createdAt: "2026-11-01T00:00:00.000Z" });
++    const retry = attempt({ round: 1, state: "failed", reviewed: { baseSha: sha("a"), headSha: sha("e") }, findings: { blocker: 3, major: 0, minor: 0, info: 0 },
++      publication: null, createdAt: "2026-11-02T00:00:00.000Z" });
++    const summary = summarizeReview(row([second, retry]), card({ headSha: sha("b") }));
++    expect(summary).toMatchObject({
++      findings: { blocker: 0, major: 0, minor: 1, info: 0 }, publication: "published", state: "published",
++      reviewed: { baseSha: sha("a"), headSha: sha("b") }, freshness: { kind: "current" },
++    });
++  });
++
++  test("archived attempts stay listed and flagged, but state, findings, publication and freshness ignore them", () => {
++    const kept = attempt({ round: 1, findings: { blocker: 0, major: 2, minor: 0, info: 0 }, publication: "pending", createdAt: "2026-11-01T00:00:00.000Z" });
++    const hidden = attempt({ round: 2, headSha: sha("c"), reviewed: { baseSha: sha("a"), headSha: sha("c") }, findings: { blocker: 5, major: 0, minor: 0, info: 0 },
++      publication: "published", decision: "archive", archived: true, createdAt: "2026-11-02T00:00:00.000Z" });
++    const summary = summarizeReview(row([kept, hidden]), card({ headSha: sha("b") }));
++    expect(summary).toMatchObject({
++      archived: false, state: "ready", publication: "pending", findings: { blocker: 0, major: 2, minor: 0, info: 0 },
++      reviewed: { baseSha: sha("a"), headSha: sha("b") }, freshness: { kind: "current" }, latestRound: 1,
++    });
++    expect(summary.rounds.map(r => [r.number, r.attempts.map(a => [a.id, a.archived])])).toEqual([[2, [[hidden.id, true]]], [1, [[kept.id, false]]]]);
++  });
++
++  test("a Review whose attempts are all archived is listed as archived with the state of its last attempt", () => {
++    const only = attempt({ state: "failed", reviewed: null, findings: null, publication: null, decision: "archive", archived: true });
++    const summary = summarizeReview(row([only]), card());
++    expect(summary).toMatchObject({ archived: true, state: "stopped", latestRound: 1 });
++    expect(reviewNeedsViewer(summary)).toBe(false);
+   });
+ });

@@ -1,0 +1,85 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage2, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b, diff mode, slice-02 read in full (2403 lines: apps/desktop dev bridge, Rust review.rs, App.tsx, platform/review.ts, ReviewBoard/ReviewDetail/ReviewResults/ReviewWorkspace/model.ts, reviews/ReviewPanel/ReviewsView/model.ts, AppShell.tsx, review.css). Load profile: not provided (context doc plan.md states none); concrete triggers used: number of project windows, Reviews in the list that are behind their PR head, run-state transitions, the 60 s reload interval. Context read outside the slice (read-only): apps/desktop/src/platform/reviewReadLane.ts, apps/desktop/src/review/useReviewRuns.ts, src/commands/review-reviews.ts (to cost one list reload in CLI spawns and GitHub calls).
+Test output: research-evidence/verify-tests-to-run-1.txt was not present when this review ran; no test result was read.
+
+Summary: The Desktop side of stage 2 is read-only on the store and has no shared-state write path in this slice; reads go through ReviewReadLane, which coalesces identical in-flight reads, so the new interval, tab-show, focus and run-observer refreshes do not fan out duplicate CLI processes. One minor: the Reviews list reload interval is not gated on document visibility, unlike its sibling run poller, so a hidden window keeps paying one identity query, one card read and up to 25 GitHub compare calls a minute. Stats: blocker 0 | major 0 | minor 1 | info 1.
+
+### CLI / Multi-Session
+[F-001] (minor) Reviews list reload keeps polling GitHub while the window is hidden — see REVIEW_RESULT.
+[F-002] (info) Reviews list is read on every project window open, even when the tab is never visited — see REVIEW_RESULT.
+
+### Concurrency & Races
+None detected. The load effect in ReviewsView uses a sequence counter (cleanup increments it, accessLost increments it) so a superseded read never overwrites a newer one; the focus/pending flow ends after at most one extra read (`read.request > pending.after`). observeRuns refreshes only when the run signature (id, state, publication, decision, result) changes, so the 3 s/15 s run poll in ReviewWorkspace cannot drive a reload loop. ReviewDetail (PR tab) and ReviewPanel (Reviews tab) each own a useReviewRuns poller but render only while their tab is active, so they never poll the same PR concurrently.
+
+### Resources
+None detected beyond F-002. seenRuns (ReviewsView) grows per PR number opened in the panel; bounded by PRs the user opens, not a load-driven leak.
+
+### Caching
+None detected. ReviewReadLane keys reviews reads by [cwd, expectedViewer, repo]; no per-user data is cached under an unscoped key.
+
+### Lock Contention
+Not applicable in this slice (no store writes; desk-run-store migration is in another slice).
+
+### Async / Queues
+None detected. ReviewReadLane bounds in-flight reads at 2 with one waiting slot that supersedes older waiters.
+
+### Retry / Timeout / Circuit Breaker
+None detected. No retry loop added; failed reads keep the last list and wait for an explicit or scheduled refresh.
+
+### Idempotency & Distributed Invariants
+None detected. The Rust and dev bridges refuse reviews_only combined with any board mode (badge, paged, cursor, state, number, repositoriesOnly, updatedSince); the reviews read is read-only.
+
+Clean Areas: Part A, B (except F-002 note), C, D, E, F, G reviewed with no findings.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Desktop Reviews tab adds read-only list reads with sequence-guarded state and coalesced CLI reads; no races or unbounded fan-out. One minor: the 60 s list reload is not gated on document visibility, so a hidden window keeps spending GitHub compare calls. One info on eager mount at window open.",
+  "slices": [{ "id": "slice-02", "status": "DONE", "coverage": "read in full, lines 1-2403" }],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "const timer = window.setInterval(refresh, RUNNING_RELOAD_MS);",
+      "problem": "While the Reviews tab is the work view and any Review is queued or running, the list is reloaded every 60 s with no check of document.visibilityState and no focus gating. The sibling run poller useReviewRuns skips its poll when the document is hidden; this new poller does not.",
+      "impact": "Each reload is one `keryx review reviews` spawn that makes an identity GraphQL query, a card read, and up to MAX_REVIEW_COMPARES = 25 REST compare calls (src/commands/review-reviews.ts) for Reviews behind their PR head. Trigger: a window left minimized or in the background with the Reviews tab selected (also while Settings is open, since workView stays 'reviews') and a Review that stays queued or running; with N project windows that is up to 25*N compare calls a minute against the user's shared GitHub REST budget, which the PR watcher and the Pull requests board also draw on. Degradation, not a crash: the list is correct, it is just read for nobody.",
+      "suggested_fix": "Mirror useReviewRuns: in the interval callback skip the refresh when document.visibilityState === 'hidden' (and optionally refresh once on 'visibilitychange' to visible), e.g. `const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') refresh(); }, RUNNING_RELOAD_MS);`.",
+      "evidence": "slice-02 ReviewsView.tsx hunk: `useEffect(() => { if (!active || !running) return; const timer = window.setInterval(refresh, RUNNING_RELOAD_MS); ... }, [active, running, refresh]);`. apps/desktop/src/review/useReviewRuns.ts: `function poll() { if (document.visibilityState !== \"hidden\") void request({ kind: \"status\" }, true); }`. src/commands/review-reviews.ts: MAX_REVIEW_COMPARES = 25, COMPARE_PARALLEL = 4, one `gh api repos/<repo>/compare/...` per behind Review. App.tsx passes active={workView === \"reviews\"}, and workView is settingsReturn.current while Settings is shown.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-list-interval-not-visibility-gated",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "{/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}",
+      "problem": "ReviewsView is mounted unconditionally in every project window (by design, to keep the tab indicator current), so opening a window runs one `review reviews` read, including up to 25 GitHub compare calls, even if the user never opens the Reviews tab; the indicator then only updates on tab show, run-state changes seen in the panel, or the running-only interval while shown.",
+      "impact": "Opening or reopening N project windows costs N extra CLI spawns and up to 25*N compare calls at startup, on top of the Pull requests board read. Bounded and intentional; noted so the cost is a recorded choice. The compare calls are only needed for the 'behind N' counts, not for the indicator (needs_answer / ready / stopped).",
+      "suggested_fix": "Optional: let the hidden mount request the list without commit counts (a flag that skips compares) and fetch counts only when the tab becomes active; or accept as is and record it.",
+      "evidence": "slice-02 App.tsx hunk mounts <ReviewsView ... active={workView === \"reviews\"} .../> inside `<div className=\"view\" hidden={view !== \"reviews\"}>` with no visit guard, unlike FlowsBoard/IssuesView which render only when workView matches; ReviewsView's load effect runs on mount regardless of `active`.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-view-eager-mount-read",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice was supplied as text; three context files were known by path from imports). wiki_used: no (not-relevant: concurrency review of a supplied diff). ctx_used: yes (keryx ctx read, keryx ctx rg). raw_rg_used: no. Metaproject index.md was not read: this reviewer worked from the supplied payload and slice only, per the dispatch.

@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Security Review — round 2 (delta), wave 6
+
+### Scope
+- PR #1304, delta 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1
+- Slice reviewed: slice-04 (read in full, 1849 lines)
+- Files in slice: Desktop tests (reviewPages.test.ts, ReviewBoard/ReviewDetail/ReviewPanel/ReviewsView DOM tests, reviews/model.test.ts, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx), docs (cli-reference.md, desktop-app.md, guides/desktop-metaproject.md, review-v2 implementation-plan.md and specification.md), and production code src/commands/review-board.ts and src/commands/review-reviews.ts.
+- Context read at head f6971fd beyond the slice: src/commands/review-reviews.ts lines 40-100 (the elided part of the hunk) and src/review/board-github.ts lines 85-125 (the moved writer).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Checked and clean
+- Command / path injection in the GitHub compare call (`repos/${repo}/compare/${base}...${head}`): `repo` comes from `selectRepository` over the configured remotes; `base` and `head` are filtered by `OBJECT_ID = /^[0-9a-f]{40}$/` before they reach `compareHeads` (review-reviews.ts at head, the `behind` flatMap). `gh` is invoked with an argument array (`boardGh`), not a shell string. The new deadline/race code does not change which values reach the call.
+- `--include-closed`: a `parseArgs` boolean in strict mode, passed as `values["include-closed"] === true`; it only widens which locally stored rows (already scoped by the GitHub-verified `repositoryId` and `viewer`) get their PR card read through the parameterised GraphQL path (`listActiveReviewCards`). No new IDOR: rows of another account or repository are not reachable.
+- Publication boundary: `writeJson`/`writeSerialized` moved from review-board.ts to `writeBoundJson`/`writeBoundJsonText` in board-github.ts with the same body; the GitHub binding generation is still re-checked inside `withCurrentGithubBinding` immediately before stdout is written, and a throw there rejects the promise. review-reviews.ts now uses it directly instead of importing from review-board.ts. Both callers still go through the binding check.
+- Compare timeout: the timer is cleared in `finally`; a late comparison is dropped (count unknown) rather than retained, and errors are swallowed only into a generic warning — no error text (and so no token or path) reaches the payload.
+- Error handling in `readCards`: `access:`/`configuration:` errors still propagate (`cannotRetainData`), so a lost account does not degrade into a partial list that keeps another account's data.
+- Tests in the slice assert the security-relevant behaviour of code in other slices: the Review panel PR link refuses `javascript:` URLs and opens through the system browser with `preventDefault` (ReviewPanel.dom.test.tsx), a pending rules read for a previous account is never shown (ReviewsView.dom.test.tsx), Review rules are not offered from another account's identity, and session-review snapshots of another project do not trigger a re-read. The production side of those was covered in wave 5 (raw/review-security-code-w5.txt, slice-03).
+- Docs and fixtures: no secrets, tokens or personal data; fixture logins are placeholders.
+- Categories with nothing to check in this slice: SQL (no query text changed here), XSS sinks (no `dangerouslySetInnerHTML`/`eval` added), crypto, CSRF, open redirect, NestJS.
+
+### Not verified
+- Tests were not run (exec budget 0); the slice's assertions were read, and the package's test log reports 194 root + 1008 Desktop tests passing at f6971fd.
+- Rust bridge code is not in this slice.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-04 (Desktop tests, docs, and the CLI side of review-board.ts / review-reviews.ts) has no security findings. The compare API path still takes only an allowlisted repo and 40-hex object IDs; --include-closed is a strict boolean that widens card reads only over rows already scoped to the verified repository and viewer; the moved writeBoundJson keeps the GitHub binding re-check at the stdout boundary.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-04"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: two named files read directly at head), wiki_used: no (not-relevant: delta review of a bounded slice), ctx_used: yes (keryx ctx rg for writeBoundJson/withCurrentGithubBinding), raw_rg_used: no.

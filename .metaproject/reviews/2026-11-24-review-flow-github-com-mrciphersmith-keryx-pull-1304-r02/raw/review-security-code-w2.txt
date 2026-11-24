@@ -1,0 +1,60 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 2, slice-08)
+
+### Scope
+- PR #1304, branch feat/desktop-review-v2-stage2, delta 20e4281a2..f6971fd4a
+- Slice read in full: slice-08 (97 376 bytes, 1968 lines). It holds the Desktop code: dev/reviewBoard.ts, src-tauri/src/review.rs, App.tsx, platform/review.ts, review/ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, ReviewWorkspace.tsx (new), review/model.ts, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx and styles/review.css.
+- Also read: the T17 commit 8d95e651a (ReviewPanel PR link) and apps/desktop/src/review/ReviewBrowserLink.tsx (current). For the `--repo` sink I also grepped src/commands/review-reviews.ts, which is outside this slice.
+- The payload's prior_findings and known_findings are empty, and slice-08 is not the fix slice. That makes prior_dispositions empty.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked
+- Argument and command injection on the new `reviews_only` bridge mode (review.rs `board_read_args`, dev/reviewBoard.ts `reviewsArgs`):
+  - The args are passed as an argv vector, never through a shell.
+  - `--repo` is refused when it is empty, starts with `-` (option injection) or contains whitespace.
+  - `reviews_only` combined with pr_state, number, repositories_only, paged, cursor or badges is refused. `updated_since` is refused separately: review.rs line 147 now checks `reviews_only` too.
+  - The dev mirror applies the same refusals.
+- API path injection downstream of `--repo`: src/commands/review-reviews.ts:127 resolves the value through `selectRepository(repositories, values.repo)` against the project's own repository list before `repos/${repo}/compare/${base}...${head}` is built (line 134). Per the comment at line 18, only full object IDs reach the compare path. So a crafted repo such as `../../user` cannot reach `gh api`. This file belongs to the backend slices; I read only the grep hits.
+- Open redirect and URL scheme (T17): ReviewPanel now hands `card.url` to `openReviewLink` through `ReviewBrowserLink`. `reviewUrl` admits only `https:` URLs without credentials, and anything else renders no link. GitHub PR URLs go to `openPullRequest`, everything else to `openExternal`. A `javascript:`, `file:` or custom-scheme URL from GitHub data never reaches the system opener.
+- XSS: the new views (ReviewsView, ReviewPanel, ReviewWorkspace, ReviewResults title) render GitHub- and CLI-supplied strings as React text only: titles, warnings, SHAs, run ids, `previousRunId`, findings labels. There is no dangerouslySetInnerHTML, eval or `new Function`. `document.getElementById(attemptAnchor(scope, previous))` only focuses an element and injects nothing.
+- Cross-account data mixing (authz in the client):
+  - `fetchReviews` keeps `assertProtocol` and `verifyProjectViewer`.
+  - ReviewsView is keyed by the bound viewer, and on any `access:` or `configuration:` error it drops its snapshot and selection (`accessLost`).
+  - The Reviews tab indicator is bound to the viewer and hidden when GitHub is disconnected (App.tsx `reviewsIndicator`).
+  - ReviewWorkspace keys its run subject by repositoryId, viewer, number and range.
+- Run start still re-checks the range before `start`, and the backend re-validates it: RunLaunchDialog carries the same `sameRange` / `stale` / `state === "open"` guard that the removed ReviewDetail code had.
+- Secrets and storage: no new localStorage or sessionStorage use. `rememberSessionReview` and `readSessionReviewLinks` predate this PR and are only called here. No tokens or credentials appear in the code or in error toasts.
+- Crypto, CSRF, path traversal on the file system, NestJS patterns: not applicable to this slice.
+
+### Clean areas
+Injection (command, argument, API path), XSS, open redirect and URL scheme, client-side authz and identity binding, secrets and storage, crypto, CSRF, path traversal, framework patterns.
+
+### Not verified
+- `selectRepository` and `boardGh` themselves were not read. I relied on their call sites in review-reviews.ts and on the 40-hex head guard named in the comment at line 18. Both belong to the backend slices.
+- `openPullRequest` and `openExternal` on the Rust side were not read. Only the TS-side scheme filter was checked.
+- History beyond the T17 commit was not needed.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-08 (Desktop: reviews_only bridge mode, Reviews tab, ReviewPanel/ReviewWorkspace, T17 PR link) has no security findings. The --repo argv is option-injection guarded in both hosts and allowlisted by the CLI. Board modes are refused with reviews_only. PR links pass the https-only reviewUrl filter. GitHub data renders as React text. Reads are bound to the viewer.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-08"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: I followed the sinks by direct grep from the slice). wiki_used: no (not-relevant: the security controls were read directly in code). ctx_used: yes (keryx ctx rg/read/run for the T17 commit, ReviewBrowserLink and review-reviews.ts). raw_rg_used: no.

@@ -1,0 +1,142 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b
+- Slice: slice-05, read in full: board-badges.ts, board-types.ts, desk-run-store.ts (migration, assignReviews/reviewFor/roundFor, storedDetails/place, save, recordExisting, history, attachBadges, reviewRows, readReviewRows, requestAttempt), desk-run-types.ts, review-entity.ts.
+- Scope mode: supplied slice text. Spec gate: ran against plan.md section T5 (assignment rule, projection, read-only rule, badge round).
+
+### Summary
+The store migration, placement columns, projection and badge round match plan T5. Every writer of `runs.details` strips or never carries the placement (enumerated below), the migration is one immediate transaction, and read-only stores read NULL placement without migrating. One major: the T5 rule puts a retry on an earlier range back into its old, lower round. The read model and Desktop treat round number as recency, so on a Review whose head returns to an earlier range the newest attempt sits under a lower round. Then `latestRound`, the round order and the Desktop reviewed commit disagree with the server's freshness, findings and publication. One minor: a queued attempt that was superseded before it started opens a round of its own, though the store itself does not count it as an attempt.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected. Schema, assignment rule (continuation, same range, new range), transaction placement, projection, `save` stripping, read-only NULL substitution and `outdated.round` are all present as T5 specifies.
+
+### Logic Bugs
+
+### [F-001] A retry on an earlier range puts the newest attempt in a lower round, and the read model and Desktop read round number as recency
+- **Severity**: major
+- **File**: src/review/desk-run-store.ts:195 (roundFor retry branch); src/review/review-entity.ts:138 (roundsOf sort), :159 (latestRound); apps/desktop/src/reviews/model.ts:53-64 (latestReviewed / reviewedCommit)
+- **Problem**: `roundFor` places an attempt on a range already seen in the Review into that range's round (`ORDER BY round DESC LIMIT 1`, then `return { round: retry.round, ... }`). T5 step 2 asks for exactly this. The Review can then have a newer attempt in round 1 than the attempts in round 2. The consumers assume round number tracks time:
+  - `roundsOf` sorts by number and is documented "Newest round first" (review-entity.ts:68). Round 2 is listed first although round 1 holds the newest attempt.
+  - `summarizeReview.latestRound = latest.round`, where `latest` is the newest attempt by createdAt. It is 1 while `rounds[0].number` is 2. ReviewsView (:275, :321) and the ReviewPanel header (:106) show "Round 1", and the timeline puts Round 2 on top.
+  - Desktop `latestReviewed` walks `review.rounds` in order and takes the first attempt with `reviewed`. That is the round-2 attempt on B. The server's `referenceHead`, `findings` and `publication` use the newest finished attempt by createdAt, which is the round-1 retry on A.
+- **Trigger**: Round 1 on range A ends `partial` or `budget`, or the user re-runs A with other options. Either way `previousAttempt` does not reuse it (requestAttempt reuses only `completed` with `complete` coverage and matching options). The PR moves to B, and round 2 on B completes. The author force-pushes back to A, so the PR's base..head is A again, and the user starts a manual review on A. The new attempt lands in round 1 with `previous_run_id` = the old round-1 attempt. It completes.
+- **Outcome**: The server summary has freshness `current` (reference head A = PR head A), the A retry's findings and publication, and `latestRound: 1`. The Desktop card and row show reviewed commit B (from round 2) next to "current" and A's findings. The panel says "Round 1" above a timeline that starts at Round 2 and hides the newest result in the lower entry. The view gives a wrong result with no error.
+- **Relation to earlier findings**: review-logic w2 F-001 (stopped attempt chosen by `latestReviewed`) has a patch that adds a finished-state filter. That patch does not fix this, because B's attempt is finished too. w2's alternative, a server-provided `reviewedHead` (`referenceHead(row)`), does fix the commit label. It does not fix `latestRound` or the round order. review-degradation w3 F-001 reaches the same inconsistency through a late CLI import, which the plan records as a known limitation. This trigger is native to Desktop and is not covered by that note. review-testing-practices w2 noted that no A,B,A fixture exists. That note is about a missing test, not this consumer defect.
+- **Fix**: Choose one rule and apply it to every consumer.
+  - (a) Keep the T5 placement. Then order rounds by their newest attempt's createdAt in `roundsOf`, define `latestRound` as `rounds[0].number`, or keep "round of newest attempt" and label it that way. Have the CLI emit `reviewedHead: referenceHead(row)` and have Desktop render it instead of walking `rounds`.
+  - (b) Change T5 step 2 so that a same-range match joins only the current highest round, and any other range opens `max+1`. Round number then follows time and every current consumer stays correct. Rows already placed are not renumbered, because `assignReviews` touches only unassigned rows.
+  - Either way, add an A,B,A fixture through `reviewRows` → `summarizeReview` → model `reviewedCommit`.
+- **Patch** (option b, store side):
+  ```diff
+  -    const retry = this.db.query<{ round: number }, [string, string | null, string | null]>(`SELECT round FROM runs
+  -      WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?
+  -      ORDER BY round DESC LIMIT 1`).get(reviewId, run.base, run.head);
+  +    const retry = this.db.query<{ round: number }, [string, string, string | null, string | null]>(`SELECT round FROM runs
+  +      WHERE review_id=? AND round=(SELECT max(round) FROM runs WHERE review_id=?1)
+  +        AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ? LIMIT 1`).get(reviewId, reviewId, run.base, run.head);
+  ```
+  (The plan's T5 text and the migration fixture expectations must change with it.)
+- **class_scope**: sites = desk-run-store.ts:195 (producer), review-entity.ts:138 (roundsOf), review-entity.ts:159 (latestRound), apps/desktop/src/reviews/model.ts:54 (latestReviewed), model.ts:63 (reviewedCommit fallback `rounds[0].headSha`), ReviewPanel.tsx:106 and ReviewsView.tsx:275/:321 (render latestRound). Enumeration: `keryx ctx rg "latestRound|rounds\[0\]|\.rounds\b" apps/desktop/src src`. 127 hits in all. The others belong to unrelated `rounds` concepts (review-gate, loop, autonomous-run, agent tests). Among Reviews consumers, review-reviews.ts:75 (`latestCreated`) uses createdAt over all attempts and is not affected.
+
+### [F-002] A queued attempt superseded before it started opens a round of its own
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:196-199 (roundFor new-range branch), with requestAttempt's supersede path (~:700)
+- **Problem**: `requestAttempt` places the new row as soon as it is inserted. Take a Review with round 1 running on A. The user requests B, which is queued and placed as round 2. The head moves to C before round 1 finishes, and the user requests C. The B row is ended `skipped`/"Superseded" with `startedAt` null, and C opens round 3 with `previous_run_id` = the never-started B row. The store's own `previousAttempt` excludes exactly this row shape (`NOT (state='skipped' AND phase='Superseded' AND startedAt IS NULL AND result IS NULL AND usage IS NULL)`) as not an attempt. Round placement counts it anyway, and `reviewRows` lists it, because only archive and delete are filtered.
+- **Why it matters**: After two reviews the Review shows "Round 3", and Round 2 holds a stopped request that never ran. Round 3's "after" link points at that request, not at the review it actually follows. No data is lost.
+- **Fix**: In `roundFor`, leave never-started superseded rows out of the `max(round)` and `newest()` lookups (reuse the `previousAttempt` predicate). Or place a queued row only when it is dispatched. The row still needs a Review, so it would join the current round, not open one.
+
+### Async & Concurrency
+None detected. The migration ALTERs and `assignReviews` run in one immediate transaction behind a `pragma_table_info` check. `request` runs `assignReviews` inside the caller's dispatch transaction. `recordExisting` is now `atomic` (a savepoint when nested). The UPDATE is guarded by `review_id IS NULL`, so concurrent placers cannot renumber a row.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected. `place` returns early when `reviewId` is not a string (unmigrated read-only store). `reviewRows` types `round` as `number`, which holds because `readReviewRows` opens writable and the constructor places every row first. `findings` is an object in `DeskResult`, so `json_extract` returns JSON text and `JSON.parse` is safe.
+
+### Type Contract Violations
+None detected. `outdated.round` is spread only when `typeof stale.round === "number"`, so attachBadges (SQL NULL) and localBadge (live history) keep parity.
+
+### Edge Cases
+See F-002.
+
+### Verified clean (traced)
+- Writers of `runs.details`. Enumerated with `keryx ctx rg "UPDATE runs SET|INSERT INTO runs|INSERT OR" src` (non-test). Five sites, all in desk-run-store.ts: the placement UPDATE (:170), `save` (:346, through `storedDetails`), `recordExisting` (:383, through `storedDetails`), the `request` insert (:730, a fresh run with no placement), and the recoverable state UPDATE (:801, state only). No path writes placement into details.
+- `decode` and `byId` use `SELECT *`. They place from the columns when present and stay unplaced on an unmigrated read-only store.
+- Continuation: `linked` requires the predecessor in the same Review with a non-null round. A continuation reuses its predecessor's range (requestContinuation), so it can never open a new round.
+
+### Not covered / inputs
+- No tests run (exec_budget_s 0). `research-evidence/verify-tests-to-run-1.txt` was not opened, because the prompt says it holds load-related timeouts outside this PR. F-001 and F-002 are read traces, not runs.
+- Git history not read: no `git log`/`git blame` was needed for these findings.
+- The Desktop render sites (ReviewPanel.tsx, ReviewsView.tsx) were confirmed by the rg lines only, not read in full.
+
+### Suggested Patches
+See F-001 (option b).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-05 matches plan T5 on schema, migration, placement projection, details stripping, read-only NULL substitution and the badge round. Major F-001: T5's same-range rule puts a retry on an earlier range (A,B,A) back into its lower round. roundsOf orders by number ('newest round first'), latestRound is the newest attempt's round, and Desktop latestReviewed walks rounds in that order, so after A,B,A the panel shows 'Round 1' over a timeline topped by Round 2, and the Desktop reviewed commit (B) contradicts the server's freshness, findings and publication (A). Minor F-002: a queued attempt superseded before it started opens its own round, though previousAttempt does not treat such a row as an attempt. No tests run (exec budget 0).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/desk-run-store.ts",
+      "line": 195,
+      "quote": "if (retry) return { round: retry.round, previous: newest(retry.round) };",
+      "problem": "A retry on a range already seen joins that range's round even when higher rounds exist, so round number no longer tracks time. review-entity roundsOf sorts rounds by number ('Newest round first'), summarizeReview.latestRound is the newest attempt's round, and Desktop model.ts latestReviewed/reviewedCommit walk rounds in number order.",
+      "impact": "Trigger: round 1 on A ends partial or budget, or is re-run with other options. Round 2 on B completes. The PR is force-pushed back to A and a manual review on A completes (it lands in round 1). The server reports freshness current (reference A), A's findings and publication, and latestRound 1. Desktop shows reviewed commit B, and the panel says 'Round 1' while the timeline lists Round 2 first and holds the newest result in the lower entry. The view gives a wrong result with no error. review-logic w2 F-001's finished-state patch does not fix it, because B is finished too.",
+      "suggested_fix": "Either (b) restrict the same-range match to the current highest round, so any other range opens max+1 and round number follows time (assignReviews never renumbers placed rows), and update plan T5 and the migration fixture. Or (a) keep placement and make every consumer use recency: order roundsOf by newest attempt createdAt, define latestRound consistently, and have the CLI emit reviewedHead = referenceHead(row) for Desktop to render. Add an A,B,A fixture through reviewRows -> summarizeReview -> reviewedCommit.",
+      "evidence": "Read roundFor (desk-run-store.ts:186-200), requestAttempt reuse rule (reuses only completed+complete with matching options), review-entity.ts roundsOf :131-141, summarizeReview :159, latestReviewed :120ff (createdAt order), apps/desktop/src/reviews/model.ts:52-65. The migration fixture (desk-run-store.test.ts:870-875) has no range that returns after a later one.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "class_scope": {
+        "sites": [
+          "src/review/desk-run-store.ts:195",
+          "src/review/review-entity.ts:138",
+          "src/review/review-entity.ts:159",
+          "apps/desktop/src/reviews/model.ts:54",
+          "apps/desktop/src/reviews/model.ts:63",
+          "apps/desktop/src/reviews/ReviewPanel.tsx:106",
+          "apps/desktop/src/reviews/ReviewsView.tsx:275",
+          "apps/desktop/src/reviews/ReviewsView.tsx:321"
+        ],
+        "enumeration_method": "keryx ctx rg \"latestRound|rounds\\[0\\]|\\.rounds\\b\" apps/desktop/src src: 127 hits; the Reviews read-model consumers are the listed sites; the rest are unrelated 'rounds' concepts (review-gate, loop, autonomous-run, agent tests); review-reviews.ts:75 uses createdAt and is unaffected"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 198,
+      "quote": "return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };",
+      "problem": "Rows are placed at insert. A queued request on a new range opens round N+1. When a newer request supersedes it before it starts (state skipped, phase Superseded, startedAt null), it keeps that round, and the next range opens N+2 with previous_run_id pointing at the never-started row. previousAttempt in the same store excludes exactly this row shape as not an attempt.",
+      "impact": "After two reviews the Review shows Round 3. Round 2 is a stopped request that never ran, and Round 3's 'after' link points at that request. No data loss.",
+      "suggested_fix": "Exclude never-started superseded rows from roundFor's max(round) and newest() lookups (reuse the previousAttempt predicate), or have queued rows join the current round until they are dispatched.",
+      "evidence": "Read requestAttempt supersede path (end(queued, skipped/Superseded)) and the previousAttempt NOT(state='skipped' AND phase='Superseded' AND startedAt IS NULL ...) predicate; roundFor new-range branch; reviewRows filters only archive/delete.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the consumers were enumerated with a ctx rg search over the changed read-model fields, which a graph dependents list would not narrow); wiki_used: not-relevant (plan T5 holds the rule); ctx_used: yes (`keryx ctx rg` for earlier findings, consumers, writers, test coverage); raw_rg_used: no (one bounded `sed -n` slice of requestAttempt, marked keryx:raw).

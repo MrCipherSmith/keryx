@@ -1,0 +1,66 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 3, slice-09)
+
+### Scope
+- PR #1304, branch feat/desktop-review-v2-stage2, delta 20e4281a2..f6971fd4a
+- Slice read in full: slice-09 (135 915 bytes, 2190 lines).
+- What the slice holds:
+  - Desktop tests: platform/reviewPages.test.ts, review/ReviewBoard.dom.test.tsx, review/model.test.ts, reviews/ReviewPanel.dom.test.tsx, reviews/ReviewsView.dom.test.tsx, shell/ProjectNavigation.dom.test.tsx, test/app-navigation.fixture.tsx.
+  - Docs: cli-reference.md, the implementation plan and the specification.
+  - Backend: src/commands/review-reviews.ts and its test, plus the `reviews` wiring in src/commands/review.ts and src/lib/group-subcommands.ts.
+- Also read at head: src/commands/review-reviews.ts in full, plus `selectRepository`, `reviewRepositories` and the new `writeBoundJson` / `writeBoundJsonText` in src/review/board-github.ts. The `writeBoundJson` delta was read with `git diff 20e4281..f6971fd`.
+- Slice-09 is not the fix slice, and the payload's prior_findings and known_findings are empty. That makes prior_dispositions empty.
+- Waves 1–2 (slice-07, slice-08) raised no security findings, so there is nothing to cite or re-file.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked
+- Path and argument injection into `gh api` in review-reviews.ts:133-134. The path is `repos/${repo}/compare/${base}...${head}?per_page=1`, built from three values:
+  - `repo` comes from `selectRepository`, which is an exact-match lookup (case-insensitive) in the project's own git remotes (`reviewRepositories` runs `git remote -v`). A `--repo` value that is not one of the project's repositories is refused with a `configuration:` error. In the bridge path, `--repo` is option-guarded in both hosts (wave 2).
+  - `base` and `head` reach `compare` only after `OBJECT_ID = /^[0-9a-f]{40}$/` checks both values of the pair (line 58). A `..`, `?`, `/` or `-` cannot enter the path or argv from the stored head or from GitHub's `headRefOid`.
+  - The args go to `gh` as an argv vector, never through a shell.
+- Parsing GitHub's response: `--jq "{status, ahead_by}"` cuts the comparison down in gh. `parseCompare` then accepts only the four known statuses and a non-negative safe integer, and throws `unavailable:` on anything else. A malformed or hostile body cannot put arbitrary data into the snapshot.
+- Authz and cross-account isolation:
+  - `readReviews` takes `viewer` and `repositoryId` from the GitHub identity query, never from CLI input. `readReviewRows(repositoryId, viewer, root)` is scoped by that key, so a caller cannot list another account's local Reviews.
+  - An unidentified account or repository is refused with `access:` (tested).
+  - `access:` and `configuration:` errors from card reads are rethrown instead of being turned into warnings (`cannotRetainData`).
+  - `writeBoundJson` checks the GitHub binding again at the output boundary, so a binding change during the read does not publish the previous account's data.
+- Data exposure: the output carries summaries only. The test checks that `"private report body"` and `reviewerProgress` are absent from the JSON. The `--include-closed` mode reads only PR numbers already in the viewer's local store.
+- DoS bounds: compares are capped at 25 per call (`MAX_REVIEW_COMPARES`), with 4 in parallel and a 60 s overall deadline. Card reads go in batches of 20, 3 in parallel. `parseArgs` is strict, and unknown flags are refused (tested).
+- Bridge refusal tests (reviewPages.test.ts) pin that `reviewsOnly` is refused together with every other board mode, and that a `--other` repo is refused ("Invalid repository").
+- Desktop tests and fixtures: the `<script>` strings in report and finalOutput fixtures are test inputs that are expected to render as text. There is no dangerouslySetInnerHTML, eval, storage of secrets or credential material in the slice. The "Previous account secret rule" test pins that a pending rules response for the previous account is not shown.
+- Docs: no secrets, tokens or personal data. Paths are generic.
+- Not applicable to this slice: crypto, CSRF, file-system path traversal (the store root is `deskRunRoot()` or a test temp dir, never CLI input), open redirect, NestJS patterns.
+
+### Clean areas
+API path and argv injection, response parsing, authz and identity binding, data exposure, resource bounds, XSS, secrets and PII, crypto, CSRF, path traversal, open redirect, framework patterns.
+
+### Not verified
+- `boardGh`, `boardGraphql`, `projectGithubConnection`, `withCurrentGithubBinding` and `configuredRepositories` (the remote URL parser) were not read in full. I relied on their call sites and on `selectRepository`'s exact-match lookup. Whether a crafted git remote URL could produce a `repo` with path characters depends on `configuredRepositories`. The remotes belong to the operator's own checkout, so that input is not attacker-controlled under this PR.
+- `listActiveReviewCards`, `readReviewRows` and `summarizeReview` internals belong to other slices.
+- No tests were run (exec budget 0). The test evidence is the package's verify-tests-to-run-1.txt as stated in the dispatch, and I did not re-read it.
+- History beyond the board-github.ts delta was not needed.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-09 (review-reviews CLI, its wiring and tests, Desktop tests, docs) has no security findings. The gh compare path takes repo from an exact-match allowlist of the project's remotes and heads only as 40-hex object IDs, passed as argv. The response is reduced to status/ahead_by and strictly parsed. Rows are scoped by the GitHub-verified viewer and repository id. Access errors are not retained, and the binding is checked again at output. Compares and card reads are bounded.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-09"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (not-relevant: I followed the sinks directly from review-reviews.ts into board-github.ts). wiki_used: no (not-relevant: the controls were read in code). ctx_used: yes (keryx ctx rg over the slice and board-github.ts). raw_rg_used: no. One raw `git diff` was used with a keryx:raw marker, for the 15-line board-github.ts delta.

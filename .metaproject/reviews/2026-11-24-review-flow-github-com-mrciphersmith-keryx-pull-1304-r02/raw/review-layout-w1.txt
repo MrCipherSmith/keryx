@@ -1,0 +1,36 @@
+STATUS: DONE_WITH_CONCERNS
+
+Concern: exec_budget_s is 0, so nothing was measured in a real layout engine. Every disposition below comes from reading the cascade, not from a measurement. No new finding is filed. Under Iron Law 1 an unmeasured observation could only be `info`, and the delta has no layout change that warrants one.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "slices": ["slice-01"],
+  "summary": "Delta round 2 (20e4281a2..f6971fd4a), FIX slice-01, read in full (791 lines). Three layout-relevant parts of the delta also sit outside the slice excerpt, and I read them too: ReviewDetail.css (+2), ReviewWorkspace.tsx and ReviewPanel.tsx, plus review.css and the ReviewsView toolbar at head. Prior layout findings: F-054 (LY-001, .review-workspace-block had no rule) is closed. ReviewDetail.css now gives `.review-workspace-block { display:flex; flex-direction:column; align-items:stretch; gap:var(--sp-3); min-width:0 }`, so the Rounds timeline and `.desk-runs` get the same 12px gap as in the card-less fallback branch, which renders inside `.review-detail-body`. `.review-associated-flow { align-self:flex-start }` applies again. ReviewWorkspace has no direct `.btn` child (the primary button sits inside `.sheet-actions.review-detail-actions`), so losing the `.review-detail-body > .btn` match changes nothing. F-055 (LY-002, cut-off select values at 760px or less) is closed by the fix's 'mirror in title' alternative: the state, freshness and source selects at ReviewsView.tsx:291-303 now carry a `title` with the selected label. The 6.5rem cap in review.css:111 is unchanged, so a long value may still be visually cut off; that is unmeasured. Sibling check: the 'Base repository' select (ReviewsView.tsx:325) sits in `.review-context`, not under `.reviews-board .flows-toolbar > select`, so the cap does not reach it and it is outside the class. F-030 (error banner placement) is closed: the `local.error` banner now renders in the sheet header right after `.review-detail-actions` and before the associated-Flow link. `.inline-banner` is display:flex with margin-bottom 12px, and `.sheet-head` has 0 bottom padding, so the margin separates it from the header border. The ReviewPanel no-card banner changed from <p> to a flex div with <span>, which gets flex:1; min-width:0, and a btn-sm 'Refresh'. Its text wraps inside the span, and nothing in it is fixed-width. No new layout defects found in the delta. All of this is unmeasured: exec_budget_s 0, and the T11 browser check had an empty Reviews list. To settle it, run `bun run dev:browser` with a project that has Reviews. Read the gap between `.review-rounds` bottom and `.desk-runs` top, which should be 12px. Then pick 'Needs your answer' in the state select at 700px and compare the select's clientWidth with its text.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "F-054", "disposition": "closed" },
+    { "id": "F-055", "disposition": "closed" },
+    { "id": "F-030", "disposition": "closed" }
+  ],
+  "follow_ups": [
+    "Not measured: confirm in dev:browser with a populated Reviews list that the gap between .review-rounds and .desk-runs is 12px, and check the selected-value text of the 6.5rem-capped filter selects at 700px and 560px. The title attribute mirrors the value; the visible cut-off itself is unchanged."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary (review-layout, round 2, wave 1)
+
+- Scope: FIX slice-01 read in full. I also read the delta hunks of ReviewDetail.css, ReviewWorkspace.tsx and ReviewPanel.tsx, which are only partly in the slice, and the ReviewsView toolbar and review.css at head.
+- Prior dispositions (layout lens):
+  - F-054 / LY-001: closed. `.review-workspace-block` is now a flex column with a 12px gap (ReviewDetail.css). The fix-round ledger had it as deferred, but the code fixes it (fix-round-1.md FB-9).
+  - F-055 / LY-002: closed via the `title` alternative on the three filter selects. The 6.5rem cap is unchanged.
+  - F-030: closed. The banner moved into the header under the actions row.
+- Other prior findings (F-001..F-053, F-056..F-060) are logic, state, a11y, docs, backend or test findings outside this lens. I gave them no disposition; their own lenses own them.
+- New findings: none.
+- Not verified: no measurement of any kind (exec_budget_s 0). Every conclusion is from reading the cascade.
+
+Routing audit: graph_used: no (not-relevant: three named files, located directly from the diff stat); wiki_used: no (not-relevant: a CSS cascade check); ctx_used: yes (keryx ctx rg for the CSS and selector enumeration); raw_rg_used: no. One raw `git diff` with a keryx:raw marker, to read about 100 lines of exact hunks.

@@ -1,0 +1,188 @@
+STATUS: DONE
+
+# Style Review Report: review-style, round 2 (delta), wave 1
+
+## Summary
+The fix delta reads cleanly. The new helpers have specific names: readCards, headComparison, headsDiffer, settlePending, consumeIntent, inViewOverlay and latestActivity. The comments state intent. No touched file crosses a length threshold, and the delta adds no console output. There are four minor naming and readability findings. Two are in ReviewsView.tsx: the Review-rules fallback target has three names, and its guard is a long ungrouped condition. Two are in review-reviews.ts: a function `compareHeads` sits next to the exported type `CompareHeads` with a different meaning, and the type `Pair` has a generic name. Round 1 had no style findings. For the prior findings this slice touches, the fixes match the suggested shapes. Those checks are shape-level, not a logic trace.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (explicit-hash-range, delta round)
+- Slice read in full: slice-01 (the FIX slice: App.tsx, ReviewBoard.tsx, ReviewDetail.tsx, ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts, ReviewBoard.dom.test.tsx, ReviewsView.dom.test.tsx, cli-reference.md, desktop-app.md, implementation-plan.md, specification.md, review-reviews.ts and its test, desk-run-store.ts, review-entity.ts and its test)
+- Extra head reads (git show f6971fd): ReviewsView.tsx 20-60, 85-130, 190-198 and 225-282; review-reviews.ts declarations; review-entity.ts declarations; App.tsx 628-665; desk-run-store.ts neverStarted/PlacedAttempt/roundFor declarations
+
+## Stats
+- major: 0
+- minor: 4
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+
+### [F-001] One Review-rules target has three names, and `rulesTarget` names two different values
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:114
+- **Problem**: The Pull requests board's verified identity is called `boardIdentity` in App.tsx, where it is passed as `rulesTarget={boardIdentity}`. It arrives as the prop `rulesTarget`, whose doc says "The Pull requests board's verified identity". RepositoryReviews then renames it during destructuring (`rulesTarget: boardRules`). It has to, because line 274 declares a different local `rulesTarget`: the effective target, which is this list's own `target` or the board fallback. So one concept has three names, and inside one component `rulesTarget` means the prop at the call site and something else in the body.
+- **Why it matters**: A reader who follows `rulesTarget` from App into ReviewsView reaches a value that is not the prop. This is the Name row ("gives one concept two names").
+- **Fix**: Name the prop after what it holds, for example `boardTarget` or `boardIdentity` as in App, and drop the destructuring rename. The local `rulesTarget` then names only the effective target.
+
+### [F-002] The board-rules fallback guard is a six-clause condition with no name
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:274
+- **Problem**: `target ?? (!snapshot && read.error && !accessProblem(read.error) && boardRules && (!expectedViewer || …) && (!repo || …) ? boardRules : null)`. That is four ungrouped `&&` clauses plus two grouped ones, then a ternary inside a `??`. The fix round added it for prior F-017. It crosses the Readability threshold "Boolean condition: more than 3 clauses without grouping".
+- **Why it matters**: To read when the board's rules are borrowed, you have to parse operator precedence across three lines. The comment above it gives the purpose but not the conditions.
+- **Fix**: Extract a named predicate, for example `const boardRulesApply = !snapshot && !!read.error && !accessProblem(read.error) && sameAccount(boardRules, expectedViewer) && sameRepo(boardRules, repo);` and then `const rulesTarget = target ?? (boardRulesApply ? boardRules : null);`. A small `boardRulesFor(...)` helper beside `inViewOverlay` would also work.
+
+### [F-003] Function `compareHeads` and exported type `CompareHeads` share a name but mean different things
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:86
+- **Problem**: `export type CompareHeads = (base, head) => Promise<ReviewCompare>` (line 23) is one GitHub comparison, which callers inject as `compare`. The fix round adds a module function `compareHeads(pairs, compare: CompareHeads, budgetMs, warnings)` (line 86). It runs every comparison within one deadline and pushes warnings. The two identifiers differ only in case, and the function takes the type as a parameter: `compareHeads(..., compare: CompareHeads, ...)`.
+- **Why it matters**: A search for `compareHeads` or `CompareHeads` finds both, and the batch-with-deadline step reads like the single-call contract. This is the Name row ("needs a comment / one name, two concepts").
+- **Fix**: Rename the function after what it adds, for example `compareWithinBudget` or `countCommitsBehind`, and keep `CompareHeads` for the injected single call.
+
+### [F-004] Generic type name `Pair` for the reviewed-head / PR-head comparison
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:84
+- **Problem**: `type Pair = { id: string; reviewed: string; head: string };` and the local `pair` at line 58 do not say what is paired. The same `{ reviewed, head }` concept already has a specific name in this change, `headComparison` (review-entity.ts:157), but its return type is written inline.
+- **Why it matters**: `Pair[]` in the `compareHeads` signature gives no information. This is the Name row ("generic").
+- **Fix**: Name the concept once. Export `type HeadComparison = { reviewed: string; head: string }` from review-entity.ts as `headComparison`'s return type, then use `HeadComparison & { id: string }`, or name the local type `HeadPair`.
+
+## Considered and not reported
+- App.tsx: the nested JSX ternary in the Reviews view (`reviewDisconnected ? … : (githubAccount || githubAccountError) ? … : null`). App.tsx already has another conditional chain of this shape, and a comment explains the three-way render. Law 4: sibling pattern.
+- ReviewsView.tsx:95: `const handled = useRef(props.onFocusHandled)` holds a callback, but the name reads like a boolean. Sibling callback refs use the same past-participle form (`ended` in StreamView.tsx:14, `changed` in ActivityPanel.tsx:381, `intentConsumed` in ReviewWorkspace.tsx:92), so it is the codebase convention.
+- The ReviewsView pending-focus effect: about 9 if/else-if/ternary branches. The base had about 7. That is under the "more than 10" threshold.
+- File lengths, base to head: App.tsx 730 to 741 (already past 500, stays under 800), desk-run-store.ts 912 to 932 (already past 800), ReviewBoard.tsx 553 to 561 (already past 500), ReviewsView.tsx 330 to 417, review-reviews.ts 104 to 137, review-entity.ts 166 to 203. None crosses a threshold in this delta.
+- ReviewBoard.tsx:65 declares two constants in one statement (`const boardRepo = …, boardRepositoryId = …`). That is formatter territory, not a finding.
+- ReviewsView.dom.test.tsx renames `tile` to `card6`. Test files are exempt from the readability rows, and the rename is fine.
+
+## Prior findings (FIX slice): dispositions
+Round 1 had no review-style findings. For the prior findings whose sites slice-01 touches, I compared the claimed fix with the head code. These checks are shape-level: the code now matches the suggested fix. They are not a full logic trace, which the owning lenses do.
+- F-001 closed: App.tsx:217 builds the focus from `{repo, repositoryId, number}`. ReviewsView matches the repo and repositoryId and switches the repository through `focusRepo`.
+- F-002 closed: `consumeIntent` runs when the tab deactivates, and the workspace reports `intentConsumed`.
+- F-003 closed: `pending` and the `taken` nonce now live above the keyed child, and `onFocusHandled` lets App drop the focus.
+- F-004 closed: `reviewNeedsViewer` lights `ready` only when `publication === "pending"`.
+- F-005 closed: desktop `latestReviewed` is removed. `reviewedCommit` renders the domain's `review.reviewed`.
+- F-007 closed: `subscribeSessionReview` and `reloadSignal` (watcher polls) both refresh. The running interval no longer depends on `active`.
+- F-009 closed: `accessLost` calls `settlePending()`.
+- F-011 closed: the interval skips the refresh while `document.visibilityState === "hidden"` (ReviewsView.tsx:194).
+- F-013 closed: `ReviewsTabIndicator` is defined in ReviewsView.tsx and no longer imported from shell/AppShell.
+- F-017 closed: the board's `rulesTarget` is the fallback (style residue in F-001 and F-002 above).
+- F-018 closed: desktop-app.md shortcuts read ⌘1-⌘3 Sessions/Flows/Reviews and ⌘4-⌘6 Pull requests/Issues/Metaproject.
+- F-019 closed: cli-reference.md documents freshness `unknown`.
+- F-021 closed: specification.md :8 and the protocol sentence both record that stage 2 kept version 1 and added no schemas.
+- F-022 closed: rows are sorted by latest activity, and the cap follows list order.
+- F-023 closed: Reviews closed locally are not read unless `--include-closed` is given.
+- F-024 closed: `readCards` keeps the cards of the batches that succeed.
+- F-025 closed: the compare phase has an overall deadline (`compareBudgetMs`, 60 s) and a test for it.
+- F-026 closed: `placed` caches each Review's placed attempts with narrow `json_extract` columns, and `roundFor` reads that cache.
+- F-031 closed: the aria-label now starts with the visible text `after <id>`.
+- F-033 closed: `matchesSearch` checks the title and the number.
+- F-045 closed: the test "a reviewed head that is not a full object id is never sent to GitHub" exists.
+- F-053 partial: (a) the exactly-25 boundary test is added. I did not see (b) the equal-createdAt tie-break, (c) the parseCompare non-number case or (d) the real compare closure in slice-01.
+- F-059 closed: implementation-plan.md names the action «New review round».
+- Not dispositioned (their fix sites are outside slice-01's hunks, or need a lens trace I did not do): F-006, F-008, F-010, F-012, F-014, F-015, F-016, F-020, F-027, F-028, F-029, F-030, F-032, F-034 to F-044, F-046 to F-052, F-054 to F-058, F-060.
+
+## Positive Notes
+- The new helpers and state are named for their role: `readCards`, `headComparison`, `headsDiffer`, `latestActivity`, `settlePending`, `consumeIntent`, `refreshedFor`, `restoreFocus` and `inViewOverlay`.
+- The fixes add focused doc comments that state the contract: `reviewNeedsViewer`, the `onFocusHandled` and `reloadSignal` props, and `readCards`.
+- ReviewBoard.dom.test.tsx drops a one-element `for` loop and its `opener.length` suffix, which makes the test easier to read.
+
+## Not verified
+- I read history only through the git show excerpts listed above. I ran no tests (exec_budget_s 0). I relied on the supplied verify-tests-to-run-1.txt summary and did not read it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "The fix delta reads cleanly. There are four minor naming and readability findings: the Review-rules fallback target has three names and an ungrouped six-clause guard (ReviewsView.tsx), compareHeads collides with the type CompareHeads, and the type name Pair is generic (review-reviews.ts). No length, nesting or console threshold is crossed. The prior findings the slice touches match their suggested fixes at shape level.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 114,
+      "quote": "rulesTarget: boardRules",
+      "problem": "One concept has three names: boardIdentity in App.tsx (passed as rulesTarget={boardIdentity}), the prop rulesTarget, and the local boardRules after a destructuring rename. The rename is needed because ReviewsView.tsx:274 declares a different local rulesTarget, the effective target (target ?? board fallback). So rulesTarget names two different values in one component.",
+      "impact": "Readability: following rulesTarget from App into RepositoryReviews leads to a value that is not the prop. Name row: one concept, several names.",
+      "suggested_fix": "Name the prop boardTarget or boardIdentity, as in App, and drop the destructuring rename. The local rulesTarget then names only the effective target.",
+      "evidence": "Head f6971fd: ReviewsView.tsx:41 prop `rulesTarget?: RulesTarget` (doc: the Pull requests board's verified identity); :114 `rulesTarget: boardRules`; :274 `const rulesTarget = target ?? (...)`; :313 uses the local. App.tsx `rulesTarget={boardIdentity}` (slice-01, App.tsx hunk 638-645).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "reviews-view-rules-target-naming"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 274,
+      "quote": "const rulesTarget = target ?? (!snapshot && read.error && !accessProblem(read.error) && boardRules &&",
+      "problem": "The board-rules fallback guard has six && clauses, four of them ungrouped, followed by a ternary inside ??. It crosses the Readability threshold 'Boolean condition: more than 3 clauses without grouping'. The fix round added it for prior F-017.",
+      "impact": "Readability: to see when the board's rules are borrowed, a reader has to resolve operator precedence across three lines.",
+      "suggested_fix": "Extract a named predicate (for example `const boardRulesApply = !snapshot && !!read.error && !accessProblem(read.error) && sameAccount(boardRules, expectedViewer) && sameRepo(boardRules, repo)`) and write `const rulesTarget = target ?? (boardRulesApply ? boardRules : null);`, or move it into a small helper beside inViewOverlay.",
+      "evidence": "Head f6971fd ReviewsView.tsx:273-276. It was added by 98c7b37a1, the only delta commit that touches this file.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "reviews-view-board-rules-condition"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 86,
+      "quote": "async function compareHeads(pairs: Pair[], compare: CompareHeads, budgetMs: number, warnings: string[]): Promise<Map<string, ReviewCompare>> {",
+      "problem": "The new module function compareHeads (run every comparison within one deadline and record warnings) differs only in case from the exported type CompareHeads (line 23), which is one injected GitHub comparison. The function takes that type as a parameter.",
+      "impact": "Readability: a search for the name finds two concepts, and the batch step reads like the single-call contract. Name row.",
+      "suggested_fix": "Rename the function after what it adds, for example compareWithinBudget or countCommitsBehind, and keep CompareHeads for the injected single call.",
+      "evidence": "Head f6971fd review-reviews.ts:23 `export type CompareHeads = (base: string, head: string) => Promise<ReviewCompare>;`, :28 `compare: CompareHeads;`, :61 `await compareHeads(behind.slice(0, MAX_REVIEW_COMPARES), compare, ...)`, :86. Base 20e4281 had only the type.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "review-reviews-compareheads-name-collision"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": 84,
+      "quote": "type Pair = { id: string; reviewed: string; head: string };",
+      "problem": "The type name Pair, and the local `pair`, do not say what is paired. The same {reviewed, head} concept already has a specific name in this change, headComparison (review-entity.ts:157), but its return type is written inline.",
+      "impact": "Readability: `Pair[]` in the comparison signature tells the reader nothing. Name row: generic name.",
+      "suggested_fix": "Export `type HeadComparison = { reviewed: string; head: string }` as headComparison's return type and use `HeadComparison & { id: string }` here, or name the local type HeadPair.",
+      "evidence": "Head f6971fd review-reviews.ts:58 `const pair = headComparison(...)`, :84, :86; review-entity.ts:157 `headComparison(...): { reviewed: string; head: string } | null`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "review-reviews-pair-generic-name"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-004", "disposition": "closed"},
+    {"id": "F-005", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-017", "disposition": "closed"},
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"},
+    {"id": "F-021", "disposition": "closed"},
+    {"id": "F-022", "disposition": "closed"},
+    {"id": "F-023", "disposition": "closed"},
+    {"id": "F-024", "disposition": "closed"},
+    {"id": "F-025", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-033", "disposition": "closed"},
+    {"id": "F-045", "disposition": "closed"},
+    {"id": "F-053", "disposition": "partial"},
+    {"id": "F-059", "disposition": "closed"}
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 0}
+}
+```

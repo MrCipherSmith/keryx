@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+
+## PR Contract Review — round 2 (delta), wave 2, slice-02 (flow package: acceptance-criteria.md, fix-round-1.md, journal.md, plan.md, flow.json)
+
+Inputs read: driver, slice-02.diff in full, pr-context.md (current body), raw/review-pr-contract-w1.txt and the `### ` headings of every other *-w1.txt. Code read only to settle rows: apps/desktop/src/reviews/ReviewsView.tsx:26, :183-200; apps/desktop/src/App.tsx:214-221 (ctx rg); src/review/desk-run-store.ts:26-27, :102-105 (ctx rg); the delta of apps/desktop/src/review/ReviewDetail.css; round-1 report.md lines for F-027/F-048/F-060.
+
+### Checklist form
+
+The PR body has no checkboxes; each stated claim slice-02 bears on is a row.
+
+| Claim (quoted) | State | What slice-02 / head shows | Verdict |
+|---|---|---|---|
+| "Round 1 ran ... with 12 reviewers and 32 dispatches" | stated | journal.md (slice :102) "11 reviewers, 31 dispatches; then plan growth (review-pr-contract) also confirmed" | agrees |
+| "It found 8 majors; the 7 sent to a verifier were all confirmed, and the eighth set the round rule" | stated | journal.md (slice :103-104) verifier w1 4 + w2 3 confirmed; logic-w5 F-001 -> D-R1 | agrees |
+| "Round rule: a return to an earlier range opens a new round (operator decision; AC1 reworded)" | stated | acceptance-criteria.md AC1 reworded (slice :6); plan.md T5 (slice :171-172); flow.json ac-updated | agrees |
+| Store bullet "the same base..head joins its existing round as a retry" | stated | plan.md T5 now "the current highest round already has the same baseSha..headSha" | contradicts — already PC-001 (w1), not re-filed |
+| "All are fixed in 85fa985 and 98c7b37, each with a test that failed before the fix" | stated | journal.md (slice :112) "red probes first except FA-10 (perf refactor) and pinning fixtures in FA-12" — both are minors, so the majors claim holds | agrees for majors |
+| "The minors are fixed too ... The full list is in fix-round-1.md" | stated | fix-round-1.md has no F-048 row (journal :145 sends it to T17) — PC-003 (w1); F-060 deferred (w1 prior disposition open) | overstated — PC-W2-002 (info) |
+| "Desktop: bun test src passes 1007 tests ... at 98c7b37" | stated | journal.md (slice :120) 1007 at T16; head 1008 | already PC-003 (w1) |
+| "Cross-tab: Open in Reviews ... now carries the repository"; "Indicator freshness: stays current while the tab is hidden" | stated | plan.md T7 (unchanged lines, head :59-60) still says `reviewsFocus {number, nonce}`, `onOpenInReviews(number)` and "every 60 s while the tab is active" | stale doc — PC-W2-001 |
+| "Indicator rule: ... ready only when publication is pending ... archived or card not read does not light it unless it asks a question" | stated | plan.md T6 (slice :196) updated to the same rule; AC8 keeps the general wording "ready without a publication decision" — consistent | agrees |
+| "Archived Reviews: they are reachable again" | stated | plan.md T6 (slice :193) `archive` attempts stay, flagged | agrees |
+| Toolbar: "one row ... from 760 to 1380 px ... At 560 px it needs 648 px" | stated | plan.md T7 (slice :211) and journal T11 (slice :85-86) carry the same numbers; FB-9's delta CSS adds only `.review-workspace-block` in ReviewDetail.css (not the toolbar) | agrees (the measurement predates FB-9's select `title` change; journal :122 lists "no live render of the FB-9 CSS" — covered by the body's "Not verified") |
+| "CI on 20e4281: 29 checks passed" | stated | journal.md (slice :105) same | agrees (names its commit) |
+| Mutation check "13 one-line mutations ... attention-set code unchanged" | stated | journal.md T8 (slice :74-75) and T16 "ReviewBoard.tsx diff: 30 lines, no attention-set identifier touched" | agrees |
+| "Draft ... Do not merge" / Readiness | stated | journal.md (slice :144) readiness NOT READY pending operator waive | agrees (no claim of readiness) |
+
+### Prior dispositions
+
+Slice-02 is not the FIX slice; no prior_dispositions are returned. It bears on PC-001 (plan.md T5 and AC1 now state D-R1, sharpening the body's stale Store bullet) and PC-003 (journal.md T17 entry; fix-round-1.md has no F-048 row) from wave 1 — cited, not re-filed.
+
+### Findings
+
+### [PC-W2-001] plan.md T7 still describes the pre-fix focus shape and the active-only reload
+
+- **Severity**: minor
+- **File**: .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md:59
+- **Problem**: PR body: "Open in Reviews: it now carries the repository, so it opens the right Review in multi-repo projects" and "Indicator freshness: the indicator stays current while the tab is hidden." The delta edited plan.md's T5, T6 and T7 (toolbar) text to match the fixes, but T7 still says (plan.md:59) "App holds `reviewsFocus {number, nonce}`; the PR board gets one new optional prop `onOpenInReviews(number)`" and (plan.md:60) "it reloads on mount, on Refresh, on tab activation and every 60 s while the tab is active". Head: ReviewsView.tsx:26 `export interface ReviewsFocus { repo: string; repositoryId?: string | undefined; number: number; nonce: number; intent?: ReviewIntent | undefined }`; ReviewsView.tsx:194 the 60 s timer runs whenever a Review is running and skips only `document.visibilityState === "hidden"`; :198 reloads on `subscribeSessionReview`; plus the PR watcher `reloadSignal` (FB-4).
+- **Why it matters**: the PR body names the flow package (plan) as the source for the design; a stage-1/stage-3 author reading T7 rebuilds the number-only focus (the round-1 multi-repo major) or the active-only reload (the round-1 hidden-indicator major).
+- **Fix**: update plan.md T7's Cross-tab and Indicator bullets: focus `{repo, repositoryId?, number, intent?, nonce}`, consumed once (`onFocusHandled(nonce)`); reload also on session-review events and watcher polls, 60 s timer while queued/running unless the window is hidden (fix round 1, FB-1/FB-3/FB-4).
+
+### [PC-W2-002] "The minors are fixed too" overstates: F-060 is deferred
+
+- **Severity**: info
+- **File**: .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md:1
+- **Problem**: PR body: "The minors are fixed too: docs and shortcuts, accessibility names, card-read cost and deadline, and test gaps. The full list is in `fix-round-1.md`." Round-1 minor F-060 (title names the round only when the badge carries it) has no row in fix-round-1.md and its claimed disposition is deferred (wave 1 pr-contract: open, not re-filed); F-048 is fixed but outside fix-round-1.md (PC-003). F-027 was dismissed as an owner decision, so it does not count.
+- **Why it matters**: a reader takes "minors are fixed" as all retained minors closed; one is knowingly open.
+- **Fix**: say "the minors are fixed except F-060 (deferred to stage 1's card)" or list deferred items next to the fix-list pointer.
+
+### Not verified
+
+- Whether every other retained round-1 minor (38) maps to a fix-round-1.md row — the canonical-id ↔ reviewer-id mapping was not walked; only F-027/F-048/F-060 were checked.
+- Code correctness of the plan.md T5 "superseded queued request" rule beyond seeing it present in desk-run-store.ts:26-27, :105 — logic lane.
+- implementation-plan.md (protected stage-0 text) is not in slice-02; not read here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-02 (flow package) agrees with the PR body on reviewer/dispatch counts, verifier results, D-R1/AC1, the indicator and archived rules, toolbar numbers, CI and the mutation check. One new minor: plan.md T7 still describes the number-only reviewsFocus and the active-tab-only reload that fix round 1 replaced. One info: the body's 'minors are fixed too' omits the deferred F-060. PC-001 and PC-003 from wave 1 are reinforced by this slice and not re-filed.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-W2-001",
+      "severity": "minor",
+      "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md",
+      "line": 59,
+      "quote": "Cross-tab navigation: App holds `reviewsFocus {number, nonce}`; the PR board gets one new optional prop `onOpenInReviews(number)`",
+      "problem": "PR body says Open in Reviews now carries the repository and the indicator stays current while the tab is hidden. The delta updated plan.md T5/T6/T7-toolbar, but T7 still states focus {number, nonce}, onOpenInReviews(number) (:59) and 'every 60 s while the tab is active' (:60). Head: ReviewsView.tsx:26 ReviewsFocus { repo, repositoryId?, number, nonce, intent? }; :194 60 s timer while running, skipped only when document is hidden; :198 reload on subscribeSessionReview.",
+      "impact": "The flow plan the body cites as the design source describes the two behaviours round 1 found wrong (multi-repo focus, hidden-tab indicator); a later stage author following it reintroduces them.",
+      "suggested_fix": "Rewrite plan.md T7 Cross-tab and Indicator bullets to the FB-1/FB-3/FB-4 behaviour (repo-carrying one-shot focus with onFocusHandled(nonce); reload on session-review events, watcher polls and the 60 s timer while queued/running unless the window is hidden).",
+      "evidence": "slice-02 plan.md hunk (T7 lines unchanged next to the edited toolbar line); sed -n 55,62p plan.md; keryx ctx rg ReviewsFocus apps/desktop/src/reviews/ReviewsView.tsx:26; ReviewsView.tsx:183-198; App.tsx:214-221.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W2-002",
+      "severity": "info",
+      "file": ".metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/fix-round-1.md",
+      "line": 1,
+      "quote": "The minors are fixed too: docs and shortcuts, accessibility names, card-read cost and deadline, and test gaps.",
+      "problem": "Round-1 minor F-060 has no fix-round-1.md row and is deferred (wave-1 pr-contract disposition: open). The body sentence and its pointer to fix-round-1.md as 'the full list' read as all retained minors closed.",
+      "impact": "A reader assumes no retained minor remains open; F-060 does.",
+      "suggested_fix": "Name F-060 as deferred next to the fix-list pointer.",
+      "evidence": "pr-context.md 'Review round 1 and fixes'; fix-round-1.md rows (slice-02 :21-69); round-1 report.md:129 F-060; raw/review-pr-contract-w1.txt prior disposition F-060 open.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims settled by direct reads of the slice and named lines); wiki_used: no (not-relevant: the documents in question are the flow package in the slice); ctx_used: yes (keryx ctx rg); raw_rg_used: no (raw git diff/sed used with keryx:raw markers for a 2-line CSS diff and an 8-line plan read).

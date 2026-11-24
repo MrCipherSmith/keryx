@@ -1,0 +1,78 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1304, branch feat/desktop-review-v2-stage2, delta round 2 (20e4281a2..f6971fd4a), wave 4. Slices: slice-05 and slice-06, both read in full. Diff mode. These are not fix slices, so this wave looks for new findings only and gives no prior dispositions.
+- slice-05: src/review/desk-run-store.ts (neverStarted, the module-level roundFor, assignReviews with the per-call `placed` map, publication() for every finished state, reviewRows that keeps archived attempts), src/review/review-entity.ts (stateAttempts, stateAttempt, headComparison, the reviewed and archived fields), src/review/board-github.ts (writeBoundJson/writeBoundJsonText), and tests.
+- slice-06: mostly removed lines (Rust board_read_args test args, ReviewBoard/ReviewDetail imports and props, the rules toolbar mount, the "Keryx review" tab, laneReason's reviewNote, the rules DOM tests, two doc lines, and the old desk-run-store lines that slice-05 replaced).
+
+Load profile: not provided. Concrete triggers considered:
+- several Desktop windows or workers writing one runs.sqlite
+- the number of attempts stored per account and repository
+- each Reviews-list read (the 60 s timer, watcher polls, session events)
+
+Files read beyond the slices:
+- src/review/desk-run-store.ts:150-205, the constructor migration and assignReviews at f6971fd
+- src/review/desk-run-store.ts:912-930, readReviewRows
+- src/review/watcher-db.ts:55-75, watcherTransaction, which is `.immediate()`
+- the base text of review-board.ts, through git show
+- every call site of assignReviews, atomic and reviewRows, found with keryx ctx rg
+- the ReviewWatcher and ProjectReviewRules mount sites, to confirm both are still mounted (ReviewBoard.tsx:487, ReviewsView.tsx:313)
+- raw/review-highload-w1..w3.txt
+
+Summary: No new race, lock, queue, retry or unbounded-resource hazard in these two slices.
+- Placement is still serialised. assignReviews runs only inside IMMEDIATE transactions: the constructor at :159, request at :397 and :761 under the caller's atomic. The guarded `UPDATE ... WHERE rowid=? AND review_id IS NULL` prevents a double placement, and the per-call `placed` map is rebuilt on every call, so no stale cross-process state is served.
+- writeBoundJsonText holds watcherTransaction, which is IMMEDIATE, only for the synchronous stdout.write call, the same as the base writer that wave 3 checked.
+- slice-06 removes code and tests only, and leaves nothing running.
+
+Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+### CLI / Multi-Session
+None detected. Two windows can request at the same time, but each request inserts and places in one IMMEDIATE transaction. roundFor reads `superseded` at placement time, and the supersede is written before the insert in the same transaction (wave-1 highload already checked this), so two requests cannot take the same round through a stale read.
+
+### Concurrency & Races
+None detected. The review-entity.ts changes are pure functions over a snapshot. headComparison is one rule shared by the command's compare selection and by `freshness`, so the two cannot drift apart under a concurrent head move within one read.
+
+### Resources
+None new. publication() now reads the receipt and the skip marker for every finished attempt (completed, partial, budget), not only for complete reviews. This adds two small synchronous file checks per non-archived finished attempt on each list read. The cost grows with stored history but has no exhaustion path in a one-shot CLI, so it is not filed. Event-loop and synchronous-read cost belongs to review-performance. A pre-existing shape outside this delta: readReviewRows opens the store writable, so every list read runs the migration's IMMEDIATE transaction. It is not filed, because the delta does not touch it.
+
+### Caching
+None detected.
+
+### Lock Contention
+None detected. writeBoundJsonText holds the watcher DB's IMMEDIATE lock only for the synchronous write, unchanged from base, as wave 3 found.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+None new. The overall readReviews deadline and the gh children that are not killed are already filed: wave-1 highload F-002 and backend R2-BE-001.
+
+### Idempotency & Distributed Invariants
+None detected. A superseded request that never started no longer takes a round or appears as an attempt. Rounds already shown are never renumbered, because assignReviews touches only rows that have no review_id.
+
+Clean areas reviewed: Part 0, A, B, C, D, E, F and G for slice-05 and slice-06.
+
+Protected stage-0 code: slice-06's laneReason change drops the reviewNote line from the reason order. That is UI ranking, not my lens. The attention set and attachBadges/localBadge parity are not touched by these hunks in a way that affects concurrency.
+
+Not read or verified:
+- the hidden context lines of slice-05 beyond what is cited above
+- requestAttempt's full body; I took wave 1's reading that the supersede comes before the insert
+- the Rust host
+- whether Bun's process.stdout.write to a pipe is synchronous on macOS
+- tests: none were run (exec budget 0). The research-evidence results (194 root + 1008 Desktop, 0 fail at f6971fd) were taken as given.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-05", "slice-06"],
+  "summary": "No new concurrency, lock, queue, retry or unbounded-resource hazard. Round placement stays serialised: assignReviews runs only inside IMMEDIATE transactions, updates only unplaced rows with a guarded UPDATE, and rebuilds its per-call map on each call. review-entity changes are pure. writeBoundJson holds the IMMEDIATE watcher lock only for the synchronous write, unchanged from base. slice-06 only removes code and tests. Residuals already filed elsewhere are not filed again.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "findings": [],
+  "prior_dispositions": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slices named every file, and no file was added or moved in this session). wiki_used: not-relevant (a delta review of store, entity and UI-removal hunks). ctx_used: yes (keryx ctx rg for the call-site and mount-site searches). raw_rg_used: no. A few `sed`/`git show`/`git diff --stat` reads were marked keryx:raw to get exact source lines.

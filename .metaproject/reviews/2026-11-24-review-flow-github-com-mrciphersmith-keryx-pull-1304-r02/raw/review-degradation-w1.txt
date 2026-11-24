@@ -1,0 +1,152 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 2 (fix round), wave 1, slice-01 (FIX slice), delta 20e4281a2..f6971fd4a (85fa985c1 backend, 98c7b37a1 Desktop, 8d95e651a PR link, T17).
+
+Read: slice-01.diff in full; the full delta diffs of src/review/{review-entity,desk-run-store,board-github}.ts, src/commands/{review-reviews,review-board}.ts, every non-test file under apps/desktop/src, apps/desktop/src-tauri/src/review.rs and apps/desktop/dev/reviewBoard.ts; fix-round-1.md; consumers of the changed symbols (below). No code was run (allowed_tools read-only, exec_budget_s 0). The Rust bridge change is read only: there is no local Rust toolchain, CI is its only check.
+
+## Findings
+
+### [F-001] Archived attempts now sit in the Rounds timeline unmarked, and the round number shown comes from a different set than the timeline
+- Severity: minor
+- Class: behaviour-delta
+- Evidence kind: base-diff
+- File: src/review/review-entity.ts (`rounds: roundsOf(row.attempts),`), apps/desktop/src/reviews/ReviewPanel.tsx (Attempt)
+- Problem: On base, reviewRows dropped archived attempts (`NOT IN ('archive','delete')`), so the rounds, `latestRound` and the reviewed-commit fallback all came from the same visible set. On head (FA-4), reviewRows keeps archived attempts flagged and `summarizeReview` builds `rounds` from all attempts (`roundsOf(row.attempts)`) while `latestRound`, state, findings and `reviewed` come from `stateAttempts` (unarchived only). Desktop's `Attempt` row in the Rounds timeline renders state, coverage, time, run id and "after" but never `attempt.archived`. So when the viewer archives the newest attempt (for example a bad round 3), the panel header reads "Round 2" while the timeline's top entry is "Round 3" showing that attempt as "Completed", with nothing saying it was archived. `reviewedCommit`'s fallback (`review.rounds[0]?.headSha`, used when no unarchived attempt finished with a result) can also come from the archived round while freshness is measured from the unarchived attempt's head.
+- Why it matters: The timeline shows an attempt the viewer removed as a normal one, and the panel shows two different "current" rounds. No data is lost.
+- Fix: Mark archived attempts in `Attempt` (for example an "Archived" label, and leave them out of the "after" link targets or mark them too). Either take `reviewedCommit`'s fallback from the unarchived attempts, or have the summary carry it. Add a ReviewPanel DOM test with an archived newest attempt.
+- Evidence: base-diff. Base desk-run-store.ts reviewRows WHERE `... NOT IN ('archive','delete')`. Head `...!='delete' AND NOT ${neverStarted("r.")}`. Head review-entity.ts summarizeReview: `rounds: roundsOf(row.attempts)` next to `latestRound: latest.round` with `latest = stateAttempts(row)[last]`. ReviewPanel.tsx Attempt has no `archived` branch; model.ts reviewedCommit is `review.reviewed?.headSha ?? review.rounds[0]?.headSha`. Refute attempt: the CLI doc now says "Archived attempts stay in the rounds with `archived: true`", so archived attempts in the rounds are intended. That intent does not cover Desktop rendering them with no marker. ReviewRunHistory (the panel's History) is a separate list and does not label the Rounds timeline.
+
+### [F-002] Reviews whose attempts are all archived, hidden by default, now cost PR card reads and take comparison slots
+- Severity: minor
+- Class: performance
+- Evidence kind: base-diff
+- File: src/commands/review-reviews.ts (`const cards = await readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query);`)
+- Problem: On base, a Review whose attempts were all archived was not in `rows`: reviewRows dropped archived attempts and "a Review with no other attempt". So it cost no card read and no compare. On head it is listed (`archived: true`). `readCards` skips only `closedAt !== null` rows (the FA-7 skip), and `headComparison` excludes only `reviewClosed` (closedAt, or a merged or closed card), not archived Reviews. An archived Review whose head moved therefore takes one of the 25 compare slots, in activity order, on every call. Yet Desktop lists it only under Show closed (`isClosedOrArchived`) and puts it in the Closed column, where the commit count serves no purpose. With more than 25 Reviews behind, a visible Review can lose its count to a hidden archived one, and the warning "Commit counts are shown for 25 Reviews…" appears.
+- Why it matters: Extra GitHub calls on every list read, including the reads the watcher poll, session events and the 60 s timer now trigger. Visible Reviews can lose counts. This is the sibling the FA-7 local-close skip missed.
+- Fix: Treat an all-archived Review like a locally closed one: skip its card read and comparison unless `includeClosed`, or exclude `row.attempts.every(a => a.archived)` in `headComparison`. Add a fixture with an archived Review behind.
+- Evidence: base-diff and consumer-trace. Base reviewRows WHERE and docstring "so is a Review with no other attempt". Head review-reviews.ts readCards filter `row.closedAt === null`. Head review-entity.ts `headComparison` ends with `&& !reviewClosed(row, card)`, and `reviewClosed` reads only `closedAt` and `card.state`. Desktop model.ts `isClosedOrArchived` and `reviewColumn` send archived Reviews to the Closed column. Refute attempt: the CLI doc and fix-round-1 FA-7 name only local `closedAt` for the skip. No comment or test says archived Reviews must be compared. The test "a Review whose attempts are all archived is listed as archived" checks state only.
+
+### [F-003] Toggling "Show closed" now re-reads the whole Reviews list from GitHub
+- Severity: minor
+- Class: performance
+- Evidence kind: base-diff
+- File: apps/desktop/src/reviews/ReviewsView.tsx (`void load(cwd, repo, expectedViewer, showClosed).then(snapshot => {`)
+- Problem: On base, `showClosed` only filtered the loaded snapshot (`filterReviewList`). On head it is a dependency of the load effect and is passed as `includeClosed`, and `fetchReviews` keys its read on it. ReviewReadLane only de-duplicates reads in flight; it caches nothing. So every toggle, on or off, runs `keryx review reviews` again: an identity query, ceil(n/20) card batches and up to 25 compares. The same dependency also re-reads in two more cases. `resetView()` sets `showClosed` to false. In `accessLost` that starts a new read right after an access failure while Show closed was on. On an identity change within the same key, it adds a second read straight after the one that just succeeded.
+- Why it matters: A filter toggle now costs a full GitHub round trip, and an access failure triggers an automatic retry the access-lost path is meant to avoid ("a later Try again must not act on it").
+- Fix: Keep the closed Reviews' cards out of the main read only when they are hidden, but do not re-read on every toggle. For example, read with `includeClosed` once when Show closed is first turned on and keep that snapshot when it is turned off. In any case, do not let `resetView`/`accessLost` change a load dependency: reset `showClosed` without re-running the read, or keep `includeClosed` in a ref read by the effect.
+- Evidence: base-diff and consumer-trace. Base ReviewsView load effect deps `[cwd, repo, expectedViewer, attempt, load, resetView, accessLost]`. Head adds `showClosed` and calls `load(cwd, repo, expectedViewer, showClosed)`. platform/review.ts fetchReviews key `[cwd, expectedViewer, repo, includeClosed]`. reviewReadLane.ts has no result cache (the `active` map is cleared in `finally`). ReviewsView `resetView` calls `setShowClosed(false)`, and `accessLost` calls `resetView()`. Refute attempt: the test "closed Reviews' PR cards are read only while Show closed is on" pins the opt-in, not its cost. fix-round-1 FA-7 asks only to skip locally closed Reviews' cards and names no re-read on toggle.
+
+## Prior dispositions (round 1, checked against the delta)
+Verified in code: F-001 closed (focus carries repo and repositoryId; ReviewsView selects the repository, then matches repo and number). F-002 closed (`consumeIntent` on hand-over and on `!active`). F-003 closed (`onFocusHandled` clears App focus; `taken` nonce ref; pending lives above the keyed list). F-004 closed (`ready` lights only for `publication === "pending"`). F-005 closed (summary `reviewed`; Desktop `reviewedCommit` uses it). F-006 (mine) closed (archived Reviews listed, Show closed shows them as "Archived", ReviewWorkspace's ReviewRunHistory gets `local.runs` with archived runs, PR panel `hasReview = local.runs.length > 0`). F-007 closed (hidden tab re-reads on session review events, watcher polls and the 60 s timer). F-008 closed (D-R1 `roundFor`). F-009 closed (`accessLost` calls `settlePending`). F-010 closed (`stateAttempt`). F-011 closed (`visibilityState` check). F-012 closed (mount gated on account read settled). F-013 closed. F-014 closed (fallback routes only start). F-015 closed (`headComparison`). F-016 closed (`writeBoundJson` in board-github). F-017 (mine) closed (`rulesTarget` falls back to the board identity on a non-access read error). F-018 (mine) closed (desktop-app.md ⌘1–⌘6, Reviews → Review rules; desktop-metaproject.md ⌘6). F-019 (mine) closed. F-020 closed. F-021 (mine) closed (spec :8 and :226 match `version: 1`). F-022 closed. F-023 partial: local `closedAt` is skipped, but Reviews whose PRs merged on GitHub are still read on every call, and all-archived Reviews are newly read (new F-002). F-024 closed. F-025 partial: the compare phase has a 60 s deadline, the card phase still has none (only parallelism ≤3). F-026 closed. F-027 (mine) closed as a documented and pinned limitation (test "history imported later is numbered when it is recorded … (known limitation)"). F-028 closed. F-029 closed. F-030 closed. F-031 closed. F-032 closed. F-033 closed. F-034 closed. F-035 closed (PR body names model.test.ts). F-038 closed. F-039 closed (app-navigation handoff test). F-040 closed. F-044 closed. F-045 closed. F-048 closed (`onOpen` opens the link in the system browser; no other links in ReviewWorkspace or ReviewRuns rely on a parent handler). F-049 closed. F-050 closed. F-051 closed. F-052 closed. F-053 partial (cap at exactly 25 pinned; sort tie-break and parseCompare edge not checked). F-054 closed. F-055 closed (title attributes). F-056 closed. F-057 closed. F-059 closed.
+Judged from test names and assertions only, not traced in depth: F-036 closed (journal records T10 done, typecheck and eslint clean; not re-run). F-037 closed (Round cell asserted by column index). F-041 closed (`Search reviews` focus assertion). F-042, F-043, F-046, F-047 closed (named fixtures present). F-058 closed (plan.md updated; not re-read line by line). F-060 open (info; ReviewResults.tsx is not in the delta and the PR body text is unchanged).
+
+## Summary
+The fixes hold. There are no blocker or major degradations against round 1's head. Three minor findings, each from a fix: archived attempts are unmarked in the Rounds timeline (F-001); all-archived Reviews take card reads and comparison slots that locally closed Reviews were spared (F-002, sibling of FA-7); the Show closed toggle and `resetView` trigger full GitHub re-reads (F-003).
+Verified clean:
+- the private `publication()` change (partial and budget now report a receipt or skip) followed into all three callers: history (desk-run-store.ts:476), attachBadges (:563) and reviewRows. Desktop now shows "View publication" or "Publication skipped" for a published partial run instead of "Publish to GitHub". localBadge parity holds because both paths use the same method.
+- `reviewNeedsViewer` traced to its only consumer, the ReviewsView indicator.
+- `onOpenReviewSession` removal: no remaining reader in ReviewBoard or ReviewDetail.
+- ReviewBrowserLink `onOpen`: other users pass none, the same as base.
+- `subscribeSessionReview` re-reads fire only on mutations (SessionReviewActivity continue and decide, App launch), not on progress.
+- App mount gate `(githubAccount || githubAccountError)`: `getProjectGitHubAccount` never returns null, so the view mounts once the account read settles.
+- ReviewBoard `openReview` routing, focus nonce monotonicity, the FA-10 per-Review placed cache and the FA-11 `neverStarted` exclusion are unchanged in behaviour apart from their stated intent.
+- `--include-closed` is refused outside `reviews_only` in both the Rust and the dev bridge.
+Consumers were enumerated with `keryx ctx rg --all` (search-derived), not from a graph consumer list. The payload carried no graph importer list for this delta, and no consumer cap applied. No acceptance criteria were re-read beyond plan.md and fix-round-1.md. Not run: tests, typecheck, Rust build.
+
+Routing audit: graph_used: no (no importer list in the payload; consumers found with `keryx ctx rg`, search-derived); wiki_used: not-relevant (fix-round decisions are in fix-round-1.md and the journal); ctx_used: yes (`keryx ctx rg`/`keryx ctx read`); raw_rg_used: no (`git diff`/`git log` raw with the escape marker, diffs written to scratch files).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Fix round holds: no blocker or major degradation. Three minor findings, each from a fix: archived attempts unmarked in the Rounds timeline with latestRound from a different set (F-001); all-archived Reviews newly cost card reads and compare slots, the sibling FA-7's closedAt skip missed (F-002); Show closed toggle and resetView/accessLost trigger full GitHub re-reads (F-003). Consumers search-derived (no graph list in the payload). Nothing run (read-only).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "    rounds: roundsOf(row.attempts),",
+      "problem": "Base reviewRows dropped archived attempts, so rounds, latestRound and the reviewed-commit fallback came from one visible set. Head keeps archived attempts (FA-4). summarizeReview builds rounds from all attempts but latestRound, state, findings and reviewed from the unarchived ones only. Desktop's Rounds timeline (ReviewPanel Attempt) never renders attempt.archived. After the viewer archives the newest attempt, the header reads 'Round 2' while the timeline's top entry is 'Round 3' showing the archived attempt as 'Completed'. reviewedCommit's fallback rounds[0].headSha can also come from the archived round.",
+      "impact": "Trigger: archive the newest attempt of a Review. Outcome: the panel shows an attempt the viewer removed as a normal one, and two different 'current' rounds. No data is lost.",
+      "suggested_fix": "Label archived attempts in ReviewPanel's Attempt (and in 'after' targets). Take reviewedCommit's fallback from unarchived attempts, or carry it in the summary. Add a DOM test with an archived newest attempt.",
+      "evidence": "Read base vs head desk-run-store.ts reviewRows WHERE (NOT IN ('archive','delete') -> !='delete'). Read head review-entity.ts summarizeReview: rounds: roundsOf(row.attempts) vs latestRound from stateAttempts. Read ReviewPanel.tsx Attempt (no archived branch) and model.ts reviewedCommit. Refute: the CLI doc intends archived attempts in rounds (with archived: true). That covers the data, not Desktop rendering them unmarked. ReviewRunHistory is a separate list.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/desktop/src/reviews/ReviewPanel.tsx:Attempt", "apps/desktop/src/reviews/model.ts:reviewedCommit"],
+        "enumeration_method": "keryx ctx rg --all '\\.archived\\b' over src and apps/desktop/src (search-derived): Desktop reads archived only in reviews/model.ts (column, label, closed filter), not in ReviewPanel."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "degradation_class": "performance",
+      "evidence_kind": "base-diff",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "const cards = await readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query);",
+      "problem": "On base, an all-archived Review was not in rows, so it cost no card read and no compare. On head it is listed (archived: true). readCards skips only local closedAt rows, and headComparison excludes only reviewClosed (closedAt or a merged or closed card), not archived Reviews. An archived Review whose head moved takes one of the 25 compare slots in activity order on every call. Desktop shows it only under Show closed, in the Closed column, where the count serves no purpose.",
+      "impact": "Extra GitHub calls on every list read (the watcher poll, session events and the 60 s timer now trigger reads). With more than 25 Reviews behind, a visible Review can lose its commit count to a hidden archived one. This is the sibling of FA-7's local-close skip.",
+      "suggested_fix": "Treat an all-archived Review like a locally closed one: skip its card and comparison unless includeClosed, or exclude rows whose attempts are all archived in headComparison. Add a fixture with an archived Review behind.",
+      "evidence": "Read base reviewRows (archived dropped, 'so is a Review with no other attempt') vs head (kept). Read head readCards filter and review-entity headComparison/reviewClosed (no archived term). Read Desktop model.ts isClosedOrArchived and reviewColumn. Refute: FA-7 and the CLI doc name only closedAt for the skip. No comment or test asks for archived Reviews to be compared.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["src/commands/review-reviews.ts:readReviews (readCards filter)", "src/review/review-entity.ts:headComparison"],
+        "enumeration_method": "Both GitHub-read gates in readReviews (card read filter, compare filter via headComparison), found with keryx ctx rg for readCards|headComparison (search-derived)."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "degradation_class": "performance",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "void load(cwd, repo, expectedViewer, showClosed).then(snapshot => {",
+      "problem": "On base, showClosed only filtered the loaded snapshot. On head it is a load-effect dependency passed as includeClosed, and fetchReviews keys on it. ReviewReadLane caches nothing, so every Show closed toggle (on or off) re-runs review reviews: an identity query, card batches and up to 25 compares. resetView sets showClosed to false, so accessLost with Show closed on starts a new read right after an access failure, and an identity change within the same key reads twice.",
+      "impact": "A filter toggle costs a full GitHub round trip. An access failure triggers an automatic re-read that the access-lost path is meant to avoid.",
+      "suggested_fix": "Read with includeClosed once when Show closed is first turned on and keep that snapshot when it is turned off. Do not let resetView or accessLost change a load dependency (keep includeClosed in a ref, or reset showClosed without re-running the read).",
+      "evidence": "Read base vs head ReviewsView load effect deps (showClosed added). Read platform/review.ts fetchReviews key including includeClosed and reviewReadLane.ts (no cache; active entry deleted in finally). Read ReviewsView resetView (setShowClosed(false)) and accessLost (resetView()). Refute: the test 'closed Reviews' PR cards are read only while Show closed is on' pins the opt-in, not its cost. FA-7 asks only to skip closed Reviews' cards.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/desktop/src/reviews/ReviewsView.tsx:load effect", "apps/desktop/src/reviews/ReviewsView.tsx:resetView/accessLost"],
+        "enumeration_method": "Every writer of showClosed in ReviewsView (toolbar toggle, resetView, focus handler setShowClosed(true)), found by reading the file; each now triggers a read."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"}, {"id": "F-002", "disposition": "closed"}, {"id": "F-003", "disposition": "closed"},
+    {"id": "F-004", "disposition": "closed"}, {"id": "F-005", "disposition": "closed"}, {"id": "F-006", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"}, {"id": "F-008", "disposition": "closed"}, {"id": "F-009", "disposition": "closed"},
+    {"id": "F-010", "disposition": "closed"}, {"id": "F-011", "disposition": "closed"}, {"id": "F-012", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"}, {"id": "F-014", "disposition": "closed"}, {"id": "F-015", "disposition": "closed"},
+    {"id": "F-016", "disposition": "closed"}, {"id": "F-017", "disposition": "closed"}, {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"}, {"id": "F-020", "disposition": "closed"}, {"id": "F-021", "disposition": "closed"},
+    {"id": "F-022", "disposition": "closed"}, {"id": "F-023", "disposition": "partial"}, {"id": "F-024", "disposition": "closed"},
+    {"id": "F-025", "disposition": "partial"}, {"id": "F-026", "disposition": "closed"}, {"id": "F-027", "disposition": "closed"},
+    {"id": "F-028", "disposition": "closed"}, {"id": "F-029", "disposition": "closed"}, {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"}, {"id": "F-032", "disposition": "closed"}, {"id": "F-033", "disposition": "closed"},
+    {"id": "F-034", "disposition": "closed"}, {"id": "F-035", "disposition": "closed"}, {"id": "F-036", "disposition": "closed"},
+    {"id": "F-037", "disposition": "closed"}, {"id": "F-038", "disposition": "closed"}, {"id": "F-039", "disposition": "closed"},
+    {"id": "F-040", "disposition": "closed"}, {"id": "F-041", "disposition": "closed"}, {"id": "F-042", "disposition": "closed"},
+    {"id": "F-043", "disposition": "closed"}, {"id": "F-044", "disposition": "closed"}, {"id": "F-045", "disposition": "closed"},
+    {"id": "F-046", "disposition": "closed"}, {"id": "F-047", "disposition": "closed"}, {"id": "F-048", "disposition": "closed"},
+    {"id": "F-049", "disposition": "closed"}, {"id": "F-050", "disposition": "closed"}, {"id": "F-051", "disposition": "closed"},
+    {"id": "F-052", "disposition": "closed"}, {"id": "F-053", "disposition": "partial"}, {"id": "F-054", "disposition": "closed"},
+    {"id": "F-055", "disposition": "closed"}, {"id": "F-056", "disposition": "closed"}, {"id": "F-057", "disposition": "closed"},
+    {"id": "F-058", "disposition": "closed"}, {"id": "F-059", "disposition": "closed"}, {"id": "F-060", "disposition": "open"}
+  ],
+  "follow_ups": [
+    "Dispositions for F-036, F-037, F-041..F-043, F-046, F-047 and F-058 rest on test names, assertions and the journal, not on a run or a line-by-line trace.",
+    "Rust bridge (review.rs include_closed) read only; it can be checked only in CI."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```

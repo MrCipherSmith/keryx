@@ -1,0 +1,262 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 2 (delta 20e4281a2..f6971fd4a), wave 1, slice-01 (FIX slice).
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so no mutant was run. `mutant_candidates` below lists 77 candidates covering every changed branch in slice-01 and the code just downstream of it. Every anchor was checked to occur exactly once in the head file. Previous-round survivors come first. No mutation result in this report was observed, and none is claimed. Not reached: 77 of 77, all of them; the main session runs them.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-01"],
+  "summary": "The round-1 testing findings are fixed in the tests. F-037, F-038, F-040 through F-047, F-052 and F-053 are closed: each now has an assertion that can fail, and seven round-1 survivors (B02, B05, B08, B09, E06, E07, S04) now have a separating fixture. F-039 is partial: App.tsx:530 (the account-binding gate on the Reviews indicator, round-1 M29) still has no test. Two new findings. (1) major, by the tdd-workflow table: the new compare-deadline test runs on wall-clock time. It uses a real 50 ms budget and asserts `Date.now() - started < 2000`. (2) minor: four App-level wirings added for round-1 majors have no test that can fail: the focus clearing that F-003 depends on across an account remount, the indicator binding gate, the mount gate from F-012, and the reloadSignal/onWatcherPoll hookup from F-007. No mutation was run (read-only lane).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/review-reviews.test.ts",
+      "line": null,
+      "quote": "expect(Date.now() - started).toBeLessThan(2000);",
+      "problem": "tdd-workflow Rule 5 (a unit test uses no wall-clock time): the new test 'comparisons that outlast the deadline leave the count unknown with one warning' drives the compare deadline with a real 50 ms `setTimeout` (`compareBudgetMs: 50`) and checks elapsed real time with `expect(Date.now() - started).toBeLessThan(2000)`. Inside compareHeads, `left = deadline - Date.now()` and `setTimeout(..., left)` are real-clock reads. The fast pair (head d) counts as answered only if its task starts before 50 ms of real time have passed since the deadline was set.",
+      "impact": "Under load the test can fail without any code change. The elapsed assertion fails when readReviews (SQLite open and migration, identity, card read) takes more than 2 s. The PR body records 5 s timeouts in other suites while the machine was heavily loaded. If 50 ms pass before the head-d task runs, `left <= 0` reports it late and its `commits: 1` expectation fails. The tdd-workflow table rates a reachable time-based assertion `major`.",
+      "suggested_fix": "Drop the `Date.now() - started` assertion: bun's per-test timeout already bounds a hang. Make the deadline deterministic. Either add a seam to ReviewsSource (for example `compareDeadline?: Promise<void>`, defaulting to a timer of `compareBudgetMs`), and have the test resolve it after the head-d compare settles. Or use bun:test fake timers: call `jest.useFakeTimers()`, start readReviews, flush microtasks, then call `jest.advanceTimersByTime(REVIEW_COMPARE_BUDGET_MS)`. With the deadline under the test's control, add a third pair so that the `left <= 0` branch (a task admitted after the deadline) is also driven.",
+      "evidence": "src/commands/review-reviews.test.ts (slice-01 lines 557-574): `const started = Date.now();`, `compareBudgetMs: 50`, `expect(Date.now() - started).toBeLessThan(2000);`. src/commands/review-reviews.ts compareHeads: `const deadline = Date.now() + budgetMs;`, `const left = deadline - Date.now(); if (left <= 0) { late = true; return null; }`, `setTimeout(() => resolve(\"late\"), left)`. Rule: .metaproject/rules/core/tdd-workflow.mdc Rule 5, and the severity row 'Real network or wall-clock dependence in a unit test, a real call or a time-based assertion is reachable, major'.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-reviews.test.ts:202-204 (real 50 ms budget plus elapsed-time assertion; slice-01)",
+          "apps/desktop/src/test/app-navigation.fixture.tsx:277-281 (new Open-in-Reviews loop: polls the DOM with 10 ms real sleeps capped at 50 iterations, then asserts; outside slice-01, and it copies the fixture's existing deadline loop at :143-145, which is base code)"
+        ],
+        "enumeration_method": "keryx ctx rg --all -n 'Date\\.now\\(\\)|setTimeout\\(|useFakeTimers|setSystemTime|compareBudgetMs' over every test file the delta changed in slice-01's area (src/commands/review-reviews.test.ts, src/review/review-entity.test.ts, src/review/desk-run-store.test.ts, apps/desktop/src/reviews/*, apps/desktop/src/review/ReviewBoard.dom.test.tsx, apps/desktop/src/test/app-navigation.fixture.tsx). Hits not listed are base code: ReviewBoard.dom.test.tsx:267, :555, :1026 and :1377, and fixture :143-145."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "setReviewsFocus(old => old?.nonce === nonce ? null : old);",
+      "problem": "tdd-workflow Rule 3 (a bug fix gets a regression test): four App-level wirings added for round-1 majors have no test that can fail. (a) `reviewsFocusHandled` is F-003's guard for an account change. ReviewsView is keyed by `reviewViewer`, so its `taken` ref is lost on remount, and only App clearing `reviewsFocus` stops a replay. ReviewsView.dom.test checks only that `onFocusHandled` is called. The fixture switches the account to 'second' right after its Open-in-Reviews loop (app-navigation.fixture.tsx ~:291) but asserts nothing about the Reviews tab afterwards. (b) The indicator binding gate `reviewsNotice?.binding === reviewViewer` (App.tsx:530) survived as M29 in round 1, and F-039 asked for a test. The fixture's Reviews mock never returns a Review that waits on the viewer, so the Reviews dot is only ever checked while null. (c) The F-012 mount gate `(githubAccount || githubAccountError)`: the fixture asserts only `reviewReads.length > 0`, not a single read per account. (d) F-007's App half, `reloadSignal={watcherPolls}` and `onWatcherPoll={noteWatcherPoll}`: each end is unit-tested in ReviewBoard and ReviewsView, but the hookup between them is not.",
+      "impact": "Each line can be deleted, inverted or miswired with the suites green. Examples: focus cleared too late, so an account switch reopens the previous account's PR Review. A stale Reviews dot from the previous account. A double Reviews read at startup. A hidden Reviews tab that stops following watcher polls. These are the regressions round 1 rated major. No current defect is claimed.",
+      "suggested_fix": "Extend app-navigation.fixture.tsx. (a) After `chooseAccount(\"second\")`, `go(\"Reviews\")` and assert that no `aside[aria-label=\"Review of pull request #12\"]` is open. (b) Have the reviewsOnly mock return a `needs_answer` Review for account 'me'. Assert `nav .reviews-tab-dot` lights, switch the account while the new read is held, and assert the dot clears before that read lands. (c) Replace `reviewReads.length > 0` with an exact count: one read per settled account. (d) Advance the watcher status's `lastSuccessAt` (as ReviewBoard.dom.test does) and assert that `reviewReads` grows while the Reviews tab is hidden.",
+      "evidence": "App.tsx:221-223 reviewsFocusHandled; :530 `const reviewsIndicator = !reviewDisconnected && reviewsNotice?.binding === reviewViewer ? ...`; :640 `) : (githubAccount || githubAccountError) ? (`; :642 `reloadSignal={watcherPolls}`. ReviewsView.tsx: the `taken` ref and `handled.current?.(request.nonce)` are inside the component that App keys by reviewViewer. app-navigation.fixture.tsx (keryx ctx rg --all 'reviewReads|reviews-tab-dot|binding|account'): :193 `assert.ok(reviewReads.length > 0, ...)`, the only reviews-dot check is `assert.equal(host.querySelector(\"nav .reviews-tab-dot\"), null, ...)`, and the focus loop at :269-285 is followed by chooseAccount('second') with no Reviews assertion. Round-1 mutation-2.md: M29 (App.tsx binding gate -> true) survived. No other test renders App (ProjectNavigation.dom.test.tsx:111 runs this fixture).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-004", "disposition": "closed"},
+    {"id": "F-005", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"},
+    {"id": "F-008", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-010", "disposition": "closed"},
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-014", "disposition": "closed"},
+    {"id": "F-015", "disposition": "closed"},
+    {"id": "F-017", "disposition": "closed"},
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"},
+    {"id": "F-020", "disposition": "closed"},
+    {"id": "F-021", "disposition": "closed"},
+    {"id": "F-022", "disposition": "closed"},
+    {"id": "F-023", "disposition": "partial"},
+    {"id": "F-024", "disposition": "closed"},
+    {"id": "F-025", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-027", "disposition": "closed"},
+    {"id": "F-028", "disposition": "closed"},
+    {"id": "F-029", "disposition": "closed"},
+    {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-033", "disposition": "closed"},
+    {"id": "F-037", "disposition": "closed"},
+    {"id": "F-038", "disposition": "closed"},
+    {"id": "F-039", "disposition": "partial"},
+    {"id": "F-040", "disposition": "closed"},
+    {"id": "F-041", "disposition": "closed"},
+    {"id": "F-042", "disposition": "closed"},
+    {"id": "F-043", "disposition": "closed"},
+    {"id": "F-044", "disposition": "closed"},
+    {"id": "F-045", "disposition": "closed"},
+    {"id": "F-046", "disposition": "closed"},
+    {"id": "F-047", "disposition": "closed"},
+    {"id": "F-052", "disposition": "closed"},
+    {"id": "F-053", "disposition": "closed"},
+    {"id": "F-059", "disposition": "closed"}
+  ],
+  "mutant_candidates": [
+    {"id": "R2-A02", "file": "apps/desktop/src/App.tsx", "anchor": "!reviewDisconnected && reviewsNotice?.binding === reviewViewer ?", "replacement": "!reviewDisconnected && true ?", "kind": "behavior"},
+    {"id": "R2-A07", "file": "apps/desktop/src/App.tsx", "anchor": "setView(\"reviews\");\n  }, []);", "replacement": "}, []);", "kind": "behavior"},
+    {"id": "R2-B01", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "if (kind === \"start\") setSelected({ number: card.number, reviewIntent });", "replacement": "if (false) setSelected({ number: card.number, reviewIntent });", "kind": "behavior"},
+    {"id": "R2-D02", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "reviewIntent?.kind === \"start\" ? reviewIntent : undefined", "replacement": "reviewIntent", "kind": "behavior"},
+    {"id": "R2-V22", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (!filterReviewList([found], filters, q, true).length) {", "replacement": "if (true) {", "kind": "behavior"},
+    {"id": "R2-V23", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (!read.error) setNotice(", "replacement": "setNotice(", "kind": "behavior"},
+    {"id": "R2-V24", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (previous !== undefined && previous !== signature) refresh();", "replacement": "", "kind": "behavior"},
+    {"id": "R2-R13", "file": "src/commands/review-reviews.ts", "anchor": "if (!rows.length) return snapshot;", "replacement": "", "kind": "behavior"},
+    {"id": "R2-R04", "file": "src/commands/review-reviews.ts", "anchor": " && OBJECT_ID.test(pair.head)", "replacement": "", "kind": "behavior"},
+    {"id": "R2-R05", "file": "src/commands/review-reviews.ts", "anchor": "OBJECT_ID.test(pair.reviewed) && ", "replacement": "", "kind": "behavior"},
+    {"id": "R2-R14", "file": "src/commands/review-reviews.ts", "anchor": "if (behind.length > MAX_REVIEW_COMPARES)", "replacement": "if (behind.length >= MAX_REVIEW_COMPARES)", "kind": "behavior"},
+    {"id": "R2-R01", "file": "src/commands/review-reviews.ts", "anchor": ".sort((a, b) => b.at.localeCompare(a.at) || b.row.number - a.row.number)", "replacement": ".sort((a, b) => b.at.localeCompare(a.at))", "kind": "behavior"},
+    {"id": "R2-E03", "file": "src/review/review-entity.ts", "anchor": "(review.state === \"ready\" && review.publication === \"pending\")", "replacement": "(review.state === \"ready\" && review.publication !== \"skipped\" && review.publication !== \"published\")", "kind": "behavior"},
+    {"id": "R2-E10", "file": "src/review/review-entity.ts", "anchor": "const attempts = stateAttempts(row);\n  return newest(attempts, reviewedResult)", "replacement": "const attempts = row.attempts;\n  return newest(attempts, reviewedResult)", "kind": "behavior"},
+    {"id": "R2-S02", "file": "src/review/desk-run-store.ts", "anchor": "return { round: retry ? top : top + 1, previous };", "replacement": "return { round: top + 1, previous };", "kind": "behavior"},
+    {"id": "R2-S03", "file": "src/review/desk-run-store.ts", "anchor": "const retry = inTop.some(", "replacement": "const retry = counted.some(", "kind": "behavior"},
+    {"id": "R2-S09", "file": "src/review/desk-run-store.ts", "anchor": "reviewed && item.source !== \"existing\" && !archived ? this.publication", "replacement": "reviewed && item.source !== \"existing\" ? this.publication", "kind": "behavior"},
+    {"id": "R2-A01", "file": "apps/desktop/src/App.tsx", "anchor": "setReviewsFocus(old => old?.nonce === nonce ? null : old);", "replacement": "setReviewsFocus(old => old);", "kind": "behavior"},
+    {"id": "R2-A03", "file": "apps/desktop/src/App.tsx", "anchor": ") : (githubAccount || githubAccountError) ? (", "replacement": ") : true ? (", "kind": "behavior"},
+    {"id": "R2-A04", "file": "apps/desktop/src/App.tsx", "anchor": "reloadSignal={watcherPolls}", "replacement": "reloadSignal={0}", "kind": "behavior"},
+    {"id": "R2-A05", "file": "apps/desktop/src/App.tsx", "anchor": "onWatcherPoll={noteWatcherPoll}", "replacement": "onWatcherPoll={undefined}", "kind": "behavior"},
+    {"id": "R2-A06", "file": "apps/desktop/src/App.tsx", "anchor": "rulesTarget={boardIdentity}", "replacement": "rulesTarget={null}", "kind": "behavior"},
+    {"id": "R2-B02", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "else if (onOpenInReviews && boardRepo && boardRepositoryId) onOpenInReviews(", "replacement": "else if (onOpenInReviews) onOpenInReviews(", "kind": "behavior"},
+    {"id": "R2-B03", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "else setSelected({ number: card.number });", "replacement": "else setSelected({ number: card.number, reviewIntent });", "kind": "behavior"},
+    {"id": "R2-B04", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "refresh(); onWatcherPoll?.(); }", "replacement": "refresh(); }", "kind": "behavior"},
+    {"id": "R2-B05", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "useEffect(() => { onIdentityChange?.(watcherTarget); }, [watcherTarget, onIdentityChange]);", "replacement": "", "kind": "behavior"},
+    {"id": "R2-D01", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "{local.error && !local.staleRange && <p className=\"inline-banner tone-warn\" role=\"alert\">{local.error}</p>}", "replacement": "{local.error && <p className=\"inline-banner tone-warn\" role=\"alert\">{local.error}</p>}", "kind": "behavior"},
+    {"id": "R2-D03", "file": "apps/desktop/src/review/ReviewDetail.tsx", "anchor": "{local.error && !local.staleRange && <p className=\"inline-banner tone-warn\" role=\"alert\">{local.error}</p>}", "replacement": "", "kind": "presentation"},
+    {"id": "R2-P01", "file": "apps/desktop/src/reviews/ReviewPanel.tsx", "anchor": "aria-label={`after ${previous.slice(0, 8)} — go to the attempt this one follows`}", "replacement": "aria-label={`Go to the attempt this one follows, run ${previous.slice(0, 8)}`}", "kind": "presentation"},
+    {"id": "R2-V01", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "settlePending();\n    setRead(old => ({ snapshot: null, error: message", "replacement": "setRead(old => ({ snapshot: null, error: message", "kind": "behavior"},
+    {"id": "R2-V02", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "restoreFocus.current = inViewOverlay(document.activeElement);", "replacement": "restoreFocus.current = true;", "kind": "behavior"},
+    {"id": "R2-V03", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (el.closest('.reviews-workspace [role=\"dialog\"], .review-panel')) return true;", "replacement": "", "kind": "behavior"},
+    {"id": "R2-V04", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (restoreFocus.current && !overlayOpen()) search.current?.focus();", "replacement": "if (restoreFocus.current) search.current?.focus();", "kind": "behavior"},
+    {"id": "R2-V05", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (document.visibilityState !== \"hidden\") refresh();", "replacement": "refresh();", "kind": "behavior"},
+    {"id": "R2-V06", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (project === cwd) refresh();", "replacement": "refresh();", "kind": "behavior"},
+    {"id": "R2-V07", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (lastSignal.current === reloadSignal) return;", "replacement": "", "kind": "behavior"},
+    {"id": "R2-V08", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (shown !== wanted && repo?.toLowerCase() !== wanted) {", "replacement": "if (shown !== wanted) {", "kind": "behavior"},
+    {"id": "R2-V09", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "(!pending.repositoryId || snapshot.repositoryId === pending.repositoryId)", "replacement": "true", "kind": "behavior"},
+    {"id": "R2-V10", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "} else if (refreshedFor?.nonce !== pending.nonce) {", "replacement": "} else if (!refreshedFor) {", "kind": "behavior"},
+    {"id": "R2-V11", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "useEffect(() => { if (!active) consumeIntent(); }, [active, consumeIntent]);", "replacement": "", "kind": "behavior"},
+    {"id": "R2-V12", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "reviewIntent={selected?.intent} onIntentConsumed={consumeIntent}", "replacement": "reviewIntent={selected?.intent}", "kind": "behavior"},
+    {"id": "R2-V13", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (!request || request.nonce === taken.current) return;", "replacement": "if (!request) return;", "kind": "behavior"},
+    {"id": "R2-V14", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "handled.current?.(request.nonce);", "replacement": "", "kind": "behavior"},
+    {"id": "R2-V15", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "setPending(null);\n    setRepo(next);", "replacement": "setRepo(next);", "kind": "behavior"},
+    {"id": "R2-V16", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "read.error && !accessProblem(read.error) && boardRules", "replacement": "read.error && boardRules", "kind": "behavior"},
+    {"id": "R2-V17", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "(!expectedViewer || boardRules.viewer.toLowerCase() === expectedViewer.toLowerCase())", "replacement": "true", "kind": "behavior"},
+    {"id": "R2-V18", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase())", "replacement": "true", "kind": "behavior"},
+    {"id": "R2-V19", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "void load(cwd, repo, expectedViewer, showClosed)", "replacement": "void load(cwd, repo, expectedViewer, false)", "kind": "behavior"},
+    {"id": "R2-V20", "file": "apps/desktop/src/reviews/ReviewsView.tsx", "anchor": "if (isClosedOrArchived(found)) setShowClosed(true);", "replacement": "if (found.state === \"closed\") setShowClosed(true);", "kind": "behavior"},
+    {"id": "R2-M01", "file": "apps/desktop/src/reviews/model.ts", "anchor": "const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? \"\";", "replacement": "const head = review.rounds[0]?.headSha ?? \"\";", "kind": "behavior"},
+    {"id": "R2-M02", "file": "apps/desktop/src/reviews/model.ts", "anchor": "String(review.number).includes(text.replace(/^#(?=\\d)/, \"\"))", "replacement": "String(review.number).startsWith(text.replace(/^#(?=\\d)/, \"\"))", "kind": "behavior"},
+    {"id": "R2-M03", "file": "apps/desktop/src/reviews/model.ts", "anchor": "String(review.number).includes(text.replace(/^#(?=\\d)/, \"\"))", "replacement": "String(review.number).includes(text)", "kind": "behavior"},
+    {"id": "R2-M04", "file": "apps/desktop/src/reviews/model.ts", "anchor": "return review.state === \"closed\" || !!review.archived;", "replacement": "return review.state === \"closed\";", "kind": "behavior"},
+    {"id": "R2-M05", "file": "apps/desktop/src/reviews/model.ts", "anchor": "if (state === \"closed\" || review.archived) return \"closed\";", "replacement": "if (state === \"closed\") return \"closed\";", "kind": "behavior"},
+    {"id": "R2-M06", "file": "apps/desktop/src/reviews/model.ts", "anchor": "return review.archived ? \"Archived\" : STATE_LABEL[review.state] ?? review.state;", "replacement": "return STATE_LABEL[review.state] ?? review.state;", "kind": "presentation"},
+    {"id": "R2-R02", "file": "src/commands/review-reviews.ts", "anchor": ".sort((a, b) => b.at.localeCompare(a.at) || b.row.number - a.row.number)", "replacement": ".sort(() => 0)", "kind": "behavior"},
+    {"id": "R2-R03", "file": "src/commands/review-reviews.ts", "anchor": "includeClosed ? rows : rows.filter(row => row.closedAt === null)", "replacement": "rows", "kind": "behavior"},
+    {"id": "R2-R06", "file": "src/commands/review-reviews.ts", "anchor": "if (cannotRetainData(error)) throw error;\n      unreadable = true;", "replacement": "unreadable = true;", "kind": "behavior"},
+    {"id": "R2-R07", "file": "src/commands/review-reviews.ts", "anchor": "if (left <= 0) { late = true; return null; }", "replacement": "", "kind": "behavior"},
+    {"id": "R2-R08", "file": "src/commands/review-reviews.ts", "anchor": "if (result === \"late\") { late = true; return null; }", "replacement": "if (result === \"late\") { return null; }", "kind": "behavior"},
+    {"id": "R2-R09", "file": "src/commands/review-reviews.ts", "anchor": "if (late) warnings.push(", "replacement": "if (false) warnings.push(", "kind": "behavior"},
+    {"id": "R2-R11", "file": "src/commands/review-reviews.ts", "anchor": "includeClosed: values[\"include-closed\"] === true", "replacement": "includeClosed: false", "kind": "behavior"},
+    {"id": "R2-R12", "file": "src/commands/review-reviews.ts", "anchor": "}, { stopOnError: true });", "replacement": "});", "kind": "behavior"},
+    {"id": "R2-S01", "file": "src/review/desk-run-store.ts", "anchor": "const counted = placed.filter(attempt => !attempt.superseded);", "replacement": "const counted = placed;", "kind": "behavior"},
+    {"id": "R2-S04", "file": "src/review/desk-run-store.ts", "anchor": " || (b.created === a.created && b.seq > a.seq)", "replacement": "", "kind": "behavior"},
+    {"id": "R2-S05", "file": "src/review/desk-run-store.ts", "anchor": "attempts.push({ ...row, round });", "replacement": "", "kind": "behavior"},
+    {"id": "R2-S06", "file": "src/review/desk-run-store.ts", "anchor": "if (linked) return { round: linked.round, previous: linked.id };", "replacement": "", "kind": "behavior"},
+    {"id": "R2-S07", "file": "src/review/desk-run-store.ts", "anchor": "return state === \"completed\" && coverage === \"complete\" ? \"pending\" : undefined;", "replacement": "return \"pending\";", "kind": "behavior"},
+    {"id": "R2-S08", "file": "src/review/desk-run-store.ts", "anchor": "if (!FINISHED_STATES.has(state) ||", "replacement": "if (state !== \"completed\" ||", "kind": "behavior"},
+    {"id": "R2-S10", "file": "src/review/desk-run-store.ts", "anchor": "'')!='delete' AND NOT ${neverStarted(\"r.\")}", "replacement": "'')!='delete'", "kind": "behavior"},
+    {"id": "R2-S11", "file": "src/review/desk-run-store.ts", "anchor": "const archived = item.decision === \"archive\";", "replacement": "const archived = false;", "kind": "behavior"},
+    {"id": "R2-E01", "file": "src/review/review-entity.ts", "anchor": "if (review.archived || review.card === null) return false;", "replacement": "if (review.card === null) return false;", "kind": "behavior"},
+    {"id": "R2-E02", "file": "src/review/review-entity.ts", "anchor": "if (review.archived || review.card === null) return false;", "replacement": "if (review.archived) return false;", "kind": "behavior"},
+    {"id": "R2-E04", "file": "src/review/review-entity.ts", "anchor": "return kept.length ? kept : row.attempts;", "replacement": "return row.attempts;", "kind": "behavior"},
+    {"id": "R2-E05", "file": "src/review/review-entity.ts", "anchor": "if (!latest || live(latest) || reviewedResult(latest)) return latest;", "replacement": "if (!latest || reviewedResult(latest)) return latest;", "kind": "behavior"},
+    {"id": "R2-E06", "file": "src/review/review-entity.ts", "anchor": "return newest(attempts, a => a.round === latest.round && reviewedResult(a)) ?? latest;", "replacement": "return latest;", "kind": "behavior"},
+    {"id": "R2-E07", "file": "src/review/review-entity.ts", "anchor": " && !reviewClosed(row, card) ? { reviewed, head } : null", "replacement": " ? { reviewed, head } : null", "kind": "behavior"},
+    {"id": "R2-E08", "file": "src/review/review-entity.ts", "anchor": "if (!headsDiffer(reviewedHead, prHead) ||", "replacement": "if (reviewedHead === prHead ||", "kind": "behavior"},
+    {"id": "R2-E09", "file": "src/review/review-entity.ts", "anchor": "archived: attempts.every(attempt => attempt.archived),", "replacement": "archived: false,", "kind": "behavior"},
+    {"id": "R2-E11", "file": "src/review/review-entity.ts", "anchor": "state: reviewState(settled, reviewClosed(row, card)),", "replacement": "state: reviewState(latest, reviewClosed(row, card)),", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 1, "info": 0}
+}
+```
+
+## Mutation pass
+
+Skipped: the payload's allowed_tools is `read-only` and exec_budget_s is 0, so no `keryx review mutate` was run. I report no red/green result.
+
+Suggested order for the main session's run:
+- Round-1 survivors that the fixes claim to have pinned: R2-A02 (M29), R2-A07 (M28), R2-B01 (M08), R2-D02 (M09), R2-V22/V23/V24 (M24/M25/M26), R2-R13 (B01), R2-R04/R05 (B02), R2-R14 (B05), R2-R01 (B07), R2-E03 (E05), R2-E10 (E07), R2-S02/S03 (S02), R2-S09 (S05).
+- Then the new gates.
+- Nearest suites: `bun test src/commands/review-reviews.test.ts src/review/desk-run-store.test.ts src/review/review-entity.test.ts src/review/board-badges.test.ts` for src/; `sh -c 'cd apps/desktop && bun test src/review src/reviews src/shell src/platform src/test'` for Desktop. App.tsx candidates are reached only through the fixture run by src/shell/ProjectNavigation.dom.test.tsx.
+
+Reading notes for the run. These are leads, not results:
+- R2-R01 is expected to be equivalent. Array.prototype.sort is stable, and readReviewRows already returns rows in `ORDER BY v.pr DESC`, so the number tie-break repeats that order.
+- R2-V11 and R2-V12 are redundant mechanisms. The F-002 test deactivates the tab, so either one alone may keep it green.
+- R2-V03: the F-041 test focuses the portaled Review rules dialog only, so the panel branch of inViewOverlay is never driven.
+- R2-V09: no fixture has a repositoryId that differs between the request and the list.
+- R2-R04: no fixture has a non-hex PR head.
+- R2-R07: with 2 pairs and a parallelism of 4, no task is admitted after the deadline.
+
+## Prior findings (slice-01 touches)
+
+Testing-practices findings:
+- F-037 closed. The Round cell is asserted by its column index: `toBe("2")`.
+- F-038 closed. Both sides of the intent routing are now tested:
+  - ReviewBoard.dom.test: with onOpenInReviews wired, start stays in the PR panel; without it, view opens the PR panel and starts nothing.
+  - ReviewsView.dom.test: ReviewDetail takes only a start intent.
+- F-039 partial. The fixture now clicks the PR card's review action twice and asserts that the Reviews tab is active with the PR's panel open, which pins openInReviews/setView. The binding gate (App.tsx:530, round-1 M29) still has no test; it is carried into new F-002.
+- F-040 closed. A panel start re-reads the list exactly once, and opening the panel does not.
+- F-041 closed. The moved rules-dialog test asserts focus returns to "Search reviews". Only the portaled-dialog branch is driven; see R2-V03.
+- F-042 closed. Requested head c against PR head d expects behind.
+- F-043 closed. A deleted #16 is absent from the list, and 'recoverable' reads as 'failed' (desk-run-store.test).
+- F-044 closed. The A,B,A fixture follows the D-R1 rule: the third attempt opens round 3, and its retry joins round 3.
+- F-045 closed for the reviewed head ("main" leads to 0 compares). The PR-head half of the guard has no fixture; see R2-R04.
+- F-046 closed. A failed attempt that carries a reviewed range is not the reference.
+- F-047 closed. The positional case uses `rejects.toThrow(/positional/i)`, so the configuration error can no longer satisfy it.
+- F-052 closed. The watcher-focus loop is unrolled, and ReviewPanel.dom.test is re-indented.
+- F-053 closed:
+  - (a) An exactly-25 case expects no warning.
+  - (c) The parseCompare case with `"2"` is added.
+  - (b) The tie-break moved into the row sort and is now equivalent to the SQL order; see R2-R01.
+
+Other lenses' findings, checked against the code:
+- F-001 closed: the focus carries the repo and repositoryId, the Reviews tab switches to that repo, and a two-repository DOM test covers it.
+- F-002 closed: consumeIntent runs on deactivation and through onIntentConsumed, and there is a test for returning to the tab.
+- F-003 closed in code: a taken-nonce ref above the keyed list, App clears the focus, and tests cover the repo switch and access-lost. The App half is untested; see F-002.
+- F-004 closed: reviewNeedsViewer requires publication === "pending", and publication() covers partial and budget.
+- F-005 closed: reviewedCommit reads summary.reviewed, and model.test has a cancelled newer attempt.
+- F-007 closed: subscribeSessionReview, reloadSignal and an ungated interval, each with a test. The App hookup is untested; see F-002.
+- F-008 closed: roundFor considers only the top round.
+- F-009 closed: accessLost calls settlePending, and a test covers it.
+- F-010 closed: stateAttempt, with tests.
+- F-011 closed: the interval checks visibility, with a test.
+- F-012 closed in code: the mount gate. It has no test; see F-002.
+- F-013 closed: ReviewsTabIndicator is declared in reviews/.
+- F-014 closed: the fallback routes only start, with a test.
+- F-015 closed: headComparison, with a test.
+- F-017 closed: rulesTarget falls back to the board identity, with a test.
+- F-018 closed: the shortcut table in the slice hunk.
+- F-019 closed: the cli-reference hunk.
+- F-020 closed: the cli-reference hunk.
+- F-021 closed for spec line 226; line 8 is outside this slice.
+- F-022 closed: the cap follows the activity order, with a test.
+- F-023 partial: only Reviews closed locally skip the card read. Reviews merged or closed on GitHub are still read on every call, which is FA-7's chosen scope.
+- F-024 closed: per-batch cards, with a test.
+- F-025 closed: compare deadline. Its test is new finding F-001.
+- F-026 closed: per-Review placed attempts are held in memory.
+- F-027 closed: a test pins the known limitation.
+- F-028 closed: neverStarted is excluded from round placement, with a test.
+- F-029 closed: the card has no aria-label, with a test.
+- F-030 closed: the banner sits in .sheet-head, with a test.
+- F-031 closed: the accessible name starts with the visible text, with a test.
+- F-033 closed: model.test.
+- F-059 closed: the implementation-plan stage-3 line.
+
+Not assessed here, because slice-01's hunks do not touch them or only another slice holds the fix: F-006, F-016, F-032, F-034, F-035, F-036, F-048, F-049, F-050, F-051, F-054 to F-058, F-060.
+
+## Not verified
+
+- No mutant was run (read-only lane).
+- Test results were taken from the package's verify-tests-to-run-1.txt (194 root + 1008 Desktop, 0 fail at f6971fd); I did not re-run anything.
+- I read slice-01, the full diffs of ReviewsView/App/ReviewBoard/model.ts, the changed Desktop and root test files in this area, and the fixture.
+- I did not read: the Rust bridge, the CSS, ReviewWorkspace beyond its intent effect, or docs outside the slice hunks.
+
+Routing audit: graph_used: no (not-relevant: the scope is a fixed slice plus its named test files). wiki_used: no (not-relevant: testing conventions came from tdd-workflow.mdc). ctx_used: yes (keryx ctx rg/read; git diff written to the scratchpad and read in pages). raw_rg_used: no.

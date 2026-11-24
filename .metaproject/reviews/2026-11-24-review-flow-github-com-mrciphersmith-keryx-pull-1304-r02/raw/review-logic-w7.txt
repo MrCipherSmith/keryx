@@ -1,0 +1,144 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (round 2, delta)
+- Slice: slice-03 (Desktop and bridge side of the round-1 fixes: dev/reviewBoard.ts, src-tauri/review.rs, App.tsx, platform/review.ts, ReviewBoard, ReviewBrowserLink, ReviewDetail(.css), ReviewRuns, ReviewWorkspace, reviews/ReviewPanel, reviews/ReviewsView, reviews/model.ts, shell/AppShell). I read it in full.
+- Scope mode: explicit-hash-range (from the payload)
+- Spec compliance gate: skipped. No issue or task was attached to this slice, and the operator decisions in fix-round-1.md are settled.
+
+### Summary
+The slice routes "Open in Reviews" through a repository-named focus request that the outer `ReviewsView` holds and takes once. It adds an intent-consumed callback from `ReviewWorkspace`, passes the `include_closed` opt-in through both bridges with matching refusals, shows archived Reviews under Show closed, and opens the Review panel's PR link in the system browser.
+
+I traced these paths at head and found them correct:
+- The focus hand-off: App nulls the focus on `onFocusHandled`, and a remount keyed by viewer or repository cannot replay it.
+- `refreshedFor`/`sequence`: the request written by the refresh is always greater than `after`.
+- The Rust/dev parity of `include_closed`.
+- `selectRepository`: the Reviews read and the board read share one repository source, so `focusRepo` cannot pick a repository the CLI refuses unless the remotes changed in between.
+
+I found two new items, both below major. Neither duplicates waves 1 to 6.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+#### [F-001] A focus request resolved while the Reviews tab is hidden keeps its intent and acts on it at the next visit
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:225-256
+- **Problem**: The pending-focus effect (`:225-251`) has no `active` guard. When the matching Review is found, it calls `setSelected({ id: found.id, intent: pending.intent })`. The only code that strips an intent without the panel is `useEffect(() => { if (!active) consumeIntent(); }, [active, consumeIntent])` (`:256`), and it fires only when `active` changes. Scenario:
+  1. The user clicks a card's answer action on the Pull requests tab. `openInReviews` sets the focus and switches to Reviews.
+  2. The tab-show refresh starts. It reads from GitHub and runs compares within the compare budget, so it takes seconds.
+  3. The user switches to another tab before the read returns. `consumeIntent` runs now, while nothing is selected, so it does nothing.
+  4. The read returns, and the effect selects the Review with `intent: answer` while the tab is hidden. `ReviewPanel` renders only when `active` is true (`:349`), so nothing can consume the intent.
+  5. When the user next opens Reviews (minutes later, say), the panel mounts with the intent. `ReviewWorkspace` (`ReviewWorkspace.tsx:1013-1030`) opens the answer dialog unprompted, if the PR range is unchanged and questions are still pending.
+
+  The comment at `:253-254` says the selection keeps only the Review once the tab is left. That holds only for a selection made while the tab was shown. Hidden-tab resolution also resets filters and the search query, and can turn Show closed on (`:238-242`) while the user is elsewhere.
+- **Why it matters**: A dialog the user did not just ask for opens on a later visit, from an action taken on another tab. No data changes, because the answer still needs the user's input, so this is minor.
+- **Fix**: Strip the intent when the effect resolves the focus while the tab is hidden, e.g. `setSelected({ id: found.id, ...(active && { intent: pending.intent }) })`. Alternatively, keep `pending` until `active` is true by adding `!active` to the early return at `:226`. Add a DOM test: focus with `intent: answer`, flip `active` to false before the load resolves, resolve it, flip `active` back, and assert the answer dialog is not open.
+
+### Async & Concurrency
+None detected beyond F-001. I did not re-file the in-flight join of a refresh (highload-w1 F-001) or the visibility gating of the watcher-poll reload (frontend-w1 F-002).
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+#### [F-002] `ReviewWorkspace`'s `start` intent branch is now unreachable, yet the Reviews tab comment lists `start` as a handled intent
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx:1016,1027-1028 (slice lines); apps/desktop/src/reviews/ReviewsView.tsx:253
+- **Problem**: `ReviewWorkspace` is mounted only by `ReviewPanel.tsx:132`. The only producer of a `ReviewsFocus` intent is `ReviewBoard.openReview` (`ReviewBoard.tsx:462`), and after this delta it routes `kind === "start"` to the PR panel (`ReviewDetail`, which keeps its own start effect). It sends only `view` or `answer` to the Reviews tab. The `next.kind === "start"` conditions in `ReviewWorkspace`'s intent effect therefore cannot be met. The comment "An intent (answer, view, start) is acted on once" describes a case that never occurs.
+- **Enumeration**: `keryx ctx rg '<ReviewWorkspace|openInReviews\(|onOpenInReviews\(|setReviewsFocus\('` over apps/desktop/src (non-test). The result is one ReviewWorkspace mount (ReviewPanel), one focus producer with an intent (ReviewBoard:462, start excluded), and one without an intent (ReviewBoard:557).
+- **Why it matters**: There is no runtime defect. A later editor may assume the Reviews tab can start a review from a board click.
+- **Fix**: Drop `start` from the comment, or narrow `ReviewIntent` for the Reviews path to `view | answer`. Keep the start branch only if a planned producer will use it, and say so.
+
+### Not re-filed (already raised in waves 1 to 6)
+- The state filter matches the underlying state of archived Reviews: ui-ux-w1 (frontend-w2 note).
+- The closed Review panel's card-less banner after Show closed is toggled: frontend-w1 F-001.
+- The Review rules fallback targets the board repository while the tab is on its default repository: frontend-w1 F-003, logic-w1 F-005, architecture-w1 F-003.
+- `hasReview` counts superseded never-started runs: degradation-w2 F-001.
+- Show closed and the second list read: performance-w2 P2-001/I2-001, highload-w2 F-001.
+- The Review panel's PR link has no in-flight guard: FE2-001.
+- Two link-opening mechanisms: architecture-w2 F-001.
+- Adjacent positional bools in `board_read_args`: backend-w2 / clean-code-w2.
+
+### Suggested Patches
+```diff
+-      setSelected({ id: found.id, intent: pending.intent });
++      // An intent resolved while the tab is hidden is dropped: coming back shows the Review, never a late action.
++      setSelected(active ? { id: found.id, intent: pending.intent } : { id: found.id });
+```
+(Add `active` to that effect's dependency list.)
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-03"],
+  "summary": "Slice-03 (Desktop and bridge side of the round-1 fixes) is logically sound on its main paths. These are correct: the once-only focus hand-off (App nulls on onFocusHandled, outer ReviewsView holds pending above the repository key), the refreshedFor/sequence ordering, and the include_closed opt-in with identical refusals in review.rs and dev/reviewBoard.ts. One minor: a focus request resolved while the Reviews tab is hidden keeps its intent, so the next visit acts on it (opens the answer dialog) despite the consume-on-leave design. One info: ReviewWorkspace's start-intent branch is unreachable now that board starts stay in the PR panel. Items from waves 1 to 6 were not re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "repo": "keryx",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 243,
+      "quote": "setSelected({ id: found.id, intent: pending.intent });",
+      "problem": "The pending-focus effect (ReviewsView.tsx:225-251) has no active guard, and consumeIntent runs only when `active` changes (:256). If the user leaves the Reviews tab while the tab-show read is in flight, the read resolves while the tab is hidden and selects the Review with its intent. ReviewPanel renders only while active, so nothing consumes the intent. On the next visit the panel mounts with the intent, and ReviewWorkspace opens the answer dialog unprompted. The resolution also resets filters and the query, and can turn Show closed on, while the tab is hidden.",
+      "impact": "An answer dialog opens unprompted on a later visit, from an action taken earlier on another tab. No data changes.",
+      "suggested_fix": "When the tab is hidden, select the Review without the intent (setSelected(active ? {id, intent} : {id}), with active in the deps). Alternatively, hold pending until active. Add a DOM test that resolves the load after active flips to false and asserts that no answer dialog opens on return.",
+      "evidence": "ReviewsView.tsx:225-251 (no active check before setSelected with intent), :256 (consume only on active change), :349 (ReviewPanel gated by active); ReviewWorkspace.tsx intent effect (answer -> setSessionId).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "changed-line",
+      "evidence_kind": "code-trace"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "repo": "keryx",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "quote": "} else if (next.kind === \"start\" && !action.open) {",
+      "problem": "ReviewWorkspace is mounted only by ReviewPanel (Reviews tab). The only intent producer, ReviewBoard.openReview, now routes kind 'start' to the PR panel (ReviewDetail) and sends only view/answer to the Reviews tab. The start-intent conditions in ReviewWorkspace's intent effect are therefore unreachable, and the ReviewsView comment 'An intent (answer, view, start)' describes a case that cannot occur.",
+      "impact": "There is no runtime defect. The comment and the branch mislead the next editor about where a board start runs.",
+      "suggested_fix": "Drop 'start' from the comment, or narrow the Reviews-path intent type to view|answer. Keep the branch only with a note naming its planned producer.",
+      "evidence": "keryx ctx rg '<ReviewWorkspace|openInReviews\\(|onOpenInReviews\\(|setReviewsFocus\\(' apps/desktop/src (non-test): one ReviewWorkspace mount (ReviewPanel.tsx:132), one focus producer with intent (ReviewBoard.tsx:462, start excluded), one without (ReviewBoard.tsx:557).",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "changed-line",
+      "evidence_kind": "negative-enumeration",
+      "class_scope": {
+        "sites": [],
+        "enumeration_method": "keryx ctx rg for ReviewWorkspace mounts and ReviewsFocus producers in apps/desktop/src excluding tests; the only producer excludes kind 'start'"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+### Not read / not verified
+- I ran no tests (exec budget 0). The test claims rest on research-evidence/verify-tests-to-run-1.txt (194 root + 1008 Desktop tests, 0 failed, at f6971fd), which I did not re-run. I did not check whether an existing DOM test covers the hidden-tab resolution in F-001.
+- I could not type-check or compile the Rust side locally (no Rust toolchain). CI at f6971fd reports 0 failed checks.
+- At head I read, beyond the slice: ReviewsView.tsx:95-394, ReviewDetail.tsx:185-284, ReviewBoard.tsx:380-465, App.tsx:205-220/505-535/630-650, platform/review.ts:1-60, review-reviews.ts:118-140, board-github.ts:40-62, review-entity.ts:60-200, and reviews/model.ts:40-110. I did not read ReviewWatcher, ReviewResults or localBadge in full.
+- I did not use the payload's `layers` block or the package graph.
+- I did not read the protected stage-0 code list. The slice's changes touch no stage-0 code that I could identify.
+
+### Routing audit
+- graph_used: no (not-relevant: I reviewed the supplied slice and found the callers and producers with keryx ctx rg)
+- wiki_used: no (not-relevant: the operator decisions are in fix-round-1.md and the prior-wave findings)
+- ctx_used: yes (keryx ctx rg for the producer and consumer enumeration, review-reviews flags and tabActive uses)
+- raw_rg_used: no. Raw grep/sed/cat were used only on the hidden .metaproject review package (ctx rg skips hidden paths) and for bounded reads of exact line ranges, each with a keryx:raw marker.

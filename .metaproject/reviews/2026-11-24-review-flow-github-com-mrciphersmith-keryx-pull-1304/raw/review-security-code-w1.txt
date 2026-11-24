@@ -1,0 +1,65 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- PR #1304, base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b
+- Scope mode: diff (payload `scope_mode: diff`), read-only
+- Slice read in full: slice-02 (2402 lines): apps/desktop/dev/reviewBoard.ts, apps/desktop/src-tauri/src/review.rs, apps/desktop/src/App.tsx, apps/desktop/src/platform/review.ts, apps/desktop/src/review/{ReviewBoard,ReviewDetail,ReviewResults,ReviewWorkspace}.tsx, apps/desktop/src/review/model.ts, apps/desktop/src/reviews/{ReviewPanel,ReviewsView}.tsx, apps/desktop/src/reviews/model.ts, apps/desktop/src/shell/AppShell.tsx, apps/desktop/src/styles/review.css
+- Context files read outside the slice: apps/desktop/src/review/ReviewBrowserLink.tsx, apps/desktop/src-tauri/src/navigation.rs, apps/desktop/src/platform/review.ts:87 (verifyProjectViewer location only)
+- Test output for this round (research-evidence/verify-tests-to-run-1.txt): not available when this review ran (only ingest-screened.json was present).
+- Git history: not read (read-only child; no excerpts needed for any finding).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness was found in slice-02.
+
+### What was checked, and why it holds
+
+1. Command/argument injection on the new `reviewsOnly` read (review.rs `board_read_args`, dev/reviewBoard.ts `reviewsArgs`).
+   The CLI is invoked with an argv vector, not a shell string. The only forwarded value, `repo`, is refused when empty, when it starts with `-` (no option smuggling such as `--repo --other`) or when it contains whitespace, the same guard the board path already uses. Every board-mode field (badges, repositoriesOnly, prState, number, paged, cursor) is refused in combination, and `updated_since` is refused by the `review_board` caller when `reviews_only` is set; the dev bridge refuses the same set. The Rust test `reviews_list_is_a_separate_read_only_query` pins these refusals. The new command is `review reviews --json`, a read, and runs through `invoke_review(..., read_only = true)`, which still requires the requested cwd to equal the project registered for the calling webview (`review_project`), so no new cross-project or write path is opened.
+
+2. Viewer/account binding of the new list. `fetchReviews` asserts protocol version 1 and calls `verifyProjectViewer(result.viewer, expectedViewer)` exactly like `fetchReviewDetail`; ReviewsView resets selection, filters and notice when the (repositoryId, viewer) identity changes, and treats `access:`/`configuration:` errors as access loss that clears the snapshot. The App-level Reviews indicator is accepted only when its binding equals the current `reviewViewer`, the same rule as the PR board's indicator, and the view is keyed by the viewer.
+
+3. Rules/automation target. `ProjectReviewRules` moved from the PR board to the Reviews tab; its target is built from the verified snapshot's repo, repositoryId and viewer and rendered only while the tab is active, as before.
+
+4. Mutations reachable from a cross-tab "Open in Reviews". The PR board now routes only `view`/`answer` intents to the Reviews tab; `start` stays in the PR panel. In `ReviewWorkspace` a `view` or `answer` intent only opens a dialog; a `start` intent is consumed once, only after status loads, and only when the intent's base/head equal the card's range and the PR is open and not stale; `RunLaunchDialog` re-checks open state, staleness and `sameRange` before calling the CLI, and requires the CLI to confirm the started run id. `ReviewDetail` now refuses a carried intent of any kind when the PR is not open or the range moved. No user-unintended run start, cancel, answer or publication path was added.
+
+5. XSS / untrusted text. All new rendering (titles, run ids, SHAs, freshness, findings, warnings, flow ids) is React text interpolation; no `dangerouslySetInnerHTML`, `eval`, `Function` or HTML string building was added. `document.getElementById(attemptAnchor(scope, previous))` takes CLI-supplied ids but is not a selector API, so it cannot be injected. The PR link in ReviewPanel goes through `ReviewBrowserLink`, which allows only `https:` URLs without credentials.
+
+6. Navigation. The new ReviewPanel PR link has no click handler (unlike ReviewDetail's `followLink`). Security-wise this is contained: `navigation.rs` refuses every navigation away from the app origin and every new window, so the webview cannot be taken to the linked page. Whether the link opens anything for the user is a functional question for the logic/UX lens, not a security finding (handed over below, not reported here).
+
+7. Keyboard shortcuts. `projectViewForKey` accepts only `/^[1-9]$/` and indexes `PROJECT_VIEWS`; out-of-range digits return undefined. No new handler runs while an overlay is open (existing `overlayOpen()` guard kept; the new Cmd+F handler in ReviewsView checks it too and is attached only while the tab is active).
+
+8. Resource use. The new 60 s re-read runs only while the tab is shown and a Review is queued or running, and reads go through the deduplicating `ReviewReadLane`; not a DoS vector.
+
+### Clean Areas
+Injection (SQL: none in slice; command/argv: checked, see 1; XSS: checked, see 5; eval: none), auth/authz and IDOR (project registration and viewer binding, see 1-2), input validation at the Tauri boundary (see 1), secrets and logging (none added), cryptography (none), CSRF (not applicable: Tauri IPC, no cookies), path traversal (no file paths built from input), open redirect (see 6), React-specific patterns (no localStorage of sensitive data added, no postMessage handlers), NestJS (not applicable).
+
+### Cross-lens handover (not a security finding)
+- apps/desktop/src/reviews/ReviewPanel.tsx: the header "Open pull request" `ReviewBrowserLink` has no click handler that calls `openPullRequest`/`openExternal`, unlike the same link inside ReviewDetail (whose container uses `followLink`). With the host navigation guard the click is likely a no-op. For review-logic / UX to confirm.
+
+### Routing audit
+- graph_used: no (not-relevant: the change is UI/IPC plumbing read in full from the slice; the two host guards needed were located with ctx rg)
+- wiki_used: no (not-relevant: the security boundary was read directly in navigation.rs and review.rs)
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`)
+- raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-02 read in full. The new Reviews-list read (`review reviews --json`) is built as an argv vector with the same repo guard as the board (non-empty, no leading '-', no whitespace), refuses every board mode and updated_since, stays read-only and keeps the project-registration check; the list is bound to the expected viewer; cross-tab intents never mutate except a start that is re-checked against the open, non-stale range; new rendering is plain React text and the PR link is https-only behind a host navigation guard. No blocker, major, minor or info security finding. Test output for the round was not available.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full (2402 lines)", "status": "DONE" } ],
+  "follow_ups": [
+    "review-logic/UX: apps/desktop/src/reviews/ReviewPanel.tsx header 'Open pull request' ReviewBrowserLink has no click handler (ReviewDetail routes the same link through followLink -> openPullRequest); with navigation.rs refusing off-origin navigation the click is likely a no-op. Not a security defect."
+  ]
+}
+```

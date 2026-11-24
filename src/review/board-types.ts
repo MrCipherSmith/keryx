@@ -15,7 +15,7 @@ export interface ReviewCard {
     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;
     /** Newest finished result for another range. Present only when no run covers this range and none is active;
      * `runState` is then absent, because a finished `runState` means a result for this revision exists. */
-    outdated?: { headSha: string; state: DeskRunState };
+    outdated?: { headSha: string; state: DeskRunState; /** The stale run's Review round, when the store records one. */ round?: number };
   };
   /** GitHub message node IDs addressed to this snapshot’s viewer. */
   addressedReplyIds?: string[];

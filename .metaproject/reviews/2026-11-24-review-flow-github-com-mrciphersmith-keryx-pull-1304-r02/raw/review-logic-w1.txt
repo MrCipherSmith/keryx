@@ -1,0 +1,249 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (round 2, delta; FIX slice)
+- Slice: slice-01 (read in full, 791 lines), plus the head files it touches, read at f6971fd4a: `apps/desktop/src/reviews/ReviewsView.tsx` (whole), `apps/desktop/src/reviews/model.ts` (whole), `src/review/review-entity.ts` (whole), `src/commands/review-reviews.ts` (whole), `src/review/desk-run-store.ts` (roundFor/assignReviews, publication(), reviewRows, requestAttempt), `apps/desktop/src/App.tsx` (focus, signals, mount gate), `ReviewBoard.tsx` openReview/badge polling, `ReviewPanel.tsx` body, `ReviewWorkspace.tsx` intent consumption, `src/review/board.ts` listActiveReviewCards.
+- Scope mode: explicit-hash-range
+- Spec compliance gate: ran against `fix-round-1.md` (FA-1..FA-17, FB-1..FB-12) and plan.md; journal operator decisions treated as settled.
+
+### Summary
+The round-1 logic findings this slice touches are fixed in the code: the cross-tab focus now carries the repository and is matched on repo + repositoryId + number (F-001); the intent and the focus request are each taken once (F-002, F-003); the round rule follows D-R1 including A,B,A and superseded queued requests (F-008, F-028); the Desktop reads the domain `reviewed` range (F-005); `reviewNeedsViewer`/`reviewState` follow FA-2 (F-004, F-010); failed card batches no longer discard successful ones (F-024); digit search matches title and number anywhere (F-033). No blocker or major found. Five new low-severity observations, the most concrete being that the locally-closed card skip added for F-023 keys on `reviews.closed_at`, which no code path writes, so F-023 is only partly addressed (the parallel batches are real; the skip is dead).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 2
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+#### [F-001] The locally-closed card skip keys on `reviews.closed_at`, which nothing writes
+- Severity: minor
+- File: src/commands/review-reviews.ts (`const cards = await readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query);`)
+- Problem: FA-7 / the operator answer ("locally closed Reviews fetch their cards only while 'Show closed' is on") is implemented as a filter on `row.closedAt`, which comes from `reviews.closed_at`. Across `src`, `apps/desktop/src` and `apps/desktop/src-tauri`, `closed_at` appears only in the `CREATE TABLE reviews` DDL (desk-run-store.ts:155) and the `reviewRows` SELECT (:593); the only writer is the test helper `editStore("UPDATE reviews SET closed_at=? ...")` in review-reviews.test.ts:225. No product path closes a Review locally in this PR.
+- Impact: In production every Review has `closedAt === null`, so the filter never removes a row: a Review whose PR is merged or closed on GitHub (the population round-1 F-023 was about) still has its PR card read on every `review reviews` call (window open, tab show, focus, watcher-poll signal, the 60 s running reload). Turning "Show closed" on now triggers an extra full read with `--include-closed` that returns the same cards. F-023 is recorded fixed; only its parallel-batch half (mapPool, CARD_PARALLEL=3) changes behaviour. No wrong value is shown, so minor.
+- Suggested fix: Either say in fix-round-1 / the CLI reference that the skip is plumbing for the stage-3 "close Review" action and record F-023 as partly addressed, or give `closed_at` a writer now (e.g. set it when a read observes the PR card `merged`/`closed`, from a write lane rather than this read), so merged PRs stop being re-read.
+- Evidence: `keryx ctx rg --all -n "closed_at|closedAt\s*[:=]|closeReview|close_review" src apps/desktop/src apps/desktop/src-tauri`: DDL at desk-run-store.ts:155, read at :593/:612, test write at review-reviews.test.ts:225, nothing else.
+- Confidence: high
+
+#### [F-002] `freshness` and `headComparison` still disagree for a closed Review, despite "one rule"
+- Severity: minor
+- File: src/review/review-entity.ts (`if (!headsDiffer(reviewedHead, prHead) || compare?.status === "identical") return { kind: "current" };`)
+- Problem: FA-5 / round-1 F-015 asked for one domain rule deciding "needs a commit-count comparison", and `headComparison`'s doc says "The one rule for the command's comparisons and for `freshness`". But `freshness` does not call `headComparison`; it uses `headsDiffer` only. For a Review whose PR is merged/closed with a head past the reviewed head, `headComparison` returns null (never compared) while `summarizeReview(...).freshness` is `{ kind: "behind", commits: null }`.
+- Impact: Named input: a PR merged after more commits were pushed since its last review, listed under Show closed. Its card reads "behind" with no count, permanently, and none of the warnings is added, while the CLI reference says unknown counts come with a warning. The new test "summarizeReview reports behind exactly when a comparison is needed" only uses open cards, so it does not see this; the previous test in the same describe already asserts `headComparison(row, card({ headSha: c, state: "merged" }))` is null.
+- Suggested fix: Derive freshness from the same predicate (e.g. in `summarizeReview`, a closed Review with differing heads reports a defined kind, or `freshness` takes `headComparison`'s result), and add the merged-card case to the "exactly" test.
+- Evidence: review-entity.ts:110-115 (freshness), :155-162 (headComparison, its doc comment), :190 (summarizeReview uses freshness, not headComparison); review-entity.test.ts headComparison describe.
+- Confidence: high
+
+#### [F-003] Reviewed commit and freshness can name different heads when the newest round is archived
+- Severity: minor
+- File: apps/desktop/src/reviews/model.ts (`const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? "";`)
+- Problem: With no finished reviewed attempt, Desktop falls back to `rounds[0].headSha`. `rounds` is built from `row.attempts` including archived ones (review-entity.ts:193), while the domain's `referenceHead` (the head freshness is measured from) uses only unarchived attempts (`stateAttempts`). The comment says the fallback is "the latest requested head".
+- Impact: Input: round 1 has unarchived failed attempts on head X, round 2 (head Y) has only archived attempts, nothing finished. Card, list and panel show `Y` as the reviewed commit while freshness was computed from `X`. Wrong value, rare input, low cost.
+- Suggested fix: Have the backend expose the reference head it used (e.g. `reviewed` stays the finished range, plus the fallback requested head from `referenceHead`), or compute the fallback from the newest unarchived attempt on the Desktop side.
+- Evidence: model.ts:54-56; review-entity.ts:132-141 (stateAttempts, referenceHead), :193 (`rounds: roundsOf(row.attempts)`).
+- Confidence: medium
+
+### Async & Concurrency
+None detected. Checked: the focus request lives in outer `ReviewsView`, is taken once by nonce and acknowledged to App (`reviewsFocusHandled` clears only the same nonce); `focusRepo` cannot loop (guarded by `repo?.toLowerCase() !== wanted`, and the one re-read is bounded by `refreshedFor.nonce`); `accessLost` now settles the pending request; `compareHeads` races each compare against the remaining budget and clears its timer; `readCards` keeps successful batches and rethrows only access/configuration errors; `assignReviews` caches each Review's placed attempts and pushes each newly placed row, so later rows in the same batch see it; a superseded queued row is ended before the new row is inserted and placed, so it no longer holds a round.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+
+#### [F-004] "Waiting on you" lane and the Reviews tab indicator now disagree on more Reviews
+- Severity: info
+- File: apps/desktop/src/reviews/model.ts (`return state === "published" ? "published" : "waiting";`)
+- Problem: The lane follows plan T7 (`needs_answer`, `ready`, `stopped`). After FA-2 and the operator answers, `reviewNeedsViewer` excludes `ready` without a pending publication (partial, budget, imported package, skipped) and `stopped`/`ready` whose PR card was not read. Those Reviews sit in the lane titled "Waiting on you" while the tab dot, described as "lights when a Review waits on the viewer", stays off. Before the fix only `ready`+skipped diverged. Both rules are settled decisions, so this is not filed as a defect; recorded so the operator can choose whether the lane title or membership should follow the indicator.
+- Impact: Visible inconsistency only.
+- Suggested fix: Operator decision: rename the lane, or route `ready` without `pending` to another lane.
+- Evidence: model.ts:35-42; review-entity.ts:117-124; ReviewsView.tsx:22.
+- Confidence: high
+
+#### [F-005] Fallback Review rules can target the board's repository while the Reviews tab is on the default one
+- Severity: info
+- File: apps/desktop/src/reviews/ReviewsView.tsx (`(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);`)
+- Problem: When the Reviews list read fails and no repository was picked in the Reviews tab (`repo` undefined, so the default repository was requested), the fallback accepts the Pull requests board's identity whatever repository the board is on. If the board was switched to a non-default repository, the Reviews toolbar opens Review rules for that repository while the tab (with no snapshot, so no repository label) is about the default one.
+- Impact: Possible confusion about which repository's rules are edited; only while the list read fails in a multi-repository project.
+- Suggested fix: Pass the board's default-repository flag, or accept the fallback only when `boardRules.repo` equals the first entry of the board's repositories when `repo` is undefined.
+- Evidence: ReviewsView.tsx:273-276; App.tsx passes `rulesTarget={boardIdentity}` fed by ReviewBoard `onIdentityChange(watcherTarget)`.
+- Confidence: medium
+
+### Suggested Patches
+None (each fix needs a choice by the owner).
+
+### Prior dispositions (round 1 findings touched by slice-01)
+- F-001 closed: focus carries `{repo, repositoryId, number}` from both ReviewBoard producers (openReview, ReviewDetail Open in Reviews); ReviewsView switches repository first and matches on repo + repositoryId + number. Only producer: App.openInReviews.
+- F-002 closed: intent consumed by ReviewWorkspace via `onIntentConsumed` and on tab leave (`consumeIntent`).
+- F-003 closed: App drops the focus on `onFocusHandled(nonce)`; ReviewsView takes each nonce once; remounts start with focus null.
+- F-004 closed: `ready` counts only with publication `pending`.
+- F-005 closed: Desktop uses `review.reviewed` (see new F-003 for the fallback edge).
+- F-006 closed: archived Reviews listed under Show closed (`isClosedOrArchived`), PR panel `hasReview` uses all runs. History restore/delete path not traced in depth.
+- F-007 closed: Reviews view re-reads on session-review events, watcher-poll signal and the 60 s running timer while hidden (matches the verifier's narrowed set).
+- F-008 closed: retry only within the current highest round; A,B,A opens round 3.
+- F-009 closed: `accessLost` settles the pending request; the re-read gate uses `refreshedFor`.
+- F-010 closed: `stateAttempt` keeps the round's accepted result after a failed retry.
+- F-011 closed: running reload skips a hidden document.
+- F-012 closed: ReviewsView mounts only after the account read settled.
+- F-013 closed: `ReviewsTabIndicator` declared in reviews/ReviewsView.tsx.
+- F-014 closed: without `onOpenInReviews` only `start` carries an intent into the PR panel.
+- F-015 closed for the command (uses `headComparison`); sibling gap in `freshness` filed as new F-002.
+- F-016 closed: command imports `writeBoundJson` from `review/board-github`.
+- F-017 closed: rules fall back to the board identity (see new F-005).
+- F-018 closed: desktop-app.md shortcuts and Review rules location updated.
+- F-019 closed: CLI reference lists `unknown`.
+- F-020 closed: CLI reference says the list read opens the store writable and migrates.
+- F-021 closed: specification.md :8 and :226 state `version: 1` kept.
+- F-022 closed: rows sorted by newest activity before the cap; no later re-sort.
+- F-023 partial: card batches now run 3 in parallel, but the locally-closed skip never applies (new F-001); merged/closed-on-GitHub Reviews are still read every call.
+- F-024 closed: per-batch failure keeps other batches' cards, one warning.
+- F-025 closed: compare phase bounded at 60 s; with parallel card batches the worst case stays under the 150 s host bound up to about 180 Reviews.
+- F-026 closed: per-Review placed attempts cached within assignReviews, no per-row details parse.
+- F-028 closed: superseded unstarted rows excluded from round counting and from reviewRows.
+- F-029 closed: card button has no overriding aria-label.
+- F-030 closed: run-status error banner is in the PR panel header.
+- F-031 closed: accessible name starts with the visible "after <id>".
+- F-033 closed: title OR number substring.
+- F-045 closed: non-hex reviewed head test added.
+- F-048 closed: Review panel link routed through `openPullRequestLink`.
+- F-049 closed: `onOpenReviewSession` gone from ReviewDetail and ReviewBoard.
+- F-052 closed: one-element loop removed.
+- F-053 partial: exact-25 cap boundary pinned; sort tie-break and parseCompare edge not seen in this slice.
+- F-056 closed: card-less panel has a Refresh button.
+- F-059 closed: implementation-plan stage-3 hand-off says «New review round».
+Not assessed (outside this slice's hunks or the logic lens, not verified): F-027, F-032, F-034, F-035, F-036, F-037, F-038, F-039, F-040, F-041, F-042, F-043, F-044, F-046, F-047, F-050, F-051, F-054, F-055, F-057, F-058, F-060.
+
+### Not read / not verified
+- No tests run (exec budget 0); relied on research-evidence for the green run. Did not read desk-run-store.test.ts, ReviewPanel.dom.test.tsx, model.test.ts, or the full ReviewsView.dom.test.tsx; test-related prior findings are left unassessed.
+- Layers (`keryx gdgraph affected`, `keryx wiki ask`, `keryx memory search`) not consulted beyond the payload's memory list; the graph is not needed for these files.
+
+### Routing audit
+graph_used: no (not-relevant: files named by the slice) · wiki_used: no (not-relevant: plan/fix-round/journal give the intent) · ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) · raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round-1 logic fixes in slice-01 hold: repo-aware cross-tab focus, once-only intent and focus, D-R1 round rule with superseded requests, domain reviewed range, FA-2 indicator rules, per-batch card failures, number-anywhere search. No blocker or major. New: the locally-closed card skip keys on reviews.closed_at, which nothing writes (F-023 only partly fixed); freshness and headComparison still disagree for closed Reviews; reviewed-commit fallback can include archived rounds; two info notes.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "const cards = await readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query);",
+      "problem": "The FA-7 skip of locally closed Reviews filters on reviews.closed_at, but no product code writes that column: across src, apps/desktop/src and apps/desktop/src-tauri it appears only in the CREATE TABLE DDL and the reviewRows SELECT; the only writer is the test helper editStore in review-reviews.test.ts.",
+      "impact": "Every Review has closedAt null in production, so the filter never removes a row: Reviews whose PRs are merged or closed on GitHub (round-1 F-023's population) still have their cards read on every review reviews call, and turning Show closed on triggers an extra identical read with --include-closed. F-023 is recorded fixed while only its parallel-batch half changes behaviour.",
+      "suggested_fix": "Record the skip as plumbing for the stage-3 close action and F-023 as partly addressed, or give closed_at a writer now (set it when a PR card is observed merged/closed, from a write lane) so merged PRs stop being re-read.",
+      "evidence": "keryx ctx rg --all 'closed_at|closedAt\\s*[:=]|closeReview|close_review' src apps/desktop/src apps/desktop/src-tauri: desk-run-store.ts:155 (DDL), :593/:612 (read), review-reviews.test.ts:225 (test write); nothing else.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "if (!headsDiffer(reviewedHead, prHead) || compare?.status === \"identical\") return { kind: \"current\" };",
+      "problem": "headComparison's doc claims to be the one rule for the command's comparisons and for freshness, but freshness does not use it. For a merged/closed PR whose head moved past the reviewed head, headComparison returns null (never compared) while summarizeReview reports freshness behind with commits null.",
+      "impact": "A PR merged after further pushes shows 'behind' with no count under Show closed, permanently, and no warning is added although the CLI reference says unknown counts come with a warning. The new 'behind exactly when a comparison is needed' test uses only open cards.",
+      "suggested_fix": "Derive freshness from headComparison (or give closed Reviews a defined freshness kind) and add the merged-card case to the 'exactly' test.",
+      "evidence": "review-entity.ts:110-115 freshness, :155-162 headComparison and its doc, :190 summarizeReview; review-entity.test.ts headComparison describe asserts null for a merged card.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? \"\";",
+      "problem": "Without a finished reviewed attempt, Desktop falls back to the newest round's head; rounds include archived attempts, while the domain's referenceHead (freshness base) uses only unarchived attempts.",
+      "impact": "Round 1 unarchived failed attempts on head X, round 2 on head Y fully archived, nothing finished: card, list and panel show Y as the reviewed commit while freshness is measured from X.",
+      "suggested_fix": "Expose the fallback head the backend used (referenceHead) in the summary, or compute the fallback from the newest unarchived attempt.",
+      "evidence": "model.ts:54-56; review-entity.ts:132-141 stateAttempts/referenceHead; :193 rounds built from row.attempts.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "return state === \"published\" ? \"published\" : \"waiting\";",
+      "problem": "The 'Waiting on you' lane (plan T7: needs_answer, ready, stopped) now holds Reviews the indicator excludes after FA-2 and the operator answers: ready without a pending publication (partial, budget, imported, skipped) and stopped/ready with an unread PR card.",
+      "impact": "Visible inconsistency between lane title and tab dot; both rules are settled, so not a defect.",
+      "suggested_fix": "Operator choice: rename the lane or move ready-without-pending elsewhere.",
+      "evidence": "model.ts:35-42; review-entity.ts:117-124; ReviewsView.tsx:22.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);",
+      "problem": "When the Reviews list read fails and no repository was picked in the Reviews tab, the fallback accepts the PR board's identity whatever repository the board shows, including a non-default one.",
+      "impact": "In a multi-repository project, Review rules for the board's repository can open from a Reviews tab that requested the default repository (no repository label is shown without a snapshot).",
+      "suggested_fix": "When repo is undefined, accept the board identity only if it is the default repository.",
+      "evidence": "ReviewsView.tsx:273-276; App.tsx rulesTarget={boardIdentity}; ReviewBoard onIdentityChange(watcherTarget).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 },
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-006", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" },
+    { "id": "F-010", "disposition": "closed" },
+    { "id": "F-011", "disposition": "closed" },
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-014", "disposition": "closed" },
+    { "id": "F-015", "disposition": "closed" },
+    { "id": "F-016", "disposition": "closed" },
+    { "id": "F-017", "disposition": "closed" },
+    { "id": "F-018", "disposition": "closed" },
+    { "id": "F-019", "disposition": "closed" },
+    { "id": "F-020", "disposition": "closed" },
+    { "id": "F-021", "disposition": "closed" },
+    { "id": "F-022", "disposition": "closed" },
+    { "id": "F-023", "disposition": "partial" },
+    { "id": "F-024", "disposition": "closed" },
+    { "id": "F-025", "disposition": "closed" },
+    { "id": "F-026", "disposition": "closed" },
+    { "id": "F-028", "disposition": "closed" },
+    { "id": "F-029", "disposition": "closed" },
+    { "id": "F-030", "disposition": "closed" },
+    { "id": "F-031", "disposition": "closed" },
+    { "id": "F-033", "disposition": "closed" },
+    { "id": "F-045", "disposition": "closed" },
+    { "id": "F-048", "disposition": "closed" },
+    { "id": "F-049", "disposition": "closed" },
+    { "id": "F-052", "disposition": "closed" },
+    { "id": "F-053", "disposition": "partial" },
+    { "id": "F-056", "disposition": "closed" },
+    { "id": "F-059", "disposition": "closed" }
+  ]
+}
+```

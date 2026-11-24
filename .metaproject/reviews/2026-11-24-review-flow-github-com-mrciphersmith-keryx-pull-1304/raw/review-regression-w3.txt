@@ -1,0 +1,65 @@
+STATUS: DONE
+
+review-regression, round 1, wave 3, scope B (blast radius). I read slice-05 in full (923 lines).
+
+Short summary: I found no regression in existing behaviour from the slice-05 changes. The slice covers the store migration (src/review/desk-run-store.ts), the `round` field on the outdated badge (src/review/board-badges.ts and board-types.ts), the placement fields on DeskRun (src/review/desk-run-types.ts), and the new pure read model (src/review/review-entity.ts).
+
+Parity of SQL `attachBadges` with `localBadge` holds:
+- Desktop's ReviewBoard calls `localBadge(runs.runs, revision)` on `history()` runs. `history()` now projects `round` from the same `runs.round` column through `place()`.
+- The SQL path selects `${placement("r.").round}` from that same column.
+- Both paths choose the outdated row the same way: the newest finished run with a reviewed result, ordered by created DESC and then seq DESC. `round` only rides along on that row.
+- On an unmigrated database opened read-only, both paths give no round. The SQL path reads NULL, and `place()` does nothing without a `review_id`.
+- I found one asymmetry, and it cannot be reached. `place()` sets `round` only when `review_id` is a string, while SQL reads `round` whenever the column exists. A row with a round but no review_id cannot exist: `assignReviews` always writes all three columns together.
+
+What I checked along the dependency paths, with the caller read before the callee:
+- desk-run-store.ts → src/review/desk-run-service.ts (in set)
+  - `requestAttempt` now calls `assignReviews()` without opening a transaction of its own. Both dispatch call sites (service :226 and :275, which covers requestManual and requestContinuation) already run inside `store.atomic`. `store.request` is called only from tests.
+  - `recordExisting` now wraps its own `this.atomic`, and the service still calls it inside `store.atomic` (:260). bun:sqlite turns a nested transaction into a SAVEPOINT, so this does not throw.
+  - `save()` (:187, :333, :367) now goes through `storedDetails`. That function removes only the three placement keys, so the existing details shape is unchanged.
+- desk-run-store.ts → src/review/desk-questions.ts (in set) and the dropped desk-reviewer-question.ts / tui/ask-user-bridge.ts
+  - `askDesktopOperator` builds a writable `new DeskRunStore()`, and that constructor now takes BEGIN IMMEDIATE.
+  - It is async and is never called inside another connection's open transaction, so it cannot self-deadlock.
+  - It now waits for the write lock, up to busy_timeout 8000. This is the same lock contention the wave-2 reviewer recorded, and I found no trigger that turns it into a failure.
+- desk-run-store.ts → src/review/pr-context.ts and src/review/desk-publication.ts (in set)
+  - Both open the store read-only.
+  - `history()` and `byId()`/`decode` handle a database that predates Reviews: `placement()` reads absent columns as NULL, and `decode` leaves the run unplaced.
+- desk-run-store.ts → desk-run-lifecycle.ts (in set): this file only calls `store.save(attempt)`, and that call is unchanged in effect.
+- Internal `orphan()` selects `request,details,pid,cwd` without the placement columns, so recovered attempts are unplaced. Those attempts are only saved, and `save()` writes `details` and never touches the placement columns. Nothing is lost.
+- board-types.ts → board-transport.ts, watcher*.ts, board.ts (in set)
+  - `outdated.round` is optional and additive.
+  - board-transport passes `localReview` through as-is.
+  - Desktop's `badgesEqual` now compares `round`, which is in the diff and has tests.
+  - The Rust `deny_unknown_fields` structs in apps/desktop/src-tauri/src/review.rs (BadgeTarget, RunTarget/RunAction, WatcherTarget/WatcherAction) are request inputs. They are not the board or run output, so the new keys do not reach them.
+- desk-run-types.ts → Desktop consumers (reviewRuns.ts, useReviewRuns.ts, Review*.tsx) and src review modules: the new optional `reviewId`/`round`/`previousRunId` fields are additive, and I found no strict key validation of DeskRun on the TS side.
+- Older binaries sharing the database
+  - The migration only adds nullable columns, a `reviews` table and an index. Older binaries use named-column INSERTs and `SELECT *`, so they keep working.
+  - Rows they insert get a Review on the next writable open or the next dispatch.
+- Existing tests that assert exact badge or history shapes
+  - The `outdated` expectations that change after migration were updated in this diff (desk-run-store.test.ts, board-badges.test.ts).
+  - desk-run-legacy.test.ts:105 compares against `[]` only.
+  - I did not run tests.
+
+Findings already filed by earlier waves and not re-filed here: RR-001 and RR-002 (slice-02), and the logic, performance, pr-contract and degradation findings in raw/*.txt. Some observations belong under scope A, not scope B, so I did not file them here. One example: the round assigned to an `existing` run that history import records after newer manual runs. That is new behaviour, not a break of existing behaviour.
+
+Coverage and limits:
+- The blast-radius record is capped: droppedByCap 86, droppedTestConsumer 114, droppedTextHub 799, droppedByPreFilter 1, droppedUnrelatedSymbol 15. The retained set is 40 files, all at hop 1.
+- For this slice's files, the cap dropped 16 non-test dependents at hops 1-2. They include desk-run-executor.ts, commands/review-desk-run.ts, commands/review-desk-publish.ts, commands/review-pr-context.ts, desk-reviewer-question.ts, tui/ask-user-bridge.ts, board-badge-read.ts, SessionReviewActivity.tsx and runPolling.ts.
+- I checked desk-reviewer-question.ts and ask-user-bridge.ts only through their `askDesktopOperator` use. I checked the dropped files only by searching for `new DeskRunStore(`, `UPDATE/INSERT/FROM runs`, `outdated` and `localReview`. I did not read them in full.
+- Runtime edges the code graph cannot see: the shared SQLite file across processes and binaries, and the Desktop's `review_board` and `review_runs` Tauri bridges. I reasoned about them from the code above. I did not exercise them.
+- Test output `research-evidence/verify-tests-to-run-1.txt` was not present; research-evidence holds only ingest-screened.json. No tests were run (exec_budget_s 0). The Rust side is CI-only.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression in existing behaviour from slice-05. SQL attachBadges and localBadge agree on the new outdated.round: both read the runs.round column, the outdated row is chosen in the same order, and an unmigrated read-only store gives no round on either path. Dependents in the set still work: requestAttempt's assignReviews runs inside the callers' atomic dispatch transactions; the nested recordExisting atomic becomes a SAVEPOINT; save() strips only the placement keys; read-only readers (pr-context, desk-publication) handle the missing columns; the new optional DeskRun and badge fields are additive, and the Rust deny_unknown_fields structs are request inputs only. The blast-radius set is capped (86 dropped by cap, 114 test consumers dropped). Dropped dependents of this slice, such as desk-run-executor.ts and commands/review-desk-run.ts, were only checked by targeted search. No tests were run and no test output was available.",
+  "slices": ["slice-05"],
+  "inputs_unreadable": [],
+  "findings": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: yes (the package's blast-radius.json, computed from the code graph at head); wiki_used: not-relevant (I answered the regression question from the code and the dependency paths); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

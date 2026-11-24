@@ -1,0 +1,5 @@
+{"time":"2026-11-24T08:31:53.579Z","event":"log-start"}
+{"time":"2026-11-24T08:44:30.676Z","source":"cli","caller":"unattributed","command":"keryx memory search --bogus x"}
+{"time":"2026-11-24T08:44:59.777Z","source":"cli","caller":"unattributed","command":"keryx memory search x --json=1"}
+{"time":"2026-11-24T09:01:09.748Z","source":"cli","caller":"unattributed","command":"keryx memory search 'command imports helper from sibling command module'"}
+{"time":"2026-11-24T09:09:04.285Z","source":"cli","caller":"unattributed","command":"keryx memory search 'review round assignment store'"}

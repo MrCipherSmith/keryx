@@ -1,0 +1,78 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 2 (delta round), wave 2, slice-03 (kind: new, not the FIX slice). Delta 20e4281a2..f6971fd4a.
+
+Read: slice-03.diff in full (14 files: dev/reviewBoard.ts, src-tauri review.rs, App.tsx, platform/review.ts, ReviewBoard.tsx, ReviewBrowserLink.tsx, ReviewDetail.css, ReviewDetail.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts, AppShell.tsx). I also read head ReviewDetail.tsx:160-284, head ReviewsView.tsx:120-279, the delta diff of src/review/desk-run-store.ts for `neverStarted`, desk-run-store.ts:440-459 (history query), fix-round-1.md rows FB-3..FB-12, and every wave-1 raw file, to avoid re-filing. Nothing was run (read-only, exec_budget_s 0). The Rust bridge change was only read: there is no local Rust toolchain.
+
+## Findings
+
+### [F-001] PR panel offers "Open in Reviews" for a PR whose only runs were superseded before they started, but the Reviews list no longer lists that Review
+- Severity: minor
+- Class: behaviour-delta
+- Evidence kind: consumer-trace
+- File: apps/desktop/src/review/ReviewDetail.tsx:177 (`const hasReview = local.runs.length > 0;`)
+- Problem: Two changes in this delta disagree about what counts as a Review. Head reviewRows (desk-run-store.ts:606) now drops never-started superseded rows (`AND NOT ${neverStarted("r.")}`). On the delta base those rows were listed. The PR panel's run read is the status history (desk-run-store.ts:445-456). It filters only `decision.action != 'delete'`, so it still returns those rows. `hasReview` is now `local.runs.length > 0` (the FB-5 change, which counts archived runs on purpose). Take a PR whose only remaining runs are queued requests superseded before they started, for example after the run that superseded them was deleted. The PR panel then shows "Open in Reviews" in place of the Start/New review round button (ReviewDetail.tsx:251). The Reviews tab cannot find the Review. It re-reads once, then shows "Pull request #N has no Keryx review in this list." (ReviewsView.tsx:244-249). On the delta base, the same PR was listed in Reviews (never-started rows were not excluded), so "Open in Reviews" found it.
+- Why it matters: In this state the PR panel's header action leads to a dead end, and the panel no longer offers a start. The board card's own review action still starts a review through the start intent, so the user is not blocked. Rare trigger.
+- Fix: Give `hasReview` the same predicate as reviewRows. Count a run only if it is not a superseded-before-start request (state `skipped`, phase `Superseded`, no startedAt, result or usage). Better, export one predicate the store and Desktop share. Add a ReviewDetail DOM case with a single superseded-never-started run.
+- Evidence: consumer-trace. Read the delta diff of desk-run-store.ts: base reviewRows `NOT IN ('archive','delete')` became head `!='delete' AND NOT ${neverStarted("r.")}`. Read desk-run-store.ts:445-456: history `scoped` filters only `!='delete'`. Read ReviewDetail.tsx:174-177 and 251. Read ReviewsView.tsx:225-251, the focus path to the "no Keryx review" notice. Refute: FB-5 settles counting archived runs, which the Reviews list now shows under Show closed. It says nothing about never-started rows, and the neverStarted exclusion (FA-11) was added to reviewRows only. Base `hasReview = runs.some(run => !reviewIsArchived(run))` also counted never-started rows, but on base the list held them, so the hand-off worked. The trigger needs every non-deleted run of the PR to be never-started. I did not check whether `delete` is allowed on the superseding run in every state, so the frequency is unverified.
+
+## Not re-filed (raised in wave 1 or settled by an operator decision)
+- Opening a locally closed Review via Open in Reviews or Show closed briefly shows "GitHub did not return this pull request": ui-ux-w1 UX-002 (unverified) and frontend-w1.
+- The Show closed toggle and resetView/accessLost re-read the list: degradation-w1 F-003. Hidden-tab re-reads (watcher poll, session events, 60 s timer): highload-w1, perf; the FB-4 decision.
+- A failed list read falls back to the board identity for Review rules when `repo` is undefined: frontend-w1, architecture-w1, style-w1 (naming).
+- Archived Reviews with a state filter or label mismatch: ui-ux-w1. Archived attempts unmarked in Rounds: degradation-w1 F-001.
+- The PR panel losing its Start button when every run is archived follows directly from FB-5 (`hasReview` counts archived runs). Start stays reachable from the Reviews panel (launchAction ignores archived runs) and from the board card's start intent. This is settled, not filed.
+- ReviewTile's overriding aria-label removed, "Review again" renamed "New review round", ReviewBoard's non-start fallback opens the panel without an intent: FB-8, decision (d) and FB-7. All settled.
+
+## Summary
+One minor degradation in slice-03. FB-5's `hasReview = local.runs.length > 0` and FA-11's never-started exclusion in reviewRows disagree, so "Open in Reviews" can point at a Review the list no longer holds. Everything else in this slice is either the intended effect of a settled fix-round-1 decision or already filed in wave 1.
+
+Verified clean:
+- includeClosed bridge: Rust `board_read_args` and the dev bridge `reviewBoardArgs` both refuse `includeClosed` outside `reviewsOnly`, and add `--include-closed` only there. fetchReviewBoard, fetchReviewBadges and fetchReviewDetail never pass it. The Rust tests were updated at every call site (read only, not compiled).
+- `fetchReviews` signature: the new `includeClosed = false` is a trailing default. The only production caller is ReviewsView (`load(cwd, repo, expectedViewer, showClosed)`). The lane key includes it, so reads with different flags are not merged.
+- ReviewBoard `onIdentityChange` effect: `watcherTarget` is memoized (ReviewBoard.tsx:421), so there is no App re-render loop. `openReview` and the panel's `onOpenInReviews` now carry repo and repositoryId from the shown snapshot.
+- ReviewsFocus now requires `repo`. Its only producer, App `openInReviews` (App.tsx:216-217), spreads the target. The consumer ReviewsView switches the repository at most once per request (`repo?.toLowerCase() !== wanted` guard), so it cannot loop.
+- ReviewWorkspace `onIntentConsumed`: fires on both the drop and the act branches. ReviewsView `consumeIntent` strips only the intent and keeps the selection.
+- ReviewBrowserLink `onOpen`: only ReviewPanel passes it. Other users (ReviewDetail Message and header, ReviewChecks) keep the parent `followLink` handler, the same as base. `followLink` now delegates to `openReviewLink`, which makes the same PR-or-external choice as base.
+- The ReviewDetail run-error banner moved from the body to the header (FB-8). The `!local.staleRange` condition is kept.
+- ReviewsTabIndicator type moved from AppShell to reviews/ReviewsView. It is a type-only import, App and AppShell were both updated, and runtime is unchanged.
+- `.review-workspace-block` CSS restores the column and gap of the panel body. Stage-0 protected code (attention set, attachBadges/localBadge parity, toolbar container queries) is not touched by this slice.
+Consumers were enumerated with `keryx ctx rg` (search-derived). This driver carried no graph importer list, and no cap applied. The payload's acceptance criteria were not re-read beyond fix-round-1.md. Not run: tests, typecheck, Rust build.
+
+Routing audit: graph_used: no (no importer list for this slice; consumers search-derived); wiki_used: not-relevant (decisions in fix-round-1.md); ctx_used: yes (keryx ctx rg); raw_rg_used: no (one raw `git diff | grep` excerpt and a `sed` table read, both with the escape marker).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-03"],
+  "summary": "One minor degradation: FB-5's hasReview = local.runs.length > 0 counts never-started superseded runs that FA-11 now drops from the Reviews list, so the PR panel can offer Open in Reviews for a Review the list no longer holds, hiding Start. Everything else in slice-03 is either a settled fix-round-1 decision or already filed in wave 1. Consumers search-derived; nothing run.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "line": 177,
+      "quote": "  const hasReview = local.runs.length > 0;",
+      "problem": "Head reviewRows drops never-started superseded rows (AND NOT neverStarted). The status history the PR panel reads (desk-run-store.ts:445-456) still returns them. With hasReview = local.runs.length > 0, a PR whose only non-deleted runs were superseded before they started shows 'Open in Reviews' instead of Start. The Reviews tab re-reads once and shows 'Pull request #N has no Keryx review in this list.' On the delta base, reviewRows listed those rows, so the hand-off found the Review.",
+      "impact": "Trigger: every remaining run of the PR is a superseded-before-start request, for example after the superseding run was deleted. Outcome: the PR panel's header action is a dead end and it no longer offers a start. The board card's start still works. Rare.",
+      "suggested_fix": "Give hasReview the same predicate as reviewRows: ignore runs with state skipped, phase Superseded, and no startedAt, result or usage. Ideally share one predicate between the store and Desktop. Add a ReviewDetail DOM case with a single never-started run.",
+      "evidence": "Read the delta diff of desk-run-store.ts reviewRows (NOT IN ('archive','delete') became !='delete' AND NOT neverStarted). Read desk-run-store.ts:445-456: history filters only !='delete'. Read ReviewDetail.tsx:174-177 and :251, and ReviewsView.tsx:225-251 (focus, then the notice). Refute: FB-5 settles archived runs only. FA-11's exclusion was added to reviewRows only. Base hasReview also counted never-started rows, but the base list held them. Not checked: whether delete is allowed on the superseding run in every state, so the frequency is unverified.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/desktop/src/review/ReviewDetail.tsx:177", "src/review/desk-run-store.ts:606"],
+        "enumeration_method": "keryx ctx rg for hasReview in apps/desktop/src/review (single site) and for 'delete' and neverStarted in desk-run-store.ts (history vs reviewRows filters); search-derived."
+      }
+    }
+  ],
+  "follow_ups": [
+    "Rust bridge include_closed read only; CI is its only check.",
+    "The trigger's frequency depends on when a superseding run can be deleted; not traced."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```

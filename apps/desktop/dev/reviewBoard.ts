@@ -1,6 +1,8 @@
 type Json = Record<string, unknown>;
 
 export function reviewBoardArgs(args: Json): string[] {
+  if (args.reviewsOnly === true) return reviewsArgs(args);
+  if (args.includeClosed === true) throw new Error("configuration: Closed Reviews can be included only in the Reviews list");
   const argv = ["review", "board", "--json"];
   if (args.repo != null) {
     if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
@@ -43,5 +45,23 @@ export function reviewBoardArgs(args: Json): string[] {
     }
     argv.push("--updated-since=" + args.updatedSince);
   }
+  return argv;
+}
+
+/** The Reviews list is its own read and refuses every board mode. */
+function reviewsArgs(args: Json): string[] {
+  // Same refusals as the Rust host's board_read_args.
+  if (args.badgeTarget != null || args.repositoriesOnly === true || args.prState != null || args.number != null ||
+      args.paged === true || args.cursor != null || args.updatedSince != null) {
+    throw new Error("configuration: The Reviews list cannot be combined with a board query");
+  }
+  const argv = ["review", "reviews", "--json"];
+  if (args.repo != null) {
+    if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
+      throw new Error("configuration: Invalid repository");
+    }
+    argv.push("--repo", args.repo);
+  }
+  if (args.includeClosed === true) argv.push("--include-closed");
   return argv;
 }

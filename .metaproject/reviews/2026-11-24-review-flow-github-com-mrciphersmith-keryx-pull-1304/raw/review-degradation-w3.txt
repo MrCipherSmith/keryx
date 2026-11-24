@@ -1,0 +1,101 @@
+STATUS: DONE
+
+review-degradation, round 1, wave 3, slice-05. I read slice-05 in full: board-badges.ts, board-types.ts, desk-run-store.ts (migration, assignReviews/reviewFor/roundFor, storedDetails/place, save, recordExisting, history, attachBadges, reviewRows, readReviewRows, request), desk-run-types.ts and the new review-entity.ts. I found no blocker or major. There is one minor finding and one info.
+
+### [F-001] History imported later gets the next round number, even when it is older than rounds already placed
+
+- **Severity**: minor
+- **Class**: diff-vs-description
+- **Evidence kind**: consumer-trace
+- **File**: src/review/desk-run-store.ts:161 (assignReviews), :186 (roundFor), recordExisting (~:380)
+- **Problem**: The assignReviews docstring and AC1 say rounds are numbered "in creation order" (by first appearance of a base..head pair). That holds only within one assignReviews batch. `recordExisting` imports CLI review packages, and the `createdAt` it stores is the package's own timestamp (desk-run-legacy.ts:71, `stamp(data.createdAt ?? data.startedAt, …)`). It then calls `assignReviews`, and `roundFor` gives any range not seen before `max(round)+1`. Its `previous` points to the newest attempt of the last round. History scans run per (cwd, repo, pr, viewer) and at most every 5 min (requestDeskRun status → claimHistoryScan → recordExisting, desk-run-service.ts:258-260). Two cases follow. A package from another worktree, or a CLI review that finished after the last scan, is placed after Desktop attempts that are newer than it.
+  - It becomes round N+1 even though it is the oldest attempt.
+  - Its `previousRunId` points forward in time.
+  - If the package's range matches an existing round, it joins that round as a retry. By `createdAt` it is then the round's first attempt, so `roundsOf` reports the round's `previousRunId` as a later attempt of the same round.
+  - The summary also stops agreeing with itself. `latestRound` is the round of the newest attempt by createdAt (`latest.round`), which is lower than `rounds[0].number`.
+- **Why it matters**: The Reviews panel orders the rounds timeline by round number. After such an import it shows an older review as the newest round, and its "after <id>" link points to a later attempt. No data is lost. The numbering is wrong, and the docstring and AC1 promise creation order.
+- **Fix**: Choose one. (a) Make roundFor place by createdAt: when the new row is older than the Review's newest placed attempt, give it the round of the newest older attempt on the same range, or record it out of band without renumbering. (b) Keep "numbered when recorded" and say so in AC1, in the assignReviews docstring and in the spec. Then sort rounds in roundsOf/latestRound consistently, and pin it with a fixture that imports an older package after a Desktop attempt.
+- Refutation attempt: read desk-run-store.test.ts:926-928. The only import fixture uses a same-range package (it joins round 1) and no older range. Read desk-run-legacy.ts:71: createdAt comes from the package, not from the import time. Read desk-run-service.ts:258: scans are per cwd and run after Desktop attempts can exist. No guard re-sorts placement.
+
+### [F-002] (info) Round placement reads `details` (report included) for every attempt of the Review, and the migration does this once per pending row
+
+- **Severity**: info
+- **Class**: performance
+- **Evidence kind**: consumer-trace
+- **File**: src/review/desk-run-store.ts:186-200 (roundFor)
+- **Problem**: On every new attempt (request → assignReviews inside the dispatch transaction), `roundFor` runs these queries over all of the Review's rows:
+  - the `retry` query: `json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?`;
+  - `newest()`: `ORDER BY json_extract(details,'$.createdAt')`.
+
+  `details` embeds the full report (attachBadges' own comment at :491 calls a second pass over it costly). The migration calls roundFor once for each unassigned row, so it parses O(n²) report-laden JSON per PR, inside one immediate transaction that holds the write lock. On base, request parsed no other rows.
+- **Why it matters**: The operator database (17 attempts) is trivial. The cost grows only with attempts per PR, and the lock is held while other windows wait under busy_timeout 8000.
+- **Fix**: Optional. Select base/head/createdAt once per Review into a small in-memory list during assignReviews, or add generated columns or an index for base/head/created.
+
+### Verified clean (traced, no finding)
+- `localBadge` `outdated.round`: it is only added when `round` is a number. The SQL path projects `round` through `placement("r.")` (NULL on an unmigrated read-only store), so attachBadges and localBadge stay in parity. The other badge fields are unchanged from base. The Desktop consumers of board-badges.ts from the graph (apps/desktop platform/review.ts, ReviewBoard.tsx `badgesEqual`, useReviewRuns.ts) and board-badge-read.ts read the optional field. useReviewRuns and board-badge-read have no `round`/`outdated` references to break.
+- `DeskRun.reviewId/round/previousRunId` (desk-run-types.ts) are optional output-only fields. The Rust structs with `deny_unknown_fields` (review.rs:43, :292, :301, :522, :530) are request inputs only (BadgeTarget, RunTarget, RunAction, WatcherTarget), so the extra fields in history output are not refused. platform/review.ts checks only the protocol version.
+- `storedDetails`/`place`: every writer of `runs.details` was enumerated (`keryx ctx rg 'JSON.stringify\(|details=|INSERT INTO runs|json_set'`): save, recordExisting and request. save and recordExisting strip placement. request inserts a fresh run that has no placement. No other path writes details.
+- `assignReviews` in `request`: the docstring relies on the caller's transaction. Every non-test caller of requestAttempt/requestManual/requestContinuation is inside `store.atomic` (desk-run-service.ts:226, :275). `recordExisting` is now wrapped in `atomic`, and the service already wraps it (:260). Bun nests that as a savepoint, so the behaviour is the same as base.
+- Read-only consumers on an unmigrated database: pr-context.ts:156 (`history`) and desk-publication.ts:289 (`byId`). `placement()` gives NULL columns and `decode`/`place` leave the run unplaced. Neither migrates.
+- Mixed binaries (memory constraint "stale installed keryx binary"): an older binary's `INSERT INTO runs (...)` names its columns, so the new nullable columns stay NULL. The next writable open by a new binary places them, and `readReviewRows` opens writable, so `review reviews` never lists an unplaced attempt.
+- Concurrent first open of an old database: the ALTERs and assignReviews run in one immediate transaction behind a `pragma_table_info` check. `reviews` uses `CREATE TABLE IF NOT EXISTS`. The case-insensitive viewer is unique through the column's NOCASE collation.
+- review-entity.ts consumers from the graph: apps/desktop reviews/model.ts, ReviewsView.tsx, ReviewPanel.tsx and platform/review.ts, plus src/commands/review-reviews.ts. The module is new, so it has no base behaviour to degrade. Its indicator/publication semantics were filed in wave 1 (review-logic F-002) and are not re-filed here.
+
+### Not covered / inputs
+- Test output: `research-evidence/verify-tests-to-run-1.txt` is absent (research-evidence holds only ingest-screened.json). No tests were run (exec_budget_s 0), so both findings are read traces, not runs.
+- Graph (`keryx gdgraph affected --data-dir <package>/layers/graph`): the dependents of desk-run-store.ts (18), board-badges.ts (7), board-types.ts (19) and review-entity.ts (10) were listed. desk-run-types.ts output was cut at the first 32 dependents by my `head -40`, and the Desktop components it lists import the type only. I traced the consumers that read the changed fields or methods. I did not open every watcher*/board* importer of board-types.ts, which only gained an optional `outdated.round`. The graph's freshness is recorded in layers.json and was not re-checked.
+- Not re-filed: the writable open/immediate transaction on the `review reviews` read path (review-highload w2), the indicator lighting on publication null for partial/budget/existing (review-logic w1 F-002), the missing A,B,A, deleted and recoverable fixtures (review-testing-practices w2), the CLI-reference freshness and spec version docs (review-degradation w2).
+- Acceptance criteria: taken from the payload (AC1-AC12). F-001 bears on AC1/AC2.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "slice-05 (store migration and Review placement, badge round, review-entity read model): no blocker or major. Minor F-001: CLI history imported after Desktop attempts gets round max+1 and a forward-pointing previous_run_id even when it is older, so round numbers and the timeline stop following creation order (AC1 and the assignReviews docstring say creation order). Info F-002: roundFor json_extracts report-laden details over all of the Review's rows on each request, O(n^2) during migration. Verified clean: localBadge/attachBadges outdated.round parity (Desktop consumers ReviewBoard badgesEqual, useReviewRuns, platform/review.ts, board-badge-read.ts); the new DeskRun output fields against the Rust deny_unknown_fields structs (inputs only); every details writer strips placement or writes fresh runs; assignReviews callers all run inside atomic; read-only unmigrated consumers (pr-context history, desk-publication byId); mixed old/new binaries; concurrent first-open migration. Not run: no tests (exec budget 0; verify-tests-to-run-1.txt absent). The graph listed the dependents of all changed modules; the desk-run-types dependents list was truncated in my read to 32 (type-only Desktop importers); watcher*/board* importers of board-types.ts not opened individually (optional field only). Exports the graph could not answer: none.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 186,
+      "quote": "return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };",
+      "problem": "Rounds are numbered in creation order only within one assignReviews batch. recordExisting imports CLI review packages with their own createdAt (desk-run-legacy.ts:71). The scan runs per cwd and every 5 min, after Desktop attempts can exist (desk-run-service.ts:258-260). An older package on a new range therefore gets round max+1 and previous_run_id = the newest attempt of the last round, which points forward in time. On a known range it becomes the round's first attempt by createdAt, so roundsOf reports a later attempt of the same round as the round's previous. summarizeReview's latestRound (newest attempt by createdAt) is then lower than rounds[0].number.",
+      "impact": "After a worktree or late CLI import, the Reviews rounds timeline (ordered by round number) shows an older review as the newest round with an 'after' link to a later attempt. No data is lost; the numbering is wrong against AC1 and the docstring.",
+      "suggested_fix": "Either place late imports by createdAt (join the round of the newest older attempt on that range, or record them without opening a new top round), or document 'numbered when recorded' in AC1, the docstring and the spec, keep roundsOf/latestRound consistent, and add a fixture that imports an older package after a Desktop attempt.",
+      "evidence": "Read: desk-run-store.ts assignReviews (:161, ORDER BY createdAt over unassigned rows only) and roundFor (:186-200, new range -> max+1, previous = newest(last)); recordExisting -> assignReviews; desk-run-legacy.ts:71 createdAt from the package; desk-run-service.ts:258-260 scan per cwd every 5 min; review-entity.ts roundsOf/summarizeReview (latestRound = latest.round). Refute: desk-run-store.test.ts:926-928 covers only a same-range import; no re-sort guard exists.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-run-store.ts",
+      "line": 192,
+      "quote": "WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?",
+      "problem": "Each new attempt runs roundFor, whose retry query and newest() json_extract `details` (which embeds the full report) for every row of the Review. The migration calls roundFor once per unassigned row, so it parses O(n^2) report-laden JSON per PR inside one immediate write transaction. On base, request read no other rows.",
+      "impact": "Negligible at current sizes (17 attempts on the operator database). It grows with attempts per PR while the write lock is held and other windows wait under busy_timeout 8000.",
+      "suggested_fix": "Load base/head/createdAt per Review once in assignReviews, or add generated columns or an index for them.",
+      "evidence": "Read roundFor :186-200 (retry and newest queries filter and order by json_extract(details,...)); index review_rounds(review_id, round) narrows to the Review's rows but not past details parsing; attachBadges comment at :491 notes details embeds the report.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding",
+      "degradation_class": "performance",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": ["research-evidence/verify-tests-to-run-1.txt (absent)"],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: yes (`keryx gdgraph affected` with the package graph for the five changed modules); wiki_used: not-relevant (the store and read-model semantics were settled from the code, the AC and the docstrings); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no (a few small `sed -n` line slices of known files, marked keryx:raw).

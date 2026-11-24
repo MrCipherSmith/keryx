@@ -1,0 +1,77 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, round 1, wave 1, PR #1304 (head 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b). I read slice-02 in full (2402 lines).
+
+Concern: I could not measure anything. The dispatch is read-only with exec_budget_s 0, so I could not start the browser dev build (`bun run dev:browser`) or run a probe. The only real-engine numbers are the orchestrator's T11 measurements in the flow 519 journal. Those cover the Reviews toolbar only, and only with each filter select on its default option. The Reviews list was empty in that run ("the list was empty because every Review in the copy belongs to another repository"), so no real engine has drawn the Review cards, the list table, the Review panel or its Rounds timeline. All three findings below are therefore `info`, marked unverified, and each one names the measurement that would settle it.
+
+Research evidence `research-evidence/verify-tests-to-run-1.txt` did not exist when I read the package (the folder held only `ingest-screened.json`). I did not read it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Read slice-02 in full. No measured layout defect. Three unmeasured observations are filed as info: (1) the new .review-workspace-block wrapper has no CSS, so in the Review panel the Rounds section and the 'Latest review' section sit flush with no gap, and .review-associated-flow loses its flex parent; (2) the Reviews filter selects are capped at 6.5rem (104px) at a container of 760px or less, which by arithmetic leaves about 70px for the selected text, so a non-default value such as 'Needs your answer' is probably cut off (T11 measured the default values only); (3) the Review panel has a fixed inline width of 560px, which leaves the Reviews board at 280px in a 681-840px workspace, below the 340px lower bound T11 measured. Locale and RTL rules do not apply: the desktop strings are hard-coded English with no catalog. The Reviews table's min-width of 960px scrolls inside .flow-list-wrap (overflow: auto), which is the two-dimensional-content exception and not a finding. The 6-tab project nav has overflow-x: auto by design. The PR toolbar only lost the Review rules button, so it can only shrink.",
+  "slices": [{"id": "slice-02", "coverage": "read in full, 2402 lines", "status": "DONE"}],
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "return <div className=\"review-workspace-block\" aria-busy={local.working}>",
+      "problem": "UNVERIFIED (no measurement). ReviewWorkspace wraps its actions row, the associated-Flow link, the revision banner, the Rounds `children` and `ReviewRuns` in `div.review-workspace-block`. No stylesheet has a rule for that class: `keryx ctx rg \"review-workspace-block\" apps/desktop/src --glob '*.css'` returns 0 matches. So the wrapper is a plain block. Its children no longer get the `gap: var(--sp-3)` of `.review-detail-body` (a flex column), which they did get as direct children of the PR panel body before. Two effects follow from the cascade. First, `.review-rounds` (no margin) is followed directly by `section.desk-runs`, whose h3 has `margin: 0` (ReviewDetail.css: `.desk-run-head h3, .desk-runs p { margin: 0; }`), so the last round's border should touch the 'Latest review' heading with 0px between them. Second, `.review-associated-flow { align-self: flex-start }` and `.review-detail-body > .btn` no longer apply, because the parent is not a flex container. The fallback branch in ReviewPanel (no `card`) puts `<Rounds>` directly into `.review-detail-body`, so the same Review renders with a 12px gap there and with no gap here.",
+      "impact": "In the Review panel of every Review whose PR GitHub returned, the Rounds timeline and the Latest review block probably run into each other. The same panel has different spacing depending on whether the PR card loaded.",
+      "suggested_fix": "Add `.review-workspace-block { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }` to review.css or ReviewDetail.css. Alternatively use `display: contents`, so the children join the `.review-detail-body` flex column as they did in the PR panel. Then confirm with a computed-style probe.",
+      "evidence": "Cascade read: ReviewDetail.css line 1 (`.review-workspace` matches only that class), `.review-detail-body { display:flex; flex-direction:column; gap: var(--sp-3) }`, `.desk-runs { display:grid; gap: var(--sp-3) }`, and `.review-rounds` rules in review.css with no margin-bottom. Not measured: exec_budget_s 0, and T11's live check had an empty list, so the panel never rendered. To settle it: in `bun run dev:browser` with a project that has a Review, open the Review panel and read `getComputedStyle(document.querySelector('.review-workspace-block')).display` and the vertical distance between `.review-rounds` getBoundingClientRect().bottom and `.desk-runs` getBoundingClientRect().top.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".reviews-board .flows-toolbar > select { max-width: 6.5rem; }",
+      "problem": "UNVERIFIED (arithmetic, not a measurement). `.select-compact` has `padding: 0 24px 0 8px`, a 1px border and `font-size: var(--fs-md)`. Under `flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem`, and with `max-width: 6.5rem` at a container of 760px or less, the text box of the selected value is 104 - 34 = 70px at the cap and 80 - 34 = 46px at the minimum. The longest option labels are 'Needs your answer' (17 characters), 'Any freshness' (13) and 'Existing review' (15), which at about 13px are wider than 70px by estimate. T11 reports 'nothing is clipped at any width', but it measured with each select showing its default option ('All states', 'Any freshness', 'Any source'), and the journal does not say whether the text inside the select was checked.",
+      "impact": "In a narrow Reviews toolbar (window or panel width below 760px), a chosen filter can show a cut-off value, for example 'Needs your…'. The user may not be able to tell which state filter is on.",
+      "suggested_fix": "Measure first. If the text is cut off, raise the 760px cap (for example to `max-width: 8.5rem`) or shorten the option labels in the select, for example 'Needs answer' and 'Existing'. Alternatively, mirror the selected value in a `title` attribute so the full value is reachable.",
+      "evidence": "CSS read: components.css `.select-compact { height: 28px; padding: 0 24px 0 8px; ... max-width: 180px; }` and review.css lines 2380-2383 of the slice. Supplied measurement: flow 519 journal, T11 section (default option values only). Not measured: exec_budget_s 0. To settle it: in `bun run dev:browser` at Reviews board widths 760, 700 and 560px, select 'Needs your answer', then 'Behind' and 'Existing review', screenshot each select, and record the select width beside the rendered text.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "style={{ width: 560 }}",
+      "problem": "UNVERIFIED (no measurement). The Review panel is a `.review-detail-panel` with a fixed inline width of 560px (`max-width: calc(100% - 280px)`, `min-width: 360px`) and no resize handle. While the `.review-workspace` container is 681-840px wide, the panel takes width - 280 and the Reviews board is left at exactly 280px. At 680px or less the board is hidden, through the `@container (max-width: 680px)` rule. T11 measured the Reviews toolbar down to 340px (three rows, nothing clipped) but not at 280px. Nobody measured the board lanes or the list at 280px with the panel open. A 681-840px workspace happens in shipping hosts: tauri.conf.json sets `minWidth: 720`, and the default window of 1180px with the side panel or the session sidebar open can reach it.",
+      "impact": "If a toolbar item or a lane is wider than 280px minus the toolbar padding, the Reviews board clips or scrolls sideways while a Review is open in a medium-width window. This is probably fine given the wrapping toolbar, but it is not shown.",
+      "suggested_fix": "Measure the Reviews toolbar and lanes at a 280px board, with the Review panel open in a container of about 700px. If anything clips, lower the panel width to follow the PR panel's resizable `detailWidth`, or raise the container breakpoint that hides the board.",
+      "evidence": "CSS read: ReviewDetail.css `.review-detail-panel { flex: none; min-width: 360px; max-width: calc(100% - 280px); }` and `@container (max-width: 680px) { .review-board:has(~ .review-detail-panel) { display: none; } ... }`. tauri.conf.json `\"minWidth\": 720`. Supplied measurement: flow 519 journal, T11 (one row at 760px and wider; two rows at 700-560px; three rows at 340px; empty list). Not measured: exec_budget_s 0.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "follow_ups": [
+    "Render a non-empty Reviews list in a real engine (bun run dev:browser against a repository that has local Reviews) and measure the Review panel spacing (LY-001), the selected-filter text at 760/700/560px (LY-002) and the board at 280px with the panel open (LY-003); T11 covered only the toolbar with an empty list and default filter values."
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 3 }
+}
+```
+
+Summary
+- No blocker, major or minor findings. Every observation is unmeasured, so all three are `info`.
+- LY-001: `.review-workspace-block` has no CSS. In the Review panel, the Rounds section and the 'Latest review' section probably sit flush, and the same panel gets a 12px gap only in the fallback branch where GitHub did not return the PR card. A one-line CSS fix is likely.
+- LY-002: the 6.5rem cap on the filter selects at a container of 760px or less leaves about 70px for the selected text, so a non-default value may be cut off. T11 measured the default options only.
+- LY-003: the fixed 560px Review panel leaves the Reviews board at 280px in a 681-840px workspace. T11 measured down to 340px only. Filed as a question.
+- Not findings: the reviews table's `min-width: 960px` scrolls in its own `overflow: auto` region (two-dimensional data table); the 6-tab nav scrolls in its own region by design (`overflow-x: auto`); locale and RTL do not apply (no translation catalog); `.review-round-attempt` uses the logical `border-inline-start`.
+
+Routing audit: graph_used: no (not-relevant: the slice and the CSS cascade were read directly, and the class enumeration used ctx rg); wiki_used: no (not-relevant: a geometry review); ctx_used: yes (`keryx ctx rg` and `keryx ctx read` for the CSS, the schema, the driver, the rule and the payload); raw_rg_used: no.

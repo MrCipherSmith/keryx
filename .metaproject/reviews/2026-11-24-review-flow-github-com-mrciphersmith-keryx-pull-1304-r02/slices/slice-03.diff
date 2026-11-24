@@ -1,0 +1,1781 @@
+--- apps/desktop/dev/reviewBoard.ts
+@@ 1,25 @@
+ type Json = Record<string, unknown>;
+ 
+ export function reviewBoardArgs(args: Json): string[] {
+   if (args.reviewsOnly === true) return reviewsArgs(args);
++  if (args.includeClosed === true) throw new Error("configuration: Closed Reviews can be included only in the Reviews list");
+   const argv = ["review", "board", "--json"];
+   if (args.repo != null) {
+     if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
+       throw new Error("configuration: Invalid repository");
+     }
+     argv.push("--repo", args.repo);
+   }
+   if (args.badgeTarget != null) {
+     const target = args.badgeTarget as Json;
+     if (!args.repo || args.repositoriesOnly || args.prState != null || args.number != null || args.paged || args.cursor != null ||
+         typeof target.revisions !== "string" || !target.revisions || target.revisions.length > 50000 || !/^[0-9a-f:,]+$/.test(target.revisions) ||
+         [target.viewer, target.repositoryId].some(value => typeof value !== "string" || !value || /^-|\s/.test(value))) {
+       throw new Error("configuration: Invalid badge request");
+     }
+     argv.push("--viewer", String(target.viewer), "--repository-id", String(target.repositoryId), "--badge-revisions", target.revisions);
+   } else if (args.repositoriesOnly === true) {
+     if (args.repo != null || args.prState != null || args.number != null) {
+       throw new Error("configuration: Repository discovery cannot be combined with a PR query");
+     }
+     argv.push("--repositories");
+
+--- apps/desktop/dev/reviewBoard.ts
+@@ 45,67 @@
+     }
+     argv.push("--updated-since=" + args.updatedSince);
+   }
+   return argv;
+ }
+ 
+ /** The Reviews list is its own read and refuses every board mode. */
+ function reviewsArgs(args: Json): string[] {
+   // Same refusals as the Rust host's board_read_args.
+   if (args.badgeTarget != null || args.repositoriesOnly === true || args.prState != null || args.number != null ||
+       args.paged === true || args.cursor != null || args.updatedSince != null) {
+     throw new Error("configuration: The Reviews list cannot be combined with a board query");
+   }
+   const argv = ["review", "reviews", "--json"];
+   if (args.repo != null) {
+     if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
+       throw new Error("configuration: Invalid repository");
+     }
+     argv.push("--repo", args.repo);
+   }
++  if (args.includeClosed === true) argv.push("--include-closed");
+   return argv;
+ }
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 32,87 @@
+     match (pr_state, number) {
+         (Some(state @ ("open" | "closed" | "merged" | "all")), None) => {
+             args.extend(["--state".into(), state.into()]);
+         }
+         (None, Some(n)) if n > 0 && repo.is_some() => args.extend(["--number".into(), n.to_string()]),
+         _ => return Err("configuration: Select a PR state or a repository and PR number".into()),
+     }
+     Ok(args)
+ }
+ 
+ #[derive(Deserialize)]
+ #[serde(rename_all = "camelCase", deny_unknown_fields)]
+ pub struct BadgeTarget {
+     repository_id: String,
+     viewer: String,
+     revisions: String,
+ }
+ 
+ #[allow(clippy::too_many_arguments)]
+ fn board_read_args(pr_state: Option<&str>, repo: Option<&str>, number: Option<u32>, repositories_only: bool,
+-    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool) -> Result<Vec<String>, String> {
++    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool, include_closed: bool) -> Result<Vec<String>, String> {
++    if include_closed && !reviews_only {
++        return Err("configuration: Closed Reviews can be included only in the Reviews list".into());
++    }
+     if reviews_only {
+         if pr_state.is_some() || number.is_some() || repositories_only || paged || cursor.is_some() || badges.is_some() {
+             return Err("configuration: The Reviews list cannot be combined with a board query".into());
+         }
+         let mut args = vec!["review".into(), "reviews".into(), "--json".into()];
+         if let Some(repo) = repo {
+             if repo.is_empty() || repo.starts_with('-') || repo.contains(char::is_whitespace) {
+                 return Err("configuration: Invalid repository".into());
+             }
+             args.extend(["--repo".into(), repo.into()]);
+         }
++        if include_closed { args.push("--include-closed".into()); }
+         return Ok(args);
+     }
+     if let Some(target) = badges {
+         if paged || cursor.is_some() || repositories_only || pr_state.is_some() || number.is_some() || target.revisions.is_empty()
+             || target.revisions.len() > 50000 || !target.revisions.bytes().all(|b| b.is_ascii_hexdigit() || b == b':' || b == b',') {
+             return Err("configuration: Invalid badge request".into());
+         }
+         let mut args = vec!["review".into(), "board".into(), "--json".into()];
+         for (flag, value) in [("--repo", repo.unwrap_or_default()), ("--viewer", &target.viewer), ("--repository-id", &target.repository_id)] {
+             if value.is_empty() || value.starts_with('-') || value.contains(char::is_whitespace) { return Err("configuration: Invalid badge identity".into()); }
+             args.extend([flag.into(), value.into()]);
+         }
+         args.extend(["--badge-revisions".into(), target.revisions]);
+         return Ok(args);
+     }
+     let mut args = board_args(pr_state, repo, number, repositories_only)?;
+     if paged {
+         if pr_state.is_none() { return Err("configuration: Select a board state to page".into()); }
+         args.extend(["--page".into(), "--cards-only".into()]);
+     }
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 133,176 @@
+         });
+     }
+     serde_json::from_str(&out.stdout).map_err(|_| "unavailable: The selected Keryx CLI did not return a valid Review response. Check the CLI version in Settings.".into())
+ }
+ 
+ #[allow(clippy::too_many_arguments)]
+ #[tauri::command]
+ pub async fn review_board(
+     app: AppHandle,
+     view: Webview,
+     cwd: String,
+     pr_state: Option<String>,
+     repo: Option<String>,
+     number: Option<u32>,
+     repositories_only: Option<bool>,
+     paged: Option<bool>,
+     cursor: Option<String>,
+     updated_since: Option<String>,
+     badge_target: Option<BadgeTarget>,
+     reviews_only: Option<bool>,
++    include_closed: Option<bool>,
+ ) -> Result<Value, String> {
+     let reviews_only = reviews_only.unwrap_or(false);
+-    let mut args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target, reviews_only)?;
++    let mut args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target, reviews_only, include_closed.unwrap_or(false))?;
+     if let Some(value) = updated_since {
+         if reviews_only || pr_state.is_none() || value.len() > 24 {
+             return Err("configuration: Invalid pull request period".into());
+         }
+         args.push(format!("--updated-since={value}"));
+     }
+     invoke_review(app, view, cwd, args, true).await
+ }
+ 
+ fn review_project(registered: Option<&str>, requested: &str) -> Result<PathBuf, String> {
+     match registered {
+         Some(cwd) if cwd == requested => project_dir(cwd),
+         _ => Err("configuration: Open this project in the current view to use Review.".into()),
+     }
+ }
+ 
+ pub(crate) async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<String>, read_only: bool) -> Result<Value, String> {
+     let registered = app.state::<ProjectWindows>().cwd_for(view.label());
+     invoke_review_at(app, args, read_only, move || review_project(registered.as_deref(), &cwd)).await
+ }
+
+--- apps/desktop/src-tauri/src/review.rs
+@@ 659,726 @@
+ 
+     #[test]
+     fn rule_settings_only_forward_scoped_data() {
+         let key = || WatcherTarget { repo: "org/repo".into(), repository_id: "R".into(), viewer: "me".into() };
+         assert!(rule_args(key(), serde_json::json!({"kind":"worker"})).is_err());
+         for rule in [serde_json::json!({}), serde_json::json!({"budgetTokens": null}), serde_json::json!({"budgetTokens": 500000})] {
+             let request = serde_json::json!({"kind": "save", "rule": rule});
+             let args = rule_args(key(), request.clone()).unwrap();
+             assert_eq!(serde_json::from_str::<Value>(args.last().unwrap()).unwrap(), request);
+         }
+         let args = rule_args(key(), serde_json::json!({"kind":"mode", "number":1, "choice":{"mode":"manual"}})).unwrap();
+         assert_eq!(&args[..5], ["review","rules","--json","--repo","org/repo"]);
+         assert_eq!(args[9], "--request");
+         assert_eq!(serde_json::from_str::<Value>(&args[10]).unwrap()["choice"]["mode"], "manual");
+     }
+ 
+     #[test]
+     fn badge_batches_and_page_cursors_are_read_only_board_queries() {
+         let r = format!("1:{}:{}", "a".repeat(40), "b".repeat(40));
+         let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: r.clone() };
+-        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), false).unwrap(),
++        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), false, false).unwrap(),
+             ["review","board","--json","--repo","org/repo","--viewer","me","--repository-id","R","--badge-revisions",&r]);
+-        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None,false).unwrap(),
++        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None,false, false).unwrap(),
+             ["review","board","--json","--state","open","--page","--cards-only","--cursor=-abc"]);
+-        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None,false).is_err());
++        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None,false, false).is_err());
+     }
+ 
+     #[test]
+     fn reviews_list_is_a_separate_read_only_query() {
+-        assert_eq!(board_read_args(None, None, None, false, false, None, None, true).unwrap(), ["review","reviews","--json"]);
+-        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, None, true).unwrap(),
++        assert_eq!(board_read_args(None, None, None, false, false, None, None, true, false).unwrap(), ["review","reviews","--json"]);
++        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, None, true, false).unwrap(),
+             ["review","reviews","--json","--repo","org/repo"]);
+-        assert!(board_read_args(None, Some("--other"), None, false, false, None, None, true).is_err());
+-        assert!(board_read_args(None, Some(""), None, false, false, None, None, true).is_err());
+-        assert!(board_read_args(Some("open"), None, None, false, false, None, None, true).is_err());
+-        assert!(board_read_args(None, Some("org/repo"), Some(4), false, false, None, None, true).is_err());
+-        assert!(board_read_args(None, None, None, true, false, None, None, true).is_err());
+-        assert!(board_read_args(None, None, None, false, true, None, None, true).is_err());
+-        assert!(board_read_args(None, None, None, false, false, Some("c"), None, true).is_err());
++        assert!(board_read_args(None, Some("--other"), None, false, false, None, None, true, false).is_err());
++        assert!(board_read_args(None, Some(""), None, false, false, None, None, true, false).is_err());
++        assert!(board_read_args(Some("open"), None, None, false, false, None, None, true, false).is_err());
++        assert!(board_read_args(None, Some("org/repo"), Some(4), false, false, None, None, true, false).is_err());
++        assert!(board_read_args(None, None, None, true, false, None, None, true, false).is_err());
++        assert!(board_read_args(None, None, None, false, true, None, None, true, false).is_err());
++        assert!(board_read_args(None, None, None, false, false, Some("c"), None, true, false).is_err());
+         let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: format!("1:{}:{}", "a".repeat(40), "b".repeat(40)) };
+-        assert!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), true).is_err());
++        assert!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), true, false).is_err());
++        // Closed Reviews are an opt-in of the Reviews list only.
++        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, None, true, true).unwrap(),
++            ["review","reviews","--json","--repo","org/repo","--include-closed"]);
++        assert_eq!(board_read_args(None, None, None, false, false, None, None, true, true).unwrap(), ["review","reviews","--json","--include-closed"]);
++        assert!(board_read_args(None, None, None, false, false, None, None, false, true).is_err());
++        assert!(board_read_args(Some("open"), None, None, false, false, None, None, false, true).is_err());
++        assert!(board_read_args(None, None, None, true, false, None, None, false, true).is_err());
+     }
+ 
+     #[test]
+     fn watcher_controls_use_only_scoped_cli_operations() {
+         assert!(serde_json::from_str::<WatcherAction>(r#"{"kind":"tick"}"#).is_err());
+         assert!(watcher_args(None, WatcherAction::Resume).is_err());
+         assert_eq!(watcher_args(None, WatcherAction::Pause).unwrap(), ["review", "watch", "pause", "--json"]);
+         let key = || Some(WatcherTarget { repo: "org/repo".into(), repository_id: "R".into(), viewer: "me".into() });
+         let enabled = watcher_args(key(), WatcherAction::Enable { interval_minutes: 10 }).unwrap();
+         assert_eq!(&enabled[4..], ["--repo","org/repo","--repository-id","R","--viewer","me","--interval-minutes","10"]);
+         assert!(watcher_args(key(), WatcherAction::Enable { interval_minutes: 0 }).is_err());
+     }
+ 
+     #[test]
+     fn manual_review_exposes_only_typed_operations() {
+         let target = || RunTarget {
+             repo: "org/r".into(), repository_id: "R_42".into(), viewer: "me".into(), number: 4,
+         };
+         let start = RunAction::Start { base_sha: "b".repeat(40), head_sha: "c".repeat(40), options: None };
+         let args = run_args(target(), start).unwrap();
+
+--- apps/desktop/src/App.tsx
+@@ 1,44 @@
+ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+ import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+ import { isTauri } from "./platform/backend";
+ import {
+   acpStop,
+   pickFolder,
+   setFolderPrompter,
+   setWindowTitle,
+   settingsAddRecent,
+   settingsGet,
+   windowInitialCwd,
+   windowOpenProject,
+ } from "./platform/commands";
+ import { applyTheme, setPrefs, MOD } from "./lib/prefs";
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+-import { AppShell, PROJECT_VIEWS, projectViewForKey, type ReviewsTabIndicator, type View } from "./shell/AppShell";
++import { AppShell, PROJECT_VIEWS, projectViewForKey, type View } from "./shell/AppShell";
+ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
+ import { SettingsView } from "./shell/SettingsView";
+ import { Welcome } from "./shell/Welcome";
+ import { UpdateBanner } from "./shell/UpdateBanner";
+ import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+ import type { ReviewIntent } from "./review/ReviewWorkspace";
+-import { ReviewsView, type ReviewsFocus } from "./reviews/ReviewsView";
++import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
+ import { RoutingDialog } from "./shell/RoutingDialog";
+ import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
+ import { SessionReviewActivity } from "./review/SessionReviewActivity";
+ import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
+ import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
+ import { modelChoices, providerOf } from "./session/Composer";
+ import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
+ import { IssuesView } from "./issues/IssuesView";
+ import { useIssueWork } from "./issues/IssueWork";
+ import { FlowsBoard } from "./flows/FlowsBoard";
+ import type { LinkedSession } from "./flows/FlowDetail";
+ import { sessionFlags } from "./acp/types";
+ import type { FlowCard } from "./platform/commands";
+ import { laneOf, workPrompt } from "./flows/model";
+ import { useFlows } from "./flows/useFlows";
+ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
+ import type { ComposerHandle } from "./session/Composer";
+ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
+ import { SessionView } from "./session/SessionView";
+ import { modelOption, useAcpSession } from "./session/useAcpSession";
+
+--- apps/desktop/src/App.tsx
+@@ 219,247 @@
+   }, []);
++  // A focus request is handed over once: dropped as soon as the Reviews tab took it, so a remount cannot replay it.
++  const reviewsFocusHandled = useCallback((nonce: number) => {
++    setReviewsFocus(old => old?.nonce === nonce ? null : old);
++  }, []);
++  // The PR watcher's background polls and the board's identity reach the Reviews tab.
++  const [watcherPolls, setWatcherPolls] = useState(0);
++  const noteWatcherPoll = useCallback(() => setWatcherPolls(n => n + 1), []);
++  const [boardIdentity, setBoardIdentity] = useState<{ repo: string; repositoryId: string; viewer: string } | null>(null);
+   const [githubAccountError, setGitHubAccountError] = useState("");
+   const [projectSettings, setProjectSettings] = useState(false);
+   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+   const accountRevision = useRef(0);
+   const registration = useRef<Promise<void> | null>(null);
+   const [issueOrigin, setIssueOrigin] = useState<IssueOriginRequest | null>(null);
+   const openIssueOrigin = (origin: IssueOriginRequest) => { setIssueOrigin(origin); setView("issues"); };
+   const [linkedFlow, setLinkedFlow] = useState<string | null>(null);
+   const [palette, setPalette] = useState<string | null>(null);
+   const [enrich, setEnrich] = useState(false);
+   const runProject = useProjectRunner(cwd, s.keryxPath);
+   const rebuildGraph = useCallback(() => new Promise<boolean>(resolve => {
+     void runProject(["gdgraph", "build"], "Build Metaproject graph", code => resolve(code === 0))
+       .then(started => { if (!started) resolve(false); });
+   }), [runProject]);
+   const listProviders = useMemo(() => (supportsProviders(s.extensions) ? providersLister(s.rpc) : null), [s.extensions, s.rpc]);
+   const [recents, setRecents] = useState<string[]>([]);
+   const composer = useRef<ComposerHandle>(null);
+   const paletteOpen = useRef(false);
+   paletteOpen.current = palette !== null;
+
+--- apps/desktop/src/App.tsx
+@@ 613,637 @@
+           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
+             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
+             onContinuation={linkReviewContinuation} /> : undefined}
+           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
+       </div>
+       {workView === "flows" ? (
+         <div className="view" hidden={view !== "flows"}>
+           <FlowsBoard onOpenIssue={dir => openIssueOrigin({flowDir:dir})} initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
+         </div>
+       ) : null}
+       {issueWork.chooser}
+       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+       </div>}
+       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+       <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
+         if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+         setView("session");
+       }} />
+-      {/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}
++      {/* Mounted while hidden: it re-reads on a session review, a PR watcher poll and, while a Review runs, every minute,
++          so the Reviews indicator follows those on every tab. Mounted once the account read settled, so it reads once. */}
+       <div className="view" hidden={view !== "reviews"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="checklist">
+
+--- apps/desktop/src/App.tsx
+@@ 646,676 @@
+               setView("flows");
+             }} />
+-        )}
++        ) : null}
+       </div>
+       <div className="view" hidden={view !== "review"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="pr">
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenInReviews={openInReviews} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
++          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenInReviews={openInReviews} onWatcherPoll={noteWatcherPoll} onIdentityChange={setBoardIdentity} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+               flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
+             setLinkedFlow(dir);
+             setView("flows");
+           }} />
+         )}
+       </div>
+       {view === "settings" ? (
+         <div className="view">
+           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
+         </div>
+       ) : null}
+ 
+       {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+         !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <RoutingDialog key={routingSession} sessionId={routingSession} models={reviewModels} rpc={s.rpc}
+           onClose={() => setRoutingSession(null)} />}
+ 
+       {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
+           initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
+
+--- apps/desktop/src/platform/review.ts
+@@ 95,131 @@
+     const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor, updatedSince]),
+       () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor, updatedSince }));
+     if (page?.viewer) verifyProjectViewer(page.viewer, expectedViewer);
+     return page;
+   }, repo, signal);
+ }
+ 
+ export async function fetchReviewBadges(cwd: string, key: Omit<DeskRunKey, "number">, cards: BadgeCard[]): Promise<BadgeSnapshot> {
+   const combined: BadgeSnapshot = { version: 1, repositoryId: key.repositoryId, viewer: key.viewer, cards: [] };
+   // Keep each CLI argument well below the OS per-argument limit even on unusually large active boards.
+   for (let i = 0; i < cards.length; i += 500) {
+     const revisions = cards.slice(i, i + 500).map(c => [c.number, c.baseSha, c.headSha].join(":")).join(",");
+     const result = await invoke<BadgeSnapshot>("review_board", { cwd, repo: key.repo, badgeTarget: { viewer: key.viewer, repositoryId: key.repositoryId, revisions } });
+     assertProtocol(result);
+     if (result.viewer !== key.viewer || result.repositoryId !== key.repositoryId) throw new Error("access: GitHub account or repository changed. Refresh Review.");
+     combined.cards.push(...result.cards);
+   }
+   return combined;
+ }
+ 
+-/** This account's local Reviews of the project's repository, with state, freshness and rounds. */
+-export async function fetchReviews(cwd: string, repo?: string, expectedViewer?: string): Promise<ReviewsSnapshot> {
+-  const result = await reviewLists.read(JSON.stringify([cwd, expectedViewer, repo]),
+-    () => invoke("review_board", { cwd, reviewsOnly: true, ...(repo && { repo }) }));
++/** This account's local Reviews of the project's repository, with state, freshness and rounds. `includeClosed` also
++ * reads the PR cards of Reviews closed locally (for "Show closed"); without it they come without a card. */
++export async function fetchReviews(cwd: string, repo?: string, expectedViewer?: string, includeClosed = false): Promise<ReviewsSnapshot> {
++  const result = await reviewLists.read(JSON.stringify([cwd, expectedViewer, repo, includeClosed]),
++    () => invoke("review_board", { cwd, reviewsOnly: true, ...(repo && { repo }), ...(includeClosed && { includeClosed: true }) }));
+   assertProtocol(result);
+   verifyProjectViewer(result.viewer, expectedViewer);
+   return result;
+ }
+ 
+ export async function fetchReviewDetail(cwd: string, repo: string, number: number, expectedViewer?: string): Promise<ReviewDetailSnapshot> {
+   const result = await details.read(JSON.stringify([cwd, expectedViewer, repo, number]),
+     () => invoke("review_board", { cwd, repo, number }));
+   assertProtocol(result);
+   verifyProjectViewer(result.viewer, expectedViewer);
+   return result;
+ }
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 4,64 @@
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+ import { withRunBackoff } from "./runPolling";
+ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+ import { sameRange, type RunObserver } from "./useReviewRuns";
+ import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+ import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
+ import { reviewRules } from "../platform/reviewRules";
+ import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
+ import { ReviewWatcher } from "./ReviewWatcher";
+ import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
+ import { readReplies, subscribeReviewReads } from "./reviewReadState";
+ import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
+ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
+ import { ReviewFilters, filterSummary } from "./ReviewFilters";
+ import { ReviewResults } from "./ReviewResults";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+ import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
+-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ export type ReviewTabIndicator = "attention" | "watching" | null;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string;
+   active?: boolean;
+   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: ((card: ReviewCard) => void) | undefined;
+-  /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews". */
+-  onOpenInReviews?: ((number: number, intent?: ReviewIntent) => void) | undefined;
++  /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews".
++   * The target names this board's repository: the Reviews tab chooses its own. */
++  onOpenInReviews?: ((target: { repo: string; repositoryId: string; number: number }, intent?: ReviewIntent) => void) | undefined;
++  /** A background PR watcher poll completed (the Reviews tab re-reads its list on it). */
++  onWatcherPoll?: (() => void) | undefined;
++  /** The board's verified repository and account, or null before a read (the Reviews tab offers Review rules from it). */
++  onIdentityChange?: ((target: { repo: string; repositoryId: string; viewer: string } | null) => void) | undefined;
+   load?: typeof fetchReviewBoard;
+   loadBadges?: typeof fetchReviewBadges;
+   listRepositories?: typeof fetchReviewRepositories;
+   loadDetail?: typeof fetchReviewDetail;
+   runCommand?: typeof reviewRun;
+   watcherCommand?: typeof reviewWatcher;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+ interface ReadState {
+   scope: string;
+   snapshot: ReviewBoardSnapshot | null;
+   error: string;
+   loading: boolean;
+   /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
+   stale?: boolean;
+ }
+ 
+ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 79,119 @@
+   if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+   const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+   return card.addressedReplyIds.filter(id => !readIds.has(id));
+ }
+ const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+ const attentionNumbers = (board: ReviewBoardSnapshot) =>
+   new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+ /** A load of this scope holds every open PR, so it replaces the carried attention set. */
+ const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+ const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
+ 
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenInReviews, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
++function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenInReviews, onWatcherPoll, onIdentityChange, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+   repo?: string;
+   selectRepo: (repo?: string) => void;
+ }) {
+   // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+   const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
+   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
+   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+   const [filters, setFilters] = useState(EMPTY_FILTERS);
+   const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
+   const [query, setQuery] = useState("");
+   const [filtering, setFiltering] = useState(false);
+   const [dismissedWarning, setDismissedWarning] = useState("");
+   const warningId = useId();
+   const warningToggle = useRef<HTMLButtonElement>(null);
+   const [view, setView] = useState<"board" | "list">("board");
+   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
+   const [attempt, setAttempt] = useState(0);
+   const refresh = useCallback(() => setAttempt(n => n + 1), []);
+   const [alternatives, setAlternatives] = useState<string[]>([]);
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 459,507 @@
+     const reviewIntent: ReviewIntent = { kind, baseSha: card.baseSha, headSha: card.headSha };
+-    if (kind !== "start" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);
+-    else setSelected({ number: card.number, reviewIntent });
+-  }, [onOpenInReviews]);
++    // Only a start runs in the PR panel; viewing or answering happens in the Reviews tab.
++    if (kind === "start") setSelected({ number: card.number, reviewIntent });
++    else if (onOpenInReviews && boardRepo && boardRepositoryId) onOpenInReviews({ repo: boardRepo, repositoryId: boardRepositoryId, number: card.number }, reviewIntent);
++    else setSelected({ number: card.number });
++  }, [onOpenInReviews, boardRepo, boardRepositoryId]);
++  const watcherPolled = useCallback(() => { refresh(); onWatcherPoll?.(); }, [refresh, onWatcherPoll]);
++  useEffect(() => { onIdentityChange?.(watcherTarget); }, [watcherTarget, onIdentityChange]);
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+         {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
+       </span>}
+       {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset}
+         aria-label={hiddenText + " — clears filters and search"} title={hiddenText + " — clears filters and search"}>
+         <Icon name="alert" size={13} /> <span className="toolbar-label">{hiddenText}</span><span className="hint-short">{hiddenAttention} hidden</span>
+       </button>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+         <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
+       </button>
+       <div className="grow" />
+-      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
++      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={watcherPolled} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+       <div className="segmented" role="group" aria-label="Review view">
+         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
+           aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+           onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
+       </div>
+       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
+         {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
+       </button>
+     </div>
+     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">
+       {snapshot && <>
+         <Icon name="branch" size={14} />
+         {snapshot.repositories.length > 1 ? <select className="select-compact" aria-label="Base repository" value={snapshot.repo}
+           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
+           : <strong>{snapshot.repo}</strong>}
+         <span>Signed in as {snapshot.viewer}</span>
+         <span className="grow" />
+         <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+         {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
+           aria-expanded={showWarning} aria-controls={warningId} onClick={() => setDismissedWarning(showWarning ? warningKey : "")}>
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 536,561 @@
+     {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
+         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
+       <EmptyState icon={q || active.length ? "search" : "pr"}
+         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
+         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
+         {q || active.length ? "Try another title, number, or filter." : undefined}
+       </EmptyState>)}
+     </section>
+     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+         item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+       models={reviewModels} currentModel={currentRepairModel}
+       watching={watchingTarget !== null} onAccessLost={accessLost}
+       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
+     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
+       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
+     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
+       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+       width={detailWidth} onResize={setDetailWidth}
+-      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
+-      onOpenInReviews={onOpenInReviews && (() => onOpenInReviews(card.number))}
++      reviewModels={reviewModels} onOpenSession={onOpenSession && (() => onOpenSession(card))}
++      onOpenInReviews={onOpenInReviews && (() => onOpenInReviews({ repo: snapshot.repo, repositoryId: snapshot.repositoryId, number: card.number }))}
+       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
+       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
+   </div>;
+ }
+
+--- apps/desktop/src/review/ReviewBrowserLink.tsx
+@@ 1,35 @@
+-import type { ReactNode } from "react";
++import type { MouseEvent, ReactNode } from "react";
++import { githubPrUrl } from "../lib/githubPr";
++import { openExternal, openPullRequest } from "../platform/commands";
+ 
+ /** Review bodies and check destinations come from GitHub and may contain arbitrary URLs. */
+ export function reviewUrl(raw: string | null): string | null {
+   try {
+     const url = new URL(raw ?? "");
+     return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+   } catch {
+     return null;
+   }
+ }
+ 
+-export function ReviewBrowserLink({ url, children, className = "link-btn", label }: {
+-  url: string | null; children: ReactNode; className?: string; label?: string;
++/**
++ * The app blocks navigation away from itself, so a review link is handed to the system browser:
++ * a pull request through `openPullRequest`, anything else through `openExternal`.
++ */
++export function openReviewLink(url: string): Promise<void> {
++  return (githubPrUrl(url) ? openPullRequest : openExternal)(url);
++}
++
++/** `onOpen` receives the checked https URL; without it the anchor relies on a parent's click handler. */
++export function ReviewBrowserLink({ url, children, className = "link-btn", label, onOpen }: {
++  url: string | null; children: ReactNode; className?: string; label?: string; onOpen?: (url: string) => void;
+ }) {
+   const href = reviewUrl(url);
+-  if (href) return <a className={className} href={href} rel="noreferrer" aria-label={label} title={label}>{children}</a>;
+-  return label ? null : <>{children}</>;
++  if (!href) return label ? null : <>{children}</>;
++  const open = onOpen && ((event: MouseEvent<HTMLAnchorElement>) => {
++    if (event.button > 1) return;
++    event.preventDefault();
++    onOpen(href);
++  });
++  return <a className={className} href={href} rel="noreferrer" aria-label={label} title={label} onClick={open} onAuxClick={open}>{children}</a>;
+ }
+
+--- apps/desktop/src/review/ReviewDetail.css
+@@ 1,37 @@
+ .review-workspace { display: flex; min-width: 0; min-height: 0; height: 100%; container-type: inline-size; }
+ .review-workspace[hidden] { display: none; }
+ .review-board { flex: 1; min-width: 0; }
+ .review-detail-panel { flex: none; min-width: 360px; max-width: calc(100% - 280px); }
+ .review-detail-panel .sheet-head-row .flow-id { min-width: 0; overflow-wrap: anywhere; }
+ .review-detail-panel .tabs { flex-wrap: wrap; flex-shrink: 0; }
+ .review-detail-panel .tab[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+ .review-detail-panel .review-detail-resize { width: 12px; left: -6px; touch-action: none; }
+ .review-detail-resize:focus-visible, .review-detail-resize:active { background: var(--accent-soft); }
+ @container (max-width: 680px) {
+   .review-board:has(~ .review-detail-panel) { display: none; }
+   .review-workspace .review-detail-panel { min-width: 100%; max-width: 100%; border-left: 0; }
+   .review-detail-panel .review-detail-resize { display: none; }
+ }
+ .review-detail-body { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-3); }
++/* The moved review interface keeps the panel body's column and gap (its children were direct children of it). */
++.review-workspace-block { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-3); min-width: 0; }
+ .review-detail-body > .btn { align-self: flex-start; }
+ .review-detail-meta { color: var(--fg-muted); font-size: var(--fs-sm); display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); }
+ .review-detail-meta strong { color: var(--fg); overflow-wrap: anywhere; }
+ .review-detail-message { padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+ .pr-discussion { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: var(--sp-3); }
+ .pr-discussion h3 { margin: 0; font-size: var(--fs-md); }
+ .discussion-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: var(--sp-2); }
+ .discussion-description { padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
+ .discussion-count { color: var(--fg-muted); font-size: var(--fs-sm); font-weight: normal; }
+ .discussion-conversation { padding-inline-start: var(--sp-3); border-inline-start: 2px solid var(--border); }
+ .discussion-conversation > article:first-child { padding-top: 0; }
+ .discussion-conversation > article:last-child { border-bottom: 0; }
+ .discussion-byline time { margin-inline-start: auto; font-size: var(--fs-xs); }
+ .discussion-event { text-transform: capitalize; }
+ .discussion-markdown { user-select: text; -webkit-user-select: text; min-width: 0; overflow-wrap: anywhere; }
+ .discussion-markdown > :first-child { margin-top: var(--sp-2); }
+ .discussion-markdown > :last-child { margin-bottom: 0; }
+ .discussion-markdown pre, .discussion-markdown table { display: block; max-width: 100%; overflow-x: auto; }
+ .review-detail-thread { min-width: 0; background: var(--bg-surface); }
+ .review-detail-thread > header { border-bottom: 1px solid var(--border); padding-bottom: var(--sp-2); }
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 1,61 @@
+-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+ import { Icon } from "../components/Icon";
+ import { useToast } from "../components/Toasts";
+ import { Spinner } from "../components/ui";
+ import { absoluteTime, errMessage, relativeTime } from "../lib/format";
+-import { openExternal, openPullRequest, type FlowCard } from "../platform/commands";
++import type { openExternal, FlowCard } from "../platform/commands";
+ import { reviewRun } from "../platform/reviewRuns";
+ import { PullRequestAutomation } from "./PullRequestAutomation";
+ import type { reviewRules } from "../platform/reviewRules";
+ import { launchAction } from "./ReviewRuns";
+-import { reviewIsArchived } from "./ReviewLifecycle";
+ import { sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
+ import { fetchReviewDetail } from "../platform/review";
+ import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
+ import type { ReviewCard } from "./types";
+ import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewReadState";
+ import { DiscussionMarkdown } from "./DiscussionMarkdown";
+-import { githubPrUrl } from "../lib/githubPr";
+-import { ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
++import { openReviewLink, ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
+ import { ReviewChecks } from "./ReviewChecks";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import { RunLaunchDialog, type ReviewIntent } from "./ReviewWorkspace";
+ import "./ReviewDetail.css";
+ 
+ export type { ReviewIntent } from "./ReviewWorkspace";
+ 
+ interface Props {
+   reviewIntent?: ReviewIntent | undefined;
+   cwd: string;
+   repo: string;
+   repositoryId: string;
+   viewer: string;
+   card: ReviewCard;
+   width?: number;
+   onResize?: (width: number) => void;
+   flow?: FlowCard | undefined;
+   projectFlows?: readonly FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   onOpenFlow?: (dir: string) => void;
+   onClose: () => void;
+   onAccessLost?: (reason: string) => void;
+   load?: typeof fetchReviewDetail;
+   openBrowser?: typeof openExternal;
+-  /** Accepted from the board; the review interface that opens review sessions lives in the Reviews tab. */
+-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   onOpenSession?: (() => void) | undefined;
+   /** Shows this PR's Review in the Reviews tab; offered once the PR has a Review. */
+   onOpenInReviews?: (() => void) | undefined;
+   runCommand?: typeof reviewRun;
+   onRunSnapshot?: RunObserver;
+   rulesCommand?: typeof reviewRules;
+   onRefreshBoard?: () => void;
+   onDiscussionLoaded?: (detail: ReviewDetailSnapshot) => void;
+ }
+ 
+ function Message({ item, label, read }: { item: ReviewMessage; label: string; read: Set<string> }) {
+   return <article className="review-detail-message">
+     <div className="review-detail-meta discussion-byline">
+       <strong>{item.author}</strong>
+       {item.own && <span>You</span>}
+       <span className="discussion-event">{label}</span>
+       {!item.own && !read.has(item.id) && <span className="badge">Unread</span>}
+       <time dateTime={item.createdAt} title={absoluteTime(item.createdAt)}><ReviewBrowserLink url={item.url}>{relativeTime(item.createdAt)}</ReviewBrowserLink></time>
+     </div>
+     {item.body && <DiscussionMarkdown body={item.body} />}
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 138,197 @@
+     };
+   }, []);
+ 
+   const currentWidth = () => panel.current?.offsetWidth || width;
+   const maxWidth = () => Math.max(360, (panel.current?.parentElement?.clientWidth || window.innerWidth) - 280);
+   const resize = (next: number) => onResize?.(Math.min(maxWidth(), Math.max(360, next)));
+   function startResize(event: PointerEvent<HTMLDivElement>) {
+     if (event.button !== 0) return;
+     event.currentTarget.setPointerCapture(event.pointerId);
+     drag.current = { pointerId: event.pointerId, x: event.clientX, width: currentWidth() };
+   }
+ 
+   function followLink(event: MouseEvent<HTMLElement>) {
+     if (event.button > 1) return;
+     const link = (event.target as Element).closest("a[href]");
+     if (!link) return;
+     event.preventDefault();
+     const url = reviewUrl(link.getAttribute("href"));
+     if (!url || openingLink.current) return;
+     openingLink.current = true;
+-    const open = openBrowser ?? (githubPrUrl(url) ? openPullRequest : openExternal);
++    const open = openBrowser ?? openReviewLink;
+     void open(url).catch(cause => {
+       if (mounted.current) toast({ level: "error", title: "Could not open link", detail: errMessage(cause) });
+     }).finally(() => { openingLink.current = false; });
+   }
+   const [data, setData] = useState<ReviewDetailSnapshot | null>(null);
+   const [launchCard, setLaunchCard] = useState<ReviewCard | null>(null);
+   const [error, setError] = useState("");
+   const [busy, setBusy] = useState(true);
+   const [refresh, setRefresh] = useState(0);
+   const [tab, setTab] = useState<"discussion" | "checks" | "automation">("discussion");
+   // Only a start reaches this panel: viewing or answering a review happens in the Reviews tab.
+   const initialLaunch = useRef<ReviewIntent | undefined>(reviewIntent?.kind === "start" ? reviewIntent : undefined);
+   const subject = useMemo(() => ({ repo, repositoryId, viewer, number: card.number }), [repo, repositoryId, viewer, card.number]);
+   const rulesTarget = useMemo(() => ({ repo, repositoryId, viewer }), [repo, repositoryId, viewer]);
+   // Read once (and followed while a run is active) to choose between launching and opening the Review.
+   const local = useReviewRuns(cwd, subject, card.baseSha, card.headSha, false, runCommand, onRunSnapshot, onAccessLost);
+   const action = launchAction(local.runs, card);
+-  const hasReview = local.runs.some(run => !reviewIsArchived(run));
++  // An archived run still has its Review in the Reviews tab (under Show closed), where History restores or deletes it.
++  const hasReview = local.runs.length > 0;
+   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
+   const associatedFlow = associatedFlowId
+     ? projectFlows?.find(candidate => candidate.id === associatedFlowId)
+     : flow;
+   const revisionChanged = (data && data.headSha !== card.headSha) || local.staleRange;
+   const start = useCallback(() => {
+     if (reviewModels) setLaunchCard(card);
+     else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
+   }, [reviewModels, card, local.request]);
+   // A board start is tied to the clicked revision, and consumed once after status resolves.
+   // The backend validates this same range again before admitting the run.
+   useEffect(() => {
+     const next = initialLaunch.current;
+     if (!next) return;
+     if (local.error || card.state !== "open" || revisionChanged || next.baseSha !== card.baseSha || next.headSha !== card.headSha) {
+       initialLaunch.current = undefined;
+       return;
+     }
+     if (!local.loaded) return;
+     initialLaunch.current = undefined;
+
+--- apps/desktop/src/review/ReviewDetail.tsx
+@@ 282,304 @@
+       <button className="tab" aria-pressed={tab === "automation"} onClick={() => setTab("automation")}>Automation</button>
+     </div>
+     <div className="sheet-body review-detail-body" onClick={tab === "checks" || tab === "discussion" ? followLink : undefined}
+       onAuxClick={tab === "checks" || tab === "discussion" ? followLink : undefined} aria-busy={busy}>
+       {revisionChanged && <div className="inline-banner tone-warn" role="status">
+         <span>The PR revision changed. Refresh the board to load the latest range.</span>
+         {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh board</button>}
+       </div>}
+       {tab === "automation" ? <PullRequestAutomation cwd={cwd} target={rulesTarget} number={card.number} open={card.state === "open"} command={rulesCommand} onAccessLost={onAccessLost} /> : <>
+       {busy && <Spinner label="Loading PR details" />}
+       {error && <div className="inline-banner" role="alert">{error}</div>}
+       {data && <>
+         {data.warnings.map(w => <p className="inline-banner" key={w} role="status">{w}</p>)}
+         <div className="review-detail-meta"><span>Read {absoluteTime(data.fetchedAt)}</span><span className="mono">{data.headSha.slice(0, 9)}</span></div>
+         {tab === "discussion" ? <Discussion key={JSON.stringify([data.viewer, data.repositoryId, data.number])} data={data} /> : <ReviewChecks checks={data.checks} partial={!!data.warnings.length} />}
+       </>}
+       </>}
+-      {local.error && !local.staleRange && <p className="inline-banner tone-warn" role="alert">{local.error}</p>}
+     </div>
+     {launchCard && reviewModels && <RunLaunchDialog cwd={cwd} subject={subject} card={launchCard} stale={!!revisionChanged}
+       models={reviewModels} flows={projectFlows ?? []} defaultFlow={associatedFlow?.id} runCommand={runCommand}
+       onRunSnapshot={onRunSnapshot} onStarted={() => local.request({ kind: "status" })} onClose={() => setLaunchCard(null)} />}
+   </aside>;
+ }
+
+--- apps/desktop/src/review/ReviewRuns.tsx
+@@ 18,58 @@
+ 
+ function Range({ value }: { value: DeskRevision }) {
+   if (!value.baseSha && !value.headSha) return <>Unrecorded</>;
+   return <span className="mono" title={value.baseSha + " → " + value.headSha}>
+     {value.baseSha.slice(0, 9) || "Unknown base"} → {value.headSha.slice(0, 9) || "Unknown head"}
+   </span>;
+ }
+ 
+ export function launchAction(runs: DeskRun[], card: ReviewCard) {
+   const matching = runs.filter(run => run.source !== "existing" && !reviewIsArchived(run) && sameRange(run, card));
+   const same = matching.find(runActive) ?? matching[0];
+   if (same && runActive(same)) {
+     const questions = pendingManualQuestions(same);
+     if (questions.length) {
+       const label = questions.length > 1 ? "Answer questions" : questions[0]!.reviewerSessionId ? "Reply to reviewer" : "Reply to coordinator";
+       return { open: true, label, sessionId: same.id };
+     }
+     return { open: true, label: "View active review", sessionId: same !== runs[0] ? same.id : undefined };
+   }
+   if (same?.state === "completed" && same.scope === DESK_RUN_SCOPE && same.result?.coverage === "complete" && sameRange(same.result?.reviewed ?? null, card)) return { open: true, label: "View review result", sessionId: same !== runs[0] ? same.id : undefined };
+-  return { open: false, label: same ? "Retry review" : runs.some(run => run.headSha && run.baseSha && !sameRange(run, card)) ? "Review again" : "Start review" };
++  return { open: false, label: same ? "Retry review" : runs.some(run => run.headSha && run.baseSha && !sameRange(run, card)) ? "New review round" : "Start review" };
+ }
+ 
+ interface ReportProps {
+   loadAttempt: LoadReviewAttempt;
+   onAccessLost?: (reason: string) => void;
+ }
+ 
+ function ReviewReport({ run, loadAttempt, onAccessLost }: { run: DeskRun } & ReportProps) {
+   const [open, setOpen] = useState(false);
+   const [report, setReport] = useState<string | null>(null);
+   const [error, setError] = useState("");
+   const [attempt, setAttempt] = useState(0);
+   const inline = run.result?.report;
+   const deferred = run.result?.reportDeferred;
+   useEffect(() => {
+     if (!open || !deferred || inline || report !== null) return;
+     let current = true;
+     setError("");
+     void loadAttempt(run.id).then(attempt => {
+       if (current) setReport(attempt?.result?.report ?? "");
+
+--- apps/desktop/src/review/ReviewWorkspace.tsx
+@@ 49,113 @@
+ }
+ 
+ interface Props {
+   cwd: string;
+   subject: DeskRunKey;
+   card: ReviewCard;
+   reviewIntent?: ReviewIntent | undefined;
+   flow?: FlowCard | undefined;
+   projectFlows?: readonly FlowCard[] | undefined;
+   reviewModels?: readonly ReviewLaunchModel[] | undefined;
+   runCommand?: typeof reviewRun | undefined;
+   publishCommand?: typeof reviewPublish | undefined;
+   onRunSnapshot?: RunObserver | undefined;
+   onAccessLost?: ((reason: string) => void) | undefined;
+   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
+   onOpenFlow?: ((dir: string) => void) | undefined;
+   /** Re-reads the list the card came from; offered when the PR revision moved. */
+   onRefreshBoard?: (() => void) | undefined;
+   /** The review moved to Sessions: the surrounding panel closes. */
+   onLeave?: (() => void) | undefined;
++  /** The board action's intent was taken (acted on or dropped); the caller must not hand it over again. */
++  onIntentConsumed?: (() => void) | undefined;
+   /** Shown between the primary action and the latest attempt (the Review panel puts its rounds here). */
+   children?: ReactNode;
+ }
+ 
+ /**
+  * The Keryx review interface of one PR's current range: the primary action, run history, the latest
+  * attempt with its report, answers, cancel, continue, publication and lifecycle actions, and the launch form.
+  */
+-export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow, projectFlows, reviewModels, runCommand = reviewRun, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefreshBoard, onLeave, children }: Props) {
++export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow, projectFlows, reviewModels, runCommand = reviewRun, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefreshBoard, onLeave, onIntentConsumed, children }: Props) {
+   const toast = useToast();
+   // The run hook re-reads whenever its key changes identity, so the key follows the target's fields.
+   const { repo, repositoryId, viewer, number } = target;
+   const subject = useMemo(() => ({ repo, repositoryId, viewer, number }), [repo, repositoryId, viewer, number]);
+   const mounted = useRef(false);
+   useEffect(() => {
+     mounted.current = true;
+     return () => { mounted.current = false; };
+   }, []);
+   const [sessionId, setSessionId] = useState<string | null>(null);
+   const [launchCard, setLaunchCard] = useState<ReviewCard | null>(null);
+   const initialLaunch = useRef(reviewIntent);
++  const intentConsumed = useRef(onIntentConsumed);
++  intentConsumed.current = onIntentConsumed;
+   const publication = { cwd, target: subject, url: card.url, publishCommand };
+   const loadAttempt = useCallback(async (id: string) => {
+     const history = await runCommand(cwd, subject, { kind: "status", id });
+     return history.runs.find(run => run.id === id);
+   }, [cwd, subject, runCommand]);
+   const local = useReviewRuns(cwd, subject, card.baseSha, card.headSha, true, runCommand, onRunSnapshot, onAccessLost);
+   const syncRuns = local.request;
+   function openManagedRun(id: string) {
+     const run = local.runs.find(item => item.id === id);
+     if (!onOpenReviewSession || !run || run.source === "existing") {
+       setSessionId(id);
+       return;
+     }
+     void onOpenReviewSession(subject, run).then(() => onLeave?.(), reason => {
+       if (mounted.current) toast({ level: "error", title: "Could not open the review in Sessions", detail: errMessage(reason) });
+     });
+   }
+   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
+     const snapshot = await runCommand(cwd, subject, action);
+     if (action.kind === "decide") {
+
+--- apps/desktop/src/review/ReviewWorkspace.tsx
+@@ 117,191 @@
+     }
+     return snapshot;
+   }, [cwd, subject, runCommand, onRunSnapshot, card.baseSha, card.headSha, syncRuns]);
+   const session = sessionId && local.runs.find(run => run.id === sessionId);
+   const action = launchAction(local.runs, card);
+   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
+   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
+   const revisionChanged = local.staleRange;
+   const start = useCallback(() => {
+     if (reviewModels) setLaunchCard(card);
+     else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
+   }, [reviewModels, card, local.request]);
+   // A board action is tied to the clicked revision, and consumed once after status resolves.
+   // The backend validates this same range again before admitting the run.
+   useEffect(() => {
+     const next = initialLaunch.current;
+     if (!next) return;
+     if (local.error || (next.kind === "start" && (card.state !== "open" || revisionChanged)) ||
+       next.baseSha !== card.baseSha || next.headSha !== card.headSha) {
+       initialLaunch.current = undefined;
++      intentConsumed.current?.();
+       return;
+     }
+     if (!local.loaded) return;
+     initialLaunch.current = undefined;
++    intentConsumed.current?.();
+     if (next.kind === "answer" && action.sessionId && local.runs.some(run => run.id === action.sessionId && pendingManualQuestions(run).length > 0)) {
+       setSessionId(action.sessionId);
+     } else if (next.kind === "start" && !action.open) {
+       start();
+     }
+   }, [action.open, action.sessionId, local.runs, card.state, card.baseSha, card.headSha, local.error, local.loaded, start, revisionChanged]);
+ 
+   function answerQuestion(id: string, questionId: string, answer: string) {
+     void local.request({ kind: "answer", id, questionId, answer });
+   }
+   function launch() {
+     if (action.sessionId) setSessionId(action.sessionId);
+     else if (!action.open) start();
+   }
+ 
+   return <div className="review-workspace-block" aria-busy={local.working}>
+     <div className="sheet-actions review-detail-actions">
+       {card.state === "open" && <button className="btn btn-sm btn-primary" onClick={launch}
+         disabled={local.working || !local.loaded || (!action.open && revisionChanged)}>
+         {local.working ? "Updating review…" : !local.loaded && !local.error ? "Checking review…" : action.label}
+       </button>}
+       <ReviewRunHistory runs={local.runs} onSelect={setSessionId} />
+     </div>
+     {associatedFlow ? (onOpenFlow ? <button className="link-btn review-associated-flow" onClick={() => onOpenFlow(associatedFlow.dir)}>Flow #{associatedFlow.id} · {associatedFlow.title}</button>
+       : <span className="review-associated-flow">Flow #{associatedFlow.id} · {associatedFlow.title}</span>)
+       : associatedFlowId && <span className="review-associated-flow">Flow #{associatedFlowId}</span>}
+     {revisionChanged && <div className="inline-banner tone-warn" role="status">
+-      <span>The PR revision changed. Refresh the board to load the latest range.</span>
+-      {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh board</button>}
++      <span>The PR revision changed. Refresh to load the latest range.</span>
++      {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
+     </div>}
+     {children}
+     <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
+       onCancel={id => void local.request({ kind: "cancel", id })}
+       onLifecycle={lifecycle}
+       onRefresh={() => void local.request({ kind: "status" })} />
+     {session && <ReviewRunDialog
+       {...(onOpenReviewSession && session.source !== "existing" && {
+         onOpenWorkspace: async () => {
+           await onOpenReviewSession(subject, session);
+           setSessionId(null);
+           onLeave?.();
+         },
+       })} key={session.id} publication={publication} run={session} card={card} working={local.working} activity={local.activity}
+       error={local.error} loadAttempt={loadAttempt} onAccessLost={onAccessLost} onClose={() => setSessionId(null)}
+       onCancel={id => void local.request({ kind: "cancel", id })}
+       onLifecycle={lifecycle}
+       onRefresh={() => void local.request({ kind: "status" })}
+       onAnswer={answerQuestion} />}
+     {launchCard && reviewModels && <RunLaunchDialog cwd={cwd} subject={subject} card={launchCard} stale={revisionChanged}
+
+--- apps/desktop/src/reviews/ReviewPanel.tsx
+@@ 1,23 @@
+ import type { DeskRun, DeskRunKey, DeskRunState } from "../../../../src/review/desk-run-types";
+ import type { ReviewAttemptSummary, ReviewRound, ReviewSummary } from "../../../../src/review/review-entity";
+-import { useId, useLayoutEffect, useMemo, useRef } from "react";
++import { useCallback, useId, useLayoutEffect, useMemo, useRef } from "react";
+ import { Icon } from "../components/Icon";
+-import { absoluteTime, relativeTime } from "../lib/format";
+-import type { FlowCard } from "../platform/commands";
++import { useToast } from "../components/Toasts";
++import { absoluteTime, errMessage, relativeTime } from "../lib/format";
++import type { FlowCard, openExternal } from "../platform/commands";
+ import type { reviewRun } from "../platform/reviewRuns";
+-import { ReviewBrowserLink } from "../review/ReviewBrowserLink";
++import { openReviewLink, ReviewBrowserLink } from "../review/ReviewBrowserLink";
+ import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
+ import type { reviewPublish } from "../review/ReviewPublishDialog";
+ import { ReviewWorkspace, type ReviewIntent } from "../review/ReviewWorkspace";
+ import type { RunObserver } from "../review/useReviewRuns";
+-import { findingsLabel, freshnessLabel, publicationLabel, reviewedCommit, reviewTitle, SOURCE_LABEL, STATE_LABEL } from "./model";
++import { findingsLabel, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
+ 
+ const ATTEMPT_STATE: Record<DeskRunState, string> = {
+   queued: "Queued", running: "Running", cancelling: "Stopping", completed: "Completed", partial: "Partial",
+   blocked: "Blocked", failed: "Failed", cancelled: "Cancelled", skipped: "Skipped", budget: "Budget reached",
+ };
+ 
+ const short = (sha: string) => sha.slice(0, 7) || "unknown";
+ const attemptAnchor = (scope: string, id: string) => `${scope}-attempt-${id}`;
+ 
+
+--- apps/desktop/src/reviews/ReviewPanel.tsx
+@@ 52,146 @@
+   </section>;
+ }
+ 
+ interface Props {
+   cwd: string;
+   target: Omit<DeskRunKey, "number">;
+   review: ReviewSummary;
+   reviewIntent?: ReviewIntent | undefined;
+   flows?: readonly FlowCard[] | undefined;
+   reviewModels?: readonly ReviewLaunchModel[] | undefined;
+   runCommand?: typeof reviewRun | undefined;
+   publishCommand?: typeof reviewPublish | undefined;
+   onRunSnapshot?: RunObserver | undefined;
+   onAccessLost?: ((reason: string) => void) | undefined;
+   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
+   onOpenFlow?: ((dir: string) => void) | undefined;
+   onRefresh: () => void;
++  /** The board action's intent was taken by the review interface. */
++  onIntentConsumed?: (() => void) | undefined;
+   onClose: () => void;
++  /** Opens the PR outside the app; defaults to the system browser. */
++  openBrowser?: typeof openExternal | undefined;
+ }
+ 
+ /** One Review: its state, rounds timeline and the review interface of the PR's current range. */
+-export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onClose }: Props) {
++export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onIntentConsumed, onClose, openBrowser = openReviewLink }: Props) {
++  const toast = useToast();
+   const panel = useRef<HTMLElement>(null);
+   const closeButton = useRef<HTMLButtonElement>(null);
++  const mounted = useRef(false);
+   useLayoutEffect(() => {
+     const before = document.activeElement as HTMLElement | null;
+     const pane = panel.current;
+     closeButton.current?.focus();
++    mounted.current = true;
+     return () => {
++      mounted.current = false;
+       if (pane?.contains(document.activeElement) && before?.isConnected) before.focus();
+     };
+   }, []);
++  // The app blocks navigation away from itself, so the link is handed to the system browser.
++  const openPullRequestLink = useCallback((url: string) => {
++    void openBrowser(url).catch(cause => {
++      if (mounted.current) toast({ level: "error", title: "Could not open link", detail: errMessage(cause) });
++    });
++  }, [openBrowser, toast]);
+   const { card } = review;
+   const subject = useMemo(() => ({ ...target, number: review.number }), [target, review.number]);
+   const flow = card ? flows?.find(item => item.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()) : undefined;
+   const findings = findingsLabel(review.findings);
+   const publication = publicationLabel(review);
+   const freshness = freshnessLabel(review.freshness);
+   return <aside ref={panel} className="side-panel review-detail-panel review-panel" style={{ width: 560 }} aria-label={`Review of pull request #${review.number}`}
+     onKeyDown={event => {
+       if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing && !(event.target as Element).closest('[role="dialog"]')) {
+         event.preventDefault();
+         onClose();
+       }
+     }}>
+     <header className="sheet-head">
+       <div className="sheet-head-row">
+         <span className="flow-id">{target.repo} #{review.number}</span>
+         <span className="grow" />
+-        {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request"><Icon name="external" /></ReviewBrowserLink>}
++        {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request" onOpen={openPullRequestLink}><Icon name="external" /></ReviewBrowserLink>}
+         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close review"><Icon name="x" size={16} /></button>
+       </div>
+       <h2 className="sheet-title">{reviewTitle(review)}</h2>
+       <div className="review-detail-meta review-panel-facts">
+-        <strong>{STATE_LABEL[review.state] ?? review.state}</strong>
++        <strong>{reviewStateLabel(review)}</strong>
+         <span>Round {review.latestRound}</span>
+         <span className="mono">{reviewedCommit(review)}</span>
+         {freshness && <span>{freshness}</span>}
+         {findings && <span>{findings}</span>}
+         {publication && <span>{publication}</span>}
+         <span>{SOURCE_LABEL[review.source] ?? review.source}</span>
+         {review.flowId && <span>Flow #{review.flowId}</span>}
+         {review.tokens !== null && <span>{review.tokens.toLocaleString()} tokens</span>}
+       </div>
+     </header>
+     <div className="sheet-body review-detail-body">
+       {card ? <ReviewWorkspace key={JSON.stringify([target.repositoryId, target.viewer, review.number, card.baseSha, card.headSha])} cwd={cwd} subject={subject} card={card}
+         reviewIntent={reviewIntent} flow={flow} projectFlows={flows} reviewModels={reviewModels} runCommand={runCommand}
+         publishCommand={publishCommand} onRunSnapshot={onRunSnapshot} onAccessLost={onAccessLost}
+-        onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefreshBoard={onRefresh} onLeave={onClose}>
++        onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefreshBoard={onRefresh} onLeave={onClose} onIntentConsumed={onIntentConsumed}>
+         <Rounds rounds={review.rounds} />
+       </ReviewWorkspace> : <>
+-        <p className="inline-banner tone-warn" role="status">GitHub did not return this pull request, so its current range is unknown. Refresh to try again.</p>
++        <div className="inline-banner tone-warn" role="status">
++          <span>GitHub did not return this pull request, so its current range is unknown. Refresh the Reviews list to try again.</span>
++          <button className="btn btn-sm" onClick={onRefresh}>Refresh</button>
++        </div>
+         <Rounds rounds={review.rounds} />
+       </>}
+     </div>
+   </aside>;
+ }
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 1,13 @@
+ import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import { reviewNeedsViewer, type ReviewState, type ReviewSummary, type ReviewsSnapshot } from "../../../../src/review/review-entity";
+ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+ import { Icon } from "../components/Icon";
+ import { EmptyState, overlayOpen, Spinner } from "../components/ui";
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviews } from "../platform/review";
+ import { reviewRules } from "../platform/reviewRules";
+-import type { reviewRun } from "../platform/reviewRuns";
++import { subscribeSessionReview, type reviewRun } from "../platform/reviewRuns";
+ import { ProjectReviewRules } from "../review/ProjectReviewRules";
+ import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
+ import type { reviewPublish } from "../review/ReviewPublishDialog";
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 21,122 @@
+ 
+-/** A request from another tab to show one PR's Review; a new nonce repeats it. */
+-export interface ReviewsFocus { number: number; nonce: number; intent?: ReviewIntent | undefined }
++/** The Reviews tab lights when a Review waits on the viewer: an answer, a publication decision or a stopped round. */
++export type ReviewsTabIndicator = "attention" | null;
++
++/** A request from another tab to show one PR's Review of the named repository; a new nonce repeats it. */
++export interface ReviewsFocus { repo: string; repositoryId?: string | undefined; number: number; nonce: number; intent?: ReviewIntent | undefined }
++
++type RulesTarget = Omit<DeskRunKey, "number">;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string | undefined;
+   /** This tab is shown. The view stays mounted while hidden so the tab indicator stays current. */
+   active: boolean;
+   focus?: ReviewsFocus | null | undefined;
++  /** The view took the focus request: the caller drops it, so a remount (repository or account) cannot replay it. */
++  onFocusHandled?: ((nonce: number) => void) | undefined;
++  /** Changes when the PR watcher completed a background poll: the list is read again, also while the tab is hidden. */
++  reloadSignal?: number | undefined;
++  /** The Pull requests board's verified identity: Review rules stay reachable when this list cannot be read. */
++  rulesTarget?: RulesTarget | null | undefined;
+   onIndicatorChange?: ((indicator: ReviewsTabIndicator) => void) | undefined;
+   flows?: readonly FlowCard[] | undefined;
+   reviewModels?: readonly ReviewLaunchModel[] | undefined;
+   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
+   onOpenFlow?: ((dir: string) => void) | undefined;
+   load?: typeof fetchReviews;
+   runCommand?: typeof reviewRun | undefined;
+   publishCommand?: typeof reviewPublish | undefined;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+-/** While the tab is shown and a Review is queued or running, the list is read again this often. */
++/** While a Review is queued or running, the list is read again this often (shown or hidden tab, not a hidden window). */
+ export const RUNNING_RELOAD_MS = 60_000;
+ 
+ const STATES: ReviewState[] = ["queued", "running", "needs_answer", "ready", "stopped", "published", "closed"];
++const FRESHNESS_LABEL: Record<ReviewFilters["freshness"], string> = { "": "Any freshness", current: "Current", behind: "Behind", unknown: "Unknown" };
+ 
+ interface ReadState {
+   snapshot: ReviewsSnapshot | null;
+   error: string;
+   loading: boolean;
+   /** The request that produced this state; a focus request waits for a load started after it. */
+   request: number;
+ }
+ 
+ const accessProblem = (message: string) => /^(access|configuration):/i.test(message);
+ const plainError = (message: string) => message.replace(/^(access|configuration|unavailable):\s*/i, "");
+ 
++/** Focus inside a dialog of this view, its Review panel, or a Review rules dialog portaled to the body. */
++function inViewOverlay(el: Element | null) {
++  if (!el) return false;
++  if (el.closest('.reviews-workspace [role="dialog"], .review-panel')) return true;
++  return !!el.closest('[role="dialog"]')?.querySelector("[data-review-board-dialog]");
++}
++
++interface RepositoryProps {
++  repo?: string | undefined;
++  /** The viewer picked a base repository: a waiting focus request is dropped. */
++  selectRepo: (repo?: string) => void;
++  /** A focus request names another repository: show it. */
++  focusRepo: (repo: string) => void;
++  pending: ReviewsFocus | null;
++  settlePending: () => void;
++}
++
+ export function ReviewsView(props: Props) {
+   const [repo, setRepo] = useState<string>();
+-  return <RepositoryReviews key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase(), repo])} {...props} repo={repo} selectRepo={setRepo} />;
++  // The focus request lives here, above the keyed list: it survives the switch to its repository and is
++  // taken once, so neither a remount nor a later repository switch replays it.
++  const [pending, setPending] = useState<ReviewsFocus | null>(null);
++  const taken = useRef<number>();
++  const focusRef = useRef(props.focus);
++  focusRef.current = props.focus;
++  const handled = useRef(props.onFocusHandled);
++  handled.current = props.onFocusHandled;
++  const focusNonce = props.focus?.nonce;
++  useEffect(() => {
++    const request = focusRef.current;
++    if (!request || request.nonce === taken.current) return;
++    taken.current = request.nonce;
++    setPending(request);
++    handled.current?.(request.nonce);
++  }, [focusNonce]);
++  const selectRepo = useCallback((next?: string) => {
++    setPending(null);
++    setRepo(next);
++  }, []);
++  const settlePending = useCallback(() => setPending(null), []);
++  return <RepositoryReviews key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase(), repo])} {...props} repo={repo}
++    selectRepo={selectRepo} focusRepo={setRepo} pending={pending} settlePending={settlePending} />;
+ }
+ 
+-function RepositoryReviews({ cwd, expectedViewer, active, focus, onIndicatorChange, flows, reviewModels, onOpenReviewSession, onOpenFlow,
+-  load = fetchReviews, runCommand, publishCommand, rulesCommand = reviewRules, repo, selectRepo }: Props & { repo?: string | undefined; selectRepo: (repo?: string) => void }) {
++function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, reloadSignal, rulesTarget: boardRules, flows, reviewModels, onOpenReviewSession, onOpenFlow,
++  load = fetchReviews, runCommand, publishCommand, rulesCommand = reviewRules, repo, selectRepo, focusRepo, pending, settlePending }: Props & RepositoryProps) {
+   const [read, setRead] = useState<ReadState>({ snapshot: null, error: "", loading: true, request: 0 });
+   const [attempt, setAttempt] = useState(0);
+   const refresh = useCallback(() => setAttempt(n => n + 1), []);
+   const sequence = useRef(0);
+   const identity = useRef("");
+   const [filters, setFilters] = useState<ReviewFilters>(EMPTY_REVIEW_FILTERS);
+   const [query, setQuery] = useState("");
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 149,153 @@
+     const request = ++sequence.current;
+     setRead(old => ({ ...old, loading: true }));
+-    void load(cwd, repo, expectedViewer).then(snapshot => {
++    // Locally closed Reviews' PR cards are read only while they are shown.
++    void load(cwd, repo, expectedViewer, showClosed).then(snapshot => {
+       if (request !== sequence.current) return;
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 168,195 @@
+         accessLost(message);
+         return;
+       }
+       // A failed refresh keeps the last list; a failed first load has none to keep.
+       setRead(old => ({ snapshot: old.snapshot, error: message, loading: false, request }));
+     });
+     return () => { sequence.current++; };
+-  }, [cwd, repo, expectedViewer, attempt, load, resetView, accessLost]);
++  }, [cwd, repo, expectedViewer, showClosed, attempt, load, resetView, accessLost]);
++
++  useEffect(() => {
++    if (restoreFocus.current && !overlayOpen()) search.current?.focus();
++    restoreFocus.current = false;
++  }, [read]);
+ 
+   // Read again whenever the tab is shown again.
+   const wasActive = useRef(active);
+   useEffect(() => {
+     if (active && !wasActive.current) refresh();
+     wasActive.current = active;
+   }, [active, refresh]);
+ 
+   const { snapshot } = read;
+   const running = !!snapshot?.reviews.some(review => review.state === "queued" || review.state === "running");
++  // The indicator follows a running Review while the tab is hidden too; a hidden window reads for nobody.
+   useEffect(() => {
+-    if (!active || !running) return;
+-    const timer = window.setInterval(refresh, RUNNING_RELOAD_MS);
++    if (!running) return;
++    const timer = window.setInterval(() => { if (document.visibilityState !== "hidden") refresh(); }, RUNNING_RELOAD_MS);
+     return () => window.clearInterval(timer);
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 214,225 @@
+         e.preventDefault();
+         search.current?.select();
+       }
+     };
+     window.addEventListener("keydown", focusSearch);
+     return () => window.removeEventListener("keydown", focusSearch);
+   }, [active]);
+ 
+-  // "Open in Reviews" from another tab: select the PR's Review, reading the list again once when it is not there yet.
+-  const [pending, setPending] = useState<(ReviewsFocus & { after?: number }) | null>(null);
+-  const focusNonce = focus?.nonce;
+-  const focusRef = useRef(focus);
+-  focusRef.current = focus;
+-  useEffect(() => {
+-    if (focusNonce !== undefined && focusRef.current) setPending({ ...focusRef.current });
+-  }, [focusNonce]);
++  // "Open in Reviews" from another tab: show its repository, select the PR's Review there, and read the list
++  // again once when it is not there yet.
++  const [refreshedFor, setRefreshedFor] = useState<{ nonce: number; after: number } | null>(null);
+   useEffect(() => {
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 236,241 @@
+-      setPending(null);
++      settlePending();
+       setNotice("");
+-      if (found.state === "closed") setShowClosed(true);
++      if (isClosedOrArchived(found)) setShowClosed(true);
+       if (!filterReviewList([found], filters, q, true).length) {
+         setFilters(EMPTY_REVIEW_FILTERS);
+         setQuery("");
+
+--- apps/desktop/src/reviews/ReviewsView.tsx
+@@ 247,417 @@
+-    } else if (read.request > pending.after) {
+-      setPending(null);
++    } else if (read.request > refreshedFor.after) {
++      settlePending();
+       if (!read.error) setNotice(`Pull request #${pending.number} has no Keryx review in this list.`);
+     }
+-  }, [pending, snapshot, read, filters, q, refresh]);
++  }, [pending, snapshot, read, filters, q, refresh, repo, focusRepo, settlePending, refreshedFor]);
++
++  // An intent (answer, view, start) is acted on once: after the review interface took it, and when the tab is
++  // left, the selection keeps only the Review, so coming back never replays it.
++  const consumeIntent = useCallback(() => setSelected(current => current?.intent ? { id: current.id } : current), []);
++  useEffect(() => { if (!active) consumeIntent(); }, [active, consumeIntent]);
+ 
+   // A mutation in the panel (start, cancel, answer, decision, publication) changes the Review's summary.
+   const seenRuns = useRef(new Map<number, string>());
+   const observeRuns = useCallback<RunObserver>((key, _revision, runs) => {
+     const signature = JSON.stringify(runs.runs.map(run => [run.id, run.state, run.publication ?? null, run.decision?.action ?? null, !!run.result]));
+     const previous = seenRuns.current.get(key.number);
+     seenRuns.current.set(key.number, signature);
+     if (previous !== undefined && previous !== signature) refresh();
+   }, [refresh]);
+ 
+   const visible = useMemo(() => snapshot ? filterReviewList(snapshot.reviews, filters, q, showClosed) : [], [snapshot, filters, q, showClosed]);
+   const target = useMemo(() => snapshot ? { repo: snapshot.repo, repositoryId: snapshot.repositoryId, viewer: snapshot.viewer } : null,
+     [snapshot?.repo, snapshot?.repositoryId, snapshot?.viewer]);
+   const review = selected && snapshot?.reviews.find(item => item.id === selected.id);
+   const narrowed = filtersActive(filters) || !!q.trim();
+-  const closedCount = snapshot?.reviews.filter(item => item.state === "closed").length ?? 0;
++  const closedCount = snapshot?.reviews.filter(isClosedOrArchived).length ?? 0;
++  // Review rules from the Pull requests board when this list could not be read (an older CLI, GitHub unavailable).
++  const rulesTarget = target ?? (!snapshot && read.error && !accessProblem(read.error) && boardRules &&
++    (!expectedViewer || boardRules.viewer.toLowerCase() === expectedViewer.toLowerCase()) &&
++    (!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);
+   const openReview = useCallback((id: string) => { setNotice(""); setSelected({ id }); }, []);
+   const resetFilters = () => { setFilters(EMPTY_REVIEW_FILTERS); setQuery(""); search.current?.focus(); };
+   const setFilter = <K extends keyof ReviewFilters>(key: K, value: ReviewFilters[K]) => setFilters(old => ({ ...old, [key]: value }));
+ 
+   return <div className="review-workspace reviews-workspace" hidden={!active}>
+     <section className="flows review-board reviews-board" aria-label="Reviews">
+       <div className="flows-toolbar">
+         <div className="flows-heading"><h1>Reviews</h1>{snapshot && <span className="count-label">
+           {visible.length}<span className="count-word"> {visible.length === 1 ? "review" : "reviews"}</span>
+         </span>}</div>
+         <label className="search-field"><Icon name="search" size={14} />
+           <input ref={search} type="search" aria-label="Search reviews" placeholder="Search by title or #number"
+             value={query} onChange={e => setQuery(e.target.value)} />
+         </label>
+         <select className="select-compact" aria-label="Review state" value={filters.state} disabled={!snapshot}
++          title={filters.state ? STATE_LABEL[filters.state] : "All states"}
+           onChange={e => setFilter("state", e.target.value as ReviewFilters["state"])}>
+           <option value="">All states</option>
+           {STATES.map(state => <option key={state} value={state}>{STATE_LABEL[state]}</option>)}
+         </select>
+         <select className="select-compact" aria-label="Freshness" value={filters.freshness} disabled={!snapshot}
++          title={FRESHNESS_LABEL[filters.freshness]}
+           onChange={e => setFilter("freshness", e.target.value as ReviewFilters["freshness"])}>
+-          <option value="">Any freshness</option><option value="current">Current</option><option value="behind">Behind</option><option value="unknown">Unknown</option>
++          {(Object.keys(FRESHNESS_LABEL) as Array<ReviewFilters["freshness"]>).map(kind => <option key={kind} value={kind}>{FRESHNESS_LABEL[kind]}</option>)}
+         </select>
+         <select className="select-compact" aria-label="Source" value={filters.source} disabled={!snapshot}
++          title={filters.source ? SOURCE_LABEL[filters.source] : "Any source"}
+           onChange={e => setFilter("source", e.target.value as ReviewFilters["source"])}>
+           <option value="">Any source</option>
+           {(Object.keys(SOURCE_LABEL) as Array<keyof typeof SOURCE_LABEL>).map(source => <option key={source} value={source}>{SOURCE_LABEL[source]}</option>)}
+         </select>
+         <button className="btn btn-sm" aria-pressed={showClosed} disabled={!snapshot} onClick={() => setShowClosed(value => !value)}
+           aria-label="Show closed" title={`Show closed${closedCount ? ` (${closedCount})` : ""}`}>
+           <Icon name="archive" size={14} /> <span className="toolbar-label">Show closed</span>
+         </button>
+         <div className="grow" />
+-        {active && target && <ProjectReviewRules key={"rules-" + JSON.stringify(target)} cwd={cwd} target={target} command={rulesCommand} onAccessLost={accessLost} />}
++        {active && rulesTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(rulesTarget)} cwd={cwd} target={rulesTarget} command={rulesCommand} onAccessLost={accessLost} />}
+         <div className="segmented" role="group" aria-label="Reviews view">
+           {(["board", "list"] as const).map(mode => <button key={mode} aria-pressed={view === mode}
+             aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+             onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
+         </div>
+         <button className="btn btn-sm" disabled={read.loading} onClick={refresh} aria-label="Refresh reviews" title="Refresh reviews">
+           {read.loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
+         </button>
+       </div>
+       {snapshot && <div className="review-context">
+         <Icon name="branch" size={14} />
+         {snapshot.repositories.length > 1 ? <select className="select-compact" aria-label="Base repository" value={snapshot.repo}
+           onChange={e => selectRepo(e.target.value)}>{snapshot.repositories.map(name => <option key={name}>{name}</option>)}</select>
+           : <strong>{snapshot.repo}</strong>}
+         <span>Signed in as {snapshot.viewer}</span>
+         <span className="grow" />
+         <span>{read.error ? "Last available list" : snapshot.warnings.length ? "Partial list" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+       </div>}
+       {read.error && <div className="inline-banner tone-warn" role="alert">
+         <Icon name="alert" size={15} /><span>{snapshot ? "Last available list. " : ""}{plainError(read.error)}</span>
+         <button className="btn btn-sm" onClick={refresh}>Try again</button>
+       </div>}
+       {snapshot && snapshot.warnings.length > 0 && <div className="inline-banner tone-warn" role="status">
+         <Icon name="alert" size={15} /><div>{snapshot.warnings.map(warning => <div key={warning}>{warning}</div>)}</div>
+       </div>}
+       {notice && <p className="inline-banner" role="status">{notice}</p>}
+       {!snapshot && read.loading && <div className="review-loading" role="status"><Spinner /> Loading reviews…</div>}
+       {active && snapshot && (visible.length ? <ReviewList view={view} reviews={visible} showClosed={showClosed} selectedId={review?.id} onOpen={openReview} />
+         : <EmptyState icon={narrowed ? "search" : "checklist"}
+           title={narrowed ? "No matching reviews" : snapshot.reviews.length ? "No open reviews" : "No Keryx reviews yet"}
+           actions={narrowed ? <button className="btn" onClick={resetFilters}>Reset search and filters</button>
+             : !snapshot.reviews.length ? undefined : closedCount && !showClosed ? <button className="btn" onClick={() => setShowClosed(true)}>Show closed</button> : undefined}>
+           {narrowed ? "Try another title, number, or filter." : snapshot.reviews.length ? undefined : "Start a review from a pull request; its rounds appear here."}
+         </EmptyState>)}
+     </section>
+-    {active && review && target && <ReviewPanel key={review.id} cwd={cwd} target={target} review={review} reviewIntent={selected?.intent}
++    {active && review && target && <ReviewPanel key={review.id} cwd={cwd} target={target} review={review} reviewIntent={selected?.intent} onIntentConsumed={consumeIntent}
+       flows={flows} reviewModels={reviewModels} runCommand={runCommand} publishCommand={publishCommand} onRunSnapshot={observeRuns}
+       onAccessLost={accessLost} onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefresh={refresh}
+       onClose={() => setSelected(null)} />}
+   </div>;
+ }
+ 
+ function ReviewFacts({ review }: { review: ReviewSummary }) {
+   const findings = findingsLabel(review.findings);
+   const publication = publicationLabel(review);
+   const freshness = freshnessLabel(review.freshness);
+   return <>
+     <span className="meta-item">Round {review.latestRound}</span>
+     <span className="meta-item"><span className="mono">{reviewedCommit(review)}</span>{freshness && <span className={isBehind(review.freshness) ? "review-behind" : undefined}> · {freshness}</span>}</span>
+     {findings && <span className="meta-item">{findings}</span>}
+     {publication && <span className="meta-item">{publication}</span>}
+     <span className="meta-item">{SOURCE_LABEL[review.source] ?? review.source}</span>
+     {review.flowId && <span className="meta-item">Flow #{review.flowId}</span>}
+     {review.tokens !== null && <span className="meta-item">{review.tokens.toLocaleString()} tokens</span>}
+   </>;
+ }
+ 
+ function ReviewTile({ review, selected, onOpen }: { review: ReviewSummary; selected: boolean; onOpen: (id: string) => void }) {
+   return <article className="flow-card review-summary-card" aria-current={selected || undefined}>
+-    <button className="review-card" onClick={() => onOpen(review.id)} aria-label={`Open review of #${review.number} ${reviewTitle(review)}`}>
++    <button className="review-card" onClick={() => onOpen(review.id)}>
+       <span className="flow-card-top"><span className="flow-id">#{review.number}</span><span className="grow" />
+-        <span className="badge">{STATE_LABEL[review.state] ?? review.state}</span></span>
++        <span className="badge">{reviewStateLabel(review)}</span></span>
+       <span className="flow-title">{reviewTitle(review)}</span>
+-      <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{review.card?.author || "Unknown author"}</span></span>
++      {/* Without its PR card (a closed Review read while Show closed was off) the PR number stands alone. */}
++      {review.card && <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{review.card.author || "Unknown author"}</span></span>}
+       <span className="flow-meta review-summary-facts"><ReviewFacts review={review} /></span>
+     </button>
+   </article>;
+ }
+ 
+ function ReviewLane({ column, reviews, selectedId, onOpen }: { column: ReviewColumn; reviews: ReviewSummary[]; selectedId?: string | undefined; onOpen: (id: string) => void }) {
+   return <section className="lane" aria-label={COLUMNS[column]}>
+     <header className="lane-head"><span className={"lane-dot reviews-lane-" + column} /><h2>{COLUMNS[column]}</h2><span className="lane-count">{reviews.length}</span></header>
+     <div className="lane-body">
+       {!reviews.length && <div className="lane-empty">No reviews</div>}
+       {reviews.map(review => <ReviewTile key={review.id} review={review} selected={review.id === selectedId} onOpen={onOpen} />)}
+     </div>
+   </section>;
+ }
+ 
+ const ReviewList = memo(function ReviewList({ view, reviews, showClosed, selectedId, onOpen }: {
+   view: "board" | "list"; reviews: ReviewSummary[]; showClosed: boolean; selectedId?: string | undefined; onOpen: (id: string) => void;
+ }) {
+   if (view === "board") {
+     return <div className="board review-lanes reviews-lanes">{groupByColumn(reviews, showClosed).map(([column, items]) =>
+       <ReviewLane key={column} column={column} reviews={items} selectedId={selectedId} onOpen={onOpen} />)}</div>;
+   }
+   return <div className="flow-list-wrap">
+     <table className="flow-list review-table reviews-table"><thead><tr>
+       <th>Pull request</th><th>Author</th><th>State</th><th>Round</th><th>Reviewed</th><th>Findings</th><th>Publication</th><th>Source</th><th>Flow</th><th>Tokens</th>
+     </tr></thead><tbody>{reviews.map(review => <tr key={review.id} aria-current={review.id === selectedId || undefined}>
+       <td><button className="review-list-link" onClick={() => onOpen(review.id)}><span className="flow-id">#{review.number}</span> {reviewTitle(review)}</button></td>
+-      <td>{review.card?.author || "Unknown author"}</td>
+-      <td>{STATE_LABEL[review.state] ?? review.state}</td>
++      <td>{review.card ? review.card.author || "Unknown author" : ""}</td>
++      <td>{reviewStateLabel(review)}</td>
+       <td>{review.latestRound}</td>
+       <td><span className="mono">{reviewedCommit(review)}</span> {freshnessLabel(review.freshness)}</td>
+       <td>{findingsLabel(review.findings)}</td>
+       <td>{publicationLabel(review)}</td>
+       <td>{SOURCE_LABEL[review.source] ?? review.source}</td>
+       <td>{review.flowId ? `#${review.flowId}` : ""}</td>
+       <td>{review.tokens !== null ? review.tokens.toLocaleString() : ""}</td>
+     </tr>)}</tbody></table>
+   </div>;
+ });
+
+--- apps/desktop/src/reviews/model.ts
+@@ 1,44 @@
+-import type { ReviewAttemptSummary, ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
++import type { ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
+ 
+ export type ReviewColumn = "running" | "waiting" | "behind" | "published" | "closed";
+ 
+ export const COLUMNS: Record<ReviewColumn, string> = {
+   running: "Running",
+   waiting: "Waiting on you",
+   behind: "Behind",
+   published: "Published",
+   closed: "Closed",
+ };
+ 
+ export const STATE_LABEL: Record<ReviewState, string> = {
+   queued: "Queued",
+   running: "Running",
+   needs_answer: "Needs your answer",
+   stopped: "Stopped",
+   ready: "Ready",
+   published: "Published",
+   closed: "Closed",
+ };
+ 
+ export const SOURCE_LABEL: Record<ReviewSource, string> = {
+   manual: "Manual",
+   scheduled: "Scheduled",
+   existing: "Existing review",
+ };
+ 
+ /** Only `behind` is behind: `unknown` (PR head unread) and a kind this build does not know are not. */
+ export function isBehind(freshness: ReviewFreshness | { kind: string }): freshness is Extract<ReviewFreshness, { kind: "behind" }> {
+   return freshness.kind === "behind";
+ }
+ 
+-/** Column choice order: closed → running → needs_answer → behind → by state. An unknown PR head goes by state. */
+-export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness">): ReviewColumn {
++/** Column choice order: closed or archived → running → needs_answer → behind → by state. An unknown PR head goes by state. */
++export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness"> & { archived?: boolean }): ReviewColumn {
+   const { state } = review;
+-  if (state === "closed") return "closed";
++  if (state === "closed" || review.archived) return "closed";
+   if (state === "queued" || state === "running") return "running";
+   if (state === "needs_answer") return "waiting";
+   if (isBehind(review.freshness)) return "behind";
+   return state === "published" ? "published" : "waiting";
+ }
+ 
+ export function freshnessLabel(freshness: ReviewFreshness | { kind: string }): string {
+
+--- apps/desktop/src/reviews/model.ts
+@@ 58,102 @@
+ 
+-/** The reviewed head commit, short; the latest requested head when no attempt finished with a result. */
+-export function reviewedCommit(review: Pick<ReviewSummary, "rounds">): string {
+-  const head = latestReviewed(review)?.reviewed?.headSha ?? review.rounds[0]?.headSha ?? "";
+-  return head.slice(0, 7);
++/** The state shown for a Review: an archived one reads "Archived" (it is listed under Show closed). */
++export function reviewStateLabel(review: Pick<ReviewSummary, "state"> & { archived?: boolean }): string {
++  return review.archived ? "Archived" : STATE_LABEL[review.state] ?? review.state;
++}
++
++/** Listed only under Show closed: closed locally, or every attempt archived. */
++export function isClosedOrArchived(review: Pick<ReviewSummary, "state"> & { archived?: boolean }): boolean {
++  return review.state === "closed" || !!review.archived;
+ }
+ 
+ const SEVERITIES = ["blocker", "major", "minor", "info"] as const;
+ 
+ export function findingsLabel(findings: ReviewSummary["findings"]): string {
+   if (!findings) return "";
+   const parts = SEVERITIES.filter(severity => (findings[severity] ?? 0) > 0).map(severity => `${findings[severity]} ${severity}`);
+   return parts.length ? parts.join(" · ") : "No findings";
+ }
+ 
+ export function publicationLabel(review: Pick<ReviewSummary, "publication" | "state">): string {
+   if (review.publication === "published") return "Published on GitHub";
+   if (review.publication === "skipped") return "Publication skipped";
+   if (review.state === "ready") return "Not published";
+   return "";
+ }
+ 
+ export function reviewTitle(review: Pick<ReviewSummary, "number" | "card">): string {
+   return review.card?.title || `Pull request #${review.number}`;
+ }
+ 
+ export interface ReviewFilters {
+   state: ReviewState | "";
+   freshness: ReviewFreshness["kind"] | "";
+   source: ReviewSource | "";
+ }
+ 
+ export const EMPTY_REVIEW_FILTERS: ReviewFilters = { state: "", freshness: "", source: "" };
+ 
+ export function filtersActive(filters: ReviewFilters): boolean {
+   return !!(filters.state || filters.freshness || filters.source);
+ }
+ 
+-/** Search matches the PR title, or its number with or without `#`. */
++/** Search matches the PR title, or its number anywhere with or without `#`, as on the Pull requests board. */
+ export function matchesSearch(review: Pick<ReviewSummary, "number" | "card">, query: string): boolean {
+   const text = query.trim().toLowerCase();
+
+--- apps/desktop/src/reviews/model.ts
+@@ 107,120 @@
+ export function filterReviewList(reviews: readonly ReviewSummary[], filters: ReviewFilters, query: string, showClosed: boolean): ReviewSummary[] {
+   return reviews.filter(review =>
+-    (showClosed || review.state !== "closed") &&
++    (showClosed || !isClosedOrArchived(review)) &&
+     (!filters.state || review.state === filters.state) &&
+     (!filters.freshness || review.freshness.kind === filters.freshness) &&
+     (!filters.source || review.source === filters.source) &&
+     matchesSearch(review, query));
+ }
+ 
+ export function groupByColumn(reviews: readonly ReviewSummary[], showClosed: boolean): Array<[ReviewColumn, ReviewSummary[]]> {
+   const groups: Record<ReviewColumn, ReviewSummary[]> = { running: [], waiting: [], behind: [], published: [], closed: [] };
+   for (const review of reviews) groups[reviewColumn(review)].push(review);
+   return (Object.keys(COLUMNS) as ReviewColumn[]).filter(column => column !== "closed" || showClosed).map(column => [column, groups[column]]);
+ }
+
+--- apps/desktop/src/shell/AppShell.tsx
+@@ 1,53 @@
+ import { useEffect, useRef, useState, type ReactNode } from "react";
+ import { isTauri, listen } from "../platform/backend";
+ import { basename } from "../lib/format";
+ import { fitSidePanelWidth, getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
+ import { SidePanel } from "../panels/SidePanel";
+ import { slotRef, useActivityRunning } from "../panels/sideSlots";
+ import { ConsentDialog } from "../panels/ConsentDialog";
+ import { overlayOpen } from "../components/ui";
+ import { Icon, type IconName } from "../components/Icon";
+ import { Menu, type MenuItem } from "../components/Menu";
+ import { Kbd } from "../components/ui";
+ import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
+ import type { LiveProject } from "../platform/projects";
+ import type { ReviewTabIndicator } from "../review/ReviewBoard";
++import type { ReviewsTabIndicator } from "../reviews/ReviewsView";
+ 
+ export type View = "session" | "flows" | "reviews" | "review" | "issues" | "metaproject" | "settings";
+ 
+ /** The project tabs in order (D4): Keryx work (Flows, Reviews) before the GitHub slices; `MOD`+digit follows the order. */
+ export const PROJECT_VIEWS = [
+   { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
+   { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
+   { id: "reviews", label: "Reviews", icon: "checklist", shortcut: `${MOD}3` },
+   { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}4` },
+   { id: "issues", label: "Issues", icon: "circleDot", shortcut: `${MOD}5` },
+   { id: "metaproject", label: "Metaproject", icon: "branch", shortcut: `${MOD}6` },
+ ] as const;
+ 
+ /** The project tab a `MOD`+digit key opens: the digit is the tab's position in `PROJECT_VIEWS`. */
+ export function projectViewForKey(key: string): (typeof PROJECT_VIEWS)[number]["id"] | undefined {
+   return /^[1-9]$/.test(key) ? PROJECT_VIEWS[Number(key) - 1]?.id : undefined;
+ }
+ 
+-/** The Reviews tab lights when a Review waits on the viewer: an answer, a publication decision or a stopped round. */
+-export type ReviewsTabIndicator = "attention" | null;
+-
+ /**
+  * With `titleBarStyle: "Overlay"` the web view runs under the traffic lights and
+  * the window has no native title bar height; leave room for the lights then.
+  * With a standard title bar the inset collapses to normal padding.
+  */
+ function useTitlebarInset(): boolean {
+   const [overlay, setOverlay] = useState(false);
+   useEffect(() => {
+     if (!isTauri()) return;
+     const check = () => setOverlay(window.outerHeight - window.innerHeight < 8);
+     check();
+     window.addEventListener("resize", check);
+     return () => window.removeEventListener("resize", check);
+   }, []);
+   return overlay;
+ }
+ 
+ interface ShellProps {
+   cwd: string;
+   recents: string[];

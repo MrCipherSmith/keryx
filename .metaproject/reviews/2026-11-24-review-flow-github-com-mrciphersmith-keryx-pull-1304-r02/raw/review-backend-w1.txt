@@ -1,0 +1,196 @@
+STATUS: DONE
+
+# Backend Review Report — PR #1304, round 2 (delta), wave 1, slice-01
+
+## Summary
+The round-1 backend fixes (85fa985c1) hold up. Round placement now follows time and the cache removes the repeated JSON parsing. Rows that were superseded before they started are left out. Publication is `pending` only for complete reviews. Archived attempts are flagged, card batches fail independently, and the comparisons have a deadline. Every one has a red-first test. I found no blocker or major. What remains is partial: the compare deadline stops waiting but does not stop the `gh` children; `headComparison` claims to be the freshness rule but `summarizeReview` does not use it; the cap warning still promises that a refresh reads more; and the header comment still says "Read-only".
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2..f6971fd4a` (explicit-hash-range, fix round 1)
+- Slice: slice-01, read in full (it holds excerpts). I also read the backend delta from git: review-reviews.ts, review-entity.ts, desk-run-store.ts, board-github.ts, review-board.ts and their three test files.
+- Not read: Desktop components beyond the slice excerpts (they belong to the frontend lenses), and the Rust host apart from `child::run_bounded_with_stdin`. No tests were run (exec budget 0). verify-tests-to-run-1.txt was not opened.
+
+## Stats
+- blocker: 0
+- major: 0
+- minor: 4
+- info: 2
+
+## Minor & Info
+
+### [R2-BE-001] The compare deadline does not end the `gh` children, so the process outlives the budget
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:94 (compareHeads), :133 (compare closure)
+- **Problem**: `Promise.race([compare(...), expired])` stops waiting at the deadline, but the losing `compare` is still a running `boardGh` → `exec(gh, ..., { timeout: 18_000 })` child. The CLI ends by setting `process.exitCode` (cli.ts:214), not by calling `process.exit`, so the event loop stays alive until those children end. That can take up to 18 s after the JSON is written, with up to 4 of them in flight. Desktop's `run_bounded_with_stdin` (child.rs:71) waits for the process to exit within 150 s, not for stdout. The card phase also has no budget: there are ceil(batches/3) slots of up to 18 s each. Worst case is 18 (identity) + cards + 60 + 18. That passes 150 s once there are more than about 120 open Reviews and GitHub stalls, and Desktop then shows an error instead of the list.
+- **Why it matters**: F-025 asked for an end-to-end bound under the host's 150 s reader. The budget only bounds how long the function waits, not how long the process runs.
+- **Fix**: Give the comparison the time that is left. Add `timeoutMs` to `CompareHeads` and pass `Math.min(left, 18_000)` to `boardGh(cwd, args, auth, timeoutMs)` in runReviewReviews, so the child is killed at the deadline. Optionally start the deadline when readReviews starts, so the card phase is inside it too.
+- **Disposition link**: F-025 → partial.
+
+### [R2-BE-002] `headComparison` says it is "the one rule" for freshness, but `summarizeReview` does not use it
+- **Severity**: minor
+- **File**: src/review/review-entity.ts:156-157, :190
+- **Problem**: `headComparison` returns null for a closed Review (closed locally, or merged or closed on GitHub). `summarizeReview` still computes `freshness(referenceHead(row), card?.headSha, compare)` with no closed check. A merged PR whose final head differs from the reviewed head, or a locally closed Review read with `--include-closed`, therefore reports `freshness: {kind:"behind", commits:null}` while no comparison is made. The new test "summarizeReview reports behind exactly when a comparison is needed" covers only an open Review, so it cannot catch this.
+- **Why it matters**: F-015 asked for one domain rule used by both the command and summarizeReview. The command uses it and summarizeReview does not, and the docstring states otherwise.
+- **Fix**: Either derive freshness in summarizeReview from `headComparison` (a closed Review with a known card is `current`, or skip the behind state for closed Reviews), or narrow the docstring to "the rule for which pairs the command compares". Add a closed-or-merged case to the "exactly when" test.
+- **Disposition link**: F-015 → partial.
+
+### [R2-BE-003] The cap warning still says "Refresh to read more", but a refresh compares the same 25
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:60
+- **Problem**: The comparisons now follow list order, newest activity first, which is deterministic. Refreshing without new activity compares the same 25 pairs again, so the warning promises an action that does nothing.
+- **Fix**: Drop "Refresh to read more." (for example: "Commit counts are shown for the 25 most recently active Reviews behind their pull request."), as F-022 already suggested.
+- **Disposition link**: F-022 → partial (the ordering is fixed; the warning text is not).
+
+### [R2-BE-004] The header comment still calls `review reviews` a "Read-only list"
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts:1
+- **Problem**: The CLI reference and the PR body now say the read opens the store for writing and migrates an older `runs.sqlite`. The module header still says "Read-only list of local Reviews", and F-020 named this exact comment.
+- **Fix**: `// List of local Reviews for the Desktop Reviews tab: \`keryx review reviews --json\`. Opens the store writable, so a pre-Reviews store is migrated by the first read.`
+- **Disposition link**: F-020 → partial.
+
+### [R2-BE-005] The PR body's store rule no longer matches round placement
+- **Severity**: info
+- **File**: PR body (pr-context.md:14), against src/review/desk-run-store.ts:243-256
+- **Problem**: The body says "the same base..head joins its existing round as a retry". After the F-008 fix, `roundFor` treats only a repeat inside the current highest round as a retry. A return to an earlier range (A, B, A) opens the next round, which the new store test pins.
+- **Fix**: Change the bullet to "the same base..head within the current highest round is a retry; any other range, a return to an earlier one included, opens the next round."
+
+### [R2-BE-006] A fully archived Review that was published reports `state: "ready"` and `publication: null` in the JSON
+- **Severity**: info
+- **File**: src/review/desk-run-store.ts:619, src/review/review-entity.ts (summarizeReview)
+- **Problem**: reviewRows reads no publication for archived attempts, so they get null. When every attempt is archived, summarizeReview takes its state from them, and `reviewState` returns `ready` rather than `published`. The CLI reference says archived attempts "do not decide the state", but in the all-archived case they do. Desktop hides this by showing "Archived", so only JSON consumers see it.
+- **Fix**: Read the publication for archived attempts too, and leave them out only of `reviewNeedsViewer`. Or document that a fully archived Review's state ignores its publication.
+
+## Prior dispositions (checked against code at f6971fd)
+- F-004 closed: publication() returns `pending` only for a completed, complete-coverage attempt; reviewNeedsViewer lights on `pending` only; covered by store and entity tests.
+- F-008 closed: option (b). Retry is matched only in the highest counted round, and A,B,A opens round 3 (store test).
+- F-010 closed: stateAttempt uses the round's accepted result when a later attempt in that round stopped; the fixture now expects `published`.
+- F-015 partial: see R2-BE-002.
+- F-016 closed: the claim says "disputed", but the code does move the writer to board-github `writeBoundJson`/`writeBoundJsonText`, and review-board no longer exports writeJson (pinned by a test).
+- F-018 closed: the shortcut table and "Reviews → Review rules" are updated (desktop-app.md:157, :439).
+- F-019 closed: cli-reference lists the three freshness kinds.
+- F-020 partial: see R2-BE-004. The docs and PR body are updated; the header comment is not.
+- F-021 closed: specification.md:8 and :226 record that `version: 1` was kept.
+- F-022 partial: see R2-BE-003.
+- F-023 closed: locally closed Reviews skip card reads unless `--include-closed` is given; batches run through mapPool(3).
+- F-024 closed: each batch keeps its own result, and reviewNeedsViewer excludes `card === null` except needs_answer (tested).
+- F-025 partial: see R2-BE-001.
+- F-026 closed: each Review's placed attempts are read once per assignReviews call and cached.
+- F-027 withdrawn: the operator kept it as a documented limitation, pinned by the "history imported later" test.
+- F-028 closed: the `neverStarted` predicate is shared; superseded rows count for no round, are not used as `previous`, and are not listed.
+- F-042 closed: the differing-requested-head fixture expects `behind`.
+- F-043 closed: there are deleted-attempt and `recoverable` → `failed` fixtures.
+- F-044 closed: there is an A,B,A fixture, now with the round-3 semantics.
+- F-045 closed: a non-object-id head is not compared.
+- F-046 closed: there is a failed attempt with a reviewed range that is not the reference.
+- F-047 closed: the test matches `/positional/i`.
+- F-053 partial: (a) the 25 boundary and (c) the string `ahead_by` are tested; (b) the equal-createdAt tie-break and (d) the real gh compare closure are not.
+- I did not dispose the Desktop-only findings (F-001–F-003, F-005–F-007, F-009, F-011–F-014, F-017, F-029–F-033, F-035, F-037–F-041, F-048–F-052, F-054–F-060), F-034 or F-036. They are outside this lens and are for the frontend, UI and PR-contract reviewers.
+
+## Positive Notes
+- The pure `roundFor` over an in-memory placed list is easier to read and to test than the three SQL lookups it replaces.
+- The `neverStarted` SQL fragment removes a duplicated predicate (sibling at desk-run-store.ts:665).
+- The partial-failure behaviour of card batches is pinned at the batch boundary, 25 Reviews in two batches.
+
+## Routing audit
+- graph_used: no. The delta's backend files and their consumers were known from the slice and the diffstat, and no change to an export had to be traced.
+- wiki_used: not-relevant. The behaviour is defined in plan.md, fix-round-1.md and the CLI reference.
+- ctx_used: yes (keryx ctx read / rg / run).
+- raw_rg_used: no. I used a few short `sed`/`git diff` reads with keryx:raw markers to write bounded excerpts to the scratchpad.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "slices": ["slice-01"],
+  "summary": "The round-1 backend fixes hold. Four minor items remain partial: the compare deadline does not kill the gh children (the process can outlive the budget), headComparison is not used by summarizeReview's freshness, the cap warning still says refresh reads more, and the header comment still says Read-only. Two info items: the PR body's store rule is stale, and a fully archived published Review reports ready in the JSON.",
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 2 },
+  "findings": [
+    {
+      "id": "R2-BE-001", "severity": "minor", "reviewer": "review-backend",
+      "file": "src/commands/review-reviews.ts", "line": 94,
+      "problem": "compareHeads races each compare against a deadline but does not cancel the losing gh child (boardGh exec timeout 18 s). The CLI exits by exitCode, so the process lives until those children end; Desktop's run_bounded_with_stdin waits for process exit within 150 s. The card phase (ceil(batches/3) x 18 s) is outside any budget.",
+      "impact": "The end-to-end bound F-025 asked for does not hold. With more than about 120 open Reviews and a stalled GitHub, the read can pass 150 s and Desktop shows an error instead of the list; in every case exit is delayed up to 18 s past the budget.",
+      "suggested_fix": "Add a timeoutMs parameter to CompareHeads and pass Math.min(left, 18_000) to boardGh(cwd, args, auth, timeoutMs) so the child is killed at the deadline. Optionally start the deadline at readReviews entry to include the card phase.",
+      "evidence": "review-reviews.ts:94 Promise.race with setTimeout; :133 boardGh without a timeout argument; board-github.ts:133 timeout = 18_000; cli.ts:214 sets process.exitCode; child.rs:71-84 waits on try_wait until the deadline.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R2-BE-002", "severity": "minor", "reviewer": "review-backend",
+      "file": "src/review/review-entity.ts", "line": 156,
+      "problem": "headComparison's docstring says it is the one rule for the command's comparisons and for freshness, but summarizeReview (line 190) computes freshness without the closed check. A closed Review whose PR head differs (merged on GitHub, or locally closed with --include-closed) reports behind with commits null, and no comparison is made.",
+      "impact": "F-015 is only half done: the rule is still split between two places, and closed Reviews carry a behind freshness the command never counts.",
+      "suggested_fix": "Derive freshness from headComparison (a closed Review with a known card is not behind), or narrow the docstring; add a closed or merged case to the 'reports behind exactly when a comparison is needed' test.",
+      "evidence": "review-entity.ts:157-160 headComparison includes !reviewClosed; :190 freshness(referenceHead(row), card?.headSha ?? null, compare) does not.",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-BE-003", "severity": "minor", "reviewer": "review-backend",
+      "file": "src/commands/review-reviews.ts", "line": 60,
+      "problem": "The cap warning says 'Refresh to read more', but the compared set is the first 25 in deterministic list order, so a refresh compares the same ones.",
+      "impact": "The warning tells the viewer to take an action that changes nothing (F-022 remainder).",
+      "suggested_fix": "Drop 'Refresh to read more.' and name what is shown, for example the 25 most recently active Reviews behind their pull request.",
+      "evidence": "review-reviews.ts:52-56 sorts rows by latest activity; :60 warning text; :61 behind.slice(0, MAX_REVIEW_COMPARES).",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-BE-004", "severity": "minor", "reviewer": "review-backend",
+      "file": "src/commands/review-reviews.ts", "line": 1,
+      "problem": "The header comment still reads 'Read-only list of local Reviews', but the read opens the store writable and migrates a pre-Reviews store. F-020 named this comment.",
+      "impact": "A maintainer reading the module is misled about a write and a migration at Desktop start (F-020 remainder).",
+      "suggested_fix": "Reword it: 'List of local Reviews for the Desktop Reviews tab; opens the store writable, so a pre-Reviews store is migrated by the first read.'",
+      "evidence": "review-reviews.ts:1; cli-reference.md and the PR body were updated to say 'opened for writing ... migrated'.",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-BE-005", "severity": "info", "reviewer": "review-backend",
+      "file": "src/review/desk-run-store.ts", "line": 246,
+      "problem": "The PR body's store bullet says 'the same base..head joins its existing round as a retry', but after the F-008 fix only a repeat inside the current highest round is a retry; A,B,A opens a new round.",
+      "impact": "The PR description contradicts the implemented and tested rule.",
+      "suggested_fix": "Update the bullet: a repeat within the current highest round is a retry; any other range, a return to an earlier one included, opens the next round.",
+      "evidence": "pr-context.md:14; desk-run-store.ts:243-256 roundFor; desk-run-store.test.ts 'a return to an earlier range (A, B, A) opens the next round'.",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-BE-006", "severity": "info", "reviewer": "review-backend",
+      "file": "src/review/desk-run-store.ts", "line": 619,
+      "problem": "Archived attempts get publication null, so a Review whose attempts are all archived and whose last attempt was published reports state 'ready' and publication null in the review reviews JSON. The CLI reference says archived attempts do not decide the state.",
+      "impact": "JSON consumers see the wrong state and publication. Desktop hides it behind the 'Archived' label.",
+      "suggested_fix": "Read the publication for archived attempts too (reviewNeedsViewer already excludes archived Reviews), or document that a fully archived Review's state ignores its publication.",
+      "evidence": "desk-run-store.ts:619 '&& !archived'; review-entity.ts stateAttempts returns all attempts when every one is archived; reviewState uses publication === 'published'.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-010", "disposition": "closed" },
+    { "id": "F-015", "disposition": "partial" },
+    { "id": "F-016", "disposition": "closed" },
+    { "id": "F-018", "disposition": "closed" },
+    { "id": "F-019", "disposition": "closed" },
+    { "id": "F-020", "disposition": "partial" },
+    { "id": "F-021", "disposition": "closed" },
+    { "id": "F-022", "disposition": "partial" },
+    { "id": "F-023", "disposition": "closed" },
+    { "id": "F-024", "disposition": "closed" },
+    { "id": "F-025", "disposition": "partial" },
+    { "id": "F-026", "disposition": "closed" },
+    { "id": "F-027", "disposition": "withdrawn" },
+    { "id": "F-028", "disposition": "closed" },
+    { "id": "F-042", "disposition": "closed" },
+    { "id": "F-043", "disposition": "closed" },
+    { "id": "F-044", "disposition": "closed" },
+    { "id": "F-045", "disposition": "closed" },
+    { "id": "F-046", "disposition": "closed" },
+    { "id": "F-047", "disposition": "closed" },
+    { "id": "F-053", "disposition": "partial" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Desktop-only prior findings were not disposed by this lens: they go to the frontend, ui-ux and testing lenses. F-034 and F-036 are for review-pr-contract and review-logic.",
+    "No tests were run (exec_budget_s 0); verify-tests-to-run-1.txt was not opened."
+  ]
+}
+```

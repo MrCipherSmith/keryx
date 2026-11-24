@@ -5200,6 +5200,29 @@ discussion and checks with `--number N`. A partial list includes warnings.
 `keryx review board --json --repositories` lists the configured GitHub.com fetch
 remotes without contacting GitHub, with the origin repository first.
 
+`keryx review reviews --json [--repo owner/name] [--include-closed]` lists the selected account's local
+Reviews of a connected repository: one per pull request, newest activity first. Each
+Review carries its pull request card (`null` when it could not be read), its state
+(`queued`, `running`, `needs_answer`, `stopped`, `ready`, `published` or `closed`), its
+freshness, the range its newest finished reviewed attempt covered (`reviewed`, or
+`null`), its rounds newest first with their attempts, the findings of the latest
+reviewed round, the publication outcome, the source, the linked Flow and the total
+tokens. Freshness has three kinds: `current`; `behind`, with the number of new commits
+(`commits`, `null` when the count is unknown) and whether the branch was rewritten
+(`rewritten`); and `unknown`, when the pull request's head cannot be read (its card was
+not loaded, or GitHub did not return the pull request). Reports and reviewer sessions
+are not included. Deleted attempts, and requests superseded before they started, are
+left out. Archived attempts stay in the rounds with `archived: true` and do not decide
+the state, findings or publication; a Review whose attempts are all archived is listed
+with `archived: true`. An interrupted attempt awaiting recovery reads as `failed`.
+Pull request cards are not read for Reviews closed locally (their `card` is `null`)
+unless `--include-closed` is given; Desktop passes it while **Show closed** is on. Commit counts are read for
+the first 25 Reviews behind their pull request in list order, within 60 seconds in all;
+the rest, any comparison GitHub refuses and any not answered in time show an unknown
+count and a warning. Without a local review store the list is empty and no store is
+created. An existing store is opened for writing, so a store that predates Reviews is
+migrated (attempts placed into Reviews and rounds) by the first list read.
+
 `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
 `keryx review accounts project --json` shows the current project's selection.
 Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
