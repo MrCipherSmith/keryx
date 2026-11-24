@@ -27,9 +27,11 @@ import { packageFacts, packageHashesOf, readRoundRecord, renderRoundLine, roundR
 import {
   appendRoundRegistry,
   compactEntries,
+  partialRoundVouch,
   readRoundRegistry,
   readRoundRegistryReport,
   recordFinishedRound,
+  recordPartialRound,
   REGISTRY_COMPACT_BYTES,
   registryVouches,
   repoIdentity,
@@ -276,6 +278,74 @@ describe("choosing between sources", () => {
     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
     expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "r1", reviewedHead: A } });
     expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
+  });
+
+  describe("flow 520 AC7: an update round builds on a partial previous round Desktop ran", () => {
+    // What a partial Desktop attempt leaves in its run directory: `review complete` never ran, so the manifest is still a
+    // draft, the ledger did not establish scopeReviewed, and the reviewers' findings were ingested into findings.json.
+    function partialPackage(extraManifest: Record<string, unknown> = {}): string {
+      const dir = ".metaproject/reviews/desk-partial";
+      writePackage(dir, { reviewId: "desk-partial", head: B, status: "draft", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
+      write(`${dir}/research.json`, JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
+      if (Object.keys(extraManifest).length > 0) {
+        const file = path.join(root, dir, "manifest.json");
+        writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ...extraManifest }));
+      }
+      return path.join(root, dir);
+    }
+    const deskVouch = (dir: string, packageId = "desk-partial"): RoundRegistryEntry =>
+      ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: B, ...packageFacts(dir)!.hashes, completedAt: "2026-11-24T00:00:00.000Z", event: "desk-partial" }) as RoundRegistryEntry;
+
+    test("partial previous round with accepted findings: delta, prior findings attached, the area it did not cover planned as new", async () => {
+      const dir = partialPackage();
+      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
+      // Without Desktop's own record the draft is no previous round at all (M1 unchanged).
+      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [] })).round.previous).toBeNull();
+      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
+      expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "desk-partial", reviewedHead: B }, range: { base: B, head: C } });
+      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
+      // Per-file coverage of a partial round is not proven, so everything of merge-base..head outside the delta is new, not a second look.
+      expect(round.secondLookHunks).toBeUndefined();
+      expect(round.newHunks.map((h) => h.file).sort()).toEqual(["src/a.ts", "src/new.ts", "src/other.ts"]);
+      expect(round.weakPrevious).toContain("not completed");
+      expect(round.sourcesTried[0]!.detail).toContain("partial round");
+    });
+
+    test("previous partial round run with different settings still gives its findings", async () => {
+      const dir = partialPackage({ options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } });
+      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
+      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
+      expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "desk-partial" } });
+      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
+    });
+
+    test("only Desktop's partial-round record for exactly these files admits a draft; any other draft stays out", async () => {
+      const dir = partialPackage();
+      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
+      const vouch = deskVouch(dir);
+      const previousWith = async (registry: RoundRegistryEntry[]) => (await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry })).round.previous;
+      // A record of another kind (a finished round) does not admit a draft.
+      expect(await previousWith([{ ...vouch, event: "publish" }])).toBeNull();
+      // A record of another package, or of other files, does not either.
+      expect(await previousWith([deskVouch(dir, "other-package")])).toBeNull();
+      write(".metaproject/reviews/desk-partial/findings.json", "[]");
+      expect(await previousWith([vouch])).toBeNull();
+      // A draft without ingested findings is never admitted, whatever the registry says.
+      rmSync(path.join(dir, "findings.json"));
+      expect(await previousWith([deskVouch(dir)])).toBeNull();
+    });
+
+    test("a partial-round record never vouches for the same files committed by the branch as a closed round", async () => {
+      // Status is not part of the hashed manifest identity: the branch commits Desktop's partial package marked closed.
+      const files = packageFiles(".metaproject/reviews/desk-partial", { reviewId: "desk-partial", head: B, status: "closed", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
+      const C = commit("commit a closed copy of the partial round", { ...files, "src/other.ts": "export const o = 1;\n" });
+      const vouch = deskVouch(path.join(root, ".metaproject/reviews/desk-partial"));
+      const { round } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [vouch] });
+      expect(round.mode).toBe("fallback-first");
+      expect(round.sourcesTried[0]!.detail).toContain("not trusted desk-partial");
+      // The same files recorded as a finished round are trusted, as before.
+      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [{ ...vouch, event: "complete" }] })).round.mode).toBe("delta");
+    });
   });
 
   test("a head this clone has never fetched is not an ancestor", async () => {
@@ -542,6 +612,29 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
         write(".metaproject/reviews/r1/findings.json", "[]");
         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeUndefined();
         expect(readRoundRegistry("remote:another", dataDir)).toEqual([]);
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
+
+    test("flow 520 AC7: Desktop records a partial round with ingested findings as desk-partial, and nothing without them", () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        const dir = path.join(root, ".metaproject/reviews/partial");
+        writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "draft", findings: [finding("F-1")] });
+        // recordFinishedRound refuses a draft; the partial record is the only way one is recorded.
+        expect(recordFinishedRound(dir, "ingest", { cwd: root, dir: dataDir }).skipped).toContain("not a finished round");
+        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).error).toBeUndefined();
+        const entries = readRoundRegistry(repoIdentity(root), dataDir);
+        expect(entries).toEqual([expect.objectContaining({ packageId: "partial", reviewedHead: A, event: "desk-partial" })]);
+        expect(partialRoundVouch(entries, "partial", packageFacts(dir)!.hashes)).toBeDefined();
+        // A finished-round entry for the same files is no partial-round record.
+        expect(partialRoundVouch(entries.map((entry) => ({ ...entry, event: "complete" as const })), "partial", packageFacts(dir)!.hashes)).toBeUndefined();
+        write(".metaproject/reviews/partial/findings.json", "{\"not\":\"a list\"}");
+        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
+        rmSync(path.join(dir, "findings.json"));
+        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
+        expect(readRoundRegistry(repoIdentity(root), dataDir)).toHaveLength(1);
       } finally {
         rmSync(dataDir, { recursive: true, force: true });
       }

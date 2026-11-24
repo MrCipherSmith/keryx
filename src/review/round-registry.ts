@@ -41,10 +41,11 @@ export type RoundRegistryEntry = {
   roundRecordSha256?: string | undefined;
   completedAt: string;
   /**
-   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, or the operator's premise
-   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for.
+   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, the operator's premise
+   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for, or Desktop
+   * handing a partial attempt's package to the next round of the same Review (`desk-partial`, {@link recordPartialRound}).
    */
-  event: "ingest" | "complete" | "publish" | "decide-premise";
+  event: "ingest" | "complete" | "publish" | "decide-premise" | "desk-partial";
 };
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
@@ -169,6 +170,16 @@ export function registryVouches(entries: readonly RoundRegistryEntry[], packageI
   );
 }
 
+/**
+ * Flow 520 AC7: Desktop's record that this package, with exactly these files, is a partial round it ran itself and handed
+ * to the next round of the same Review. Only that record admits a package with no completion evidence (a draft) as a
+ * previous round, and only one whose findings were ingested: a partial round builds on its accepted findings.
+ */
+export function partialRoundVouch(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
+  if (hashes === undefined || hashes.findingsSha256 === null) return undefined;
+  return registryVouches(entries.filter((entry) => entry.event === "desk-partial"), packageId, hashes);
+}
+
 /** The package id the registry records a package under: its manifest's `reviewId`, else its directory name. */
 function packageIdOf(packageDir: string, manifest: Record<string, unknown>): string {
   return typeof manifest.reviewId === "string" ? manifest.reviewId : path.basename(packageDir);
@@ -226,6 +237,48 @@ export function recordFinishedRound(
     };
     const written = appendRoundRegistry(identity, entry, options.dir);
     return { file: written.file, ...(written.warning === undefined ? {} : { warning: written.warning }) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Flow 520 AC7: record a partial round Desktop ran (its attempt ended `partial` with accepted findings), as Desktop copies
+ * the package from its own run directory into the next round's checkout. Called only by the Desktop executor, which takes
+ * the package from the user's run store, never from a checkout a pull request can write. A package without ingested
+ * findings (findings.json holding a list) is not recorded. Unlike {@link recordFinishedRound} a failure is returned, and
+ * the caller then does not hand the package on.
+ */
+export function recordPartialRound(
+  packageDir: string,
+  options: { cwd: string; dir?: string | undefined; now?: Date },
+): { file?: string; error?: string; skipped?: string } {
+  try {
+    const facts = packageFacts(packageDir);
+    if (facts === undefined) return { error: `${packageDir} has no readable manifest.json` };
+    const read = readConfigFile(path.join(packageDir, "findings.json"));
+    let findings: unknown;
+    try {
+      findings = read.ok ? JSON.parse(read.text) : undefined;
+    } catch {
+      findings = undefined; // Not JSON: no ingested findings, refused just below.
+    }
+    if (!Array.isArray(findings)) return { skipped: "the partial round has no ingested findings.json" };
+    const identity = repoIdentity(options.cwd);
+    if (identity === undefined) return { error: `${options.cwd} is not a git checkout` };
+    const target = facts.manifest.target !== null && typeof facts.manifest.target === "object" ? (facts.manifest.target as Record<string, unknown>) : {};
+    const entry: RoundRegistryEntry = {
+      v: 2,
+      packageId: packageIdOf(packageDir, facts.manifest),
+      targetKey: roundStampOf(facts.manifest)?.targetKey ?? `${String(target.kind ?? "unknown")}:${String(target.ref ?? "")}`,
+      reviewedHead: typeof target.head === "string" ? target.head : null,
+      manifestSha256: facts.hashes.manifestSha256,
+      findingsSha256: facts.hashes.findingsSha256,
+      ...(facts.hashes.roundRecordSha256 === null ? {} : { roundRecordSha256: facts.hashes.roundRecordSha256 }),
+      completedAt: (options.now ?? new Date()).toISOString(),
+      event: "desk-partial",
+    };
+    return { file: appendRoundRegistry(identity, entry, options.dir).file };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

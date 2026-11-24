@@ -29,6 +29,7 @@ import { finishAutoDesktopReview } from "./desk-auto-finalize";
 import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay,
   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
+import { recordPartialRound } from "./round-registry";
 import { mainReviewRoot } from "./report-overlay";
 import { askDesktopOperator } from "./desk-questions";
 import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
@@ -47,6 +48,8 @@ interface DeskExecutionOptions {
   headSha: string;
   runDir: string;
   previousRunDir?: string | undefined;
+  /** The previous attempt ended partial with accepted findings: its draft package is handed on as a partial round (flow 520 AC7). */
+  previousPartial?: boolean | undefined;
   resumeRunDir?: string;
   guidance?: string;
   operatorRunId?: string;
@@ -83,6 +86,8 @@ interface ExecutorPorts {
   remoteUrl?: string;
   revision?: (options: DeskExecutionOptions) => Promise<Revision>;
   spawn?: SpawnChild;
+  /** Test seam: the keryx config directory the round registry is written to. Default: the user's. */
+  registryDir?: string;
 }
 
 const exec = promisify(execFile);
@@ -517,9 +522,12 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       }
       if (previous && !resumePackage) {
         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
-        if (manifest?.status === "closed" && await regularPackage(previous) && manifest.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId)) {
-          await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
-        }
+        const usable = manifest?.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(previous);
+        // A closed package is a finished round. A partial attempt's package never got past its draft: only Desktop's own
+        // record, written here from the user's run store, lets the next round cut from it (prior-round.ts, TM-04 §4d).
+        const handOn = usable && (manifest.status === "closed" ||
+          (options.previousPartial === true && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));
+        if (handOn) await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
       }
       signal.throwIfAborted();
       const childFile = path.join(runDir, "child.json");
