@@ -9,17 +9,66 @@
   "id": "519",
   "slug": "desktop-review-v2-stage2",
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T11:06:50.991Z",
+  "updatedAt": "2026-11-24T14:29:13.006Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-24T14:29:07.609Z",
+      "note": "bun test desk-run-store.test.ts on merged main 3b7e18bb2: pass (91 tests across the four root AC suites, 0 fail); A,B,A opens round 3 (D-R1)"
+    },
+    "AC2": {
+      "at": "2026-11-24T14:29:07.830Z",
+      "note": "desk-run-store.test.ts on merged main: pass"
+    },
+    "AC3": {
+      "at": "2026-11-24T14:29:08.054Z",
+      "note": "desk-run-store.test.ts + board-badges.test.ts on merged main: pass; parity run recorded in research-evidence/badge-parity-b38e33ce8.txt of the round-2 package"
+    },
+    "AC4": {
+      "at": "2026-11-24T14:29:08.311Z",
+      "note": "review-entity.test.ts + review-reviews.test.ts on merged main: pass"
+    },
+    "AC5": {
+      "at": "2026-11-24T14:29:08.523Z",
+      "note": "judged: bridge args built for a reviews-only request and refused in combination, in review.rs and dev/reviewBoard.ts with tests on both sides; Rust unit tests ran in CI only (29 checks green on PR #1304 head 3c730b7ba)"
+    },
+    "AC6": {
+      "at": "2026-11-24T14:29:08.748Z",
+      "note": "apps/desktop bun test reviews+shell+review on merged main: 249 pass, 0 fail"
+    },
+    "AC7": {
+      "at": "2026-11-24T14:29:08.994Z",
+      "note": "apps/desktop bun test reviews+review on merged main: pass"
+    },
+    "AC8": {
+      "at": "2026-11-24T14:29:09.209Z",
+      "note": "apps/desktop bun test reviews+review on merged main: pass; needsViewerAttention mutation check (13 mutations, each failed a test) recorded in the journal"
+    },
+    "AC9": {
+      "at": "2026-11-24T14:29:09.420Z",
+      "note": "judged: attention-set lines in ReviewBoard.tsx unchanged by the PR and kept as on main after the rebase; needsViewerAttention mutation check in the journal"
+    },
+    "AC10": {
+      "at": "2026-11-24T14:29:09.647Z",
+      "note": "apps/desktop bun test src/review on merged main: pass; slot title on stage 1's work row names the round (PrWorkRow.dom.test.tsx)"
+    },
+    "AC11": {
+      "at": "2026-11-24T14:29:09.913Z",
+      "note": "judged: migration copy check on a scratch copy of the working database, 17 attempts before and after, 13 Reviews, rounds 1x13 and 2x4, recorded in the journal; not repeated after D-R1"
+    },
+    "AC12": {
+      "at": "2026-11-24T14:29:10.141Z",
+      "note": "CI green on PR #1304 head 3c730b7ba: 29 passing, 0 failing; root typecheck clean; Desktop tests 1171/1171 on the rebased code before merge"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1304"
   },
   "baseBranch": "main",
   "owner": {
@@ -241,7 +290,7 @@
       "id": "T12",
       "title": "review-orchestrator on the PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -251,7 +300,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Review ran as two managed rounds (round 1 on 20e4281, round 2 as a delta on f6971fd); round 2 capped by the operator: 0 blockers, 1 major fixed, 83 minors/info deferred (deferred-findings.md); delta review of the fix found no blocker or major"
     },
     {
       "id": "T13",
@@ -562,6 +613,76 @@
       "at": "2026-11-24T11:06:50.991Z",
       "event": "task-done",
       "detail": "T17: Fix F-048: Review panel Open pull request link does nothing"
+    },
+    {
+      "at": "2026-11-24T14:29:07.390Z",
+      "event": "task-done",
+      "detail": "T12: review-orchestrator on the PR"
+    },
+    {
+      "at": "2026-11-24T14:29:07.609Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test desk-run-store.test.ts on merged main 3b7e18bb2: pass (91 tests across the four root AC suites, 0 fail); A,B,A opens round 3 (D-R1) (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:07.831Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: desk-run-store.test.ts on merged main: pass (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:08.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: desk-run-store.test.ts + board-badges.test.ts on merged main: pass; parity run recorded in research-evidence/badge-parity-b38e33ce8.txt of the round-2 package (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:08.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-entity.test.ts + review-reviews.test.ts on merged main: pass (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:08.523Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: judged: bridge args built for a reviews-only request and refused in combination, in review.rs and dev/reviewBoard.ts with tests on both sides; Rust unit tests ran in CI only (29 checks green on PR #1304 head 3c730b7ba) (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:08.748Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: apps/desktop bun test reviews+shell+review on merged main: 249 pass, 0 fail (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:08.994Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: apps/desktop bun test reviews+review on merged main: pass (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:09.209Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: apps/desktop bun test reviews+review on merged main: pass; needsViewerAttention mutation check (13 mutations, each failed a test) recorded in the journal (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:09.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: judged: attention-set lines in ReviewBoard.tsx unchanged by the PR and kept as on main after the rebase; needsViewerAttention mutation check in the journal (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:09.647Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: apps/desktop bun test src/review on merged main: pass; slot title on stage 1's work row names the round (PrWorkRow.dom.test.tsx) (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:09.914Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: judged: migration copy check on a scratch copy of the working database, 17 attempts before and after, 13 Reviews, rounds 1x13 and 2x4, recorded in the journal; not repeated after D-R1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:10.141Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: CI green on PR #1304 head 3c730b7ba: 29 passing, 0 failing; root typecheck clean; Desktop tests 1171/1171 on the rebased code before merge (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-24T14:29:13.006Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1304 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
@@ -610,5 +731,139 @@
       "kind": "invariant",
       "check": "sh -c 'bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit'"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-24T14:29:07.609Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:07.830Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:08.054Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:08.311Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:08.523Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:08.748Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:08.994Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:09.209Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:09.420Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:09.647Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:09.913Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    },
+    {
+      "at": "2026-11-24T14:29:10.141Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35"
+    }
+  ]
 }

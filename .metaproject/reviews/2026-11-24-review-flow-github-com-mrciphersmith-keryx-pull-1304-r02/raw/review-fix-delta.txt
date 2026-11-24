@@ -1,0 +1,19 @@
+STATUS: done. Reviewed d967bce5e (two test files plus a flow journal line) against compareHeads in src/commands/review-reviews.ts. Ran bun test --timeout 60000 src/commands/review-reviews.test.ts once: 16 pass, 0 fail.
+
+(1) Deadline test still guards the logic.
+- Timer never fires: the pending compare for #13 is a never-resolving promise and Promise.race only settles through `expired`. Without the timer readReviews never returns, so the test hits the test timeout and fails. Real regression signal, not a silent pass.
+- `late` never set: result.warnings would be [] and the final toEqual on the single "took too long" warning fails. Also #13 would not get commits:null.
+- Residual: the hang guard depends on the runner's per-test timeout (bun default 5 s; the 60 s override was only for my run). That is a coarser signal than the removed 2000 ms assertion: a deadline that fires late (e.g. 3 s instead of 50 ms) would now pass. Acceptable under the no-wall-clock rule.
+
+(2) waitFor is at least as strict as the removed loop.
+- Removed loop: 50 x 10 ms sleeps (~500 ms+), then fell through silently to the next assert.
+- waitFor: polls with realSetTimeout, flushes through React.act, and calls assert.fail with a descriptive message after 2000 ms. The failure is explicit; the longer window only reduces flakiness. realSetTimeout is not affected by tracked/faked timers, unlike the old bare setTimeout. The two follow-up asserts remain.
+
+(3) Anything else: no blocker or major found in the diff.
+Minors:
+- The test comment relies on the runner timeout without naming its value.
+- The commit also edits the flow 519 journal.md (one line), outside the "two test files" scope; harmless.
+
+Not verified: the desktop fixture was not run (desktop checks are CI-only here); I did not confirm realSetTimeout is declared in scope beyond waitFor's existing use at ~line 191; bun's default 5 s per-test timeout is from memory, not checked in config.
+
+VERDICT: no blocker/major
