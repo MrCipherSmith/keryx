@@ -1,4 +1,5 @@
 // Portable Desktop launch contract. Keep this module usable from the webview.
+import { AUTO_MAX_MINUTES, DEFAULT_MAX_MINUTES } from "./plan-limits";
 import { REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
 
 export { DEFAULT_REVIEW_PARALLEL } from "./wave-limits";
@@ -9,6 +10,7 @@ export interface DeskReviewOptions {
   orchestrator?: boolean;
   autoPublish?: true;
   adaptive: boolean;
+  maxMinutes?: number;
   maxWaves?: number;
   maxParallel?: number;
   maxTokens?: number;
@@ -34,7 +36,7 @@ function modelName(value: unknown, label: string): string {
   return value;
 }
 export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
-  const input = object(value, ["mode", "orchestrator", "autoPublish", "adaptive", "maxWaves", "maxParallel", "maxTokens", "flowId", "modelPools"], "launch settings");
+  const input = object(value, ["mode", "orchestrator", "autoPublish", "adaptive", "maxWaves", "maxParallel", "maxTokens", "maxMinutes", "flowId", "modelPools"], "launch settings");
   if (input.mode !== "auto" && input.mode !== "manual") invalid("mode");
   if (typeof input.adaptive !== "boolean") invalid("adaptive");
   if (input.orchestrator !== undefined && typeof input.orchestrator !== "boolean") invalid("orchestrator");
@@ -46,11 +48,11 @@ export function parseDeskReviewOptions(value: unknown): DeskReviewOptions {
     out.orchestrator = false;
     out.adaptive = false;
   }
-  for (const key of ["maxWaves", "maxParallel", "maxTokens"] as const) {
+  for (const key of ["maxWaves", "maxParallel", "maxTokens", "maxMinutes"] as const) {
     const n = input[key];
     if (n === undefined) continue;
-    if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1 || (key === "maxParallel" && n > DESK_MAX_PARALLEL)) invalid(key);
-    if (out.orchestrator !== false || key === "maxTokens") out[key] = n;
+    if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1 || (key === "maxParallel" && n > DESK_MAX_PARALLEL) || (key === "maxMinutes" && n > AUTO_MAX_MINUTES)) invalid(key);
+    if (out.orchestrator !== false || key === "maxTokens" || key === "maxMinutes") out[key] = n;
   }
   if (input.flowId !== undefined) {
     if (typeof input.flowId !== "string" || !/^\d{1,12}$/.test(input.flowId)) invalid("flowId");
@@ -81,4 +83,15 @@ export function readDeskOptionsJson(json: string): DeskReviewOptions {
 
 export function deskOptionsKey(options?: DeskReviewOptions): string {
   return options ? JSON.stringify(parseDeskReviewOptions(options)) : "";
+}
+
+export function defaultDeskReviewMinutes(mode?: DeskReviewOptions["mode"], orchestrator = true): number {
+  if (!mode || !orchestrator) return 30;
+  return mode === "auto" ? AUTO_MAX_MINUTES : DEFAULT_MAX_MINUTES;
+}
+
+/** Keep a scheduled rule's budget when a launch also sets a time limit. */
+export function deskReviewMinutes(options?: DeskReviewOptions, scheduledMinutes?: number): number {
+  if (scheduledMinutes !== undefined) return Math.min(scheduledMinutes, options?.maxMinutes ?? scheduledMinutes);
+  return options?.maxMinutes ?? defaultDeskReviewMinutes(options?.mode, options?.orchestrator);
 }

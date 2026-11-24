@@ -105,7 +105,9 @@ test("limits, editable linked flow and provider/model pairs are scoped to the se
   await render({ ...defaults, onApply: async (...values) => { calls.push(values); } });
   expect(flowSelector().value).toBe("51");
   await choose(flowSelector(), "");
+  expect(document.body.textContent).toContain("Automatically approves plan expansions");
   await click(btn("Manual"));
+  expect(document.body.textContent).toContain("Asks for approval");
   await click(limit("Adaptive model selection"));
   await changeText(limit("Max waves"), "-1");
   expect(btn("Apply").disabled).toBe(true);
@@ -113,6 +115,7 @@ test("limits, editable linked flow and provider/model pairs are scoped to the se
   await changeText(limit("Parallel reviewers"), "33");
   expect(btn("Apply").disabled).toBe(true);
   await changeText(limit("Parallel reviewers"), "15");
+  await changeText(limit("Time limit (minutes)"), "180");
   await changeText(limit("Token limit"), "120000");
   for (const m of models) await pickModel("Strong", m.provider);
   expect(addModel("Strong").disabled).toBe(true);
@@ -120,7 +123,7 @@ test("limits, editable linked flow and provider/model pairs are scoped to the se
   await click(document.querySelector('[aria-label="Remove first Large from Strong"]')!);
   expect(calls).toHaveLength(0);
   await click(btn("Apply"));
-  expect(calls[0]?.[2]).toEqual({ mode: "manual", adaptive: false, maxWaves: 3, maxParallel: 15, maxTokens: 120000,
+  expect(calls[0]?.[2]).toEqual({ mode: "manual", adaptive: false, maxWaves: 3, maxParallel: 15, maxMinutes: 180, maxTokens: 120000,
     modelPools: { strong: [{ provider: "second", model: "large" }], middle: [], light: [{ provider: "first", model: "large" }] } });
 });
 

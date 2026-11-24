@@ -148,6 +148,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         <dt>Review mode</dt><dd>{run.options.mode === "auto" ? "Auto" : "Manual"} · {run.options.orchestrator === false ? "Single reviewer" : run.options.adaptive ? "Adaptive" : "Fixed tiers"}</dd>
         {run.options.flowId && <><dt>Associated Flow</dt><dd>#{run.options.flowId}</dd></>}
         <dt>Limits</dt><dd>{[
+          run.options.maxMinutes && `Up to ${run.options.maxMinutes} minutes`,
           run.options.maxWaves && `Up to ${run.options.maxWaves} waves`,
           run.options.maxParallel && `Up to ${run.options.maxParallel} reviewers at a time`,
           run.options.maxTokens ? `${run.options.maxTokens.toLocaleString()} tokens` : "Unlimited tokens",

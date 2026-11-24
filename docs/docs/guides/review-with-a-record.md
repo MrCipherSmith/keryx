@@ -416,7 +416,7 @@ The blast radius is capped at 40 files a pass. The files beyond the cap are not 
 
 #### Child agents are counted per wave
 
-One orchestrator turn may start at most 32 child agents, which a deep run with many waves used to hit: the 33rd reviewer was refused and the package stayed incomplete. The dispatcher now names the wave on `spawn_subagent` with `review_wave: { "package": "<package dir>", "pass": "<chunk id>" }` (`"pass": "round"` for the round's own reviewers), and each wave counts its own 32 children. One turn opens at most 25 waves, the same ceiling as the chunk plan, so the total stays bounded; the pool of 16 concurrent children is shared and unchanged.
+One orchestrator turn may start at most 32 child agents, which a deep run with many waves used to hit: the 33rd reviewer was refused and the package stayed incomplete. The dispatcher now names the wave on `spawn_subagent` with `review_wave: { "package": "<package dir>", "pass": "<chunk id>" }` (`"pass": "round"` for the round's own reviewers), and each wave counts its own 32 children. One turn opens at most 100 waves. Reviews share the available pool of concurrent children.
 
 The count is fail-closed. A wave is accepted only when the package is inside the project, has a `manifest.json`, and the pass is `round` or a chunk the package records (`chunks.json`, or a retry chunk in `chunk-state.json`). A wave that does not check out is ignored, not refused: the child counts against the turn's 32 exactly as a call without `review_wave` does, so inventing wave names buys nothing. A refusal says which cap was hit. For a full wave, finish it with `review chunks record` and dispatch the next one; for the turn, continue in a new turn.
 
