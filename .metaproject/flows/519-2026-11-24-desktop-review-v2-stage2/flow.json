@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T07:37:09.572Z",
+  "updatedAt": "2026-11-24T07:51:43.524Z",
   "source": {
     "type": "description",
     "ref": null
@@ -121,7 +121,7 @@
       "id": "T6",
       "title": "Reviews read model, keryx review reviews --json, bridge arg and platform call",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -137,7 +137,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -148,8 +149,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:51:43.524Z",
+            "outcome": "started",
+            "detail": "519-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -351,6 +358,16 @@
       "at": "2026-11-24T07:37:09.572Z",
       "event": "task-done",
       "detail": "T9: Migration on a copy of the local working database"
+    },
+    {
+      "at": "2026-11-24T07:51:43.210Z",
+      "event": "task-done",
+      "detail": "T6: Reviews read model, keryx review reviews --json, bridge arg and platform call"
+    },
+    {
+      "at": "2026-11-24T07:51:43.524Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 519-T7"
     }
   ],
   "acKinds": {
