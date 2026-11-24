@@ -420,6 +420,14 @@ One orchestrator turn may start at most 32 child agents, which a deep run with m
 
 The count is fail-closed. A wave is accepted only when the package is inside the project, has a `manifest.json`, and the pass is `round` or a chunk the package records (`chunks.json`, or a retry chunk in `chunk-state.json`). A wave that does not check out is ignored, not refused: the child counts against the turn's 32 exactly as a call without `review_wave` does, so inventing wave names buys nothing. A refusal says which cap was hit. For a full wave, finish it with `review chunks record` and dispatch the next one; for the turn, continue in a new turn.
 
+### Expanded plans and reviewer models
+
+Desktop shows the pinned pull request, changed files, checks and selection reasons in the review session. Open **Show reviewer assignments** to see each wave, tier and selected model. In Adaptive mode, the reviewer’s declared tier sets a floor. Critical roles, escalated findings, and large or high-risk source changes can raise the tier. Fixed mode uses the skill’s declared tier or the role default. Each assignment uses the model pool selected for its tier at launch.
+
+The default confirmation thresholds are 160 dispatches and 400 estimated minutes. Desktop Auto can approve a larger plan for the same revision within 800 dispatches, 1,200 estimated minutes and the remaining run budget. An approval applies to that exact plan. Manual mode asks when the plan exceeds the confirmation thresholds.
+
+In the project’s trusted `routing.config.json`, `reviewPlan.maxDispatches` and `reviewPlan.maxMinutes` set the confirmation thresholds. `reviewPlan.autoMaxDispatches` and `reviewPlan.autoMaxMinutes` can lower the automatic allowance. Set `reviewPlan.autoApprove` to `false` to require confirmation in Desktop Auto, or to `true` to enable bounded automatic approval in standalone reviews.
+
 ## Answer the humans — once, at the end
 
 ```bash
