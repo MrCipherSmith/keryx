@@ -94,11 +94,14 @@ export function usageFrom(value: unknown): DispatchUsage | undefined {
   return { tokens_in: tokensIn, tokens_out: tokensOut, ...(model === undefined ? {} : { model }), ...(value.partial === true ? { partial: true as const } : {}), ...(value.by === HOST_MARK ? {} : { reported: true as const }) };
 }
 
-/** The JSON of a usage line a host writes: the counts as given, the host's mark, and `incomplete` for a non-final save. */
-function hostLineJson(usage: DispatchUsage | undefined, incomplete: boolean): string {
+/** A prepared Desktop call completed by the native host on this provider and model. */
+export type HostAssignmentReceipt = { key: string; model: string };
+
+/** The JSON of a usage line a host writes. */
+function hostLineJson(usage: DispatchUsage | undefined, incomplete: boolean, assignment?: HostAssignmentReceipt): string {
   const counts = usage === undefined ? {} : { tokens_in: usage.tokens_in, tokens_out: usage.tokens_out, ...(usage.model === undefined ? {} : { model: usage.model }), ...(usage.partial === true ? { partial: true } : {}) };
   // Counts a reviewer stated stay unmarked when a host copies them into another line: the mark never launders them.
-  return JSON.stringify({ ...counts, ...(usage?.reported === true ? {} : { by: HOST_MARK }), ...(incomplete ? { incomplete: true } : {}) });
+  return JSON.stringify({ ...counts, ...(usage?.reported === true ? {} : { by: HOST_MARK }), ...(incomplete ? { incomplete: true } : {}), ...(assignment && { assignment }) });
 }
 
 /** The line spawn_subagent (or any host) appends to a saved result. */
@@ -110,9 +113,9 @@ export function formatUsageLine(usage: DispatchUsage): string {
  * The own line of a record a host saves: its usage, and `incomplete` for a non-final save. Undefined for a final record
  * with no usage (nothing to state); an incomplete one with no usage still gets a line, which reads as unknown usage.
  */
-export function formatRecordLine(usage: DispatchUsage | undefined, options: { incomplete: boolean }): string | undefined {
-  if (usage === undefined && !options.incomplete) return undefined;
-  return `${USAGE_MARKER} ${hostLineJson(usage, options.incomplete)}`;
+export function formatRecordLine(usage: DispatchUsage | undefined, options: { incomplete: boolean; assignment?: HostAssignmentReceipt | undefined }): string | undefined {
+  if (usage === undefined && !options.incomplete && !options.assignment) return undefined;
+  return `${USAGE_MARKER} ${hostLineJson(usage, options.incomplete, options.assignment)}`;
 }
 
 /** The `KERYX_USAGE_OTHER` line recording one other dispatch to the same path; `unknown` when it reported no usage. */
@@ -124,7 +127,7 @@ export function formatOtherUsageLine(usage: DispatchUsage | undefined): string {
  * A raw result split into the reply and the usage its trailing block states (see splitUsage). `incomplete` is true when
  * the file's own line (its last `KERYX_USAGE` line) marks a non-final save: the reply is not a complete result.
  */
-export type SplitRecord = { body: string; usage?: DispatchUsage | undefined; others?: Array<DispatchUsage | undefined>; incomplete?: true };
+export type SplitRecord = { body: string; usage?: DispatchUsage | undefined; others?: Array<DispatchUsage | undefined>; incomplete?: true; assignment?: HostAssignmentReceipt };
 
 /**
  * The reply without its usage lines; the usage the last well-formed `KERYX_USAGE` line of the trailing block states; and
@@ -139,6 +142,7 @@ export function splitUsage(raw: string): SplitRecord {
   const others: Array<DispatchUsage | undefined> = [];
   let usage: DispatchUsage | undefined;
   let incomplete = false;
+  let assignment: HostAssignmentReceipt | undefined;
   let ownSeen = false;
   let found = false;
   // Walked from the end: `trailing` holds while only usage lines and blank lines have been passed.
@@ -158,13 +162,21 @@ export function splitUsage(raw: string): SplitRecord {
       others.unshift(usageFrom(object));
       continue;
     }
-    if (!ownSeen) incomplete = isObject(object) && object.incomplete === true;
+    if (!ownSeen && isObject(object)) {
+      incomplete = object.incomplete === true;
+      const receipt = object.assignment;
+      if (!incomplete && object.by === HOST_MARK && isObject(receipt) &&
+          typeof receipt.key === "string" && /^[a-f0-9]{64}$/.test(receipt.key) &&
+          typeof receipt.model === "string" && receipt.model.length <= 322) {
+        assignment = { key: receipt.key, model: receipt.model };
+      }
+    }
     ownSeen = true;
     usage ??= usageFrom(object);
   }
   if (!found) return { body: raw };
   const body = kept.reverse().join("\n").trimEnd();
-  return { body, ...(usage === undefined ? {} : { usage }), ...(others.length === 0 ? {} : { others }), ...(incomplete ? { incomplete: true as const } : {}) };
+  return { body, ...(usage === undefined ? {} : { usage }), ...(others.length === 0 ? {} : { others }), ...(incomplete ? { incomplete: true as const } : {}), ...(assignment && { assignment }) };
 }
 
 /** True for a reply body that holds nothing: blank, or exactly the no-text placeholder. */

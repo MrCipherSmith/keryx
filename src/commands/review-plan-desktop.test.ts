@@ -7,6 +7,7 @@ import { createPinnedSourceInput, prepareBlastInput } from "./review-plan-deskto
 import { SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../lib/subagent-context";
 import path from "node:path";
 import type { PrContext } from "../review/context-collect";
+import { formatRecordLine } from "../review/dispatch-usage";
 import { checkDispatch } from "../review/dispatch-check";
 import { PR_CONTEXT_FILE } from "../review/pr-context";
 import type { SliceEntry, SliceManifest } from "../review/slice";
@@ -138,6 +139,42 @@ test("fix, new and second-look drivers prepare their own validated contracts and
     expect.objectContaining({ tier: "strong", slices: ["slice-03"] }),
   ]));
 
+
+  const selectModel: PlanDeps["run"] = async args => args[0] === "tier"
+    ? { stdout: JSON.stringify({ model: { ...model, provider: "primary", model: "review-model" } }), stderr: "", exitCode: 0 }
+    : { stdout: "", stderr: "", exitCode: 0 };
+  const pools = { ...launch, adaptive: true, maxWaves: 3, modelPools: {
+    middle: [{ provider: "primary", model: "review-model" }, { provider: "fallback", model: "review-model" }],
+    light: [], strong: [],
+  } };
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools);
+  const original = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
+  mkdirSync(path.join(dir, "raw"), { recursive: true });
+  for (const route of original.modelRouting) {
+    const reply = `STATUS: DONE\nREVIEW_RESULT: ${JSON.stringify({ reviewer: role, status: "DONE", summary: "Checked", findings: [], slices: route.slices })}`;
+    const footer = formatRecordLine(undefined, {
+      incomplete: false, assignment: { key: route.assignmentKey, model: route.slices.includes("slice-01") ? "fallback/review-model" : "primary/review-model" },
+    });
+    writeFileSync(path.join(root, route.result), `${reply}\n${footer}\n`);
+  }
+  slices[2]!.depth = "deep";
+  record("slices/manifest.json", manifest);
+  const retained = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-01"));
+  const legacy = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-02"));
+  const reopened = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-03"));
+  writeFileSync(path.join(root, legacy.result), "An unverified legacy result");
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools, []);
+  const resumed = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
+  expect(resumed.calls).toHaveLength(3);
+  expect(resumed.completedAssignments).toEqual([retained.result]);
+  expect(resumed.assignments).toEqual(original.assignments.filter((result: string) => result !== retained.result));
+  expect(resumed.modelRouting.find((route: { result: string }) => route.result === reopened.result).assignmentKey).not.toBe(reopened.assignmentKey);
+  expect(readFileSync(path.join(root, retained.result), "utf8")).toContain("fallback/review-model");
+  const changedPools = { ...pools, modelPools: { ...pools.modelPools,
+    middle: [{ provider: "primary", model: "review-model" }, { provider: "different", model: "review-model" }],
+  } };
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, changedPools, []);
+  expect(JSON.parse(readFileSync(path.join(root, queueFile), "utf8")).completedAssignments).toEqual([]);
 
   maxContext = requirements[0]! - 1;
   const smaller = await prepareDesktopDispatch(root, plan, base, manifest, [drivers[0]!], prContext, run);

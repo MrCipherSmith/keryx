@@ -6,6 +6,7 @@ import type { DeskReviewerProgress, DeskReviewerSession, DeskRun, DeskRunKey } f
 import { assignedReviewerWave, finishedReviewerSession, identifier, reviewerName, summarizeReviewerAssignments, waveNumber } from "./reviewer-activity";
 import { isReviewerResult, parseReviewResult } from "./ledger";
 import { publicReviewerOutput, publicReviewText } from "./desk-public-text";
+import { finishedDesktopAssignment } from "./desktop-assignment-result";
 import { splitUsage } from "./dispatch-usage";
 import { usageCounts, validUsageCounts } from "./run-usage";
 
@@ -209,6 +210,8 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       observed.set(pair, observed.has(pair) ? null : session); // A raw file cannot identify which retry produced it.
     }
     const queued = new Set<string>();
+    const completed = new Set(Array.isArray(queue?.completedAssignments) ? queue.completedAssignments : []);
+    const routes = new Map(Array.isArray(queue?.modelRouting) ? queue.modelRouting.filter(isRecord).map(route => [route.result, route]) : []);
     let remaining = 4 * 1024 * 1024;
     for (const call of calls) {
       if (!isRecord(call) || !reviewerName(call.label) || typeof call.save_result_to !== "string") continue;
@@ -222,7 +225,8 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       const checkpoint = observed.get(key);
       if (checkpoint === null || (checkpoint && !detailed && (active || finishedReviewerSession(checkpoint)))) continue;
       if (active && checkpoint && !finishedReviewerSession(checkpoint)) continue;
-      const session: DeskReviewerSession = checkpoint ?? { id: key, reviewer, wave, state: active ? "planned" : "unknown" };
+      const retained = completed.has(call.save_result_to);
+      const session: DeskReviewerSession = checkpoint ?? { id: key, reviewer, wave, state: retained ? "completed" : active ? "planned" : "unknown" };
       if (isRecord(call.expected_model)) {
         if (!session.model && identifier(call.expected_model.model)) session.model = call.expected_model.model;
         if (!session.provider && identifier(call.expected_model.provider)) session.provider = call.expected_model.provider;
@@ -232,8 +236,11 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
         remaining -= Buffer.byteLength(raw);
         const { body, incomplete, usage } = splitUsage(raw);
         const saved = parseReviewResult(body);
+        const route = routes.get(call.save_result_to);
+        const currentResult = typeof route?.assignmentKey !== "string" ||
+          (Array.isArray(route.slices) && finishedDesktopAssignment(raw, reviewer, route.assignmentKey, route.slices));
         if (!incomplete && isReviewerResult(saved) && saved.reviewer === reviewer) {
-          const savedState = saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS" ? "completed"
+          const savedState = saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS" ? (currentResult ? "completed" : undefined)
             : saved.status === "BLOCKED" || saved.status === "NEEDS_CONTEXT" ? "partial" : undefined;
           if (savedState && (!checkpoint || !finishedReviewerSession(checkpoint))) session.state = savedState;
           if (saved.status === "NEEDS_CONTEXT" && session.state === "partial") session.needsContext = true;

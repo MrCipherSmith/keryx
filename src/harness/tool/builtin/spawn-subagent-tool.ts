@@ -34,7 +34,7 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { REVIEW_TURN_MAX_WAVES } from "../../../review/wave-limits";
 import { describeReviewWave, resolveReviewWave, REVIEW_WAVE_MAX_CHILDREN } from "../../../review/wave-key";
-import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
+import { type DispatchUsage, type HostAssignmentReceipt, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -354,6 +354,7 @@ async function writeRecordFile(abs: string, text: string): Promise<string | unde
 /** What one dispatch leaves at `save_result_to`: its text (empty when it wrote none) and its usage, when measured. */
 export type DispatchRecord = {
   text: string;
+  assignment?: HostAssignmentReceipt | undefined;
   /** True only for a child that completed with text: its record replaces whatever is at the path. */
   final: boolean;
   usage?: DispatchUsage | undefined;
@@ -401,13 +402,13 @@ async function saveDispatchRecordNow(abs: string, record: DispatchRecord): Promi
   const existing = await readFile(abs, "utf8").catch(() => undefined);
   const prior = existing === undefined ? undefined : splitUsage(existing);
   const body = splitUsage(record.text).body.trim();
-  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final });
+  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final, assignment: record.final ? record.assignment : undefined });
   const priorHasReply = prior !== undefined && !isEmptyBody(prior.body);
   const priorComplete = priorHasReply && prior.incomplete !== true;
   if (prior !== undefined && priorHasReply && !record.final && (priorComplete || isEmptyBody(body))) {
     // The earlier reply stays the file's, under its own line; this dispatch joins the others.
     const others = [...(prior.others ?? []), record.usage].map(formatOtherUsageLine);
-    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete });
+    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete, assignment: prior.assignment });
     const before = await stat(abs).catch(() => undefined);
     const error = await writeRecordFile(abs, [prior.body, ...others, ...(priorLine === undefined ? [] : [priorLine])].join("\n"));
     if (error !== undefined) return { error };
@@ -2356,7 +2357,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       /** Save this dispatch's record at `save_result_to` (saveDispatchRecord), when the parent asked for one. */
       const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> => {
         if (saveTarget.abs === undefined) return undefined;
-        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
+        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options),
+          ...(desktopRoute?.assignmentKey && { assignment: { key: desktopRoute.assignmentKey, model: `${runModel.provider}/${runModel.model}` } }) });
         recordSaved = true;
         return saved;
       };

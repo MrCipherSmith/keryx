@@ -7,6 +7,7 @@ import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { validRunUsage, type ReviewRunUsage } from "./run-usage";
 import { isReviewerResult, parseReviewResult } from "./ledger";
+import { finishedDesktopAssignment } from "./desktop-assignment-result";
 import { splitUsage } from "./dispatch-usage";
 import { createEventTail } from "./autonomous-progress";
 import type { RunProgress } from "./autonomous-run";
@@ -124,8 +125,15 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
     if (!existsSync(planFile)) return true; // Legacy completion with no plan format.
     if (plan && typeof plan === "object" && !Array.isArray(plan) && plan.desktopDispatch === undefined) return true;
   }
-  const queue = json<{ blocked?: unknown[]; calls: Array<{ label: string; save_result_to: string }> }>(queueFile);
-  if ((prepared && typeof plan?.desktopDispatch !== "string") || !Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || plan.dispatches !== queue.calls.length) return false;
+  const queue = json<{
+    blocked?: unknown[]; calls: Array<{ label: string; save_result_to: string }>;
+    completedAssignments?: string[];
+    modelRouting?: Array<{ result: string; assignmentKey: string; slices: string[] }>;
+  }>(queueFile);
+  if ((prepared && typeof plan?.desktopDispatch !== "string") || !Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || typeof plan.dispatches !== "number") return false;
+  const keyed = Array.isArray(queue.completedAssignments);
+  if (keyed ? plan.dispatches > queue.calls.length : plan.dispatches !== queue.calls.length) return false;
+  const routing = new Map(Array.isArray(queue.modelRouting) ? queue.modelRouting.map(route => [route.result, route]) : []);
   const sliceFile = path.join(dir, "slices/manifest.json");
   const expected = new Set<string>();
   if (existsSync(sliceFile)) {
@@ -137,7 +145,7 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
         roleDispatchWaves(original, role).forEach((_, i) => expected.add(`${role}-w${i + 1}.txt`));
       }
     } catch { return false; }
-    if (expected.size !== queue.calls.length) return false;
+    if (expected.size !== plan.dispatches) return false;
   }
   const observed = new Set(usage?.reviewers.map(record => record.reviewer));
   const roles = new Set<string>();
@@ -145,16 +153,23 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
   for (const call of queue.calls) {
     if (!call || typeof call.label !== "string" || !plan.roster.includes(call.label) || routed.has(call.label) || !observed.has(call.label) || typeof call.save_result_to !== "string") return false;
     const name = path.basename(call.save_result_to);
-    if ((expected.size && !expected.has(name)) || files.has(name) || !name.startsWith(call.label + "-w") || !/-w[1-9][0-9]*\.txt$/.test(name)) return false;
+    if ((!keyed && expected.size && !expected.has(name)) || files.has(name) || !name.startsWith(call.label + "-w") || !/-w[1-9][0-9]*\.txt$/.test(name)) return false;
     try {
-      const { body, incomplete } = splitUsage(readFileSync(path.join(dir, "raw", name), "utf8"));
-      const reply = parseReviewResult(body);
-      if (incomplete || !isReviewerResult(reply) || reply.reviewer !== call.label || !["DONE", "DONE_WITH_CONCERNS"].includes(String(reply.status))) return false;
+      const raw = readFileSync(path.join(dir, "raw", name), "utf8");
+      if (keyed) {
+        const route = routing.get(call.save_result_to);
+        if (!route || typeof route.assignmentKey !== "string" || !Array.isArray(route.slices) ||
+            !finishedDesktopAssignment(raw, call.label, route.assignmentKey, route.slices)) return false;
+      } else {
+        const { body, incomplete } = splitUsage(raw);
+        const reply = parseReviewResult(body);
+        if (incomplete || !isReviewerResult(reply) || reply.reviewer !== call.label || !["DONE", "DONE_WITH_CONCERNS"].includes(String(reply.status))) return false;
+      }
     } catch { return false; }
     files.add(name);
     roles.add(call.label);
   }
-  return plan.roster.length > 0 && plan.roster.every(role => roles.has(role) || routed.has(role));
+  return plan.roster.length > 0 && plan.roster.every(role => roles.has(role) || routed.has(role)) && [...expected].every(name => files.has(name));
 }
 
 /** A zero-finding local verdict needs complete coverage of the requested revision. */

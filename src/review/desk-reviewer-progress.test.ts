@@ -168,6 +168,26 @@ test("the pinned plan sets the total before dispatch and keeps blocked and later
   expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 2, finished: 2 });
 });
 
+test("retains completed assignment counts and ignores stale saved results after a plan revision", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  const reviewer = "review-logic";
+  const call = (wave: number) => ({ label: reviewer, save_result_to: `raw/${reviewer}-w${wave}.txt` });
+  const calls = [call(1), call(2)];
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 2 });
+  save(["package", "desktop-dispatch.json"], {
+    calls, completedAssignments: [calls[0]!.save_result_to],
+    modelRouting: calls.map(call => ({ result: call.save_result_to, slices: ["S-1"], assignmentKey: "a".repeat(64) })),
+  });
+  save(["package", calls[1]!.save_result_to], `STATUS: DONE\nREVIEW_RESULT: ${JSON.stringify({
+    reviewer, status: "DONE", summary: "Stale", findings: [], slices: ["S-1"],
+  })}`);
+  for (const detailed of [false, true]) {
+    const progress = readDeskReviewerProgress(directory, key, run, detailed);
+    expect(progress).toMatchObject({ planned: 2, finished: 1, completed: 1, sessions: [{ state: "completed" }, { state: "planned" }] });
+  }
+});
+
 test("projects a bounded plan summary only from artifacts pinned to the attempt range", () => {
   const target = { ref, base: baseSha, head: headSha };
   save(["package", "manifest.json"], { target });

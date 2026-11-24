@@ -1008,8 +1008,8 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
     context_files: [],
     save_result_to: `${pkg}/raw/review-logic-w1.txt`,
   };
-  const writeQueue = (calls: unknown[], modelRouting?: unknown[]) =>
-    writeFile(path.join(checkout, pkg, "desktop-dispatch.json"), JSON.stringify({ calls, modelRouting }));
+  const writeQueue = (calls: unknown[], modelRouting?: unknown[], completedAssignments?: string[]) =>
+    writeFile(path.join(checkout, pkg, "desktop-dispatch.json"), JSON.stringify({ calls, modelRouting, completedAssignments }));
   await writeQueue([request]);
   expect(await writeActiveReview(checkout, { id: "test-round", dir: pkg })).toBe(true);
   await setRoutingCategory("user", location, "review", { mode: "model", target: session });
@@ -1095,6 +1095,10 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
   expect(selections).toEqual([poolModel, poolModel, poolModel]);
   await writeQueue([shared], [{ result: shared.save_result_to, tier: "light" }]);
   expect((await scoped.invoke(ref)).output).toContain("candidate-unverified");
+  expect(selections).toEqual([poolModel, poolModel, poolModel]);
+
+  await writeQueue([shared], [{ result: shared.save_result_to, tier: "middle" }], [shared.save_result_to]);
+  expect((await scoped.invoke(ref)).status).toBe("Denied");
   expect(selections).toEqual([poolModel, poolModel, poolModel]);
 
   const changed = { ...request, expected_model: { ...request.expected_model, model: "different" } };
