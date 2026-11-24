@@ -1,0 +1,664 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w2:review-architecture-w2-1",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding review-architecture-w2-1 (The review_publish card's buildCard, documented as a dry run of publishReview, first calls attemptOf) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "operator-confirm-review.ts buildCard",
+      "reason": "Registering before the card is shown is deliberate: the body the operator reads must carry the Attempt marker that will be posted, or apply refuses it as changed."
+    },
+    {
+      "id": "review-architecture-w3:review-architecture-w3-1",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding review-architecture-w3-1 (The D1 / closed-PR publication acceptance is re-implemented in publish.ts (refuseClosed, movedHead) ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T4",
+      "reason": "representative",
+      "finding": "T4"
+    },
+    {
+      "id": "review-architecture-w3:review-architecture-w3-2",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding review-architecture-w3-2 (sessionPublication re-joins the store layout as path.join(root, \"attempts\", id) instead of DeskRunSt) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "session-attempt.ts sessionPublication",
+      "reason": "The path equals DeskRunStore.directory for the default root; opening a store only to join a path is not worth the side effect. Kept as a note."
+    },
+    {
+      "id": "review-architecture-w3:review-architecture-w3-3",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding review-architecture-w3-3 (The Attempt that holds the shared receipt and marker is keyed by the project's bound GitHub account ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "session-publish-github.ts runGh",
+      "reason": "Posting under the project-bound account needs the board-github connection in the session path; a separate change. Recorded as a known limitation in the PR body."
+    },
+    {
+      "id": "review-architecture-w3:review-architecture-w3-4",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding review-architecture-w3-4 (session-attempt.ts (store registration) imports the pure URL parser pullRequestPath from session-pub) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "session-attempt.ts imports",
+      "reason": "Module layout note; no behaviour change."
+    },
+    {
+      "id": "review-degradation-w1:review-degradation-w1-1",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding review-degradation-w1-1 (A registered session Attempt (new source \"session\") is labelled \"Existing review\" (the imported-revi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T5",
+      "reason": "duplicate of review-frontend-w3:review-frontend-w3-1",
+      "finding": "T5"
+    },
+    {
+      "id": "review-degradation-w2:review-degradation-w2-1",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding review-degradation-w2-1 (The skill's Head moved step 4 says `keryx review complete` registers the PR package as an Attempt an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T13",
+      "reason": "representative",
+      "finding": "T13"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-1",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-1 (keryx review publish now refuses a MERGED or CLOSED pull request (refuseClosed, called at :196 and :) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T14",
+      "reason": "representative",
+      "finding": "T14"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-2",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-2 (The session publish transport now posts only for refs matching ^https://github.com/<o>/<r>/pull/N an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T15",
+      "reason": "representative",
+      "finding": "T15"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-3",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-3 (Every registration (default on every terminal `review complete` and `review publish` of a PR package) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T8",
+      "reason": "duplicate of review-performance-w3:review-performance-w3-1",
+      "finding": "T8"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-4",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-4 (After the operator's yes, a failed or empty PR re-read (lookup error or exists:false mapped to undef) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T12",
+      "reason": "representative",
+      "finding": "T12"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-5",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-5 (A package published while registration failed keeps its receipt in the package dir and carries the m) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T2",
+      "reason": "duplicate of review-highload-w3:review-highload-w3-1",
+      "finding": "T2"
+    },
+    {
+      "id": "review-degradation-w3:review-degradation-w3-6",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding review-degradation-w3-6 (recordSession leaves a decided session row unchanged, but register has already replaced that attempt) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T7",
+      "reason": "representative",
+      "finding": "T7"
+    },
+    {
+      "id": "review-frontend-w1:review-frontend-w1-1",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding review-frontend-w1-1 (Stage 4 adds the `session` source and labels it \"Session\" in the Reviews list (SOURCE_LABEL), but th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T5",
+      "reason": "duplicate of review-frontend-w3:review-frontend-w3-1",
+      "finding": "T5"
+    },
+    {
+      "id": "review-frontend-w3:review-frontend-w3-1",
+      "source": "raw/review-frontend-w3.txt",
+      "question": "Is review-frontend finding review-frontend-w3-1 (Stage 4 adds `source: \"session\"` attempts (registered from agent-session packages; no coordinator tr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T5",
+      "reason": "representative",
+      "finding": "T5"
+    },
+    {
+      "id": "review-frontend-w3:review-frontend-w3-2",
+      "source": "raw/review-frontend-w3.txt",
+      "question": "Is review-frontend finding review-frontend-w3-2 (confirmPublicationReceipt writes `{posted:true}` when GitHub's answer carried no URL (the session pa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T6",
+      "reason": "representative",
+      "finding": "T6"
+    },
+    {
+      "id": "review-highload-w3:review-highload-w3-1",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding review-highload-w3-1 (Registration copies the package into <attempt>/package but filters out publication-receipt.json, and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T2",
+      "reason": "representative",
+      "finding": "T2"
+    },
+    {
+      "id": "review-highload-w3:review-highload-w3-2",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding review-highload-w3-2 (publishReview locks <receiptDir>/publication.lock, where receiptDir is the attempt dir if this proce) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T3",
+      "reason": "representative",
+      "finding": "T3"
+    },
+    {
+      "id": "review-highload-w3:review-highload-w3-3",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding review-highload-w3-3 (Re-registration replaces <attempt>/package with rm + cp outside any lock, while Desktop's publicatio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T7",
+      "reason": "duplicate of review-degradation-w3:review-degradation-w3-6",
+      "finding": "T7"
+    },
+    {
+      "id": "review-highload-w3:review-highload-w3-4",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding review-highload-w3-4 (The session path holds the shared <attempt>/publication.lock across options.confirm, which for the C) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "publish.ts lock across confirm",
+      "reason": "Holding the publication lock while the operator reads is what prevents two posts of the same Attempt; Desktop reports the lock timeout as before."
+    },
+    {
+      "id": "review-logic-w1:review-logic-w1-1",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding review-logic-w1-1 (Desktop's Update review now calls `keryx review advance --id <reviewed>`. `reviewedAttempt` (src/rev) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T10",
+      "reason": "representative",
+      "finding": "T10"
+    },
+    {
+      "id": "review-logic-w1:review-logic-w1-2",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding review-logic-w1-2 (`session` was added to DeskRun.source and SOURCE_LABEL, but the attempt card and run dialog still la) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T5",
+      "reason": "duplicate of review-frontend-w3:review-frontend-w3-1",
+      "finding": "T5"
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-1",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-1 (A session publish made while registration failed writes its receipt to <package>/publication-receipt) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T2",
+      "reason": "duplicate of review-highload-w3:review-highload-w3-1",
+      "finding": "T2"
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-2",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-2 (Deleting a session Attempt in Desktop removes its directory, receipt included (desk-run-lifecycle.ts) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T2",
+      "reason": "duplicate of review-highload-w3:review-highload-w3-1",
+      "finding": "T2"
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-3",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-3 (The moved-head first-line test takes the first non-empty line, HTML comments included, and only chec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T11",
+      "reason": "representative",
+      "finding": "T11"
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-4",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-4 (findPublished's documented 'undefined = no review carries the marker' answer is handled like null: t) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "publish.ts findPublished handling",
+      "reason": "Same rule as Desktop (desk-publication blocks an unknown-result receipt until the operator checks the PR); a definite no is still not proof the POST did not land later."
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-5",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-5 (recordSession refreshes only an undecided session row, but register() always rm+cp's <attempt>/packa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T7",
+      "reason": "duplicate of review-degradation-w3:review-degradation-w3-6",
+      "finding": "T7"
+    },
+    {
+      "id": "review-logic-w3:review-logic-w3-6",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding review-logic-w3-6 (confirmPublicationReceipt(dir, undefined) writes {posted:true}, which receiptPublished treats as pub) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T6",
+      "reason": "duplicate of review-frontend-w3:review-frontend-w3-2",
+      "finding": "T6"
+    },
+    {
+      "id": "review-performance-w2:review-performance-w2-1",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding review-performance-w2-1 (keryx review publish now registers the package first; registerSessionPackage runs computeReadiness () real, and where is it reported?",
+      "status": "narrowed",
+      "evidence": "session-attempt.ts register",
+      "reason": "The copy cost is fixed (T8); the extra readiness pass during registration stays.",
+      "remains": "Registration still recomputes readiness (a few extra gh calls per command)."
+    },
+    {
+      "id": "review-performance-w2:review-performance-w2-2",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding review-performance-w2-2 (review advance opens a DeskRunStore and reads one bounded history per call; no inefficiency, recorde) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "review-advance.ts",
+      "reason": "Reviewer recorded it as checked and clean."
+    },
+    {
+      "id": "review-performance-w3:review-performance-w3-1",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding review-performance-w3-1 (register() deletes and re-copies the entire session package (rm -r then cp -r) on every registration) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T8",
+      "reason": "representative",
+      "finding": "T8"
+    },
+    {
+      "id": "review-performance-w3:review-performance-w3-2",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding review-performance-w3-2 (publishReview calls prLookup via readPullRequest and again via computeReadiness's head gate for the ) real, and where is it reported?",
+      "status": "narrowed",
+      "evidence": "publish.ts readPullRequest",
+      "reason": "The head is read before readiness and again after the yes by design; readiness reads it once more.",
+      "remains": "One extra PR read before confirmation."
+    },
+    {
+      "id": "review-security-code-w2:review-security-code-w2-1",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding review-security-code-w2-1 (review_publish buildCard registers the session package as a Desktop Attempt (GitHub read, package co) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "operator-confirm-review.ts buildCard",
+      "reason": "Same as review-architecture-w2-1: the card must show the body that is posted, marker included."
+    },
+    {
+      "id": "review-security-code-w3:review-security-code-w3-1",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding review-security-code-w3-1 (readSessionAttempt accepts any attemptId from the package's desk-attempt.json; sessionPublication jo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T9",
+      "reason": "representative",
+      "finding": "T9"
+    },
+    {
+      "id": "review-security-code-w3:review-security-code-w3-2",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding review-security-code-w3-2 (The session publish port posts with bare gh (ambient account) while the Attempt it publishes is regi) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "session-publish-github.ts runGh",
+      "reason": "Same limitation as review-architecture-w3-3."
+    },
+    {
+      "id": "review-testing-practices-w1:review-testing-practices-w1-1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w1-1 (The new mapping of an `advance` refusal to kind `start` (so a `stale:` refusal sets `staleRange`) is) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T10",
+      "reason": "duplicate of review-logic-w1:review-logic-w1-1",
+      "finding": "T10"
+    },
+    {
+      "id": "review-testing-practices-w2:review-testing-practices-w2-1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w2-1 (The command-level wiring of the shared publication guard is untested: runPublish's `publication` (re) real, and where is it reported?",
+      "status": "narrowed",
+      "evidence": "review.ts runPublish wiring",
+      "reason": "The complete card registration and advance argument parsing are now tested; runPublish publication/laterRound wiring is covered only through publishReview.",
+      "remains": "No test drives runPublish with a registered Attempt end to end."
+    },
+    {
+      "id": "review-testing-practices-w2:review-testing-practices-w2-2",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w2-2 (The new `keryx review advance` CLI's argument validation is untested: dropping the `--base`/`--head`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T16",
+      "reason": "representative",
+      "finding": "T16"
+    },
+    {
+      "id": "review-testing-practices-w3:review-testing-practices-w3-1",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w3-1 (registerSessionPackage skips any package whose manifest.target.base is not a 40-hex SHA, but the ses) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T1",
+      "reason": "representative",
+      "finding": "T1"
+    },
+    {
+      "id": "review-testing-practices-w3:review-testing-practices-w3-2",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w3-2 (The AC5 'session package' fixture copies the Desktop attempt's own package and changes only reviewId) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T1",
+      "reason": "duplicate of review-testing-practices-w3:review-testing-practices-w3-1",
+      "finding": "T1"
+    },
+    {
+      "id": "review-testing-practices-w3:review-testing-practices-w3-3",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w3-3 (Four guards publishReview added are unpinned: reading the package's own receipt beside the Attempt's) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T16",
+      "reason": "duplicate of review-testing-practices-w2:review-testing-practices-w2-2",
+      "finding": "T16"
+    },
+    {
+      "id": "review-testing-practices-w3:review-testing-practices-w3-4",
+      "source": "raw/review-testing-practices-w3.txt",
+      "question": "Is review-testing-practices finding review-testing-practices-w3-4 (Further new guards survive deletion: unreadable receipt counted as unknown (publication-guard.ts:38)) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T16",
+      "reason": "duplicate of review-testing-practices-w2:review-testing-practices-w2-2",
+      "finding": "T16"
+    },
+    {
+      "id": "review-ui-ux-w1:review-ui-ux-w1-1",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding review-ui-ux-w1-1 (An advance refusal is stored as a 'start' error, so the 'stale: A later round of this Review already) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into T10",
+      "reason": "duplicate of review-logic-w1:review-logic-w1-1",
+      "finding": "T10"
+    },
+    {
+      "id": "review-ui-ux-w1:review-ui-ux-w1-2",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding review-ui-ux-w1-2 (keryx review publish prints the session-registration warning to stdout, while keryx review complete ) real, and where is it reported?",
+      "status": "narrowed",
+      "evidence": "publish now warns on stderr like complete",
+      "reason": "fixed in review.ts runPublish",
+      "remains": "nothing"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-security-code",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:a19b10f1d4a9",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:a19b10f1d4a9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:5046cdd6c86e",
+        "rawEvidence": "raw/review-degradation-w3.txt#sha256:5046cdd6c86e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:e3115d3a8cd2",
+        "rawEvidence": "raw/review-frontend-w3.txt#sha256:e3115d3a8cd2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "incomplete",
+        "scopeComplete": false,
+        "executionReason": "not claimed: the reviewer did not finish its scope"
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:f8450265b664",
+        "rawEvidence": "raw/review-highload-w3.txt#sha256:f8450265b664",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:e68ca3d64039",
+        "rawEvidence": "raw/review-layout-w1.txt#sha256:e68ca3d64039",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:33a8b68bf388",
+        "rawEvidence": "raw/review-logic-w3.txt#sha256:33a8b68bf388",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:3d846692c2f5",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:3d846692c2f5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:a46f89dd1094",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:a46f89dd1094",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "incomplete",
+        "scopeComplete": false,
+        "executionReason": "not claimed: the reviewer did not finish its scope"
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:d8dec503cffc",
+        "rawEvidence": "raw/review-testing-practices-w3.txt#sha256:d8dec503cffc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:7332780e3a09",
+        "rawEvidence": "raw/review-ui-ux-w1.txt#sha256:7332780e3a09",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 26,
+    "known": 0,
+    "unknown": 26,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

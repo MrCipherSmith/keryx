@@ -1,0 +1,109 @@
+STATUS: DONE
+
+reviewer: review-testing-practices, wave 2 of 3, round 3 of PR #1302 (flow 521, stage 4)
+slice: slice-02 (read in full: lines 1-1153)
+
+## Scope read
+
+- slices/slice-02.diff in full: operator-confirm-review-tools.test.ts, operator-confirm-review.ts (review_publish card),
+  src/commands/review-advance.ts (new), src/commands/review.ts (advance routing, runPublish, runComplete, help),
+  the bundled SKILL.md / SKILL.detail.md hunks, review-orchestrator-preflight.test.ts, group-subcommands.ts.
+- At HEAD: the same files around the changed lines; src/review/session-attempt.ts (sessionPublication,
+  registerSessionPackageForProject); src/commands/review.test.ts (which `complete` tests pass seams);
+  tests that reference the new seams (`keryx ctx rg registerSession|sessionPublication|desk-attempt|runReviewAdvance|findPublished`
+  over *.test.*: only desk-publication.test.ts and publish.test.ts, and neither goes through a command).
+- Prior findings S3 and S7 are fixed at HEAD (describe block renamed AC1-AC2; negative assertions for the R1/R2/R7
+  texts present at preflight.test.ts lines 1043-1056 of the slice).
+
+## What I ran
+
+- Baseline: `bun test src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts`
+  green; `bun test src/gdskills/review-orchestrator-preflight.test.ts` 85 pass (AC1, AC2, AC6 verify).
+- `keryx review mutate --spec <scratch>/w2.json --test "bun test src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts" --package <pkg>`
+  (scratch copy; record in research-evidence/mutation-*.json). Baseline exit 0. 7 run, 0 not reached.
+
+| mutant | mutation | result |
+|---|---|---|
+| TP2-M1 | commands/review-advance.ts:27 drop `(v.base === undefined) !== (v.head === undefined) \|\|` | **survived** |
+| TP2-M2 | commands/review-advance.ts:27 drop `(v.id !== undefined && !uuid.test(v.id)) \|\|` | **survived** |
+| TP2-M3 | operator-confirm-review.ts:261 drop `findPublished: seams.findPublished ?? githubFindPublished` | **survived** |
+| TP2-M4 | operator-confirm-review.ts:259 drop `publication: await sessionPublication(...)` in apply | **survived** |
+| TP2-M5 | review.ts:5177 `if (register !== undefined)` -> `if (false)` (complete no longer registers) | **survived** |
+| TP2-M6 | review.ts:5078 drop `publication,` from runPublish's publishReview call | **survived** |
+| TP2-M7 | review.ts:5081 drop `findPublished: seams?.findPublished ?? githubFindPublished` | **survived** |
+
+No casualties in this slice: every gate the commands added is unexercised by the nearest suites. The SKILL text
+changes are pinned by the preflight test (read, not mutated: string assertions on prose; the AC5 casualties in wave 3
+show the shared guard itself is tested at the function level).
+
+## Findings
+
+### TP-W2-1 (minor) The command wiring that makes `keryx review publish` / `complete` / the review_publish card share Desktop's receipt is untested
+
+- Files: src/commands/review.ts:5073-5081 (runPublish), :5174-5179 (runComplete), src/commands/operator-confirm-review.ts:215,259,261 (card).
+- Problem: AC5 says `keryx review publish` uses the shared receipt and marker. The AC5 tests
+  (desk-publication.test.ts:812, :831) call `publishReview` with a hand-built `publication: { directory, id }`; no
+  test reaches it through a command. Deleting the `publication` argument in runPublish (TP2-M6), the registration in
+  runComplete that prints `desktop attempt: <id>` (TP2-M5, the line the skill's step 4 tells agents to read), the
+  card's apply-time `publication` (TP2-M4), or either `findPublished` default (TP2-M3, TP2-M7) leaves every suite
+  green. The `ReviewCommandSeams.registerSession` / `ReviewConfirmSeams.registerSession` seams exist and no test sets them.
+- Why it matters: the AC5 claim rides the function-level seam; the path an operator actually runs can lose the shared
+  receipt (and post a duplicate after a Desktop publish) with the suite green.
+- Fix: in publish.test.ts drive `reviewCommand(["publish", …], { registerSession, postReview, findPublished, … })`
+  after a Desktop publish of the same Attempt and assert the refusal; in operator-confirm-review-tools.test.ts build
+  the card with `registerSession` set and assert the posted body ends with the Attempt's marker; in review.test.ts
+  assert `complete` prints `desktop attempt:` when `registerSession` returns a record.
+
+### TP-W2-2 (minor) `keryx review advance`'s argument validation has no test
+
+- File: src/commands/review-advance.ts:26-29
+- Problem: the CLI Desktop's Tauri `review_run` Advance arm calls (`--id --base --head --repository-id --viewer`) has
+  no test of its own; removing the paired `--base/--head` rule (TP2-M1) or the UUID check on `--id` (TP2-M2) stays
+  green. review-advance.test.ts tests `advanceReview`, never `runReviewAdvance`. Nothing checks that the args
+  review.rs:356 builds parse here either.
+- Fix: a small test of `runReviewAdvance` (or `reviewCommand(["advance", …])`) for: `--base` without `--head`
+  refused, non-UUID `--id` refused, missing `--json` refused, and the exact argument vector review.rs emits accepted
+  (with `advanceReview`'s deps stubbed, or by asserting the thrown usage text).
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [
+    {
+      "id": "review-testing-practices-w2-1",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": 5078,
+      "problem": "The command-level wiring of the shared publication guard is untested: runPublish's `publication` (review.ts:5078) and `findPublished` (:5081), runComplete's registration that prints `desktop attempt:` (:5174-5179), and the review_publish card's apply-time `publication` and `findPublished` (operator-confirm-review.ts:259,261) can each be deleted with publish, operator-confirm and review-advance suites green. AC5's tests call publishReview with a hand-built `publication` object; the registerSession seams are never set by any test.",
+      "evidence": "keryx review mutate with spec TP2-M3..M7 against `bun test src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts`: baseline exit 0, all 5 survived. `keryx ctx rg registerSession|sessionPublication over *.test.*` finds no command-level test; desk-publication.test.ts:812,831 pass `publication` directly.",
+      "impact": "A regression that drops the shared receipt from the operator's actual publish path (terminal or card) would allow a duplicate review after a Desktop publish while the AC5 tests stay green.",
+      "suggested_fix": "Add command-level tests: reviewCommand([\"publish\", …]) with registerSession/findPublished seams after a Desktop publish of the same Attempt -> refused as duplicate; review_publish card with registerSession set -> posted body ends with the Attempt marker; `complete` with registerSession returning a record prints `desktop attempt: <id>`.",
+      "confidence": "high"
+    },
+    {
+      "id": "review-testing-practices-w2-2",
+      "severity": "minor",
+      "file": "src/commands/review-advance.ts",
+      "line": 27,
+      "problem": "The new `keryx review advance` CLI's argument validation is untested: dropping the `--base`/`--head` pairing rule or the UUID check on `--id` leaves the suites green. Only advanceReview (the library function) is tested; nothing checks that the argument vector Tauri builds (review.rs:356) parses.",
+      "evidence": "keryx review mutate TP2-M1 and TP2-M2 (src/commands/review-advance.ts:27) -> survived; no test imports runReviewAdvance (`keryx ctx rg runReviewAdvance` over tests: none).",
+      "impact": "A later edit can accept a half range or a malformed attempt id from Desktop or a session without a red test; the code at HEAD is correct.",
+      "suggested_fix": "Test runReviewAdvance/reviewCommand([\"advance\", …]): --base without --head, a non-UUID --id and a missing --json are refused with ADVANCE_USAGE; the exact vector review.rs emits is accepted (advanceReview deps stubbed).",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 0
+  }
+}
+```
+
+routing audit: graph_used: no (not-relevant: slice lists the files; callers found with `keryx ctx rg`), wiki_used: no (not-relevant), ctx_used: yes (`keryx ctx rg`, `keryx ctx run`), raw_rg_used: no

@@ -1,0 +1,150 @@
+STATUS: DONE
+
+Reviewer: review-degradation, wave 3 of 3, slice-03 (PR 1302, base 7a846bef1..head 5957d1249).
+
+## Scope read
+
+- slice-03.diff in full (1496 lines): `src/review/autonomous-profile.ts`, `desk-publication.ts`, `desk-run-store.ts` (recordSession), `desk-run-types.ts`, `publication-guard.ts`, `publish.ts`, `review-advance.ts`, `review-entity.ts`, `session-attempt.ts`, `session-publish-github.ts` and the tests `desk-publication.test.ts`, `publish.test.ts`, `review-advance.test.ts`, `session-publish-github.test.ts`.
+- Code at HEAD read for the traces: `src/flow/tracker/github.ts:139-150` (base `githubPostReview`), `src/review/complete-head-gate.ts:1-30` (`isPrBound`, merged-PR rationale), `src/review/desk-run-store.ts:98-112` (constructor creates the store), `:460-700` (history, roundPlacements, attachBadges, reviewRows, previousAttempt), `src/review/desk-publication.ts:355-400` (headMoved, lock path), `src/review/desk-run-executor.ts:170-209, 360-399, 465-472` (worker checkout lives in `<runDir>/checkout`, under the store root), `src/review/managed.ts:228-237` (samePrRef), the skill `SKILL.md:908` and `templates/review-report.md:23` (both copies).
+- Consumers: of `publicationMarker` (`keryx ctx rg keryx-desktop-review`: only publication-guard.ts), of `PUBLISHED_BODY_LIMIT` (publish.ts, desk-publication.ts), of `DeskRun.source` (listed in wave 1), of `publishReview` options (review.ts runPublish, operator-confirm-review.ts publishSpec, desk-publication.test.ts). Search-derived (`keryx ctx rg`); the graph was not queried, so no graph cap applies.
+- Measured: `du -sh .metaproject/reviews/*/` — PR packages of this repository reach 55-57 MB, of which `layers/` is 52 MB (pull-1052-r05).
+
+## Findings
+
+### F1 (minor, default-change, consumer-trace) `keryx review publish` now refuses a merged or closed PR, while the skill and the report template still send a post-merge review there
+
+New `refuseClosed` (publish.ts:62-65, called at :196 and :244) throws for state MERGED or CLOSED. Base `publishReview` had no such refusal; it posted through `gh pr review --comment` (github.ts:144), which GitHub accepts on a merged PR. The unchanged consumers still direct that publish: `SKILL.md:908` (both copies) "`--event COMMENT` on a merged or closed PR"; `templates/review-report.md:23` (both copies) "PR already merged or closed | a plain PR comment"; `complete-head-gate.ts:28-30` keeps such a round closable "because a round on a merged PR is still worth closing", and Preflight 4 calls it "a post-merge audit".
+Refute: the PR body and divergence-map.md row 4 name "refuse a closed PR" as intended, so the code change itself is deliberate; this is filed because its consumers (the skill text and the template the agent follows) were not updated, so a post-merge audit round now ends in a refused publish with no documented path. Severity kept at minor because the change is announced.
+
+### F2 (minor, behaviour-delta, base-diff) The session publish transport accepts only `https://github.com/...` refs; the base posted whatever `gh pr review` accepts
+
+Base: `githubPostReview(url, ...)` ran `gh pr review <ref> --comment|--approve|--request-changes --body-file -` (github.ts:144), so a `pr`-kind package whose `target.ref` is a PR number, a branch, `owner/repo#N` or a GitHub Enterprise URL was publishable. Head: `githubPostPullReview` (session-publish-github.ts:30) returns `not a GitHub pull request URL` unless the ref matches `^https://github\.com/.../pull/N` (line 8), and posts with `--hostname github.com` (line 35). `isPrBound` (complete-head-gate.ts:18) treats every `kind === "pr"` package as publishable regardless of ref shape, and `samePrRef` (managed.ts:232-237) exists because refs come in more than one form.
+Refute attempted: did not find a normaliser that forces `--target pr` refs to github.com URLs at `review start`; not proven either way, hence medium confidence.
+
+### F3 (minor, performance, consumer-trace + measurement) Every registration deletes and re-copies the whole package, `layers/` included, into the user data directory
+
+`register` (session-attempt.ts:116-122) runs `rm(target, recursive)` then `cp(own, target, recursive)` on every call. It is called by default on every terminal `keryx review complete` of a PR package (review.ts:5171-5178), every terminal `keryx review publish` (review.ts:5073-5074) and every publish-card build (operator-confirm-review.ts:191-192). PR packages here are 55-57 MB, 52 MB of it `layers/` (graph data Desktop's publication never reads), so each complete/publish copies ~55 MB into `<keryxDataDir>/desktop-review/attempts/<id>/package`, one copy per round, kept until Desktop deletes the attempt. In addition, `registerSessionPackage` creates the Desktop store (`new DeskRunStore()` at line 71 runs `ensureKeryxConfigDir` + `CREATE TABLE`, desk-run-store.ts:107-110) before `resolveKey` can fail, so a project with no GitHub binding gets a store and a warning on every complete. Base `complete`/`publish` wrote nothing outside the package.
+Refute: read the cp filter (session-attempt.ts:121-122): it skips only `desk-attempt.json`, `publication.lock`, `publication-receipt.json`.
+
+### F4 (minor, behaviour-delta, base-diff) A failed head re-read after the operator's yes now refuses the publish as "stale"
+
+publish.ts:241-249: after `confirm`, when a tracker is configured, `readPullRequest` runs again; it maps any lookup error or `exists: false` to `undefined` (publish.ts:54-59), and `after === null` with a known `before` throws `stale: The pull request head changed while the review was being confirmed (… → unknown)`. A transient `gh` failure on that third read therefore refuses a publish the operator already approved, and reports it as a head change. Base posted after the yes with no re-read.
+Refute: the first read uses the same mapping but only skips the check (`before === null`); only the post-confirm read fails closed.
+
+### F5 (minor, behaviour-delta, consumer-trace) A receipt written before registration is not carried into the Attempt, so Desktop can publish the same package a second time
+
+When registration fails (warning, publish continues), `publishReview` keeps the receipt in the package (`receiptDir = packageDir`, publish.ts:222) and marks the body with `sessionPublicationId(reviewId, round)`. A later successful registration (the next `complete`, `publish` or card) copies the package with `publication-receipt.json` filtered out (session-attempt.ts:121-122) into an Attempt directory that has no receipt. Desktop reads only the Attempt directory's receipt (desk-run-store.ts publication(), desk-publication.ts prepare) and looks for its own marker (the Attempt id), so it shows the attempt as `pending` and allows a submit: a second review on the PR. `keryx review publish` itself is safe (it reads both directories, publish.ts:229-230). Base could not publish a session package from Desktop at all, so this duplicate path is new. The PR body notes the unregistered fallback but says "Desktop cannot see such a package anyway", which stops holding once the package is registered later.
+
+### F6 (info, debt) Re-registering a decided session Attempt still replaces its package copy
+
+`recordSession` (desk-run-store.ts:404-414) leaves a row whose `decision` is set untouched, but `register` has already `rm`+`cp`'d that attempt's `package/` (session-attempt.ts:116-122). An archived or completed-by-operator session attempt then holds a package that no longer matches its stored report and counts.
+
+## Verified clean
+
+- `desk-publication.ts` refactor: `publicationMarker`, `headMovedLine`, `beginPublicationReceipt`, `confirmPublicationReceipt`, `dropPublicationReceipt` produce the same text and files as the removed inline code; the only difference is that `dropPublicationReceipt` ignores ENOENT, where `unlink` would have thrown after GitHub refused (strictly more tolerant).
+- Lock sharing: session uses `<receiptDir>/publication.lock`, Desktop `path.join(directory, "publication.lock")` (desk-publication.ts:394): same file for a registered package.
+- Body budget: the appended marker (~60 chars) is outside the minors budget, but PUBLISHED_BODY_LIMIT is 60 000 (publish.ts:103), well under GitHub's 65 536.
+- Marker consumers: nothing but publication-guard.ts emits or parses `keryx-desktop-review`; the old Desktop prefix is kept, so earlier Desktop reviews are still found.
+- D1 moved-head rule: refused events, COMMENT pinned to `commit_id`, first line kept when the report already names the reviewed commit; tests in publish.test.ts would fail if the event check or the first line regressed.
+- `advanceRequest` / `reviewedAttempt`: superseded-round refusal matches desk-publication's `newerRound` rule (no Update button is offered then); `existing` and withdrawn attempts excluded as in update-round.ts:48/67.
+- Desktop worker packages: the worker's checkout is `<runDir>/checkout` under the store root (desk-run-executor.ts:470), so `register`'s realpath check skips them (session-attempt.ts:84-86); no duplicate session attempt from a Desktop run.
+- autonomous-profile.ts: the fixed-range line keeps "Keep this range"; only the "separate request" sentence changed; the open-range line is unchanged.
+- review-entity.ts / desk-run-types.ts: additive union members; SQL filters `IN ('manual','scheduled')` (attachBadges, activeReviewNumbers, previousAttempt, latestAdmission) exclude `session`, so board badges and admission are unchanged by session rows.
+- Tests: the AC5 tests would fail if either path stopped writing the shared receipt or marker; publish.test.ts "a push while the operator reads" uses a real head change, not the failed-lookup case of F4 (that case is untested).
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-degradation-w3-1",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 62,
+      "problem": "keryx review publish now refuses a MERGED or CLOSED pull request (refuseClosed, called at :196 and :244). Base posted there via `gh pr review --comment`. The skill (SKILL.md:908, both copies: \"--event COMMENT on a merged or closed PR\"), the report template (templates/review-report.md:23: \"PR already merged or closed | a plain PR comment\") and complete-head-gate.ts:28-30 (a round on a merged PR is still worth closing) still direct a post-merge audit to this publish.",
+      "evidence": "base-diff: github.ts:144 (base transport, no state check) vs publish.ts:62-65,196,244 (head); consumer-trace: SKILL.md:908 and templates/review-report.md:23 in both skill copies, complete-head-gate.ts:28-30; refute: PR body and divergence-map row 4 name the refusal as intended, so only the stale consumers are the defect",
+      "impact": "An agent following the skill on a post-merge audit gets a refused publish with no documented alternative.",
+      "suggested_fix": "Either update SKILL.md:908 and templates/review-report.md:23 (both copies) to say a merged/closed PR is not published by keryx, or allow COMMENT on a merged/closed PR as the template describes.",
+      "confidence": "high",
+      "degradation_class": "default-change",
+      "evidence_kind": "consumer-trace"
+    },
+    {
+      "id": "review-degradation-w3-2",
+      "severity": "minor",
+      "file": "src/review/session-publish-github.ts",
+      "line": 30,
+      "problem": "The session publish transport now posts only for refs matching ^https://github.com/<o>/<r>/pull/N and hardcodes --hostname github.com. Base `gh pr review <ref>` accepted a PR number, branch, owner/repo#N or a GitHub Enterprise URL; isPrBound treats every kind=pr package as publishable regardless of ref shape.",
+      "evidence": "base-diff: src/flow/tracker/github.ts:144 (`gh pr review <url>`) vs session-publish-github.ts:8,30,35; complete-head-gate.ts:18 (isPrBound: kind === \"pr\" suffices); managed.ts:232-237 (samePrRef handles several ref forms); refute: no normaliser of pr refs to github.com URLs found at review start (not proven absent)",
+      "impact": "A PR package with a non-github.com-URL ref that published on base now fails with 'not a GitHub pull request URL'.",
+      "suggested_fix": "Resolve the ref to owner/repo/number through `gh pr view <ref> --json url` before posting, or refuse such refs at review start with a clear message.",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "review-degradation-w3-3",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 120,
+      "problem": "Every registration (default on every terminal `review complete` and `review publish` of a PR package, and every publish-card build) rm's and re-copies the whole package, layers/ included, into <keryxDataDir>/desktop-review/attempts/<id>/package. PR packages here are 55-57 MB (52 MB layers/). It also creates the Desktop store (new DeskRunStore at :71) before resolveKey can fail, so a project without a GitHub binding gets a store and a warning on every complete. Base complete/publish wrote nothing outside the package.",
+      "evidence": "consumer-trace: review.ts:5171-5178 and :5073-5074, operator-confirm-review.ts:191-192 call register; session-attempt.ts:71, 116-123 (rm + cp, filter skips only 3 file names); desk-run-store.ts:107-110 (constructor creates the store); measured: du -sh .metaproject/reviews/*/ → 55-57 MB, layers/ 52 MB",
+      "impact": "Each complete/publish copies tens of MB per round into the user data dir and repeats it on every call; the Desktop store is created as a side effect for users who never used Desktop.",
+      "suggested_fix": "Copy only what Desktop publication reads (manifest, report, findings, round/premise/verdict inputs) or skip layers/ and payloads/; copy only when the package changed; resolve the key before opening the store.",
+      "confidence": "high",
+      "degradation_class": "performance",
+      "evidence_kind": "consumer-trace"
+    },
+    {
+      "id": "review-degradation-w3-4",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 247,
+      "problem": "After the operator's yes, a failed or empty PR re-read (lookup error or exists:false mapped to undefined by readPullRequest) makes `after` null, and the check throws 'stale: The pull request head changed ... (→ unknown)'. A transient gh failure refuses an approved publish and misreports it as a head change. Base posted after the yes without a re-read.",
+      "evidence": "base-diff: publish.ts:54-59 (readPullRequest maps errors to undefined), :241-249 (after === null throws stale); base publishReview called options.post right after confirm",
+      "impact": "The operator must re-run and re-confirm publish after a transient GitHub read failure; the message points at a head move that did not happen.",
+      "suggested_fix": "Distinguish 'could not read' from 'moved': on an unreadable re-read, refuse with an 'unavailable: could not re-check the head' message, or retry once.",
+      "confidence": "high",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "review-degradation-w3-5",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 122,
+      "problem": "A package published while registration failed keeps its receipt in the package dir and carries the marker <reviewId>#r<round>. When a later complete/publish/card registers it, the copy filters out publication-receipt.json and the Attempt directory gets no receipt; Desktop reads only that directory and searches for its own marker (the Attempt id), so it shows the attempt as pending and lets the operator submit a second review.",
+      "evidence": "consumer-trace: publish.ts:222 (receiptDir = packageDir when unregistered), :230-231 (session path reads both dirs); session-attempt.ts:121-122 (receipt filtered from the copy); desk-run-store.ts publication() and desk-publication.ts prepare read the Attempt directory's receipt and the Attempt-id marker only",
+      "impact": "A duplicate review on the PR through Desktop, the outcome the shared guard exists to prevent.",
+      "suggested_fix": "On registration, move or merge a published package-level receipt into the Attempt directory (or refuse Desktop publish when the package dir holds a published receipt).",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace"
+    },
+    {
+      "id": "review-degradation-w3-6",
+      "severity": "info",
+      "file": "src/review/session-attempt.ts",
+      "line": 116,
+      "problem": "recordSession leaves a decided session row unchanged, but register has already replaced that attempt's package copy, so an archived or operator-completed session attempt holds a package that no longer matches its stored report and counts.",
+      "evidence": "desk-run-store.ts:404-414 (ON CONFLICT ... WHERE decision IS NULL); session-attempt.ts:116-124 (rm + cp before recordSession)",
+      "impact": "Stale-versus-stored mismatch for decided session attempts; no publish path found that relies on it.",
+      "suggested_fix": "Check the row (source session, no decision) before refreshing the copy.",
+      "confidence": "medium",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 5,
+    "info": 1
+  }
+}
+```

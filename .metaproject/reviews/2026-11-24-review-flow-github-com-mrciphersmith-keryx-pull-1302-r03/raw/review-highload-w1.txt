@@ -1,0 +1,34 @@
+STATUS: DONE
+
+## High-Load Review — wave 1 (slice-01)
+
+Scope: range 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d1249 (stage 4 only), diff mode. Load profile: not provided; concrete triggers used: two processes (Desktop and an agent session) on one review store, repeated clicks on "Update review", wave-boundary head reads.
+Read: the full code diff of apps/desktop/src-tauri/src/review.rs, apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx, apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts, and the stage-4 diff of .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md and SKILL.detail.md (§ "Head moved"). Code read at HEAD: ReviewWorkspace.tsx:125-164 (updateReview), src/review/desk-run-service.ts:247-283 (requestDeskRun), src/review/desk-run-store.ts:302-325 and 713-772 (requestManual, requestAttempt).
+Skimmed only (documentation and test text, no runtime concurrency surface): the flow-521 planning files (.metaproject/flows/521-*/*.md, flow.json, resolved/T5.implement.json), apps/desktop/src/reviews/ReviewPanel.dom.test.tsx, docs/docs/cli-reference.md.
+
+Summary: Desktop's "Update review" now calls `keryx review advance`. A double click, or a Desktop click racing an agent session's `advance` on the same range, does not produce a second round: requestAttempt, inside the store's BEGIN IMMEDIATE transaction, reuses an active, queued or completed-complete attempt on the same revision and options (desk-run-store.ts:729-740), and the UI also reuses a covering attempt (ReviewWorkspace.tsx:139-147). The skill's per-wave `git ls-remote` head read is one network call per wave boundary with no retry loop. Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+Findings:
+- CLI / Multi-Session: None detected.
+- Concurrency & Races: None detected.
+- Resources, Caching, Lock Contention, Async / Queues, Retry / Timeout / Circuit Breaker, Idempotency & Distributed Invariants: None detected.
+
+Clean Areas: Parts 0, A, B, C, D, E, F, G reviewed for this slice.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

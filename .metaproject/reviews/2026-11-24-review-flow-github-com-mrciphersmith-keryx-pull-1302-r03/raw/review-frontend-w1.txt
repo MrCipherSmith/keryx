@@ -1,0 +1,47 @@
+STATUS: DONE
+
+## Frontend Review — wave 1 (slice-01)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 only)
+- Read in full: the Desktop part of slice-01 (lines 1137-1925): apps/desktop/src-tauri/src/review.rs (3 hunks), apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx (3 hunks), apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts, apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (3 hunks), docs/docs/cli-reference.md hunk. Lines 1-1136 (flow folder files, review-orchestrator SKILL docs, flow.json, resolved/T5) are not frontend code; file headers only.
+- Read at HEAD for context: ReviewWorkspace.tsx 90-175, ReviewRuns.tsx 100-135, ReviewRunDialog.tsx 25-60, App.tsx 520-550, every `action.kind === "start"` / startedRunId consumer in apps/desktop/src, desk-run-store.ts latestAdmission/continuationSource.
+- Verified: `bun test src/reviews/ReviewPanel.dom.test.tsx` (apps/desktop) 49 pass / 0 fail; `bunx tsc --noEmit -p .` (apps/desktop) clean. Rust (review.rs run_args test) NOT run: no local cargo toolchain.
+
+### Checked, clean
+- `advance` action wiring: ReviewRunAction union, reviewRun mutationVersion bump (kind !== "status"), useReviewRuns PollAction includes advance, error mapped to "start" so staleRange (useReviewRuns.ts:112) still reports a stale advance. Tauri run_args: `advance` routed to `review advance --json` with --id/--base/--head checked by the shared field check; the `KERYX_DESKTOP_REVIEW_ACTION` condition parses as `a && ((b && c) || d)`, as intended.
+- updateReview: covering-attempt guard, focus handling and toast paths unchanged; removed `updateRoundOptions` has no remaining Desktop caller.
+- No MobX in these files; updateReview hook deps unchanged and complete.
+
+### Findings
+- F-001 (minor): a `session` attempt is labelled "Existing review" in the attempt card and History menu, while the Reviews list (model.ts SOURCE_LABEL, added here) calls it "Session".
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "review-frontend-w1-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": 27,
+      "problem": "Stage 4 adds the `session` source and labels it \"Session\" in the Reviews list (SOURCE_LABEL), but the two other source labels in Desktop are nested ternaries that fall through to \"Existing review\" for any source other than manual/scheduled, so a session attempt reads \"Existing review\" in its attempt card and in the History menu.",
+      "evidence": "apps/desktop/src/review/ReviewRuns.tsx:131 and apps/desktop/src/review/ReviewRunDialog.tsx:32 (`run.source === \"manual\" ? \"Manual\" : run.source === \"scheduled\" ? \"Scheduled\" : \"Existing review\"`); apps/desktop/src/reviews/model.ts:27 `session: \"Session\"`; neither ReviewRuns.tsx nor ReviewRunDialog.tsx is touched by the range (git diff --stat empty)",
+      "impact": "The same attempt carries two source names in one panel; an imported review and an agent-session review are indistinguishable in the card and the history menu.",
+      "suggested_fix": "Use SOURCE_LABEL[run.source] (or one shared source-label helper) in ReviewRuns.tsx:131 and ReviewRunDialog.tsx:32, and add a dom test with a `session` run.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```

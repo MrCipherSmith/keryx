@@ -1,0 +1,127 @@
+STATUS: PARTIAL
+
+## Security Review — wave 3 (slice-03)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 only)
+- Read in full: every non-test hunk of src/review/autonomous-profile.ts, desk-publication.ts, desk-run-store.ts,
+  desk-run-types.ts, publication-guard.ts (new), publish.ts, review-advance.ts (new), review-entity.ts, session-attempt.ts (new),
+  session-publish-github.ts (new).
+- Code read at HEAD beyond the diff: src/lib/fs.ts writeFileAtomic/withFileLock (40-120), src/review/report-overlay.ts scopedFile
+  (Desktop's symlink-refusing reader), src/review/desk-publication.ts json/findPreviousPublication (44-75), src/review/readiness.ts
+  headCheck (362-372), src/review/complete-head-gate.ts lookup handling (43-45), src/review/desk-run-service.ts spawnWorker.
+- NOT read in full: the test files of this slice (desk-publication.test.ts, publish.test.ts, review-advance.test.ts,
+  session-publish-github.test.ts).
+
+### Summary
+- Blockers: 0 / Major: 0 / Minor: 1 / Info: 1
+
+### Findings
+
+#### [security-w3-1] `desk-attempt.json` is trusted unvalidated: its attemptId becomes a filesystem path and the duplicate marker (minor)
+- File: src/review/session-attempt.ts:38-42 (readSessionAttempt), :159-160 (sessionPublication); src/review/publish.ts:223,227
+- Problem: `readSessionAttempt` accepts any string as `attemptId`. `sessionPublication` joins it into
+  `path.join(deskRunRoot(), "attempts", record.attemptId)` without checking it is a UUID or that the record matches the package's
+  PR (repositoryId/viewer/number are read but never compared with the manifest). publishReview then uses that directory for
+  `withFileLock(<dir>/publication.lock)` (which `mkdir -p`s the parent) and for the receipt (`writeFileAtomic` also `mkdir -p`s),
+  and embeds the id unescaped in `<!-- keryx-desktop-review ${id} -->`. The session-generated fallback id is sanitised
+  (sessionPublicationId strips `>`); this one is not.
+- Attack vector: a review package is a plain directory (this repo tracks 3509 files under .metaproject/reviews/), so a package
+  delivered by a branch or written by a reviewer agent can carry its own desk-attempt.json, e.g. `{"attemptId":"../../../x",…}`.
+  The file is read whenever registration does not overwrite it first: always in the review_publish card `apply`
+  (operator-confirm-review.ts:259, no registrar), and in `keryx review publish` when registration skips (manifest without full
+  base/head SHAs) or fails (offline, GitHub unreadable). Impact: directories and fixed-content `publication-receipt.json` /
+  `publication.lock/` are created outside the Desktop store wherever the user can write; an id naming another real Attempt
+  makes this publish read/write that Attempt's receipt (blocking or marking it published) and reuse its marker; an id containing
+  `-->` closes the hidden comment so the rest shows in the posted review. The operator still sees the body before posting and the
+  written content is fixed, so the impact is limited — hardening, not a reachable data compromise.
+- Fix: in readSessionAttempt require `attemptId` to match the store's UUID pattern and the record's repositoryId/number to match
+  the manifest's PR; better, recompute the expected id with `sessionAttemptId(key, manifest.reviewId, round)` and ignore a record
+  that differs. Optionally assert the resolved directory stays under `<root>/attempts/`.
+- class_scope:
+  - sites: src/review/session-attempt.ts:159 (fallback read), src/review/session-attempt.ts:160 (path join),
+    src/review/publish.ts:223 (marker), src/review/publish.ts:227 (lock path), src/commands/operator-confirm-review.ts:259
+    (apply reads without registrar), src/commands/operator-confirm-review.ts:191 and src/commands/review.ts:5074, 5178
+    (same reader behind a registrar that may skip or fail)
+  - enumeration_method: `keryx ctx rg -n 'readSessionAttempt\(|sessionPublication\(' src --glob '!*.test.ts'` — 7 matches, all
+    listed; readSessionAttempt is the only parser of SESSION_ATTEMPT_FILE.
+
+#### [security-w3-2] Session publish posts as the gh default account while the Attempt is registered under the project account (info)
+- File: src/review/session-publish-github.ts:18-22 (runGh: bare `gh`, inherited env), src/review/session-attempt.ts:136
+- Problem: registration keys the Attempt by `resolveDeskSubject(cwd, …, projectGithubConnection(cwd))` (the project's selected
+  account), and Desktop posts that Attempt pinned to that viewer (desk-publication.ts withCurrentGithubBinding). The session path
+  posts the same Attempt with bare `gh` (whatever account is active in the environment) and looks the marker up by that login.
+  When the two differ, the review appears under an account the Attempt's viewer is not, and the operator card/prompt does not show
+  which account posts. Posting via the ambient gh account is pre-existing behaviour of session publish; the new shared receipt
+  makes the mismatch visible in Desktop. No attacker vector.
+- Fix: post with the project connection's environment (as Desktop does), or show the posting login in the confirmation.
+
+### Checked, clean
+- gh api POST port: argv array, no shell; body sent on stdin via `--input -`; repo/number taken from a strict PR-URL regex;
+  `html_url` accepted only under https://github.com/; 4xx vs uncertain classification keeps the receipt on an unknown result, so
+  a lost answer cannot cause a duplicate post.
+- Receipt/lock: written with mode 0600 after a lock; a published or unknown receipt in either the attempt dir or the package dir
+  refuses a second post; drop only on a certain refusal; head re-read after confirm refuses a stale head; commit_id pins the review.
+  A moved head allows only COMMENT (fail-open only when the tracker cannot be read, which also matches readiness' pre-existing
+  behaviour, and the review is still pinned to the reviewed commit).
+- Package copy into the store: realpath check refuses a package already inside the store; target dir is derived from a hashed id
+  (no traversal); symlinks copied verbatim are not followed by Desktop, whose readers use scopedFile (lstat + realpath equality);
+  receipt, lock and desk-attempt.json are excluded from the copy so a package cannot pre-seed the Attempt's receipt.
+- recordSession upsert only refreshes rows whose source is `session` and that carry no operator decision; ids are hashes over the
+  key, so one account cannot overwrite another's row.
+- review advance: Attempt lookup scoped to the resolved key; repositoryId/viewer mismatch refused; autoPublish stripped.
+- Autonomous prompt change: tells the fixed-range run not to review new commits and not to run advance itself.
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-security-code",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-security-code-w3-1",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 160,
+      "problem": "readSessionAttempt accepts any attemptId from the package's desk-attempt.json; sessionPublication joins it into a filesystem path under the Desktop store and publishReview embeds it unescaped in the hidden duplicate marker. The record is never checked against the package's PR.",
+      "evidence": "src/review/session-attempt.ts:38-42,159-160; src/review/publish.ts:223,227; src/lib/fs.ts:51-52,107 (mkdir -p in writeFileAtomic/withFileLock); src/commands/operator-confirm-review.ts:259",
+      "impact": "A package carrying a crafted desk-attempt.json (packages are plain, often tracked directories) makes publish create receipt/lock files outside the store, share another Attempt's receipt and marker, or break out of the HTML comment marker. Read whenever registration is skipped or fails, and always in the review_publish card apply. Content written is fixed and the operator sees the body, so impact is limited.",
+      "suggested_fix": "Validate attemptId as a UUID and compare repositoryId/number with the manifest's PR (or recompute sessionAttemptId and ignore a differing record); assert the resolved directory stays under <root>/attempts/.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/session-attempt.ts:159",
+          "src/review/session-attempt.ts:160",
+          "src/review/publish.ts:223",
+          "src/review/publish.ts:227",
+          "src/commands/operator-confirm-review.ts:259",
+          "src/commands/operator-confirm-review.ts:191",
+          "src/commands/review.ts:5074",
+          "src/commands/review.ts:5178"
+        ],
+        "enumeration_method": "keryx ctx rg -n 'readSessionAttempt\\(|sessionPublication\\(' src --glob '!*.test.ts': 7 matches, all listed; readSessionAttempt is the only parser of desk-attempt.json"
+      }
+    },
+    {
+      "id": "review-security-code-w3-2",
+      "severity": "info",
+      "file": "src/review/session-publish-github.ts",
+      "line": 18,
+      "problem": "The session publish port posts with bare gh (ambient account) while the Attempt it publishes is registered under the project's selected GitHub account, which Desktop pins when it posts the same Attempt.",
+      "evidence": "src/review/session-publish-github.ts:18-22,28-35; src/review/session-attempt.ts:136; src/review/desk-publication.ts withCurrentGithubBinding in the submit path",
+      "impact": "When the accounts differ the review is posted under an identity the operator was not shown and that differs from the Attempt's viewer; no attacker vector, pre-existing posting behaviour now shared with Desktop's record.",
+      "suggested_fix": "Run gh with the project connection's environment (as Desktop does) or show the posting login in the confirmation.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 1
+  }
+}
+```

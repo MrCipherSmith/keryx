@@ -1,0 +1,197 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Architecture Review — wave 3 (slice-03)
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 commits only)
+- Scope mode: explicit-hash-range, supplied slice text
+- Stack detected: generic-ts (review domain modules, SQLite store, GitHub CLI adapters, tests)
+
+Read in full: slice-03.diff lines 1-1496 (src/review/autonomous-profile.ts, desk-publication.ts four hunks, desk-run-store.ts,
+desk-run-types.ts, publication-guard.ts, publish.ts two hunks, review-advance.ts, review-entity.ts, session-attempt.ts,
+session-publish-github.ts, desk-publication.test.ts, publish.test.ts, review-advance.test.ts, session-publish-github.test.ts).
+Code at HEAD read: src/review/desk-publication.ts:86-104 and :370-400 (Desktop acceptance: `open`, `current`, `headMoved`,
+`reviewedHeadInPull`, publication.lock), src/review/desk-run-store.ts:98-224, :300-312, :432-470 (layout `directory(id)`,
+`atomic`, `history`), src/review/board-github.ts:95-125 (`projectGithubConnection`), src/review/desk-run-service.ts:28-60
+(`resolveDeskSubject`, `verifyDeskSubject`), src/review/complete-head-gate.ts:3 (`PrSnapshot` has no base field),
+src/review/desk-publication-types.ts:50 (`PUBLICATION_RECEIPT`). Enumeration by `keryx ctx rg` (commands quoted per finding).
+
+### Summary
+The change introduces a real shared module (`publication-guard.ts`: marker, receipt life cycle, D1 first line) that both
+publish paths now call, a pure `review-advance.ts` behind injected deps, and a `session` Attempt registered through an additive
+store method. Dependency direction is sound (publish.ts receives the Attempt through options and does not import the store;
+no import cycle among publish / publication-guard / desk-publication / session-attempt / session-publish-github). The
+structural gap is that the *acceptance* half of "shared acceptance, receipt and marker" (AC5) was not extracted: the D1 /
+closed-PR rule is re-implemented in publish.ts and has already diverged from Desktop's in three conditions. Smaller items:
+the session's new GitHub adapter bypasses the project GitHub binding the same operation uses to key the Attempt, and the
+store's directory layout and the guard's lock/receipt file names are re-spelled outside their owners.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 2  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+
+#### [ARCH-W3-1] Publication acceptance (D1 / closed PR) is duplicated in publish.ts instead of shared, and has diverged from Desktop
+- **Severity**: major
+- **File**: src/review/publish.ts:62-71, 195-201 (Desktop counterpart src/review/desk-publication.ts:377-385, 293-295)
+- **Problem**: publication-guard.ts states it holds "what the two review publish paths share", but it holds only the marker,
+  the receipt and the first-line text. The acceptance rule a moved or closed PR is checked against lives twice:
+  Desktop (desk-publication.ts:377-385) allows the as-is Comment only when `open` = OPEN **and the base is unchanged**
+  (`pr.baseRefOid === run.baseSha`), the reviewed head is still in the PR (`reviewedHeadInPull`: GitHub compare says `ahead`;
+  diverged/rewritten history is refused), and **no later round of the Review exists** (`newerRound === undefined`, else
+  `supersededReason`). The session copy (publish.ts `refuseClosed` + `movedHead`) checks only state and head inequality:
+  `PrSnapshot` has no base (complete-head-gate.ts:3), there is no ancestry check, and publish.ts never consults the Review's
+  rounds although the package is now an Attempt of that Review (session-attempt.ts) and `keryx review advance` creates later rounds.
+- **Why it matters** (trigger -> outcome): (a) a session package registered as round N; Desktop's "Update review" (now
+  `keryx review advance`) opens round N+1; `keryx review publish <pkg> --event COMMENT` still posts round N as is, where
+  `desk-publish` of the same Attempt refuses it as superseded. (b) after a force-push, the session path posts a Comment pinned
+  to a `commit_id` outside the PR, which Desktop's comment at desk-publication.ts:93-98 says is "never attempted".
+  (c) after the PR's base is retargeted, the session path publishes a review of the old range; Desktop blocks it. The two
+  surfaces that AC5 and the skill ("with the same code as Desktop's publish", SKILL.detail.md Head moved step 5.2) say share
+  acceptance give different answers for the same Attempt.
+- **Fix**: move the acceptance decision into publication-guard.ts as one function over a narrow port, e.g.
+  `publicationAcceptance({ reviewed: {base, head}, pr: {state, base, head}, reviewedHeadInPull(): Promise<boolean>,
+  newerRound?: NewerRound }) -> { kind: "current" } | { kind: "as-is", currentHead } | { kind: "refused", reason }`, call it from
+  `requestDeskPublication` and from `publishReview` (session supplies base via the PR lookup and, when `options.publication`
+  is set, the newer-round check through the store's history of the Attempt's key), and keep only the per-surface rendering
+  (Desktop's blockedReason text, the session's thrown error) outside it.
+- **class_scope**: sites `src/review/publish.ts:62` (refuseClosed), `src/review/publish.ts:68` (movedHead),
+  `src/review/publish.ts:196-201` (call + D1 event check), `src/review/publish.ts:244` (post-confirm re-read),
+  `src/review/desk-publication.ts:377-385` (open/current/headMoved), `src/review/desk-publication.ts:100` (reviewedHeadInPull),
+  `src/review/desk-publication.ts:293-295` (closed/moved/superseded blockedReason). Enumeration: `keryx ctx rg -n
+  "movedHead|headMovedLine|refuseClosed|reviewedHeadInPull" src --all` (42 matches; non-test sites are the 5 in publish.ts,
+  4 in desk-publication.ts, 1 in publication-guard.ts) plus the `const open =`/`const current =` lines found by
+  `keryx ctx rg -n "headMoved|const current|open =" src/review/desk-publication.ts --all`. Two implementations, no third.
+
+#### [ARCH-W3-2] The store's attempt-directory layout and the guard's lock/receipt file names are re-spelled outside their owners
+- **Severity**: minor
+- **File**: src/review/session-attempt.ts:160
+- **Problem**: `sessionPublication` builds the Attempt directory as `path.join(root, "attempts", record.attemptId)`, a copy of
+  `DeskRunStore.directory(id)` (desk-run-store.ts:204-206). The lock name `"publication.lock"` is a literal in three modules
+  (publish.ts:227, desk-publication.ts:394, session-attempt.ts:121) and the receipt name is spelled `"publication-receipt.json"`
+  in session-attempt.ts:122 and the publish.ts:238 message, while publication-guard.ts was introduced to own the receipt
+  (`receiptPath`, `PUBLICATION_RECEIPT`).
+- **Why it matters**: the cross-path duplicate guard depends on both paths resolving the same directory and the same lock file;
+  a change to the store layout or the lock name in one owner silently splits the guard (each path would lock and read a different
+  file), and no compile-time link exists between the copies.
+- **Fix**: export `publicationLockPath(directory)` (and use `receiptPath`/`PUBLICATION_RECEIPT`) from publication-guard.ts for all
+  three sites; derive the Attempt directory from the store (`DeskRunStore.directory`, or a static helper over `deskRunRoot()`)
+  instead of re-joining `"attempts"`.
+
+### Design Pattern Misuse
+None detected beyond W3-1.
+
+### Dependency Inversion
+
+#### [ARCH-W3-3] The session GitHub adapter bypasses the project GitHub binding used to key the same Attempt
+- **Severity**: minor
+- **File**: src/review/session-publish-github.ts:18-22
+- **Problem**: one `keryx review publish` keys the Attempt (and so the shared receipt and marker) by the project's bound
+  GitHub account: `registerSessionPackageForProject` -> `projectGithubConnection` -> `resolveDeskSubject` (session-attempt.ts:130-137;
+  board-github.ts:103-115 uses `namedGithubEnvironment` for a bound login). The post and the marker lookup go through a new
+  hand-rolled `Bun.spawn(["gh", ...])` with the ambient environment (`runGh`), and `githubFindPublished` matches reviews by the
+  ambient `gh api user` login. Desktop's adapter for the same API wraps the spawn in `withCurrentGithubBinding` with the bound
+  env (desk-publication.ts:437). The infrastructure boundary (project GitHub binding) exists, but the new adapter is a second
+  GitHub port beside it instead of going through it.
+- **Why it matters** (trigger -> outcome): a project bound to account B while `gh`'s active account is A: the review is posted as
+  A, recorded in B's Review/Attempt receipt as published, and a lost-response lookup searches A's reviews while Desktop's searches
+  B's. Same-operation identity is not single-sourced.
+- **Fix**: give `githubPostPullReview`/`githubFindPublished` a connection parameter and build them on the project connection
+  (`projectGithubConnection` + `withCurrentGithubBinding` + `reviewTool("gh", env)`, as desk-publication does), or resolve the
+  key and post with the same connection object passed down from the command layer.
+
+#### [ARCH-W3-4] Registration domain imports URL parsing from the GitHub transport module
+- **Severity**: info
+- **File**: src/review/session-attempt.ts:20
+- **Problem**: `session-attempt.ts` (store registration) imports `pullRequestPath` from `session-publish-github.ts`, the
+  module that spawns `gh`; a pure URL parser is the only thing it needs.
+- **Fix**: move `pullRequestPath` to a pure helper (e.g. beside `isPrBound` in complete-head-gate.ts or a small pr-url module)
+  and import it from both.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+Not run: tests (read-only review); the AC5 cross-path tests read above exercise receipt and marker sharing only, not the
+acceptance divergences in W3-1.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-architecture-w3-1",
+      "severity": "major",
+      "file": "src/review/publish.ts",
+      "line": 68,
+      "problem": "The D1 / closed-PR publication acceptance is re-implemented in publish.ts (refuseClosed, movedHead) instead of being shared through publication-guard.ts, and it has diverged from Desktop's (desk-publication.ts:377-385): the session path does not check that the base is unchanged (PrSnapshot has no base), does not check that the reviewed head is still an ancestor of the current head (Desktop's reviewedHeadInPull), and does not refuse an Attempt a later round of its Review superseded (Desktop's newerRound/supersededReason), although the package is now an Attempt of that Review and keryx review advance creates later rounds.",
+      "evidence": "src/review/publish.ts:62-71,195-201,244 (slice-03 lines 494-504, 553-560, 606-615); src/review/desk-publication.ts:93-98,100,293-295,377-385 read at HEAD; src/review/complete-head-gate.ts:3; keryx ctx rg -n \"movedHead|headMovedLine|refuseClosed|reviewedHeadInPull\" src --all",
+      "impact": "For the same Attempt the two publish surfaces give different answers: after keryx review advance opened round N+1, keryx review publish --event COMMENT still posts round N as is while desk-publish refuses it as superseded; after a force-push the session path posts a Comment pinned to a commit_id outside the PR; after a base retarget it posts a review of the old range. AC5's 'shared acceptance' and SKILL.detail.md Head moved 5.2 ('with the same code as Desktop's publish') do not hold.",
+      "suggested_fix": "Extract one acceptance function into publication-guard.ts over a narrow port (reviewed base/head, PR state/base/head, reviewedHeadInPull(), newerRound) returning current | as-is(currentHead) | refused(reason); call it from requestDeskPublication and publishReview (session: base from the PR lookup, newer-round check from the store when options.publication is set); keep only per-surface wording outside it.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/publish.ts:62",
+          "src/review/publish.ts:68",
+          "src/review/publish.ts:196",
+          "src/review/publish.ts:244",
+          "src/review/desk-publication.ts:100",
+          "src/review/desk-publication.ts:293",
+          "src/review/desk-publication.ts:377"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"movedHead|headMovedLine|refuseClosed|reviewedHeadInPull\" src --all (42 matches, non-test: 5 publish.ts, 4 desk-publication.ts, 1 publication-guard.ts) and keryx ctx rg -n \"headMoved|const current|open =\" src/review/desk-publication.ts --all; two implementations of the acceptance rule, no third"
+      }
+    },
+    {
+      "id": "review-architecture-w3-2",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 160,
+      "problem": "sessionPublication re-joins the store layout as path.join(root, \"attempts\", id) instead of DeskRunStore.directory(id); the lock name \"publication.lock\" is a literal in publish.ts:227, desk-publication.ts:394 and session-attempt.ts:121, and the receipt name is spelled \"publication-receipt.json\" in session-attempt.ts:122 and publish.ts:238 while publication-guard.ts owns receiptPath/PUBLICATION_RECEIPT.",
+      "evidence": "src/review/session-attempt.ts:121-122,160; src/review/desk-run-store.ts:204-206; src/review/publish.ts:227,238; src/review/desk-publication.ts:394; src/review/publication-guard.ts:30 receiptPath (slice-03 line 384); keryx ctx rg -n 'publication.lock|publication-receipt.json|\"attempts\"' over the four files",
+      "impact": "The cross-path duplicate guard relies on both paths resolving the same directory and lock file; a change in one owner (store layout, lock name) silently splits the guard with no compile-time link between the copies.",
+      "suggested_fix": "Export publicationLockPath(directory) and use receiptPath/PUBLICATION_RECEIPT from publication-guard.ts at all sites; derive the Attempt directory from DeskRunStore.directory or a static helper over deskRunRoot().",
+      "confidence": "high"
+    },
+    {
+      "id": "review-architecture-w3-3",
+      "severity": "minor",
+      "file": "src/review/session-publish-github.ts",
+      "line": 18,
+      "problem": "The Attempt that holds the shared receipt and marker is keyed by the project's bound GitHub account (registerSessionPackageForProject -> projectGithubConnection -> resolveDeskSubject), but the session post and marker lookup use a new hand-rolled Bun.spawn(['gh', ...]) adapter with the ambient environment and match reviews by the ambient `gh api user` login, bypassing the project GitHub binding (withCurrentGithubBinding + namedGithubEnvironment) that Desktop's adapter for the same API uses.",
+      "evidence": "src/review/session-publish-github.ts:18-22,60-75; src/review/session-attempt.ts:130-137; src/review/board-github.ts:103-115; src/review/desk-publication.ts:437",
+      "impact": "With a project bound to account B and gh's active account A, the review is posted as A but recorded as published in B's Review/Attempt, and a lost-response lookup searches A's reviews while Desktop's searches B's; one operation uses two identities.",
+      "suggested_fix": "Pass the project GithubConnection to githubPostPullReview/githubFindPublished and spawn gh through withCurrentGithubBinding with reviewTool('gh', env), or resolve the Attempt key and post with the same connection object supplied by the command layer.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-architecture-w3-4",
+      "severity": "info",
+      "file": "src/review/session-attempt.ts",
+      "line": 20,
+      "problem": "session-attempt.ts (store registration) imports the pure URL parser pullRequestPath from session-publish-github.ts, the gh-spawning transport module.",
+      "evidence": "src/review/session-attempt.ts:20,63; src/review/session-publish-github.ts:11",
+      "impact": "Registration takes a compile-time dependency on the GitHub transport for a pure helper; cost lands on whoever splits or replaces the adapter.",
+      "suggested_fix": "Move pullRequestPath to a pure PR-URL helper and import it from both modules.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 2,
+    "info": 1
+  }
+}
+```

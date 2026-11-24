@@ -84,3 +84,14 @@
 - T8 text: skill "Head moved" steps 3–5 describe advance as the command both surfaces run, with `keryx review plan --head` to run the round in-session; autonomous-profile.ts fixed-range line drops "New commits belong to a separate request" and names `keryx review advance` outside the run, still "Keep this range" (skill maps it to `ignore`). Preflight test pins both.
 - 2026-11-24T10:50:30.559Z - task-done: T7: Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)
 - 2026-11-24T10:50:30.749Z - task-done: T8: Session and Desktop prompt use the same update command (needs stage 3)
+- 2026-11-24T11:44:33.384Z - task-added: T13: Fix round 3 findings of PR 1302 (T1-T16)
+- 2026-11-24T11:44:33.648Z - task-attempt: T13: started (attempt 1) — 521-T13 fix round 3
+
+## 2026-11-24 Review round 3 (T7/T8 code) and fix round T13
+
+- Rebased onto stage 3 at 7a846bef1 (conflicts only in ReviewWorkspace.tsx and ReviewPanel.dom.test.tsx; resolved). Round 3 planned with `keryx review plan --ref 7a846bef1` (fallback-first: round 2's head is not an ancestor after the rebase), 3 slices, 10 reviewers, 26 driver waves; dispatched as 9 subagents (ui-ux and layout shared one). Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r03`.
+- 44 raw findings → 16 canonical (5 major, 11 minor), all acted on in T13; 13 others dispositioned (refuted / out-of-scope / narrowed) in `dispositions-3.json`. Majors: T1 a branch-name base (`origin/main`, 11 of 15 local PR packages) silently skipped registration; T2/T3 receipts and locks could split between the package and the Attempt, allowing a second post; T4 session publish lacked Desktop's superseded-round and ancestry checks; T5 Desktop treated `session` Attempts as worker runs (coordinator, Continue).
+- Not closed: the ledger gate refuses completion because review-frontend and review-security-code ended PARTIAL (test and doc tails skimmed) and no reviewer model was recorded; no retry wave was spent. The mutation pass (testing reviewer: 29 mutants, 13 survived before T13) was not re-run after the fixes.
+- Out of scope, recorded: the session path posts with the ambient `gh` account while the Attempt is keyed by the project-bound one; registration still recomputes readiness (a few extra gh calls).
+- CI: "Core tests (2/4)" fails `src/lib/file-lock.reclaim.test.ts` on stage 3's head too (stage 3 commit 41779d177); left to stage 3.
+- 2026-11-24T11:45:15.144Z - task-done: T13: Fix round 3 findings of PR 1302 (T1-T16)

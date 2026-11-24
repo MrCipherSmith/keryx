@@ -1,0 +1,306 @@
+[
+  {
+    "id": "T1",
+    "title": "Session packages with a branch-name base were never registered",
+    "severity": "major",
+    "file": "src/review/session-attempt.ts",
+    "line": 67,
+    "quote": null,
+    "problem": "registerSessionPackage skips any package whose manifest.target.base is not a 40-hex SHA, but the session producer records a ref name there in the common case (`review start/ingest --target pr` without --base stores `origin/main`, review.test.ts:175-176; prBaseRef review.ts:698). 11 of the 15 GitHub PR packages in .metaproject/reviews/ have base `origin/main`. registerSessionPackageForProject (:139) drops the skip reason, so `keryx review complete` prints neither `desktop attempt:` nor a warning.",
+    "impact": "For most session-made PR reviews flow 521's sharing silently does not happen: Desktop does not list or publish the round, the two paths keep separate receipts, and `keryx review advance` has no session Attempt to update from, contrary to SKILL.detail.md Head moved step 4.",
+    "suggested_fix": "Resolve the base SHA when registering (from the PR's baseRefOid via the same resolveDeskSubject call, or by rev-parsing the recorded ref), or have review start/plan record the base SHA beside prBase; print the skip reason as a warning in complete/publish; add a test with base `origin/main`.",
+    "evidence": "Ran `bun -e` registerSessionPackage on .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 (returns before any write): {\"skipped\":\"the package does not record the full base and head commits it reviewed\"}. Manifest census over .metaproject/reviews/*/manifest.json: 4 full-SHA base, 11 not. session-attempt.ts:67,139; review.ts:5174-5179.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "merged_from": "review-testing-practices-w3:review-testing-practices-w3-1, review-testing-practices-w3:review-testing-practices-w3-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Registration takes the PR base commit when the package recorded a branch, pins it in the copied manifest, and surfaces every skip reason as a warning; AC5 fixture now uses a symbolic base."
+    }
+  },
+  {
+    "id": "T2",
+    "title": "A receipt written outside the Attempt directory was invisible to Desktop",
+    "severity": "major",
+    "file": "src/review/session-attempt.ts",
+    "line": 121,
+    "quote": null,
+    "problem": "Registration copies the package into <attempt>/package but filters out publication-receipt.json, and Desktop reads the receipt only from the attempt directory. A package published by the session path before registration (or after a failed registration, receipt in the package dir, marker sessionPublicationId) shows as unpublished in Desktop, and Desktop's marker search uses the attempt-id marker, so Desktop can post a second review of the same round.",
+    "impact": "Duplicate GitHub review for one round when the operator publishes from Desktop a session package already published from the CLI.",
+    "suggested_fix": "At registration, under <attempt>/publication.lock, carry an existing package-side receipt into the attempt directory instead of filtering it out (or have Desktop also read the registered package's original receipt), and let Desktop's lost-response search also match sessionPublicationId(reviewId, round).",
+    "evidence": "src/review/session-attempt.ts:121-122 (filter excludes publication-receipt.json); src/review/session-attempt.ts:156-159 (registration failure is a warning); src/review/publish.ts:229 (only the session path reads both dirs); src/review/desk-publication.ts:145,283 (Desktop reads attempt dir only, searches attempt-id marker); src/review/desk-run-store.ts:424 (board status from attempt dir)",
+    "confidence": "high",
+    "reviewer": "review-highload",
+    "merged_from": "review-highload-w3:review-highload-w3-1, review-degradation-w3:review-degradation-w3-5, review-logic-w3:review-logic-w3-1, review-logic-w3:review-logic-w3-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Registration carries a package receipt into the Attempt; every session receipt write goes to both the Attempt and the package."
+    }
+  },
+  {
+    "id": "T3",
+    "title": "Two session publishers could hold different locks",
+    "severity": "major",
+    "file": "src/review/publish.ts",
+    "line": 227,
+    "quote": null,
+    "problem": "publishReview locks <receiptDir>/publication.lock, where receiptDir is the attempt dir if this process's sessionPublication returned a record, else the package dir. Two concurrent publishers of one package whose registration outcomes differ (one failed and fell back; or the card execution path read desk-attempt.json before the other's registration wrote it) hold different locks, read different receipt sets and use different markers, so both pass the receipt check and both POST.",
+    "impact": "Duplicate review posted to the pull request when two publishes of the same package race and one registration fails or lags.",
+    "suggested_fix": "Use a lock key independent of registration: always take <packageDir>/publication.lock, then the attempt lock when registered (fixed order), and re-read desk-attempt.json and both receipts under the locks; or refuse to publish when registration failed but the package may be registered.",
+    "evidence": "src/review/publish.ts:227-229 (lock and receipt dirs from options.publication); src/review/session-attempt.ts:156-159 (failure -> warning -> fallback); src/review/session-attempt.ts:125 (desk-attempt.json written after the DB upsert); src/commands/operator-confirm-review.ts:259 (execution path reads desk-attempt.json only); src/commands/review.ts:5074",
+    "confidence": "medium",
+    "reviewer": "review-highload",
+    "merged_from": "review-highload-w3:review-highload-w3-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The package lock is always taken first, then the Attempt lock."
+    }
+  },
+  {
+    "id": "T4",
+    "title": "Session publish acceptance weaker than Desktop (superseded round, reviewed commit no longer in PR)",
+    "severity": "major",
+    "file": "src/review/publish.ts",
+    "line": 68,
+    "quote": null,
+    "problem": "The D1 / closed-PR publication acceptance is re-implemented in publish.ts (refuseClosed, movedHead) instead of being shared through publication-guard.ts, and it has diverged from Desktop's (desk-publication.ts:377-385): the session path does not check that the base is unchanged (PrSnapshot has no base), does not check that the reviewed head is still an ancestor of the current head (Desktop's reviewedHeadInPull), and does not refuse an Attempt a later round of its Review superseded (Desktop's newerRound/supersededReason), although the package is now an Attempt of that Review and keryx review advance creates later rounds.",
+    "impact": "For the same Attempt the two publish surfaces give different answers: after keryx review advance opened round N+1, keryx review publish --event COMMENT still posts round N as is while desk-publish refuses it as superseded; after a force-push the session path posts a Comment pinned to a commit_id outside the PR; after a base retarget it posts a review of the old range. AC5's 'shared acceptance' and SKILL.detail.md Head moved 5.2 ('with the same code as Desktop's publish') do not hold.",
+    "suggested_fix": "Extract one acceptance function into publication-guard.ts over a narrow port (reviewed base/head, PR state/base/head, reviewedHeadInPull(), newerRound) returning current | as-is(currentHead) | refused(reason); call it from requestDeskPublication and publishReview (session: base from the PR lookup, newer-round check from the store when options.publication is set); keep only per-surface wording outside it.",
+    "evidence": "src/review/publish.ts:62-71,195-201,244 (slice-03 lines 494-504, 553-560, 606-615); src/review/desk-publication.ts:93-98,100,293-295,377-385 read at HEAD; src/review/complete-head-gate.ts:3; keryx ctx rg -n \"movedHead|headMovedLine|refuseClosed|reviewedHeadInPull\" src --all",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "merged_from": "review-architecture-w3:review-architecture-w3-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "publishReview refuses a superseded round (laterRound from the store) and a moved head whose reviewed commit is not an ancestor (gh compare), like desk-publication."
+    }
+  },
+  {
+    "id": "T5",
+    "title": "Desktop treated session Attempts as worker runs and labelled them \"Existing review\"",
+    "severity": "major",
+    "file": "src/review/desk-run-types.ts",
+    "line": 123,
+    "quote": null,
+    "problem": "Stage 4 adds `source: \"session\"` attempts (registered from agent-session packages; no coordinator transcript, never admitted through the desk-run journal). Every Desktop branch that decides whether an attempt has a Desktop coordinator tests `source !== \"existing\"`, so session attempts get an \"Open review session\" button that creates a new blank Desktop session linked to the attempt (App.tsx openReviewWorkspace calls s.newSession()), a \"Coordinator\" header with an empty transcript and an activity follow, and, for a `partial` session attempt (registerSessionPackage sets state partial when readiness fails), a \"Continue review\" button because canContinueDeskRun only excludes `existing`. The backend always refuses that continue: continuationSource requires latestAdmission(key) === id, and latestAdmission selects only sources IN ('manual','scheduled').",
+    "impact": "A reachable path (partial session package -> Reviews -> Open review session -> Continue review) offers an action that can never succeed and fails with a misleading 'another review is active' error; opening any session attempt spawns an unrelated empty Desktop session and shows an empty Coordinator transcript.",
+    "suggested_fix": "Add one predicate in desk-run-types.ts (e.g. `hasDeskCoordinator(run) = run.source === \"manual\" || run.source === \"scheduled\"`), use it in canContinueDeskRun and at every listed Desktop site; for session attempts hide the session/continue controls (an update goes through `keryx review advance`), and add a ReviewPanel dom test with a partial `session` run.",
+    "evidence": "src/review/desk-run-types.ts:104-105 canContinueDeskRun `run.source !== \"existing\"`; apps/desktop/src/review/SessionReviewActivity.tsx:177 canResume and :226-227 Continue review button; src/review/desk-run-store.ts:305-307 latestAdmission `source IN ('manual','scheduled')`, :333 refusal `stale: Another review is active or this attempt is out of date`; src/review/session-attempt.ts source session / state partial (slice-03 lines 855,859); apps/desktop/src/review/ReviewRuns.tsx:117, ReviewWorkspace.tsx:100, ReviewWorkspace.tsx:213, ReviewRunDialog.tsx:55 gate on `!== \"existing\"`; apps/desktop/src/App.tsx:531 newSession",
+    "confidence": "high",
+    "reviewer": "review-frontend",
+    "merged_from": "review-frontend-w3:review-frontend-w3-1, review-frontend-w1:review-frontend-w1-1, review-degradation-w1:review-degradation-w1-1, review-logic-w1:review-logic-w1-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "hasDeskWorker() gates coordinator, reviewer sessions and Continue; canContinueDeskRun excludes session; labels use SOURCE_LABEL."
+    }
+  },
+  {
+    "id": "T6",
+    "title": "A receipt without a URL counted as published on one path only",
+    "severity": "minor",
+    "file": "src/review/publication-guard.ts",
+    "line": 63,
+    "quote": null,
+    "problem": "confirmPublicationReceipt writes `{posted:true}` when GitHub's answer carried no URL (the session path's githubPostPullReview returns url only when html_url is present). DeskRunStore.publication, which drives Desktop's 'Action required' badge and the Review's published state, counts a receipt as published only when it has a string `url`.",
+    "impact": "A review posted through `keryx review publish` without a returned URL still shows in Desktop as needing a publication decision; the publish dialog resolves it by marker lookup, but the list badge and Review state stay wrong.",
+    "suggested_fix": "Count `posted: true` as published in DeskRunStore.publication (reuse receiptPublished from publication-guard.ts), or resolve the URL by marker before confirming the receipt on the session path.",
+    "evidence": "src/review/publication-guard.ts:63; src/review/desk-run-store.ts:297 `if (typeof JSON.parse(receipt.text)?.url === \"string\") return \"published\"`, otherwise pending/skipped; apps/desktop/src/review/ReviewRuns.tsx:107 publicationPending = run.publication === \"pending\"",
+    "confidence": "medium",
+    "reviewer": "review-frontend",
+    "merged_from": "review-frontend-w3:review-frontend-w3-2, review-logic-w3:review-logic-w3-6",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The poster builds the review URL from its id; without one the PR URL is written, so Desktop counts it as published."
+    }
+  },
+  {
+    "id": "T7",
+    "title": "Re-registration overwrote a decided Attempt and copied outside the lock",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 116,
+    "quote": null,
+    "problem": "recordSession leaves a decided session row unchanged, but register has already replaced that attempt's package copy, so an archived or operator-completed session attempt holds a package that no longer matches its stored report and counts.",
+    "impact": "Stale-versus-stored mismatch for decided session attempts; no publish path found that relies on it.",
+    "suggested_fix": "Check the row (source session, no decision) before refreshing the copy.",
+    "evidence": "desk-run-store.ts:404-414 (ON CONFLICT ... WHERE decision IS NULL); session-attempt.ts:116-124 (rm + cp before recordSession)",
+    "confidence": "medium",
+    "reviewer": "review-degradation",
+    "merged_from": "review-degradation-w3:review-degradation-w3-6, review-logic-w3:review-logic-w3-5, review-highload-w3:review-highload-w3-3",
+    "disposition": {
+      "state": "acted-on",
+      "note": "A decided Attempt keeps its copy; the copy runs under the Attempt publication lock."
+    }
+  },
+  {
+    "id": "T8",
+    "title": "Every registration re-copied ~55 MB of layers and payloads",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 119,
+    "quote": null,
+    "problem": "register() deletes and re-copies the entire session package (rm -r then cp -r) on every registration; the filter drops only desk-attempt.json, publication.lock and publication-receipt.json, so layers/ (graph + memory) and payloads/ are copied though Desktop publication does not read them. Registration runs on keryx review complete, keryx review publish and every review_publish card build.",
+    "impact": "Tens of MB of disk I/O 2-3 times per round on interactive commands, and a second persistent copy of every PR round under the keryx data dir; reclamation on Desktop delete not verified.",
+    "suggested_fix": "Skip the copy when a fingerprint (manifest/report/findings hash stored in desk-attempt.json) is unchanged, and exclude layers/, payloads/ and slices/ from the copy, or copy only the files desk-publication prepare() reads.",
+    "evidence": "src/review/session-attempt.ts:119-122; callers src/commands/review.ts:5073,5175 and src/commands/operator-confirm-review.ts:215,928; du -sk .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/* shows layers 52820 KB of ~58 MB",
+    "confidence": "medium",
+    "reviewer": "review-performance",
+    "merged_from": "review-performance-w3:review-performance-w3-1, review-degradation-w3:review-degradation-w3-3",
+    "disposition": {
+      "state": "acted-on",
+      "note": "layers/ and payloads/ are not copied (Desktop publication never reads them)."
+    }
+  },
+  {
+    "id": "T9",
+    "title": "desk-attempt.json attemptId was trusted unvalidated",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 160,
+    "quote": null,
+    "problem": "readSessionAttempt accepts any attemptId from the package's desk-attempt.json; sessionPublication joins it into a filesystem path under the Desktop store and publishReview embeds it unescaped in the hidden duplicate marker. The record is never checked against the package's PR.",
+    "impact": "A package carrying a crafted desk-attempt.json (packages are plain, often tracked directories) makes publish create receipt/lock files outside the store, share another Attempt's receipt and marker, or break out of the HTML comment marker. Read whenever registration is skipped or fails, and always in the review_publish card apply. Content written is fixed and the operator sees the body, so impact is limited.",
+    "suggested_fix": "Validate attemptId as a UUID and compare repositoryId/number with the manifest's PR (or recompute sessionAttemptId and ignore a differing record); assert the resolved directory stays under <root>/attempts/.",
+    "evidence": "src/review/session-attempt.ts:38-42,159-160; src/review/publish.ts:223,227; src/lib/fs.ts:51-52,107 (mkdir -p in writeFileAtomic/withFileLock); src/commands/operator-confirm-review.ts:259",
+    "confidence": "high",
+    "reviewer": "review-security-code",
+    "merged_from": "review-security-code-w3:review-security-code-w3-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "readSessionAttempt accepts only a UUID for the package own PR number."
+    }
+  },
+  {
+    "id": "T10",
+    "title": "A refused advance read as lost access or a moved range in Desktop",
+    "severity": "minor",
+    "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+    "line": 152,
+    "quote": null,
+    "problem": "Desktop's Update review now calls `keryx review advance --id <reviewed>`. `reviewedAttempt` (src/review/review-advance.ts:24-26) excludes archived/deleted attempts and throws 'access: This attempt is unavailable…' for a named one. Desktop still offers the publish dialog and its Update review button on an archived attempt (ReviewRuns.tsx:105 `draft` ignores the decision; desk-publication.ts publication() does not refuse archived attempts). useReviewRuns.ts treats an `access:` message as lost access: it clears the snapshot and calls onAccessLost.",
+    "impact": "An operator updating from an archived attempt's head-moved dialog sees an account-access failure and an emptied panel; before stage 4 the same click started the update round.",
+    "suggested_fix": "Throw a `stale:` or `configuration:` error for a withdrawn/imported attempt in reviewedAttempt (e.g. 'This attempt was archived. Restore it or update from the latest round.'), or do not pass onUpdateReview for reviewIsArchived(run).",
+    "evidence": "src/review/review-advance.ts:24-26 (candidates filter + access: error); apps/desktop/src/review/ReviewRuns.tsx:105-108, :176-184 (dialog and onUpdateReview for any completed/partial run); apps/desktop/src/review/useReviewRuns.ts (slice-01 :1529-1533: access: -> setSnapshot(null), onAccessLost); src/review/desk-publication.ts:366-374 (no decision check outside automatic).",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w1:review-logic-w1-1, review-ui-ux-w1:review-ui-ux-w1-1, review-testing-practices-w1:review-testing-practices-w1-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "A withdrawn attempt refuses with stale:; advance errors keep their own kind and never set staleRange; DOM test pins it."
+    }
+  },
+  {
+    "id": "T11",
+    "title": "The moved-head first-line test differed from the review complete head gate",
+    "severity": "minor",
+    "file": "src/review/publish.ts",
+    "line": 211,
+    "quote": null,
+    "problem": "The moved-head first-line test takes the first non-empty line, HTML comments included, and only checks that it contains the 7-char reviewed SHA. complete-head-gate.ts:56-58 skips comment lines and also requires a moved word. A template-shaped report starting with `<!-- slot:pre-verdict -->` (templates/review-report.md:36; not stripped by publicProjectReport, report-overlay.ts:188) gets a second moved notice above its own; a report whose first line names the SHA without saying the PR moved gets no D1 notice at all.",
+    "impact": "Duplicate moved-head lines in the posted body, or a COMMENT on an outdated commit without the statement that the PR moved.",
+    "suggested_fix": "Export the gate's first-line predicate (skip <!-- --> lines, require SHA and SAYS_SO) and use it in publish.ts.",
+    "evidence": "src/review/publish.ts:211-214; src/review/complete-head-gate.ts:56-58; src/review/report-overlay.ts:188-190; templates/review-report.md:35-39.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w3:review-logic-w3-3",
+    "disposition": {
+      "state": "acted-on",
+      "note": "firstLineSaysMoved is shared by complete-head-gate and publish."
+    }
+  },
+  {
+    "id": "T12",
+    "title": "A failed head re-read after the yes was reported as a moved head",
+    "severity": "minor",
+    "file": "src/review/publish.ts",
+    "line": 247,
+    "quote": null,
+    "problem": "After the operator's yes, a failed or empty PR re-read (lookup error or exists:false mapped to undefined by readPullRequest) makes `after` null, and the check throws 'stale: The pull request head changed ... (→ unknown)'. A transient gh failure refuses an approved publish and misreports it as a head change. Base posted after the yes without a re-read.",
+    "impact": "The operator must re-run and re-confirm publish after a transient GitHub read failure; the message points at a head move that did not happen.",
+    "suggested_fix": "Distinguish 'could not read' from 'moved': on an unreadable re-read, refuse with an 'unavailable: could not re-check the head' message, or retry once.",
+    "evidence": "base-diff: publish.ts:54-59 (readPullRequest maps errors to undefined), :241-249 (after === null throws stale); base publishReview called options.post right after confirm",
+    "confidence": "high",
+    "reviewer": "review-degradation",
+    "merged_from": "review-degradation-w3:review-degradation-w3-4",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Distinct refusal when the PR cannot be read again."
+    }
+  },
+  {
+    "id": "T13",
+    "title": "The review_complete card did not register the package",
+    "severity": "minor",
+    "file": "src/commands/operator-confirm-review.ts",
+    "line": 789,
+    "quote": null,
+    "problem": "The skill's Head moved step 4 says `keryx review complete` registers the PR package as an Attempt and that `keryx review advance` updates from that registered round. Only the terminal `runComplete` (review.ts:5171-5178) and the publish card register; the `review_complete` card (completeSpec), which the skill mandates in keryx shell, does not. A round closed by the card is not an Attempt, so `advance` refuses (no review to update) or silently updates from an older Desktop round instead of the session round just completed.",
+    "impact": "In keryx shell, 'Update after this round finishes' either detours to the plan fallback or opens an update round on the wrong prior round, without the operator's per-finding answers from the session round.",
+    "suggested_fix": "Register in completeSpec's apply after completeReviewGated succeeds (same sessionPublication call as runComplete), or scope the skill sentence to the terminal command and tell keryx-shell sessions to publish/register before advance.",
+    "evidence": "consumer-trace: operator-confirm-review.ts:789-872 completeSpec calls completeReviewGated only; registerSession/sessionPublication appear only at :191-192, :259, :928 (publishSpec); review.ts:5171-5178 registers in runComplete; SKILL.detail.md:387 (both copies, cmp identical) claims complete registers; review-advance.ts:665-675 picks the newest registered round; refute: complete-gated.ts:11 has no registration",
+    "confidence": "high",
+    "reviewer": "review-degradation",
+    "merged_from": "review-degradation-w2:review-degradation-w2-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The complete card registers like the terminal command."
+    }
+  },
+  {
+    "id": "T14",
+    "title": "Skill and template still sent a merged/closed PR review to publish",
+    "severity": "minor",
+    "file": "src/review/publish.ts",
+    "line": 62,
+    "quote": null,
+    "problem": "keryx review publish now refuses a MERGED or CLOSED pull request (refuseClosed, called at :196 and :244). Base posted there via `gh pr review --comment`. The skill (SKILL.md:908, both copies: \"--event COMMENT on a merged or closed PR\"), the report template (templates/review-report.md:23: \"PR already merged or closed | a plain PR comment\") and complete-head-gate.ts:28-30 (a round on a merged PR is still worth closing) still direct a post-merge audit to this publish.",
+    "impact": "An agent following the skill on a post-merge audit gets a refused publish with no documented alternative.",
+    "suggested_fix": "Either update SKILL.md:908 and templates/review-report.md:23 (both copies) to say a merged/closed PR is not published by keryx, or allow COMMENT on a merged/closed PR as the template describes.",
+    "evidence": "base-diff: github.ts:144 (base transport, no state check) vs publish.ts:62-65,196,244 (head); consumer-trace: SKILL.md:908 and templates/review-report.md:23 in both skill copies, complete-head-gate.ts:28-30; refute: PR body and divergence-map row 4 name the refusal as intended, so only the stale consumers are the defect",
+    "confidence": "high",
+    "reviewer": "review-degradation",
+    "merged_from": "review-degradation-w3:review-degradation-w3-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "SKILL.md and templates/review-report.md (both copies) say the report stays local."
+    }
+  },
+  {
+    "id": "T15",
+    "title": "Refs other than github.com PR URLs could no longer be posted",
+    "severity": "minor",
+    "file": "src/review/session-publish-github.ts",
+    "line": 30,
+    "quote": null,
+    "problem": "The session publish transport now posts only for refs matching ^https://github.com/<o>/<r>/pull/N and hardcodes --hostname github.com. Base `gh pr review <ref>` accepted a PR number, branch, owner/repo#N or a GitHub Enterprise URL; isPrBound treats every kind=pr package as publishable regardless of ref shape.",
+    "impact": "A PR package with a non-github.com-URL ref that published on base now fails with 'not a GitHub pull request URL'.",
+    "suggested_fix": "Resolve the ref to owner/repo/number through `gh pr view <ref> --json url` before posting, or refuse such refs at review start with a clear message.",
+    "evidence": "base-diff: src/flow/tracker/github.ts:144 (`gh pr review <url>`) vs session-publish-github.ts:8,30,35; complete-head-gate.ts:18 (isPrBound: kind === \"pr\" suffices); managed.ts:232-237 (samePrRef handles several ref forms); refute: no normaliser of pr refs to github.com URLs found at review start (not proven absent)",
+    "confidence": "medium",
+    "reviewer": "review-degradation",
+    "merged_from": "review-degradation-w3:review-degradation-w3-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "They post through gh pr review as before, unpinned."
+    }
+  },
+  {
+    "id": "T16",
+    "title": "Command-level wiring and advance argument checks were untested",
+    "severity": "minor",
+    "file": "src/commands/review-advance.ts",
+    "line": 27,
+    "quote": null,
+    "problem": "The new `keryx review advance` CLI's argument validation is untested: dropping the `--base`/`--head` pairing rule or the UUID check on `--id` leaves the suites green. Only advanceReview (the library function) is tested; nothing checks that the argument vector Tauri builds (review.rs:356) parses.",
+    "impact": "A later edit can accept a half range or a malformed attempt id from Desktop or a session without a red test; the code at HEAD is correct.",
+    "suggested_fix": "Test runReviewAdvance/reviewCommand([\"advance\", …]): --base without --head, a non-UUID --id and a missing --json are refused with ADVANCE_USAGE; the exact vector review.rs emits is accepted (advanceReview deps stubbed).",
+    "evidence": "keryx review mutate TP2-M1 and TP2-M2 (src/commands/review-advance.ts:27) -> survived; no test imports runReviewAdvance (`keryx ctx rg runReviewAdvance` over tests: none).",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "merged_from": "review-testing-practices-w2:review-testing-practices-w2-2, review-testing-practices-w3:review-testing-practices-w3-3, review-testing-practices-w3:review-testing-practices-w3-4",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Tests added for advance argument validation, laterRound, ancestry, receipt mirror, URL fallback, first line, re-read failure, registration edge cases and attempt-id validation."
+    }
+  }
+]

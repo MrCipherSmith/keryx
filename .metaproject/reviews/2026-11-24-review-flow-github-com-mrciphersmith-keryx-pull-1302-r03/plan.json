@@ -1,0 +1,156 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r03",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1302",
+    "base": "7a846bef15e4424b94bbd8ebb4dea275b75581f5",
+    "head": "5957d12494d3cc9df02d0542e30848de8be4d1df"
+  },
+  "round": {
+    "number": 3,
+    "mode": "fallback-first",
+    "source": "local-package",
+    "previous": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02",
+    "range": {
+      "base": "7a846bef15e4424b94bbd8ebb4dea275b75581f5",
+      "head": "5957d12494d3cc9df02d0542e30848de8be4d1df"
+    },
+    "fixHunks": 0,
+    "newHunks": 102,
+    "priorFindings": 9,
+    "carried": 0,
+    "line": "round 3 (source: local-package; previous 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 at 0c6ff2b7e6e4; fallback-first: 0c6ff2b7e6e4 is not an ancestor of 5957d12494d3 (force-push or rebase, or a commit this clone has not fetched); full review with prior findings attached)"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+          "apps/desktop/src-tauri/src/review.rs",
+          "apps/desktop/src/platform/reviewRuns.ts",
+          "apps/desktop/src/review/ReviewWorkspace.tsx",
+          "apps/desktop/src/review/useReviewRuns.ts",
+          "apps/desktop/src/reviews/model.ts",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+          "docs/docs/cli-reference.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "src/commands/operator-confirm-review.ts",
+          "src/commands/review-advance.ts",
+          "src/commands/review.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/review-orchestrator-preflight.test.ts",
+          "src/lib/group-subcommands.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/review/autonomous-profile.ts",
+          "src/review/desk-publication.ts",
+          "src/review/desk-run-store.ts",
+          "src/review/desk-run-types.ts",
+          "src/review/publication-guard.ts",
+          "src/review/publish.ts",
+          "src/review/review-advance.ts",
+          "src/review/review-entity.ts",
+          "src/review/session-attempt.ts",
+          "src/review/session-publish-github.ts",
+          "src/review/desk-publication.test.ts",
+          "src/review/publish.test.ts",
+          "src/review/review-advance.test.ts",
+          "src/review/session-publish-github.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 26,
+  "minutes": {
+    "min": 14,
+    "max": 35
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "6610f756353baedb",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 210 changed file(s) but the package's recorded scope holds 40 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r03 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "dispatch"
+}

@@ -1,0 +1,59 @@
+STATUS: DONE
+
+Reviewer: review-degradation, wave 2 of 3, slice-02 (PR 1302, base 7a846bef1..head 5957d1249).
+
+## Scope read
+
+- slice-02.diff lines 1-690 and 860-1153 in full: `src/commands/operator-confirm-review-tools.test.ts`, `src/commands/operator-confirm-review.ts` (publishSpec, seams, reviewConfirmSpecs), `src/commands/review-advance.ts`, `src/commands/review.ts` (imports, seams, `advance` routing, runPublish, runComplete registration, help), the bundled `SKILL.md` publication tail, `src/gdskills/review-orchestrator-preflight.test.ts`, `src/lib/group-subcommands.ts`.
+- slice-02 lines 690-860 (bundled `SKILL.detail.md` / `SKILL.md` hunks) are covered by `cmp` instead of a second read: both bundled files are byte-identical to the installed copies read in wave 1 (`cmp ... && echo identical` → identical).
+- Code at HEAD read for the traces: `src/commands/review-desk-run.ts:55-104` (base Desktop start path), `src/review/desk-run-service.ts:247-283` (requestDeskRun), `src/review/desk-run-store.ts:98-112, 296-345` (constructor, latestAdmission, continuation), `src/flow/tracker/github.ts:139-150` (base `githubPostReview`), `src/commands/review.ts:750-753` (trackerPrLookup), `src/commands/operator-confirm-review.ts` matches for `registerSession|sessionPublication|completeSpec` (lines 37, 64, 191-192, 259, 789, 872, 928).
+- Consumers of the changed seams (`ReviewCommandSeams.postReview/findPublished/registerSession`, `ReviewConfirmSeams`): enumerated by `keryx ctx rg` (search-derived); the graph was not queried.
+
+## Findings
+
+### F1 (minor, diff-vs-description, consumer-trace) The `review_complete` card does not register the package as an Attempt, yet the skill says `keryx review complete` does and `advance` depends on it
+
+`SKILL.detail.md` § "Head moved" step 4 (both copies, line 387 of the installed file) says `keryx review advance` "updates from the Review's latest round, which must be an Attempt of the Review: `keryx review complete` and `keryx review publish` register a pull request package as one (`keryx review complete` prints `desktop attempt: <id>`)". Registration was added only to the terminal `runComplete` (review.ts:5171-5178) and to the publish card (operator-confirm-review.ts:191-192, 928). `completeSpec` (operator-confirm-review.ts:789-872) still calls `completeReviewGated` and nothing else. In keryx shell the skill makes the `review_complete` card the only way to close a round ("Call the card and never send the operator to a terminal"), so a round closed there is not an Attempt. "Update after this round finishes" then runs `keryx review advance`, which either refuses with "This pull request has no review to update" (no Desktop round) or, when a Desktop round exists, opens the update from that older Desktop round instead of the session round just completed (`reviewedAttempt` picks the newest registered round, review-advance.ts:665-675).
+Refute: searched operator-confirm-review.ts for `registerSession|sessionPublication`: only publishSpec uses them; complete-gated.ts:11 has no registration. The skill's fallback (`keryx review plan --head` when advance refuses) limits the outcome to a detour in the no-Desktop-round case; the stale-base case is silent.
+
+## Verified clean
+
+- `keryx review advance` start path: it calls the same `requestDeskRun(..., { action: "start" }, resolveDeskReviewOptions)` that `desk-run start` used for Desktop's Update in the base (review-desk-run.ts:94-100), so admission, `observedAdmission`, verification and options resolution are unchanged; only the option source moved to the backend.
+- `advance` argument parsing: `--json` mandatory, base/head both-or-neither, 40-hex SHAs, UUID id; matches the Tauri args review.rs builds.
+- review.ts help/routing and group-subcommands: `advance` added beside `reviews`; additive.
+- The publish card's dry run: registration happens in buildCard, apply reads the recorded Attempt with `sessionPublication(dir, undefined)` so the marker in the body shown equals the one posted; a body change refuses as before.
+- `operator-confirm-review-tools.test.ts`: the added `rmSync(receipt)` is required by the new duplicate refusal; the test still checks what it checked (hidden-tail refusal and shown==posted).
+- Preflight test additions pin text only; the autonomous-profile cross-check (lines 1059-1075) builds the real prompt, so it would fail if the prompt and the skill diverged.
+- The default-on registration side effects of `complete`/`publish` (Desktop store creation, GitHub reads, package copy) and the post transport change are filed once each in wave 3 against `session-attempt.ts` and `session-publish-github.ts`, where the behaviour lives.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [
+    {
+      "id": "review-degradation-w2-1",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 789,
+      "problem": "The skill's Head moved step 4 says `keryx review complete` registers the PR package as an Attempt and that `keryx review advance` updates from that registered round. Only the terminal `runComplete` (review.ts:5171-5178) and the publish card register; the `review_complete` card (completeSpec), which the skill mandates in keryx shell, does not. A round closed by the card is not an Attempt, so `advance` refuses (no review to update) or silently updates from an older Desktop round instead of the session round just completed.",
+      "evidence": "consumer-trace: operator-confirm-review.ts:789-872 completeSpec calls completeReviewGated only; registerSession/sessionPublication appear only at :191-192, :259, :928 (publishSpec); review.ts:5171-5178 registers in runComplete; SKILL.detail.md:387 (both copies, cmp identical) claims complete registers; review-advance.ts:665-675 picks the newest registered round; refute: complete-gated.ts:11 has no registration",
+      "impact": "In keryx shell, 'Update after this round finishes' either detours to the plan fallback or opens an update round on the wrong prior round, without the operator's per-finding answers from the session round.",
+      "suggested_fix": "Register in completeSpec's apply after completeReviewGated succeeds (same sessionPublication call as runComplete), or scope the skill sentence to the terminal command and tell keryx-shell sessions to publish/register before advance.",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```

@@ -1,0 +1,73 @@
+STATUS: DONE
+
+## Performance Review — wave 2 (slice-02)
+
+### Scope
+- Range 7a846bef..5957d124 (stage 4 only), slice-02 read in full (1153 lines).
+- Code read at HEAD: src/commands/review.ts (runPublish 5050-5095, runComplete tail 5165-5180, imports), src/commands/operator-confirm-review.ts (publishSpec 205-270, reviewConfirmSpecs 920-930), src/commands/review-advance.ts, src/lib/group-subcommands.ts, src/review/readiness.ts (prLookup at 365-367, prFiles at 412-435: computeReadiness makes one `prLookup` and one `prFiles` call), src/review/session-attempt.ts (registerSessionPackage) and src/review/publish.ts (publishReview) as the callees.
+- Skill/test files (bundled SKILL copies, preflight test, operator-confirm test) read; prose only.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [PERF-W2-1] Registering before publishing runs the readiness checklist twice, so `keryx review publish` reads the same PR 4 times and its files twice
+- **Severity**: minor
+- **File**: src/commands/review.ts:5073
+- **Hot path**: once per `keryx review publish` (interactive: the operator waits at the prompt), once per `review_publish` card build and once per `keryx review complete`. Not a loop; each read is a `gh` subprocess with a network round trip.
+- **Problem**: `runPublish` now calls `sessionPublication(packageDir, register)` where `register = registerSessionPackageForProject(..., readiness)`. `registerSessionPackage` calls `computeReadiness(packageDir, readiness)` (session-attempt.ts:88) only to choose `completed`/`partial`, which costs one `prLookup` (readiness.ts:367 head gate) and one `prFiles` (readiness.ts:419), plus `resolveDeskSubject` gh calls for the key. `publishReview` then calls `readPullRequest` (publish.ts:195), `computeReadiness` again (publish.ts:202: `prLookup` + `prFiles`), and `readPullRequest` after the yes (publish.ts:243). Before stage 4 the same command made 1 `prLookup`, 1 `prFiles` and the post. Now: 4 `prLookup`, 2 `prFiles`, the subject resolution and the post. The card path does the same twice over (buildCard registers and dry-runs publishReview at operator-confirm-review.ts:215-225; apply runs publishReview again). `runComplete` (review.ts:5175) adds a second readiness pass after `completeReviewGated` already computed one.
+- **Why it matters**: each `gh pr view` / `gh api` call is roughly 0.3–1.5 s; the change adds about 3–5 sequential network calls to an interactive command, i.e. several seconds before the body is shown. Only the post-confirm re-read (publish.ts:243) is needed for correctness (stale check); the rest repeat data read moments earlier.
+- **Fix**: compute readiness once and pass it through: let `registerSessionPackage` accept a precomputed `ReadinessReport` (or a `complete: boolean`) and have `publishReview` take the PR snapshot it already read for the head gate (pass `pr` into `computeReadiness`, or memoize `prLookup` per ref for the duration of one command, e.g. wrap `readiness.prLookup`/`prFiles` in a once-per-ref cache in runPublish / publishSpec / runComplete). Keep the post-confirm read uncached.
+- **class_scope**: sites review.ts:5073 (runPublish), review.ts:5175 (runComplete), operator-confirm-review.ts:928 with :215 and :245 (card build and apply); enumerated with `keryx ctx rg -n "registerSessionPackageForProject|const publication = await|attemptOf\(dir" src/commands/review.ts src/commands/operator-confirm-review.ts` (3 registration callers, all pass live `prLookup`/`prFiles`).
+
+### [PERF-W2-2] info: `review advance` opens a store and reads history once per call
+- **Severity**: info
+- **File**: src/commands/review-advance.ts:36
+- **Note**: `history` opens a `DeskRunStore`, reads one bounded `history(key)` and closes it; `start` lazy-imports the provider. One call per click/command; no action needed. Recorded so the next round does not re-check it.
+
+### Clean Areas
+- Command startup: review.ts's new static imports (`./review-advance`, `../review/session-attempt`, `../review/session-publish-github`) pull in modules already reachable from review.ts's existing static imports (`./review-desk-run` → `desk-run-service`; `autonomous-summary` is already imported by desk-run-executor). No new heavy top-level reads; `review-desk-provider` stays a dynamic import.
+- group-subcommands / help table: constant additions.
+- Preflight test: string scans over two skill files; test-only.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [
+    {
+      "id": "review-performance-w2-1",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": 5073,
+      "problem": "keryx review publish now registers the package first; registerSessionPackage runs computeReadiness (1 prLookup + 1 prFiles via gh) only to set completed/partial, then publishReview reads the PR again (readPullRequest), runs computeReadiness again (prLookup + prFiles) and re-reads after the yes. 4 prLookup + 2 prFiles + subject resolution per publish, versus 1 + 1 before stage 4. The review_publish card (build + apply) and keryx review complete repeat the extra readiness pass.",
+      "evidence": "src/review/session-attempt.ts:88; src/review/publish.ts:195,202,243; src/review/readiness.ts:367,419; src/commands/operator-confirm-review.ts:215,928; src/commands/review.ts:5175; src/review/publish.test.ts 'a push while the operator reads' expects prLookup answers at(REVIEWED, REVIEWED, NEWER) = 3 reads inside publishReview alone",
+      "impact": "About 3-5 extra sequential gh network calls (~0.3-1.5 s each) on an interactive command before the body is shown; once per publish/complete/card, not a loop.",
+      "suggested_fix": "Compute readiness once and pass it through (registerSessionPackage accepts a precomputed ReadinessReport or completeness flag), and memoize prLookup/prFiles per ref for the duration of one command in runPublish, publishSpec and runComplete; keep only the post-confirm head re-read live.",
+      "confidence": "high"
+    },
+    {
+      "id": "review-performance-w2-2",
+      "severity": "info",
+      "file": "src/commands/review-advance.ts",
+      "line": 36,
+      "problem": "review advance opens a DeskRunStore and reads one bounded history per call; no inefficiency, recorded as checked.",
+      "evidence": "src/commands/review-advance.ts:36-39",
+      "impact": "None measurable.",
+      "suggested_fix": "None.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 1
+  }
+}
+```

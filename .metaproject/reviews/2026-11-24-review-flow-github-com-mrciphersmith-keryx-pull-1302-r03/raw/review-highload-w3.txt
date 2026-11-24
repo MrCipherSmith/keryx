@@ -1,0 +1,131 @@
+STATUS: DONE
+
+## High-Load Review — wave 3 (slice-03)
+
+Scope: range 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d1249 (stage 4 only), diff mode. Load profile: not provided. Concrete triggers: two processes sharing one review package/attempt (Desktop `desk-publish` and `keryx review publish`, or two sessions / the `review_publish` card and the CLI), a session publish whose registration failed, re-registration by `keryx review complete` / `publish` while Desktop renders the attempt.
+Read: full diff of every file in the slice: src/review/autonomous-profile.ts, desk-publication.ts (+test), desk-run-store.ts, desk-run-types.ts, publication-guard.ts (new), publish.ts (+test), review-advance.ts (+test), review-entity.ts, session-attempt.ts (new), session-publish-github.ts (+test). Code read at HEAD: src/lib/fs.ts:74-149 (withFileLock: 5 s acquire timeout, heartbeat keeps a live holder's lock fresh), src/review/desk-publication.ts:278-297 and 370-474 (Desktop receipt read, lock, POST), src/review/desk-run-store.ts:98-174, 200-205, 415-430 (busy_timeout, BEGIN IMMEDIATE, assignReviews, board publication status), 713-772 (requestAttempt), src/commands/review.ts:5060-5080, src/commands/operator-confirm-review.ts:185-262.
+
+Summary: The shared receipt + marker closes the main cross-process duplicate for an Attempt both paths address by the same directory: both take `<attempt>/publication.lock`, write `{}` before the POST, and refuse on a receipt. Two gaps remain where the receipt/lock location depends on registration state: a receipt written in the package directory (pre-registration or registration-failed publish) is invisible to Desktop after registration, and a process whose registration failed locks a different directory than one whose registration succeeded. The SQLite side is sound (recordSession upsert and assignReviews inside BEGIN IMMEDIATE, busy_timeout 8000). Stats: blocker 0 | major 2 | minor 2 | info 0.
+
+### CLI / Multi-Session
+
+#### [review-highload-w3-1] A receipt kept beside the package is invisible to Desktop once the package is registered — Desktop can publish it a second time
+- Severity: major
+- File: src/review/session-attempt.ts:121
+- Pattern: Idempotency G1 — dedup state not shared by both writers
+- Failure mode: `keryx review publish` writes the receipt in the package directory whenever `publication` is undefined (registration skipped or failed: session-attempt.ts:156-159 turns a failure into a warning; publish.ts receiptDir = packageDir) — also every package published before flow 521. Its marker is then `sessionPublicationId(...)` (or none pre-521), not the attempt id. A later `keryx review complete` or `publish` registers the package: the copy into `<attempt>/package` explicitly filters out `publication-receipt.json` (session-attempt.ts:121-122), and Desktop reads the receipt only from the attempt directory (desk-publication.ts:145; board status desk-run-store.ts:424). Desktop therefore shows the attempt as unpublished, its marker search (`findPreviousPublication` with the attempt-id marker) cannot match the earlier post, and a Desktop submit posts a second review of the same round. Only the session path reads both places (publish.ts:229); the comment there documents the case for one path only.
+- Fix: at registration, under `<attempt>/publication.lock`, carry an existing package-side receipt into the attempt directory (keep its url / `{}` state) instead of filtering it out; or make Desktop's receipt read also consult the registered package's original directory (recorded in the attempt row). Also have Desktop's lost-response search look for the session marker `sessionPublicationId(reviewId, round)`.
+- class_scope: sites ["src/review/session-attempt.ts:121", "src/review/desk-publication.ts:145", "src/review/desk-run-store.ts:424", "src/review/publish.ts:229"]; enumeration_method: `keryx ctx rg "PUBLICATION_RECEIPT|receipt" src/review/desk-publication.ts src/review/desk-run-store.ts` plus `readPublicationReceipt` call sites — 3 receipt readers, only publish.ts:229 reads the package directory; one writer of the copy (session-attempt.ts:119-122).
+
+#### [review-highload-w3-2] The session publication lock directory depends on per-process registration success, so two publishers of one package can hold different locks
+- Severity: major
+- File: src/review/publish.ts:227
+- Pattern: Concurrency A4 — check-then-act guarded by a lock whose key is not stable
+- Failure mode: `publishReview` locks `<receiptDir>/publication.lock` where receiptDir is the attempt directory when `sessionPublication` returned a record, else the package directory. Two concurrent publishers of the same package (two sessions, or the CLI and the `review_publish` card) where one's registration succeeded and the other's failed (resolveKey's GitHub read failed, SQLite busy past 8 s) — or the card's execution path (operator-confirm-review.ts:259, no registration) reading desk-attempt.json before the other process's registration wrote it (session-attempt.ts:125, written after the DB upsert) — take different lock directories. Process A reads receipts in attempt dir + package dir, process B reads only the package dir; neither sees the other's `{}` before both pass the check, and they use different markers (attempt id vs sessionPublicationId), so the lost-response search cannot reconcile either. Both POST: a duplicate review on the pull request.
+- Fix: make the lock key independent of registration: always take `<packageDir>/publication.lock` first (the package is the stable identity), and additionally the attempt lock when registered, in that fixed order; under the locks, re-read desk-attempt.json and both receipts. Alternatively refuse to publish when registration fails but a desk-attempt.json or attempt row may exist.
+- class_scope: sites ["src/review/publish.ts:227", "src/review/session-attempt.ts:156", "src/review/session-attempt.ts:159", "src/commands/operator-confirm-review.ts:259", "src/commands/review.ts:5074"]; enumeration_method: `keryx ctx rg "sessionPublication\(" src --all` — 4 call sites (two register, one reads only, one is complete's registration), and the single lock acquisition in publish.ts.
+
+#### [review-highload-w3-3] Re-registration replaces `<attempt>/package` with rm + cp outside any lock while Desktop renders it under the publication lock
+- Severity: minor
+- File: src/review/session-attempt.ts:119
+- Pattern: Part 0 — state-directory rewrite not serialised with its readers
+- Failure mode: `register` does `rm(target)` then `cp(own, target)` with no lock; Desktop's publication `render()` reads report/findings/manifest from `<attempt>/package` under `publication.lock`. A `keryx review complete` or `publish` (both re-register) running while Desktop previews/submits makes Desktop read a missing or half-copied package: a failed preview/submit or a spurious "stale" digest refusal. Two concurrent registrations of the same package interleave their rm/cp on one target (one's rm deletes the other's partial copy, its cp then fails with ENOENT and degrades to a warning). Not a data-loss path: submit's digest check refuses a body that changed.
+- Fix: copy into a sibling temp directory and rename it over `package` (atomic swap), and take `<attempt>/publication.lock` around the swap.
+- class_scope: sites ["src/review/session-attempt.ts:119", "src/review/session-attempt.ts:120"]; enumeration_method: read of register(); single writer of `<attempt>/package` for session attempts.
+
+#### [review-highload-w3-4] `keryx review publish` holds the shared publication lock across the operator's terminal prompt; Desktop's lock waits time out after 5 s
+- Severity: minor
+- File: src/review/publish.ts:240
+- Pattern: Part D — lock held across a human interaction
+- Failure mode: `options.confirm` (runPublish's `promptYes`, src/commands/review.ts:5069) runs inside `withFileLock(<attempt>/publication.lock)`; the heartbeat keeps the lock fresh for as long as the operator leaves the y/N prompt open. Every Desktop save, skip or submit of that attempt (desk-publication.ts:394, default `timeoutMs` 5000 in src/lib/fs.ts:102) fails meanwhile with a raw "Timed out waiting for lock: <path>" error, which carries none of the `stale:`/`configuration:` prefixes Desktop maps. Before this change the session path took no lock. Correctness is kept (no duplicate); availability of Desktop's publish dialog is not.
+- Fix: take the lock only for the receipt check and again for check + begin receipt + POST after the operator's yes (re-checking the receipt under the second acquisition), so the prompt runs unlocked; or map a lock timeout in Desktop to "another publish of this review is in progress".
+
+### Concurrency & Races (SQLite)
+None detected: recordSession's upsert (`ON CONFLICT(id) DO UPDATE ... WHERE source='session' AND decision IS NULL`) and assignReviews run inside `store.atomic` (BEGIN IMMEDIATE, desk-run-store.ts:201-203) with busy_timeout 8000; the deterministic attempt id makes concurrent registration of one package converge on one row. `advanceReview`'s newerRoundOf check is outside a transaction, but requestAttempt reuses a same-revision attempt inside BEGIN IMMEDIATE.
+
+### Resources / Caching / Async / Retry
+None detected. `githubFindPublished` paginates the PR's reviews once per lost-response retry; no retry loop.
+
+Clean Areas: Parts B, C, E, F reviewed with no findings.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-highload-w3-1",
+      "severity": "major",
+      "file": "src/review/session-attempt.ts",
+      "line": 121,
+      "problem": "Registration copies the package into <attempt>/package but filters out publication-receipt.json, and Desktop reads the receipt only from the attempt directory. A package published by the session path before registration (or after a failed registration, receipt in the package dir, marker sessionPublicationId) shows as unpublished in Desktop, and Desktop's marker search uses the attempt-id marker, so Desktop can post a second review of the same round.",
+      "evidence": "src/review/session-attempt.ts:121-122 (filter excludes publication-receipt.json); src/review/session-attempt.ts:156-159 (registration failure is a warning); src/review/publish.ts:229 (only the session path reads both dirs); src/review/desk-publication.ts:145,283 (Desktop reads attempt dir only, searches attempt-id marker); src/review/desk-run-store.ts:424 (board status from attempt dir)",
+      "impact": "Duplicate GitHub review for one round when the operator publishes from Desktop a session package already published from the CLI.",
+      "suggested_fix": "At registration, under <attempt>/publication.lock, carry an existing package-side receipt into the attempt directory instead of filtering it out (or have Desktop also read the registered package's original receipt), and let Desktop's lost-response search also match sessionPublicationId(reviewId, round).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/session-attempt.ts:121",
+          "src/review/desk-publication.ts:145",
+          "src/review/desk-run-store.ts:424",
+          "src/review/publish.ts:229"
+        ],
+        "enumeration_method": "keryx ctx rg \"PUBLICATION_RECEIPT|receipt\" over desk-publication.ts and desk-run-store.ts plus readPublicationReceipt call sites: 3 receipt readers, only publish.ts:229 reads the package dir; one writer of the copy (session-attempt.ts:119-122)"
+      }
+    },
+    {
+      "id": "review-highload-w3-2",
+      "severity": "major",
+      "file": "src/review/publish.ts",
+      "line": 227,
+      "problem": "publishReview locks <receiptDir>/publication.lock, where receiptDir is the attempt dir if this process's sessionPublication returned a record, else the package dir. Two concurrent publishers of one package whose registration outcomes differ (one failed and fell back; or the card execution path read desk-attempt.json before the other's registration wrote it) hold different locks, read different receipt sets and use different markers, so both pass the receipt check and both POST.",
+      "evidence": "src/review/publish.ts:227-229 (lock and receipt dirs from options.publication); src/review/session-attempt.ts:156-159 (failure -> warning -> fallback); src/review/session-attempt.ts:125 (desk-attempt.json written after the DB upsert); src/commands/operator-confirm-review.ts:259 (execution path reads desk-attempt.json only); src/commands/review.ts:5074",
+      "impact": "Duplicate review posted to the pull request when two publishes of the same package race and one registration fails or lags.",
+      "suggested_fix": "Use a lock key independent of registration: always take <packageDir>/publication.lock, then the attempt lock when registered (fixed order), and re-read desk-attempt.json and both receipts under the locks; or refuse to publish when registration failed but the package may be registered.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          "src/review/publish.ts:227",
+          "src/review/session-attempt.ts:156",
+          "src/review/session-attempt.ts:159",
+          "src/commands/operator-confirm-review.ts:259",
+          "src/commands/review.ts:5074"
+        ],
+        "enumeration_method": "keryx ctx rg \"sessionPublication\\(\" src --all: 4 call sites (2 register, 1 read-only, 1 complete) and the single lock acquisition in publish.ts"
+      }
+    },
+    {
+      "id": "review-highload-w3-3",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 119,
+      "problem": "Re-registration replaces <attempt>/package with rm + cp outside any lock, while Desktop's publication render reads that copy under publication.lock; two concurrent registrations also interleave rm/cp on one target.",
+      "evidence": "src/review/session-attempt.ts:119-122; src/review/desk-publication.ts:394-395 (render under the lock reads the attempt package)",
+      "impact": "Desktop preview/submit fails or is refused as stale while `keryx review complete`/`publish` re-registers; a concurrent registration can fail with ENOENT (degraded to a warning). No duplicate post: submit's digest check refuses a changed body.",
+      "suggested_fix": "Copy into a sibling temp directory and rename it over package (atomic swap), under <attempt>/publication.lock.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-highload-w3-4",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 240,
+      "problem": "The session path holds the shared <attempt>/publication.lock across options.confirm, which for the CLI is an interactive y/N prompt; the heartbeat keeps the lock live, so Desktop's withFileLock (5 s timeout) fails every save/skip/submit of that attempt meanwhile.",
+      "evidence": "src/review/publish.ts:227,240; src/commands/review.ts:5069 (promptYes); src/lib/fs.ts:102,146-149 (5 s timeout, heartbeat); src/review/desk-publication.ts:394",
+      "impact": "Desktop's publish dialog for the attempt errors with an unmapped \"Timed out waiting for lock\" for as long as a terminal prompt stays open.",
+      "suggested_fix": "Run the prompt outside the lock: check the receipt under the lock, release, ask, then re-acquire and re-check the receipt before beginPublicationReceipt + POST; or map a lock timeout in Desktop to an 'another publish is in progress' message.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 2,
+    "info": 0
+  }
+}
+```

@@ -1,0 +1,51 @@
+STATUS: PARTIAL
+
+## Security Review — wave 1 (slice-01)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 only)
+- Read in full: every hunk of apps/desktop/src-tauri/src/review.rs, apps/desktop/src/platform/reviewRuns.ts,
+  apps/desktop/src/review/ReviewWorkspace.tsx, apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts,
+  and the added/removed lines of .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md and SKILL.detail.md.
+- Code read at HEAD beyond the diff: src/commands/review-desk-run.ts:1-90 (the KERYX_DESKTOP_REVIEW_ACTION gates),
+  src/review/desk-run-service.ts:155-170 (worker spawn), src/commands/review-advance.ts (the CLI the new Tauri action calls).
+- NOT read in full: the flow bookkeeping files under .metaproject/flows/521-…/ (acceptance-criteria, context, description,
+  divergence-map, flow.json, journal, plan, resolved/T5.implement.json, tasks), apps/desktop/src/reviews/ReviewPanel.dom.test.tsx,
+  docs/docs/cli-reference.md. They carry no executable code; no security lens applies to them, but they were not read.
+
+### Summary
+- Blockers: 0 / Major: 0 / Minor: 0 / Info: 0
+
+### Checked, clean
+- Tauri argument mapping for `advance` (review.rs run_args): `id`, `baseSha`, `headSha` go through the same per-field check
+  as every other operation (non-empty, no leading `-`, no whitespace), each value is its own argv element (no shell), and the
+  `review advance` CLI re-validates strictly (parseArgs strict, `--id` UUID, `--base/--head` 40-hex, `--repo` owner/name,
+  `--number` positive integer). Option injection via `--x` is refused (unit test at review.rs ~765). Operator precedence of the
+  new `desktop_action` expression is `(desk-run && start|continue|decide) || advance`, as intended.
+- KERYX_DESKTOP_REVIEW_ACTION on `advance`: `review advance` consults no operator gate, and it can never carry `autoPublish`
+  (review-advance.ts updateRoundOptions strips it), so the env grants nothing `desk-run start` did not already have. The spawned
+  worker inherits the env exactly as for `desk-run start` (pre-existing; desk-run-service.ts:160).
+- Account/IDOR: advance passes `--repository-id/--viewer`; advanceReview refuses when they differ from the project-resolved key,
+  and the reviewed attempt is looked up only in that key's history.
+- Frontend: no HTML sinks, no eval, no storage of secrets added; the removed `updateRoundOptions` moved to the CLI with the same
+  autoPublish strip.
+- Skill text: Head moved procedure keeps publication operator-only (no `--yes`, no raw `gh pr review`), reads `on_head_move`
+  only from the keryx store (not PR body/branch files), and allows only COMMENT for a moved head.
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-security-code",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

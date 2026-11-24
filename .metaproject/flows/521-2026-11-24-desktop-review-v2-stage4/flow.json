@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T10:50:30.749Z",
+  "updatedAt": "2026-11-24T11:45:15.144Z",
   "source": {
     "type": "description",
     "ref": null
@@ -267,6 +267,30 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix round 3 findings of PR 1302 (T1-T16)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T11:44:33.648Z",
+            "outcome": "started",
+            "detail": "521-T13 fix round 3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -427,6 +451,21 @@
       "at": "2026-11-24T10:50:30.749Z",
       "event": "task-done",
       "detail": "T8: Session and Desktop prompt use the same update command (needs stage 3)"
+    },
+    {
+      "at": "2026-11-24T11:44:33.384Z",
+      "event": "task-added",
+      "detail": "T13: Fix round 3 findings of PR 1302 (T1-T16)"
+    },
+    {
+      "at": "2026-11-24T11:44:33.648Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 521-T13 fix round 3"
+    },
+    {
+      "at": "2026-11-24T11:45:15.144Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 3 findings of PR 1302 (T1-T16)"
     }
   ],
   "acKinds": {

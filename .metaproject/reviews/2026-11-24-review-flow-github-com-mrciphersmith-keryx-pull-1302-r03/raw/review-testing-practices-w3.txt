@@ -1,0 +1,181 @@
+STATUS: DONE
+
+reviewer: review-testing-practices, wave 3 of 3, round 3 of PR #1302 (flow 521, stage 4)
+slice: slice-03 (read in full: lines 1-1496)
+
+## Scope read
+
+- slices/slice-03.diff in full: autonomous-profile.ts, desk-publication.ts, desk-run-store.ts (recordSession),
+  desk-run-types.ts, publication-guard.ts (new), publish.ts, review-advance.ts (new), review-entity.ts,
+  session-attempt.ts (new), session-publish-github.ts (new), and the tests desk-publication.test.ts, publish.test.ts,
+  review-advance.test.ts (new), session-publish-github.test.ts (new).
+- Producer check for the session-package fixture: src/commands/review.test.ts:110-177 (what `review start/ingest
+  --target pr` writes as `target.base`), src/commands/review.ts:698 (prBaseRef -> `origin/<name>`), and the manifests of
+  the real PR packages under .metaproject/reviews/.
+
+## What I ran
+
+- AC5 verify: `bun test src/review/publish.test.ts src/review/desk-publication.test.ts` -> 64 pass, 0 fail.
+  Each of the four slice suites alone: green (26, 38, 5, 4). One combined six-file run under load average ~13 had a
+  5 s timeout in an unchanged desk-publication test ("inline edits reuse placement…"); the rerun was 237/237 green.
+  Not attributed to this change.
+- `keryx review mutate --spec <scratch>/w3.json --test "bun test src/review/publish.test.ts src/review/desk-publication.test.ts src/review/review-advance.test.ts src/review/session-publish-github.test.ts" --package <pkg>`
+  (scratch copy; research-evidence/mutation-1.json). Baseline exit 0. 19 run, 0 not reached.
+
+| mutant | mutation | result |
+|---|---|---|
+| TP3-M1 | publish.ts:229 read receipts from `[receiptDir]` only (drop the package's own pre-registration receipt) | **survived** |
+| TP3-M2 | publish.ts:247 `after === null \|\| …` -> `after !== null && …` (unreadable head after the yes no longer refuses) | **survived** |
+| TP3-M3 | publish.ts:244 drop the post-confirm `refuseClosed(now, ref)` | **survived** |
+| TP3-M4 | publish.ts:199 D1 gate -> `if (false)` | killed |
+| TP3-M5 | publish.ts:251 commit_id = `reviewedHead ?? undefined` (no full-SHA filter) | **survived** |
+| TP3-M6 | publish.ts:255 `result.uncertain === true` -> false | killed |
+| TP3-M7 | publication-guard.ts:38 unreadable receipt -> treated as absent | **survived** |
+| TP3-M8 | publication-guard.ts:55 drop `\|\| receipt.posted === true` | **survived** |
+| TP3-M9 | session-attempt.ts:84 store-package guard -> false | killed |
+| TP3-M10 | session-attempt.ts:99 state always `completed` | **survived** |
+| TP3-M11 | session-attempt.ts:159 drop `record ??= readSessionAttempt(...)` | killed |
+| TP3-M12 | session-attempt.ts:67 full-SHA guard -> false | **survived** |
+| TP3-M13 | review-advance.ts:39 closed-PR refusal -> false | killed |
+| TP3-M14 | review-advance.ts:17 `withdrawn` drops `delete` | killed |
+| TP3-M15 | review-advance.ts:30 latest by createdAt only | killed |
+| TP3-M16 | review-advance.ts:43 "already current" compares head only | **survived** |
+| TP3-M17 | review-advance.ts:71 case-sensitive viewer | killed |
+| TP3-M18 | session-publish-github.ts:52 drop `html_url.startsWith("https://github.com/")` | **survived** |
+| TP3-M19 | session-publish-github.ts:74 author filter -> true | killed |
+
+## Findings
+
+### TP-W3-1 (major, defect) A session package whose manifest records the base as a ref name is never registered, and the skip is silent
+
+- File: src/review/session-attempt.ts:67 (gate), :139 (reason dropped), src/commands/review.ts:5174-5179.
+- Problem: `registerSessionPackage` refuses a package unless `manifest.target.base` is a 40-hex SHA. The session
+  producer writes a ref name there in the common case: `review start/ingest --target pr` without `--base` stores
+  `base: "origin/main"` (review.test.ts:175-176, prBaseRef at review.ts:698), and `keryx review plan --target <pr-url>
+  --head <sha>` is the skill's documented start. Of the 15 GitHub PR packages under .metaproject/reviews/, 11 carry
+  `base: "origin/main"` (every first-round package, and 1302-r02). I ran `registerSessionPackage` on
+  2026-11-24-…-pull-1302-r02 (read-only up to the guard): `{"skipped":"the package does not record the full base and
+  head commits it reviewed"}`. `registerSessionPackageForProject` turns the skip into `undefined` with no message, so
+  `keryx review complete` prints no `desktop attempt:` line and no warning, and `publish` falls back to the package's
+  own receipt.
+- Outcome: for those packages none of flow 521's session/Desktop sharing happens: the Review in Desktop does not list
+  the round, Desktop cannot publish it, and `keryx review advance` (SKILL.detail.md Head moved step 4: "keryx review
+  complete and keryx review publish register a pull request package as one") has no session Attempt to update from.
+- Fix: resolve the base for registration (rev-parse the recorded ref against the package's head, or read the PR's
+  baseRefOid through the same resolveKey call), or have `review start/plan` record the base SHA beside `prBase`; and
+  surface the skip reason as a warning in `complete`/`publish`. Add a test whose package has `base: "origin/main"`.
+- class_scope: sites session-attempt.ts:67 (the only full-SHA gate), :139 (the only place the skip reason is dropped);
+  callers review.ts:5073 (publish), :5174 (complete), operator-confirm-review.ts:215 (card). Enumeration:
+  `keryx ctx rg registerSessionPackage|registerSessionPackageForProject src` (3 callers, all through ForProject).
+
+### TP-W3-2 (minor) The AC5 fixture carries a Desktop package's shape, not a session package's
+
+- File: src/review/desk-publication.test.ts:775-779
+- Problem: `sessionAttempt()` copies the Desktop attempt's own `package/` and changes only `reviewId`; it inherits a
+  full-SHA `target.base` that the session producer usually does not write (see TP-W3-1), and TP3-M12 (deleting the
+  full-SHA guard) survives. The AC5 tests read as coverage of "a package an agent made in a session" while covering
+  only Desktop-shaped packages.
+- Fix: build the fixture from what `keryx review start --target pr` writes (or add a second case with
+  `base: "origin/main"`) and assert the outcome the fix for TP-W3-1 chooses.
+
+### TP-W3-3 (minor) Four guards `publishReview` added are unpinned
+
+- File: src/review/publish.ts:229, 244, 247, 251
+- Problem: survivors TP3-M1 (the package's own pre-registration receipt is no longer read, so a package published
+  before registration could be published again through the Attempt), TP3-M2 (an unreadable head after the operator's
+  yes no longer refuses), TP3-M3 (a PR merged while the operator read no longer refuses), TP3-M5 (a short head is sent
+  as `commit_id`). The "push while the operator reads" test covers only a changed SHA; no fixture has a receipt
+  beside the package plus a registered Attempt, a lookup returning null/MERGED on the third call, or a 7-char head
+  with an asserted `commitId`.
+- Fix: four small cases in the "publication guard shared with Desktop" describe: receipt in packageDir + `publication`
+  pointing elsewhere -> refused; `at(REVIEWED, REVIEWED, {exists:false})`-style null after the yes -> refused;
+  `at(REVIEWED, REVIEWED, {state:"MERGED"})` -> refused; head `abcdef1234567` -> `commitId` undefined.
+
+### TP-W3-4 (minor) Receipt, session-state, advance and port guards survive deletion
+
+- Files: src/review/publication-guard.ts:38, :55; src/review/session-attempt.ts:99; src/review/review-advance.ts:43;
+  src/review/session-publish-github.ts:52
+- Problem: survivors TP3-M7 (an unreadable receipt counted as absent -> a second post), TP3-M8 (a `{posted:true}`
+  receipt, written when GitHub answers without `html_url`, no longer reads as published), TP3-M10 (a session package
+  failing readiness registered as `completed`), TP3-M16 (a base-only change reads as "already current"), TP3-M18 (a
+  non-github.com `html_url` lands in the receipt). Every receipt test posts with a URL; no fixture has an unreadable
+  receipt, a failing-readiness session package, or a base-only move.
+- Fix: one case per guard: chmod 000 / directory-as-receipt -> refused as unknown; post returning `{ok:true}` without
+  url, then republish -> "already been published"; register a package whose readiness fails -> state `partial`,
+  coverage `partial`; advance with `{baseRefOid: other, headRefOid: B}` on a round at B -> starts; `html_url:
+  "https://evil.example/x"` -> no `url`.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-testing-practices-w3-1",
+      "severity": "major",
+      "file": "src/review/session-attempt.ts",
+      "line": 67,
+      "problem": "registerSessionPackage skips any package whose manifest.target.base is not a 40-hex SHA, but the session producer records a ref name there in the common case (`review start/ingest --target pr` without --base stores `origin/main`, review.test.ts:175-176; prBaseRef review.ts:698). 11 of the 15 GitHub PR packages in .metaproject/reviews/ have base `origin/main`. registerSessionPackageForProject (:139) drops the skip reason, so `keryx review complete` prints neither `desktop attempt:` nor a warning.",
+      "evidence": "Ran `bun -e` registerSessionPackage on .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 (returns before any write): {\"skipped\":\"the package does not record the full base and head commits it reviewed\"}. Manifest census over .metaproject/reviews/*/manifest.json: 4 full-SHA base, 11 not. session-attempt.ts:67,139; review.ts:5174-5179.",
+      "impact": "For most session-made PR reviews flow 521's sharing silently does not happen: Desktop does not list or publish the round, the two paths keep separate receipts, and `keryx review advance` has no session Attempt to update from, contrary to SKILL.detail.md Head moved step 4.",
+      "suggested_fix": "Resolve the base SHA when registering (from the PR's baseRefOid via the same resolveDeskSubject call, or by rev-parsing the recorded ref), or have review start/plan record the base SHA beside prBase; print the skip reason as a warning in complete/publish; add a test with base `origin/main`.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/session-attempt.ts:67",
+          "src/review/session-attempt.ts:139",
+          "src/commands/review.ts:5073",
+          "src/commands/review.ts:5174",
+          "src/commands/operator-confirm-review.ts:215"
+        ],
+        "enumeration_method": "keryx ctx rg 'registerSessionPackage|registerSessionPackageForProject' src: one full-SHA gate, one place the reason is dropped, three callers (publish, complete, review_publish card), all through registerSessionPackageForProject"
+      }
+    },
+    {
+      "id": "review-testing-practices-w3-2",
+      "severity": "minor",
+      "file": "src/review/desk-publication.test.ts",
+      "line": 777,
+      "problem": "The AC5 'session package' fixture copies the Desktop attempt's own package and changes only reviewId, so it carries a full-SHA target.base that the session producer usually does not write; the fixture covers Desktop-shaped packages and reads as coverage of session ones. Deleting the full-SHA guard (TP3-M12) survives.",
+      "evidence": "desk-publication.test.ts:775-779 (cpSync of directory/package); producer: review.test.ts:175-176 and real manifests (11/15 base `origin/main`); keryx review mutate TP3-M12 -> survived.",
+      "impact": "The tests stay green for exactly the package shape that fails to register (TP-W3-1).",
+      "suggested_fix": "Build the session fixture from what `keryx review start --target pr` writes, or add a case with base `origin/main`, and assert the behaviour the TP-W3-1 fix chooses.",
+      "confidence": "high"
+    },
+    {
+      "id": "review-testing-practices-w3-3",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 229,
+      "problem": "Four guards publishReview added are unpinned: reading the package's own receipt beside the Attempt's (:229), the post-confirm closed/merged refusal (:244), refusing when the head cannot be read after the yes (:247), and sending commit_id only for a full SHA (:251).",
+      "evidence": "keryx review mutate TP3-M1, M2, M3, M5 against the four slice suites -> all survived (casualties in the same file: TP3-M4 D1 gate, TP3-M6 uncertain-result).",
+      "impact": "A later edit can allow a second post of a package published before registration, a post to a PR merged during confirmation, or a 422 from a short commit_id, with the suite green. Code at HEAD is correct.",
+      "suggested_fix": "Add to the 'publication guard shared with Desktop' describe: a receipt in packageDir with `publication` elsewhere -> refused; prLookup returning not-found then MERGED on the call after confirm -> refused, nothing posted, no receipt; a 7-char head -> commitId undefined.",
+      "confidence": "high"
+    },
+    {
+      "id": "review-testing-practices-w3-4",
+      "severity": "minor",
+      "file": "src/review/publication-guard.ts",
+      "line": 55,
+      "problem": "Further new guards survive deletion: unreadable receipt counted as unknown (publication-guard.ts:38), `posted: true` receipt counted as published (:55), session package failing readiness registered as partial (session-attempt.ts:99), base-only move not 'already current' (review-advance.ts:43), html_url restricted to github.com (session-publish-github.ts:52).",
+      "evidence": "keryx review mutate TP3-M7, M8, M10, M16, M18 -> survived. All receipt tests post with a URL; no fixture has an unreadable receipt, a failing-readiness session package or a base-only move.",
+      "impact": "Regressions in duplicate protection (a url-less or unreadable receipt) and in Attempt state would go unnoticed. Coverage gap only.",
+      "suggested_fix": "One case each: unreadable receipt -> refused as unknown; post `{ok:true}` without url then republish -> 'already been published'; register a failing-readiness package -> state/coverage partial; advance on a base-only change -> starts; non-github html_url -> no url.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 3,
+    "info": 0
+  }
+}
+```
+
+routing audit: graph_used: no (not-relevant: slice lists the files; callers via `keryx ctx rg`), wiki_used: no (not-relevant), ctx_used: yes (`keryx ctx rg`, `keryx ctx run`), raw_rg_used: no

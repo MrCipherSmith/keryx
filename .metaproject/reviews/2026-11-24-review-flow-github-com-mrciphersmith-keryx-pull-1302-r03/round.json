@@ -1,0 +1,558 @@
+{
+  "v": 1,
+  "round": 3,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "2 round(s): 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02, 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302; 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 trusted: local registry (ingest at 2026-11-24T08:11:11.858Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 was committed by e380567d0d5c; 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 trusted: local registry (ingest at 2026-11-24T07:54:39.529Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 was committed by da8bacdf26cb; chosen 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 (0c6ff2b7e6e4 is not an ancestor of 5957d12494d3 (force-push or rebase, or a commit this clone has not fetched))"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and 7a846bef15e4424b94bbd8ebb4dea275b75581f5 (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02",
+    "reviewedHead": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+    "packagePath": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02"
+  },
+  "mode": "fallback-first",
+  "range": {
+    "base": "7a846bef15e4424b94bbd8ebb4dea275b75581f5",
+    "head": "5957d12494d3cc9df02d0542e30848de8be4d1df"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 1,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 1,
+      "endLine": 465
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+      "startLine": 1,
+      "endLine": 86
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 132
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 618
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "startLine": 179,
+      "endLine": 181
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "startLine": 317,
+      "endLine": 324
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "startLine": 356,
+      "endLine": 356
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "startLine": 382,
+      "endLine": 387
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "startLine": 742,
+      "endLine": 746
+    },
+    {
+      "file": "apps/desktop/src/platform/reviewRuns.ts",
+      "startLine": 13,
+      "endLine": 14
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "startLine": 52,
+      "endLine": 52
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "startLine": 150,
+      "endLine": 152
+    },
+    {
+      "file": "apps/desktop/src/review/useReviewRuns.ts",
+      "startLine": 67,
+      "endLine": 68
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 689,
+      "endLine": 689
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 733,
+      "endLine": 733
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 745,
+      "endLine": 745
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 769,
+      "endLine": 769
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 790,
+      "endLine": 791
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 795,
+      "endLine": 795
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 813,
+      "endLine": 813
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 847,
+      "endLine": 848
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 853,
+      "endLine": 855
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 863,
+      "endLine": 863
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 986,
+      "endLine": 986
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 997,
+      "endLine": 997
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 1005,
+      "endLine": 1005
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 1010,
+      "endLine": 1010
+    },
+    {
+      "file": "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+      "startLine": 1035,
+      "endLine": 1035
+    },
+    {
+      "file": "apps/desktop/src/reviews/model.ts",
+      "startLine": 27,
+      "endLine": 27
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5205,
+      "endLine": 5219
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 266,
+      "endLine": 267
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 35,
+      "endLine": 37
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 61,
+      "endLine": 64
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 190,
+      "endLine": 192
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 215,
+      "endLine": 215
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 222,
+      "endLine": 222
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 258,
+      "endLine": 259
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 261,
+      "endLine": 261
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 927,
+      "endLine": 929
+    },
+    {
+      "file": "src/commands/review-advance.ts",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 11,
+      "endLine": 11
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 125,
+      "endLine": 127
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 678,
+      "endLine": 681
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 825,
+      "endLine": 828
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5071,
+      "endLine": 5074
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5078,
+      "endLine": 5081
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5173,
+      "endLine": 5180
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5401,
+      "endLine": 5401
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5572,
+      "endLine": 5573
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 618
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 386,
+      "endLine": 529
+    },
+    {
+      "file": "src/lib/group-subcommands.ts",
+      "startLine": 160,
+      "endLine": 160
+    },
+    {
+      "file": "src/review/autonomous-profile.ts",
+      "startLine": 199,
+      "endLine": 199
+    },
+    {
+      "file": "src/review/desk-publication.test.ts",
+      "startLine": 9,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/desk-publication.test.ts",
+      "startLine": 773,
+      "endLine": 848
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 123,
+      "endLine": 123
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 281,
+      "endLine": 281
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 430,
+      "endLine": 430
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 432,
+      "endLine": 432
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 454,
+      "endLine": 454
+    },
+    {
+      "file": "src/review/desk-publication.ts",
+      "startLine": 470,
+      "endLine": 470
+    },
+    {
+      "file": "src/review/desk-run-store.ts",
+      "startLine": 402,
+      "endLine": 414
+    },
+    {
+      "file": "src/review/desk-run-types.ts",
+      "startLine": 122,
+      "endLine": 123
+    },
+    {
+      "file": "src/review/publication-guard.ts",
+      "startLine": 1,
+      "endLine": 70
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 13,
+      "endLine": 14
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 113,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 292,
+      "endLine": 415
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 8,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 22,
+      "endLine": 23
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 29,
+      "endLine": 40
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 48,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 194,
+      "endLine": 201
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 211,
+      "endLine": 215
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 218,
+      "endLine": 218
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 221,
+      "endLine": 264
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 267,
+      "endLine": 267
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 271,
+      "endLine": 271
+    },
+    {
+      "file": "src/review/review-advance.test.ts",
+      "startLine": 1,
+      "endLine": 67
+    },
+    {
+      "file": "src/review/review-advance.ts",
+      "startLine": 1,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/review-entity.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/session-attempt.ts",
+      "startLine": 1,
+      "endLine": 161
+    },
+    {
+      "file": "src/review/session-publish-github.test.ts",
+      "startLine": 1,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/session-publish-github.ts",
+      "startLine": 1,
+      "endLine": 82
+    }
+  ],
+  "carried": [],
+  "mergeBase": "7a846bef15e4424b94bbd8ebb4dea275b75581f5",
+  "modeReason": "0c6ff2b7e6e4 is not an ancestor of 5957d12494d3 (force-push or rebase, or a commit this clone has not fetched)"
+}
