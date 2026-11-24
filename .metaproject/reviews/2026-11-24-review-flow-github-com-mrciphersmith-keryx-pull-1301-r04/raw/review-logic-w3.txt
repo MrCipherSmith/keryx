@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-05 (second-look) holds only flow-518 bookkeeping: dispatch/T5-T8 and T12-T14 (+fix_context), resolved/T5-T7 and T12-T14 implement contexts, and flow.json. No executable code. Of these files only flow.json changed in 3ad918b66..0d6df2937 (git diff --stat over the flow folder: flow.json +T15 task entry, three T15 history events, updatedAt). Checked that delta with git diff, because the slice's flow.json hunks skip lines 309-329, where T15 sits. T15 is recorded consistently: status done, disposition completed, attempt count 1 with one started log entry, and history events task-added (09:20:33) -> task-attempt (09:20:54) -> task-done (09:27:37) in order. updatedAt equals the last history event, and the shape matches T12-T14. Nothing in the slice is logically wrong now. No findings.",
+  "findings": [],
+  "slices": ["slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `3ad918b66a990c7f0b04180e17d9fb74fb82713a` (round-5 delta base)
+- Merge-base: `3ad918b66a990c7f0b04180e17d9fb74fb82713a` (payload); PR merge-base with main `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Scope mode: `explicit-hash-range` (3ad918b66..0d6df2937), slice-05 = second-look
+- Spec compliance gate: not applicable to this slice. It holds no code that implements an AC. The ACs are covered by the code slices and by the head test run (verify-tests-to-run-1.txt: exit 0, 1021 pass).
+
+### Summary
+slice-05 holds flow metadata only: dispatch records, resolved rule contexts and flow.json. The only file in the slice that the fix-round-4 delta touched is flow.json, which adds the T15 task and its three history events. That record is internally consistent and in chronological order. No logic defect is present now.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. Not applicable: the slice has no code.
+
+### Error Handling
+None detected. Not applicable.
+
+### Null / Undefined Safety
+None detected. Not applicable.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Notes (not findings)
+- The slice's flow.json hunks (`@@ 15,308` then `@@ 330,489`) leave out lines 309-329, which hold the T15 entry this delta added. I read that entry with `git diff 3ad918b66..0d6df2937 -- .../flow.json` instead.
+- dispatch/T8.json carries two `Scope:` constraints that contradict each other. One was copied from T7 (apps/desktop/src/metaproject/**). The other says docs only. T8 is complete, and this is a historical dispatch record outside this delta that changes no behaviour, so it is not reported.
+- T10 (CI verify) and T11 (managed review) remain `todo`. That matches the flow's current state: review round 5 is in progress.
+
+### Routing audit
+- graph_used: no. not-relevant: metadata-only slice; the payload layers list no affected files.
+- wiki_used: no. not-relevant: the slice holds no domain code.
+- ctx_used: yes (keryx ctx rg over the slice; keryx ctx read of the schema).
+- raw_rg_used: no. Raw `git diff --stat` and `git diff` were run on one small file, marked `keryx:raw`; both are in the allowed read-only set.
+- Not verified: nothing was executed (exec_budget_s = 0). I did not read `.metaproject/index.md`, the routing index the project's CLAUDE.md hard gate requires before any repository action; the brief was used as the sole routing source.
+KERYX_USAGE {"tokens_in":152858,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,72 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `3ad918b66a990c7f0b04180e17d9fb74fb82713a..0d6df293794fe1b4582463544f9ad21f5ce202d2` (round 5, delta after fix round 4)
+- Scope mode: explicit-hash-range, supplied slices only
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Files: apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx, apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx, apps/desktop/src/platform/metaproject.test.ts, apps/desktop/src/platform/metaproject.ts
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1 (pr-process, not a code finding)
+
+The production change in slice-02 is a pure extraction: the focus hand-off target computation moved from the layout effect into `handOffTarget(rows, anchor, parent)` with the same logic. It reads only in-memory row ids and calls `.focus()` on an element already in the tree's own list; no input crosses a trust boundary, nothing is rendered as HTML, no eval, storage, postMessage or navigation. The rest of slice-02 is tests (parked stale rows, refused Show more, reveal through a stale folder, Wiki re-read, empty-page focus fallback, and the permit classifier ignoring a typed `MetaprojectRequestError` whose text mimics the permit refusal). The last test strengthens a security-relevant property: a CLI-supplied typed error cannot be mistaken for Desktop's own permit refusal and trigger the retry path.
+
+slice-03 shows two removed lines in apps/desktop/src/platform/metaproject.ts, but that file is unchanged in this range (`git diff 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` is empty; last commit touching it is b5c8d5fe8, fix round 3). I read the file at 0d6df2937 to check the code the slice describes: the capabilities probe now requires `"actions" in response` before reading `actions.includes("tree")` (line 268), and the snapshot check sits after the full shape, `matchesRequest` and size (`METAPROJECT_RESPONSE_BYTES_V2`) validation in `requestMetaprojectV2` and throws `stale-snapshot` instead of accepting the answer (lines 315-319). An answer for another snapshot is therefore still refused, never returned to the caller; no validation was lost. Nothing to report on the code.
+
+### Findings
+
+### [F-001] slice-03 carries a hunk for a file this round's range does not change
+- **Severity**: info (pr-process, publication: omit)
+- **File**: apps/desktop/src/platform/metaproject.ts
+- **Problem**: The slicer put two deletions from apps/desktop/src/platform/metaproject.ts into slice-03 (kind new), yet the file has no change in 3ad918b66..0d6df2937. The hunk matches an earlier round's edit (the file was last touched in b5c8d5fe8).
+- **Impact**: None on the code. A reviewer reading only the slice could take already-reviewed round-3 code for new code, or think validation was removed in this round.
+- **Fix**: Check the slice builder's base for this round; slice-03 should be empty or dropped for this range.
+- **Evidence**: `git diff 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` prints nothing; `git log -- apps/desktop/src/platform/metaproject.ts` heads at b5c8d5fe8; at 0d6df2937 the snapshot check is still present at lines 315-319 as a `stale-snapshot` throw.
+
+### Clean Areas
+Injection (XSS, command, SQL, eval): none in the changed code. Auth/authz, IDOR: not applicable (local Desktop UI over a Tauri command; no endpoint added). Input validation: the v2 response validation (shape, request match, byte cap, snapshot pin) is intact at the head. Secrets/logging: none added. Crypto: none. CSRF, path traversal, open redirect: no new path or URL handling. React-specific: no dangerouslySetInnerHTML, no storage of sensitive data, no postMessage.
+
+### Notes
+- Read-only; no tests run (exec_budget_s = 0). Test evidence relied on: research-evidence/verify-tests-to-run-1.txt (Desktop tsc + suite exit 0, 1021 pass), not re-verified by me.
+- Layers: payload layers block used for affected files; wiki and memory entries were empty for these files.
+- Routing audit: graph_used: no (payload layers block covered affected files; not-relevant for a two-slice delta), wiki_used: no (payload wiki empty; not-relevant), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no. Raw `git diff`/`git show` used with escape markers for a single-file pinned read.
+- metaproject: index.md not read; this was narrow bounded review work under a brief that inlined the routing it needed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 5 delta: no security finding. slice-02's production change extracts the focus hand-off target into handOffTarget with unchanged logic and no trust-boundary input; the rest is tests, one of which pins that a typed CLI error cannot pose as Desktop's permit refusal. slice-03 shows a metaproject.ts hunk although the file is unchanged in this range; at the head the v2 response validation and stale-snapshot refusal are intact. One pr-process info note on the slice.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": null,
+      "problem": "slice-03 (kind new) carries two deletions from apps/desktop/src/platform/metaproject.ts, but the file has no change in 3ad918b66..0d6df2937; the hunk matches an earlier round's edit (last commit on the file is b5c8d5fe8).",
+      "impact": "None on the code. A reader of the slice alone could take already-reviewed round-3 code for new code, or think the snapshot check was dropped this round; at the head it is still enforced as a stale-snapshot throw after shape, match and size validation.",
+      "suggested_fix": "Check the slice builder's base for round 5; slice-03 should be empty or dropped for this range.",
+      "evidence": "git diff 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts prints nothing; git log -- that file heads at b5c8d5fe8; git show 0d6df2937:apps/desktop/src/platform/metaproject.ts lines 268 and 315-319 hold the capabilities 'actions' guard and the stale-snapshot refusal.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "pr-process",
+      "publication": "omit",
+      "blocking_merge": false
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-02", "slice-03"]
+}
+```
+KERYX_USAGE {"tokens_in":100524,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

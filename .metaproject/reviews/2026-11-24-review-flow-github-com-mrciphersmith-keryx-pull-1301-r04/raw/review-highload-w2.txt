@@ -1,0 +1,38 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "Round 5 delta 3ad918b66..0d6df2937 (fix round 4). I read slice-02 and slice-03 in full and found no high-load defect. In slice-02, MetaprojectTree.tsx moves the focus hand-off target into the pure helper handOffTarget. The helper behaves exactly like the inline code it replaces: with no anchor shown it returns undefined; with no parent it returns the row after the anchor; with a parent it returns that parent's first row after the anchor, or the anchor itself. It holds no state, does no I/O and shares nothing across renders, so it cannot cause a race. The rest of slice-02 is tests, and they add load-relevant guarantees: (a) clicking or pressing Enter on a parked stale Show more row sends no read (exactly one call with cursor page-2 is made before Refresh catalog), so the parked row cannot be used to send repeated requests; (b) after Refresh catalog, a parked Wiki read and a parked reveal are each re-read once (two calls per parent with expectedSnapshotId s1); (c) a typed MetaprojectRequestError carrying the permit-refusal text is not treated as a permit refusal, so a CLI error cannot trigger the bounded permit retry. Concern (tooling, not code), the same one raised in round 4: slice-03 shows two removed hunks in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` line, and the expectedSnapshotId check in matchesRequest). Neither is in this range: `git diff 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` is empty, and the file was last changed in b5c8d5fe8. At the head, the snapshot check sits after validation in requestMetaprojectV2 (metaproject.ts:315-319) and raises stale-snapshot, as round 1 intended. Reviewed as head state, it raises no high-load concern.",
+    "findings": [],
+    "slices": ["slice-02", "slice-03"],
+    "follow_ups": [
+      "slice-03.diff in the r04 package again renders removals from apps/desktop/src/platform/metaproject.ts that are not in 3ad918b66..0d6df2937 (git diff for that file is empty; it was last changed in b5c8d5fe8). The slicer appears to carry a hunk over from an earlier round; the orchestrator may want to check it."
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta 3ad918b66..0d6df2937 (round 5, fix round 4), diff mode, slices slice-02 and slice-03 (both new). No load profile was provided. Concrete triggers checked: activating a parked stale Show more row repeatedly, Refresh catalog re-reading parked Graph and Wiki reads and a parked reveal, typed CLI errors that look like a permit refusal, and focus hand-off when several folders' answers land in one commit. Files reviewed: MetaprojectTree.tsx, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts (slice-02), and platform/metaproject.ts (slice-03, plus the file at head for context).
+Summary: No blocker, major, minor or info finding. The only production change in these slices (handOffTarget) is a pure refactor with the same behaviour. The new tests pin that parked reads send nothing until a catalog load, and that each parked read is then re-sent exactly once. Stats: 0 | 0 | 0 | 0.
+
+Findings:
+- CLI / Multi-Session: None detected.
+- Concurrency & Races: None detected. handOffTarget is pure and reads only the current commit's rows.
+- Resources: None detected.
+- Caching: None detected.
+- Lock Contention: Not relevant (no transactions or locks).
+- Async / Queues: None detected.
+- Retry / Timeout / Circuit Breaker: None detected. A parked row sends no read when activated, so it cannot cause a retry storm. A typed CLI error is not classified as a permit refusal, so it cannot start the bounded retry.
+- Idempotency & Distributed Invariants: None detected (tree reads are read-only).
+
+Clean Areas: Parts 0, A, B, C, E, F and G reviewed; Part D is not relevant.
+
+Concern: slice-03 does not match the range (see follow_ups). Not verified: runtime behaviour beyond the supplied test log (exec budget 0; the log reports 1021 tests passing at the head). useMetaprojectTree.ts changed in this range but is not in my slices, so I did not review it.
+
+Routing audit: graph_used: no (the payload's layers supplied the affected set); wiki_used: not-relevant; ctx_used: yes (keryx ctx read; one bounded raw git diff of a single file, marked keryx:raw, to check slice-03 against the range); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":103898,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

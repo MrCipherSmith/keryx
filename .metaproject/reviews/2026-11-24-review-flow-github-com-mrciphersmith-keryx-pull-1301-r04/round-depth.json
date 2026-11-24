@@ -1,0 +1,20 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 11 files exceeds 5",
+  "head": "0d6df293794fe1b4582463544f9ad21f5ce202d2",
+  "files": [
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.fix_context.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T15.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T15.implement.json",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts"
+  ],
+  "changedLines": 426
+}

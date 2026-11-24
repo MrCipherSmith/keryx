@@ -1,0 +1,39 @@
+{
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "floor:security",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "routing": {
+    "receiptId": "7b26cbd871c508f92335146826c958f5a73d93012a46441d3554286259473139",
+    "decision": {
+      "schemaVersion": 2,
+      "decisionId": "7b26cbd871c508f92335146826c958f5a73d93012a46441d3554286259473139",
+      "requestId": "review:1740b837-ca73-45f5-8add-e669ee1749f9",
+      "configDigest": "7fdc79fec39e8f6d824975ee1cfbc6a3556ebd15c620d930bafc8f7125b0f01f",
+      "snapshotDigest": "aba5715b0179549d976b221990accbfcfb5bf389be344dc888110d3a1328b5aa",
+      "assignmentSource": "builtin",
+      "recommendationSource": "none",
+      "exclusions": [],
+      "status": "selected",
+      "selection": {
+        "providerId": "anthropic",
+        "modelId": "claude-opus-5-5"
+      }
+    }
+  }
+}

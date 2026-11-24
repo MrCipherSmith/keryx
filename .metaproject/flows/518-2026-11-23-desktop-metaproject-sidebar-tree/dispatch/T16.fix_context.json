@@ -1,0 +1,24 @@
+{
+ "review_feedback": [
+  {
+   "id": "r5-clean-code-w2-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+   "line": 2181,
+   "problem": "DRY: the new test adds the third copy in this file of the same block that records scrollIntoView calls by patching HTMLElement.prototype and restores it in a finally (`const scrolled: HTMLElement[] = []; const original = HTMLElement.prototype.scrollIntoView; HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); }; ... finally { HTMLElement.prototype.scrollIntoView = original; }`). The change crosses the 3-copy threshold of solid-principles.mdc.",
+   "impact": "Each copy hand-manages a global prototype patch; a future copy that forgets the finally restore leaks the stub into every later test in the file. Three places to change if the recording shape changes.",
+   "suggested_fix": "Extract one helper next to manualTimer(), for example `function captureScrolls(): { scrolled: HTMLElement[]; restore(): void }`, and use it at all three sites (try { ... } finally { scrolls.restore(); })."
+  },
+  {
+   "id": "r5-testing-practices-w1-M3",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "line": 88,
+   "problem": "Gate unpinned (mutation pass, research-evidence/mutation-1.json): removing the guard `if (at < 0) return undefined;` from handOffTarget (MetaprojectTree.tsx) survives the tree, view and platform suites. With the guard gone, an anchor that is not shown (the root's status row, whose anchor d: is never rendered, or an anchor that left in the same commit) no longer falls back to the old index; it picks the first row of the parent from the top of the tree (rows.slice(0)).",
+   "impact": "No user-visible defect today, but the documented fallback for an unshown anchor ('none: the caller falls back to the old index') has no test, so a refactor could drop it and move focus to the top of the parent's rows without any test failing.",
+   "suggested_fix": "Add a MetaprojectTree DOM test where the focused row's anchor is not shown: for example a focused root Loading/status row replaced by the root's first page, or an anchor removed in the same commit, asserting focus lands at the old index position. Confirm it fails with M3 applied."
+  }
+ ],
+ "review_package": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r04",
+ "mutation_evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r04/research-evidence/mutation-1.json"
+}

@@ -1,0 +1,52 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 5 delta (3ad918b66..0d6df2937), slices 02 and 03, both read in full. No style, naming or readability threshold is crossed. The new helper handOffTarget in MetaprojectTree.tsx is well named, documented, and pairs with handOff; extracting it shortened the layout effect's nested ternary to one call. slice-03 only removes a dead capabilities check and a duplicated snapshot comparison from matchesRequest in platform/metaproject.ts (the same check stays, commented, in requestMetaprojectV2). Test additions are exempt from the thresholds and their names (deadRetry, parked, Harness reload) read clearly. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, MetaprojectTree.tsx hunks)", "status": "DONE" },
+    { "id": "slice-03", "coverage": "read in full (platform/metaproject.ts removals), checked against the file at head lines 255-333", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+# Style Review Report
+
+## Summary
+The fix-round delta is clean for style. `handOffTarget` (MetaprojectTree.tsx) takes the inline target lookup out of the layout effect. It has a clear name, a doc comment that matches its three branches, and short local names (`at`, `after`, `next`). The platform change only deletes code. No file crosses a length threshold: MetaprojectTree.tsx went from 338 to 349 lines and platform/metaproject.ts is 334 lines, both under 500. No new condition has more than 3 ungrouped clauses, nesting goes no deeper than 3, and no console usage was added.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `3ad918b66` (round-5 delta base)
+- Merge-base: `3ad918b66a990c7f0b04180e17d9fb74fb82713a`
+- Scope mode: `explicit-hash-range` (3ad918b66..0d6df2937), slices slice-02 and slice-03 (both new)
+- Changed files in my slices: 5
+
+## Stats
+- major: 0
+- minor: 0
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+None.
+
+## Positive Notes
+- `handOff` / `handOffTarget` read as a pair, and the component doc and the effect comment now point at them instead of restating the rule.
+- The `matchesRequest` cleanup leaves one stale-snapshot check, with a comment saying why it exists.
+
+## Not verified / notes
+- Read-only review; I ran no tests. I relied on the supplied evidence (Desktop tsc plus suite exit 0, 1021 pass at 0d6df2937).
+- I did not review slices outside slice-02 and slice-03, for example the useMetaprojectTree.ts `reload` change.
+
+Routing audit: graph_used: no (the payload layers supplied the affected set, and the review is bounded to the slices); wiki_used: not-relevant (style lens); ctx_used: yes (keryx ctx rg for the thresholds and the prior findings); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":98813,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,81 @@
+[
+ {
+  "id": "r5-clean-code-w2-F-001",
+  "reviewer": "review-clean-code",
+  "severity": "minor",
+  "problem": "DRY: the new test adds the third copy in this file of the same block that records scrollIntoView calls by patching HTMLElement.prototype and restores it in a finally (`const scrolled: HTMLElement[] = []; const original = HTMLElement.prototype.scrollIntoView; HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); }; ... finally { HTMLElement.prototype.scrollIntoView = original; }`). The change crosses the 3-copy threshold of solid-principles.mdc.",
+  "impact": "Each copy hand-manages a global prototype patch; a future copy that forgets the finally restore leaks the stub into every later test in the file. Three places to change if the recording shape changes.",
+  "suggested_fix": "Extract one helper next to manualTimer(), for example `function captureScrolls(): { scrolled: HTMLElement[]; restore(): void }`, and use it at all three sites (try { ... } finally { scrolls.restore(); }).",
+  "evidence": "keryx ctx rg -n 'scrollIntoView = function|scrollIntoView = original' MetaprojectView.dom.test.tsx --all: patch at 698/restore 710, patch 2082/restore 2100 (pre-existing), patch 2185/restore 2207 (added by this delta). MetaprojectTree.dom.test.tsx has two further variants (314, 346) that record different values and are not counted.",
+  "confidence": "high",
+  "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+  "line": null,
+  "quote": "test(\"a selection made elsewhere whose folder read is parked stale is revealed once Refresh catalog reads it\", async () => {\n  const timer = manualTimer();\n  const scrolled: HTMLElement[] = [];\n  const original = HTMLElement.prototype.scrollIntoView;\n  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };",
+  "source": "internal",
+  "merged_from": [],
+  "reported_by": [
+   "review-clean-code"
+  ]
+ },
+ {
+  "id": "r5-pr-contract-w1-PC-001",
+  "reviewer": "review-pr-contract",
+  "severity": "minor",
+  "problem": "Regression from the fix for r4-logic-w2-F-001. The plan.md amendment added the state-matrix row 'folder or page read answered stale-snapshot', and its new-snapshot cell says 'every catalog load re-reads parked reads, same snapshot id included'. The code does not do that for every catalog load. When the explorer is shown again, MetaprojectView re-reads the catalog quietly. If that quiet read finds the same snapshot, it returns before setCatalog (MetaprojectView.tsx:410-412), so `reload: catalog` (:761) does not change and the parked reads stay Loading. This is the overclaim of the still-open r4-degradation-w2-F-002, which was not fixed, and the r4-logic fix has now copied it into the flow spec. The same claim is still in the `reload` doc (useMetaprojectTree.ts:111, which this delta edited for r4-frontend-w2-F-001 and left as it was), in the TreeFolder doc (:46) and in the PR body's round-3 line ('every catalog load re-reads it').",
+  "impact": "Fix workers and the flow-complete verifier check behaviour against the plan's state x event matrix (flow-orchestrator SKILL.md:144). Measured against this row, the quiet show-again read leaves parked rows Loading, which looks like a spec gap. A later worker could 'fix' it with a re-read on every quiet read, or a verifier could flag correct code. No runtime defect: the Refresh catalog banner stays up (snapshotMismatch is not cleared on that path), and Refresh catalog recovers the rows.",
+  "suggested_fix": "Narrow the wording at every site to what the code does: 'every catalog load that replaces the catalog (Refresh catalog, Rebuild, a new snapshot) re-reads parked reads, same snapshot id included; the quiet re-read on showing the explorer again does not, and the banner stays'. Apply it to plan.md:66, useMetaprojectTree.ts:46 and :111, and the PR body's round-3 line. Fixing these sites also closes r4-degradation-w2-F-002.",
+  "evidence": "Diff side: slice-01 plan.md hunk, the added row (the quote). Code side: MetaprojectView.tsx:410-412 `if (quiet && result.snapshotId === loadedSnapshot.current) { setFreshness(...); return; }` runs before `setCatalog(result)` at :414. useMetaprojectTree is called with `reload: catalog` at :761. Sites were enumerated with `keryx ctx rg -n --hidden \"every catalog load|loads its catalog|Every catalog load\" apps/desktop/src docs plan.md`, which gives 4 hits: plan.md:66, useMetaprojectTree.ts:46 and :111, and MetaprojectView.tsx:758. The last says '(a new catalog object)' and is accurate. The PR body was read from pr-context.md.",
+  "confidence": "high",
+  "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+  "line": null,
+  "quote": "every catalog load re-reads parked reads, same snapshot id included (fix round 3)",
+  "source": "internal",
+  "merged_from": [
+   "r5-clean-code-w1-F-001",
+   "r5-logic-w1-F-001",
+   "r5-degradation-w1-F-001"
+  ],
+  "reported_by": [
+   "review-clean-code",
+   "review-degradation",
+   "review-logic",
+   "review-pr-contract"
+  ]
+ },
+ {
+  "id": "r5-pr-contract-w2-PC-001",
+  "reviewer": "review-pr-contract",
+  "severity": "minor",
+  "problem": "Guide :107-110: 'shows **Loading\u2026** until they arrive \u2026 If a folder fails to load, its row reads **Could not load.** with the reason and a **Retry** button.' slice-02 pins different behaviour for a stale-snapshot refusal. MetaprojectView.dom.test.tsx asserts `expect(deadRetry()).toBe(false)` (no 'Could not load.' row). The row stays `[\"src1\", \"Loading\u2026\"]` (+135-136), and a parked Show more sends nothing (+203-208) until Refresh catalog. The guide's tree section does not describe this state. Only the generic troubleshooting row at :327 names Refresh catalog.",
+  "impact": "A guide reader whose folder sits on Loading\u2026 expects either data or a Retry row. It is not clear that the Refresh catalog banner is the only way out. No wrong data or runtime defect: the banner is visible and the troubleshooting row names the action.",
+  "suggested_fix": "After guide :110 add: 'If the project knowledge changed while the folder was loading, the row stays **Loading\u2026** and the explorer shows the **Refresh catalog** banner; select it to load the folder again.'",
+  "evidence": "Document side: docs/docs/guides/desktop-metaproject.md:107-110 and :327, read at head 0d6df2937. Code/test side: slice-02 MetaprojectView.dom.test.tsx hunk @@ 2136,2249 @@ (deadRetry false, +135-136 parked 'Loading\u2026', +203-208 parked Show more sends no request). Guide located with `keryx ctx rg -n -i --all \"refresh catalog|changed|stale|snapshot\" docs/docs/guides/desktop-metaproject.md` (6 hits, none in the tree section). Prior rounds checked with `keryx ctx rg` over r02/r03 findings and the r04 prior_findings.json: no earlier finding names this guide gap.",
+  "confidence": "high",
+  "file": "docs/docs/guides/desktop-metaproject.md",
+  "line": 109,
+  "quote": "If a folder fails to load, its row reads **Could",
+  "source": "internal",
+  "merged_from": [],
+  "reported_by": [
+   "review-pr-contract"
+  ]
+ },
+ {
+  "id": "r5-testing-practices-w1-M3",
+  "reviewer": "review-testing-practices",
+  "severity": "minor",
+  "problem": "Gate unpinned (mutation pass, research-evidence/mutation-1.json): removing the guard `if (at < 0) return undefined;` from handOffTarget (MetaprojectTree.tsx) survives the tree, view and platform suites. With the guard gone, an anchor that is not shown (the root's status row, whose anchor d: is never rendered, or an anchor that left in the same commit) no longer falls back to the old index; it picks the first row of the parent from the top of the tree (rows.slice(0)).",
+  "impact": "No user-visible defect today, but the documented fallback for an unshown anchor ('none: the caller falls back to the old index') has no test, so a refactor could drop it and move focus to the top of the parent's rows without any test failing.",
+  "suggested_fix": "Add a MetaprojectTree DOM test where the focused row's anchor is not shown: for example a focused root Loading/status row replaced by the root's first page, or an anchor removed in the same commit, asserting focus lands at the old index position. Confirm it fails with M3 applied.",
+  "evidence": "mutation-1.json: M1 killed, M2 killed, M3 survived, M4 killed; M3 anchor `  if (at < 0) return undefined;` with an empty replacement; command and baseline (exit 0) recorded there.",
+  "confidence": "high",
+  "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+  "line": null,
+  "quote": "  if (at < 0) return undefined;",
+  "source": "internal",
+  "merged_from": [],
+  "reported_by": [
+   "review-testing-practices"
+  ]
+ }
+]

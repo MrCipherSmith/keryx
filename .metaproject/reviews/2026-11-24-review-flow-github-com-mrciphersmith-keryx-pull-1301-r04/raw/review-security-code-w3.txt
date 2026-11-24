@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: 3ad918b66..0d6df2937 (fix round 4), head 0d6df2937; slice-06 (second-look) read in full (lines 1-1484)
+- Scope mode: explicit-hash-range, second look
+- Files in slice: apps/desktop/src-tauri/src/metaproject.rs, MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, platform/metaproject.ts
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+The round-4 fix changes nothing with security impact. In the source files it does two things: it moves the focus hand-off target into a pure helper (`handOffTarget`) and makes the hook's `reload` input required. The rest of the commit is tests. On a second read of slice-06, nothing in it is wrong now from a security point of view.
+
+### Clean Areas (checked)
+- Injection / command: the Rust `metaproject_args` passes the request as one JSON argv element after `--request`. There is no shell. Payload size is capped at 16 KiB, and `RequestV2::Tree` uses `deny_unknown_fields`, a typed `TreeScope` enum, and refuses nulls.
+- Path traversal: a graph `parent` must pass `relative_path`, which refuses empty, `.`, `..`, empty segments, a leading `/`, a backslash, a drive letter and control characters. Tests pin the `../escape`, `/src` and `src\lib` cases. A wiki `parent` is a group key, not a path; it is bounded by `valid_text`, and the CLI resolves it as a key.
+- Snapshot pin: `expectedSnapshotId` must be a 64-hex digest. A v2 answer for another snapshot is refused as `stale-snapshot` in the transport, so no cross-snapshot cursor is reused.
+- Response validation: `validTree` / `validTreeEntry` check the scope, the parent, the entry types, a 100-entry page bound, that a module path equals its folder path, and that node kinds match the scope. The response byte cap still applies.
+- XSS: tree rows render CLI strings as React text children only. There is no `dangerouslySetInnerHTML`, `eval` or `postMessage` in the slice.
+- DoS / resource use: at most 3 tree reads are in flight; a permit refusal is retried at most twice with a bounded jittered wait; a read from a retired generation is never started or repeated.
+- Capability handshake: `tree` stays optional (`METAPROJECT_REQUIRED_ACTIONS` matches the Rust `ACTIONS`), so a downgrade is not possible.
+- Secrets / crypto / auth / CSRF / open redirect: not applicable to this slice; nothing introduced.
+
+### Not verified
+- I ran no tests (exec_budget_s = 0). I relied on research-evidence/verify-tests-to-run-1.txt as the brief states (exit 0, 1021 pass).
+- I did not open `.metaproject/rules/core/security-baseline.mdc` or the review activity rule this round. With zero findings, no severity call depended on them.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-06 for the fix-round-4 delta 3ad918b66..0d6df2937: no security findings. The delta only extracts the focus hand-off helper and makes useMetaprojectTree's reload input required; the tree request validation in Rust (relative_path, typed scope, deny_unknown_fields, digest pin), the transport's response validation and stale-snapshot refusal, the bounded read concurrency with bounded permit retries, and text-only rendering hold at the head.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-06", "coverage": "read in full, lines 1-1484 (second-look)", "status": "DONE" } ],
+  "unread_inputs": [],
+  "follow_ups": []
+}
+```
+KERYX_USAGE {"tokens_in":124169,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

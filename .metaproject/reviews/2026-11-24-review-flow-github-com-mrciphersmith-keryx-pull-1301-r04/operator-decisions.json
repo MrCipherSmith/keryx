@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03#r4-style-w2-F-002",
+      "answer": "dismiss",
+      "reason": "The operator keeps the names reload/loadedCatalog, consistent with the earlier slots/pool and sleep/wait/pause decisions in this file; the input's doc states what it is.",
+      "quote": "dismiss",
+      "at": "2026-11-24T09:19:21.199Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "894f4c8161080b2d1c1582c03dd0eef71111aa83747e7ff777dfece2fc4acf80"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r4-style-w2-F-002",
+        "questionText": "r4-style-w2-F-002: the hook input `reload` (a change token; MetaprojectView passes `catalog`) is stored in a ref named `loadedCatalog`, so one value has two names. You kept two similar naming choices in this file before (slots/pool, sleep/wait/pause), and the input has a doc saying what it is. Uphold the finding (rename both to one change-token name, e.g. catalogLoad / seenCatalogLoad) or dismiss it (keep `reload` and `loadedCatalog`)?",
+        "answerText": "dismiss",
+        "time": "2026-11-24T09:19:21.199Z"
+      }
+    }
+  ]
+}

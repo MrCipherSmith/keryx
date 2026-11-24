@@ -1,0 +1,41 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, PR 1301 (flow 518), round 5 delta 3ad918b66..0d6df2937 (fix round 4), merge-base with main a5d1ab236. Mode: explicit-hash-range, read-only. Slices read in full: slice-02 (new), slice-03 (new).
+- Code changed in the range: `apps/desktop/src/metaproject/MetaprojectTree.tsx` (extracts `handOffTarget` from the focus-restore layout effect; doc comment), `apps/desktop/src/metaproject/useMetaprojectTree.ts` (`reload` becomes required, type-only; it is in slice-01 and not mine, read for context), plus test-only changes in `MetaprojectTree.dom.test.tsx`, `MetaprojectView.dom.test.tsx`, `platform/metaproject.test.ts`.
+- slice-03 note: it shows two `-` lines in `apps/desktop/src/platform/metaproject.ts` (the capabilities check near line 271 and the `expectedSnapshotId` guard in `matchesRequest`). `git log 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` is empty, and both lines are still in the file at head (lines 268 and 316). The file has no change in this range. The slice looks like a slicer artifact, not a removal, so there is nothing to review there.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- CLI/TUI hot paths / expensive computation in render: `handOffTarget` is a straight extraction of the inline code it replaces: one `findIndex`, one `slice` and one `find` over the visible rows. Before and after, it runs only in the layout effect, and only when the focused row was disconnected while focus was not elsewhere. That is at most once per commit that removes the focused row, so it is O(visible rows), not per keystroke. Asymptotic cost and frequency are unchanged, so there is no regression.
+- Re-renders: making `reload` required is a type-level change. It adds no dependency churn, because callers already passed it (the test harness now passes `props.reload ?? 0`, a primitive).
+- Memory leaks / subscriptions / timers: no new listeners, timers or collections in non-test code. The new tests restore `HTMLElement.prototype.scrollIntoView` and the manual timer in `finally`.
+- Redundant API calls: the new tests assert that a parked stale read is not re-sent on click or Enter (`treeCalls ... toHaveLength(1)`), and that each parked read is sent exactly once more after Refresh catalog. That pins the no-redundant-request behaviour rather than weakening it.
+- N+1, indexes, pagination, bundle imports, synchronous blocking: not relevant to this delta (no data-layer, import or I/O changes).
+- Performance law 3: no optimisation was claimed in this range, so there is no before/after to ask for.
+
+Routing audit: graph_used: payload layers (affected set at head 0d6df2937), no extra query needed; wiki_used: not-relevant (refactor-only delta); ctx_used: yes (`keryx ctx rg`, `keryx ctx run -- git log`); raw_rg_used: no. `git diff` of the range was run raw with a stated reason, to read exact diff lines.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Round 5 delta 3ad918b66..0d6df2937: no performance findings. handOffTarget is a pure extraction of the existing focus-restore lookup (O(visible rows), only on a commit that removes the focused row); reload becoming required is type-only; the remaining changes are tests, and they pin that a parked stale read is not re-requested. slice-03 shows removals in platform/metaproject.ts, but that file is unchanged in this range and both lines remain at head (268, 316): a slicer artifact.",
+  "findings": [],
+  "slices": [
+    {"id": "slice-02", "status": "DONE"},
+    {"id": "slice-03", "status": "DONE", "coverage": "File unchanged in range per git log; the slice's '-' lines are still present at head 0d6df2937 (metaproject.ts:268, :316)"}
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+KERYX_USAGE {"tokens_in":98888,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,68 @@
+STATUS: DONE
+
+## Frontend Review (round 5, wave 2, delta 3ad918b66..0d6df2937)
+
+### Scope
+- Branch: feat/desktop-metaproject-sidebar-tree, head 0d6df2937
+- Range: 3ad918b66a990c7f0b04180e17d9fb74fb82713a..0d6df293794f (fix round 4)
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Context read: MetaprojectTree.tsx (handOff / handOffTarget / focus layout effect), useMetaprojectTree.ts `reload` input diff, platform/metaproject.ts current negotiateMetaprojectExplorer / requestMetaprojectV2 / matchesRequest, reviewer-finding schema.
+- Stack note: this code is React hooks state (no MobX), so the MobX laws (actions, observer, store member rules) have nothing to apply to.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Checked, no finding
+- `handOffTarget` (MetaprojectTree.tsx) is a behaviour-preserving extraction of the inline block it replaces: same `at < 0 -> undefined`, same "first row after the anchor / first row of the parent after the anchor, else the anchor" rule; the caller keeps the old-index fallback. The component doc now matches `handOff` (status row -> own parent's next row; other rows -> row after their predecessor).
+- New Tree test "Show more whose page appends nothing": traced by hand. The next-page row's hand-off is anchor `d:src` (last root entry), parent root; after the empty page, no root row follows the anchor (client.ts/server.ts have parent `src`), so focus falls back to `src`, as the test asserts.
+- `reload: unknown` now required in `useMetaprojectTree`: a required property of type `unknown` must be present in the object literal, so a caller that omits it fails type-checking; the Tree test Harness passes `props.reload ?? 0`, and Desktop tsc passes at the head (verify-tests-to-run-1.txt, 1021 pass).
+- MetaprojectView tests: the parked stale row renders as Loading…, click/Enter on it sends no second read (`cursor === "page-2"` called once), Refresh catalog re-reads parked Graph and Wiki reads and finishes a pending reveal with scrollIntoView. These match the operator decision (banner only, row parked as Loading, no Retry).
+- platform/metaproject.test.ts: the new assertion pins that a typed `MetaprojectRequestError` carrying the permit text is not classified as a permit refusal, which matches `isMetaprojectPermitRefusal`'s `instanceof` guard.
+- Effects/keys/a11y: no new effect, key or ARIA change in this delta.
+
+### Findings
+
+### [F-001] slice-03 carries no change in the reviewed range
+- **Severity**: info (pr-process)
+- **File**: apps/desktop/src/platform/metaproject.ts
+- **Problem**: slice-03 shows two removed hunks (the `capabilities` `return 2` line and the `expectedSnapshotId` check inside `matchesRequest`), but `git diff 3ad918b66..0d6df2937 --stat` lists no change to this file; its last commit is b5c8d5fe8 (round 3), and those lines were removed in earlier rounds. At the head the snapshot check sits after the shape check in `requestMetaprojectV2` and throws `stale-snapshot`, and `negotiateMetaprojectExplorer` returns `{ protocol: 2, supportsTree }`. Both are correct.
+- **Why it matters**: no code defect. The slicer handed this reviewer a slice outside the round's range, so the slice coverage overstates what changed in this round.
+- **Fix**: none for the code. Check the slicer's range for this package.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 5 delta (fix round 4) reviewed in slices 02 and 03. No frontend defects. handOffTarget is an exact extraction of the inline focus hand-off. The new empty-page focus test traces correctly. Making `reload` required is enforced by tsc. The parked-stale tests match the operator decision. One info: slice-03's hunks are not in 3ad918b66..0d6df2937, because metaproject.ts is unchanged in this range.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": null,
+      "problem": "slice-03 presents removed hunks in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` line and the expectedSnapshotId check in matchesRequest), but the file is unchanged in 3ad918b66..0d6df2937 (last touched by b5c8d5fe8); the lines were removed in earlier rounds.",
+      "impact": "No code defect: at the head the snapshot check runs after the shape check in requestMetaprojectV2 and throws stale-snapshot, and negotiation returns { protocol: 2, supportsTree }. Slice coverage for this round overstates what changed.",
+      "suggested_fix": "None for the code; check the slicer's range selection for this review package.",
+      "evidence": "git diff --stat 3ad918b66..0d6df2937 -- apps lists 5 files and not platform/metaproject.ts; git log -- apps/desktop/src/platform/metaproject.ts tops at b5c8d5fe8.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "location_class": "pr-process",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Not verified: no tests were run by this reviewer (exec_budget_s = 0); the test status is the one recorded in research-evidence/verify-tests-to-run-1.txt. Focus behaviour was checked by reading the code and the DOM tests, not in the packaged app.
+
+Routing audit: graph_used: no (payload layers block used instead; delta is 5 files, all read directly), wiki_used: not-relevant (no domain question), ctx_used: yes (keryx ctx read/rg), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":101105,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,49 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 2, round 5, delta)
+
+### Scope
+- PR: https://github.com/MrCipherSmith/keryx/pull/1301 (flow 518)
+- Delta: 3ad918b66a990c7f0b04180e17d9fb74fb82713a..0d6df293794fe1b4582463544f9ad21f5ce202d2
+- Slice read in full: slice-05 (second-look), all 2078 lines
+- Files in the slice: flow-518 metadata only. These are dispatch/T5-T8, T12-T14 (.json and .fix_context.json), flow.json, and resolved/T5-T7, T12-T14 .implement.json. The slice holds no executable code.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas (checked against the slice)
+- Secrets and credentials: the slice holds no tokens, keys, passwords or credential-shaped strings. The sha256 values in resolved/*.implement.json are content digests of bundled rule files, not secrets.
+- Personal data: flow.json names the owner as the public GitHub handle and quotes the owner's own request. The dispatch constraints carry absolute worktree paths that include the local account name. The project already commits this pattern in other flow packages: `keryx ctx rg -c "/Users/" .metaproject/flows` matches files in flows 441, 480 and 490, among others. This slice is second-look, the pattern was not introduced by fix round 4, and it is not exploitable, so I did not report it.
+- Injection, auth/authz, IDOR, input validation, crypto, CSRF, path traversal, open redirect, React and NestJS patterns: not applicable. The slice is JSON task metadata that no runtime code path consumes as input.
+- No instruction text in the slice tries to direct the reviewer. The suggested_fix strings are review feedback addressed to the implementer.
+
+### Not verified
+- I ran no commands beyond read-only `keryx ctx rg` and `keryx ctx read`. exec_budget_s is 0.
+- I did not re-read security-baseline.mdc or review.mdc for this round. With no code in the slice, no severity call depended on them.
+- I reviewed no slice other than slice-05, as the brief instructs.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 5 second-look at slice-05 (flow-518 dispatch, flow.json and resolved context JSON, no executable code): no security findings. The absolute local paths in the dispatch constraints follow an existing committed project convention, were not introduced by this delta and are not exploitable, so they are not reported.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [
+    { "id": "slice-05", "coverage": "read in full, lines 1-2078", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice is metadata JSON with no code dependents); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":151336,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

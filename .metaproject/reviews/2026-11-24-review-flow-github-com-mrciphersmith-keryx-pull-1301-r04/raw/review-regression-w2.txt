@@ -1,0 +1,24 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Round 5 (delta 3ad918b66..0d6df2937), scope B regression check over slice-02 and slice-03: no existing behaviour broken, no findings. (1) MetaprojectTree.tsx: the inline focus hand-off target computation was extracted into handOffTarget(rows, anchor, parent) with identical semantics (anchor missing or not shown -> undefined, so the caller still falls back to the old index; no parent -> the row after the anchor; with a parent -> that parent's first row after the anchor, else the anchor itself). Its one caller (MetaprojectTree.tsx useLayoutEffect) passes lost.anchor/lost.parent exactly as before; handOff and remember are unchanged. (2) useMetaprojectTree.ts: `reload` went from optional to required. Every caller of useMetaprojectTree was enumerated with `keryx ctx rg 'useMetaprojectTree\\('` over apps/desktop/src: MetaprojectView.tsx passes `reload: catalog` (unchanged), and the test Harness now passes `props.reload ?? 0`; a constant value never triggers the reload effect, so the harness tests behave as with the earlier undefined. Desktop tsc passes at the head (verify-tests-to-run-1.txt), which confirms no caller omits it. (3) slice-03 shows two removals in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` and the expectedSnapshotId check inside matchesRequest), but `git log 3ad918b66..0d6df2937 -- apps/desktop/src/platform/metaproject.ts` is empty: the file did not change in this delta. Those lines were reshaped in earlier rounds; at the head the capabilities branch returns { protocol: 2, supportsTree } (line 268) and the snapshot check sits in requestMetaprojectV2 after matchesRequest, throwing stale-snapshot (lines 315-319). The slice is a slicer artifact (stale hunk base), not a change; there is nothing in it to regress. (4) Test-only hunks (MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts) add assertions and are not regression sites. Radius: the payload's affected set (depth 2, 9 files, truncated: []) was not capped; it is a code graph and would not see runtime edges, but this delta has none (a pure refactor, a type tightening and tests). Not verified by me: I ran no tests (exec_budget_s 0); I rely on the recorded run at 0d6df2937 (tsc + 1021 Desktop tests pass).",
+  "findings": [],
+  "slices": [
+    {"id": "slice-02", "status": "DONE", "coverage": "read in full; handOffTarget refactor and required reload checked against every caller"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full; file unchanged in the delta (git log empty), head code at lines 268 and 315-319 checked"}
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Summary: no regression in the round-4 fix delta. The focus hand-off extraction behaves the same, the now-required `reload` is passed by both callers, and slice-03's apparent removals in platform/metaproject.ts are not part of this delta (the file is unchanged since 3ad918b66). The blast-radius set was not capped.
+
+Routing audit: graph_used: yes (payload layers.affected at the PR head); wiki_used: not-relevant (refactor/type delta, intent stated in code docs); ctx_used: yes (keryx ctx rg/run/read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":96996,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

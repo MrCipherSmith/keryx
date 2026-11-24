@@ -1,0 +1,71 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 5 delta 3ad918b66..0d6df2937 (fix round 4). Architecturally the delta is small and sound: the focus hand-off target computation moved out of the MetaprojectTree layout effect into a pure module-level helper `handOffTarget`, co-located with its counterpart `handOff`, so the component keeps rendering/effect wiring and the row arithmetic is a pure function over `Row[]`; `useMetaprojectTree`'s `reload` input became required, which makes the hook's one recovery path for a parked stale read part of its contract instead of an optional prop (its only production caller, MetaprojectView.tsx, passes `reload: catalog`). No layer, dependency-direction, module-boundary or DIP violation is introduced; the test changes stay inside the existing harness seams (injected `request`/`wait`/`reload`). One process note: slice-03 does not match the reviewed delta.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": "if (isMetaprojectV2Response(response, \"capabilities\") && \"actions\" in response) {",
+      "problem": "slice-03 shows two hunks of apps/desktop/src/platform/metaproject.ts as removals (`if (isMetaprojectV2Response(response, \"capabilities\")) return 2;` and the `expectedSnapshotId` guard inside `matchesRequest`), but that file is not changed in 3ad918b66..0d6df2937: `git diff --stat` for the range lists only MetaprojectTree.tsx, useMetaprojectTree.ts and three test files, and `git log` shows its last change in b5c8d5fe8 (round 3). At head the capabilities branch is at line 268 in its round-1 form and the snapshot guard sits in `requestMetaprojectV2` (line 316), not in `matchesRequest`.",
+      "impact": "No code defect. The slice is stale relative to the dispatched range, so a reviewer reading it literally could report a regression (lost stale-snapshot check, broken capability negotiation) that does not exist at head; and the real delta file useMetaprojectTree.ts (reload made required) was in no slice assigned here.",
+      "suggested_fix": "Regenerate slices for the round from `git diff 3ad918b66..0d6df2937` so platform/metaproject.ts is absent and useMetaprojectTree.ts is present; treat any finding resting on slice-03's removals as unfounded.",
+      "evidence": "keryx ctx rg at head: metaproject.ts:268 `if (isMetaprojectV2Response(response, \"capabilities\") && \"actions\" in response) {`, :316 `if (\"expectedSnapshotId\" in request && request.expectedSnapshotId !== undefined`; `git diff 3ad918b66..0d6df2937 --stat -- apps docs src` lists 5 files, platform/metaproject.ts not among them.",
+      "confidence": "high",
+      "location_class": "pr-process",
+      "blocking_merge": false
+    }
+  ],
+  "slices": [
+    {"id": "slice-02", "status": "DONE"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full; its hunks do not belong to the reviewed range (F-001)"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `3ad918b66..0d6df2937` (round 5 delta, fix round 4); slices 02 and 03 (both NEW)
+- Stack detected: React (Desktop, hooks-based model; no MobX)
+
+### Summary
+`handOffTarget` is a pure helper extracted next to `handOff` (MetaprojectTree.tsx), leaving the layout effect as wiring; `reload` is now a required input of `useMetaprojectTree`, matching its role as the only exit from a parked stale read, and the one production caller passes it. No structural violation. Slice-03 shows removals in platform/metaproject.ts that are not in this range (F-001, process only).
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+None detected (no MobX; NestJS N/A).
+
+### Notes
+- Verified: useMetaprojectTree.ts delta read via `git diff` (it was in no assigned slice); callers of `useMetaprojectTree` enumerated with `keryx ctx rg` (MetaprojectView.tsx:760, the test harness).
+- Not run: no tests (exec_budget_s = 0); relied on the supplied verify-tests output (exit 0, 1021 pass).
+- Routing: graph_used: payload layers block only; wiki_used: not-relevant (delta is a local refactor); ctx_used: yes (keryx ctx rg/run); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":103424,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}
