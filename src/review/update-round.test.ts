@@ -4,9 +4,11 @@ import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types"
 import { selectPriorAttempt } from "./update-round";
 
 const SHA = (c: string): string => c.repeat(40);
+/** Overrides may set a field to undefined to model a legacy record that lacks it. */
+type Loose<T> = { [K in keyof T]?: T[K] | undefined };
 
-function result(over: Partial<DeskResult> = {}): DeskResult {
-  return {
+function result(over: Loose<DeskResult> = {}): DeskResult {
+  return <DeskResult>{
     reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
     verdict: "needs-changes",
     coverage: "complete",
@@ -17,8 +19,8 @@ function result(over: Partial<DeskResult> = {}): DeskResult {
   };
 }
 
-function run(id: string, over: Partial<DeskRun> = {}): DeskRun {
-  return {
+function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
+  return <DeskRun>{
     baseSha: SHA("a"),
     headSha: SHA("b"),
     id,
