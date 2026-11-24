@@ -11,7 +11,7 @@
   "title": "Desktop Review v2: Fix findings action launches a Flow from a Review",
   "status": "in-progress",
   "createdAt": "2026-11-24T16:19:57.525Z",
-  "updatedAt": "2026-11-24T16:21:20.759Z",
+  "updatedAt": "2026-11-24T16:28:07.692Z",
   "source": {
     "type": "description",
     "ref": null
@@ -45,7 +45,7 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -59,14 +59,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,7 +75,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests were written test-first inside T2 (model, panel DOM, App fixture)"
     },
     {
       "id": "T4",
@@ -95,7 +98,7 @@
       "id": "T5",
       "title": "Update implementation-plan.md: Fix findings done, deferred variant, not verified",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -103,13 +106,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Verify AC1-AC6 exec commands green",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -117,7 +121,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -153,6 +158,26 @@
       "at": "2026-11-24T16:21:20.759Z",
       "event": "task-attempt",
       "detail": "T2: started (attempt 1) — 522-T2"
+    },
+    {
+      "at": "2026-11-24T16:22:22.009Z",
+      "event": "task-done",
+      "detail": "T5: Update implementation-plan.md: Fix findings done, deferred variant, not verified"
+    },
+    {
+      "at": "2026-11-24T16:28:07.304Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T16:28:07.505Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T16:28:07.692Z",
+      "event": "task-done",
+      "detail": "T6: Verify AC1-AC6 exec commands green"
     }
   ],
   "acKinds": {
