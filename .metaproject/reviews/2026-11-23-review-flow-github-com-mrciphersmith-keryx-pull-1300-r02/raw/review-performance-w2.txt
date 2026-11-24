@@ -1,0 +1,71 @@
+STATUS: DONE
+
+## Performance Review (round 2, wave 2)
+
+### Scope
+- PR #1300, branch `feat/desktop-review-v2-stage1`, base b147408a8748cdbd8506b371adb5957947e4477a, head 88e3faba9a1732f45a4ff7200588832e8b83f121, mode diff (fallback-first, round 2).
+- Read in full: slice-03 (useAcpSession.ts subject binding and turn-end chain, AppShell.tsx titleLinks, review.css) and slice-05 (app-work-row fixture, implementation-plan.md, acp/server.ts handleSessionFlags, shell-session-organize test, commands/issues.ts, integrations/issues-board.ts and its test, issues-contract.ts, issue-session.ts and its test, organize.ts and its test).
+- Extra reads at head: `apps/desktop/src/session/subjectBinding.ts` (to confirm `apply` costs nothing without a pending binding) and `src/review/board-github.ts` `reviewRepositories`/`selectRepository` (what `projectRepository` costs per page).
+- Wave 1 findings (`raw/*-w1.txt`) were not repeated.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Prior findings
+- PF-002: **open**, as wave 1 said. Slice-03 still has `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());`, and `onFlags` still `return refreshSessions();`. That is one extra `session/list` on the first turn of a newly bound session. It was deferred on purpose and stays info. Not re-filed.
+
+### Findings
+
+### [F-001] The "repository" issue source hydrates the repository of every row with a GraphQL request on every page (info)
+- **Severity**: info
+- **File**: src/integrations/issues-board.ts
+- **Hot path**: every `keryx issues list` page with `source: "repository"`. That is now the default Issues source (D5), so it covers the first load, each refresh and each "load more" of the Issues board. It is user-initiated, not per keystroke.
+- **Problem**: `listIssuePage` hydrates rows that have no `repository.node_id` with `api.graphql(nodes(ids:$ids) ...)`, run after the REST page returns. For `/issues` (viewer scopes) GitHub embeds `repository`, so this was the rare path. On `/repos/{owner}/{repo}/issues` the PR's own fixture expects it to be absent (`repoRow` strips `repository`, and the AC13 test answers `/graphql` for every row). If that holds, every page of the default source makes two serial GitHub round trips instead of one. The GraphQL request resolves up to 40 nodes whose repository is one value the function already knows: the owner and name are `repository`, and only the node id is missing.
+- **Why it matters**: one added serial round trip per page on the default Issues load, roughly doubling its network latency. This is reasoned, not measured. It is bounded at one request per page, not N+1, so it is not a bottleneck. The claim that GitHub's repository-issues REST response omits `repository` is about another service's behaviour and has no pinned `file:line` behind it. Under the cross-repo rule it is therefore info. It would be settled by one recorded `/repos/{o}/{r}/issues` response, or by a timing of the Issues board's first load against `source: "assigned"`.
+- **Fix (optional)**: For the repository source, build `Repository` from the known `owner/name` and get its id once: a `repository(owner,name){id}` query that does not depend on the REST page and can run concurrently with it, or carry the id in the scoped cursor so that pages after the first need nothing. Keep the `nodes` hydration for the viewer scopes.
+
+### Clean Areas
+- Turn-end chain (slice-03): `PendingSubjects.apply` returns at once when no binding is pending (`if (!subject) return;`), so the added `.then(() => subjects.apply(sessionId))` costs nothing on ordinary turns. `subjects` is a `useMemo` over `[cwd, dispatch, refreshSessions]`, and `refreshSessions` is a `useCallback` over `[cwd, dispatch]`, so it is stable between renders. `bindSubject`/`linkFlow` are `useCallback`s. `pendingSubjects` changes only on a bind or a settle, not per render.
+- AppShell `titleLinks`: rendered as given. No per-render work was added.
+- Session flags (slice-05): `readSessionFlags` now runs `parseSessionSubject` (three anchored regexes on short strings) per session on `session/list`. That is negligible next to the existing per-session `flags.json` read. `updateSessionFlagsAt` reads and writes once per request, as before. `JSON.stringify(...).slice(0, 300)` runs only on the error path. `bindIssueSubject` adds one atomic write, only on a binding's `registered` stage.
+- `projectRepository` spawns one async `git remote -v` per page through `execFile`, so it does not block. Each page is already its own `keryx issues list` process, so the spawn is marginal and not a finding.
+- Pagination: the repository source keeps `per_page: 40` and cursor paging. The cursor scope now includes the repository.
+- N+1 / indexes: none. Memory leaks: `PendingSubjects` deletes each entry once it settles. No listeners or timers were added in these slices. Bundle imports: none were added on the Desktop side. `issues-board.ts` imports `board-github` (Node CLI side), which `commands/issues.ts` loads only for the `issues` command.
+- CSS (review.css): static rules only.
+
+### Routing audit
+- graph_used: no. The payload's `layers` block (graph at head) covered the files, and the two extra files were named by the code.
+- wiki_used: not-relevant. This is a performance lens on code read directly.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`).
+- raw_rg_used: no.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Round 2, wave 2 (slices 03 and 05). No blocker, major or minor. One info finding: the new default 'repository' Issues source probably triggers the GraphQL repository hydration on every page (one extra serial GitHub round trip). This depends on GitHub's REST shape, which is not pinned, so it is info. The subject binding wiring, the session flags store and the issue binding add no per-render or per-session cost of note. PF-002 is confirmed open (deferred, unchanged).",
+  "slices": ["slice-03", "slice-05"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/integrations/issues-board.ts",
+      "line": null,
+      "quote": "  const missing = issues.filter((x) => !x.repository?.node_id);\n  const repositories = new Map<string, Repository>();\n  if (missing.length) {",
+      "problem": "With source \"repository\" (now the default Issues source, D5) the REST endpoint is /repos/{owner}/{repo}/issues. The PR's own fixture expects it to return rows without an embedded `repository` (repoRow strips it, and the AC13 test answers /graphql for every row). So every page runs a second, serial GitHub request, a nodes(ids) GraphQL query over up to 40 issues, to learn one repository whose owner/name listIssuePage already holds.",
+      "impact": "Reasoned, not measured: one extra serial round trip per page on the default Issues load, refresh and load-more, roughly doubling that request's network latency. It is bounded (one request per page, not N+1). It rests on GitHub's REST response shape, which has no pinned file:line behind it, so it is info under the cross-repo rule. It would be settled by a recorded /repos/{o}/{r}/issues response or a first-load timing against source \"assigned\".",
+      "suggested_fix": "Optional: for the repository source, build Repository from the known owner/name and resolve its id once, with a repository(owner,name){id} query run concurrently with the REST page or with the id carried in the scoped cursor for later pages. Keep nodes hydration for the viewer scopes.",
+      "evidence": "slice-05 issues-board.ts listIssuePage: `const repository = request.source === \"repository\" ? await projectRepository(cwd) : null;`, then the REST call, then the `missing` -> api.graphql nodes hydration. issues-board.test.ts `repoRow` (`const { repository: _omitted, ...rest } = row(repo, node);`) and the AC13 test's `/graphql` branch.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "issues-repository-source-graphql-hydration-per-page",
+      "degradation_class": "performance"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "PF-002", "disposition": "open" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```

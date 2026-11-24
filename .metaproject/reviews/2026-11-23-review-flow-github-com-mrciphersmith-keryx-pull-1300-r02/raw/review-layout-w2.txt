@@ -1,0 +1,39 @@
+STATUS: DONE
+
+review-layout, round 2, wave 2 (fallback-first). I read slice-03 and slice-05 in full. Everything here is a static judgement: there is no running app and exec_budget_s is 0, so I could not measure anything in a layout engine. **No new findings.**
+
+## slice-03 (useAcpSession.ts, AppShell.tsx, styles/review.css)
+
+- **useAcpSession.ts:** session state and RPC wiring only. It renders no box, so it is out of this lens.
+- **AppShell.tsx:** `{p.view === "session" && p.titleLinks}` sits between `.titlebar-title` and `.titlebar-session-controls`. Together with the `.session-subject-links { ...; flex: none; ...; white-space: nowrap; }` rule, this is the shape wave 1 already holds as LY-004 (open, info, unverified). I am not filing it again.
+- **review.css work row:** `.pr-work-row`, `.pr-work-slot`, `.pr-work-link`, `.pr-work-more` and `.is-attention`, together with `.review-table { min-width: 1000px; }`, `th:last-child { width: 11rem; }`, `th:nth-child(6) { width: 16rem; }` and `.review-lanes .lane { flex: 1 0 230px; }`, are all the class wave 1 holds as LY-002 (open, info). The work-row focus ring is LY-003, closed by a34d8961b. Not repeated.
+- **review.css, the other added rules:**
+  - The lane colour rules (`.review-lane-waiting` and the rest) change only `background`.
+  - `.review-context [aria-pressed="true"]` changes colour and border-colour, and does not change the border width, so the box size is unchanged.
+  - `.review-quick-filters` (flex, wrap) and `.review-grouping` (inline-flex) sit inside `.review-context`, which already has `flex-wrap: wrap`. The row wraps; it does not overflow.
+  - `.review-board .card-actions { flex-wrap: wrap; }` with `.btn { white-space: nowrap; }` wraps the buttons rather than clipping them. A single button wider than its lane would overflow, but only if its label is longer than about 200px. No such label is in the diff.
+  - Removed rules: `.review-note` and `.review-table .review-progress-caption`. Their markup was removed too (wave 1 checked this).
+  - Static only.
+
+## slice-05 (app-work-row.fixture.tsx, implementation-plan.md, backend)
+
+- **app-work-row.fixture.tsx** is a happy-dom App fixture. It asserts text and wiring, and it loads no CSS, so it cannot show or catch a layout defect. It is not a layout finding.
+- **implementation-plan.md** already records the layout points that were not checked in the app: the work row in narrow columns, where the session menu sits, and the 1000px list width. These match LY-002 and LY-004.
+- **The rest is backend** (src/acp, src/commands, src/integrations, src/session). Nothing is rendered there, so it is out of this lens.
+
+## Not verified
+
+- I read no computed style and no getBoundingClientRect value. LY-002 and LY-004 can still only be settled in the app. Wave 1 names the probes.
+
+Routing audit: graph_used: no (not-relevant: the payload and the slices fixed the files); wiki_used: no (not-relevant to CSS box review); ctx_used: no (every slice and rule file was read with Read; I ran no command or search); raw_rg_used: no.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 2 wave 2, static only (no running app, exec budget 0). slice-03's layout-bearing changes are the title-bar subject links (LY-004, open, info) and the work-row and list sizing (LY-002, open, info). Wave 1 holds both, so neither is repeated. The other added CSS changes only colour, or wraps inside a wrapping flex row. slice-05 is backend plus a happy-dom fixture that loads no CSS. No new findings.",
+  "findings": [],
+  "slices": ["slice-03", "slice-05"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

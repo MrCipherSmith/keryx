@@ -1,0 +1,57 @@
+STATUS: DONE
+
+review-layout, round 2 (fallback-first, whole range b147408a..88e3faba), slice-02 read in full. No browser or real-engine measurement this round: there is no running app and exec_budget_s is 0, so every judgement below is static. No new findings. Two prior findings are closed by the fix commit a34d8961b, and two are still open as filed (both `info`, unverified).
+
+## Prior dispositions (LY lens)
+
+- **LY-001 closed.** The issue row override is now `.pr-work-row.issue-work-row { grid-template-columns: repeat(2, minmax(0, 1fr)); ... }` (apps/desktop/src/issues/IssuesBoard.css). Its specificity is (0,2,0), against (0,1,0) for `.pr-work-row` in styles/review.css, so the 2-track template wins whatever the load order.
+  - Regression check: `.issue-table .issue-work-row { min-width: 220px; margin-top: 0; }` is also (0,2,0) and comes later in the same file, so list rows still get `margin-top: 0`.
+  - keryx ctx rg found no other selector that sets the row's columns.
+- **LY-002 open.** Nothing changed: same three `minmax(0, 1fr)` tracks, same non-shrinking "More" button, `.review-lanes .lane { flex: 1 0 230px; }`, `.review-table th:nth-child(6) { width: 16rem; }`.
+  - The fix round added the state "publication pending" (`Review · publication pending`) and the warn-toned `.pr-work-link.is-attention`. Both are longer or the same length as before, so the truncation estimate stands or gets worse.
+  - The class scope already names IssueWorkRow. In an issue lane (`flex: 1 0 min(238px, 88%)`), hand arithmetic gives about 96px per slot, so `Flow · Needs an answer` would also truncate. This is the same class, so no new finding.
+  - Still unmeasured.
+- **LY-003 closed.** styles/review.css adds `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`.
+  - That is (0,2,0) against the global `:focus-visible` (0,1,0) in styles/components.css. The global rule still supplies the 2px solid outline, which is now drawn inside each 24px button, within the row's `overflow: hidden` box.
+  - I searched every `focus-visible` rule in apps/desktop/src/**/*.css (all 22 matches, styles.css enumerated in full). None has higher specificity and matches these buttons.
+  - The new `.is-attention` border does not change the box size.
+  - Static only: no screenshot.
+- **LY-004 open.** `.session-subject-links { display: inline-flex; ...; flex: none; ...; white-space: nowrap; }` is unchanged in styles/review.css. AppShell still renders `{p.view === "session" && p.titleLinks}` right after `.titlebar-title` (`flex: 1; min-width: 0`) inside `.titlebar-left`. Still unmeasured.
+
+## Fix-round code checked for new layout regressions (none found)
+
+- **PrWorkRow review slot.** Progress moved out of the card body into the review slot's `title`, through `reviewProgressText`. This removes a variable-height block from the card body and adds no box.
+- **ReviewResults list.** The 6th column is now "Keryx work", sized by `th:nth-child(6) { width: 16rem }`. "Actions" is `th:last-child` (11rem). `.review-table` has `min-width: 1000px`. The selectors match the new column order.
+- **ReviewBoard context row.** The quick filters and the "Group by" select sit in `.review-context`, which is `display: flex; flex-wrap: wrap`. `.review-quick-filters` also wraps. At narrow widths the row wraps instead of overflowing.
+- **Review card actions.** Now text buttons ("Open on GitHub", "Subscribe"/"Following"), with `.review-board .card-actions { flex-wrap: wrap; }`. In a 230px lane they wrap to two lines rather than clip.
+- **Issue card and detail panel.**
+  - `workActions` now returns the work row plus an optional `.card-actions.issue-actions` (`flex-wrap: wrap`).
+  - In the detail panel these land in `.issue-detail-actions`, which is flex with wrap (IssueDetail.tsx `<div className="issue-detail-actions">{actions}`). The grid row is a flex item sized to its max-content, so nothing collapses.
+- **Removed code.** The `.review-note` CSS and the `.review-table .review-progress-caption` rule were removed together with their markup. No orphaned box remains.
+
+## Not verified
+
+- Every claim above comes from reading the cascade and doing hand arithmetic. No computed-style or getBoundingClientRect value was read.
+- LY-002 and LY-004 stay settleable only in the app:
+  - At 1180px and 720px, read `.pr-work-slot[data-slot=session] .pr-work-link` scrollWidth vs clientWidth.
+  - With a PR-bound session open at 720px and 920px, read the width of `.titlebar-title`.
+- Test evidence file: P/research-evidence/verify-tests-to-run-1.txt (exit 0). It was not re-run (read-only lane). It covers DOM-stub tests, which cannot fail on layout.
+
+Routing audit: graph_used: no (not-relevant; the files under review were given by the payload and slice); wiki_used: no (not-relevant to CSS cascade checks); ctx_used: yes (keryx ctx run for git show/diff, keryx ctx rg for focus-visible, work-row, titlebar and context-row selectors); raw_rg_used: no.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 2, static only (no running app, exec budget 0). LY-001 and LY-003 are closed by a34d8961b: the issue row override now has two-class specificity, and the work-row buttons draw their focus ring inside (outline-offset -2px, with no competing higher-specificity rule). LY-002 (work-row slot truncation in 230px lanes and the 16rem list column) and LY-004 (non-shrinking title-bar subject links) are unchanged and stay open as info. No new layout findings in slice-02 or in the fix-round CSS: the context row and the card actions wrap, and the list column selectors match the new column order.",
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "LY-001", "disposition": "closed"},
+    {"id": "LY-002", "disposition": "open"},
+    {"id": "LY-003", "disposition": "closed"},
+    {"id": "LY-004", "disposition": "open"}
+  ],
+  "slices": ["slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

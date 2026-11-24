@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1300,
+  "headSha": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "collectedAt": "2026-11-23T21:51:41.805Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "feat(desktop): Review v2 stage 1 — GitHub slice and Keryx links",
+    "body": "Desktop Review v2, stage 1 \"GitHub slice and links\" (Flow 517). Requirements: `docs/requirements/keryx-desktop-review-v2/` — PRD R1–R3, R5, R6, parts of R4 and R7; decisions D5 and D6. Stage 0 was #1294.\n\n## What changes\n\n- **Pull requests board, GitHub only (R1, R2, D6).** Lanes and order no longer read the local review. Two groupings:\n  - \"Status\" (default): Draft · Waiting for review · Changes requested · Approved. Merged and Closed appear only when the state filter includes them.\n  - \"My role\": Requested from me · Mine · Others.\n\n  Quick filters \"Requested from me\", \"Mine\" and \"CI failed\" sit in the context row, not the toolbar. Lanes the filters rule out are not drawn. Cards are sorted by `updatedAt`, newest first. The attention lane and the \"In review\" lane are gone, and the card's reason line is built from GitHub data only.\n- **Keryx work row on every PR card and list row (R4 part, R7 part).** A fixed 24px row with three slots:\n  - Review: `Review · <state>`, from `localReview`, with no round number and no behind count. It opens the current review panel.\n  - Flow: `Flow #id · stage`. A Flow counts if its `prUrl` matches or if it is linked to a session bound to the PR.\n  - Session: the count of bound sessions. It opens the newest; a menu lists all of them plus \"New session\".\n\n  An empty slot shows a labelled action instead: \"Run review\", \"Create Flow\" or \"Open in session\". Every card action now has visible text. \"Fix review comments\" is not included; it is stage 4.\n- **Sessions bound to a Subject (R5).** A new `subject` field in the session's `flags.json`, written through `_keryx/session_flags`, records `{kind, repo, number, url}`. Issue sessions get it when `withIssueBinding` binds them.\n  - \"Open in session\" on a PR reopens the newest bound session, or creates one, binds it and prefills the composer with the PR URL without sending.\n  - On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved.\n  - The session header links back to the PR or Issue and to its Flow.\n- **Work from a bound session (R6).**\n  - `/review` with no target in a PR-bound session preselects that PR. The started run shows on the card without a refresh.\n  - \"Create Flow\" opens the bound session with a flow prompt. The single new flow package that appears while that request is pending gets linked to the session.\n- **Issues (R3, D5).**\n  - Default grouping is by GitHub state: Open, plus Closed when the filter includes closed issues.\n  - The default source is the project repository: `keryx issues list` with `source: \"repository\"` reads `/repos/{owner}/{repo}/issues`. \"Assigned to me\" and the other sources stay selectable, and a stored choice wins.\n  - The Flow stage filter is removed; the stage now shows in the card's work row.\n\nNo Rust changes.\n\n## Verification\n\n- `cd apps/desktop && bunx tsc --noEmit`: clean.\n- `cd apps/desktop && bun test src`: 1016 pass, 0 fail.\n- Root `bunx tsc --noEmit -p .`: clean.\n- Root focused suites (`desk-run-store`, `board-badges`, `session/organize`, `shell-session-organize`, `session/issues`, `issues-board`): 67 pass, 0 fail.\n- Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" is one integrated App-level test in `ProjectNavigation.dom.test.tsx`. Four product mutations each break it: the preselect, the publish, session reuse and the binding.\n- The stage 0 attention set (`carriedAttention`, `seeded`, `seedFor`, `attentionPrs`, `stale`) is unchanged. The one adjacent edited line, the `visible` memo, was mutation-checked.\n- The toolbar is unchanged, so the stage 0 measurements still hold.\n\nNot verified:\n- No run in the real app with real GitHub data.\n- Not checked: the work row in narrow lanes, the session menu placement, the list width (now 1000px).\n- Not run: lint, and the Rust CI path.\n\n## Known gaps and choices for the owner\n\n- Deviation (a), team review requests for the tab indicator, stays open: this stage adds no team membership. Deviation (b) is unchanged.\n- An Issue has no \"another or new session\" choice. The issue binding backend keeps one session per issue and account.\n- A Flow created outside the pending \"Create Flow\" window is not linked to the PR until it has a `prUrl`.\n- UI choices taken without an owner decision, listed in the flow journal:\n  - review slot state words;\n  - a disabled \"Run review\" on a merged or closed PR;\n  - the session menu button reads \"More\";\n  - an unsaved new session shows as \"not saved yet\";\n  - \"Create Flow\" replaces the composer draft;\n  - Issue card buttons became work-row links.\n\nFlow package: `.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`. Still to do: a review-orchestrator round on this PR, and the merge decision.\n"
+  },
+  "ci": {
+    "state": "pending",
+    "checks": [
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "pending"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 remaining tests",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "team-hub-distribution",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (1/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "Issues board, Projects and session-to-Flow acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (2/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "Desktop Metaproject graph and wiki acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (4/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (3/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "Lint and typecheck",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      },
+      {
+        "name": "desktop check",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
   "status": "in-progress",
   "createdAt": "2026-11-23T19:41:25.622Z",
-  "updatedAt": "2026-11-23T21:40:56.537Z",
+  "updatedAt": "2026-11-24T05:53:04.638Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:772d821796a2a198ae1024e3ca3debdc7a5c2165c3b32ab79fe9bc9cba97416f",
+  "acChecksum": "sha256:da72a72e5ec60754dc27d6402c70d504963f14c2755047d9a08f8aa64635ad98",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -357,6 +357,65 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T05:27:00.669Z",
+            "outcome": "started",
+            "detail": "fix round 2 A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T05:27:00.853Z",
+            "outcome": "started",
+            "detail": "fix round 2 B"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix round 2 (C): PR body, implementation plan, user docs",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T18",
+        "T19"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -562,6 +621,51 @@
       "at": "2026-11-23T21:40:56.537Z",
       "event": "task-done",
       "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
+    },
+    {
+      "at": "2026-11-24T05:26:50.183Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]\" -> \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers \"Link Flow #<id>?\" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]\" (Owner decision 2026-11-24 in review round 2 (HL-001): no silent link by arrival time; the link is confirmed by the user. Recorded in journal.md 'Review round 2 owner decisions'.)"
+    },
+    {
+      "at": "2026-11-24T05:26:50.378Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" -> \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" (Review round 2 PC-004: keryx stores a new session only after its first turn, so the older-keryx notice cannot appear before it; criterion text aligned with that fact, and optional repositoryId named.)"
+    },
+    {
+      "at": "2026-11-24T05:26:59.546Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
+    },
+    {
+      "at": "2026-11-24T05:26:59.729Z",
+      "event": "task-added",
+      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
+    },
+    {
+      "at": "2026-11-24T05:26:59.911Z",
+      "event": "task-added",
+      "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
+    },
+    {
+      "at": "2026-11-24T05:27:00.670Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — fix round 2 A"
+    },
+    {
+      "at": "2026-11-24T05:27:00.853Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — fix round 2 B"
+    },
+    {
+      "at": "2026-11-24T05:44:30.458Z",
+      "event": "task-done",
+      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
+    },
+    {
+      "at": "2026-11-24T05:53:04.638Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
     }
   ],
   "acKinds": {

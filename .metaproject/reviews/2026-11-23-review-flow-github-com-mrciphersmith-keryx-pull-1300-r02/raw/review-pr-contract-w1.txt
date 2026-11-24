@@ -1,0 +1,101 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 2, wave 1, slice-01 (read in full, 2242 lines). The PR body (pr-context.md, identical in substance to review_context.pr.body) has no checkbox checklist, so every stated claim of the body was worked as one row. Claims were checked across the whole PR (git diff b147408a8..88e3faba9 --stat, targeted diffs of a34d8961b) and against user documentation outside the diff.
+
+## Claim rows
+
+| Box or claim (quoted) | State | What the diff / head shows | Result |
+|---|---|---|---|
+| "No Rust changes." | claim | `git diff --stat b147408a8 88e3faba9 -- apps/desktop/src-tauri` is empty | holds |
+| "The toolbar is unchanged, so the stage 0 measurements still hold." | claim | no `flows-toolbar` line in the ReviewBoard.tsx diff; quick filters in `.review-context`; T13 skip reason in flow.json | holds |
+| "Every card action now has visible text." | quantified | `<button` enumeration (keryx ctx rg) in ReviewResults.tsx, PrWorkRow.tsx, IssueWorkRow.tsx: each has text content ("More", "Open in session", "Show more (...)", subscribe button) | holds |
+| "the session menu button reads \"More\"" | claim | PrWorkRow.tsx `onClick={() => setMenu(open => !open)}>More</button>` | holds |
+| "the list width (now 1000px)" | claim | review.css `.review-table { min-width: 1000px; }` | holds |
+| "A fixed 24px row with three slots" | claim | review.css `.pr-work-row { ... height: 24px; overflow: hidden; ...}` | holds |
+| "Review: `Review · <state>` ... It opens the current review panel." | claim | PrWorkRow.tsx `reviewText = state ? \`Review · ${state}\`` / `onClick={() => onReview(card)}` | holds; but progress now only in the slot title after a34d8961b, not stated (PC-002) |
+| "The single new flow package that appears while that request is pending gets linked to the session." | claim | prWork.ts `resolveFlowLinks`: links only when `live.length === 1`; `FLOW_LINK_WINDOW_MS = 15 * 60_000` | contradicted since a34d8961b (PC-002) |
+| "UI choices taken without an owner decision, listed in the flow journal" (six items) | claim of completeness | journal.md T17 entry lists seven more owner-facing behaviour changes | stale (PC-002) |
+| "`cd apps/desktop && bun test src`: 1016 pass, 0 fail." | claim | research-evidence/verify-tests-to-run-1.txt at head: `1034 pass` | stale (PC-002) |
+| "The default source is the project repository ... \"Assigned to me\" and the other sources stay selectable" | claim | model.ts `export const DEFAULT_SOURCE: IssueSource = "repository";` | holds in code; user docs outside the diff still describe the old default (PC-001) |
+| "The Flow stage filter is removed; the stage now shows in the card's work row." | claim | IssueFilters/model diff | holds in code; docs/docs/guides/desktop-issues.md still offers the filter (PC-001) |
+| "`keryx issues list` with `source: \"repository\"` reads `/repos/{owner}/{repo}/issues`" | claim | issues-contract.ts `export type IssueListSource = IssueScope \| "repository";` | holds in code; docs/docs/cli-reference.md source list not updated (PC-001) |
+| "Requirements: docs/requirements/keryx-desktop-review-v2/ ..." / implementation-plan "Состояние этапа 1" | doc in diff | describes Create Flow linking as before a34d8961b | stale (PC-002) |
+| Screenshots / visual evidence | none claimed | — | no row |
+
+## Findings
+
+### [PC-001] User docs for Desktop Issues and `keryx issues list` still describe the behaviour this PR replaced
+- Severity: minor
+- File: docs/docs/guides/desktop-issues.md (outside the diff; unchanged between base and head per `git log b147408a8..88e3faba9 -- docs/docs/guides/desktop-issues.md docs/docs/cli-reference.md`, empty)
+- Problem: The PR body says the default Issues source is now the project repository, the Flow stage filter is removed, the card button is "Open in session", and the default grouping is by GitHub state. The user guide still says: "The personal board initially shows open issues assigned to the selected account across its repositories." (line 3), "**Filters** can narrow the queue by repository, state, update date, author, label, assignee and Flow stage." (line 7), "Select **Open session** on the issue." (line 13), "The personal board groups those same issues by Keryx stage." (line 31). The CLI reference says "Use `assigned`, `created`, `mentioned` or `subscribed` for the source." and "The current directory does not restrict the personal queue." (docs/docs/cli-reference.md ~5175-5180), while the diff adds `repository`, which is resolved from the cwd. Code at head: apps/desktop/src/issues/model.ts `export const DEFAULT_SOURCE: IssueSource = "repository";`, IssueWorkRow.tsx `: stage === "needs_answer" ? "Open question" : "Open in session";`, src/integrations/issues-contract.ts `export type IssueListSource = IssueScope | "repository";`.
+- Why it matters: a user following the guide looks for a Flow stage filter and an "Open session" button that no longer exist and expects their assigned queue by default; a CLI/agent reader of the reference does not learn the new `repository` source.
+- Fix: update desktop-issues.md (default source, grouping Open/Closed, stage as a work-row link, "Open in session", no stage filter) and the `issues` section of cli-reference.md (add `repository`, say it reads the repository of the current directory).
+- class_scope (not required at minor): sites docs/docs/guides/desktop-issues.md lines 3, 7, 13, 31; docs/docs/cli-reference.md issues section. Enumerated with `keryx ctx rg -i "issues list|source.*(assigned|mentioned|created)|Needs attention|In review lane|Flow stage filter|Open in Sessions" docs README.md` and a second pass over docs/docs and apps/desktop/README.md for the PR board (docs/docs/desktop-app.md "Find a pull request in Review" names no lanes and was not contradicted).
+
+### [PC-002] The PR body (and the stage-1 state doc) predate fix commit a34d8961b and no longer describe the head
+- Severity: minor
+- File: .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/pr-context.md (the PR body) — code site apps/desktop/src/review/prWork.ts
+- Problem: (1) Body: "\"Create Flow\" opens the bound session with a flow prompt. The single new flow package that appears while that request is pending gets linked to the session." Head: prWork.ts `export const FLOW_LINK_WINDOW_MS = 15 * 60_000;` and `const only = live.length === 1 ? live[0] : undefined;` — a package is linked only when exactly one request is pending, within 15 minutes; two pending requests link nothing and end both. The same pre-fix wording is in the diff's docs/requirements/keryx-desktop-review-v2/implementation-plan.md ("первый новый пакет Flow, появившийся, пока запрос ждёт, привязывается к сессии. Если появилось несколько — не привязывается ни один; если списка Flow ещё не было — тоже.") and in frozen AC9 ("the first new flow package that appears while that request is pending is linked"). (2) Body "UI choices taken without an owner decision" lists six items; the journal's T17 entry adds owner-facing changes the body does not carry: "Create Flow window 15 min", "review progress only in the slot title, \"Transcript updated\" stamp gone from the card", "a header focus for another repo stays armed until that repo is shown", "new PR sessions also link a Flow found via a bound session", "launch dialog preselects the newest of several Flows", "a repeat press during an open reuses it (flow prompt not applied to that session)", "warn tone for needs-answer/publication-pending". (3) Body Verification: "`cd apps/desktop && bun test src`: 1016 pass, 0 fail." — head run (research-evidence/verify-tests-to-run-1.txt) reports `1034 pass`; the root focused-suite and mutation statements were also taken before a34d8961b.
+- Why it matters: the owner decides the merge from the body's "Known gaps and choices for the owner" section; seven behaviour choices made in the fix round, including one that narrows frozen AC9 (two concurrent Create Flow requests link nothing), are visible only in the flow journal. The stage-1 state doc is the hand-off for stages 2-4 and states the pre-fix linking rule.
+- Fix: edit the PR body: describe the 15-minute window and the one-request/one-package rule, add the T17 choices to the owner list (flagging the AC9 narrowing), and refresh the Verification numbers to the head. Update the "Создание из сессии" bullet of implementation-plan.md the same way.
+
+## Prior dispositions
+None of the round-1 findings in prior_findings belong to review-pr-contract (round 1 did not run this lens: journal "wave 2 ... incl. review-pr-contract not run in round 1"), so no prior_dispositions are returned.
+
+## Not verified
+- AC9 narrowing is reported as a body/doc disagreement only; whether the narrowing is acceptable is the owner's call and the logic lens's.
+- The flow-journal mutation claims behind "Four product mutations each break it" were not re-checked (round-1 TP-005 already covers that, testing-practices lens).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "summary": "PR body has no checkbox list; 15 claim rows checked across the whole PR. Most hold at head (no Rust, toolbar untouched, visible-text actions, 24px row, 1000px list). Two minor findings: user docs for Desktop Issues and keryx issues list still describe the replaced behaviour; the PR body and the stage-1 state doc predate fix a34d8961b (Create Flow linking rule, seven unlisted owner choices, stale test counts).",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "PC-001",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "docs/docs/guides/desktop-issues.md",
+        "line": null,
+        "quote": "**Filters** can narrow the queue by repository, state, update date, author, label, assignee and Flow stage.",
+        "problem": "The PR changes the Issues default source to the project repository, removes the Flow stage filter, renames the card action to \"Open in session\", groups by GitHub state and adds a `repository` source to `keryx issues list`. User docs outside the diff were not updated: desktop-issues.md still says the board 'initially shows open issues assigned to the selected account', offers a 'Flow stage' filter, tells the user to 'Select **Open session**', and says 'The personal board groups those same issues by Keryx stage.'; cli-reference.md still says 'Use `assigned`, `created`, `mentioned` or `subscribed` for the source.' and 'The current directory does not restrict the personal queue.'",
+        "impact": "A user following the guide looks for a filter and a button that no longer exist and expects the assigned queue by default; a CLI or agent reader of the reference does not learn the cwd-resolved `repository` source.",
+        "suggested_fix": "Update docs/docs/guides/desktop-issues.md (default source, Open/Closed grouping, stage as work-row link, 'Open in session', no stage filter) and the issues section of docs/docs/cli-reference.md (add `repository`, reads the current directory's repository).",
+        "evidence": "Code at head: apps/desktop/src/issues/model.ts `export const DEFAULT_SOURCE: IssueSource = \"repository\";`; apps/desktop/src/issues/IssueWorkRow.tsx `: stage === \"needs_answer\" ? \"Open question\" : \"Open in session\";`; src/integrations/issues-contract.ts `export type IssueListSource = IssueScope | \"repository\";`. Docs unchanged in the PR: `git log b147408a8..88e3faba9 -- docs/docs/guides/desktop-issues.md docs/docs/cli-reference.md` is empty. Found with `keryx ctx rg -i \"issues list|source.*(assigned|mentioned|created)|Needs attention|In review lane|Flow stage filter|Open in Sessions\" docs README.md`. Other sites: desktop-issues.md lines 3, 13, 31; cli-reference.md issues section.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:issues-user-docs-stale"
+      },
+      {
+        "id": "PC-002",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const only = live.length === 1 ? live[0] : undefined;",
+        "problem": "The PR body was written before fix commit a34d8961b and no longer describes the head. (1) It says 'The single new flow package that appears while that request is pending gets linked to the session.'; the code links only when exactly one request is pending and within `FLOW_LINK_WINDOW_MS = 15 * 60_000`, so two concurrent Create Flow requests link nothing. The diff's docs/requirements/keryx-desktop-review-v2/implementation-plan.md stage-1 bullet and frozen AC9 ('the first new flow package that appears while that request is pending is linked') state the pre-fix rule. (2) The owner list 'UI choices taken without an owner decision' has six items; the journal's T17 entry adds seven more (15-min window; review progress only in the slot title and 'Transcript updated' stamp gone; header focus for another repo stays armed; new PR sessions link a Flow via a bound session; launch dialog preselects the newest of several Flows; repeat press reuses an in-flight open without the flow prompt; warn tone). (3) Verification says 'bun test src: 1016 pass, 0 fail.'; the head run reports 1034 pass.",
+        "impact": "The owner decides the merge from the body's 'Known gaps and choices for the owner'; seven fix-round behaviour choices, one narrowing frozen AC9, are only in the flow journal. The stage-1 state doc, the hand-off for stages 2-4, states the old linking rule.",
+        "suggested_fix": "Edit the PR body: describe the 15-minute window and the one-request/one-package rule, add the T17 choices to the owner list (flag the AC9 narrowing), refresh Verification to the head. Update the 'Создание из сессии' bullet of implementation-plan.md the same way.",
+        "evidence": "prWork.ts at head: `export const FLOW_LINK_WINDOW_MS = 15 * 60_000;` and the resolveFlowLinks doc comment 'several new packages or several pending requests link none and end every request'. journal.md T17: 'Behavior changes accepted by the orchestrator, listed for the owner: Create Flow window 15 min ...'. research-evidence/verify-tests-to-run-1.txt: 'Ran 1034 tests across 95 files.' Sites: PR body (pr-context.md 'What changes' / 'Known gaps' / 'Verification'), docs/requirements/keryx-desktop-review-v2/implementation-plan.md 'Состояние этапа 1', acceptance-criteria.md AC9.",
+        "confidence": "high",
+        "location_class": "pr-process",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:body-predates-fix-a34d8961b"
+      }
+    ],
+    "prior_dispositions": [],
+    "stats": {
+      "files_reviewed": 19,
+      "claim_rows": 15,
+      "findings": 2,
+      "by_severity": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+    }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: doc lookups settled with ctx rg; no symbol navigation needed); wiki_used: no (not-relevant: the claims are about the PR body and user docs, found by string search); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no.

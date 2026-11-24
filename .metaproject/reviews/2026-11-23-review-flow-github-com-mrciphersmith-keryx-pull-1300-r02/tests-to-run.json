@@ -1,0 +1,280 @@
+[
+  {
+    "file": "apps/desktop/src/App.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewDetail.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/ActivityPanel.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/CommandCard.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/Composer.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/ComposerCommands.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/ComposerMentions.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/ComposerProvider.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/ContextMeter.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "SessionState",
+      "WindowState",
+      "initialState",
+      "reducer",
+      "sessionMarks",
+      "shownView"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/DelegateResultCard.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/LineComments.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionInfoPanel"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/SessionSidebar.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionInfo"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/Transcript.dom.test.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/activity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "WindowState",
+      "initialState",
+      "reducer",
+      "sessionMarks",
+      "shownView"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/agentRequests.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "initialState",
+      "reducer"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/commandRunner.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "WindowState",
+      "initialState",
+      "reducer"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/delegateTerminals.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "initialState",
+      "reducer"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/reducer.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "WindowState",
+      "initialState",
+      "reducer",
+      "sessionMarks",
+      "shownView"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/sessionGroups.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionInfo"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/startup.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionInfo"
+    ]
+  },
+  {
+    "file": "apps/desktop/src/session/subagentHistory.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "Action",
+      "WindowState",
+      "initialState",
+      "reducer"
+    ]
+  },
+  {
+    "file": "src/acp/hook-notices.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/mcp-servers.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/acp/server-archive.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-mcp.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-models.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/server-remember-model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/session-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/acp/telegram-session.server.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "harness"
+    ]
+  },
+  {
+    "file": "src/integrations/issues-contract.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/integrations/issues-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readSessionFlags"
+    ]
+  },
+  {
+    "file": "src/integrations/issues-projects.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readIssueProject"
+    ]
+  },
+  {
+    "file": "src/review/text-links.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  }
+]

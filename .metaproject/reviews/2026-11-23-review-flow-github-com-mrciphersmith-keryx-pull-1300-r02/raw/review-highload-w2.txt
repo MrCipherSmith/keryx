@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review
+
+Scope: PR #1300, branch feat/desktop-review-v2-stage1, base b147408a8 .. head 88e3faba9, diff mode, round 2 wave 2. I read slice-03 in full (useAcpSession.ts PendingSubjects wiring and the turn-end chain, AppShell.tsx titleLinks, styles/review.css) and slice-05 in full (app-work-row fixture, implementation-plan.md, server.ts handleSessionFlags, organize.ts subject/updateSessionFlagsAt, issue-session.ts bindIssueSubject, commands/issues.ts, issues-board.ts repository source and pagination, issues-contract.ts, and the tests). No load profile was provided. Concrete triggers used: several keryx processes writing one session's flags.json. Desktop starts one keryx ACP process per window (bridge.rs `launch`: "Locate and spawn keryx for one window"), and the Issues board runs `keryx issue-workspace` / `keryx issues` as child processes (issues.rs, src/commands/issue-workspace.ts).
+
+Summary: One finding. The flags.json read-modify-write in `updateSessionFlagsAt` takes no lock. That predates this PR (base `setSessionFlags` had the same body). This PR moves it into an exported helper, puts the new `subject` field in the same unlocked write, and adds writers: Desktop now writes automatically (subject binding at turn end, linkFlow from pending Create Flow), and the issue binder writes `subject` from the CLI child process. Two keryx processes that write the same session can lose one write. Nothing else in these two slices has a load-related failure mode. GitHub listing is paged by hand (one request per "load more") with a fixed batch of 40 and one bounded GraphQL hydration per page. The issue binding lock is unchanged, and the extra write runs inside it. Stats: blocker 0 | major 1 | minor 0 | info 1.
+
+### CLI / Multi-Session
+- [HW2-001, major] flags.json read-modify-write without a lock, now carrying `subject` and reached by more writers.
+
+### Concurrency & Races
+- HW2-001 above. Within one keryx process, `handleSessionFlags` → `setSessionFlags` is fully synchronous (readConfigFile, then writeOwnerOnlyFileAtomic), so concurrent Desktop requests to one server cannot interleave. The race is between processes only.
+
+### Resources
+None detected. `PendingSubjects.pending` holds one entry per new session bound in this window, and each entry is dropped on a stored reply. `repositories` (the hydration map) is per page.
+
+### Caching
+None detected.
+
+### Lock Contention
+- `withIssueBinding` (issue-session.ts) holds `withFileLock(file + ".lock")` across `createSession`, `issue-link.json`, the new `bindIssueSubject` write and `saveBinding`. All of these are local synchronous file writes, with no network I/O added under the lock.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+- PendingSubjects and applyPendingFlow retry once per finished turn of that session, driven by events, not by a loop. The turn-end chain `applyPendingFlow(...).then(() => subjects.apply(...))` cannot be broken by a rejection, because both functions catch their own write errors.
+- [HW2-002, info] The repository source pays one GraphQL `nodes` call on every page.
+
+### Idempotency & Distributed Invariants
+- `subject` writes are idempotent: the same subject is written again on retry. `bindIssueSubject` runs only in the `registered` stage, so a subject the person unlinked is not written back (issue-session.test.ts covers this).
+
+Clean Areas: Part B (no pools or handles; the temp file in writeOwnerOnlyFileAtomic is unlinked on failure), Part C (no cache in these slices), Part D (one lock, unchanged scope), Part E (no queues), Part F (GitHub calls are per user action; the cursor is scoped to viewer, query and repository, and pageLink keeps only page keys), Part G (subject writes are idempotent). Checked against the sites named above.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "slice-03 and slice-05 read in full. One major: session flags.json is read-modify-written with no lock. The pattern predates the PR, but the PR adds the subject field to it and adds automatic and cross-process writers, so two keryx processes writing one session (two windows on a project, or the issue-workspace child beside the window's ACP server) can lose a subject, flow, pin or archive flag. One info on per-page GraphQL hydration for the repository issues source. GitHub pagination, the issue binding lock and the PendingSubjects retry are bounded.",
+    "slices": ["slice-03", "slice-05"],
+    "prior_dispositions": [
+      {"id": "PF-002", "disposition": "deferred", "evidence": "slice-03 useAcpSession.ts: onFlags still `return refreshSessions();` and the turn-end chain still ends `.finally(() => void refreshSessions())`, so two session/list reads still run; deferral confirmed, not a load issue"},
+      {"id": "DG-004", "disposition": "closed", "evidence": "slice-03 review.css removes `.review-note { ... }`"},
+      {"id": "UX-001", "disposition": "closed", "evidence": "slice-03 review.css adds `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`"},
+      {"id": "LY-003", "disposition": "closed", "evidence": "same rule as UX-001 (ring drawn inside the 24px buttons)"},
+      {"id": "UX-002", "disposition": "partial", "evidence": "slice-03 review.css adds `.pr-work-link.is-attention` (warn tone). The TSX that sets the class is in slice-02, which I did not read; the CSS side only is confirmed"},
+      {"id": "LY-004", "disposition": "open", "evidence": "slice-03 review.css still has `.session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }`; claimed unreported, still present (layout lens)"}
+    ],
+    "findings": [
+      {
+        "id": "HW2-001",
+        "severity": "major",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {\n  const current = readSessionFlags(dir);",
+        "problem": "A session's flags.json is a shared state file. updateSessionFlagsAt reads it, merges the change and writes the whole object back ({archivedAt, pinnedAt, flow, subject}) without taking a lock. The temp-file-and-rename write prevents torn files, not lost updates. concurrency-patterns.mdc Rule 2 requires a lock for a read-modify-write of a shared state file. The unlocked read-modify-write predates the PR: base setSessionFlags had the same body. This PR widens it in three ways. (1) The new `subject` field rides in the same unlocked write. (2) updateSessionFlagsAt is exported and called from the issue binder in the `keryx issue-workspace` child process (bindIssueSubject). (3) Desktop now writes flags automatically, with no user action: PendingSubjects.apply at the end of a turn and linkFlow from a pending Create Flow.",
+        "impact": "Trigger: two keryx processes write the same session's flags.json at once. Two processes do exist. Desktop spawns one keryx ACP server per window (bridge.rs launch, \"Locate and spawn keryx for one window\"), and AppShell offers \"New window\" on the same project. The Issues board runs `keryx issue-workspace` as a separate child, whose prepare-flow calls setSessionFlags({flow}) on the issue session. Example: window A finishes the first turn of a new PR session S, and PendingSubjects.apply writes {subject}. At the same moment window B pins or archives S (archiveIdle or the Sessions list). Both read the old flags and each writes back its own merge, so the later rename silently drops the other's change. Outcome: a lost subject (the PR card no longer finds its session, and Desktop has already dropped its pending entry because the write returned success), or a lost flow link, pin or archive. Each write is synchronous and short, so the window is narrow. Law 2 still applies: the race is not dismissed for improbability, and its outcome is a silently lost persisted value. Rated major, not the table's blocker default, because the unlocked read-modify-write is pre-existing; this PR widens it but does not introduce it. Round obligation 4: the pre-existing defect needs a disposition. I recommend fixing it here, since it is small and in the same contract.",
+        "suggested_fix": "Serialise the read-modify-write per session directory with an exclusive-create lock file (O_EXCL, released in finally, stale recovery by PID or age), following Rule 1. For example, add a synchronous `withFileLockSync(path.join(dir, \"flags.json.lock\"), () => { read; merge; writeFlags })` in updateSessionFlagsAt, so that setSessionFlags, handleSessionFlags, issues-launch prepare-flow and bindIssueSubject all go through it. Alternatively, make the store async and reuse lib/fs withFileLock. Add a test that runs two child processes, each applying a different flag change to one session in a loop, and asserts both flags survive.",
+        "evidence": "slice-05 organize.ts: updateSessionFlagsAt = readSessionFlags(dir) → `next = { ...current }` → writeFlags(dir, next), and writeFlags = writeOwnerOnlyFileAtomic (config-dir.ts:461: temp file + renameSync, no lock). `keryx ctx rg -n \"lock|concurren|race\" src/session/organize.ts` returns 0 matches, and no comment or commit gives a reason for the missing lock (git log -- src/session/organize.ts: ae25e5de4, eaac31a23, 4fc021cdf, ec1687550, 5b7b8be56; none mentions locking). Writers, enumerated by `keryx ctx rg -n \"setSessionFlags|updateSessionFlagsAt|withIssueBinding\\(\" src --glob '!*.test.ts'`: server.ts:2964 handleSessionFlags (ACP process, per window); issues-launch.ts:116 setSessionFlags({flow}) inside withIssueBinding (run by src/commands/issue-workspace.ts, a CLI child); issue-session.ts:53 updateSessionFlagsAt({subject}) (bindIssueSubject, same child). Desktop callers of `_keryx/session_flags`: useAcpSession PendingSubjects write (new), applyPendingFlow/linkFlow (linkFlow new), archiveIdle, setFlags. Process model: apps/desktop/src-tauri/src/bridge.rs acp_start → launch \"spawn keryx for one window\"; issues.rs builds `[\"issues\", action, ...]` for a child. The withIssueBinding lock is per issue binding file, not per flags.json, so it does not serialise the ACP server's writes.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "session-flags-rmw-no-lock",
+        "location_class": "pre-existing-widened",
+        "class_scope": {
+          "sites": [
+            "src/session/organize.ts updateSessionFlagsAt (the read-modify-write; setSessionFlags delegates to it)",
+            "src/acp/server.ts handleSessionFlags → setSessionFlags (ACP server, one per Desktop window)",
+            "src/session/issues/issues-launch.ts:116 setSessionFlags({flow}) (issue-workspace CLI child)",
+            "src/session/issues/issue-session.ts:53 bindIssueSubject → updateSessionFlagsAt({subject}) (issue-workspace CLI child, new)"
+          ],
+          "enumeration_method": "keryx ctx rg -n \"setSessionFlags|updateSessionFlagsAt|withIssueBinding\\(\" src --glob '!*.test.ts' (10 matches, 4 files: every non-test writer of flags.json goes through updateSessionFlagsAt), plus keryx ctx rg over apps/desktop/src-tauri/src for acp_start/issues to establish the process model"
+        }
+      },
+      {
+        "id": "HW2-002",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  const missing = issues.filter((x) => !x.repository?.node_id);",
+        "problem": "On the new `repository` source, GET /repos/{owner}/{repo}/issues rows carry no embedded `repository`, so every non-empty page takes the hydration branch: one GraphQL `nodes(ids)` call for up to 40 ids, to learn a repository id that is the same for the whole page. The listing also includes pull requests, which are dropped after the fetch. A page from a repository with mostly PRs can therefore hold few or no issues, and can still carry a next cursor.",
+        "impact": "No failure under a concrete trigger. Desktop pages by hand: useIssueCollection loads the next page only on an explicit append, one request at a time, and has no auto-fill loop. The cost is one extra GraphQL request per page, and possibly near-empty pages, which count against the user's GitHub rate limit but stay bounded by clicks. The AC13 test itself shows the extra call (its mock answers /graphql).",
+        "suggested_fix": "Optional: resolve the repository node id once per listing (one `repository(owner,name){id}` query, or cache it with the cursor scope) and fill every row's repositoryId from it, skipping the per-page nodes call. A note that PR-heavy repositories can yield short pages would also help.",
+        "evidence": "slice-05 issues-board.ts listIssuePage: `const issues = data.filter((x) => !x.pull_request);` then `missing` / `api.graphql(\"query($ids:[ID!]!) { nodes(ids:$ids) ...\")`. issues-board.test.ts AC13 repoRow strips `repository` (`const { repository: _omitted, ...rest } = row(repo, node)`), and the mock serves /graphql. apps/desktop/src/issues/useIssueCollection.ts load(append): `if (append && (loading.current || !cursor.current)) return;`, one request per call.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "issues-repository-source-per-page-hydration",
+        "location_class": "in-diff"
+      }
+    ],
+    "stats": {"blocker": 0, "major": 1, "minor": 0, "info": 1}
+  }
+}
+```
+
+Prior dispositions (only those whose sites are in slice-03 or slice-05):
+- PF-002 deferred, as claimed. The double session/list after a bound session's first turn is still there.
+- DG-004 closed (`.review-note` removed). UX-001 and LY-003 closed (focus ring drawn inside the buttons, `outline-offset: -2px`).
+- UX-002 partial. The `.is-attention` style exists, but the TSX that applies it is in slice-02, which I did not read.
+- LY-004 still open, as claimed (`unreported`): `.session-subject-links` is still `flex: none; white-space: nowrap`.
+- HL-001, HL-002 and the other round-1 findings sit in slice-01, 02 or 04 files. Wave 1 covered HL-001 and HL-002.
+
+Not verified: no tests run (exec_budget 0). P/research-evidence/verify-tests-to-run-1.txt (exit 0) was not re-read. No test reproduces the cross-process flags race. The finding rests on the code and the process model (one keryx per window, plus issue-workspace children). I did not trace whether the ACP `session/new` with `issueLaunchId` (server.ts:2546) can write the reserved session's flags while `withIssueBinding` runs, so bindIssueSubject's own concurrent reach is not claimed; the major rests on the server.ts and issues-launch writers.
+
+Routing audit: graph_used: no (not-relevant: the slices and payload supplied the scope; writers were enumerated with ctx rg). wiki_used: no (not-relevant: a concurrency lens on a supplied diff). ctx_used: yes (keryx ctx rg). raw_rg_used: no (one raw `sed -n` excerpt of config-dir.ts:455-480, with a keryx:raw marker, to read writeOwnerOnlyFileAtomic).

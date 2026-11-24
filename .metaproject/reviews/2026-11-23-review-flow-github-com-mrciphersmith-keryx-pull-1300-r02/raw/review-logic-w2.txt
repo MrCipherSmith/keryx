@@ -1,0 +1,140 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Parent ref: `main`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a`, head `88e3faba9a1732f45a4ff7200588832e8b83f121`
+- Scope mode: diff, supplied slice `slice-02` (read in full, 2458 lines)
+- Spec compliance gate: ran against the payload's AC1–AC19, for the parts this slice implements (board lanes, quick filters, work rows, Subject sessions, Create Flow, `/review` preselect, Issues grouping and source). Nothing unimplemented in this slice. The AC9 narrowing is already reported as LG-007 and DG-008.
+
+### Summary
+The slice moves PR lanes to GitHub fields only, adds quick filters and the "My role" grouping, adds the Keryx work rows (PR and Issue), and wires Subject sessions, Create Flow links and the header back-link in App. I found no blocker or major issue. The lane function, `drawnLanes` (with the "a lane holding a card is always drawn" fallback), `filterReviews`, the quick-filter storage, `resolveFlowLinks`, `subjectOpener` and `withPendingSubjects` read correctly. There are two new minor findings. (1) Both new open paths prefill whichever composer is shown when `session/new` returns, and "Create Flow" also registers the link wait on a session the user has switched away from. (2) The Issue work row counts sessions by the new `subject` flag, which keryx writes only when a binding is first made, so a pre-existing issue session reads as "Open in session".
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+[LG-011], [LG-012] below.
+
+### Async & Concurrency
+Covered by [LG-011].
+
+### Error Handling
+None detected. The new `void openPrSession(...)` and `void createPrFlow(...)` calls reach `loadSession`, `openNew` and `workOnFlow`, and each of those catches its own failures (useAcpSession.ts `openLoad` and `openNew`). No rejection goes unhandled.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None beyond the findings and the known LG-007..LG-010, DG-006..DG-008 and RG-001.
+
+### [LG-011] A Subject open prefills the shown composer, which may be a session the user switched to while `session/new` was in flight
+- Severity: minor
+- File: apps/desktop/src/review/prWork.ts (`openSubjectSession`), with App.tsx `createPrFlow`
+- Problem: `openSubjectSession` awaits `deps.newSession()`, then calls `deps.fill(prompt)`. `fill` is App's `fillComposer`, and `fillComposer` calls `composer.current?.setText(text)`, the composer of whichever session is shown at that moment. `openNew` (useAcpSession.ts) adds the new session without showing it when the user switched elsewhere meanwhile ("shown unless the user switched elsewhere"), and it still returns the id. In that case `bind` correctly binds the new, hidden session, but the text goes to the session the user switched to. For "Create Flow", `createPrFlow` then calls `flowLinks.expect(id, known)` on the hidden session, while the flow prompt sits in the other session's composer.
+- Impact: Trigger: press "Open in session" or "Create Flow" on a PR with no bound session, then pick another session in the sidebar before `session/new` answers. Outcome: that session's draft is replaced by the PR URL or the flow prompt, because `setText` replaces the draft. If the user sends the flow prompt there, the one package it creates within 15 minutes is linked by `linkFlow` to the hidden, empty bound session. The PR card then shows that Flow, but the session that did the work is not linked to it. The window is the `session/new` latency, so the trigger is narrow.
+- Suggested fix: fill only when the new session is the one shown. For example, `openSubjectSession` could take `isShown(id)` from deps and skip `fill`, and App skip `expect`, when it is false. Or keep the prompt as a per-session pending draft that is applied when that session is shown.
+- Evidence: prWork.ts `const id = await deps.newSession(); if (!id) return null; deps.bind(id, subject); deps.fill(prompt);`. App.tsx:352 `const fillComposer = useCallback((text: string) => { setView("session"); requestAnimationFrame(() => composer.current?.setText(text)); }, []);`. useAcpSession.ts `openNew` doc: "The new session is added and shown unless the user switched elsewhere meanwhile", `const show = l.reg.created(r.sessionId, intent); ... return r.sessionId;`.
+- Class scope: the same shape also exists in two base callers outside this diff. App.tsx `openSessionWith` (`const id = flow ? await s.workOnFlow(flow.dir, "new") : await s.newSession(); if (id) fillComposer(reference);`) and `workOn` (`const id = await s.workOnFlow(card.dir, target); if (id && target === "new") fillComposer(workPrompt(card));`). They are pre-existing and listed for the fix's scope only. Enumerated by reading every `fillComposer` and `fill:` caller in App.tsx and every `deps.fill` in prWork.ts.
+
+### [LG-012] The Issue work row counts bound sessions by `subject`, which keryx writes only when a binding is first created
+- Severity: minor
+- File: apps/desktop/src/issues/IssueWorkRow.tsx
+- Problem: `IssueWorkRow` labels its session slot from `issueSessions(sessions, issue)`, which counts sessions whose `flags.json` `subject` names the issue. keryx writes that subject only inside `withIssueBinding`'s `launch.stage === "registered"` branch (src/session/issues/issue-session.ts `bindIssueSubject`), so only when a binding is first made. The click (`open-session`) goes through the private per-account binding record instead. The count and the action read different sources, and they disagree in two cases:
+  - An issue whose session was bound before this version has no `subject`, and the reuse path never adds one. The row says "Open in session" in the empty style on every visit, while the click opens the existing session.
+  - The private binding is per account (`issueViewerKey`), but the row counts sessions bound under any account. With a second GitHub account, the row says "Session" and the click creates a new session for the current account.
+- Impact: The slot misreports whether the issue already has a session, against AC12 "bound sessions found through `subject`". It does so permanently for every issue bound before the upgrade. No data is lost: the action still opens or creates the right session.
+- Suggested fix: in `withIssueBinding`, write the subject on the reuse path too when `readSessionFlags(dir).subject` is absent. Mind the comment that an unlinked subject is not written back: that needs a marker, or writing only when the flags never held a subject. Or count, in the row, only the sessions of the current viewer's binding.
+- Evidence: issue-session.ts `if (launch.stage === "registered") { ... bindIssueSubject(dir, issue.ref); launch.stage = "session_bound"; }`, with no other `bindIssueSubject` call. The doc on it says "Written once, when the session is bound". IssueWorkRow.tsx `const bound = issueSessions(sessions, issue).length;` and `onClick={() => onAction("open-session")}`.
+
+### prior_dispositions (findings this slice touches)
+- HL-001 partial. Trigger 1 (two pending requests) now links nothing (`live.length === 1` in `resolveFlowLinks`; DG-008 covers that this departs from the description). Trigger 2 (one foreign package while one request is pending) is still linked, now only within `FLOW_LINK_WINDOW_MS`.
+- LG-001 closed: `CardReviewProgress` is gone from the tile and the list row, and progress is only in the slot `title`.
+- DG-001 closed: each entry carries `expiresAt`, and `resolveFlowLinks` drops expired entries.
+- LG-002 partial: the 15-minute time limit was added. There is still no end-of-turn check and no tie to the requesting session's activity.
+- DG-002, LG-003, FE-001 closed: the focus carries `repo`, matches it case-insensitively, opens once per nonce and is cleared through `onFocusHandled`. LG-009 is the residual.
+- HL-002 closed: `subjectOpener` dedupes in-flight opens per `subjectKey`. LG-008 is the residual.
+- AR-001 closed in this slice: the App, ReviewBoard panel and ReviewLaunchDialog all use `prFlows`/`prFlowIndex`.
+- DG-003 closed: the `onOpenSession` prop is removed from ReviewBoard and ReviewResults.
+- DG-005 closed: the panel's Flow match goes through `prUrlKey` on both sides.
+- PF-001 closed for the PR board (`prWorkIndex` and a memoised `work` with stable App callbacks). The Issues residual is performance wave-1 F-001.
+- UX-002 closed: `is-attention` is set for awaitingAnswer or publicationPending. DG-006 and UX-007 are the residual.
+- LG-004 open: `PendingSubjects.apply` still treats every write failure as "not stored yet".
+- AR-002 open (deferred): prWork.ts still re-exports `boundSessions`.
+- UX-003 open: the Issue Flow slot still reads `Flow · <stage>`, with no `#id`.
+- UX-004 open: the Issues list still has the "Keryx stage" column next to the work row's Flow slot.
+- UX-005 open: a disabled "Run review" still gives its reason only in `title`.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 (Desktop PR board, work rows, Subject sessions, Issues board, App wiring) has no blocker or major issue. Lanes, drawnLanes, quick filters, resolveFlowLinks, subjectOpener and withPendingSubjects read correctly. Two minors: a Subject open prefills whichever composer is shown when session/new returns (and Create Flow registers its link wait on the hidden new session), and the Issue work row counts sessions by a subject flag that keryx writes only when a binding is first created.",
+  "findings": [
+    {
+      "id": "LG-011",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "  const id = await deps.newSession();\n  if (!id) return null;\n  deps.bind(id, subject);\n  deps.fill(prompt);\n  return id;",
+      "problem": "openSubjectSession awaits newSession, then fills the composer through App's fillComposer, which calls composer.current?.setText: the composer of whichever session is shown. openNew (useAcpSession.ts) adds a new session without showing it when the user switched elsewhere meanwhile, and still returns its id. The binding goes to the new hidden session, but the prompt replaces the draft of the session the user switched to. For Create Flow, createPrFlow then registers flowLinks.expect on the hidden session while the flow prompt sits in the other session.",
+      "impact": "Trigger: press Open in session or Create Flow on a PR with no bound session, then pick another session before session/new answers. Outcome: that session's draft is replaced by the PR URL or the flow prompt. If the user sends the flow prompt there, the single package it creates within 15 minutes is linked by linkFlow to the empty hidden session, so the PR card shows the Flow while the session that did the work is not linked to it. The window is the session/new latency, so the trigger is narrow.",
+      "suggested_fix": "Fill (and, in createPrFlow, expect) only when the new session is the one shown: pass isShown(id) through SubjectSessionDeps and skip fill and expect when it is false. Or hold the prompt as a per-session pending draft that is applied when that session is shown.",
+      "evidence": "App.tsx:352 fillComposer = setView(\"session\"); requestAnimationFrame(() => composer.current?.setText(text)). useAcpSession.ts openNew doc: 'The new session is added and shown unless the user switched elsewhere meanwhile', `const show = l.reg.created(r.sessionId, intent); ... return r.sessionId;`. App.tsx createPrFlow: `const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true); if (id) flowLinks.expect(id, known);`.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "dedupe_key": "subject-open-fills-shown-composer"
+    },
+    {
+      "id": "LG-012",
+      "severity": "minor",
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "line": null,
+      "quote": "  const bound = issueSessions(sessions, issue).length;",
+      "problem": "The Issue work row labels its session slot from sessions whose flags.json subject names the issue, but keryx writes that subject only in withIssueBinding's `launch.stage === \"registered\"` branch (bindIssueSubject in src/session/issues/issue-session.ts), so only when a binding is first created. The click goes through the private per-account binding record instead. An issue bound before this version never gets a subject, even on reuse. Sessions bound under another GitHub account are counted although the private binding is per account (issueViewerKey).",
+      "impact": "For every issue bound before the upgrade, the row shows 'Open in session' in the empty style on every visit, while the click opens the existing session. With a second account, the row shows 'Session' and the click creates a new session. The slot misreports whether the issue has a session (AC12 'bound sessions found through subject'). No data is lost: the action itself is correct.",
+      "suggested_fix": "In withIssueBinding, also write the subject on the reuse path when readSessionFlags(dir).subject is absent, keeping the 'an unlinked subject is not written back' rule (for example, a marker that the subject was written once). Or count only the sessions of the current viewer's binding in the row.",
+      "evidence": "issue-session.ts: `if (launch.stage === \"registered\") { ... bindIssueSubject(dir, issue.ref); launch.stage = \"session_bound\"; }`; bindIssueSubject doc: 'Written once, when the session is bound'. There is no other call. IssueWorkRow.tsx: `onClick={() => onAction(\"open-session\")}`.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "dedupe_key": "issue-work-row-subject-count-vs-binding"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "HL-001", "disposition": "partial"},
+    {"id": "LG-001", "disposition": "closed"},
+    {"id": "DG-001", "disposition": "closed"},
+    {"id": "LG-002", "disposition": "partial"},
+    {"id": "DG-002", "disposition": "closed"},
+    {"id": "LG-003", "disposition": "closed"},
+    {"id": "FE-001", "disposition": "closed"},
+    {"id": "HL-002", "disposition": "closed"},
+    {"id": "AR-001", "disposition": "closed"},
+    {"id": "DG-003", "disposition": "closed"},
+    {"id": "DG-005", "disposition": "closed"},
+    {"id": "PF-001", "disposition": "closed"},
+    {"id": "UX-002", "disposition": "closed"},
+    {"id": "LG-004", "disposition": "open"},
+    {"id": "AR-002", "disposition": "open"},
+    {"id": "UX-003", "disposition": "open"},
+    {"id": "UX-004", "disposition": "open"},
+    {"id": "UX-005", "disposition": "open"}
+  ],
+  "slices": ["slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```
+
+Not checked: test files and styles (not in slice-02). TP-001, TP-002, TP-003, DG-004 and the LY-* findings got no disposition from this slice. I ran no tests (exec_budget_s 0) and relied on verify-tests-to-run-1.txt, exit 0, as given.
+
+Routing audit: graph_used: no (the slice and the payload layers named the files; not-relevant). wiki_used: no (not-relevant: the requirements are in the payload ACs). ctx_used: yes (keryx ctx rg and read). raw_rg_used: no. One raw `git diff` of src/session/issues/issue-session.ts was run with a keryx:raw marker, to quote the exact hunk.

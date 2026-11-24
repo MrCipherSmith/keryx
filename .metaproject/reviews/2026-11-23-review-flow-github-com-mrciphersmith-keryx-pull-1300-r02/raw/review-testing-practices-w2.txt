@@ -1,0 +1,76 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices: round 2, wave 2 (slice-04), PR #1300 at 88e3faba9
+
+Read slice-04.diff in full (2432 lines): acp/types.test, IssuesBoard.dom, issues/model.test, PrWorkRow.dom, ReviewBoard.dom, ReviewLaunchDialog.dom, review/model.test, prWork.test, usePendingFlowLinks.dom, SessionSubjectLinks.dom, ProjectNavigation.dom, app-navigation.fixture. Wave-1 findings TP-R2-001..004 and the wave-1 mutation table are not repeated here. That includes the 40 ms `settle` in app-navigation.fixture.tsx (TP-R2-001) and the test-local focus Host in PrWorkRow.dom (TP-R2-002).
+
+## Checks that found nothing
+
+- Shared state between tests: `publishSessionReview` (platform/reviewRuns.ts) is a listener bus with no stored state, so the publish in PrWorkRow.dom cannot leak into later tests. Every PrWorkRow/ReviewBoard render uses a fresh `key`. usePendingFlowLinks.dom unmounts the Probe in `beforeEach`. IssuesBoard.dom and PrWorkRow.dom clear localStorage per test.
+- Fixed delays: no new sleep in slice-04 beyond the `settle` already reported. ReviewBoard.dom `setTimeout(resolve, 10)` in "marking a new addressed reply" is an unchanged context line. The 6000 ms `setTimeout` interception in the AC2 test is restored in `finally`, the same pattern as the existing badge-tick test.
+- The App fixtures under their `execFileSync` 8000 ms timeout: app-navigation.fixture 0.94 s, app-work-row.fixture 0.70 s, ProjectNavigation.dom 4 pass in 1.97 s. Not close to the timeout.
+- Falsy-only tests in usePendingFlowLinks.dom: each negative segment is red under a wave-1 mutant (R2-03, R2-06, R2-11, R2-12), so they are pinned.
+- ReviewLaunchDialog.dom preselect: the loader returns `selectedNumber` only when the hint equals the PR URL, so the assert separates the cases.
+
+## Mutation pass (slice-04 test-quality probes)
+
+Scratch worktree at 88e3faba9, `bun install --frozen-lockfile` at the root and in apps/desktop. Each mutant was a single-anchor replace (anchor count checked to be 1), run, then restored. The scratch tree was clean (0 changes) before it was removed. I used a local runner rather than `keryx review mutate`, as in wave 1, because the brief allows writes only to P/raw.
+
+| id | mutation | suite | result |
+|---|---|---|---|
+| W2-01 | ReviewBoard badge poll: never apply the polled badge (`return { ...card, localReview: badge.localReview }` → `return card`) | AC2 test alone (`-t "a local review starting, progressing and finishing"`) | **GREEN 1/0** |
+| W2-01 | same | ReviewBoard.dom.test.tsx | RED 68/1 ("one board tick updates every active PR…") |
+| W2-02 | ReviewResults: active reviews sorted first | AC2 test | RED |
+| W2-03 | ReviewResults: `newestFirst` dropped | AC2 test | RED |
+| W2-04 | ReviewResults: drop `|| lanes.has(lane)` | src/review | RED 164/1 ("a shown card is never dropped…") |
+| W2-05 | ReviewResults: active review forced to "waiting" in Status grouping | AC2 test alone / full src | **GREEN** on the AC2 test (not separately counted); full src RED 1033/1 (merged awaiting-answer test) |
+| W2-06 | ReviewResults: active review forced to "others" in My role grouping (injected, not a gate deletion) | full src | **GREEN 1034/0** |
+
+Cap: 6 probes run and none left unreached. W2-05 and W2-06 inject a dependency on local review state. They are not deletions of an added gate, so they do not support an "unpinned gate" claim. They are evidence about what the AC2 DOM test can observe.
+
+## Findings
+
+### [TP-R2-005] The AC2 DOM test passes when no local review ever reaches a card
+- Severity: minor. It is a test that asserts only unchanged state, with no positive artifact that the path ran.
+- File: apps/desktop/src/review/ReviewBoard.dom.test.tsx, the test "a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first".
+- Problem: after each badge tick, the test asserts only that the layout equals `before`, plus `polls === 3`. Nothing checks that the polled badge reached the card, for example that #202's review slot reads "Review · running", then "Review · needs your answer", then "Review · publication pending". W2-01, which drops the badge application, leaves this test green. The file stays red only because of an older, unrelated test. Also, the only card whose review changes (#202) sits in Waiting for review, and the test runs in Status grouping only. W2-05 (active → waiting) is green on this test, and W2-06 (active → others under My role) is green on the full Desktop suite. In My role grouping, lane independence is pinned only at model level (`reviewLane` in model.test.ts). The DOM path in ReviewResults is not covered there.
+- Why it matters: AC2 names this DOM test as its verification. As written, the test reads as coverage of "a local review starting, finishing or being published changes neither lane nor position". It would also pass if the board stopped showing local review at all.
+- Fix: after each tick, assert the review-slot text of #202 (a positive artifact), then the unchanged layout. Put the changing card in a lane other than Waiting for review, for example `decision: "APPROVED"` or `"CHANGES_REQUESTED"`. Repeat the loop under `chooseGrouping("My role")`.
+
+Severity counts: 0 blocker, 0 major, 1 minor, 0 info.
+
+Routing audit: graph_used: no (not-relevant: the slice and the files it names were given; call sites were found with ctx rg). wiki_used: no (not-relevant). ctx_used: yes (keryx ctx read of index.md, keryx ctx rg for publishSessionReview, the badge application and the newestFirst and reviewLane sites). raw_rg_used: no. One raw timing command was marked keryx:raw.
+
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-04 tests checked for shared state, fixed delays, falsy-only asserts and timeouts: no new shared-state or delay defect beyond wave 1's settle finding. Six probes run: four red, two green on the AC2 test (W2-01 dropping the polled badge application; W2-05 forcing active to waiting) and one green on the full suite (W2-06, injected My role lane bypass). One minor: the AC2 DOM test has no positive artifact that a local review reached the card.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "TP-R2-005",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "line": null,
+      "quote": "      expect({ step, layout: layout() }).toEqual({ step, layout: before });",
+      "problem": "The AC2 DOM test asserts only that the layout is unchanged after each badge tick, plus polls === 3. It never asserts that the polled badge reached the card (for example #202's review slot text). The only card whose review changes sits in Waiting for review, and only Status grouping is exercised.",
+      "impact": "The test passes when the board never applies a polled local review: W2-01 is GREEN on this test (1 pass, 0 fail) and is caught only by an older test in the same file. Forcing active reviews into Waiting (W2-05) is green on this test. Forcing them into Others under My role (W2-06) is green on the whole Desktop suite (1034/0). In that grouping, lane independence in the DOM path is pinned only at model level.",
+      "suggested_fix": "After each tick, assert #202's review slot text ('Review · running', 'Review · needs your answer', 'Review · publication pending') before comparing layouts. Give the changing card a decision that puts it outside Waiting for review (APPROVED or CHANGES_REQUESTED). Repeat the tick loop after chooseGrouping('My role').",
+      "evidence": "Scratch worktree at 88e3faba9. W2-01: ReviewBoard.tsx poll `return { ...card, localReview: badge.localReview };` → `return card;`: `bun test src/review/ReviewBoard.dom.test.tsx -t \"a local review starting, progressing and finishing\"` 1 pass / 0 fail. The full file gives 68 pass / 1 fail, failing only 'one board tick updates every active PR from scoped badges…'. W2-05 (ReviewResults lane: active && status → 'waiting') is green on the AC2 test. W2-06 (active && role → 'others') gives 1034 pass / 0 fail on `bun test src`. The neighbouring probes W2-02 (active first) and W2-03 (no newestFirst) are red on the AC2 test, so the ordering half is pinned.",
+      "confidence": "high",
+      "dedupe_key": "testing:ac2-dom-test-no-positive-badge-artifact"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "W2-01", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "                return { ...card, localReview: badge.localReview };", "replacement": "                return card;", "kind": "behavior" },
+    { "id": "W2-02", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "const ordered = useMemo(() => newestFirst(cards), [cards]);", "replacement": "const ordered = useMemo(() => newestFirst(cards).sort((a, b) => Number(!!b.localReview?.active) - Number(!!a.localReview?.active)), [cards]);", "kind": "behavior" },
+    { "id": "W2-03", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "const ordered = useMemo(() => newestFirst(cards), [cards]);", "replacement": "const ordered = useMemo(() => [...cards], [cards]);", "kind": "behavior" },
+    { "id": "W2-04", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "possible.has(lane) || lanes.has(lane)", "replacement": "possible.has(lane)", "kind": "behavior" },
+    { "id": "W2-05", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "const lane = reviewLane(card, grouping, viewer);", "replacement": "const lane = card.localReview?.active && grouping === \"status\" ? \"waiting\" : reviewLane(card, grouping, viewer);", "kind": "behavior" },
+    { "id": "W2-06", "file": "apps/desktop/src/review/ReviewResults.tsx", "anchor": "const lane = reviewLane(card, grouping, viewer);", "replacement": "const lane = card.localReview?.active && grouping === \"role\" ? \"others\" : reviewLane(card, grouping, viewer);", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

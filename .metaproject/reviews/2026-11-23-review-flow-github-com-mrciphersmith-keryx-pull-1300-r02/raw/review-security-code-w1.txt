@@ -1,0 +1,54 @@
+STATUS: DONE
+
+## Security Review (review-security-code, round 2, wave 1)
+
+### Scope
+- PR: MrCipherSmith/keryx#1300, head 88e3faba9a1732f45a4ff7200588832e8b83f121, base b147408a8748cdbd8506b371adb5957947e4477a
+- Scope mode: diff (supplied slice; diff not rebuilt)
+- Slice read in full: slice-02 (App.tsx, acp/types.ts, issues/{IssueFilters,IssueWorkRow,IssuesBoard,IssuesView,model,useIssueCollection}, IssuesBoard.css, review/{PrWorkRow,ReviewBoard,ReviewFilters,ReviewLaunchDialog,ReviewProgress,ReviewResults,model,prWork,reviewFilterStorage,usePendingFlowLinks}, session/{SessionSubjectLinks,subjectBinding})
+- Test evidence: research-evidence/verify-tests-to-run-1.txt — 1034 pass, 0 fail (exit 0)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness was found in slice-02.
+
+### Prior findings (round 1)
+None of the 31 prior findings belongs to the security lens (reviewers: highload, logic, degradation, testing-practices, architecture, frontend, performance, ui-ux, layout). No prior_dispositions are owed by this lens; the integrity effects of HL-001/DG-001/LG-002 (a foreign flow package persisted into a session's flags) are logic-lens findings and were not re-judged here.
+
+### Verified clean (each line names what it rests on)
+- XSS / HTML injection: every new render of untrusted text goes through JSX text nodes — SessionSubjectLinks.tsx (`{name}`, `Flow #{flow.id}`, `title={flow.title}`), PrWorkRow.tsx (session titles in `sessionItems` MenuItem labels, flow title in `title`), IssueWorkRow.tsx (`issueName(issue)` in aria-label/text). `keryx ctx rg "dangerouslySetInnerHTML" apps/desktop/src` hits only pre-existing Markdown renderers (components/Markdown.tsx, IssueMarkdown, DiscussionMarkdown, ReviewReportMarkdown, MetaprojectView, OpenSpecView, ChangesPanel); none is in this slice.
+- Subject persisted to flags.json (`_keryx/session_flags`, written from App.tsx `s.bindSubject` / subjectBinding.ts `PendingSubjects.apply`): the producer validates it on write and read — src/session/organize.ts `parseSessionSubject` (SUBJECT_URL `^https://github\.com/<repo>/(pull|issues)/<n>$`, REPO_REF, safe positive integer, NODE_ID for repositoryId, url/kind/repo/number cross-checked), `updateSessionFlagsAt` throws "not a GitHub subject" on an invalid one, `readSessionFlags` drops an invalid one, `writeFlags` uses `writeOwnerOnlyFileAtomic`. So a subject read back (App.tsx `shownSubject` -> `reviewLaunchTarget(...)` -> ReviewLaunchDialog `initialTarget`) is always a github.com PR/issue URL; it is used as a lookup hint, never as an href or a shell argument.
+- Flow link written by usePendingFlowLinks -> `s.linkFlow(id, dir)`: `dir` comes from the local flow list, and the producer validates it (`FLOW_REF.test(change.flow)` in organize.ts `updateSessionFlagsAt`); no path is built from it in the slice.
+- Prompt prefill: `flowPrompt(card.url)` (prWork.ts) and `openPrFromBoard` (`card.url`) only prefill the composer (`fill`/`fillComposer`), never send; the URL is the GitHub card URL. No hidden or auto-sent instruction.
+- Navigation/open redirect: the only external open in the touched code is ReviewResults.tsx `openPullRequest(href)` with `href = reviewUrl(card.url)`, unchanged in substance from base (icon -> labelled button). SessionSubjectLinks' subject link navigates in-app (`go("review")` + `setReviewFocus`), not to `subject.url`.
+- Untrusted local storage input: reviewFilterStorage.ts `readReviewFilters` accepts a quick filter only when `true`/`false`/absent and otherwise returns EMPTY_FILTERS; `readReviewGrouping` maps anything but `"role"` to `"status"`; issues/model.ts `readPreferences` keeps the type checks and drops the removed `stage` key; IssuesBoard.tsx source is accepted only via `Object.hasOwn(SOURCES, value)`.
+- Secrets / logging / crypto: no secret, token, logging of PII, `Math.random`, `eval`/`Function`, or `child_process` in the slice (read in full).
+- Auth/authz: desktop is a local single-user client; the Issues "repository" source and PR board reads go through the existing keryx GitHub account plumbing (`requestIssues`, `fetchReviewBoard`) with the existing viewer-mismatch checks kept (IssuesBoard.tsx `verified.login` comparison, `issueViewerKey` check in `move`). No new privileged surface.
+
+### Clean Areas
+Injection (SQL/command/SSTI/eval): none present. XSS: checked, clean. Auth/IDOR: no server endpoint in slice. Input validation: localStorage and session-flags inputs validated (above). Secrets: none. Crypto: none. CSRF/open redirect/path traversal: no new sink. React-specific: no dangerouslySetInnerHTML, eval, sensitive localStorage, or postMessage in slice.
+
+### Not verified
+- The server side of `_keryx/session_flags` and the `issues list` `source: "repository"` path live in other slices; only organize.ts subject/flow validation was read (at the checkout head) to close the desktop-side sinks. Other slices were not reviewed by this lens in this wave.
+
+### Routing audit
+graph_used: no (not-relevant: slice text supplied; sinks closed by direct reads) · wiki_used: no (not-relevant) · ctx_used: yes (`keryx ctx rg` for subject.url / "not a GitHub subject" / dangerouslySetInnerHTML; `keryx ctx read` for test evidence) · raw_rg_used: no
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 2, slice-02 read in full. No security findings: new UI renders untrusted text through JSX text nodes only; the session Subject and Flow written to flags.json are validated by the producer (src/session/organize.ts parseSessionSubject / FLOW_REF, owner-only atomic write), so the subject URL read back is always a github.com PR/issue URL and is used only as a review-target hint; prompts are prefilled, never sent; localStorage inputs (quick filters, grouping, issue source) are strictly validated. No round-1 finding belongs to this lens.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0, "files_reviewed": 22 }
+}
+```

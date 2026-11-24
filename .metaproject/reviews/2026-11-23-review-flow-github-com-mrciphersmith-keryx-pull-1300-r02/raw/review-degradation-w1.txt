@@ -1,0 +1,122 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 2, wave 1, slice-02 (read in full, lines 1-2458). Mode: fallback-first, the whole range b147408a8..88e3faba9 plus the fix commit a34d8961b. Read-only: nothing was run. Evidence is base-diff and consumer-trace from reading the code.
+
+## Prior findings in this lens (fix commit a34d8961b)
+
+- DG-001 closed. `resolveFlowLinks` (prWork.ts) now drops a request when `expiresAt <= now` (`FLOW_LINK_WINDOW_MS` = 15 min from the press). It also drops a request whose session already has a Flow, and it never offers a `claimed` package again. `usePendingFlowLinks` stamps `expiresAt` in `expect`. Tests cover the expiry at both levels: prWork.test.ts "a package that appears after the request's window is not linked" and usePendingFlowLinks.dom.test.tsx "a request expires: a package from elsewhere after its window is not linked". Inside the 15-minute window, a package from somewhere else can still be linked. The PR's Known gaps names this trade-off, so it is not re-filed.
+- DG-002 closed. App now sets `setReviewFocus({ repo: subject.repo, number, nonce })`. The board effect requires `snapshot.repo.toLowerCase() === focus.repo.toLowerCase()`. After handling a request it calls `onFocusHandled(nonce)`, and App clears the request with `reviewFocusHandled`, so a remounted RepositoryBoard has nothing to replay. One gap remains: no test passes `focus` to ReviewBoard or clicks the header link. `keryx ctx rg 'nonce|onFocusHandled|focus='` over the review tests, the shell tests and src/test found no match, so the repo check and the clear are both unpinned. A request for a PR outside the loaded snapshot stays armed. That is FE-001's part, owned by review-frontend, and not re-filed here.
+- DG-003 closed. `onOpenSession` is gone from ReviewBoard's Props. The panel gets `openPanelSession(card)`, which is undefined without `onOpenSubjectSession`, the same optional shape ReviewDetail.tsx:48 expects. No production or test caller still passes it (rg).
+- DG-004 closed. The fix removed `.review-note`, and also the orphaned `.review-table .review-progress-caption`. `.review-live-state` and `.badge.review-publication-pending` still have users (ReviewRuns.tsx, SessionReviewActivity.tsx).
+- DG-005 closed. The panel's `flow` is now `panelFlow(card)` = `index.flows(...)`, and `prUrlKey` strips the trailing slash and the case on both sides. ReviewLaunchDialog uses `prFlows(card, eligibleFlows, [])`. `flowForPr` no longer exists (rg: 0 matches).
+
+## New findings (3, all minor)
+
+### [DG-006] A pending publication on a merged or closed PR now gets the warn "waits on you" tone
+- Severity: minor · Class: behaviour-delta · Evidence kind: base-diff
+- File: apps/desktop/src/review/PrWorkRow.tsx
+- Problem: On base, the card's publication cue showed only on open PRs: `{card.state === "open" && card.localReview?.publicationPending && <span ...>Action required</span>}` in ReviewTags, and `card.state === "open" && ...publicationPending ? "Review publication"` in ReviewAction. The head drops that guard. `waitsOnViewer` adds `is-attention` (warn colour, warn border) for `publicationPending` whatever `card.state` is, and `reviewSlotState` returns "publication pending" before it looks at anything else. `localBadge` (src/review/board-badges.ts:49) sets `publicationPending` from the run alone, with no PR-state check, so a run left at publication "pending" before the merge keeps it. `needsViewerAttention` (model.ts) still requires `c.state === "open"`. The board therefore shows "waits on you" on a merged card that the tab indicator does not count.
+- Refute: I read board-badges.ts:49 (no state gate), model.ts `needsViewerAttention` (gated on open) and the base ReviewTags and ReviewAction in the slice (both gated on open). Neither the PR body nor a code comment gives a reason to show the cue on non-open PRs.
+- Fix: gate the attention tone, and the "publication pending" word, on `card.state === "open"` as base did. Otherwise fall through to the run state.
+
+### [DG-007] The fix removed a running review's "Transcript updated …" stamp from the board, but the board still re-renders when it changes
+- Severity: minor · Class: behaviour-delta · Evidence kind: base-diff
+- File: apps/desktop/src/review/ReviewProgress.tsx
+- Problem: Base `CardReviewProgress` rendered `<TranscriptUpdate at={badge?.lastActivityAt} />` for a running review not awaiting an answer, so a stalled run could be seen from the card. Fix a34d8961b replaced it with `reviewProgressText`, which builds the slot title from wave, percent, state and label and never reads `lastActivityAt`. The stamp now appears nowhere on the board, title included. ReviewRuns.tsx:133 shows it only in the panel, from the run and not from the card badge. Yet `badgesEqual` (ReviewBoard.tsx:75) still treats a `lastActivityAt` change as a badge change. Each poll that moves only that timestamp replaces the snapshot and re-renders the memoised ReviewResults and every work row, for a value nothing on the board shows. rg over the non-test code finds that comparison as the only reader of `card.localReview.lastActivityAt`.
+- Refute: the ReviewProgress doc comment explains why the progress block left the card body: AC4, and the fixed row height. That reason covers the block, not a text stamp in the slot title, and it does not explain why the change-tracking stayed.
+- Fix: either append the relative "updated …" time to `reviewProgressText` for running reviews, or drop `lastActivityAt` from `badgesEqual`. Not both: keep the comparison only if the board shows the value.
+
+### [DG-008] Two pending "Create Flow" requests link nothing, and the description says otherwise
+- Severity: minor · Class: diff-vs-description · Evidence kind: consumer-trace
+- File: apps/desktop/src/review/prWork.ts
+- Problem: The PR body says the single new flow package that appears while a request is pending gets linked to that request's session. AC9 says "the first new flow package that appears while that request is pending is linked to the session". In the fix, `resolveFlowLinks` links only when `live.length === 1`. With two live requests, the first fresh package ends every request unlinked (`return { pending: [], links: ... }`). Trace: App `createPrFlow` → `flowLinks.expect(id, known)` for PR A, then again for PR B within 15 minutes → session A's turn creates its package → the effect runs `resolveFlowLinks` → `only` is undefined → no link, and both requests are dropped, so B's own later package is not linked either. The code comment states the reason (which package belongs to which request cannot be told), and the reason holds. The PR description and its Known gaps do not mention it.
+- Refute: the PR body's Known gaps lists only "A Flow created outside the pending window is not linked". The fixture test "two link none" covers two packages, not two requests.
+- Fix: add to Known gaps: "With two or more Create Flow requests pending, none is linked automatically." Or keep the other requests pending instead of ending all of them.
+
+## Verified clean (traced, no finding)
+- ReviewProgress.tsx consumers (ReviewOutcome, ReviewRunDialog, ReviewRuns, ReviewSessions, SessionReviewActivity): none imported the removed `CardReviewProgress` (rg: 0 matches), and `TranscriptUpdate` keeps its export and its user in ReviewRuns.tsx.
+- ReviewLaunchDialog.tsx consumers (ReviewDetail, PrSubscriptionDialog): only the internal `linked` changed. When several Flows share a prUrl, the default Flow is now the newest by `byUpdatedDesc` instead of the first in list order. That is a narrow and arguably better choice; not filed.
+- acp/types.ts consumers (reducer, providers, commands, Composer, Transcript, commandRunner, dialogQueue, CommandCard, Approvals, SessionInfoPanel, SessionSidebar, SessionView, agentRequests, contentBlock, sessionGroups, startup, ContentBlockView, RunsTab): the changes are additive (optional `subject`, new pure functions). `sessionFlags` itself is unchanged.
+- ReviewBoard: the `onOpenSession` removal, the `work` memo (its callbacks are now `useCallback` with ref reads in App), and `NO_SESSIONS` as the default.
+- IssuesBoard.css: `.pr-work-row.issue-work-row` (0,2,0) now beats `.pr-work-row`, and `.issue-table .issue-work-row`, which comes later at the same specificity, keeps `margin-top: 0` in the list.
+- Issues model: the stored `stage` filter is ignored on read, `DEFAULT_SOURCE` is used only when nothing is stored for the account, and `issueGroups` draws Closed only when the state filter includes it.
+- review.css: `--warn-soft` exists (themes and tokens). The lane-dot classes for draft, closed and others are absent, which is a layout matter; not filed here.
+
+## Coverage and limits
+- Slice-02 only. The changes in server.ts, organize.ts, issues-board.ts, issue-session.ts and useAcpSession.ts are in other slices and were not traced here, so their consumers (shell-profile and server-harness test helpers, cli-registry, issues-github, issues-projects, issue-turn, runtime, issues-launch, issue-origin) were not traced in this wave.
+- The blast-radius cap dropped 30 of 70 consumers, untraced (list in payloads/degradation.txt). The graph reports 134 changed files absent from the code graph, so their blast radius is unknown, not empty.
+- Acceptance criteria: AC1–AC19 from the payload were used.
+- Nothing was run: the review was read-only with exec budget 0. The test evidence file (verify-tests-to-run-1.txt, exit 0) was not re-run.
+
+Routing audit: graph_used: payload blast-radius list (no extra gdgraph call); wiki_used: not-relevant (the payload carries the PRD and AC); ctx_used: yes (`keryx ctx rg`, `keryx ctx run git show`, `keryx ctx read`); raw_rg_used: no.
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "summary": "Round 2, slice-02 read in full. Prior DG-001..DG-005 are all closed by fix a34d8961b; DG-002's repo check and handled-clear have no test pinning them. Three new minor findings: the publication-pending attention tone now shows on merged or closed PRs (base gated it on open); the fix removed the running-review transcript stamp from the board but badgesEqual still re-renders on lastActivityAt; two pending Create Flow requests link nothing, which the PR description does not say. Verified clean: ReviewProgress, ReviewLaunchDialog and acp/types consumers, ReviewBoard onOpenSession removal and work memo, IssuesBoard.css specificity, issues model defaults. Not traced: the consumers of other-slice exports, and 30 consumers dropped by the cap. Nothing was run.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "DG-006",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);",
+      "problem": "Base showed the publication cue only on open PRs (ReviewTags 'Action required' and ReviewAction 'Review publication' were both gated by card.state === \"open\"). On the head, the work row's review slot takes the warn tone (is-attention) and the text 'Review · publication pending' for publicationPending whatever the PR state is. localBadge (src/review/board-badges.ts:49) sets publicationPending with no PR-state gate, so a merged or closed PR whose run was left at publication 'pending' gets a 'waits on you' cue that needsViewerAttention, and so the tab indicator, does not count.",
+      "impact": "A merged or closed card in the Merged or Closed lane looks like it needs the viewer's action, and the board disagrees with the tab indicator.",
+      "suggested_fix": "Gate waitsOnViewer's publicationPending, and reviewSlotState's 'publication pending', on card.state === \"open\" as base did; otherwise fall through to the run state.",
+      "evidence": "base-diff: base ReviewResults ReviewTags/ReviewAction (slice-02, removed lines) gate on card.state === \"open\"; head PrWorkRow.tsx waitsOnViewer and prWork.ts reviewSlotState do not. Refute: read src/review/board-badges.ts:49 (no state gate) and model.ts needsViewerAttention (gated on open); no comment or PR text gives a reason for the change.",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "DG-007",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "file": "apps/desktop/src/review/ReviewProgress.tsx",
+      "line": null,
+      "quote": "export function reviewProgressText(badge: ReviewCard[\"localReview\"]): string | null {",
+      "problem": "Fix a34d8961b replaced CardReviewProgress, which on base rendered <TranscriptUpdate at={badge?.lastActivityAt} /> for a running review, with reviewProgressText, which never reads lastActivityAt. The 'Transcript updated …' stamp is now gone from the board, slot title included. Yet ReviewBoard's badgesEqual still compares lastActivityAt, and that comparison is now the only non-test reader of card.localReview.lastActivityAt. A poll that moves only the timestamp replaces the snapshot and re-renders ReviewResults and every work row for a value nothing on the board shows.",
+      "impact": "A stalled running review can no longer be spotted from the board (only from the panel's ReviewRuns), and every running-review tick re-renders the board for nothing.",
+      "suggested_fix": "Either append the relative 'updated …' time to reviewProgressText for running reviews, or drop lastActivityAt from badgesEqual.",
+      "evidence": "base-diff: base ReviewProgress.tsx CardReviewProgress rendered TranscriptUpdate (fix diff a34d8961b); head reviewProgressText omits it. keryx ctx rg lastActivityAt (non-test): ReviewBoard.tsx:75 badgesEqual and ReviewRuns.tsx:133 (the run's own field) only. Refute: the doc comment justifies moving the progress block (AC4, fixed row height), not dropping a text stamp or keeping its change-tracking.",
+      "confidence": "medium",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "DG-008",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "const only = live.length === 1 ? live[0] : undefined;",
+      "problem": "The PR body and AC9 say the new package that appears while a request is pending is linked to that request's session. After the fix, resolveFlowLinks links only when exactly one request is live. With two Create Flow requests pending (PR A, then PR B within 15 minutes), the first fresh package ends both requests unlinked, so B's own later package is not linked either. The code comment documents this and its reason holds; the PR description and Known gaps do not.",
+      "impact": "A user who starts Create Flow on two PRs gets neither Flow on its card, with no notice, contrary to what the description promises.",
+      "suggested_fix": "Add to Known gaps: 'With two or more Create Flow requests pending, none is linked automatically.' Or keep the other requests pending instead of ending all of them.",
+      "evidence": "consumer-trace: App.tsx createPrFlow -> usePendingFlowLinks.expect -> effect -> resolveFlowLinks (prWork.ts) with two live entries -> only undefined -> { pending: [], links: [] }. Refute: PR body Known gaps names only the outside-window case; the fixture test 'two link none' covers two packages, not two requests.",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "DG-001", "disposition": "closed" },
+    { "id": "DG-002", "disposition": "closed" },
+    { "id": "DG-003", "disposition": "closed" },
+    { "id": "DG-004", "disposition": "closed" },
+    { "id": "DG-005", "disposition": "closed" }
+  ],
+  "follow_ups": [
+    "DG-002's fix (the repo match in the ReviewBoard focus effect, and App's reviewFocusHandled clear) is pinned by no test: no test passes `focus` to ReviewBoard or clicks the session header's PR link. This is for review-testing-practices to weigh.",
+    "Consumers of other-slice exports (server.ts, organize.ts, issues-board.ts, issue-session.ts, useAcpSession.ts) and the 30 cap-dropped consumers were not traced in this wave."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```

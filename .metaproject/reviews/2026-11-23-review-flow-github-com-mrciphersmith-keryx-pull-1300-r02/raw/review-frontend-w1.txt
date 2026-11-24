@@ -1,0 +1,75 @@
+STATUS: DONE
+
+## Frontend Review (round 2, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121 (fix commit a34d8961b included)
+- Scope mode: diff (fallback-first, whole range)
+- Slice: slice-02 read in full (2458 lines: App.tsx, acp/types.ts, issues/*, review/PrWorkRow, ReviewBoard, ReviewFilters, ReviewLaunchDialog, ReviewProgress, ReviewResults, model, prWork, reviewFilterStorage, usePendingFlowLinks, session/SessionSubjectLinks, session/subjectBinding)
+- Stack note: Desktop uses React hooks and plain classes, not MobX, so the MobX store checklist (mobx-store-template) does not apply. `PendingSubjects` is a plain class with `private`/`readonly` members and no `public` keyword.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Prior finding in this lens: FE-001 (closed)
+I checked the claimed fix against the code at head.
+- **The focus request now names its repository.** App.tsx declares `useState<{ repo: string; number: number; nonce: number } | null>`. The header link sets `setReviewFocus({ repo: subject.repo, number: subject.number, nonce: ++focusNonce.current })`. The nonce comes from an App-level ref and is never reused.
+- **The board matches the repository and reports handling.** ReviewBoard's effect returns early on `snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()`. After opening the panel it calls `onFocusHandled?.(focus.nonce)`, and App's `reviewFocusHandled` clears the request when the nonce still matches.
+- **A remount cannot replay the request.** A remounted RepositoryBoard (after a repository or account switch) receives `focus=null`.
+- **A DOM test pins it.** PrWorkRow.dom.test.tsx, "the session header's PR focus opens the panel only on the board of its repository, and a remount does not replay it", covers three cases:
+  - a focus for another repository opens no panel and calls no handler;
+  - a case-insensitive repository match opens the panel and reports handled `[2]`;
+  - a remount reopens nothing.
+- **What remains is deliberate.** A focus for a repository that is not shown, or for a PR missing from the snapshot, stays armed until a matching snapshot appears. The journal T17 section records this under "Behavior changes accepted by the orchestrator": "a header focus for another repo stays armed until that repo is shown". Under shared law 4 this is a decision, and I cannot show its reason wrong.
+- **The filter case from round 1 no longer applies as written.** The effect checks `snapshot.cards`, not `visible`.
+- **The fix introduced no regression.** `onFocusHandled` and `reviewFocusHandled` are stable (`useCallback(..., [])`), so the effect does not loop, and `setSelected` runs once per nonce.
+
+The same class was reported as LG-003 and DG-002 (dedupe `review-focus-number-only`). The same code closes both.
+
+### Other changes checked, no findings
+- **Hook order.** `ReviewResults` calls `useMemo(newestFirst)` before the board/list branch. `usePendingFlowLinks`, `subjectOpener` (`useMemo(..., [])`) and the board callbacks are called unconditionally in App.
+- **Callback stability for the `work` memo.** `openPrFromBoard`, `createFlowFromBoard`, `openFlowFromBoard` and `reviewFocusHandled` are `useCallback`s. They read `s`, the sessions and the Flow cards through latest-value refs (`acp`, `subjectSessionsRef`, `flowCards`), the same pattern as the existing `linkRef` and `latest` siblings. `prWorkIndex` is memoised on `[flows, sessions]`.
+- **Effect side effects.** The `usePendingFlowLinks` effect writes links through `linkRef`. Its `claimed` set prevents a second link when the effect runs again (StrictMode double-run, or a later flows/sessions change).
+- **Keys.** Lanes are keyed by lane id, tiles and rows by PR number, issue rows by `issueKey`.
+- **Accessibility basics.**
+  - Work-row slots and card actions have visible text, plus `aria-label`s that name the PR or issue.
+  - The More button has `aria-haspopup="menu"` and `aria-expanded`.
+  - The menu is portaled, and its anchor ref is set before the menu can open.
+  - The quick filters use `aria-pressed`.
+- **TypeScript.** The change adds no `any`, no non-null assertions and no `I`-prefix issues. Optional props are spread conditionally (`{...(sessions ? {sessions} : {})}`), which is compatible with exactOptionalPropertyTypes.
+- **Leftovers of the removed card UI.** `TranscriptUpdate`, `.review-live-state`, `.review-publication-pending` and `.is-following` are all still used (ReviewRuns, SessionReviewActivity, ReviewResults). `CardReviewProgress` has no remaining importer.
+
+### Not reported
+- **Out of this lens.**
+  - Performance: the inline `onSubscribe` spread still causes `memo(ReviewResults)` to re-render. This predates the PR.
+  - UX: UX-005, where a disabled "Run review" gives its reason only in its title.
+- **Left by the journal.** Per-row `issueSessions` in IssueWorkRow, and the AR-002 re-export.
+
+### Routing audit
+- graph_used: no. The fix sites were enumerated with `keryx ctx rg` (focus/reviewFocus/onFocusHandled across apps/desktop/src).
+- wiki_used: not-relevant. The deliberate behaviour comes from the flow journal T17.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`).
+- raw_rg_used: no.
+- Tests: I ran none (read-only). P/research-evidence/verify-tests-to-run-1.txt records exit 0. I did not read that file.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "summary": "Round 2, slice-02 read in full. Prior FE-001 (focus without repo, never cleared, replayed on remount) is closed: the focus carries repo, the board matches it case-insensitively and reports onFocusHandled, App clears the request, and a DOM test pins the other-repo and remount cases. A focus for an unshown repo stays armed; journal T17 records this as accepted behaviour. The same code closes the same class reported as LG-003 and DG-002. No new frontend findings. Checked: hook order, callback stability for the work memo, the claimed-set guard on the link effect, keys, labelled actions and TypeScript safety. The app has no MobX stores.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "FE-001", "disposition": "closed"},
+      {"id": "LG-003", "disposition": "closed"},
+      {"id": "DG-002", "disposition": "closed"}
+    ],
+    "slices": ["slice-02"],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```

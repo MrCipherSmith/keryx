@@ -1,0 +1,62 @@
+STATUS: DONE
+
+review-regression (scope B, round 2, wave 2). I read slice-03 (450 lines) and slice-05 (1330 lines) in full. The brief asks one question: does the change break an existing behaviour at a site in the blast-radius set or in a changed file? I found no new regression in either slice. RG-001 from wave 1 (an older CLI rejects the new default `repository` source) still stands and is not repeated here.
+
+A correction to the dispatch note: slice-03 is not backend. It holds Desktop files (`apps/desktop/src/session/useAcpSession.ts`, `apps/desktop/src/shell/AppShell.tsx`, `apps/desktop/src/styles/review.css`). The backend files (`src/session/organize.ts`, `src/acp/server.ts`, `src/session/issues/issue-session.ts`, `src/integrations/issues-board.ts`, `src/integrations/issues-contract.ts`, `src/commands/issues.ts` and their tests) are all in slice-05, with `app-work-row.fixture.tsx` and the implementation-plan doc. I checked both slices against their consumers.
+
+## Edges checked (slice → consumers in the set)
+
+- **`src/acp/server.ts` (handleSessionFlags), reaching `src/acp/server-harness.test-helpers.ts` and `src/commands/acp.ts`.** The change adds an optional `subject` key, checked at the wire for object/null and checked by the store. Requests without `subject` follow the same code path as before. `session/list` `_meta.keryx` now also carries `subject` when it is stored. Older Desktop builds read only known keys, so this is additive.
+- **`src/session/organize.ts`.** The body of `setSessionFlags` moved to `updateSessionFlagsAt`, unchanged except for the subject branch. `setSessionFlags` still calls `locate()` first, so an unknown session is still refused. `readSessionFlags` reads an invalid stored subject as absent and keeps the other flags (tested). `writeFlags` adds `subject`, and `JSON.stringify` drops it when undefined, so flags.json files without a subject keep their old shape. Writers, found with `keryx ctx rg --all 'withIssueBinding|updateSessionFlagsAt|writeFlags|flags\.json' src` (non-test): organize.ts, issue-session.ts and issues-launch.ts (through withIssueBinding). No other module writes flags.json.
+- **`src/session/issues/issue-session.ts` → `src/session/issues/issues-launch.ts`.** `bindIssueSubject` runs only in the `registered` stage, after `issue-link.json` is written, so the session directory exists. It calls `parseSessionSubject` first and skips any issue it rejects (Enterprise host, non-matching URL). It never throws on subject shape. It does not change `launch.stage`, the private binding record or `hasIssue` derivation. `issue-origin.ts` reads only `archivedAt` / `hasIssue`, which are unchanged.
+- **`src/integrations/issues-board.ts` → `issues/service.ts` (re-exports `listIssuePage`, `issueDetail`, `issueComments`, `readGithubIssue`), `issues-projects.ts` and `issue-source.ts` (both import `graphSummary`, `issueFields`, `GithubIssue`).**
+  - The imported names are unchanged.
+  - `listIssuePage(account, request, cwd?)` gains an optional trailing parameter. Its only non-test caller is `src/commands/issues.ts`, which now passes `cwd`.
+  - For viewer scopes, validation (moved to `validateListRequest`) is the same as before, and so are the `/issues` URL, the `filter` and `pulls=false` params and the cursor scope (`cursorScope` is variadic; the repository argument is added only for `source: "repository"`). Existing cursors therefore stay valid.
+  - `pageLink` keeps the exact-path check for viewer scopes (`samePage(..., false)`).
+  - The new import of `../review/board-github` pulls in child_process, watcher-db, github-account-store and github-cli. None of these runs a side effect at import, and none imports issues-board back, so there is no cycle (`keryx ctx rg` over those modules).
+- **`src/commands/issues.ts` → `src/cli-registry.ts`.** The command surface and usage are unchanged. Only `list` passes `cwd`.
+- **`src/integrations/issues-contract.ts`.** `IssueListSource` is added. `IssueScope` is unchanged and still exported. issues-board no longer imports `IssueScope`, but it never re-exported it.
+- **`apps/desktop/src/session/useAcpSession.ts` (slice-03) → Approvals, SessionInfoPanel, SessionView.**
+  - The hook's return object gains `linkFlow`, `bindSubject` and `pendingSubjects`. No existing member changed.
+  - The post-turn chain is now `applyPendingFlow(...).then(() => subjects.apply(...)).finally(refreshSessions)`. Both steps catch internally and never reject: `applyPendingFlow` has its own try/catch, and `PendingSubjects.apply` catches the write and uses try/finally around `onFlags`. So `refreshSessions` still runs after every turn, as on base.
+  - A keryx without `subject` support answers without the key. The binding is then dropped with the SUBJECT_NOT_SAVED notice instead of failing the session.
+- **`apps/desktop/src/shell/AppShell.tsx`.** `titleLinks` is optional and renders only in the session view. Existing callers that do not pass it render as before.
+- **`apps/desktop/src/styles/review.css` → ReviewDetail, ReviewRuns, ReviewOutcome, SessionReviewActivity.**
+  - Removed `.review-note`: no non-test consumer, and tests assert its absence.
+  - Removed `.review-lane-attention`, `-review` and `-done`: no consumer; the lane keys changed in slice-02 (checked in wave 1).
+  - Removed `.review-table .review-progress-caption`: `.review-table` is used only by ReviewResults' list. `ReviewProgress` (which renders the caption) is mounted only in ReviewRuns and SessionReviewActivity, outside that table. `.review-progress-caption` keeps its own rule in ReviewDetail.css.
+  - Search: `keryx ctx rg 'review-progress-caption|review-note\b|review-lane-(attention|review|done|open)'` and `'review-table|<ReviewProgress|CardReviewProgress'` over apps/desktop/src.
+
+## What the radius could and could not answer
+
+- **Cap and graph coverage.** The cap dropped 57 of 135 candidate files (blast_radius_max_files=40), and 134 changed files are absent from the code graph. This wave covers only the edges from slice-03 and slice-05.
+- **Runtime edges.** Old/new Desktop against old/new keryx over `_keryx/session_flags` and `keryx issues list` cross a process boundary the graph does not carry. I traced them by reading source:
+  - New keryx with an old Desktop is additive.
+  - New Desktop with an old keryx on `subject` is handled with a notice.
+  - New Desktop with an old keryx on `source: "repository"` is RG-001 from wave 1.
+- **Observation, not filed.** A keryx downgrade (an older keryx changing archive/pin/flow on a session) rewrites flags.json without `subject`, so the binding is lost. This is a forward-compatibility loss on downgrade, not an existing behaviour this change breaks, so it is outside scope B.
+- **Text-hub entries** that link to slice-03.diff (BrowserPanel, ChangesPanel, FilesPanel, TerminalPanel, SidePanel) import none of the changed names. The graph cannot answer for them. I list them as unresolved rather than clean.
+- **Tests.** P/research-evidence/verify-tests-to-run-1.txt exited 0. I ran no tests (exec_budget_s 0).
+
+## Prior findings
+
+review-regression raised no round-1 finding, so this lens has no dispositions. RG-001 (wave 1) is unchanged, and this wave neither covers nor resolves it.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B over slice-03 (Desktop: useAcpSession, AppShell, review.css) and slice-05 (backend: organize.ts, acp/server.ts, issue-session.ts, issues-board.ts, issues-contract.ts, commands/issues.ts and tests): no new regression. Every changed backend contract is additive for its consumers in the set: session_flags without subject, viewer-scope issue listing and cursors, listIssuePage's optional cwd, and issue binding stages. The Desktop post-turn chain still always refreshes sessions, and the removed CSS rules have no remaining consumer. RG-001 (wave 1) still stands. The cap dropped 57 files, 134 changed files are outside the graph, and text-hub panel entries are unresolved; I traced the process-boundary edges by reading source.",
+  "slices": ["slice-03", "slice-05"],
+  "findings": [],
+  "prior_dispositions": [],
+  "follow_ups": [
+    "Downgrade forward-compatibility (not a regression): an older keryx that writes archive/pin/flow drops the stored `subject` from flags.json. Record it as a known limitation if downgrades are supported.",
+    "Text-hub entries linked to slice-03.diff (panels/BrowserPanel, ChangesPanel, FilesPanel, TerminalPanel, SidePanel) import no changed name; the graph cannot answer for them."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (I used the brief's computed set from the graph at PR head and did not rerun gdgraph) · wiki_used: not-relevant (flow docs and the implementation-plan diff gave the intent) · ctx_used: yes (keryx ctx rg/read for every enumeration) · raw_rg_used: no.

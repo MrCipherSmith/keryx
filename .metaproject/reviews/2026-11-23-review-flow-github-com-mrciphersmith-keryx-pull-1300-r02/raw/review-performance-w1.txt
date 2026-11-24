@@ -1,0 +1,118 @@
+STATUS: DONE
+
+## Performance Review (round 2, wave 1)
+
+### Scope
+- PR #1300, branch `feat/desktop-review-v2-stage1`, base b147408a8748cdbd8506b371adb5957947e4477a, head 88e3faba9a1732f45a4ff7200588832e8b83f121, mode diff (fallback-first, round 2). Slice-02 read in full (2458 lines: App.tsx, acp/types.ts, issues/*, review/PrWorkRow, ReviewBoard, ReviewFilters, ReviewLaunchDialog, ReviewProgress, ReviewResults, model, prWork, reviewFilterStorage, usePendingFlowLinks, session/SessionSubjectLinks, subjectBinding).
+- Fix commit a34d8961b checked for PF-001 and PF-002 claims and for regressions it introduced.
+- Extra reads at head: App.tsx `fillComposer` (useCallback, deps []), useFlows.ts (cards live in one useState, so `flows.cards` is stable between loads), useAcpSession.ts PendingSubjects/onFlags and the turn-end chain, flow 517 journal "T17 fix round 1".
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 2
+
+### Prior findings
+- PF-001: **partial**. The PR board part is closed. `prWorkIndex(flows, sessions)` is memoised on `[flows, sessions]`. `boundSessionIndex` groups sessions once by `subjectKey`, and `prFlowIndex` builds `byUrl`/`byDir` maps once per Flow list. A PrWorkRow now does a map lookup plus one `prUrlKey` per card, not a scan of every session and Flow. The App callbacks are now stable: `openPrSession` reads `acp.current`, `flowCards.current` and `subjectSessionsRef.current`, with deps `[fillComposer, openSubject]`. `fillComposer` and `openSubject` are stable, `flowLinks` is a `useMemo` over stable callbacks, and `openPrFromBoard`, `createFlowFromBoard` and `openFlowFromBoard` are `useCallback`s. So the `work` memo in ReviewBoard hits. Menu items are built only while the menu is open (`sessionItems` is called inside `menu && createPortal(...)`). Still open: the IssueWorkRow sibling, which was in PF-001's class_scope. It still runs `issueSessions` → `boundSessions` (filter plus sort over every session) per issue row per render. The journal names this as left: "Left: ARCH-2 re-export, IssueWorkRow per-row sessions, …". It is filed below as F-001.
+- PF-002: **open**. This was deferred on purpose, and the code is unchanged. `onFlags` still `return refreshSessions();` (useAcpSession.ts), and the turn-end chain is still `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());`. One extra `session/list` per newly bound session's first turn. It stays info.
+
+### Regressions from the fix: none found in this lens
+- `prFlows(card, flows, bound)` now builds a full `prFlowIndex` on every call. Its callers are `openPrSession` (on a click) and ReviewLaunchDialog `linked` (once per dialog render). The dialog cost is O(flows) Map inserts per render, the same order as the `.find` with a regex per Flow it replaced. Not a regression.
+- `usePendingFlowLinks`: the effect returns early when nothing is pending. A pass costs O(pending × sessions + flows) and runs only on a flows or sessions change. Linking is bounded by `claimed`, and requests expire after 15 minutes. The `claimed` Set grows by one entry per linked package for the App's lifetime, and each entry comes from a user "Create Flow" press. Not a leak worth a finding.
+- `withPendingSubjects` copies the session array on every memo recompute, which happens on a `state.sessions` or `pendingSubjects` change, not per render.
+- App per-render `flows.cards.find(...)` for `shownFlow` is O(flows) with string equality, next to the existing `reviewFlowId` scan. Negligible.
+
+### Findings
+
+### [F-001] IssueWorkRow still filters and sorts every session per issue row on every render (PF-001 residual)
+- **Severity**: minor
+- **File**: apps/desktop/src/issues/IssueWorkRow.tsx
+- **Hot path**: The Issues view is mounted only while it is the work view. It re-renders on every App render, because IssuesView and IssuesBoard are not memoised and receive inline `onWork` arrows. App renders once per flushed session-update batch (rAF, or 250 ms when hidden) while any session streams. Each render runs `boundSessions` once per rendered row: board cards plus the open detail panel.
+- **Problem**: `issueSessions(sessions, issue)` is `boundSessions(sessions, issueSubject(issue))`: a full filter with `sessionFlags` and `sameSubject` over every session, then a sort, per row. The PR board got `boundSessionIndex` for this exact reason.
+- **Why it matters**: Reasoned, not measured: rows × sessions cheap comparisons per frame, e.g. 200 loaded issues × 300 sessions ≈ 60k per streaming frame. This is well under a frame on its own, so it is jank risk at scale only. This is why it is minor.
+- **Fix**: In `Collection`, `useMemo(() => boundSessionIndex(sessions), [sessions])` and pass the lookup (or the count) to IssueWorkRow instead of the raw list.
+
+### [F-002] Two implementations of "sessions bound to a subject" (info)
+- **Severity**: info
+- **File**: apps/desktop/src/acp/types.ts
+- **Problem**: `boundSessions` (filter by `sameSubject`, then sort) and `boundSessionIndex` (group by `subjectKey`, then sort) encode the same rule twice. They agree today: the same archived check, the same `newestBoundFirst`, and `subjectKey` equality matches `sameSubject` by construction. Round obligation 7 asks for one rule, one implementation. The F-001 fix would leave `boundSessions` used only by `openSubjectSession` and the tests.
+- **Fix**: Define `boundSessions(sessions, subject)` as `boundSessionIndex(sessions)(subject)`. The cost is the same O(n) per call. The architecture lens owns this if it files it.
+
+### [F-003] memo(ReviewResults) is still defeated by the inline onSubscribe (pre-existing, info)
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewBoard.tsx
+- **Problem**: With a watcher target, `onSubscribe` is a new arrow on each render, so `memo(ReviewResults)` and every PrWorkRow re-render on every App render. This line is outside the diff. After the fix the per-card work is index lookups, so the remaining cost is small. It is recorded because the journal says "stable callbacks" for PF-001, while the memo on ReviewResults still cannot hit.
+- **Fix (optional)**: `const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), [])`.
+
+### Clean Areas
+- N+1 / DB queries: none in the slice. GitHub listing is in another slice.
+- Re-renders: the PR work row index and the App callbacks are stable (verified above). `ordered` and `visible` are memoised.
+- Memory leaks: `subjectOpener` deletes its in-flight entries in `finally`. `PendingSubjects` deletes its pending entries once settled. Pending flow links expire. `claimed` is bounded by user presses.
+- Bundle imports: the only addition is `createPortal` from react-dom (already a dependency).
+- Sync blocking: localStorage reads for grouping run once per filter-key change. The rest is unchanged.
+- Pagination: the issue list paging is unchanged. Lanes keep the 30/150 limits.
+
+### Routing audit
+- graph_used: no. The payload's `layers.affected` (graph at head) was used instead; the extra files I needed were named by the findings.
+- wiki_used: not-relevant. This is a performance lens on code that was read directly.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx run -- git show --stat`, `keryx ctx read`).
+- raw_rg_used: no.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Round 2. PF-001 is partial: the PR board now indexes sessions and Flows once per change and the App callbacks are stable, so the work memo hits, but the IssueWorkRow sibling still runs boundSessions per row per render (left on purpose per the journal; filed as F-001, minor). PF-002 is open (deferred, unchanged, info). The fix introduced no performance regression. Two info notes: the bound-session rule is implemented twice, and memo(ReviewResults) is still defeated by the pre-existing inline onSubscribe.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "line": null,
+      "quote": "  const bound = issueSessions(sessions, issue).length;",
+      "problem": "PF-001 residual. IssueWorkRow calls issueSessions -> boundSessions (a filter with sessionFlags/sameSubject over every session, then a sort) once per issue row on every render. The PR board moved to boundSessionIndex for exactly this reason; the Issues board did not. The journal records it as left: 'Left: ARCH-2 re-export, IssueWorkRow per-row sessions'.",
+      "impact": "Reasoned, not measured. While the Issues view is the work view, App re-renders per flushed session-update batch (rAF / 250 ms) when any session streams. IssuesView and IssuesBoard are not memoised and get inline onWork arrows, so every row recomputes: rows x sessions cheap comparisons per frame (e.g. 200 x 300 = ~60k). Sub-frame on its own; jank risk at scale only.",
+      "suggested_fix": "In IssuesBoard Collection: const lookup = useMemo(() => boundSessionIndex(sessions), [sessions]); pass lookup(issueSubject(issue)).length (or the lookup) to IssueWorkRow instead of the raw session list.",
+      "evidence": "slice-02 IssueWorkRow.tsx render body; issues/model.ts issueSessions -> boundSessions; IssuesBoard.tsx workActions renders IssueWorkRow per card/list row/detail; App.tsx passes sessions={state.sessions} and an inline onWork; journal.md 'T17 fix round 1' Left line.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "desktop-issueworkrow-per-row-bound-sessions",
+      "degradation_class": "performance"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/acp/types.ts",
+      "line": null,
+      "quote": "export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {",
+      "problem": "The rule 'non-archived sessions bound to a subject, newest first' is implemented twice: boundSessions (sameSubject filter + sort) and boundSessionIndex (subjectKey grouping + sort). They agree today by construction (same archived check, same comparator, subjectKey equality matches sameSubject), but round obligation 7 is one rule, one implementation.",
+      "impact": "No runtime cost today. A later edit to one copy (for example how the repo is compared) silently splits the PR board's lookup from openSubjectSession and the Issues board.",
+      "suggested_fix": "Define boundSessions(sessions, subject) as boundSessionIndex(sessions)(subject) (the same O(n) per call), or have both callers use the index. Owned by review-architecture if it files it.",
+      "evidence": "slice-02 acp/types.ts boundSessions and boundSessionIndex; prWork.ts openSubjectSession uses boundSessions, prWorkIndex uses boundSessionIndex.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "desktop-bound-sessions-two-implementations"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "{...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })}",
+      "problem": "Pre-existing, outside the diff. With a watcher target, onSubscribe is a new arrow on every render, so memo(ReviewResults) never hits, and every PrWorkRow re-renders on each App render despite the now-stable work memo. The T17 journal entry describes PF-001 as fixed with 'stable callbacks'.",
+      "impact": "Small after the fix: per card it is index lookups plus one prUrlKey. Recorded so the memo is not assumed effective.",
+      "suggested_fix": "Optional: const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []); pass it instead of the inline arrow.",
+      "evidence": "ReviewBoard.tsx at head: the onSubscribe spread on ReviewResults (context line in slice-02); ReviewResults is memo(...).",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "desktop-reviewresults-memo-inline-onsubscribe",
+      "location_class": "pre-existing"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "PF-001", "disposition": "partial" },
+    { "id": "PF-002", "disposition": "open" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```

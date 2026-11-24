@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "files": [
+    "apps/desktop/src/acp/types.test.ts",
+    "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "apps/desktop/src/issues/model.test.ts",
+    "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+    "apps/desktop/src/review/model.test.ts",
+    "apps/desktop/src/review/prWork.test.ts",
+    "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+    "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+    "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+    "apps/desktop/src/test/app-navigation.fixture.tsx"
+  ],
+  "prHead": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "graphCommit": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "maxBytes": 8192,
+  "affected": {
+    "depth": 2,
+    "files": []
+  },
+  "symbols": [],
+  "relatedTests": [
+    "apps/desktop/src/acp/types.test.ts",
+    "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "apps/desktop/src/issues/model.test.ts",
+    "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+    "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+    "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+    "apps/desktop/src/review/model.test.ts",
+    "apps/desktop/src/review/prWork.test.ts",
+    "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+    "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+    "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+}

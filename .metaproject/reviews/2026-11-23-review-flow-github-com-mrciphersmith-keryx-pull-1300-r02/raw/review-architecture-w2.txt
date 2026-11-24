@@ -1,0 +1,82 @@
+STATUS: DONE
+
+## Architecture Review (round 2, wave 2)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121
+- Scope mode: diff (explicit range), round 2 fallback-first
+- Slices read in full: slice-03 (450 lines: useAcpSession.ts, AppShell.tsx, review.css) and slice-05 (1330 lines: server.ts, organize.ts, issue-session.ts, issues-board.ts, issues-contract.ts, commands/issues.ts, their tests, the app-work-row fixture and the implementation plan)
+- Stack detected: generic TS backend (keryx ACP server, session store, GitHub integration) plus a React hook (no MobX, no NestJS)
+
+### Prior dispositions (the round-1 findings on files in these slices, checked at 88e3faba9)
+- DG-004 (minor, the orphan `.review-note` rule): **closed**. slice-03 review.css removes `.review-note { ... }`, and no rule is left behind.
+- UX-001 (minor, the work-row focus ring clipped by `overflow: hidden`): **closed** as far as the stylesheet goes. `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }` draws the ring inside the 24px buttons, and a comment gives the reason. It was not checked in a rendered app.
+- PF-002 (info, a second `session/list` refresh after a subject apply): **open (deferred, as claimed)**. useAcpSession.ts still has `applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions())`, and `onFlags` still returns `refreshSessions()`.
+- LG-004 is anchored in subjectBinding.ts (slice-02), so it is not dispositioned here. Its keryx half (server.ts `refuseStore` for a refused subject) is unchanged and agrees with the round-1 description.
+
+### Summary
+The backend change puts the session Subject in the store. `SessionSubject` and `parseSessionSubject` live in session/organize.ts, which validates on both write and read. The ACP handler only checks the wire shape and leaves the field rules to the store. `setSessionFlags` now delegates to the new `updateSessionFlagsAt(dir, ...)`, which `withIssueBinding` uses for a session it has just created. The issues integration gains a "repository" list source, and it resolves the project repository with the PR board's `reviewRepositories`/`selectRepository`. The dependency direction holds: integrations → review/board-github already exists as a sibling edge (issue-checkouts.ts, issues-github.ts), review/ imports nothing from integrations/issues-*, and no cycle is formed. On the Desktop side, `PendingSubjects` receives its I/O through injected deps. I found no blocker, major or minor. One info: the pending-write rule now has two mechanisms.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected. The transport layer (server.ts `handleSessionFlags`) checks only that `subject` is an object, null or omitted. The domain rule (`parseSessionSubject`: kind, owner/name charset, positive integer, a URL that agrees with all three) is in the store module, and it runs on both write and read.
+
+### Dependency Direction
+None detected. New edge: src/integrations/issues-board.ts → src/review/board-github.ts (`reviewRepositories`, `selectRepository`). Siblings already have the same edge: issue-checkouts.ts:7 imports `reviewRepositories` from ../review/board-github, and issues-github.ts:2 imports ../review/github-cli. Reverse edge: `keryx ctx rg --all -n 'integrations/issues|issues-board|issues-github' src/review` finds 0 matches, so there is no cycle.
+
+### Module Boundary Violations
+None detected. issue-session.ts (session/issues) imports `parseSessionSubject` and `updateSessionFlagsAt` from ../organize, which is its own session module's public export. The CLI command (commands/issues.ts) passes `cwd` into the integration and adds no logic of its own.
+
+### Design Pattern Misuse
+[AR-006] info: the "write a session flag once keryx stores the session" rule has two mechanisms. See the JSON.
+
+### Dependency Inversion
+None detected. `PendingSubjects` takes `write`/`onFlags`/`onNotice`/`onChange` as deps, and useAcpSession supplies them from the live client.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS and MobX. React: `subjects` is a stateful class instance held in `useMemo([cwd, dispatch, refreshSessions])`. The sibling `delegates` (`useMemo(() => createDelegateTerminals(...), [dispatch])`) does the same thing, so I treat it as the file's own decision (shared law 4) and do not report it.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 2 wave 2, slices 03 and 05 read in full. Subject storage is layered correctly: the ACP handler checks the wire shape, organize.ts owns validation on write and read, and issue-session writes through the store's new updateSessionFlagsAt. The issues repository source reuses review/board-github through an edge that already exists, with no cycle. Prior: DG-004 closed, UX-001 closed (CSS only, not rendered), PF-002 still deferred. One info finding: pending flags writes for flow links (hook ref + applyPendingFlow) and for subjects (PendingSubjects class) are two mechanisms for one rule, ordered only by a promise chain.",
+  "slices": ["slice-03", "slice-05"],
+  "prior_dispositions": [
+    {"id": "DG-004", "disposition": "closed"},
+    {"id": "UX-001", "disposition": "closed"},
+    {"id": "PF-002", "disposition": "open"}
+  ],
+  "findings": [
+    {
+      "id": "AR-006",
+      "severity": "info",
+      "file": "apps/desktop/src/session/useAcpSession.ts",
+      "line": null,
+      "quote": "            // One flags write at a time: the flow link first, then the subject binding.\n            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());",
+      "problem": "This change adds `PendingSubjects` (a class with injected deps, its own pending map and an onChange state mirror) for the subject binding. Its own doc says it is 'applied like the pending flow link'. Beside it, the same change keeps and extends the older mechanism for flow links: a `pendingFlow` useRef Map with `applyPendingFlow`, and the new `linkFlow` writes into that ref. Both do the same job: hold a `_keryx/session_flags` write for a session keryx has not stored yet, and retry it after the session's turn. They differ in testability (only the subject path is a unit-testable class), in visibility (only subjects are exposed as `pendingSubjects` state), and in failure reporting (only subjects have onNotice). The 'one flags write at a time' invariant lives only in the `.then` chain at this one call site. `workOnFlow` and `linkFlow` call `applyPendingFlow` directly, outside that chain.",
+      "impact": "No defect named. `linkFlow` and `bindSubject` are each called for new sessions, and the store's write is a whole-file atomic replace of a read-modify-write, so I could not reach two concurrent writes for one session that lose a flag. The cost falls on the next change. A third pending flag, a fix to the retry rule, or a caller that links a flow and binds a subject outside sendPrompt's finally must remember the hand-written ordering, and must fix the rule in two places.",
+      "suggested_fix": "Optional: generalise PendingSubjects into one pending-flags queue keyed by session that holds a SessionFlagsChange (flow and/or subject), and write it as one `_keryx/session_flags` call. linkFlow and bindSubject then enqueue, and the ordering comment is no longer needed.",
+      "evidence": "slice-03: useAcpSession.ts adds `const subjects = useMemo(() => new PendingSubjects({...}))` with the doc 'applied like the pending flow link', and `linkFlow` doing `pendingFlow.current.set(sessionId, flowDir); return applyPendingFlow(sessionId);`. Head useAcpSession.ts:226 `const pendingFlow = useRef(new Map<string, string>());`. subjectBinding.ts:22-23 `export class PendingSubjects { private readonly pending = new Map<string, SessionSubject>();`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "desktop-two-pending-flags-mechanisms"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1},
+  "inputs_unreadable": []
+}
+```
+
+Verified clean (sites named):
+- No cycle at the new integrations → review edge: src/review imports nothing from integrations/issues-*, checked with `keryx ctx rg --all`. The sibling precedent is at src/integrations/issue-checkouts.ts:7-8 and issues-github.ts:2.
+- `SessionSubject` and `SessionFlags` are declared both in apps/desktop/src/acp/types.ts:153-172 and in src/session/organize.ts. The Desktop mirror of `SessionFlags` existed before this change, and acp/types.ts is kept import-free on purpose (see AR-002 and commit 23844b08e). The new field follows that decision, so it is not a finding. Desktop imports `IssueListSource` from src/integrations/issues-contract.ts, which is the shared wire-type module.
+- `setSessionFlags` → `updateSessionFlagsAt` is a pure extraction: the archived/pinned/flow logic moved verbatim and subject was added. `withIssueBinding` writes the subject inside its existing file lock, only when the stage is `registered`, so a subject the person unlinked is not written back.
+- `listIssuePage` (integration) now resolves the project's GitHub repository through `git remote -v` when `source: "repository"`. Its `cwd` parameter is optional and is needed only by that source. The same integration directory already reads git remotes (issue-checkouts.ts), so I treat this as consistent, not as a layer violation.
+
+Not verified: the rendered focus ring (UX-001). Commit history was not read with `git log -L`, beyond the 23844b08e rationale recorded in wave 1. No tests were run (exec_budget_s 0). The supplied evidence file research-evidence/verify-tests-to-run-1.txt reports 1034 pass / 0 fail.
+
+Routing audit: graph_used: no (layers block in the payload; the import edges were checked with ctx rg instead), wiki_used: not-relevant (the structural question was settled by the code), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

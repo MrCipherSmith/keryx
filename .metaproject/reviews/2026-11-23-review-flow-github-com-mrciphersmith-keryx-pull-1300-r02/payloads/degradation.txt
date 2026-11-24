@@ -1,0 +1,107 @@
+range: b147408a8748...88e3faba9a17 (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: degradation
+
+QUESTION: after this change, is the code worse than on the base branch: in behaviour, in defaults, in speed or in
+structure, and can that be shown? Scope is the diff plus the consumers below. The consumer list is the code
+graph's, not yours: trace those, and say so when you traced fewer.
+
+CHANGED SHARED EXPORTS (47):
+  - apps/desktop/src/App.tsx  (every export)
+  - apps/desktop/src/acp/types.test.ts  (every export)
+  - apps/desktop/src/acp/types.ts  SessionFlags, SessionInfo, SessionSubject, boundSessionIndex, boundSessions, messageCount, sameSubject, sessionFlags, subjectKey
+  - apps/desktop/src/issues/IssueFilters.tsx  (every export)
+  - apps/desktop/src/issues/IssueWorkRow.tsx  IssueWorkRow
+  - apps/desktop/src/issues/IssuesBoard.css  (every export)
+  - apps/desktop/src/issues/IssuesBoard.dom.test.tsx  (every export)
+  - apps/desktop/src/issues/IssuesBoard.tsx  (every export)
+  - apps/desktop/src/issues/IssuesView.tsx  (every export)
+  - apps/desktop/src/issues/model.test.ts  (every export)
+  - apps/desktop/src/issues/model.ts  DEFAULT_SOURCE, Filters, IssueSource, Row, SOURCES, STAGES, defaultFilters, groupForRow, issueGroups, issueName, issueSessions, issueSubject, mergeRows, readPreferences, repoName, visibleRows
+  - apps/desktop/src/issues/useIssueCollection.ts  useIssueCollection
+  - apps/desktop/src/review/PrWorkRow.dom.test.tsx  (every export)
+  - apps/desktop/src/review/PrWorkRow.tsx  (every export)
+  - apps/desktop/src/review/ReviewBoard.dom.test.tsx  (every export)
+  - apps/desktop/src/review/ReviewBoard.tsx  (every export)
+  - apps/desktop/src/review/ReviewFilters.tsx  (every export)
+  - apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx  (every export)
+  - apps/desktop/src/review/ReviewLaunchDialog.tsx  (every export)
+  - apps/desktop/src/review/ReviewProgress.tsx  (every export)
+  - apps/desktop/src/review/ReviewResults.tsx  (every export)
+  - apps/desktop/src/review/model.test.ts  (every export)
+  - apps/desktop/src/review/model.ts  EMPTY_FILTERS, Filters, GROUPING_LABEL, Grouping, LANES, Lane, QUICK_FILTERS, QuickFilter, ROLE_LANES, STATUS_LANES, drawnLanes, filterReviews, laneReason, newestFirst, reviewLane, stateFilterShowsDone
+  - apps/desktop/src/review/prWork.test.ts  (every export)
+  - apps/desktop/src/review/prWork.ts  FLOW_LINK_WINDOW_MS, FlowLinkPass, PendingFlowLink, PrFlowLookup, PrWorkIndex, SubjectSessionDeps, SubjectSessionTarget, boundSessions, flowPrompt, flowStage, openSubjectSession, prFlowIndex, prFlows, prSubject, prWorkIndex, resolveFlowLinks, reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects
+  - apps/desktop/src/review/reviewFilterStorage.ts  readReviewFilters, readReviewGrouping, saveReviewFilters, saveReviewGrouping
+  - apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx  (every export)
+  - apps/desktop/src/review/usePendingFlowLinks.ts  usePendingFlowLinks
+  - apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx  (every export)
+  - apps/desktop/src/session/SessionSubjectLinks.tsx  (every export)
+  - apps/desktop/src/session/subjectBinding.ts  PendingSubjects, SUBJECT_NOT_SAVED, SubjectBindingDeps
+  - apps/desktop/src/session/useAcpSession.ts  modelOption, useAcpSession
+  - apps/desktop/src/shell/AppShell.tsx  (every export)
+  - apps/desktop/src/shell/ProjectNavigation.dom.test.tsx  (every export)
+  - apps/desktop/src/styles/review.css  (every export)
+  - apps/desktop/src/test/app-navigation.fixture.tsx  (every export)
+  - apps/desktop/src/test/app-work-row.fixture.tsx  (every export)
+  - src/acp/server.ts  runAcpServer
+  - src/acp/shell-session-organize.test.ts  (every export)
+  - src/commands/issues.ts  issuesCommand
+  - src/integrations/issues-board.test.ts  (every export)
+  - src/integrations/issues-board.ts  ListIssueRequest, graphSummary, issueComments, issueDetail, listIssuePage, readGithubIssue
+  - src/integrations/issues-contract.ts  IssueListSource
+  - src/session/issues/issue-session.test.ts  (every export)
+  - src/session/issues/issue-session.ts  withIssueBinding
+  - src/session/organize.test.ts  (every export)
+  - src/session/organize.ts  SessionFlags, SessionFlagsChange, SessionSubject, parseSessionSubject, readSessionFlags, setSessionFlags, updateSessionFlagsAt
+
+CONSUMERS (40 of 70; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap 40):
+  - apps/desktop/src/session/reducer.ts  imports apps/desktop/src/acp/types.ts  [fan-in 31]
+  - src/acp/shell-profile.test-helpers.ts  imports src/acp/server.ts  [fan-in 16]
+  - apps/desktop/src/acp/providers.ts  imports apps/desktop/src/acp/types.ts  [fan-in 13]
+  - src/acp/server-harness.test-helpers.ts  imports src/acp/server.ts  [fan-in 13]
+  - apps/desktop/src/acp/commands.ts  imports apps/desktop/src/acp/types.ts  [fan-in 10]
+  - src/cli-registry.ts  imports src/commands/issues.ts  [fan-in 8]
+  - apps/desktop/src/session/Composer.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 7]
+  - apps/desktop/src/session/Transcript.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 7]
+  - apps/desktop/src/platform/issues.ts  imports src/integrations/issues-contract.ts  [fan-in 6]
+  - src/integrations/issues-github.ts  imports src/integrations/issues-contract.ts  [fan-in 6]
+  - apps/desktop/src/issues/IssueWork.tsx  imports src/integrations/issues-contract.ts  [fan-in 4]
+  - apps/desktop/src/session/commandRunner.ts  imports apps/desktop/src/acp/types.ts  [fan-in 4]
+  - apps/desktop/src/session/dialogQueue.ts  imports apps/desktop/src/acp/types.ts  [fan-in 4]
+  - src/session/issues/issue-turn.ts  imports src/session/issues/issue-session.ts  [fan-in 4]
+  - src/session/issues/runtime.ts  imports src/session/issues/issue-session.ts  [fan-in 4]
+  - apps/desktop/src/issues/IssueOriginDetail.tsx  imports apps/desktop/src/issues/useIssueCollection.ts  [fan-in 3]
+  - apps/desktop/src/review/ReviewDetail.tsx  imports apps/desktop/src/review/ReviewLaunchDialog.tsx  [fan-in 3]
+  - apps/desktop/src/review/ReviewOutcome.tsx  imports apps/desktop/src/review/ReviewProgress.tsx  [fan-in 3]
+  - apps/desktop/src/session/CommandCard.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 3]
+  - src/session/issues/issues-launch.ts  imports src/session/issues/issue-session.ts  [fan-in 3]
+  - apps/desktop/src/issues/IssueDetail.tsx  imports apps/desktop/src/issues/model.ts  [fan-in 2]
+  - apps/desktop/src/review/ReviewRunDialog.tsx  imports apps/desktop/src/review/ReviewProgress.tsx  [fan-in 2]
+  - apps/desktop/src/review/ReviewRuns.tsx  imports apps/desktop/src/review/ReviewProgress.tsx  [fan-in 2]
+  - apps/desktop/src/review/ReviewSessions.tsx  imports apps/desktop/src/review/ReviewProgress.tsx  [fan-in 2]
+  - apps/desktop/src/session/Approvals.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/SessionInfoPanel.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/SessionSidebar.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/SessionView.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/agentRequests.ts  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/contentBlock.ts  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/sessionGroups.ts  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - apps/desktop/src/session/startup.ts  imports apps/desktop/src/acp/types.ts  [fan-in 2]
+  - src/commands/acp.ts  imports src/acp/server.ts  [fan-in 2]
+  - src/integrations/issues-projects.ts  imports src/integrations/issues-board.ts  [fan-in 2]
+  - src/session/issues/issue-origin.ts  imports src/session/issues/issue-session.ts  [fan-in 2]
+  - apps/desktop/src/issues/IssueMarkdown.tsx  imports src/integrations/issues-contract.ts  [fan-in 1]
+  - apps/desktop/src/review/PrSubscriptionDialog.tsx  imports apps/desktop/src/review/ReviewLaunchDialog.tsx  [fan-in 1]
+  - apps/desktop/src/review/SessionReviewActivity.tsx  imports apps/desktop/src/review/ReviewProgress.tsx  [fan-in 1]
+  - apps/desktop/src/session/ContentBlockView.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 1]
+  - apps/desktop/src/session/RunsTab.tsx  imports apps/desktop/src/acp/types.ts  [fan-in 1]
+
+CAP: the cap of 40 dropped 30 of 70 consumers; the first 20 dropped ones are listed, the rest are counted, and none were traced. The cap is one budget shared by all changed exports, not one per export.
+NOT TRACED (30): apps/desktop/src/session/SchedulesTab.tsx, apps/desktop/src/shell/RoutingDialog.tsx, src/commands/issue-workspace.ts, src/integrations/issue-checkouts.ts, src/integrations/issue-flow-package.ts, src/integrations/issue-source.ts, src/session/issues/issue-shell.ts, apps/desktop/src/App.dom.test.tsx, apps/desktop/src/acp/commands.test.ts, apps/desktop/src/main.tsx, apps/desktop/src/panels/RunButton.dom.test.tsx, apps/desktop/src/panels/SideTabs.dom.test.tsx, apps/desktop/src/session/CommandCard.dom.test.tsx, apps/desktop/src/session/ComposerCommands.dom.test.tsx, apps/desktop/src/session/ComposerMentions.dom.test.tsx, apps/desktop/src/session/ComposerProvider.dom.test.tsx, apps/desktop/src/session/SessionSidebar.dom.test.tsx, apps/desktop/src/session/agentRequests.test.ts, apps/desktop/src/session/commandRunner.test.ts, apps/desktop/src/session/contentBlock.test.ts, and 10 more
+
+omitted with a reason: 34 unrelated-symbol, 0 hub-damped, 900 text-hub, 37 test-consumer. They are context, not owed a chunk pass.
+37 tests exercise the changed code — run them: `bun test apps/desktop/src/App.dom.test.tsx apps/desktop/src/panels/RunButton.dom.test.tsx apps/desktop/src/panels/SideTabs.dom.test.tsx apps/desktop/src/review/ReviewDetail.dom.test.tsx apps/desktop/src/review/ReviewRuns.dom.test.tsx apps/desktop/src/session/ActivityPanel.dom.test.tsx apps/desktop/src/session/CommandCard.dom.test.tsx apps/desktop/src/session/Composer.dom.test.tsx apps/desktop/src/session/ComposerCommands.dom.test.tsx apps/desktop/src/session/ComposerMentions.dom.test.tsx apps/desktop/src/session/ComposerProvider.dom.test.tsx apps/desktop/src/session/ContextMeter.dom.test.tsx apps/desktop/src/session/DelegateResultCard.dom.test.tsx apps/desktop/src/session/LineComments.dom.test.tsx apps/desktop/src/session/SessionInfoPanel.dom.test.tsx apps/desktop/src/session/SessionSidebar.dom.test.tsx apps/desktop/src/session/Transcript.dom.test.tsx apps/desktop/src/session/activity.test.ts apps/desktop/src/session/agentRequests.test.ts apps/desktop/src/session/commandRunner.test.ts apps/desktop/src/session/delegateTerminals.test.ts apps/desktop/src/session/reducer.test.ts apps/desktop/src/session/sessionGroups.test.ts apps/desktop/src/session/startup.test.ts apps/desktop/src/session/subagentHistory.test.ts src/acp/hook-notices.test.ts src/acp/mcp-servers.process.test.ts src/acp/server-archive.test.ts src/acp/server-mcp.test.ts src/acp/server-models.test.ts src/acp/server-remember-model.test.ts src/acp/session-lease.test.ts src/acp/telegram-session.server.test.ts src/integrations/issues-contract.test.ts src/integrations/issues-launch.test.ts src/integrations/issues-projects.test.ts src/review/text-links.test.ts`
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/tests-to-run.json
+cap: 57 of 135 candidate files were NOT reviewed (blast_radius_max_files=40). They are listed in the record. Cut blast radius: run the waves — keryx review chunks plan --package .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02
+unresolved: 134 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.
