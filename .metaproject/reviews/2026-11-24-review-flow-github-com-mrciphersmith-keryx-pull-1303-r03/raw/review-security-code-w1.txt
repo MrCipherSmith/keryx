@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 1, round 3)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..822192905b3d26eb976d83e5bbd46cee14ca9a6f` (diff mode)
+- Slice read in full: slice-01 (flow 520 records; Desktop `ReviewPublishDialog.tsx`, `ReviewRuns.tsx`, `ReviewWorkspace.tsx`, `SessionReviewActivity.tsx`, `useReviewRuns.ts`)
+- Supporting read outside the slice (to settle trust of the update-round start): `src/review/desk-run-service.ts` `verifyDeskSubject` (lines 50-64) and the start path (lines 250-258); `src/commands/review-desk-run.ts:9` (40-hex SHA check).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### What was checked against the T15 fixes and the new Desktop surface
+- **Update review start (`ReviewWorkspace.updateReview`, `ReviewRuns` onUpdateReview).** The revision it sends is `{ baseSha: run.baseSha, headSha: headMoved.currentHead }`, where `currentHead` comes from the backend's preview state. The backend does not trust it: `runDeskAction` calls `verifyDeskSubject(cwd, key, revision)` for `start`, which refuses unless the PR is open and base/head equal GitHub's `baseRefOid`/`headRefOid`; the CLI also accepts only 40-hex SHAs. A tampered or stale value therefore cannot start a review on an arbitrary range. No finding.
+- **Options carried into the update round.** `updateRoundOptions` drops `autoPublish`; the remaining options come from the user's own stored attempt and are re-parsed by the CLI start path (`parseDeskReviewOptions`). Automatic publication additionally refuses a moved head server-side (AC2). No privilege or trust gain. No finding.
+- **XSS / rendering.** New strings (`shortSha(...)`, toast title with `revision.headSha.slice(0, 7)`, head-moved banner) are rendered as React text nodes or `<code>` children, never via `dangerouslySetInnerHTML`; markdown rendering still goes through the existing `ReviewReportMarkdown`. No finding.
+- **Publication target URL.** `sessionReviewPublication` builds the same `https://github.com/<repo>/pull/<n>` as before (pure extraction), and `RunAttempt` still gates publication on the strict `^https://github.com/<owner>/<repo>/pull/<n>/?$` regex. Sessions offers no Update review (no `onUpdateReview` passed). No finding.
+- **Busy/race guard.** `useReviewRuns.request` now returns `done | skipped | failed`; the skip rule (`pending.current` mutation guard) is unchanged, so a stale status read still cannot roll back a mutation. Board refresh runs only on `done`. Not a security surface; no finding.
+- **Flow records (`.metaproject/flows/520-.../*`).** No credentials, tokens or keys. The resolved/*.json files hold rule paths and sha256 content hashes only. `flow.json` records the flow owner's name as stated by the `--owner` flag, which is the project's existing flow convention (not a secret). No finding.
+
+### Clean Areas
+Injection (SQL/command/SSTI/eval): none in the slice. AuthN/AuthZ and IDOR: the start and publish paths re-verify viewer, repository and revision against GitHub server-side. Input validation: revision validated at CLI and service boundary. Secrets/logging: none added. Crypto: none. CSRF/open redirect: none (desktop IPC; URL regex unchanged). Path traversal: no filesystem path built from input in this slice. React patterns: no `dangerouslySetInnerHTML`, `eval`, storage of secrets, or `postMessage` handlers added.
+
+### Not verified
+- Backend files (`desk-publication.ts`, `round-registry.ts`, `prior-round.ts`, `desk-run-executor.ts`, `update-round.ts`) are slice-02/03 and were not reviewed in this dispatch beyond the two `desk-run-service.ts` excerpts named above.
+- No tests run (read-only reviewer). Layers: graph/test/wiki/memory commands not needed; the payload's `layers` block was used as-is.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 3, slice-01 (flow records + Desktop). No security findings. The Update review start sends a revision built from the preview's currentHead, but the backend start path re-verifies it against GitHub (verifyDeskSubject) and the CLI enforces 40-hex SHAs; autoPublish is not carried; new strings render as React text; publication URL gating is unchanged; flow records contain no secrets.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [ { "id": "slice-01", "coverage": "read in full (lines 1-2603)", "status": "DONE" } ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: payload layers block sufficed); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg` for slice headers and verifyDeskSubject sites); raw_rg_used: no.

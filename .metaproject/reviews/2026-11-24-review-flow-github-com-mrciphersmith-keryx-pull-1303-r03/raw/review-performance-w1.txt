@@ -1,0 +1,77 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage3`. Base `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b` is the stage 2 tip. Head is `822192905b3d26eb976d83e5bbd46cee14ca9a6f`. Diff mode, round 3 (the verification round), wave 1.
+- I read slice-01 in full (2,604 lines). It covers:
+  - the flow 520 records: acceptance-criteria, context, description, journal, plan, tasks, flow.json, and resolved/T5-T7 and T11-T15;
+  - `apps/desktop/src/review/ReviewPublishDialog.tsx`, `ReviewRuns.tsx`, `ReviewWorkspace.tsx`, `SessionReviewActivity.tsx` and `useReviewRuns.ts`.
+- This was a read-only review. I ran no tests (exec_budget_s 0). Earlier performance results I read: round 1 `raw/review-performance-w1.txt`, and round 2 `raw/review-performance-w1.txt` and `-w2.txt`.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Round obligations in this lens
+- **Round 1 performance F-001** (automatic publication on a moved head read the PR discussion and then refused). It is in `src/review/desk-publication.ts`, which is slice-02, not mine. Round 2 w1 confirmed that it holds. Nothing in slice-01 changes it.
+- **Round 2 performance-w2 F-001** (a "not ahead" compare was not cached). T14 B5 handled it: the journal records "definitive compare status cached per head". That code is in slice-02, so I did not verify it here.
+- **The T15 Desktop changes in my slice.** I checked them for new cost:
+  - `request()` now returns an outcome.
+  - The Update button is disabled while busy.
+  - An existing attempt is shown instead of starting a new one.
+  - `autoPublish` is stripped by `updateRoundOptions`.
+  - Sessions no longer offers Update.
+  - None of these adds a hot-path cost. Details are under Clean Areas.
+
+### Findings
+None.
+
+### Clean Areas
+- **`ReviewWorkspace.updateReview` (T15)**
+  - It now filters `local.runs` and calls `latestAttempt`. Each is an O(n) pass over the attempts of one PR.
+  - It runs once per click on "Update review". It does not run on render or on a poll.
+  - Its `useCallback` deps include `card` and `local.runs`, which change on every status poll. The `publication` literal that carries it is rebuilt on every render anyway, so the memoisation buys nothing.
+  - This adds no re-render. `ReviewRuns`, `RunAttempt` and `ReviewPublishDialog` are not `React.memo`, and the `publication` object was already rebuilt on every render before this PR. Not a finding.
+- **`ReviewWorkspace`, redundant calls**
+  - A click makes one `start` request through the existing `local.request`.
+  - The board is re-read once, and only when `outcome === "done" && boardBehind`.
+  - The `skipped` outcome only shows a toast. It does not retry or poll.
+  - When the target range already has an attempt, nothing is sent.
+- **`useReviewRuns.request` (T15)**
+  - The only change is the return value (`"done" | "skipped" | "failed"`).
+  - Control flow, the generation guard and the follow-up status read in `finally` are unchanged. No polling is added.
+- **`latestAttempt` (ReviewRuns.tsx)**
+  - This is an extraction of the existing two-`find` expression that `ReviewRuns` already ran on every render. Its cost did not change.
+- **`ReviewPublishDialog`**
+  - `headMoved`, `updateOffered` and `publishButton` are derived from `draft` during render, with no new state or effect.
+  - `shortSha` is a 7-character slice. `useId` is stable.
+  - The dialog opens on demand and is not a high-frequency surface.
+- **`SessionReviewActivity.sessionReviewPublication`**
+  - It replaces an inline object literal with a function that returns the same literal. The cost is the same as before.
+- **Memory leaks**
+  - No new listeners, timers, intervals or subscriptions in slice-01.
+  - The `.then` on `local.request` runs once and holds nothing long-lived. A late toast after unmount was already possible on this path and is not a leak.
+- **Bundle and imports**
+  - The new imports are `DeskReviewOptions` (type-only), `reviewIsArchived` from `./ReviewLifecycle` (already in this bundle through `ReviewRuns`) and `latestAttempt` and `runActive`, which are siblings that are already loaded.
+- **Not applicable to this slice**
+  - N+1, indexes, pagination, and sync I/O on an interactive path: no such code is in slice-01.
+  - The flow records are data, not runtime code.
+
+### Not verified
+- No timing or verify-run measurements.
+- The backend fixes (T14 B1-B6: the compare cache, the registry lock, the prior-candidate fallback) are in slice-02. I did not review them in this wave.
+
+Routing audit: graph_used: no (not-relevant: the slice is Desktop-only and the payload's affected-file list was enough for a perf lens) | wiki_used: not-relevant (no domain question) | ctx_used: yes (`keryx ctx read`, `keryx ctx rg`) | raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No findings in slice-01. The T15 Desktop changes add no cost on a hot path. updateReview does one O(n) pass over one PR's attempts per click. It sends one start request and re-reads the board at most once, only when the board is behind. useReviewRuns.request only gained a return value. latestAttempt is an extraction of an existing render-time find. The dialog derives its head-moved state without new state, effects or listeners. The round 1 and 2 performance obligations are backend fixes in slice-02 and were not re-verified in this wave.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```

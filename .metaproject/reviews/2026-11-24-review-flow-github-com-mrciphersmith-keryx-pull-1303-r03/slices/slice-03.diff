@@ -1,0 +1,1313 @@
+--- src/review/desk-publication.test.ts
+@@ 1,105 @@
+ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publication";
++import { DESK_TEMPLATE_SELECTION, projectReviewOverlay, reportTemplateFingerprint } from "./desk-review-report";
+ import { DeskRunStore } from "./desk-run-store";
+ import { isolateGitDiscovery } from "./test-git-fixture";
+ 
+ const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
+ const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+ const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
+-  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS"] as const;
++  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS",
++  "FIXTURE_COMPARE", "FIXTURE_COMPARE_READS", "FIXTURE_DISCUSSION", "FIXTURE_DISCUSSION_READS"] as const;
+ let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
+ let restoreGit: () => void;
+ let root: string;
+ let project: string;
+ let directory: string;
+ let id: string;
+ const confirmFixture = async () => {};
+ 
+ function json(file: string, value: unknown) {
+   writeFileSync(file, JSON.stringify(value));
+ }
+ 
+-function setHead(headRefOid: string, viewer = key.viewer) {
++function setPull(fields: { state?: string; baseRefOid?: string; headRefOid?: string }, viewer = key.viewer) {
+   json(path.join(root, "pr.json"), { data: { viewer: { login: viewer }, repository: { id: key.repositoryId,
+-    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid } } } });
++    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid: revision.headSha, ...fields } } } });
++}
++
++function setHead(headRefOid: string, viewer = key.viewer) {
++  setPull({ headRefOid }, viewer);
+ }
+ 
++const posted = () => JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"));
++const reads = (name: "FIXTURE_COMPARE_READS" | "FIXTURE_DISCUSSION_READS") =>
++  existsSync(process.env[name]!) ? readFileSync(process.env[name]!, "utf8") : "";
++/** GitHub's compare status of the reviewed head against the current head, or `fail:<stderr>` for a failing gh call. */
++const setCompare = (status: string) => writeFileSync(process.env.FIXTURE_COMPARE!, `${status}\n`);
++const movedHead = "c".repeat(40);
++const movedLine = `Reviewed commit \`${revision.headSha}\`. The pull request has moved to \`${movedHead}\` since; ` +
++  "this review does not cover the newer commits.";
++
+ beforeEach(() => {
+   restoreGit = isolateGitDiscovery();
+   saved = Object.fromEntries(envNames.map(name => [name, process.env[name]]));
+   root = mkdtempSync(path.join(tmpdir(), "keryx-review-publication-"));
+   project = path.join(root, "project");
+   mkdirSync(project);
+   const git = (...args: string[]) => {
+     const result = Bun.spawnSync(["git", "-c", "init.templateDir=", ...args], { cwd: project });
+     expect(result.exitCode).toBe(0);
+   };
+   git("init", "-q");
+   git("remote", "add", "origin", "https://github.com/example/project.git");
+ 
+   process.env.KERYX_CONFIG_DIR = path.join(root, "config");
+   process.env.KERYX_DATA_DIR = path.join(root, "data");
+   process.env.PATH = root + path.delimiter + saved.PATH;
+   process.env.FIXTURE_BODY = path.join(root, "post.json");
+   process.env.FIXTURE_PR = path.join(root, "pr.json");
+   process.env.FIXTURE_DIFF = path.join(root, "diff.txt");
+   process.env.FIXTURE_DIFF_READS = path.join(root, "diff-reads");
++  process.env.FIXTURE_COMPARE = path.join(root, "compare.txt");
++  process.env.FIXTURE_COMPARE_READS = path.join(root, "compare-reads");
++  process.env.FIXTURE_DISCUSSION = path.join(root, "discussion.json");
++  process.env.FIXTURE_DISCUSSION_READS = path.join(root, "discussion-reads");
++  setCompare("ahead");
++  writeFileSync(process.env.FIXTURE_DISCUSSION, "[[]]\n");
+   delete process.env.GH_TOKEN;
+   delete process.env.GITHUB_TOKEN;
+   delete process.env.FIXTURE_NAMED_PR;
+   setHead(revision.headSha);
+   writeFileSync(process.env.FIXTURE_DIFF, "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n");
+   const gh = path.join(root, "gh");
+   writeFileSync(gh, [
+     "#!/bin/sh",
+     'case "$1:$4" in',
+     "  auth:*) printf 'fixture-value-only\\n' ;;",
+     '  api:graphql) if [ -n "$GH_TOKEN" ] && [ -n "$FIXTURE_NAMED_PR" ]; then cat "$FIXTURE_NAMED_PR"; else cat "$FIXTURE_PR"; fi ;;',
+     '  api:-H) printf x >> "$FIXTURE_DIFF_READS"; cat "$FIXTURE_DIFF" ;;',
++    '  api:--paginate) printf x >> "$FIXTURE_DISCUSSION_READS"; cat "$FIXTURE_DISCUSSION" ;;',
++    `  api:repos/*/compare/*) printf '%s %s %s\\n' "$4" "$5" "$6" >> "$FIXTURE_COMPARE_READS"; read -r status < "$FIXTURE_COMPARE"`,
++    `    case "$status" in fail:*) printf '%s\\n' "\${status#fail:}" >&2; exit 1 ;; *) printf '%s\\n' "$status" ;; esac ;;`,
+     '  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
+     "  *) exit 1 ;;",
+     "esac",
+   ].join("\n"));
+   chmodSync(gh, 0o700);
+ 
+   const store = new DeskRunStore();
+   try {
+     id = store.request(project, key, revision)!;
+     const attempt = store.byId(id)!;
+     store.end(attempt, {
+       state: "partial", phase: "Partial", reason: "Partial fixture",
+       result: { reviewed: revision, coverage: "partial", verdict: "REQUEST_CHANGES",
+         findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." },
+     });
+     directory = store.directory(id);
+   } finally {
+     store.close();
+   }
+   const pkg = path.join(directory, "package");
+
+--- src/review/desk-publication.test.ts
+@@ 115,354 @@
+     { id: "F-002", global_id: "fixture#F-002", severity: "minor", reviewer: "review-logic", problem: "A label is ambiguous.",
+       premise: { verdict: "challenged", question: "Is this label intentional?" } },
+   ]);
+   writeFileSync(path.join(pkg, "report.md"), "Fixture review.\nEvidence level: static only — did not run: tests\n\nNot verified: 1\n");
+   mkdirSync(path.join(project, ".metaproject"));
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## Team review\n\n{{review}}\n");
+ });
+ afterEach(() => {
+   for (const name of envNames) {
+     const value = saved[name];
+     if (value === undefined) delete process.env[name];
+     else process.env[name] = value;
+   }
+   restoreGit();
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("draft questions, template and saved settings are local until one explicit submit", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("changes");
++  expect(preview.headMoved).toBeUndefined();
+   expect(preview.questions).toMatchObject([{ id: "fixture#F-002", text: "Is this label intentional?", recommendation: "dismiss" }]);
+   expect(preview.canSubmit).toBe(false);
+   expect(preview.overlayAvailable).toBe(true);
+   expect(preview.body).toContain("## Team review\n\n**Changes requested — 1 Major.**");
+   expect(preview.body).toContain("Evidence level: static only — did not run: tests");
+   expect(preview.body).toContain("### Major");
+   expect(preview.body).toContain(`/blob/${revision.headSha}/src/a.ts#L1`);
+   const draft = await requestDeskPublication(project, key, { kind: "save", id,
+     settings: { ...preview.settings, inline: true, overlay: false, keryxTemplate: false, answers: { "fixture#F-002": "dismiss" } } });
+   expect(draft.savedAt).toBeDefined();
+   expect(draft.settings).toMatchObject({ keryxTemplate: true, overlay: true });
+   expect(draft.body).toContain("## Team review");
+   expect(draft.body).not.toContain("A label is ambiguous");
+   expect(draft.inlineCount).toBe(1);
+   expect(draft.canSubmit).toBe(true);
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings).toEqual(draft.settings);
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: "0".repeat(64) })).rejects.toThrow("preview changed");
+   const published = await requestDeskPublication(project, key,
+     { kind: "submit", id, settings: draft.settings, digest: draft.digest }, confirmFixture);
+   expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
+   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"))).toMatchObject({
+     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
+   });
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+ });
+ 
+-test("partial approval and a moved revision cannot send a review", async () => {
++test("partial approval, a changed base and a closed pull request cannot send a review", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   const settings = { ...preview.settings, verdictOverride: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
+   const approval = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+   expect(approval.body).toContain("A label is ambiguous");
+   expect(approval.blockedReason).toContain("cannot approve");
+   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: approval.settings, digest: approval.digest }))
+     .rejects.toThrow("cannot approve");
+-  setHead("c".repeat(40));
+-  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+-  expect(stale.savedAt).toBeDefined();
+-  expect(stale.blockedReason).toContain("revision moved");
+-  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
+-    .rejects.toThrow("revision moved");
++  for (const pull of [{ baseRefOid: "e".repeat(40), headRefOid: movedHead }, { state: "CLOSED", headRefOid: movedHead }, { state: "CLOSED" }]) {
++    setPull(pull);
++    const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
++    expect(stale.savedAt).toBeDefined();
++    expect(stale.headMoved).toBeUndefined();
++    expect(stale.blockedReason).toContain("revision moved");
++    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }, confirmFixture))
++      .rejects.toThrow("revision moved");
++  }
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a moved head publishes as is: a Comment on the reviewed commit whose first line names it", async () => {
++  setHead(movedHead);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
++  expect(preview.headMoved).toEqual({ reviewedHead: revision.headSha, currentHead: movedHead });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.body.split("\n")[0]).toBe(movedLine);
++  expect(preview.blockedReason).toContain("Answer each finding question");
++  const answered = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...preview.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(answered.canSubmit).toBe(true);
++  expect(answered.blockedReason).toBeUndefined();
++  const published = await requestDeskPublication(project, key,
++    { kind: "submit", id, settings: answered.settings, digest: answered.digest }, confirmFixture);
++  expect(published.publishedUrl).toContain("#pullrequestreview-23");
++  const sent = posted();
++  expect(sent).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++  expect(sent.body.split("\n")[0]).toBe(movedLine);
++  expect(reads("FIXTURE_COMPARE_READS").split("\n")[0])
++    .toBe(`repos/${key.repo}/compare/${revision.headSha}...${movedHead}?per_page=1 --jq .status`);
++});
++
++test("a head that no longer contains the reviewed commit keeps the refusal and posts nothing", async () => {
++  setHead(movedHead);
++  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
++    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
++  // A force-push or rebase (diverged), an older head (behind), and a compare call that fails for any reason.
++  for (const status of ["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"]) {
++    setCompare(status);
++    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++    expect(preview.headMoved).toBeUndefined();
++    expect(preview.body).not.toContain("Reviewed commit");
++    expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
++    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
++      .rejects.toThrow("revision moved");
++  }
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a current head that is not a commit id keeps the refusal without asking GitHub to compare", async () => {
++  setHead("not-a-commit");
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
++  expect(preview.headMoved).toBeUndefined();
++  expect(preview.blockedReason).toContain("revision moved");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
++});
++
++test("a moved head with General comment off names the only control that can unblock it", async () => {
++  setHead(movedHead);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: { inline: true, general: false,
++    keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.headMoved).toBeDefined();
++  expect(preview.blockedReason).toBe("Enable General comment. Inline comments are not available when publishing for an earlier commit.");
++});
++
++test("a moved head re-reads the discussion an overlay requires, and a changed discussion makes the submit stale", async () => {
++  installDiscussionOverlay();
++  setHead(movedHead);
++  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
++    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  expect(preview.headMoved).toBeDefined();
++  expect(preview.canSubmit).toBe(true);
++  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("xxx");
++  writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1,"body":"A new comment"}]]\n');
++  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
++    .rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++});
++
++test("a moved head ignores a requested verdict and inline comments", async () => {
++  setHead(movedHead);
++  const settings = { inline: true, general: true, keryxTemplate: true, overlay: true, verdict: "changes" as const,
++    verdictOverride: "changes" as const, answers: { "fixture#F-002": "uphold" as const } };
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
++  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
++  expect(preview.inlineCount).toBe(0);
++  expect(existsSync(process.env.FIXTURE_DIFF_READS!)).toBe(false);
++  await requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
++});
++
++test("a head that moves again after the preview or before the write posts nothing", async () => {
++  setHead(movedHead);
++  const first = await requestDeskPublication(project, key, { kind: "preview", id });
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id,
++    settings: { ...first.settings, answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.canSubmit).toBe(true);
++  const submit = { kind: "submit" as const, id, settings: preview.settings, digest: preview.digest };
++  setHead("d".repeat(40));
++  await expect(requestDeskPublication(project, key, submit, confirmFixture)).rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(movedHead);
++  await expect(requestDeskPublication(project, key, submit, async () => setHead("d".repeat(40)))).rejects.toThrow(/^stale:/);
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
++});
++
++/** A completed auto-publish attempt with a complete package, so only the head decides whether it posts. */
++async function automaticRun(): Promise<string> {
++  const store = new DeskRunStore();
++  let auto: string;
++  let autoDirectory: string;
++  try {
++    auto = store.requestAttempt(project, key, revision, undefined, { mode: "auto", adaptive: false, autoPublish: true,
++      modelPools: { strong: [], middle: [], light: [] } })!.id;
++    store.end(store.byId(auto)!, { state: "completed", phase: "Complete", reason: "",
++      result: { reviewed: revision, coverage: "complete", verdict: "COMMENT", findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++        report: "Fixture review." } });
++    autoDirectory = store.directory(auto);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(autoDirectory, "package"), { recursive: true });
++  const findingsFile = path.join(autoDirectory, "package", "findings.json");
++  json(findingsFile, JSON.parse(readFileSync(findingsFile, "utf8")).slice(0, 1));
++  // A complete package needs coverage.md for readiness; without it automatic publication is refused at any head.
++  writeFileSync(path.join(autoDirectory, "package", "coverage.md"), "# Coverage\n");
++  json(path.join(autoDirectory, DESK_TEMPLATE_SELECTION), reportTemplateFingerprint((await projectReviewOverlay(project)).overlay));
++  return auto;
++}
++
++/** A Keryx slots overlay whose instructions require re-reading the PR discussion before posting. */
++function installDiscussionOverlay() {
++  const templates = path.join(project, ".metaproject", "skills", "gdskills", "review", "review-orchestrator", "templates");
++  mkdirSync(templates, { recursive: true });
++  writeFileSync(path.join(templates, "review-report.md"), "# Review\n\n<!-- slot:how-run -->\n");
++  const overlay = path.join(project, ".metaproject", "project-skills", "orchestration", "fixture-overlay", "templates");
++  mkdirSync(overlay, { recursive: true });
++  writeFileSync(path.join(overlay, "report-overlay.md"), [
++    "```yaml", "extends: review-orchestrator", "overlay: fixture-overlay", "slots: [how-run]", "reread_discussion: true", "```",
++    "", "## slot: how-run", "", "Fixture run notes.", "",
++  ].join("\n"));
++}
++
++test("automatic publication posts at the reviewed head and never after the head moved", async () => {
++  const auto = await automaticRun();
++  setHead(movedHead);
++  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
++  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
++  setHead(revision.headSha);
++  await publishCompletedDeskReview(project, key, auto);
++  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha });
++});
++
++test("automatic publication after the head moved refuses before any compare or discussion read", async () => {
++  installDiscussionOverlay();
++  const auto = await automaticRun();
++  setHead(movedHead);
++  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
++  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("");
+   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+ });
+ 
+ test("uses the standard report when a project overlay is invalid", async () => {
+   writeFileSync(path.join(project, ".metaproject", "review-publish-template.md"), "## No insertion point");
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.body).toStartWith("**Changes requested — 1 Major.**");
+   expect(preview.body).not.toContain("No insertion point");
+   expect(preview.settings).toMatchObject({ keryxTemplate: true, overlay: false });
+   expect(preview.overlayWarning).toContain("{{review}}");
+ });
+ 
+ test("editing answers recomputes an automatic verdict and preserves only an explicit override", async () => {
+   const findingsFile = path.join(directory, "package", "findings.json");
+   const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+   json(findingsFile, [{ ...held, severity: "major" }]);
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.settings.verdict).toBe("comment");
+   const settings = { ...preview.settings, answers: { "fixture#F-002": "uphold" as const } };
+   const automatic = await requestDeskPublication(project, key, { kind: "save", id, settings });
+
+--- src/review/desk-publication.test.ts
+@@ 355,566 @@
+   expect(automatic.settings.verdict).toBe("changes");
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdictOverride).toBeNull();
+   await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdict).toBe("comment");
+ });
+ 
+ test("local answers reopen without storing rendered GitHub content", async () => {
+   const findingsFile = path.join(directory, "package", "findings.json");
+   const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+   json(findingsFile, Array.from({ length: 105 }, (_, index) =>
+     ({ ...held, id: `F-${index}`, global_id: `fixture#F-${index}` })));
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   expect(preview.questions).toHaveLength(105);
+   const answers = Object.fromEntries(preview.questions.map(question => [question.id, "dismiss" as const]));
+   await requestDeskPublication(project, key, { kind: "save", id, settings: { ...preview.settings, answers } });
+   const savedDraft = JSON.parse(readFileSync(path.join(directory, "publication-draft.json"), "utf8"));
+   expect(Object.keys(savedDraft).sort()).toEqual(["savedAt", "settings"]);
+   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.answers).toEqual(answers);
+ });
+ 
++/** Round 2 of the same Review on `movedHead`: its package holds F-002 again plus a new held finding F-003. */
++function updateRound(): { next: string; nextDirectory: string } {
++  const moved = { baseSha: revision.baseSha, headSha: movedHead };
++  const store = new DeskRunStore();
++  let next: string;
++  let nextDirectory: string;
++  try {
++    next = store.request(project, key, moved)!;
++    store.end(store.byId(next)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
++      result: { reviewed: moved, coverage: "partial", verdict: "REQUEST_CHANGES",
++        findings: { blocker: 0, major: 1, minor: 2, info: 0 }, report: "Fixture review." } });
++    expect(store.byId(next)!.run.previousRunId).toBe(id);
++    nextDirectory = store.directory(next);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(nextDirectory, "package"), { recursive: true });
++  json(path.join(nextDirectory, "package", "manifest.json"), {
++    reviewId: "fixture-round", status: "closed",
++    target: { kind: "pr", ref: "https://github.com/example/project/pull/7", base: moved.baseSha, head: moved.headSha },
++    artifacts: {}, coverage: [],
++  });
++  const findingsFile = path.join(nextDirectory, "package", "findings.json");
++  json(findingsFile, [...JSON.parse(readFileSync(findingsFile, "utf8")),
++    { id: "F-003", global_id: "fixture#F-003", severity: "minor", reviewer: "review-logic", problem: "A new name is unclear.",
++      premise: { verdict: "challenged", question: "Is the new name intentional?" } }]);
++  setHead(movedHead);
++  return { next, nextDirectory };
++}
++
++test("an update round pre-selects the previous round's answers by finding id, and its own draft wins", async () => {
++  // Round 1's draft: an answer for F-002, an answer for a finding round 2 does not have, and settings that must not carry.
++  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++    inline: true, general: false, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment",
++    answers: { "fixture#F-002": "dismiss", "fixture#F-404": "uphold" } } });
++  const { next, nextDirectory } = updateRound();
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  expect(preview.headMoved).toBeUndefined();
++  expect(preview.questions.map(question => question.id)).toEqual(["fixture#F-002", "fixture#F-003"]);
++  expect(preview.settings.answers).toEqual({ "fixture#F-002": "dismiss" });
++  expect(preview.settings).toMatchObject({ inline: false, general: true, verdictOverride: null });
++  expect(preview.blockedReason).toContain("Answer each finding question");
++  expect(existsSync(path.join(nextDirectory, "publication-draft.json"))).toBe(false);
++
++  await requestDeskPublication(project, key, { kind: "save", id: next,
++    settings: { ...preview.settings, answers: { "fixture#F-002": "uphold" } } });
++  const reopened = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  expect(reopened.settings.answers).toEqual({ "fixture#F-002": "uphold" });
++});
++
++test("an update round carries only answers that are valid for its own questions", async () => {
++  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++    inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
++    answers: { "fixture#F-002": "option:not-an-option-here", "fixture#F-003": "dismiss" } } });
++  const { next } = updateRound();
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  // F-003 was not a question in round 1, but an answer under its id is still that finding's answer.
++  expect(preview.settings.answers).toEqual({ "fixture#F-003": "dismiss" });
++});
++
++const roundOneDraft = (answers: Record<string, string>) => json(path.join(directory, "publication-draft.json"), {
++  savedAt: "2026-11-24T00:00:00.000Z", settings: { inline: false, general: true, keryxTemplate: true, overlay: true,
++    verdict: "comment", verdictOverride: null, answers } });
++
++/** A finished partial attempt for `forKey` at `head`, with round 1's package copied in; returns its id and directory. */
++function finishedAttempt(forKey: typeof key, head: string): { attemptId: string; attemptDirectory: string } {
++  const range = { baseSha: revision.baseSha, headSha: head };
++  const store = new DeskRunStore();
++  try {
++    const attemptId = store.request(project, forKey, range)!;
++    store.end(store.byId(attemptId)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
++      result: { reviewed: range, coverage: "partial", verdict: "REQUEST_CHANGES",
++        findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." } });
++    const attemptDirectory = store.directory(attemptId);
++    cpSync(path.join(directory, "package"), path.join(attemptDirectory, "package"), { recursive: true });
++    json(path.join(attemptDirectory, "package", "manifest.json"), { reviewId: "fixture-round", status: "closed",
++      target: { kind: "pr", ref: `https://github.com/example/project/pull/${forKey.number}`, base: range.baseSha, head },
++      artifacts: {}, coverage: [] });
++    return { attemptId, attemptDirectory };
++  } finally {
++    store.close();
++  }
++}
++
++test("T14: answers come from the newest earlier round that saved a draft, walking past one without", async () => {
++  roundOneDraft({ "fixture#F-002": "dismiss" });
++  const round2 = finishedAttempt(key, movedHead);
++  const round3 = finishedAttempt(key, "d".repeat(40));
++  setHead("d".repeat(40));
++  expect(existsSync(path.join(round2.attemptDirectory, "publication-draft.json"))).toBe(false);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: round3.attemptId });
++  expect(preview.settings.answers).toEqual({ "fixture#F-002": "dismiss" });
++  // Once round 2 saves a draft of its own, round 3 takes that newer one.
++  json(path.join(round2.attemptDirectory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++    inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
++    answers: { "fixture#F-002": "uphold" } } });
++  expect((await requestDeskPublication(project, key, { kind: "preview", id: round3.attemptId })).settings.answers)
++    .toEqual({ "fixture#F-002": "uphold" });
++});
++
++test("T14: an attempt of another account or pull request never lends its answers", async () => {
++  for (const other of [{ ...key, viewer: "other-reviewer" }, { ...key, number: 8 }]) {
++    const foreign = finishedAttempt(other, revision.headSha);
++    json(path.join(foreign.attemptDirectory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
++      inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
++      answers: { "fixture#F-002": "dismiss" } } });
++  }
++  const { next } = updateRound();
++  expect((await requestDeskPublication(project, key, { kind: "preview", id: next })).settings.answers).toEqual({});
++});
++
++test("T14 B2: an archived earlier round's draft answers are not carried", async () => {
++  roundOneDraft({ "fixture#F-002": "dismiss" });
++  const { next } = updateRound();
++  const store = new DeskRunStore();
++  try {
++    const first = store.byId(id)!;
++    first.run.decision = { action: "archive", reason: "Withdrawn", at: "2026-11-24T01:00:00.000Z" };
++    store.save(first);
++  } finally {
++    store.close();
++  }
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
++  expect(preview.settings.answers).toEqual({});
++});
++
++test("T14 B2: a retry within the same round does not take answers from its own round", async () => {
++  roundOneDraft({ "fixture#F-002": "dismiss" });
++  const store = new DeskRunStore();
++  let retry: string;
++  let retryDirectory: string;
++  try {
++    retry = store.request(project, key, revision)!;
++    expect(retry).not.toBe(id);
++    store.end(store.byId(retry)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
++      result: { reviewed: revision, coverage: "partial", verdict: "REQUEST_CHANGES",
++        findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." } });
++    expect(store.byId(retry)!.run).toMatchObject({ previousRunId: id, round: store.byId(id)!.run.round });
++    retryDirectory = store.directory(retry);
++  } finally {
++    store.close();
++  }
++  cpSync(path.join(directory, "package"), path.join(retryDirectory, "package"), { recursive: true });
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: retry });
++  expect(preview.settings.answers).toEqual({});
++});
++
++test("T14 B5: a definitive diverged head is compared once per current head; a failed compare is asked again", async () => {
++  setHead(movedHead);
++  setCompare("diverged");
++  for (let i = 0; i < 2; i++) expect((await requestDeskPublication(project, key, { kind: "preview", id })).headMoved).toBeUndefined();
++  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(1);
++  // An explicit refresh asks GitHub again.
++  await requestDeskPublication(project, key, { kind: "preview", id, refresh: true });
++  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(2);
++  rmSync(path.join(directory, "publication-preview-cache.json"));
++  rmSync(process.env.FIXTURE_COMPARE_READS!);
++  setCompare("fail:connection reset");
++  for (let i = 0; i < 2; i++) expect((await requestDeskPublication(project, key, { kind: "preview", id })).headMoved).toBeUndefined();
++  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(2);
++});
++
++test("T14 B6: an attempt superseded by a newer round of its Review is not offered as is", async () => {
++  updateRound();
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: { inline: false, general: true,
++    keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
++  expect(preview.headMoved).toBeUndefined();
++  expect(preview.canSubmit).toBe(false);
++  expect(preview.blockedReason).toContain("Round 2 of this review is newer");
++  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
++});
++
+ test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {
+   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+   const settings = { ...preview.settings, inline: true };
+   const inline = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+   expect(inline.inlineComments).toMatchObject([{ path: "src/a.ts", line: 1, body: expect.stringContaining("Open rows") }]);
+   await requestDeskPublication(project, key, { kind: "preview", id, settings: { ...settings, general: false } });
+   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("x");
+   await requestDeskPublication(project, key, { kind: "preview", id, settings, refresh: true });
+   expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("xx");
+ });
+ 
+ test("skipping a completed review clears the publication decision without writing to GitHub", async () => {
+   const store = new DeskRunStore();
+   try {
+     const attempt = store.byId(id)!;
+     const result = attempt.run.result!;
+     store.end(attempt, { state: "completed", phase: "Complete", reason: "", result: { ...result, coverage: "complete" } });
+     expect(store.history(key, id).runs[0]?.publication).toBe("pending");
+     const skipped = await requestDeskPublication(project, key, { kind: "skip", id });
+     expect(skipped.skipped).toBe(true);
+
+--- src/review/desk-run-executor.test.ts
+@@ 769,877 @@
+ 
+ test("Desktop exempts only the zero-wave roles verified by the original slice routing", () => {
+   const pkg = path.join(root, "package"), role = "review-logic", excluded = "review-style";
+   mkdirSync(path.join(pkg, "raw"), { recursive: true });
+   mkdirSync(path.join(pkg, "slices"));
+   const target = "raw/review-logic-w1.txt";
+   const queue = { calls: [{ label: role, save_result_to: target }], routedOut: [excluded] };
+   writeFileSync(path.join(pkg, "plan.json"), JSON.stringify({ roster: [role, excluded], dispatches: 1, desktopDispatch: "desktop-dispatch.json" }));
+   writeFileSync(path.join(pkg, "desktop-dispatch.json"), JSON.stringify(queue));
+   const manifest = { schemaVersion: 1, maxBytes: 100, waveBytes: 100, slices: [{ id: "slice-01", bytes: 10, files: ["src.ts"], roles: [role], depth: "light" }] };
+   const manifestFile = path.join(pkg, "slices/manifest.json");
+   writeFileSync(manifestFile, JSON.stringify(manifest));
+   const usage = { total: {}, coordinator: {}, reviewers: [{ reviewer: role, partial: true as const }], partial: true };
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+   writeFileSync(path.join(pkg, target), 'STATUS: DONE\nREVIEW_RESULT:\n' + JSON.stringify({ reviewer: role, status: "DONE", findings: [] }));
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(true);
+   manifest.slices[0]!.roles.push(excluded);
+   writeFileSync(manifestFile, JSON.stringify(manifest));
+   expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+ });
++
++// Flow 520 AC7: a partial previous attempt (draft package, ingested findings) is handed to the next round of the same
++// Review with Desktop's own partial-round record, so `review start` in the checkout builds a delta round on it.
++function previousAttempt(files: { status?: string; findings?: unknown; name?: string; reviewId?: string; raw?: boolean } = {}) {
++  const previousRunDir = path.join(root, "runs", files.name ?? "attempt-0");
++  const dir = path.join(previousRunDir, "package");
++  mkdirSync(dir, { recursive: true });
++  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ schemaVersion: 1, reviewId: files.reviewId ?? "prev", mode: "review-flow", status: files.status ?? "draft",
++    target: { kind: "pr", ref: "https://github.com/example/project/pull/12", base: baseSha, head: baseSha }, createdAt: "2026-11-24T00:00:00.000Z" }));
++  if (files.findings !== undefined) writeFileSync(path.join(dir, "findings.json"), JSON.stringify(files.findings));
++  if (files.raw) {
++    // Raw reviewer results the attempt counted findings from, never ingested into a findings.json list.
++    mkdirSync(path.join(dir, "raw"));
++    writeFileSync(path.join(dir, "raw", "review-logic-w1.txt"), 'STATUS: DONE\nREVIEW_RESULT:\n' + JSON.stringify({ reviewer: "review-logic", status: "DONE", findings: [priorFinding] }));
++  }
++  writeFileSync(path.join(dir, "research.json"), JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
++  return previousRunDir;
++}
++
++type PreviousRuns = { runDir: string; partial: boolean }[];
++async function runWithPrevious(previousRuns: PreviousRuns, inspect: (checkout: string, registryDir: string) => Promise<void>) {
++  const registryDir = path.join(root, "registry");
++  let inspected = false;
++  let failure: unknown;
++  await executeDeskReview({ ...options(), previousRuns }, {
++    selectModel, remoteUrl: cwd, revision, registryDir,
++    spawn(spec) {
++      const exited = inspect(spec.cwd, registryDir).then(() => { inspected = true; return 0; }, (error: unknown) => { failure = error; return 1; });
++      return { exited, kill() {} };
++    },
++  });
++  if (failure !== undefined) throw failure;
++  expect(inspected).toBe(true);
++}
++
++const priorFinding = { id: "F-1", reviewer: "review-logic", severity: "major", problem: "Handle missing repository", file: "src.ts", line: 1 };
++const offlineGithub = async () => ({ status: "not-consulted" as const, detail: "offline (test)" });
++const pr12 = { kind: "pr" as const, ref: "https://github.com/example/project/pull/12", base: "" };
++
++test("flow 520 AC7: a partial previous attempt reaches the next round as a delta base with its findings", async () => {
++  const { findPreviousRound } = await import("./prior-round");
++  const { readRoundRegistry, repoIdentity } = await import("./round-registry");
++  await runWithPrevious([{ runDir: previousAttempt({ findings: [priorFinding] }), partial: true }], async (checkout, registryDir) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/prev/findings.json"))).toBe(true);
++    const registry = readRoundRegistry(repoIdentity(checkout), registryDir);
++    expect(registry).toEqual([expect.objectContaining({ packageId: "prev", reviewedHead: baseSha, event: "desk-partial" })]);
++    const { round, priorFindings } = await findPreviousRound({ ...pr12, base: baseSha }, headSha,
++      { cwd: checkout, github: offlineGithub, registry });
++    expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "prev", reviewedHead: baseSha }, range: { base: baseSha, head: headSha } });
++    expect(priorFindings.map(finding => finding.id)).toEqual(["F-1"]);
++  });
++});
++
++test("flow 520 AC7: a draft package is not handed on unless its attempt was partial with ingested findings", async () => {
++  const absent = async (checkout: string, registryDir: string) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/prev"))).toBe(false);
++    expect(existsSync(path.join(registryDir, "review-rounds"))).toBe(false);
++  };
++  // A completed attempt's package must be closed: a draft from it is not a round.
++  await runWithPrevious([{ runDir: previousAttempt({ findings: [priorFinding] }), partial: false }], absent);
++  rmSync(path.join(root, "runs", "attempt-0"), { recursive: true, force: true });
++  // A partial attempt without ingested findings gives no previous round.
++  await runWithPrevious([{ runDir: previousAttempt(), partial: true }], absent);
++});
++
++test("T14 B1: a partial newest round without an ingested findings list falls back to the closed round before it", async () => {
++  const { findPreviousRound } = await import("./prior-round");
++  const { readRoundRegistry, repoIdentity } = await import("./round-registry");
++  const round2 = previousAttempt({ name: "round-2", reviewId: "round-2", raw: true });
++  const round1 = previousAttempt({ name: "round-1", reviewId: "round-1", status: "closed", findings: [priorFinding] });
++  await runWithPrevious([{ runDir: round2, partial: true }, { runDir: round1, partial: false }], async (checkout, registryDir) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-2"))).toBe(false);
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-1/findings.json"))).toBe(true);
++    const registry = readRoundRegistry(repoIdentity(checkout), registryDir);
++    expect(registry).toEqual([]);
++    const { round, priorFindings } = await findPreviousRound({ ...pr12, base: baseSha }, headSha, { cwd: checkout, github: offlineGithub, registry });
++    expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "round-1" } });
++    expect(priorFindings.map(finding => finding.id)).toEqual(["F-1"]);
++  });
++});
++
++test("T14 B1: only the first package that can be handed on reaches the checkout", async () => {
++  const newer = previousAttempt({ name: "newer", reviewId: "newer", status: "closed", findings: [priorFinding] });
++  const older = previousAttempt({ name: "older", reviewId: "older", status: "closed", findings: [] });
++  await runWithPrevious([{ runDir: newer, partial: false }, { runDir: older, partial: false }], async (checkout) => {
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/newer"))).toBe(true);
++    expect(existsSync(path.join(checkout, ".metaproject/reviews/older"))).toBe(false);
++  });
++});
+
+--- src/review/desk-run-service.test.ts
+@@ 1,110 @@
++// Flow 520 AC7: the worker picks the previous round of a new attempt with selectPriorAttempt alone, over the attempts of
++// the same Review from earlier rounds; the old "completed + complete + same options key" rule is gone.
++import { describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import path from "node:path";
++import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
++import { earlierRoundAttempts, previousRoundAttempt, previousRoundAttempts, previousRunInputs } from "./update-round";
++
++const SHA = (c: string): string => c.repeat(40);
++/** Overrides may set a field to undefined to model a legacy record that lacks it. */
++type Loose<T> = { [K in keyof T]?: T[K] | undefined };
++
++function result(over: Loose<DeskResult> = {}): DeskResult {
++  return <DeskResult>{
++    reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
++    verdict: "needs-changes",
++    coverage: "complete",
++    findingsKnown: true,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++    report: "",
++    ...over,
++  };
++}
++
++function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
++  return <DeskRun>{
++    baseSha: SHA("a"),
++    headSha: SHA("b"),
++    id,
++    source: "manual",
++    scope: DESK_RUN_SCOPE,
++    state: "completed",
++    phase: "done",
++    reason: "",
++    createdAt: "2026-11-24T00:00:00.000Z",
++    reviewId: "review-1",
++    round: 1,
++    effectiveOptionsKey: "settings-A",
++    result: result(),
++    ...over,
++  };
++}
++
++/** The attempt being executed: round 2 on a newer head of the same Review. */
++const current = run("current", { headSha: SHA("c"), round: 2, state: "running", result: null, effectiveOptionsKey: "settings-B" });
++
++describe("previousRoundAttempt", () => {
++  test("a partial attempt of the previous round, run with other settings, is the previous round and is marked partial", () => {
++    const partial = run("partial", { state: "partial", result: result({ coverage: "partial" }), effectiveOptionsKey: "settings-A" });
++    expect(previousRoundAttempt([current, partial], current)).toEqual({ attempt: partial, partial: true });
++  });
++
++  test("a completed attempt with other settings is the previous round, not partial", () => {
++    const done = run("done", { effectiveOptionsKey: "settings-A", options: { maxTokens: 5 } as DeskRun["options"] });
++    expect(previousRoundAttempt([current, done], current)).toEqual({ attempt: done, partial: false });
++  });
++
++  test("never the attempt being executed nor another attempt of its own round; the newest earlier round wins", () => {
++    const sameRound = run("same-round", { headSha: SHA("c"), round: 2 });
++    const round1 = run("round-1", { round: 1 });
++    expect(previousRoundAttempt([current, sameRound, round1], current)?.attempt.id).toBe("round-1");
++    expect(previousRoundAttempt([current, sameRound], current)).toBeUndefined();
++    const selfLike = { ...current, state: "completed" as const, result: result() };
++    expect(previousRoundAttempt([selfLike], current)).toBeUndefined();
++  });
++
++  test("attempts of another Review are not candidates", () => {
++    expect(previousRoundAttempt([current, run("other", { reviewId: "review-2" })], current)).toBeUndefined();
++  });
++
++  test("a store that has not placed rounds yet: the attempt's own range is its own round", () => {
++    const legacyCurrent = run("current", { headSha: SHA("c"), round: undefined, reviewId: undefined, state: "running", result: null });
++    const sameRange = run("same-range", { headSha: SHA("c"), round: undefined, reviewId: undefined });
++    const older = run("older", { round: undefined, reviewId: undefined });
++    expect(previousRoundAttempt([legacyCurrent, sameRange, older], legacyCurrent)?.attempt.id).toBe("older");
++  });
++
++  test("T14 B1: a partial newest round falls back to the complete round before it, in that order", () => {
++    const round2 = run("round-2", { headSha: SHA("c"), round: 2, state: "partial", result: result({ coverage: "partial" }) });
++    const round1 = run("round-1", { round: 1 });
++    const round3 = run("current", { headSha: SHA("d"), round: 3, state: "running", result: null });
++    expect(previousRoundAttempts([round3, round2, round1], round3).map((item) => item.attempt.id)).toEqual(["round-2", "round-1"]);
++  });
++
++  test("T14 B2: the earlier-round rule skips withdrawn and imported attempts and the attempt's own round", () => {
++    const decision = (action: "archive" | "delete"): DeskRun["decision"] => ({ action, reason: "r", at: "2026-11-24T01:00:00.000Z" });
++    const runs = [current, run("same-round", { headSha: SHA("c"), round: 2 }), run("archived", { decision: decision("archive") }),
++      run("deleted", { decision: decision("delete") }), run("imported", { source: "existing" }), run("kept", { state: "failed", result: null })];
++    expect(earlierRoundAttempts(runs, current).map((item) => item.id)).toEqual(["kept"]);
++  });
++
++  test("T14: the executor input carries each candidate's run directory and partial flag, in order", () => {
++    const round3 = run("current", { headSha: SHA("d"), round: 3, state: "running", result: null });
++    const round2 = run("round-2", { headSha: SHA("c"), round: 2, state: "partial", result: result({ coverage: "partial" }) });
++    const round1 = run("round-1", { round: 1 });
++    expect(previousRunInputs([round3, round2, round1], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([
++      { runDir: "/runs/round-2", partial: true },
++      { runDir: "/runs/round-1", partial: false },
++    ]);
++    expect(previousRunInputs([round3], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([]);
++  });
++
++  test("the worker has one previous-attempt rule: no options-key or completed-and-complete filter of its own", () => {
++    const source = readFileSync(path.join(import.meta.dir, "desk-run-service.ts"), "utf8");
++    expect(source).toContain("previousRunInputs(store.history(key).runs, run,");
++    expect(source).not.toContain("function previousRoundAttempt");
++    expect(source).not.toContain("deskOptionsKey(item.options)");
++    expect(source).not.toMatch(/item\.result\?\.coverage === "complete"/);
++  });
++});
+
+--- src/review/head-move.test.ts
+@@ 1,52 @@
++// Flow 520 AC4: on_head_move has ask/follow/ignore, defaults by run source, and unreadable stored values read as the default.
++
++import { describe, expect, test } from "bun:test";
++import { defaultOnHeadMove, headMoveResponse, ON_HEAD_MOVE, parseOnHeadMove } from "./head-move";
++
++describe("on_head_move values", () => {
++  test("has exactly ask, follow and ignore", () => {
++    expect([...ON_HEAD_MOVE]).toEqual(["ask", "follow", "ignore"]);
++  });
++
++  test("manual and existing reviews default to ask, rule-triggered to follow", () => {
++    expect(defaultOnHeadMove("manual")).toBe("ask");
++    expect(defaultOnHeadMove("existing")).toBe("ask");
++    expect(defaultOnHeadMove("scheduled")).toBe("follow");
++  });
++
++  test("a stored valid value is kept whatever the source", () => {
++    expect(parseOnHeadMove("ignore", "scheduled")).toBe("ignore");
++    expect(parseOnHeadMove("follow", "manual")).toBe("follow");
++    expect(parseOnHeadMove("ask", "scheduled")).toBe("ask");
++  });
++
++  test("missing, null or unknown reads as the source default", () => {
++    for (const bad of [undefined, null, "", "FOLLOW", "stop", 1, {}]) {
++      expect(parseOnHeadMove(bad, "manual")).toBe("ask");
++      expect(parseOnHeadMove(bad, "scheduled")).toBe("follow");
++    }
++  });
++});
++
++describe("headMoveResponse", () => {
++  test("ask during a round offers update-after-finish and stop-and-restart", () => {
++    expect(headMoveResponse("ask", "running")).toEqual({
++      kind: "offer",
++      actions: ["update-after-finish", "stop-and-restart"],
++    });
++  });
++
++  test("ask after a round offers a single update", () => {
++    expect(headMoveResponse("ask", "finished")).toEqual({ kind: "offer", actions: ["update"] });
++  });
++
++  test("follow defers the update until the running round finishes, then queues it now", () => {
++    expect(headMoveResponse("follow", "running")).toEqual({ kind: "queue-update", when: "after-finish" });
++    expect(headMoveResponse("follow", "finished")).toEqual({ kind: "queue-update", when: "now" });
++  });
++
++  test("ignore does nothing in either phase", () => {
++    expect(headMoveResponse("ignore", "running")).toEqual({ kind: "none" });
++    expect(headMoveResponse("ignore", "finished")).toEqual({ kind: "none" });
++  });
++});
+
+--- src/review/prior-round.test.ts
+@@ 10,54 @@
+ import type { ReviewRoundRecord } from "../flow/review-gate";
+ import type { CollectedComment, CollectedRoundBlock } from "./pr-comments";
+ import {
+   choosePrevious,
+   defaultGithubLookup,
+   findPreviousRound,
+   parseDiffHunks,
+   pullRequestOf,
+   relocateFinding,
+   sameReviewTarget,
+   skippedRound,
+   targetKeyOf,
+   type GithubLookup,
+   type PriorRoundDeps,
+   type RoundCandidate,
+ } from "./prior-round";
+ import { packageFacts, packageHashesOf, readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
+ import {
+   appendRoundRegistry,
+   compactEntries,
++  partialRoundVouch,
+   readRoundRegistry,
+   readRoundRegistryReport,
+   recordFinishedRound,
++  recordPartialRound,
+   REGISTRY_COMPACT_BYTES,
+   registryVouches,
+   repoIdentity,
+   roundRegistryFile,
+   type RoundRegistryEntry,
+ } from "./round-registry";
+ import { computeVerdict, renderVerdict } from "./verdict";
+ import { readPremiseDecisions, recordPremiseDecision } from "./operator-decisions";
+ import { heldFinding, premiseAnswerInput } from "./premise-fixtures";
+ import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
+ 
+ const PR = "https://github.com/acme/app/pull/7";
+ const TARGET = { kind: "pr", ref: PR };
+ const SCHEMA = path.join(path.resolve(import.meta.dir, "..", ".."), "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json");
+ 
+ let root: string;
+ const originalCwd = process.cwd();
+ 
+ function git(...args: string[]): string {
+   const email = process.env.GIT_AUTHOR_EMAIL ?? "t@example.com";
+
+--- src/review/prior-round.test.ts
+@@ 251,370 @@
+ 
+   test("the same head in two sources goes to the earlier source, which holds the richer record", async () => {
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1", { quote: "line 5" })] });
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: consulted([block(A, "2026-10-01T00:00:00Z")]) });
+     expect(round.source).toBe("local-package");
+   });
+ 
+   test("a newer round at a non-ancestor head (force-push) falls back to a full round over merge-base..head", async () => {
+     git("checkout", "-q", "-b", "old-feature", A);
+     const X = commit("pre-rebase work", { "src/a.ts": lines(20).replace("line 7\n", "line seven\n") });
+     git("checkout", "-q", "feature");
+     writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, at: "2026-10-01T00:00:00.000Z" });
+     writePackage(".metaproject/reviews/r2", { reviewId: "r2", head: X, at: "2026-10-03T00:00:00.000Z", findings: [finding("F-7")], round: 2 });
+     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(round).toMatchObject({ mode: "fallback-first", round: 3, previous: { reviewId: "r2", reviewedHead: X }, range: { base: A, head: B }, fixHunks: [], carried: [] });
+     expect(round.newHunks.length).toBeGreaterThan(0);
+     expect(priorFindings.map((f) => f.id)).toEqual(["F-7"]);
+     expect(renderRoundLine(round)).toContain("fallback-first");
+   });
+ 
++  test("flow 520 AC6: a round recorded under different review settings is still the previous round", async () => {
++    // The candidate path reads target, head, status and timestamps from the manifest, never the settings, so
++    // changing settings between rounds does not break the link (spec "Раунд обновления", item 4).
++    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")], round: 1 });
++    const manifestFile = path.join(root, ".metaproject/reviews/r1/manifest.json");
++    const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
++    writeFileSync(manifestFile, JSON.stringify({ ...manifest, mode: "review-fast", options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } }));
++    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
++    expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "r1", reviewedHead: A } });
++    expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++  });
++
++  describe("flow 520 AC7: an update round builds on a partial previous round Desktop ran", () => {
++    // What a partial Desktop attempt leaves in its run directory: `review complete` never ran, so the manifest is still a
++    // draft, the ledger did not establish scopeReviewed, and the reviewers' findings were ingested into findings.json.
++    function partialPackage(extraManifest: Record<string, unknown> = {}): string {
++      const dir = ".metaproject/reviews/desk-partial";
++      writePackage(dir, { reviewId: "desk-partial", head: B, status: "draft", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
++      write(`${dir}/research.json`, JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
++      if (Object.keys(extraManifest).length > 0) {
++        const file = path.join(root, dir, "manifest.json");
++        writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ...extraManifest }));
++      }
++      return path.join(root, dir);
++    }
++    const deskVouch = (dir: string, packageId = "desk-partial"): RoundRegistryEntry =>
++      ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: B, ...packageFacts(dir)!.hashes, completedAt: "2026-11-24T00:00:00.000Z", event: "desk-partial" }) as RoundRegistryEntry;
++
++    test("partial previous round with accepted findings: delta, prior findings attached, the area it did not cover planned as new", async () => {
++      const dir = partialPackage();
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      // Without Desktop's own record the draft is no previous round at all (M1 unchanged).
++      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [] })).round.previous).toBeNull();
++      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
++      expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "desk-partial", reviewedHead: B }, range: { base: B, head: C } });
++      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++      // Per-file coverage of a partial round is not proven, so everything of merge-base..head outside the delta is new, not a second look.
++      expect(round.secondLookHunks).toBeUndefined();
++      expect(round.newHunks.map((h) => h.file).sort()).toEqual(["src/a.ts", "src/new.ts", "src/other.ts"]);
++      expect(round.weakPrevious).toContain("not completed");
++      expect(round.sourcesTried[0]!.detail).toContain("partial round");
++    });
++
++    test("previous partial round run with different settings still gives its findings", async () => {
++      const dir = partialPackage({ options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } });
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      const { round, priorFindings } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [deskVouch(dir)] });
++      expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "desk-partial" } });
++      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
++    });
++
++    test("only Desktop's partial-round record for exactly these files admits a draft; any other draft stays out", async () => {
++      const dir = partialPackage();
++      const C = commit("after the partial round", { "src/other.ts": "export const o = 1;\n" });
++      const vouch = deskVouch(dir);
++      const previousWith = async (registry: RoundRegistryEntry[]) => (await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry })).round.previous;
++      // A record of another kind (a finished round) does not admit a draft.
++      expect(await previousWith([{ ...vouch, event: "publish" }])).toBeNull();
++      // A record of another package, or of other files, does not either.
++      expect(await previousWith([deskVouch(dir, "other-package")])).toBeNull();
++      write(".metaproject/reviews/desk-partial/findings.json", "[]");
++      expect(await previousWith([vouch])).toBeNull();
++      // A draft without ingested findings is never admitted, whatever the registry says.
++      rmSync(path.join(dir, "findings.json"));
++      expect(await previousWith([deskVouch(dir)])).toBeNull();
++    });
++
++    test("a partial-round record never vouches for the same files committed by the branch as a closed round", async () => {
++      // Status is not part of the hashed manifest identity: the branch commits Desktop's partial package marked closed.
++      const files = packageFiles(".metaproject/reviews/desk-partial", { reviewId: "desk-partial", head: B, status: "closed", findings: [finding("F-1", { file: "src/new.ts", line: 1 })], round: 1 });
++      const C = commit("commit a closed copy of the partial round", { ...files, "src/other.ts": "export const o = 1;\n" });
++      const vouch = deskVouch(path.join(root, ".metaproject/reviews/desk-partial"));
++      const { round } = await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [vouch] });
++      expect(round.mode).toBe("fallback-first");
++      expect(round.sourcesTried[0]!.detail).toContain("not trusted desk-partial");
++      // The same files recorded as a finished round are trusted, as before.
++      expect((await findPreviousRound(TARGET, C, { cwd: root, github: offline, registry: [{ ...vouch, event: "complete" }] })).round.mode).toBe("delta");
++    });
++  });
++
+   test("a head this clone has never fetched is not an ancestor", async () => {
+     const candidate: RoundCandidate = { source: "github-block", reviewId: "x", reviewedHead: "f".repeat(40), round: 1, at: 1, findings: [] };
+     const runner = async (args: string[]) => ({ stdout: "", exitCode: args[0] === "merge-base" ? 128 : 0 });
+     expect((await choosePrevious(runner, [candidate], B)).mode).toBe("fallback-first");
+   });
+ });
+ 
+ describe("the pull request read", () => {
+   test("offline or missing gh: both GitHub sources are recorded as not consulted, and a throwing read is too", async () => {
+     const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: async () => { throw new Error("ENOTFOUND api.github.com"); } });
+     const github = round.sourcesTried.filter((t) => t.source.startsWith("github"));
+     expect(github.map((t) => t.result)).toEqual(["not-consulted", "not-consulted"]);
+     expect(github[0]!.detail).toContain("ENOTFOUND");
+   });
+ 
+   test("a target that is not a pull request is not looked up at all", async () => {
+     expect(await defaultGithubLookup({ kind: "branch", ref: "feat/x" })).toEqual({ status: "not-consulted", detail: "the target is not a pull request" });
+   });
+ 
+   test("pull request refs compare however they are written", () => {
+
+--- src/review/prior-round.test.ts
+@@ 599,661 @@
+     test("the registry file lives outside the repository, one per repository identity, and round-trips", () => {
+       const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+       try {
+         writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")] });
+         git("remote", "add", "origin", "https://token@github.com/Acme/App.git");
+         expect(repoIdentity(root)).toBe("remote:https://github.com/acme/app");
+         const recorded = recordFinishedRound(path.join(root, ".metaproject/reviews/r1"), "publish", { cwd: root, dir: dataDir });
+         expect(recorded.error).toBeUndefined();
+         expect(recorded.file!.startsWith(dataDir)).toBe(true);
+         expect(recorded.file!.startsWith(root)).toBe(false);
+         const entries = readRoundRegistry(repoIdentity(root), dataDir);
+         expect(entries).toEqual([expect.objectContaining({ v: 2, packageId: "r1", reviewedHead: A, event: "publish" })]);
+         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeDefined();
+         write(".metaproject/reviews/r1/findings.json", "[]");
+         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeUndefined();
+         expect(readRoundRegistry("remote:another", dataDir)).toEqual([]);
+       } finally {
+         rmSync(dataDir, { recursive: true, force: true });
+       }
+     });
++
++    test("flow 520 AC7: Desktop records a partial round with ingested findings as desk-partial, and nothing without them", () => {
++      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
++      try {
++        const dir = path.join(root, ".metaproject/reviews/partial");
++        writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "draft", findings: [finding("F-1")] });
++        // recordFinishedRound refuses a draft; the partial record is the only way one is recorded.
++        expect(recordFinishedRound(dir, "ingest", { cwd: root, dir: dataDir }).skipped).toContain("not a finished round");
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).error).toBeUndefined();
++        const entries = readRoundRegistry(repoIdentity(root), dataDir);
++        expect(entries).toEqual([expect.objectContaining({ packageId: "partial", reviewedHead: A, event: "desk-partial" })]);
++        expect(partialRoundVouch(entries, "partial", packageFacts(dir)!.hashes)).toBeDefined();
++        // A finished-round entry for the same files is no partial-round record.
++        expect(partialRoundVouch(entries.map((entry) => ({ ...entry, event: "complete" as const })), "partial", packageFacts(dir)!.hashes)).toBeUndefined();
++        write(".metaproject/reviews/partial/findings.json", "{\"not\":\"a list\"}");
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
++        rmSync(path.join(dir, "findings.json"));
++        expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).skipped).toContain("no ingested findings");
++        expect(readRoundRegistry(repoIdentity(root), dataDir)).toHaveLength(1);
++      } finally {
++        rmSync(dataDir, { recursive: true, force: true });
++      }
++    });
+   });
+ 
+   test("a forced --prior package is held to the same rule", async () => {
+     commit("add review record", { ...packageFiles(".metaproject/reviews/fake", { reviewId: "fake", head: A }) });
+     const head = commit("code", { "src/auth.ts": "x\n" });
+     const { round } = await findPreviousRound(TARGET, head, { cwd: root, github: offline, forced: "fake" });
+     expect(round.mode).toBe("fallback-first");
+   });
+ 
+   test("M1: a draft is never a previous round, even with findings; `reviewed` without completion evidence is context only", async () => {
+     writePackage(".metaproject/reviews/draft", { reviewId: "draft", head: A, status: "draft", findings: [finding("F-1")] });
+     expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round.previous).toBeNull();
+     writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "reviewed", findings: [finding("F-2")] });
+     const partial = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(partial.round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "partial" } });
+     expect(partial.round.sourcesTried[0]!.detail).toContain("no completion evidence");
+     // published.json is completion evidence.
+     write(".metaproject/reviews/partial/published.json", "{}");
+     expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round).toMatchObject({ mode: "delta", previous: { reviewId: "partial" } });
+   });
+
+--- src/review/round-registry.test.ts
+@@ 1,96 @@
++// Flow 520 T14: the round registry's own guarantees — a desk-partial record never vouches for a finished round (B4),
++// and an append racing a compaction is never lost (B3).
++import { afterEach, beforeEach, expect, test } from "bun:test";
++import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { packageFacts } from "./round-record";
++import {
++  appendRoundRegistry,
++  partialRoundVouch,
++  readRoundRegistry,
++  recordPartialRound,
++  REGISTRY_COMPACT_BYTES,
++  registryVouches,
++  registryVouchesPackage,
++  repoIdentity,
++  roundRegistryFile,
++  type RoundRegistryEntry,
++} from "./round-registry";
++import { isolateGitDiscovery } from "./test-git-fixture";
++
++const HEAD = "a".repeat(40);
++let root: string;
++let dataDir: string;
++let restoreGit: () => void;
++
++beforeEach(() => {
++  restoreGit = isolateGitDiscovery();
++  root = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-repo-"));
++  dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-data-"));
++  for (const args of [["init", "-q"], ["remote", "add", "origin", "https://github.com/acme/app.git"]]) {
++    expect(Bun.spawnSync(["git", "-c", "init.templateDir=", ...args], { cwd: root }).exitCode).toBe(0);
++  }
++});
++
++afterEach(() => {
++  restoreGit();
++  rmSync(root, { recursive: true, force: true });
++  rmSync(dataDir, { recursive: true, force: true });
++});
++
++function draftPackage(): string {
++  const dir = path.join(root, ".metaproject/reviews/partial");
++  mkdirSync(dir, { recursive: true });
++  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ schemaVersion: 1, reviewId: "partial", mode: "review-flow", status: "draft",
++    target: { kind: "pr", ref: "https://github.com/acme/app/pull/7", head: HEAD }, createdAt: "2026-11-24T00:00:00.000Z" }));
++  writeFileSync(path.join(dir, "findings.json"), JSON.stringify([{ id: "F-1", reviewer: "review-logic", severity: "major", problem: "p" }]));
++  return dir;
++}
++
++test("T14 B4: a desk-partial record vouches only as a partial round, never through the finished-round API", () => {
++  const dir = draftPackage();
++  expect(recordPartialRound(dir, { cwd: root, dir: dataDir }).error).toBeUndefined();
++  const entries = readRoundRegistry(repoIdentity(root), dataDir);
++  const hashes = packageFacts(dir)!.hashes;
++  expect(entries).toEqual([expect.objectContaining({ packageId: "partial", event: "desk-partial" })]);
++  expect(partialRoundVouch(entries, "partial", hashes)).toBeDefined();
++  expect(registryVouches(entries, "partial", hashes)).toBeUndefined();
++  expect(registryVouchesPackage(dir, { cwd: root, dir: dataDir })).toBe(false);
++  // The same files recorded as a finished round do vouch.
++  expect(registryVouches(entries.map((entry) => ({ ...entry, event: "complete" as const })), "partial", hashes)).toBeDefined();
++});
++
++const entry = (packageId: string, at: string): RoundRegistryEntry => ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: HEAD,
++  manifestSha256: "b".repeat(64), findingsSha256: null, completedAt: at, event: "complete" });
++
++test("T14 B3: an append from another process while a compaction runs survives it", async () => {
++  const identity = "remote:race";
++  const file = roundRegistryFile(identity, dataDir);
++  mkdirSync(path.dirname(file), { recursive: true });
++  const line = `${JSON.stringify(entry("old", "x".repeat(300)))}\n`;
++  writeFileSync(file, line.repeat(Math.ceil(REGISTRY_COMPACT_BYTES / line.length) + 10));
++  const marker = path.join(root, "appended");
++  const script = path.join(root, "append.ts");
++  writeFileSync(script, [
++    `import { writeFileSync } from "node:fs";`,
++    `import { appendRoundRegistry } from ${JSON.stringify(path.join(import.meta.dir, "round-registry.ts"))};`,
++    `appendRoundRegistry(${JSON.stringify(identity)}, ${JSON.stringify(entry("concurrent", "now"))}, ${JSON.stringify(dataDir)});`,
++    `writeFileSync(${JSON.stringify(marker)}, "done");`,
++  ].join("\n"));
++  let child: ReturnType<typeof Bun.spawn> | undefined;
++  const written = appendRoundRegistry(identity, entry("compactor", "now"), dataDir, {
++    beforeCompactionWrite() {
++      // Another writer starts between the compaction's read and its rename. Without the lock it appends at once, and the
++      // rename would drop that line; with it, it waits. Either way give it a bounded window to land before the rename.
++      child = Bun.spawn([process.execPath, script], { cwd: root, stdout: "ignore", stderr: "inherit" });
++      const until = Date.now() + 2_000;
++      while (!existsSync(marker) && Date.now() < until) Bun.sleepSync(20);
++    },
++  });
++  expect(written.compacted).toBeGreaterThan(500);
++  expect(child).toBeDefined();
++  expect(await child!.exited).toBe(0);
++  expect(readRoundRegistry(identity, dataDir).map((item) => item.packageId)).toEqual(["old", "compactor", "concurrent"]);
++  expect(existsSync(`${file}.lock`)).toBe(false);
++}, 30_000);
+
+--- src/review/update-round.test.ts
+@@ 1,118 @@
++// Flow 520 AC5: the previous attempt of an update round is the newest one with accepted findings, whatever its settings.
++import { describe, expect, test } from "bun:test";
++import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
++import { newerRoundOf, priorAttemptCandidates, selectPriorAttempt } from "./update-round";
++
++const SHA = (c: string): string => c.repeat(40);
++/** Overrides may set a field to undefined to model a legacy record that lacks it. */
++type Loose<T> = { [K in keyof T]?: T[K] | undefined };
++
++function result(over: Loose<DeskResult> = {}): DeskResult {
++  return <DeskResult>{
++    reviewed: { baseSha: SHA("a"), headSha: SHA("b") },
++    verdict: "needs-changes",
++    coverage: "complete",
++    findingsKnown: true,
++    findings: { blocker: 0, major: 1, minor: 0, info: 0 },
++    report: "report",
++    ...over,
++  };
++}
++
++function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
++  return <DeskRun>{
++    baseSha: SHA("a"),
++    headSha: SHA("b"),
++    id,
++    source: "manual",
++    scope: DESK_RUN_SCOPE,
++    state: "completed",
++    phase: "done",
++    reason: "",
++    createdAt: "2026-11-24T00:00:00.000Z",
++    startedAt: "2026-11-24T00:00:00.000Z",
++    finishedAt: "2026-11-24T00:10:00.000Z",
++    result: result(),
++    ...over,
++  };
++}
++
++describe("selectPriorAttempt", () => {
++  test("picks the newest completed attempt and reports it as not partial", () => {
++    expect(selectPriorAttempt([run("new"), run("old")])).toEqual({ attempt: expect.objectContaining({ id: "new" }), partial: false });
++  });
++
++  test("accepts the newest partial attempt with accepted findings and marks it partial", () => {
++    const picked = selectPriorAttempt([run("p", { headSha: SHA("c"), state: "partial", result: result({ coverage: "partial" }) }), run("c")]);
++    expect(picked).toMatchObject({ attempt: { id: "p" }, partial: true });
++  });
++
++  test("T14 B1: within one round a complete attempt is preferred over a later partial retry", () => {
++    const retry = run("retry", { round: 1, state: "partial", result: result({ coverage: "partial" }) });
++    const complete = run("complete", { round: 1 });
++    expect(selectPriorAttempt([retry, complete])).toEqual({ attempt: complete, partial: false });
++    // The same with a store that has not placed rounds yet: the shared range is the round.
++    const legacyRetry = run("legacy-retry", { state: "partial", result: result({ coverage: "partial" }) });
++    expect(selectPriorAttempt([legacyRetry, run("legacy-complete")])?.attempt.id).toBe("legacy-complete");
++  });
++
++  test("T14 B1: every usable attempt is a candidate, newest round first, so the executor can fall back", () => {
++    const round2 = run("round-2-partial", { round: 2, headSha: SHA("c"), state: "partial", result: result({ coverage: "partial" }) });
++    const round1 = run("round-1", { round: 1 });
++    expect(priorAttemptCandidates([round2, round1]).map((item) => [item.attempt.id, item.partial]))
++      .toEqual([["round-2-partial", true], ["round-1", false]]);
++  });
++
++  test("a completed attempt whose coverage is not complete is partial", () => {
++    expect(selectPriorAttempt([run("u", { result: result({ coverage: "unknown" }) })])?.partial).toBe(true);
++  });
++
++  test("an attempt run with different settings is still accepted, and the options key is never compared", () => {
++    const other = run("other", { effectiveOptionsKey: "settings-B", options: { maxTokens: 10 } as DeskRun["options"] });
++    expect(selectPriorAttempt([other, run("same", { effectiveOptionsKey: "settings-A" })])?.attempt.id).toBe("other");
++  });
++
++  test("rejects imported, failed, cancelled and unreviewed attempts and falls through to the next usable one", () => {
++    const rejected = [
++      run("imported", { source: "existing" }),
++      run("failed", { state: "failed" }),
++      run("cancelled", { state: "cancelled" }),
++      run("blocked", { state: "blocked" }),
++      run("running", { state: "running" }),
++      run("unreviewed", { result: result({ reviewed: null }) }),
++      run("no-result", { result: null }),
++      run("findings-unknown", { state: "partial", result: result({ findingsKnown: undefined }) }),
++      run("findings-false", { state: "partial", result: result({ findingsKnown: false }) }),
++      run("old-scope", { scope: "review-autonomous/fixed-pr/v1" }),
++      run("no-scope", { scope: undefined }),
++    ];
++    for (const attempt of rejected) expect(selectPriorAttempt([attempt])).toBeUndefined();
++    expect(selectPriorAttempt([...rejected, run("good")])?.attempt.id).toBe("good");
++  });
++
++  test("the scope is a parameter", () => {
++    const v1 = run("v1", { scope: "review-autonomous/fixed-pr/v1" });
++    expect(selectPriorAttempt([v1])).toBeUndefined();
++    expect(selectPriorAttempt([v1], "review-autonomous/fixed-pr/v1")?.attempt.id).toBe("v1");
++  });
++
++  test("a deleted or archived attempt is skipped; completed, closed and restored ones are not", () => {
++    const decision = (action: "complete" | "close" | "archive" | "restore" | "delete"): DeskRun["decision"] => ({ action, reason: "r", at: "2026-11-24T01:00:00.000Z" });
++    expect(selectPriorAttempt([run("d", { decision: decision("delete") }), run("a", { decision: decision("archive") })])).toBeUndefined();
++    for (const action of ["complete", "close", "restore"] as const) expect(selectPriorAttempt([run("x", { decision: decision(action) })])?.attempt.id).toBe("x");
++  });
++
++  test("nothing to pick from is undefined", () => {
++    expect(selectPriorAttempt([])).toBeUndefined();
++  });
++});
++
++describe("newerRoundOf", () => {
++  test("T14 B6: the highest later round of the same Review, never another Review's", () => {
++    const round1 = run("r1", { reviewId: "review-1", round: 1 });
++    expect(newerRoundOf([round1], round1)).toBeUndefined();
++    expect(newerRoundOf([run("other", { reviewId: "review-2", round: 5 }), round1], round1)).toBeUndefined();
++    expect(newerRoundOf([run("r3", { reviewId: "review-1", round: 3 }), run("r2", { reviewId: "review-1", round: 2 }), round1], round1)).toBe(3);
++    expect(newerRoundOf([run("legacy")], run("legacy"))).toBeUndefined();
++  });
++});

@@ -1,0 +1,177 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, wave 1, round 3 (verification round). Slice read in full: slice-02 (Desktop DOM test, docs, backend sources).
+I also read the round-2 fix commits c76740462 (T14, backend) and 70f161155 (T15, Desktop) so I could build mutants for every gate they added.
+
+## Mutation pass
+
+How it ran: a scratch `git worktree add --detach <scratchpad>/wt 822192905b3d26eb976d83e5bbd46cee14ca9a6f`, with node_modules symlinked in from the reviewed tree (read-only use).
+Each mutant was an exact single-occurrence text replacement. It ran the nearest suite with `bun test --bail` and restored the file afterwards.
+`git status` in the scratch tree was clean except for the two symlinks before I removed the worktree. The reviewed tree was never written.
+I did not use `keryx review mutate`, because it copies the whole 18.8k-file tree per pass, which would have cost more than the 300 s exec budget.
+The spec below has the same shape as that tool's input (`id`, `file`, `anchor`, `replacement`), so the main session can re-run it through that tool unchanged.
+
+Baselines, all green at head:
+- update-round, round-registry, desk-publication, desk-run-executor, desk-run-service together: 91 pass / 0 fail in 82 s.
+- `apps/desktop` ReviewPanel.dom.test.tsx: 45 pass / 0 fail in 0.6 s.
+
+| mutation | nearest suite | result |
+|---|---|---|
+| T15 `disabled={writing \|\| updateDisabled}` -> `disabled={writing}` (ReviewPublishDialog.tsx:167) | ReviewPanel.dom | killed |
+| T15 `{!updateOffered && publishButton}` -> `{publishButton}` (ReviewPublishDialog.tsx:178) | ReviewPanel.dom | killed |
+| T15 `updateDisabled={working}` -> `updateDisabled={false}` (ReviewRuns.tsx:179) | ReviewPanel.dom | killed |
+| T15 `if (existing) {` -> `if (false && existing) {` (ReviewWorkspace.tsx:137) | ReviewPanel.dom | killed |
+| T15 drop `!reviewIsArchived(run) &&` from `covering` (ReviewWorkspace.tsx:135) | ReviewPanel.dom | **45/45 green** |
+| T15 drop `run.source !== "existing" &&` from `covering` (ReviewWorkspace.tsx:135) | ReviewPanel.dom | **45/45 green** |
+| T15 `covering.find(runActive) ?? covering[0]` -> `covering[0]` (ReviewWorkspace.tsx:136) | ReviewPanel.dom | **45/45 green** |
+| T15 `existing.id === latestAttempt(...)?.id ? null : existing.id` -> `existing.id` (ReviewWorkspace.tsx:138) | ReviewPanel.dom | killed |
+| T15 `outcome === "done" && boardBehind` -> `boardBehind` (ReviewWorkspace.tsx:146) | ReviewPanel.dom | killed |
+| T15 `if (outcome === "skipped") toast(` -> `if (false) toast(` (ReviewWorkspace.tsx:148) | ReviewPanel.dom | **45/45 green** |
+| T15 `updateRoundOptions` keeps `autoPublish` (ReviewWorkspace.tsx:55) | ReviewPanel.dom | killed |
+| T15 `sessionReviewPublication` returns an `onUpdateReview` (SessionReviewActivity.tsx:26) | ReviewPanel.dom | killed |
+| T15 useReviewRuns busy guard `return "skipped"` -> `return "done"` (useReviewRuns.ts:38) | ReviewPanel.dom | **45/45 green** |
+| T14 B1/B2 drop the complete-before-partial reorder in `priorAttemptCandidates` (update-round.ts:41) | update-round | killed |
+| T14 drop `\|\| withdrawn(item)` in `earlierRoundAttempts` (update-round.ts:55) | update-round | green (11/11) |
+| same | desk-run-service | killed |
+| T14 drop `item.source === "existing" \|\|` in `earlierRoundAttempts` (update-round.ts:55) | update-round | green (11/11) |
+| same | desk-run-service | killed |
+| T14 other-Review filter in `earlierRoundAttempts` -> `false` (update-round.ts:56) | update-round | green (11/11) |
+| same | desk-run-service | killed |
+| T14 B6 `newerRoundOf`: `item.round <= current.round` -> `<` (update-round.ts:85) | update-round | **11/11 green** |
+| same | desk-publication | **green** |
+| T14 B6 `newerRoundOf`: drop the same-reviewId check (update-round.ts:85) | update-round | killed |
+| T14 B6 `newerRoundOf`: drop the max comparison (update-round.ts:86) | update-round | killed |
+| T14 B4 `registryVouches` stops filtering desk-partial (round-registry.ts:181) | round-registry | killed |
+| T14 B3 `if (written === null) throw` -> `if (false) throw` (round-registry.ts:170) | round-registry | **green** |
+| T14 B3 replace `withFileLock` with direct call (round-registry.ts:154) | round-registry | killed |
+| T14 B1 `if (!handOn) continue;` -> `break;` (desk-run-executor.ts:534) | desk-run-executor | killed |
+| T14 B6 blockedReason `!current && newerRound !== undefined` -> `false && …` (desk-publication.ts:296) | desk-publication | killed |
+| T14 B6 drop `newerRound === undefined &&` from headMoved (desk-publication.ts:378) | desk-publication | killed |
+| T14 B5 delete the definitive-status allowlist `if (![…].includes(status)) return false;` (desk-publication.ts:110) | desk-publication | **green** |
+| T14 B5 `return cache.headStatus.ahead` -> `return true` (desk-publication.ts:102) | desk-publication | killed |
+| T14 drop `.slice(0, answerSourceLimit)` (desk-publication.ts:357) | desk-publication | **green** |
+
+Totals: 29 distinct mutants and 33 runs (4 mutants were re-run on a second, nearer suite after surviving the first).
+- killed: 20 mutants, 4 of them only on the second suite.
+- survived on every suite tried: 9 mutants. Five are Desktop and four are backend; all are T14/T15 gates added in answer to round 2.
+
+Cap: every gate added or changed by T14/T15 in scope was mutated, previous-round gates first. Exec time was about 235 s of the 300 s budget.
+Two further candidates were listed but not run: `T14-B1-break-after-handon` and `T15-existing-toast` (presentation). The main session can run them from `mutant_candidates`.
+Earlier-round (T11) gates were not re-mutated; round 2's testing reviewer covered them.
+
+## Findings
+
+### [F-001] `newerRoundOf` round boundary unpinned: a same-round sibling is never in a fixture
+- Severity: minor
+- File: src/review/update-round.ts:85 (test src/review/update-round.test.ts:110-117)
+- Problem: mutating `item.round <= current.round` to `<` leaves update-round.test.ts (11/11) and desk-publication.test.ts green. No fixture gives `newerRoundOf` a second attempt of the *same* round (a retry), and that is the input that separates `<=` from `<`.
+- Why it matters: this gate was added in answer to round 2 (T14 B6). Under the mutant, a retry within round N would block publication of the round-N attempt with "Round N of this review is newer" and would suppress the as-is variant. Nothing would catch that regression.
+- Fix: in update-round.test.ts, add `expect(newerRoundOf([run("retry", { reviewId: "review-1", round: 1 }), round1], round1)).toBeUndefined()`.
+
+### [F-002] B5 compare-status allowlist unpinned: no fixture returns a non-definitive status string
+- Severity: minor
+- File: src/review/desk-publication.ts:110 (test src/review/desk-publication.test.ts:205-218)
+- Problem: deleting `if (!["ahead","behind","diverged","identical"].includes(status)) return false;` leaves desk-publication.test.ts green. The refusal test drives `diverged`, `behind` and two `fail:` cases. The `fail:` cases make the gh call throw and take the `catch`, so they never reach the allowlist.
+- Why it matters: T14 B5 promises that "a failed read is not cached, so the next preview asks again". Under the mutant, an unexpected status string would be cached as not-ahead for that head, and later previews would never re-ask GitHub. The suite would stay green.
+- Fix: make the compare fixture print an unexpected status (for example an empty string) on the first preview and `ahead` on the second. Assert that the second preview has `headMoved` and that `FIXTURE_COMPARE_READS` holds two reads. Separately, assert that two previews against the same `diverged` head read the compare once, which pins the per-head cache.
+
+### [F-003] Round-registry lock contention path unpinned
+- Severity: minor
+- File: src/review/round-registry.ts:170 (test src/review/round-registry.test.ts)
+- Problem: `if (written === null) throw …` -> `if (false) throw …` leaves round-registry.test.ts green. The B3 test pins the lock around a compaction, but no test holds the lock while an append comes in.
+- Why it matters: per the T14 B3 docblock, "A lock that cannot be taken throws", so the caller reports an unrecorded entry instead of silently returning `null` as a result. Under the mutant, `appendRoundRegistry` would return `null` to callers that read `.file`/`.warning`. Nothing would catch that.
+- Fix: create a fresh `${roundRegistryFile(id, dir)}.lock` (held, not stale) and call `appendRoundRegistry`. Assert it throws `/locked by another keryx process/` and that the registry file is unchanged.
+
+### [F-004] Update review's "attempt already covers the target head" selection is only partly pinned
+- Severity: minor
+- File: apps/desktop/src/review/ReviewWorkspace.tsx:135-136 (tests apps/desktop/src/reviews/ReviewPanel.dom.test.tsx:752, :902)
+- Problem: three mutants of the T15 `covering`/`existing` selection leave the 45-test DOM suite green:
+  - dropping `!reviewIsArchived(run)`;
+  - dropping `run.source !== "existing"`;
+  - `covering.find(runActive) ?? covering[0]` -> `covering[0]`.
+  The two fixtures that drive this path use one covering attempt each: a failed one (:752) and a complete one (:902). Neither is archived or imported, and neither has a second covering attempt.
+- Why it matters: each filter decides whether Update review starts a round or redirects to an old attempt. With the archived or imported filter gone, an archived or imported attempt on the new head would block every update round. With the active preference gone, the panel would show a stale failed attempt instead of the one running. None of this would be caught.
+- Fix: add DOM cases on the headMovedFixture:
+  - (a) the only attempt on currentHead is archived (`decision.action: "archive"`): `start` is sent;
+  - (b) the only attempt on currentHead has `source: "existing"`: `start` is sent;
+  - (c) the runs are `[failed on currentHead, running on currentHead]`: no `start`, and the running attempt is shown.
+
+### [F-005] The "Update review did not start" race path is unpinned end to end
+- Severity: minor
+- File: apps/desktop/src/review/useReviewRuns.ts:38 and apps/desktop/src/review/ReviewWorkspace.tsx:148
+- Problem: two mutants leave the DOM suite green:
+  - the busy guard's `return "skipped"` -> `return "done"`;
+  - the `outcome === "skipped"` toast -> `false`.
+  The test at :714 proves that the disabled button stops the click, so the request is never issued. No test issues a start while another mutation is pending, which is the race the code comments say this branch covers.
+- Why it matters: if the guard's return value regressed to `"done"`, a raced Update click behind a stale board would refresh the board as if a round had started, and the user would get no "did not start" message. The suite stays green either way.
+- Fix: add a hook-level test of `useReviewRuns`: start one mutation with a deferred `invoke`, then call `request({kind:"start",…})` and expect `"skipped"`, with no second `invoke`. Optionally, render `ReviewPublishDialog` with `updateDisabled={false}` while a cancel is pending, and assert the info toast and `refreshed === 0`.
+
+### [F-006] The answer-carry-over bound is unpinned
+- Severity: info
+- File: src/review/desk-publication.ts:357
+- Problem: dropping `.slice(0, answerSourceLimit)` leaves desk-publication.test.ts green. No fixture has more than 8 earlier-round attempts.
+- Why it matters: this is a performance bound only. Only the newest draft's answers are used, so there is no wrong user-visible outcome, and that is why it is info.
+- Fix: optional. Add a fixture with 9 earlier attempts where only the 9th holds a draft, and assert its answers are not carried over.
+
+### Checklist (non-mutation)
+- The DOM test has no sleeps, `setTimeout` or `Date.now`. Every wait uses `act` or a deferred promise (`deferred()`), as tdd-workflow requires.
+- The command boundary is stubbed at the `reviewRun` and `publishCommand` seams. That is consistent with the existing suite.
+- The falsy-only assertions at :752 and :902 ("no start") each come with a positive artifact: the covering attempt's article is present (:770), or the dialog is closed (:922). So they cannot pass vacuously.
+- The fixes from round 2 hold: every mutant of a T14/T15 gate *named in the round-2 findings* (B1 fallback, B2 ordering, B3 lock, B4 vouch filter, B5 cache hit, B6 superseded refusal and as-is, Update disabled, autoPublish dropped, Sessions, footer order, refresh-on-done) is killed. The survivors are adjacent conditions that those fixes added without a separating fixture.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Mutation pass over every T14/T15 gate. 29 mutants and 33 runs in a scratch worktree at 822192905: 20 killed, 9 survived. The round-2 fixes hold. Five minor coverage gaps and one info cover unpinned conditions beside them: newerRoundOf same-round boundary, compare-status allowlist, registry lock-contention throw, Update review covering-attempt filters, and the skipped-start race. No defect in production code is claimed.",
+  "slices": [{"id": "slice-02", "status": "DONE"}],
+  "findings": [
+    {"id": "F-001", "severity": "minor", "file": "src/review/update-round.ts", "line": 85, "quote": "item.round <= current.round) continue;", "problem": "newerRoundOf's round boundary is unpinned: no fixture has a same-round sibling attempt.", "impact": "A regression to '<' would block publishing a same-round retry as 'superseded' and would suppress the as-is variant, and the suite would stay green.", "suggested_fix": "In update-round.test.ts, assert newerRoundOf([run('retry',{reviewId:'review-1',round:1}), round1], round1) is undefined.", "evidence": "Mutant '<=' -> '<' survived update-round.test.ts (11/11 green) and desk-publication.test.ts (green); scratch worktree at 822192905.", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-002", "severity": "minor", "file": "src/review/desk-publication.ts", "line": 110, "quote": "if (![\"ahead\", \"behind\", \"diverged\", \"identical\"].includes(status)) return false;", "problem": "The T14 B5 definitive-status allowlist is unpinned: the fail: fixtures throw into the catch and never reach it.", "impact": "An unexpected compare status would be cached as not-ahead per head, contradicting 'a failed read is not cached', and the suite would stay green.", "suggested_fix": "The compare fixture returns an unexpected status, then 'ahead'. Assert the second preview has headMoved and that two compare reads happened. Also assert one compare read for two previews on the same diverged head.", "evidence": "Deleting the allowlist line survived desk-publication.test.ts (green, 20 s run).", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-003", "severity": "minor", "file": "src/review/round-registry.ts", "line": 170, "quote": "if (written === null) throw new Error(", "problem": "The registry lock-contention throw (T14 B3) is unpinned: no test holds the lock during an append.", "impact": "A regression would return null instead of throwing, and callers would read .file from null. The suite would not catch it.", "suggested_fix": "Create a fresh held lock file beside the registry, call appendRoundRegistry, and expect /locked by another keryx process/ with the file unchanged.", "evidence": "Mutant 'if (written === null)' -> 'if (false)' survived round-registry.test.ts (green); the no-lock mutant was killed by the B3 compaction test.", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-004", "severity": "minor", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "line": 135, "quote": "const covering = local.runs.filter(run => run.source !== \"existing\" && !reviewIsArchived(run) && sameRange(run, revision));", "problem": "The Update review covering-attempt filters (archived, imported) and the active-first choice are unpinned: each fixture has exactly one plain covering attempt.", "impact": "A regression would let an archived or imported attempt block every update round, or would show a stale failed attempt over a running one, and the suite would not catch it.", "suggested_fix": "Add DOM cases: an archived attempt on currentHead -> start sent; a source:'existing' attempt on currentHead -> start sent; [failed, running] on currentHead -> no start and the running article shown.", "evidence": "Three mutants survived ReviewPanel.dom.test.tsx (45/45 green each): drop !reviewIsArchived, drop source!=='existing', find(runActive)??[0] -> [0].", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-005", "severity": "minor", "file": "apps/desktop/src/review/useReviewRuns.ts", "line": 38, "quote": "if (pending.current && (action.kind === \"status\" || pending.current !== \"status\")) return \"skipped\";", "problem": "The skipped-start race path (the busy guard's 'skipped' outcome and the 'Update review did not start' toast) is unpinned. The only test stops the click at the disabled button.", "impact": "A regression to 'done' would refresh the board after a start that never happened, and the user would get no message. The suite would stay green.", "suggested_fix": "Add a hook test: hold one mutation on a deferred invoke, then call request({kind:'start'}) and expect 'skipped' with no second invoke. Optionally add a DOM race test asserting the toast and no refresh.", "evidence": "Mutants return 'skipped'->'done' (useReviewRuns.ts:38) and the skipped toast -> false (ReviewWorkspace.tsx:148) both survived ReviewPanel.dom.test.tsx (45/45 green).", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-006", "severity": "info", "file": "src/review/desk-publication.ts", "line": 357, "quote": ".slice(0, answerSourceLimit).map(", "problem": "The answer-source bound is unpinned.", "impact": "This is a performance bound only. Only the newest draft is used, so there is no wrong outcome.", "suggested_fix": "Optional: a fixture with 9 earlier attempts where only the 9th has a draft, asserting its answers are not carried over.", "evidence": "Dropping the slice survived desk-publication.test.ts (green).", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 5, "info": 1},
+  "follow_ups": ["Two listed candidates were not run (T14-B1-break-after-handon, T15-existing-toast); run them from mutant_candidates."],
+  "mutant_candidates": [
+    {"id": "T15-update-disabled", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "disabled={writing || updateDisabled}", "replacement": "disabled={writing}", "result": "killed"},
+    {"id": "T15-publish-button-dup", "file": "apps/desktop/src/review/ReviewPublishDialog.tsx", "anchor": "{!updateOffered && publishButton}", "replacement": "{publishButton}", "result": "killed"},
+    {"id": "T15-runs-update-disabled", "file": "apps/desktop/src/review/ReviewRuns.tsx", "anchor": "updateDisabled={working}", "replacement": "updateDisabled={false}", "result": "killed"},
+    {"id": "T15-existing-attempt", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "    if (existing) {", "replacement": "    if (false && existing) {", "result": "killed"},
+    {"id": "T15-covering-archived", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "run.source !== \"existing\" && !reviewIsArchived(run) && sameRange", "replacement": "run.source !== \"existing\" && sameRange", "result": "survived"},
+    {"id": "T15-covering-imported", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "run => run.source !== \"existing\" && !reviewIsArchived(run)", "replacement": "run => !reviewIsArchived(run)", "result": "survived"},
+    {"id": "T15-existing-prefers-active", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "covering.find(runActive) ?? covering[0]", "replacement": "covering[0]", "result": "survived"},
+    {"id": "T15-existing-session-null", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "existing.id === latestAttempt(local.runs, card)?.id ? null : existing.id", "replacement": "existing.id", "result": "killed"},
+    {"id": "T15-refresh-only-done", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "if (outcome === \"done\" && boardBehind)", "replacement": "if (boardBehind)", "result": "killed"},
+    {"id": "T15-skipped-toast", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "if (outcome === \"skipped\") toast(", "replacement": "if (false) toast(", "result": "survived"},
+    {"id": "T15-autopublish-dropped", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "{ autoPublish: _automatic, ...options }: DeskReviewOptions", "replacement": "options: DeskReviewOptions", "result": "killed"},
+    {"id": "T15-sessions-no-update", "file": "apps/desktop/src/review/SessionReviewActivity.tsx", "anchor": "return { cwd, target: key, url: `https://github.com/${key.repo}/pull/${key.number}` };", "replacement": "return { cwd, target: key, url: `https://github.com/${key.repo}/pull/${key.number}`, onUpdateReview: () => {} };", "result": "killed"},
+    {"id": "T15-request-skipped", "file": "apps/desktop/src/review/useReviewRuns.ts", "anchor": "pending.current !== \"status\")) return \"skipped\";", "replacement": "pending.current !== \"status\")) return \"done\";", "result": "survived"},
+    {"id": "T15-existing-toast", "kind": "presentation", "file": "apps/desktop/src/review/ReviewWorkspace.tsx", "anchor": "already has a review attempt`", "replacement": "has an attempt`", "result": "not-run"},
+    {"id": "T14-B2-complete-before-partial", "file": "src/review/update-round.ts", "anchor": "flatMap((round) => [...round.filter((item) => !item.partial), ...round.filter((item) => item.partial)])", "replacement": "flatMap((round) => round)", "result": "killed"},
+    {"id": "T14-earlier-withdrawn", "file": "src/review/update-round.ts", "anchor": "item.source === \"existing\" || withdrawn(item)) return false;", "replacement": "item.source === \"existing\") return false;", "result": "killed (desk-run-service; green on update-round)"},
+    {"id": "T14-earlier-imported", "file": "src/review/update-round.ts", "anchor": "item.id === current.id || item.source === \"existing\" || withdrawn(item)", "replacement": "item.id === current.id || withdrawn(item)", "result": "killed (desk-run-service; green on update-round)"},
+    {"id": "T14-earlier-other-review", "file": "src/review/update-round.ts", "anchor": "item.reviewId !== undefined && item.reviewId !== current.reviewId) return false;", "replacement": "item.reviewId !== undefined && false) return false;", "result": "killed (desk-run-service; green on update-round)"},
+    {"id": "T14-newer-round-cmp", "file": "src/review/update-round.ts", "anchor": "item.round <= current.round) continue;", "replacement": "item.round < current.round) continue;", "result": "survived (update-round, desk-publication)"},
+    {"id": "T14-newer-round-review", "file": "src/review/update-round.ts", "anchor": "item.reviewId !== current.reviewId || item.round === undefined", "replacement": "item.round === undefined", "result": "killed"},
+    {"id": "T14-newer-round-max", "file": "src/review/update-round.ts", "anchor": "if (newest === undefined || item.round > newest) newest = item.round;", "replacement": "newest = item.round;", "result": "killed"},
+    {"id": "T14-B4-vouch-filter", "file": "src/review/round-registry.ts", "anchor": "matchingEntry(entries.filter((entry) => entry.event !== \"desk-partial\"), packageId, hashes)", "replacement": "matchingEntry(entries, packageId, hashes)", "result": "killed"},
+    {"id": "T14-B3-lock-null-throw", "file": "src/review/round-registry.ts", "anchor": "if (written === null) throw new Error(", "replacement": "if (false) throw new Error(", "result": "survived"},
+    {"id": "T14-B3-no-lock", "file": "src/review/round-registry.ts", "anchor": "const written = withFileLock(`${file}.lock`, (", "replacement": "const written = ((_l: string, f: () => any) => f())(`${file}.lock`, (", "result": "killed"},
+    {"id": "T14-B1-no-fallback", "file": "src/review/desk-run-executor.ts", "anchor": "if (!handOn) continue;", "replacement": "if (!handOn) break;", "result": "killed"},
+    {"id": "T14-B1-break-after-handon", "file": "src/review/desk-run-executor.ts", "anchor": "        break;\n      }\n      signal.throwIfAborted();", "replacement": "      }\n      signal.throwIfAborted();", "result": "not-run"},
+    {"id": "T14-B5-cache-transient", "file": "src/review/desk-publication.ts", "anchor": "if (![\"ahead\", \"behind\", \"diverged\", \"identical\"].includes(status)) return false;", "replacement": "", "result": "survived"},
+    {"id": "T14-B5-cache-ahead", "file": "src/review/desk-publication.ts", "anchor": "return cache.headStatus.ahead;", "replacement": "return true;", "result": "killed"},
+    {"id": "T14-B6-blocked-superseded", "file": "src/review/desk-publication.ts", "anchor": ": !current && newerRound !== undefined", "replacement": ": false && newerRound !== undefined", "result": "killed"},
+    {"id": "T14-B6-asis-superseded", "file": "src/review/desk-publication.ts", "anchor": "!current && newerRound === undefined && sha.test", "replacement": "!current && sha.test", "result": "killed"},
+    {"id": "T14-answer-limit", "file": "src/review/desk-publication.ts", "anchor": ".slice(0, answerSourceLimit).map(", "replacement": ".map(", "result": "survived"}
+  ]
+}
+```
+
+Routing audit: graph_used: no (the payload's `layers.relatedTests` gave the nearest suites, so no extra graph query was needed). wiki_used: not-relevant (test-coverage lens; the intent came from the commit docblocks). ctx_used: yes (`keryx ctx rg`/`read`/`run`). raw_rg_used: no.
+Raw `cat`/`sed`/`git show` were used with `# keryx:raw` markers for the fix diffs and one short test excerpt.
+Scratch worktree removed with `git worktree remove`. Mutant evidence is in this file only. Nothing was written to `research-evidence/`.

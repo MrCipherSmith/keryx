@@ -1,0 +1,71 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, wave 1, round 3 (verification round). PR #1303, range 20e4281a2..822192905.
+
+Inputs read: the review-layout SKILL.md, the round brief, the payload, the driver, and round 2's raw/review-layout-w1.txt (its LY-001 is the round obligation for this lens). In slice-01, the flow markdown records (acceptance-criteria, context, description, journal, plan, tasks) and every Desktop section were read in full: ReviewPublishDialog, ReviewRuns, ReviewWorkspace, SessionReviewActivity and useReviewRuns. The JSON flow records were only keyword-scanned for layout terms, with no hits: flow.json and resolved/T5-T7 and T11-T15.implement.json, diff lines 310-1915. For that reason `slices` below is empty, as the brief requires. The JSON records hold no rendered code.
+
+Concern: I did not read `.metaproject/index.md` in this dispatch. The dispatch was narrow and bounded, and the routing pointers came inline.
+
+## Measurements
+
+No measurements were taken. Nothing was rendered: the dispatch is read-only, exec_budget_s is 0, and the brief records "No browser render". Every statement below is a static reading of the CSS. Under layout-rendering.mdc Rule 1, each one is info and unverified. The pixel figures are the token-based estimates from round 2, which still apply because no stylesheet changed in the range: `git diff --stat 20e4281a2..HEAD -- '*.css'` is empty.
+
+The inputs were re-confirmed this round with keryx ctx rg:
+- tauri.conf.json: `minWidth` is 720 and the default `width` is 1180.
+- components.css: `.dialog-foot` is a wrapping flex row with justify-content flex-end and padding-inline `--sp-5`.
+- ReviewDetail.css:132-133: `.review-publish-footer` is a wrapping flex row with `--sp-2` gap and justify-content flex-end.
+
+## Round obligation: LY-001 (round 2) is resolved statically
+
+T15 reordered the head-moved footer to Update review (primary), Publish as is, Close, Skip publication, Save locally. The two alternatives are adjacent flex items at the start of the row. They sit in a fragment, not a nowrap group, but a wrapping flex row fills each line in source order, so the pair stays together whenever the first line can hold both.
+
+Estimated footer layout (round 2 per-button widths; at 1.22 the widths are scaled):
+
+```
+window  text-scale  footer content  row 1                                   row 2
+720px   1.00        ~624px          Update ~189, Publish as is ~187,        Save
+                                    Close ~62, Skip ~126 (~588px)
+720px   1.22        ~624px          Update ~231, Publish as is ~228,        Skip, Save
+                                    Close ~76 (~551px)
+792px+  1.00        ~732px          all five (~696px)                       -
+```
+
+The pair would split only if the footer content width fell below about 384px at scale 1, or about 467px at scale 1.22. That corresponds to a window of roughly 480 to 565px, below the 720px Desktop minWidth (Iron Law 3). The source comment at ReviewPublishDialog.tsx says the pair is kept on one row, and that holds statically at every reachable width. The defect LY-001 described, "Publish as is" alone on row 2, no longer occurs at 720px. Nothing clips or scrolls sideways.
+
+## Other checks (no finding)
+
+1. Order versus the non-moved state: when the head has not moved, the primary "Submit review" stays last, at the trailing edge. In the head-moved state the primary is first. The journal records this order as decided in T15. It is a placement and convention question for review-ui-ux, not geometry, and is not filed.
+2. Update review `title` and `disabled={writing || updateDisabled}`: these attributes change no geometry. The `<code>` short SHA inside `.btn` is 7 characters, so there is no unbreakable overflow.
+3. Head-moved notice: unchanged since round 2. It is a `div.inline-banner.tone-warn` whose `span` has `flex:1` and `min-width:0`. Its code runs are 7-character SHAs, and its text wraps.
+4. `aria-describedby` on the fieldsets and `disabled` on the inputs change no layout.
+5. ReviewRuns, ReviewWorkspace, SessionReviewActivity and useReviewRuns: the changes are wiring, toasts and return values, with no rendered sizing.
+6. RTL: no physical property was added. `justify-content: flex-end` together with `margin-inline-start: auto` mirrors.
+7. Locale: Desktop strings are hard-coded English with no catalog, so the translation-length rule has no input.
+
+## Findings
+
+None. LY-001 from round 2 is resolved statically and is not re-filed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Round 3 static layout verification. No CSS changed in the range. T15 placed Update review and Publish as is adjacent at the start of the wrapping publish footer. In a flex-wrap row that keeps the pair on the first line at every reachable width: at the 720px minWidth only Save, or Skip and Save at text-scale 1.22, wraps to row 2. Round 2's LY-001 (Publish as is orphaned on row 2) is therefore resolved statically. No new layout defect is introduced by T14 or T15. Concerns: nothing was measured (read-only, no render), and the JSON flow records in slice-01 were keyword-scanned rather than read in full, so slices is empty.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": ["A real-CSS probe of ReviewPublishDialog with headMoved and onUpdateReview at 720px, text-scale 1 and 1.22, reading each footer button's rect top, would turn the static LY-001 resolution into a measurement."],
+  "slices": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Notes
+
+- Browser measurements were not run, and nothing was rendered. The Desktop DOM suites run under a DOM stub and cannot observe wrapping.
+- Routing audit:
+  - graph_used: no. Not relevant, because the slice named the changed .tsx files and their stylesheets.
+  - wiki_used: no. Not relevant, because the question is rendered CSS geometry.
+  - ctx_used: yes. keryx ctx rg found the footer, banner, button and dialog CSS and the tauri minWidth, and keryx ctx read loaded the round 2 result. A few short raw reads, each marked keryx:raw, listed the slice headers, gave the CSS diff stat, scanned the JSON records and read the tail of the round 2 result.
+  - raw_rg_used: no.

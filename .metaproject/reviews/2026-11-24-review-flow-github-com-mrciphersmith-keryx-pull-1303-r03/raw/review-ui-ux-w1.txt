@@ -1,0 +1,109 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 3 (verification), code mode only. No render was supplied, so every visual and live check was judged statically. The T15 Desktop fixes hold for this lens. Round-2 UX-102 is closed: an Update review that finds an existing attempt on the target head now raises a toast. A start skipped because another action is running also raises a toast. A failed start surfaces through the panel's existing alert, and a DOM test pins it. Round-2 UX-105 is closed: the docs now describe Update review. UX-101 (footer order) and UX-103 (one-click start without a settings preview) are recorded owner decisions and are not re-filed. UX-104 (carried answers are unmarked) is unchanged and stays info; it is not re-filed. New this round: one minor and one info. The minor (UX-201): when the board has not seen the push and the target head already has an attempt, the panel opens that attempt badged \"Earlier revision\" although it is the newer commit, and the board is not refreshed. The info (UX-202): the reason Update review is disabled lives only in a `title` on a disabled button, which keyboard and screen-reader users cannot reach. Slop score 0. No blocker or major findings.",
+  "slices": [
+    { "id": "slice-01", "coverage": "Desktop hunks (ReviewPublishDialog, ReviewRuns, ReviewWorkspace, SessionReviewActivity, useReviewRuns) and flow records (AC, context, description, journal, plan, tasks, flow.json, T11-T13 resolved) read in full. The T14, T15, T5, T6 and T7 resolved/*.implement.json bodies are rule-entry lists of the same shape and were read only for their file lists." }
+  ],
+  "findings": [
+    {
+      "id": "UX-201",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "setSessionId(existing.id === latestAttempt(local.runs, card)?.id ? null : existing.id);",
+      "problem": "This happens when Update review finds an attempt that already covers the PR's current head while the board card is still on the reviewed head (board behind). The panel opens that attempt in a ReviewRunDialog against the stale `card`. RunAttempt computes `historic` as `recorded.headSha !== card.headSha`, so the attempt on the NEWER commit is badged \"Earlier revision\". This branch also returns before `onRefreshBoard`, which only runs after a successful start, and `staleRange` stays false because no start failed. So no \"The PR revision changed\" banner appears either. The toast says \"Showing it instead of starting another\", and the thing shown is mislabelled as outdated.",
+      "impact": "Nielsen #1 (status visibility) and #2 (match with the real world): the user asked to move to the newer commit. They are shown its attempt labelled as an earlier revision, with no prompt to refresh the board. `publicationPending` and other current-range affordances are also computed against the stale card. This happens in a secondary flow only: board behind and an attempt already on the new head, for example one started by a follow rule.",
+      "suggested_fix": "In the existing-attempt branch, call `onRefreshBoard?.()` when `!sameRange(card, revision)`, the same as the start path does after `done`. Or pass the attempt's own range as the card for that dialog. Then update the test \"Update review does not start when the current head already has a failed attempt, whatever the board shows\" (it asserts `refreshed` is 0 for board head `b`) so it expects one refresh in the board-behind case.",
+      "evidence": "Traced statically. Case 55 of the DOM test above: runs `[reviewed(head b), failed(head c)]`, board head `b`. `latestAttempt` returns `reviewed` (no active attempt, first non-archived), so `setSessionId(\"attempt-failed\")`. ReviewWorkspace renders `<ReviewRunDialog ... run={session} card={card}>`. ReviewRuns.tsx: `const historic = !!((recorded.headSha && recorded.headSha !== card.headSha) || ...)` and `{historic && <span className=\"badge\">Earlier revision</span>}`. The test asserts `expect(refreshed).toBe(0)` for both board heads. PR body: \"If the board has not seen the push yet, it is refreshed. If the current head already has an attempt, nothing new starts.\" It does not say the refresh is skipped in the second case, so this is not a recorded decision. Not verified on a render.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-202",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "title={updateDisabled ? \"Another action of this review is still running.\" : undefined}",
+      "problem": "When another action of the review is in flight, the primary \"Update review to <sha>\" button is disabled. The only explanation is a `title` attribute on that disabled button. A disabled button is not focusable, so a keyboard user never reaches the tooltip, and a screen reader does not announce it. Whether the WKWebView that Tauri uses on macOS shows a `title` tooltip on a disabled button on hover was not checked.",
+      "impact": "Nielsen #1: the dialog's primary action is inert, and some users get no reason for it. The state clears by itself when the other action finishes, so the cost is confusion, not a dead end.",
+      "suggested_fix": "Render the reason as visible text when `updateDisabled` is true, for example a muted line in the head-moved notice: \"Update review is available when the current action finishes.\" Or keep the button focusable with `aria-disabled` and `aria-describedby` pointing at that text.",
+      "evidence": "The `disabled={writing || updateDisabled}` and `title` props on the Update review button in the footer (slice-01 ReviewPublishDialog hunk). No other element carries the reason. Unmeasured: no render, so tooltip behaviour in the Desktop webview is unverified.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "UX-101", "disposition": "withdrawn" },
+    { "id": "UX-102", "disposition": "closed" },
+    { "id": "UX-103", "disposition": "withdrawn" },
+    { "id": "UX-104", "disposition": "open" },
+    { "id": "UX-105", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+## Summary (review-ui-ux, wave 1, round 3, slice-01)
+
+**Verdict:** DONE. No blocker or major findings; 1 minor and 1 info.
+
+**Context**
+- Product: Keryx Desktop. Surface: an app screen, the Publish to GitHub dialog and the Review panel.
+- Audience: the operator publishing a local review.
+- Primary task: when the PR moved past the reviewed commit, either publish the old review as is, or start the next round on the new head and land on it.
+- Mode: code only. No URL or screenshots were supplied, so nothing was rendered.
+
+**Round-2 dispositions (checked at head 822192905)**
+- **UX-102: closed.** The existing-attempt branch now raises the toast "Commit <sha> already has a review attempt / Showing it instead of starting another". A skipped start raises "Update review did not start". A failed start sets `actionError`, and ReviewRuns renders that error through its `{...local}` props as a `role="alert"` banner; the test "a failed Update review start shows its error" pins it. This also closes round 2's unchecked item.
+- **UX-105: closed.** docs/docs/desktop-app.md now describes **Update review to**.
+- **UX-101: withdrawn (decision).** T15 records the footer order as decided: Update, Publish as is, Close, Skip, Save.
+- **UX-103: withdrawn (decision).** Journal T13 needs_operator (1) records the one-click start as decided.
+- **UX-104: open, still info.** Carried Keep/Dismiss answers are still unmarked. It is not re-filed as a new finding.
+
+**New this round**
+- **UX-201 (minor).** With the board behind and an attempt already on the new head, the panel shows that attempt badged "Earlier revision". No refresh and no stale banner follow.
+- **UX-202 (info).** The reason Update review is disabled is a tooltip on a disabled button only.
+
+**Scores**
+- Slop score 0 (T1 0 / T2 0 / T3 0). This is an app screen, and the changes add no new visual treatment; no exemptions were needed.
+- WCAG 2.2 AA floor: no code-level failure found. Contrast, focus and target size were not measured.
+- Viewports: not run.
+
+**Top 3 changes**
+1. Refresh the board, or use the attempt's own range, when Update review lands on an existing attempt (UX-201).
+2. Give the disabled Update review a visible reason (UX-202).
+3. Mark carried answers (UX-104, still open).
+
+**What works (keep)**
+- Exactly one primary in each footer state.
+- The two head-moved alternatives sit side by side.
+- The busy state disables Update, and a raced click still reaches the user as a toast.
+- `autoPublish` is stripped from the update round.
+- Sessions deliberately offers no Update, and a test pins it.
+- The as-is notice is described by both fieldsets.
+
+**Checks not run**
+- No live render, so none of these ran:
+  - the 1440, 768 and 390 viewports;
+  - light and dark modes;
+  - computed contrast of the tone-warn banner and of `<code>` inside buttons;
+  - focus order, and where focus lands after the publish dialog closes on Update review (the opener may unmount when `setSessionId(null)` closes a History dialog);
+  - the announcement of the toasts and of a `role="status"` banner present at mount;
+  - footer target sizes;
+  - tooltip behaviour on a disabled button in WKWebView.
+- A render that would close the gap: screenshots or a URL of the head-moved publish dialog, idle and busy, and of the panel after Update review in three cases (new start, existing attempt with the board current, existing attempt with the board behind), at 1440 and 390 in both themes.
+- Tests were not run (read-only lens). The brief reports Desktop `src/review src/reviews` at 151 pass.
+- Slice-01's T14, T15, T5, T6 and T7 resolved/*.implement.json bodies were read only for their file lists. They are rule-entry lists, not UI.
+
+**Routing audit**
+- metaproject: index.md was not read. The bounded reviewer dispatch supplied the skill, brief, driver and slice directly.
+- graph_used: no. Not relevant: the slice named the changed files.
+- wiki_used: no. Not relevant: the flow records and AC were in the slice.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`).
+- raw_rg_used: no.

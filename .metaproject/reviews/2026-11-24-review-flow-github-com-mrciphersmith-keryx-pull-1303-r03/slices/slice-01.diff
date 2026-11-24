@@ -1,0 +1,2603 @@
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md
+@@ 1,25 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: When the pull request is open with the reviewed base and a different head, the `desk-publish` preview returns `headMoved` with both commits, verdict `comment`, inline off, and a body whose first line names the reviewed commit and says the pull request moved on; submit posts a `COMMENT` review with `commit_id` equal to the reviewed head. [verify: exec `bun test src/review/desk-publication.test.ts`]
++- AC2: With a moved head, a submit whose settings ask for another verdict or inline comments still posts a `COMMENT` with no inline comments; a head that moved again after the preview fails with `stale:` and posts nothing; automatic publication with a moved head posts nothing; a changed base or a closed pull request keeps today's refusal. · sensitive: failure-scenario [verify: exec `bun test src/review/desk-publication.test.ts`]
++- AC3: The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]
++- AC4: `on_head_move` has the values `ask`, `follow`, `ignore`; a manual review defaults to `ask` and a rule-triggered review to `follow`; a missing or unknown stored value reads as the default. [verify: exec `bun test src/review/head-move.test.ts`]
++- AC5: The previous-attempt selection accepts the newest partial attempt with accepted findings and an attempt run with different settings, and rejects imported, failed, cancelled and unreviewed attempts. [verify: exec `bun test src/review/update-round.test.ts`]
++- AC6: `findPreviousRound` still chooses a previous round recorded under different review settings. [verify: exec `bun test src/review/prior-round.test.ts`]
++- AC7: A new attempt on a newer head of the same Review (stage 2 round N+1, started by "Review again" / "New review round" or "Update review") builds on the previous round: after a partial previous round with accepted findings it runs in mode delta with a non-empty prior-findings list and the area the partial round did not cover planned as unreviewed; after a previous round run with different settings it still gets the previous findings; the previous-attempt rule exists once (selectPriorAttempt), the old options-key rule is gone. [verify: exec `bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts`]
++- AC8: Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]
++- AC9: The scenario on a real pull request with a commit pushed during a round, then published as is from Desktop. [verify: judged]
++- AC10: In the publish dialog with a moved head, "Update review to <sha>" starts a new round of the same Review on the current head; the keep/dismiss answers given in the previous round's draft are pre-selected in the new round's publication draft for findings with the same finding id. [verify: exec `sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'`]
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md
+@@ 1,68 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-11-24T07:28:04.148Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.812] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++2. [1.723] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md
++   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.
++   claimType: constraint | confidence: high | version: 0.1.0
++   scope: module:review, memory, entity:managed-review-package
++   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown
++3. [1.662] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++4. [1.609] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++5. [1.603] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
++
++## Stage 3 sources and code map
++
++- Requirements: `docs/requirements/keryx-desktop-review-v2/` — plan v0.1.3 (stage 3, D1, D2, "Передача следующим этапам"), spec "Поведение при смене head", "Раунд обновления", "Перед публикацией".
++- Publish path: `src/review/desk-publication.ts` (`publication`, `prepare`, `current` at the subject check, `verifyDeskSubject` before POST), `src/review/desk-publication-types.ts`, `src/commands/review-desk-publish.ts`, dialog `apps/desktop/src/review/ReviewPublishDialog.tsx` (DOM tests in `ReviewRuns.dom.test.tsx`), backend tests `src/review/desk-publication.test.ts`.
++- Subject check: `verifyDeskSubject` in `src/review/desk-run-service.ts:49` (strict base+head; used by run start, executor and publication).
++- Previous-round selection today: `desk-run-service.ts:369-377` (completed + complete + same options key), executor copies only a `closed` previous package (`desk-run-executor.ts:518-523`), package trust requires completion evidence (`prior-round.ts` `packageTrust`, `round-record.ts` `completionOf`).
++- Run model: `DeskRun` in `src/review/desk-run-types.ts` (`source: manual | scheduled | existing`).
++- Stage 2 (flow 519, `feat/desktop-review-v2-stage2`) owns the rounds migration in `src/review/desk-run-store.ts`; at flow init (2026-11-24) the branch had no pushed code.
++- Stage 1 (Draft PR MrCipherSmith/keryx#1300) touches `ReviewBoard.tsx`, `model.ts`, Issues tab — no planned overlap with this flow's files.
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md
+@@ 1,24 @@
++# Desktop Review v2 stage 3: head move
++
++## Problem
++
++When the head of a pull request moves after a Desktop review finished, the review can no longer be published at all: `desk-publish` reports "The pull request is closed or its revision moved" and only a local save remains (spec O8). There is no `on_head_move` setting, and "Review again" starts an unrelated run instead of an update round of the same review. The previous-round rules reject a partial round and a round run with different settings (spec O10).
++
++Source: `docs/requirements/keryx-desktop-review-v2/` (PRD R9, R10; specification "Поведение при смене head"; implementation plan v0.1.3, stage 3, owner decisions D1 and D2).
++
++## Expected outcome
++
++1. The publish dialog offers the D1 variants when the head moved after the reviewed commit: "Publish as is for `<sha>`" is allowed only with the verdict Comment and a first body line that names the reviewed commit and says the pull request moved on. Save locally and Skip stay as they are. Automatic publication still refuses a moved head.
++2. `on_head_move` exists as a typed setting with the values `ask`, `follow`, `ignore`; a manual review defaults to `ask` (D2), a rule-triggered review to `follow`.
++3. "Review again" becomes an update round of the same Review (blocked on stage 2, see below).
++4. The previous-round choice accepts a partially completed round and a round run with other settings, with tests.
++
++## Dependency on stage 2
++
++Stage 3 requires stage 2 (flow 519, branch `feat/desktop-review-v2-stage2`): the update round belongs to the Review entity and its rounds, which stage 2 introduces. The operator chose to start stage 3 before stage 2 lands. Items 1, 2 and the round-independent part of 4 are built first, shaped so they attach to rounds without a rewrite. Item 3 and the parts of item 4 that need rounds (wiring the selection into the run start, the package trust rule) wait for stage 2's rounds migration; this flow records them as blocked until then. No rounds schema is invented here.
++
++## Out of scope
++
++- The Reviews tab, the `reviews` table and the migration (stage 2).
++- Wave-boundary head checks in the executor and the `review-orchestrator` "Head moved" procedure (stage 4 for the skill; executor checks go with item 3).
++- Carrying finding answers across the update round (goes with item 3).
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md
+@@ 1,108 @@
++# Flow Journal
++
++- 2026-11-24T07:28:08.299Z - flow created
++- 2026-11-24T07:29:19.786Z - task-done: T1: Collect remaining context
++- 2026-11-24T07:29:20.005Z - task-done: T2: Implement per plan
++- 2026-11-24T07:29:20.287Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-11-24T07:29:20.486Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-24T07:29:20.700Z - task-added: T5: D1: publish as is for the reviewed commit (server + dialog + tests)
++- 2026-11-24T07:29:21.040Z - task-added: T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)
++- 2026-11-24T07:29:21.291Z - task-added: T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test
++- 2026-11-24T07:29:21.529Z - task-added: T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)
++- 2026-11-24T07:29:21.726Z - task-added: T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff
++- 2026-11-24T07:29:21.953Z - task-added: T10: review-orchestrator round on the branch
++- 2026-11-24T07:29:43.882Z - frozen: 9 criteria; checksum recorded
++- 2026-11-24T07:29:44.073Z - started
++- 2026-11-24T07:29:54.815Z - task-attempt: T5: started (attempt 1) — 520-T5
++- 2026-11-24T07:29:54.994Z - task-attempt: T6: started (attempt 1) — 520-T6
++- 2026-11-24T07:29:55.173Z - task-attempt: T7: started (attempt 1) — 520-T7
++- 2026-11-24T07:32:02.125Z - task-done: T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)
++
++## 2026-11-24 T6 accepted (DONE_WITH_CONCERNS)
++
++- `ask` + finished returns an `update` offer (spec "Перед публикацией": update is the primary action once a round finished). Accepted.
++- Worker could not run eslint/tsc: worktree has no node_modules. Orchestrator runs them in T9 after `bun install`.
++- Dispatch JSON files were not written or schema-validated; the dispatch carried the Worker brief fields in the prompt.
++
++## 2026-11-24 T7 accepted (DONE)
++
++- `selectPriorAttempt` skips attempts with a `delete`/`archive` decision (evidence withdrawn). Accepted.
++- AC6 test passes on current code: the package candidate path never reads settings, so it is a regression guard, not red-first.
++- Sensitivity evidence (worker): dropping `partial` acceptance and re-adding an options-key filter each failed a named test.
++- The worker temporarily symlinked node_modules from another worktree to run tests, then removed it.
++- 2026-11-24T07:35:54.838Z - task-done: T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test
++- 2026-11-24T07:54:35.165Z - task-done: T5: D1: publish as is for the reviewed commit (server + dialog + tests)
++
++## 2026-11-24 T5 accepted (DONE_WITH_CONCERNS)
++
++- No new helper in desk-run-service.ts: `verifyDeskSubject` already takes a revision; publication passes the as-is variant's expected head. Deviation from plan A accepted.
++- Sensitivity evidence (worker): each AC2 guard reverted and its test failed; the explicit digest entry for currentHead is a backstop (body already carries it).
++- Rust `review_publish` passes request/state as `Value`; no Rust change.
++- Desktop `.tsx` files are in the root ESLint ignore list and apps/desktop has no ESLint config: AC8's eslint over apps/desktop/src/review lints nothing there. Desktop tsc was run instead.
++- behavior_changes flagged needs_operator, decided by the orchestrator as within D1 and listed in the PR for the owner:
++  1. Save locally in the head-moved case stores the forced settings (comment, no inline). Accepted: this attempt can only ever be published as is now; an update round is a new attempt with its own draft.
++  2. Dialog status wording "Reviewed commit <short>. The pull request has moved to <short> since. Publishing as is posts a Comment for the reviewed commit only." Accepted.
++  3. "Update review to <sha>" placement (first footer button): no caller yet; revisit when item 3 wires it — spec calls it the primary action.
++  4. General comment can be turned off in the head-moved case, which then refuses submit with the existing message. Accepted (no silent override).
++- Orchestrator fixed T7's test typing (6 TS2379 under exactOptionalPropertyTypes) directly: mechanical test-only change, journaled here instead of a fix dispatch.
++- 2026-11-24T08:16:57.645Z - task-added: T11: Fix round 1: review findings of round 1 on PR #1303
++- 2026-11-24T08:16:58.249Z - task-attempt: T11: started (attempt 1) — 520-T11
++
++## 2026-11-24 Review round 1 (PR #1303, head 9e871b17f)
++
++- Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303`, 11 reviewers (roster from `keryx review plan`), all DONE with results in `raw/`.
++- Totals: blocker 0, major 1 (logic F-001: as-is offered after a force-push), minor 10, info ~12.
++- tests-to-run: verify-tests-to-run-1 had 1 timeout + 1 follow-on error in `src/commands/review-desk-run.test.ts` under concurrent load; re-run alone (verify-tests-to-run-2) passed. Full backend `bun test src/review`: 5461 pass, 1 fail (`mutate.test.ts` SIGTERM test, passed alone) — both load flakes, files not touched by this PR.
++- Fix round T11 dispatched for logic F-001, performance/degradation F-001, frontend F-001 = ui-ux UX-001, ui-ux UX-002, UX-003, testing F-001..F-003.
++- Architecture F-001 (two prior-attempt rules) and F-002 (on_head_move default source), degradation F-002 (findingsKnown undefined): recorded as obligations of T8 in tasks.md; no code change now (wiring is item 3).
++- Verifier (Wave C) and review-premise (Wave D) were not dispatched: the one major is fixed defensively in T11 regardless of whether GitHub returns 422, so its premise does not gate the fix. Recorded as Not run.
++- 2026-11-24T08:26:00.635Z - task-done: T11: Fix round 1: review findings of round 1 on PR #1303
++- 2026-11-24T08:28:08.753Z - ac-updated: AC7: ""Review again" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none — blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]" -> "A new attempt on a newer head of the same Review (stage 2 round N+1, started by "Review again" / "New review round" or "Update review") builds on the previous round: after a partial previous round with accepted findings it runs in mode delta with a non-empty prior-findings list and the area the partial round did not cover planned as unreviewed; after a previous round run with different settings it still gets the previous findings; the previous-attempt rule exists once (selectPriorAttempt), the old options-key rule is gone. [verify: exec `bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts`]" (Stage 2 rounds landed (origin/feat/desktop-review-v2-stage2 98bec5904); item 3 is now implementable, so AC7 gets its real criterion and test command.)
++- 2026-11-24T08:28:09.050Z - ac-updated: AC10: "(new)" -> "In the publish dialog with a moved head, "Update review to <sha>" starts a new round of the same Review on the current head; the keep/dismiss answers given in the previous round's draft are pre-selected in the new round's publication draft for findings with the same finding id. [verify: exec `sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'`]" (Spec 'Перед публикацией' and acceptance criterion 7: update action in the dialog and answers carried by finding id; implementable now that stage 2 rounds exist.)
++- 2026-11-24T08:28:26.551Z - ac-updated: AC8: "Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]" -> "Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]" (Branch rebased onto stage 2 (98bec5904), which legitimately changes these files; the invariant now compares with the stage 2 tip, and covers the new src/reviews suite.)
++- 2026-11-24T08:28:36.136Z - task-added: T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)
++- 2026-11-24T08:28:36.364Z - task-added: T13: Item 3 Desktop: Update review action and finding answers carried by id
++- 2026-11-24T08:28:37.754Z - task-attempt: T12: started (attempt 1) — 520-T12
++- 2026-11-24T08:28:38.153Z - task-attempt: T13: started (attempt 1) — 520-T13
++- 2026-11-24T08:38:11.386Z - task-done: T13: Item 3 Desktop: Update review action and finding answers carried by id
++
++## 2026-11-24 Rebase onto stage 2; T13 accepted (DONE_WITH_CONCERNS)
++
++- Rebased onto origin/feat/desktop-review-v2-stage2 @ 98bec5904 (stage 2 T5/T6/T7/T9/T14). Clean; one fix: stage 2 renamed ReviewRuns.dom.test.tsx to reviews/ReviewPanel.dom.test.tsx, dialog import path corrected. AC7 rewritten (item 3 real criterion), AC8 diff base moved to the stage 2 tip, AC10 added (Update review + answers by finding id).
++- T13: Update review = start on the current range through the existing start path with the reviewed attempt's options; stage 2's roundFor makes it round N+1. Update is the primary button when offered; Publish as is becomes secondary (closes T5 decision 3). Answers seeded from the newest earlier attempt draft via previousRunId (<=8 hops, same-Review guard), answers only, own draft wins.
++- needs_operator items decided by the orchestrator and listed in the PR for the owner: (1) Update starts directly with the previous options instead of opening the launch form; (2) the user stays in the Reviews panel; a board behind the push is refreshed; if the current head already has an attempt nothing new starts.
++- 2026-11-24T08:46:48.935Z - task-done: T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)
++- 2026-11-24T08:46:49.192Z - task-done: T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)
++
++## 2026-11-24 T12 accepted (DONE_WITH_CONCERNS); T8 closed
++
++- A partial Desktop package is a draft (status stays draft until `review complete` writes closed), with findings.json when ingested; completionOf gives eligible=false, completed=false.
++- Trust design: new machine-local round-registry event `desk-partial`, written only by the executor when it hands a partial attempt's package from the user's own run store to the next round; prior-round admits a draft only with that vouch, and the finished-round vouch ignores desk-partial entries (a red test caught the hole where status is not part of the hashed identity). The spec's literal relaxation for every draft was rejected.
++- Uncovered area: a vouched partial round stays completed=false, so weakReasons plan everything outside the delta as new code (whole prior range treated as uncovered; per-file partial coverage not reliable).
++- Behaviour change: a retry on the same range no longer builds on another attempt of its own round (only earlier rounds count).
++- Not verified: runDeskWorker end to end (needs GitHub); live Desktop update round.
++- T8 open info-level follow-ups (not blocking): `findingsKnown: undefined` treated as unknown by selectPriorAttempt vs known elsewhere (degradation F-002); `reviews.on_head_move` column defaults to 'ask' for every Review incl. rule-created ones, while spec/D2 say rule runs default to follow — parseOnHeadMove/defaultOnHeadMove exist but nothing writes the default per source yet (architecture F-002).
++- 2026-11-24T09:17:24.760Z - ac-updated: AC3: "The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]" -> "The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]" (Stage 2 renamed ReviewRuns.dom.test.tsx to src/reviews/ReviewPanel.dom.test.tsx; the verify command follows the file (round 2 logic F-001). The as-is action is no longer always the primary one since T13 made Update review primary when offered.)
++- 2026-11-24T09:24:30.152Z - task-added: T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is
++- 2026-11-24T09:24:30.407Z - task-added: T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs
++- 2026-11-24T09:24:31.665Z - task-attempt: T14: started (attempt 1) — 520-T14
++- 2026-11-24T09:24:31.922Z - task-attempt: T15: started (attempt 1) — 520-T15
++- 2026-11-24T09:32:22.490Z - task-done: T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs
++
++## 2026-11-24 Review round 2 (PR #1303 head 412258583, range 98bec5904..head)
++
++- Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303-r02`, roster from `keryx review plan` (10) + review-pr-contract from `review next`; 2 slices (flow+Desktop / backend), 20 dispatches, all results in raw/.
++- blast-radius refused to recount against the stacked base (100 files vs 32 recorded) — Not run; tests chosen with `keryx test related` and run through verify-run (-1, -2).
++- harness-robustness "whole process group" test fails at stage 2 tip 98bec5904 and passes at main: inherited from stage 2, reported in the shared notes.
++- Totals: blocker 0; major 2 (logic-w2 F-001 = architecture-w2 F-005 = degradation-w2 F-001: prior selection with no fallback; highload-w2 F-001 pre-existing registry compaction without lock); minors ~20 (deduplicated into T14 B1-B6 and T15 D1-D6 plus testing-w2 gaps forwarded to T14); infos ~15.
++- AC3 test path corrected (stage 2 rename). PR body: automatic publication refuses a moved head before the compare/discussion reads (one PR read happens) — wording fixed (pr-contract PC-004).
++- T15 accepted (DONE_WITH_CONCERNS): request() returns an outcome; Update disabled while busy; existing attempt on the target range shown instead of a second start; autoPublish not carried; Sessions offers no Update (explicit, tested); footer order Update, Publish as is, Close, Skip, Save. Toast texts decided by the orchestrator (listed in PR).
++- 2026-11-24T09:51:12.372Z - task-done: T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is
++
++## 2026-11-24 T14 accepted (DONE)
++
++- B1 one ordering rule `priorAttemptCandidates` (newest round first, complete before partial); executor takes `previousRuns[]` and hands on the first qualifying (closed, or partial with recordPartialRound ok). B2 answers from `earlierRoundAttempts` (same Review, earlier rounds, not deleted/archived), newest draft wins. B3 registry append+compaction under withFileLock (lock failure → error → next candidate). B4 registryVouches ignores desk-partial internally. B5 definitive compare status cached per head. B6 superseded round refuses as-is ("Round N of this review is newer…").
++- needs_operator (decided by orchestrator, listed in PR): B6 blocks on any newer round incl. a failed/running one.
++- testing-w2 gaps 1-4 pinned (worker-level runDeskWorker still has only a source check; same-Review guard pinned without a killed mutant).
++- Round 3 (verification of T14/T15) not run in this session: stopping point reported to the parent session.
++- 2026-11-24T09:52:22.686Z - task-done: T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md
+@@ 1,47 @@
++# Plan
++
++## Approach
++
++### A. Publish as is for the reviewed commit (D1) — `src/review/desk-publication.ts`, `desk-publication-types.ts`, `apps/desktop/src/review/ReviewPublishDialog.tsx`
++
++- The server classifies the PR against the run: `current` (open, same base and head), `head-moved` (open, same base, different head), or `moved` (closed, or the base changed). Only `head-moved` gets the new variant; `moved` keeps today's refusal.
++- `PublicationState` gains `headMoved?: { reviewedHead: string; currentHead: string }`. Its presence means "this draft is the as-is variant for the reviewed commit".
++- In the `head-moved` case the server forces the verdict to `comment` and inline comments off (the current PR diff does not place lines on the old commit), and prepends one first line to the body: ``Reviewed commit `<reviewedHead>`. The pull request has moved to `<currentHead>` since; this review does not cover the newer commits.`` The current head is part of the digest, so a further push makes the preview stale.
++- Submit re-verifies the subject: open, base unchanged, head equal to the previewed current head (a new helper next to `verifyDeskSubject`, which stays strict for every other caller). `commit_id` stays the reviewed head.
++- `automatic` publication with a moved head stays refused.
++- The dialog shows a status line naming both commits, disables the verdict choice and the Inline checkbox, and labels the primary button "Publish as is for `<short sha>`". An optional `onUpdateReview` prop renders "Update review to `<short sha>`" as the first action when a caller provides it; no caller provides it until item 3.
++
++### B. `on_head_move` (D2) — new `src/review/head-move.ts`
++
++- `ON_HEAD_MOVE = ["ask", "follow", "ignore"]`, `type OnHeadMove`, `defaultOnHeadMove(source)` (`manual` and `existing` → `ask`, `scheduled` → `follow`), `parseOnHeadMove(value, source)` (unknown or missing → default; this is how stage 2 reads a nullable column), and `headMoveResponse(mode, phase)` encoding the spec table (running: ask → offer "update after" and "stop and restart"; follow → queue update after finish; ignore → nothing).
++- No storage. Stage 2 adds the `reviews.on_head_move` column and reads it through `parseOnHeadMove`.
++
++### C. Previous-round selection (item 4, round-independent part) — new `src/review/update-round.ts`
++
++- `selectPriorAttempt(attempts)` over `DeskRun` records (an Attempt keeps the `DeskRun` format per the spec): newest attempt, not `existing`, of the current scope, with a recorded reviewed range and accepted findings, state `completed` or `partial`; the options key is ignored. Returns the attempt and `partial: boolean` (for spec step 4, uncovered area).
++- Not wired into `desk-run-service.ts` yet: today the executor copies only a closed previous package and the package trust rule in `prior-round.ts` requires completion evidence, so wiring it alone would change nothing observable and would half-implement item 3. Wiring plus the trust-rule change go with item 3.
++- `prior-round.test.ts` gains a test that a previous round recorded with different review settings is still chosen (settings are not part of the package candidate), pinning that invariant for the update round.
++
++### D. Item 3 — blocked on stage 2
++
++After A–C, `git fetch origin` and check `feat/desktop-review-v2-stage2` for the rounds migration (`src/review/desk-run-store.ts`). If present, rebase onto it and implement the update round; if not, leave T-item3 blocked and report.
++
++## Trade-offs
++
++- Forcing inline off for the as-is variant loses inline placement; placing lines on an old commit would need its diff and is not needed for a Comment.
++- `headMoved` as a state field instead of a new request kind keeps the request contract and the draft file unchanged; the user's explicit act is pressing the distinctly labelled button, and the digest binds the preview they saw.
++
++## Do not break
++
++- Attention-set logic in `apps/desktop/src/review/ReviewBoard.tsx`: not touched by this plan.
++- `attachBadges` ↔ `localBadge` parity: not touched.
++- Toolbar container queries in `apps/desktop/src/styles/review.css`: not touched.
++
++## State × event matrix (publish dialog)
++
++| state \ event | preview loads | head moves again before submit | user presses primary | settings change |
++|---|---|---|---|---|
++| current head | as today | submit fails `stale:`; preview marked stale | Submit review | as today |
++| head moved, PR open, base same | status line names both commits; verdict locked to Comment; Inline disabled; primary "Publish as is for `<sha>`" | digest differs → `stale:` error, preview stale, nothing posted | posts a COMMENT review on the reviewed commit with the first line | verdict/inline changes are ignored by the server (forced) |
++| base moved or PR closed | blocked reason as today | — | disabled | as today |
++| automatic publication, head moved | refused, needs a decision in Desktop | — | — | — |
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md
+@@ 1,19 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1–T4 | — | Scaffold rows superseded by T5–T10 |
++| T5 | implement | D1: publish as is for the reviewed commit — `desk-publication.ts`, `desk-publication-types.ts`, `ReviewPublishDialog.tsx`, tests (plan A) |
++| T6 | implement | D2: `on_head_move` — `src/review/head-move.ts` + test (plan B) |
++| T7 | implement | Prior-attempt selection — `src/review/update-round.ts` + test; settings test in `prior-round.test.ts` (plan C) |
++| T8 | implement | Item 3: "Review again" as an update round of the same Review — blocked until stage 2 (flow 519) pushes the rounds migration (plan D). Must, in the same change: replace the live previous-run rule in `desk-run-service.ts` (no second rule left), relax `prior-round.ts` packageTrust and `round-record.ts` REVIEWED_STATUSES for partial rounds, align `findingsKnown: undefined` handling with `pr-context.ts`/`desk-run-legacy.ts` (review round 1: architecture F-001, degradation F-002), and settle where the `on_head_move` default is resolved for a Review mixing manual and scheduled attempts (architecture F-002) |
++| T9 | verify | Backend and Desktop review suites, typecheck, lint, invariant diff (AC8) |
++| T10 | review | review-orchestrator round on the branch |
++| T11 | implement | Fix round 1: findings of review round 1 on PR #1303 |
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json
+@@ 1,556 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "520",
++  "slug": "desktop-review-v2-stage3",
++  "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
++  "status": "in-progress",
++  "createdAt": "2026-11-24T07:28:08.299Z",
++  "updatedAt": "2026-11-24T09:52:22.686Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:137248605acbee3bc31841d56515a90018a1b54771c5abbd95c2329b79d6f135",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "Aleksandr Tsaitler",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "scaffold row superseded by T5-T10"
++    },
++    {
++      "id": "T5",
++      "title": "D1: publish as is for the reviewed commit (server + dialog + tests)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:54.815Z",
++            "outcome": "started",
++            "detail": "520-T5"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "D2: on_head_move type, defaults and parse (head-move.ts + tests)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:54.994Z",
++            "outcome": "started",
++            "detail": "520-T6"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T07:29:55.173Z",
++            "outcome": "started",
++            "detail": "520-T7"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Implemented by T12 (backend: prior selection, partial prior, trust vouch) and T13 (Update review, answers by finding id) after stage 2 landed; findingsKnown-undefined alignment and on_head_move default resolution remain info-level follow-ups recorded in journal"
++    },
++    {
++      "id": "T9",
++      "title": "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Backend review suites (5499/5501; the 2 failures are timing tests in untouched files, one inherited from stage 2), Desktop review suites 150/150, root and Desktop tsc clean, eslint clean on src/review; CI green on heads 9e871b17f and 412258583"
++    },
++    {
++      "id": "T10",
++      "title": "review-orchestrator round on the branch",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T11",
++      "title": "Fix round 1: review findings of round 1 on PR #1303",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T08:16:58.249Z",
++            "outcome": "started",
++            "detail": "520-T11"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T12",
++      "title": "Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T08:28:37.754Z",
++            "outcome": "started",
++            "detail": "520-T12"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T13",
++      "title": "Item 3 Desktop: Update review action and finding answers carried by id",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T08:28:38.153Z",
++            "outcome": "started",
++            "detail": "520-T13"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T14",
++      "title": "Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T09:24:31.665Z",
++            "outcome": "started",
++            "detail": "520-T14"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T15",
++      "title": "Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T09:24:31.922Z",
++            "outcome": "started",
++            "detail": "520-T15"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-24T07:28:08.299Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-24T07:29:19.786Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-11-24T07:29:20.005Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-11-24T07:29:20.287Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-11-24T07:29:20.486Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-24T07:29:20.700Z",
++      "event": "task-added",
++      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.040Z",
++      "event": "task-added",
++      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.291Z",
++      "event": "task-added",
++      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
++    },
++    {
++      "at": "2026-11-24T07:29:21.529Z",
++      "event": "task-added",
++      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
++    },
++    {
++      "at": "2026-11-24T07:29:21.726Z",
++      "event": "task-added",
++      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
++    },
++    {
++      "at": "2026-11-24T07:29:21.953Z",
++      "event": "task-added",
++      "detail": "T10: review-orchestrator round on the branch"
++    },
++    {
++      "at": "2026-11-24T07:29:43.882Z",
++      "event": "frozen",
++      "detail": "9 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-11-24T07:29:44.073Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-11-24T07:29:54.815Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 520-T5"
++    },
++    {
++      "at": "2026-11-24T07:29:54.994Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 520-T6"
++    },
++    {
++      "at": "2026-11-24T07:29:55.173Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 520-T7"
++    },
++    {
++      "at": "2026-11-24T07:32:02.125Z",
++      "event": "task-done",
++      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
++    },
++    {
++      "at": "2026-11-24T07:35:54.838Z",
++      "event": "task-done",
++      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
++    },
++    {
++      "at": "2026-11-24T07:54:35.165Z",
++      "event": "task-done",
++      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
++    },
++    {
++      "at": "2026-11-24T08:16:57.645Z",
++      "event": "task-added",
++      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
++    },
++    {
++      "at": "2026-11-24T08:16:58.249Z",
++      "event": "task-attempt",
++      "detail": "T11: started (attempt 1) — 520-T11"
++    },
++    {
++      "at": "2026-11-24T08:26:00.635Z",
++      "event": "task-done",
++      "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
++    },
++    {
++      "at": "2026-11-24T08:28:08.753Z",
++      "event": "ac-updated",
++      "detail": "AC7: \"\"Review again\" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none — blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]\" -> \"A new attempt on a newer head of the same Review (stage 2 round N+1, started by \"Review again\" / \"New review round\" or \"Update review\") builds on the previous round: after a partial previous round with accepted findings it runs in mode delta with a non-empty prior-findings list and the area the partial round did not cover planned as unreviewed; after a previous round run with different settings it still gets the previous findings; the previous-attempt rule exists once (selectPriorAttempt), the old options-key rule is gone. [verify: exec `bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts`]\" (Stage 2 rounds landed (origin/feat/desktop-review-v2-stage2 98bec5904); item 3 is now implementable, so AC7 gets its real criterion and test command.)"
++    },
++    {
++      "at": "2026-11-24T08:28:09.050Z",
++      "event": "ac-updated",
++      "detail": "AC10: \"(new)\" -> \"In the publish dialog with a moved head, \"Update review to <sha>\" starts a new round of the same Review on the current head; the keep/dismiss answers given in the previous round's draft are pre-selected in the new round's publication draft for findings with the same finding id. [verify: exec `sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'`]\" (Spec 'Перед публикацией' and acceptance criterion 7: update action in the dialog and answers carried by finding id; implementable now that stage 2 rounds exist.)"
++    },
++    {
++      "at": "2026-11-24T08:28:26.551Z",
++      "event": "ac-updated",
++      "detail": "AC8: \"Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" (Branch rebased onto stage 2 (98bec5904), which legitimately changes these files; the invariant now compares with the stage 2 tip, and covers the new src/reviews suite.)"
++    },
++    {
++      "at": "2026-11-24T08:28:36.136Z",
++      "event": "task-added",
++      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
++    },
++    {
++      "at": "2026-11-24T08:28:36.364Z",
++      "event": "task-added",
++      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
++    },
++    {
++      "at": "2026-11-24T08:28:37.754Z",
++      "event": "task-attempt",
++      "detail": "T12: started (attempt 1) — 520-T12"
++    },
++    {
++      "at": "2026-11-24T08:28:38.153Z",
++      "event": "task-attempt",
++      "detail": "T13: started (attempt 1) — 520-T13"
++    },
++    {
++      "at": "2026-11-24T08:38:11.386Z",
++      "event": "task-done",
++      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
++    },
++    {
++      "at": "2026-11-24T08:46:48.935Z",
++      "event": "task-done",
++      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
++    },
++    {
++      "at": "2026-11-24T08:46:49.192Z",
++      "event": "task-done",
++      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
++    },
++    {
++      "at": "2026-11-24T09:17:24.760Z",
++      "event": "ac-updated",
++      "detail": "AC3: \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]\" -> \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]\" (Stage 2 renamed ReviewRuns.dom.test.tsx to src/reviews/ReviewPanel.dom.test.tsx; the verify command follows the file (round 2 logic F-001). The as-is action is no longer always the primary one since T13 made Update review primary when offered.)"
++    },
++    {
++      "at": "2026-11-24T09:24:30.152Z",
++      "event": "task-added",
++      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
++    },
++    {
++      "at": "2026-11-24T09:24:30.407Z",
++      "event": "task-added",
++      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
++    },
++    {
++      "at": "2026-11-24T09:24:31.665Z",
++      "event": "task-attempt",
++      "detail": "T14: started (attempt 1) — 520-T14"
++    },
++    {
++      "at": "2026-11-24T09:24:31.922Z",
++      "event": "task-attempt",
++      "detail": "T15: started (attempt 1) — 520-T15"
++    },
++    {
++      "at": "2026-11-24T09:32:22.490Z",
++      "event": "task-done",
++      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
++    },
++    {
++      "at": "2026-11-24T09:51:12.372Z",
++      "event": "task-done",
++      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
++    },
++    {
++      "at": "2026-11-24T09:52:22.686Z",
++      "event": "task-done",
++      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-publication.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/review/desk-publication.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/review/head-move.test.ts"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/review/update-round.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun test src/review/prior-round.test.ts"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts"
++    },
++    "AC8": {
++      "kind": "invariant",
++      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'"
++    },
++    "AC9": {
++      "kind": "judged"
++    },
++    "AC10": {
++      "kind": "exec",
++      "check": "sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'"
++    }
++  }
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T11.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewPublishDialog.tsx",
++    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
++    "src/review/desk-publication.test.ts",
++    "src/review/desk-publication.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewPublishDialog.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-publication.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T12.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/desk-run-executor.ts",
++    "src/review/desk-run-service.ts",
++    "src/review/prior-round.ts",
++    "src/review/round-record.ts",
++    "src/review/update-round.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/desk-run-executor.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-run-executor.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T13.implement.json
+@@ 1,131 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewPublishDialog.tsx",
++    "apps/desktop/src/review/ReviewRuns.tsx",
++    "apps/desktop/src/review/ReviewWorkspace.tsx",
++    "src/review/desk-publication.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewPublishDialog.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-publication.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T14.implement.json
+@@ 1,133 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/desk-publication.ts",
++    "src/review/desk-run-executor.ts",
++    "src/review/desk-run-service.ts",
++    "src/review/prior-round.ts",
++    "src/review/round-registry.ts",
++    "src/review/update-round.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/desk-publication.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-publication.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T15.implement.json
+@@ 1,105 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewPublishDialog.tsx",
++    "apps/desktop/src/review/ReviewRuns.tsx",
++    "apps/desktop/src/review/ReviewWorkspace.tsx",
++    "apps/desktop/src/sessions/SessionReviewActivity.tsx",
++    "docs/docs/desktop-app.md"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.tsx",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "file:apps/desktop/src/sessions/SessionReviewActivity.tsx",
++      "tier": "must_read",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewPublishDialog.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/review/ReviewPublishDialog.tsx",
++    "apps/desktop/src/review/ReviewRuns.dom.test.tsx",
++    "src/review/desk-publication-types.ts",
++    "src/review/desk-publication.test.ts",
++    "src/review/desk-publication.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/review/ReviewPublishDialog.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/desk-publication.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json
+@@ 1,129 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/head-move.test.ts",
++    "src/review/head-move.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json
+@@ 1,130 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/review/prior-round.test.ts",
++    "src/review/update-round.test.ts",
++    "src/review/update-round.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:src/review/prior-round.test.ts",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/review/prior-round.test.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- apps/desktop/src/review/ReviewPublishDialog.tsx
+@@ 17,87 @@
+   { value: "suggestions", label: "Approve with suggestions" },
+   { value: "changes", label: "Request changes" },
+   { value: "comment", label: "Comment only" },
+ ];
+ 
+ const unsupportedCli = "The selected Keryx CLI does not support review publishing. Update it or select Bundled in Settings → Desktop.";
+ 
+ const findingActions = [
+   { id: "uphold", label: "Keep finding" },
+   { id: "dismiss", label: "Dismiss finding" },
+ ] as const;
+ 
+ function choicesFor(question: PublicationState["questions"][number]): ReadonlyArray<{ id: PublicationAnswer; label: string }> {
+   return question.options?.length ? question.options : findingActions;
+ }
+ 
+ function Preview({ text, label = "Review comment preview" }: { text: string; label?: string }) {
+   return text.trim() ? <ReviewReportMarkdown text={text} label={label} className="review-publish-markdown" /> : <p>No general comment in this draft.</p>;
+ }
+ 
+-export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onClose }: {
++const shortSha = (sha: string) => sha.slice(0, 7);
++
++export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onUpdateReview, updateDisabled = false, onClose }: {
+   cwd: string;
+   target: DeskRunKey;
+   id: string;
+   command?: typeof reviewPublish | undefined;
+   onAccessLost?: ((message: string) => void) | undefined;
+   onDecision?: (() => void) | undefined;
++  /** Starts an update round on the current head it is given; offered only while the head has moved. */
++  onUpdateReview?: ((currentHead: string) => void) | undefined;
++  /** The update round cannot start now, because another action of the same review is in flight. */
++  updateDisabled?: boolean | undefined;
+   onClose: () => void;
+ }) {
+   const [draft, setDraft] = useState<PublicationState>();
+   const [settings, setSettings] = useState<PublicationSettings>();
+   const [pending, setPending] = useState<PublicationRequest["kind"] | null>("preview");
+   const [previewStale, setPreviewStale] = useState(false);
+   const [questionIndex, setQuestionIndex] = useState(0);
+   const [inlineOpen, setInlineOpen] = useState(false);
+   const [error, setError] = useState("");
+   const currentSettings = useRef<PublicationSettings>();
+   const requestNumber = useRef(0);
+   const activeRequest = useRef<PublicationRequest["kind"] | null>(null);
+   const queuedPreview = useRef<Extract<PublicationRequest, { kind: "preview" }>>();
+   const decision = useRef(onDecision);
+   decision.current = onDecision;
+   const verdictName = useId();
+   const answerName = useId();
++  const headMovedNotice = useId();
+ 
+   const send = useCallback(async (initialRequest: PublicationRequest) => {
+     if (activeRequest.current) {
+       if (activeRequest.current === "preview" && initialRequest.kind === "preview") queuedPreview.current = initialRequest;
+       return;
+     }
+     const number = ++requestNumber.current;
+     let request: PublicationRequest | undefined = initialRequest;
+     try {
+       while (request) {
+         activeRequest.current = request.kind;
+         setPending(request.kind);
+         setError("");
+         try {
+           const result = await command(cwd, target, request);
+           if (number !== requestNumber.current) return;
+           if (result?.version !== 1) throw new Error(unsupportedCli);
+           if (!queuedPreview.current) {
+             currentSettings.current = result.settings;
+             setDraft(result);
+
+--- apps/desktop/src/review/ReviewPublishDialog.tsx
+@@ 134,236 @@
+     const options = { ...current, verdictOverride: current.verdictOverride ?? null, ...changes };
+     currentSettings.current = options;
+     setSettings(options);
+     setPreviewStale(true);
+     void send({ kind: "preview", id, settings: options });
+   }
+ 
+   function refreshPreview() {
+     const latest = currentSettings.current;
+     setPreviewStale(true);
+     void send({ kind: "preview", id, refresh: true, ...(latest && { settings: latest }) });
+   }
+ 
+   const busy = pending !== null;
+   const writing = pending !== null && pending !== "preview";
+   const posted = Boolean(draft?.publishedUrl);
+   const questions = draft?.questions ?? [];
+   const question = questions[Math.min(questionIndex, questions.length - 1)];
+   const unanswered = questions.filter(item => !choicesFor(item).some(choice => choice.id === settings?.answers[item.id])).length;
+   const canUsePreview = !!draft && !!settings && !busy && !previewStale && !posted;
++  const headMoved = draft?.headMoved;
++  // The update round is the primary action while it is offered; publishing as is becomes the alternative.
++  const updateOffered = !!headMoved && !!onUpdateReview && !posted;
++  const publishButton = <button type="button" className={updateOffered ? "btn" : "btn btn-primary"}
++    disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
++    onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
++    {headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : "Submit review"}</button>;
+ 
+   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
+     onClose={writing ? null : onClose} footer={
+       <div className="review-publish-footer">
++        {/* The two head-moved alternatives stay next to each other, so a wrapping footer keeps them on one row. */}
++        {updateOffered && headMoved && onUpdateReview && <>
++          <button type="button" className="btn btn-primary" disabled={writing || updateDisabled}
++            title={updateDisabled ? "Another action of this review is still running." : undefined}
++            onClick={() => onUpdateReview(headMoved.currentHead)}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>
++          {publishButton}
++        </>}
+         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
+         {!posted && <>
+           {!draft?.skipped && <button type="button" className="btn" disabled={busy || !draft}
+             onClick={() => void send({ kind: "skip", id })}>Skip publication</button>}
+           <button type="button" className="btn" disabled={!canUsePreview}
+             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
+-          <button type="button" className="btn btn-primary" disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
+-            onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>Submit review</button>
++          {!updateOffered && publishButton}
+         </>}
+       </div>
+     }>
+     <div className="review-publish" aria-busy={writing}>
+       <p className="review-detail-meta">{target.repo} #{target.number} · @{target.viewer}</p>
+       {draft?.skipped && <p className="review-detail-muted" role="status">Publication skipped. This review is saved locally.</p>}
+       {error && <div className="inline-banner tone-warn" role="alert">
+         <span>{error}</span>
+         {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
+       </div>}
+       {settings && draft && !posted && <>
++        {headMoved && <div id={headMovedNotice} className="inline-banner tone-warn review-publish-head-moved" role="status"><span>
++          Reviewed commit <code title={headMoved.reviewedHead}>{shortSha(headMoved.reviewedHead)}</code>. The pull request has moved
++          to <code title={headMoved.currentHead}>{shortSha(headMoved.currentHead)}</code> since. Publishing as is posts a Comment
++          for the reviewed commit only. The verdict is Comment only, and inline comments are off because they cannot be
++          placed on an earlier commit.
++        </span></div>}
+         <div className="review-publish-settings">
+-          <fieldset disabled={writing}>
++          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
+             <legend>Include in the review</legend>
+             <label><input type="checkbox" checked={settings.general}
+               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
+-            <label><input type="checkbox" checked={settings.inline}
++            <label><input type="checkbox" checked={settings.inline} disabled={!!headMoved}
+               onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
+             <small className="review-detail-muted">English · Keryx template{draft.overlayAvailable ? " + project overlay" : ""}</small>
+             {draft.overlayRequiresApproval && <small className="review-detail-muted">This project requires confirmation of the finished report.</small>}
+             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
+           </fieldset>
+-          <fieldset disabled={writing}>
++          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
+             <legend>Review verdict</legend>
+-            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null}
++            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null} disabled={!!headMoved}
+               onChange={() => update({ verdictOverride: null })} />
+               <span>Use recommendation{settings.verdictOverride == null && <>
+                 <br /><small>{verdicts.find(option => option.value === settings.verdict)?.label} recommended</small>
+               </>}</span>
+             </label>
+             {verdicts.map(({ value, label }) => <label key={value}>
+-              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value}
++              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value} disabled={!!headMoved}
+                 onChange={() => update({ verdict: value, verdictOverride: value })} /> {label}
+             </label>)}
+           </fieldset>
+         </div>
+         {question && <section className="review-publish-questions" aria-label="Finding questions">
+           <div className="review-detail-meta" aria-live="polite">
+             <strong>Question {Math.min(questionIndex + 1, questions.length)} of {questions.length}</strong>
+             {!!unanswered && <span>{unanswered} unanswered</span>}
+           </div>
+           <fieldset disabled={writing}>
+             <legend>{question.text}</legend>
+             {!question.recommendation && <small className="review-detail-muted">The report has no recommendation.</small>}
+             {choicesFor(question).map(choice => <label key={choice.id}>
+               <input type="radio" name={answerName} value={choice.id} checked={settings.answers[question.id] === choice.id}
+                 onChange={() => update({ answers: { ...currentSettings.current?.answers, [question.id]: choice.id } })} />
+               <span className="review-publish-choice">{choice.label}
+                 {choice.id === question.recommendation && <> <span className="badge">Recommended</span></>}
+               </span>
+             </label>)}
+           </fieldset>
+
+--- apps/desktop/src/review/ReviewRuns.tsx
+@@ 63,128 @@
+       if (/^access:/i.test(message)) onAccessLost?.(message);
+     });
+     return () => { current = false; };
+   }, [open, deferred, inline, run.id, report, loadAttempt, attempt, onAccessLost]);
+   if (!inline && !deferred) return null;
+   return <details className="desk-run-report" onToggle={e => setOpen(e.currentTarget.open)}>
+     <summary>Open review report</summary>
+     {error && <div role="alert" className="inline-banner tone-warn">{error} <button className="btn btn-sm"
+       onClick={() => setAttempt(n => n + 1)}>Retry report</button></div>}
+     {open && (inline || report) && <ReviewReportMarkdown text={inline || report || ""} label="Review report" />}
+     {!inline && report === "" && <p>Report unavailable.</p>}
+     {open && !error && !inline && report === null && <Spinner label="Loading report" />}
+   </details>;
+ }
+ 
+ interface PublicationTarget {
+   cwd: string;
+   target: DeskRunKey;
+   url: string;
+   publishCommand?: typeof reviewPublish | undefined;
++  /** Starts the next round of the same Review on `revision`, the PR's current range, after `reviewed`. */
++  onUpdateReview?: ((reviewed: DeskRun, revision: DeskRevision) => void) | undefined;
+ }
+ 
+ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, publication, onPublicationDecision, onOpenSession, children, onAnswer, onLifecycle, answerError = "", showOutcome = true }: ReportProps & {
+   publication?: PublicationTarget;
+   onPublicationDecision?: () => void;
+   children?: ReactNode; onAnswer: AnswerReviewQuestion; answerError?: string;
+   onLifecycle?: ReviewLifecycleCommand;
+   onOpenSession?: (id: string) => void;
+   showOutcome?: boolean;
+   activity: ActivitySubscription; run: DeskRun; card: Pick<ReviewCard, "number" | "baseSha" | "headSha">; working: boolean; onCancel: (id: string) => void;
+ }) {
+   const [publishOpen, setPublishOpen] = useState(false);
+   const active = runActive(run);
+   const questions = pendingManualQuestions(run);
+   const question = questions[0];
+   const result = run.result;
+   const sessionLabel = question ? (questions.length > 1 ? "Answer review questions" : "Answer review question") : "Open review session";
+   const stopLabel = run.state === "cancelling" ? "Stopping…" : "Stop review";
+   const recorded = result?.reviewed ?? run;
+   const historic = !!((recorded.headSha && recorded.headSha !== card.headSha) || (recorded.baseSha && recorded.baseSha !== card.baseSha));
+   const draft = publication && run.source !== "existing" && (run.state === "completed" || run.state === "partial") &&
+     result?.reviewed && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i.test(publication.url) ? publication : undefined;
+   const publicationPending = draft && !historic && run.publication === "pending";
++  const updateReview = draft?.onUpdateReview;
+   return <article className="desk-run" aria-label={'Review attempt ' + run.id}>
+     <header className="desk-run-head">
+       <div className="desk-run-state">
+         <strong className={active && !question ? "review-live-state" : undefined}>{runStatusLabel(run)}</strong>
+         {historic && <span className="badge">Earlier revision</span>}
+         {publicationPending && <span className="badge review-publication-pending">Action required</span>}
+       </div>
+       <div className="review-action-row">
+         {onOpenSession && run.source !== "existing" && <button className="btn review-icon-action" type="button"
+           aria-label={sessionLabel} title={sessionLabel} aria-haspopup="dialog" onClick={() => onOpenSession(run.id)}>
+           <Icon name={question ? "comment" : "chat"} />
+         </button>}
+         {active && <button className="btn review-icon-action" type="button" aria-label={stopLabel} title={stopLabel}
+           disabled={working || run.state === "cancelling"} onClick={() => onCancel(run.id)}><Icon name="stop" /></button>}
+         {onLifecycle && <ReviewLifecycle run={run} working={working} command={onLifecycle} load={loadAttempt} />}
+       </div>
+     </header>
+     {publicationPending && <div className="review-publish-actions">
+       <span>Choose whether to publish on GitHub.</span>
+       <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>Review publication</button>
+
+--- apps/desktop/src/review/ReviewRuns.tsx
+@@ 157,214 @@
+       {run.startedAt && <><dt>Started</dt><dd><time dateTime={run.startedAt}>{absoluteTime(run.startedAt)}</time></dd></>}
+       {run.finishedAt && <><dt>Finished</dt><dd><time dateTime={run.finishedAt}>{absoluteTime(run.finishedAt)}</time></dd></>}
+       {result && <>
+         <dt>Reviewed range</dt><dd>{result.reviewed ? <Range value={result.reviewed} /> : "Unconfirmed"}</dd>
+         <dt>Coverage</dt><dd>{result.coverage || "Unconfirmed"}</dd>
+       </>}
+     </dl>
+     {run.decision && <p className="desk-run-reason"><strong>Operator reason</strong> · {run.decision.reason}</p>}
+     {active && run.reason && <p className="desk-run-reason">{run.reason}</p>}
+     {result?.reviewed && !sameRange(result.reviewed, run) && <p className="inline-banner tone-warn">The recorded review covers a different range from the request.</p>}
+     {run.usage ? <ReviewUsage usage={run.usage} /> : !active && <p className="review-detail-muted">Token usage was not recorded.</p>}
+     {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions onAnswer={onAnswer} working={working} answerError={answerError} run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
+     <ReviewReport run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />
+     {draft && !publicationPending && <div className="review-publish-actions">
+       <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>
+         {run.publication === "published" ? "View publication" : "Publish to GitHub"}
+       </button>
+       {run.publication === "skipped" && <span className="review-detail-muted">Publication skipped</span>}
+     </div>}
+     {draft && publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
+-      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)} />}
++      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)}
++      // Another action of this review is in flight: an update round could not start until it answers.
++      updateDisabled={working}
++      {...(updateReview && { onUpdateReview: (currentHead: string) => {
++        setPublishOpen(false);
++        // The as-is variant exists only while the base is unchanged, so the current range keeps this attempt's base.
++        updateReview(run, { baseSha: run.baseSha, headSha: currentHead });
++      } })} />}
+   </article>;
+ }
+ 
+ interface Props extends ReportProps {
+   publication?: PublicationTarget;
+   onAnswer: AnswerReviewQuestion;
+   onLifecycle?: ReviewLifecycleCommand;
+   activity: ActivitySubscription;
+   card: ReviewCard; runs: DeskRun[]; error: string; working: boolean; loaded: boolean;
+   onCancel: (id: string) => void; onRefresh: () => void; onOpenSession: (id: string) => void;
+ }
+ 
+-export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
+-  const latest = runs.find(run => runActive(run) && sameRange(run, card)) ??
++/** The attempt the Latest review section shows for the card's range. */
++export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
++  return runs.find(run => runActive(run) && sameRange(run, card)) ??
+     runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
++}
++
++export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
++  const latest = latestAttempt(runs, card);
+   return <section className="desk-runs" aria-label="Latest Keryx review">
+     <header className="desk-run-head"><h3>Latest review</h3><button className="btn review-icon-action" type="button"
+       disabled={working} aria-label="Refresh runs" title="Refresh runs" onClick={onRefresh}><Icon name="refresh" /></button></header>
+     <p className="review-detail-muted">GitHub review decision · {card.decision ? DECISION_LABEL[card.decision] : "No decision"}</p>
+     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}
+     {!loaded && !error && <Spinner label="Loading review history" />}
+     {loaded && !latest && <p className="review-detail-muted">{runs.length ? "Archived reviews are available in History." : "No Keryx reviews for this pull request yet."}</p>}
+     {latest && <RunAttempt key={latest.id} publication={publication} onPublicationDecision={onRefresh} onAnswer={onAnswer} answerError={error} onOpenSession={onOpenSession} activity={activity} run={latest} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} onLifecycle={onLifecycle} />}
+   </section>;
+ }
+
+--- apps/desktop/src/review/ReviewWorkspace.tsx
+@@ 1,171 @@
+-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
++import type { DeskReviewOptions } from "../../../../src/review/desk-run-options";
++import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { useToast } from "../components/Toasts";
+ import { errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { reviewRun } from "../platform/reviewRuns";
+ import { pendingManualQuestions } from "./ReviewProgress";
+-import { launchAction, ReviewRuns } from "./ReviewRuns";
++import { latestAttempt, launchAction, ReviewRuns } from "./ReviewRuns";
++import { reviewIsArchived } from "./ReviewLifecycle";
+ import type { reviewPublish } from "./ReviewPublishDialog";
+ import { ReviewRunDialog, ReviewRunHistory } from "./ReviewRunDialog";
+ import type { ReviewLifecycleCommand } from "./ReviewLifecycle";
+-import { sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
++import { runActive, sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
+ import { ReviewLaunchDialog, type ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import type { ReviewCard } from "./types";
+ import "./ReviewDetail.css";
+ 
+ /** What a board action asked of the review interface, tied to the revision it was clicked on. */
+ export interface ReviewIntent { kind: "start" | "view" | "answer"; baseSha: string; headSha: string }
+ 
+ /** The launch form for one PR's current range: it refuses a range that moved since the form opened. */
+ export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defaultFlow, runCommand, onRunSnapshot, onStarted, onClose }: {
+   cwd: string;
+   subject: DeskRunKey;
+   card: ReviewCard;
+   /** The PR revision is known to have moved since the card was read. */
+   stale: boolean;
+   models: readonly ReviewLaunchModel[];
+   flows: readonly FlowCard[];
+   defaultFlow?: string | undefined;
+   runCommand: typeof reviewRun;
+   onRunSnapshot?: RunObserver | undefined;
+-  onStarted: () => Promise<void>;
++  /** Re-reads the attempts once the start is confirmed; its outcome is not used. */
++  onStarted: () => Promise<unknown>;
+   onClose: () => void;
+ }) {
+   return <ReviewLaunchDialog models={models} flows={flows} defaultFlow={defaultFlow}
+     fixedTarget={{ repo: subject.repo, repositoryId: subject.repositoryId, viewer: subject.viewer, card }}
+     onApply={async (key, revision, options) => {
+       if (card.state !== "open" || stale || !sameRange(card, revision)) {
+         throw new Error("The PR revision changed. Refresh the board and open the launch form again.");
+       }
+       const snapshot = await runCommand(cwd, key, { kind: "start", ...revision, options });
+       if (!snapshot.startedRunId || !snapshot.runs.some(run => run.id === snapshot.startedRunId)) {
+         throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
+       }
+       onRunSnapshot?.(key, revision, snapshot);
+       await onStarted();
+     }}
+     onClose={onClose} />;
+ }
+ 
++/** The reviewed attempt's settings for its update round. Posting to GitHub is decided again for every round. */
++export function updateRoundOptions({ autoPublish: _automatic, ...options }: DeskReviewOptions): DeskReviewOptions {
++  return options;
++}
++
+ interface Props {
+   cwd: string;
+   subject: DeskRunKey;
+   card: ReviewCard;
+   reviewIntent?: ReviewIntent | undefined;
+   flow?: FlowCard | undefined;
+   projectFlows?: readonly FlowCard[] | undefined;
+   reviewModels?: readonly ReviewLaunchModel[] | undefined;
+   runCommand?: typeof reviewRun | undefined;
+   publishCommand?: typeof reviewPublish | undefined;
+   onRunSnapshot?: RunObserver | undefined;
+   onAccessLost?: ((reason: string) => void) | undefined;
+   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
+   onOpenFlow?: ((dir: string) => void) | undefined;
+   /** Re-reads the list the card came from; offered when the PR revision moved. */
+   onRefreshBoard?: (() => void) | undefined;
+   /** The review moved to Sessions: the surrounding panel closes. */
+   onLeave?: (() => void) | undefined;
+   /** Shown between the primary action and the latest attempt (the Review panel puts its rounds here). */
+   children?: ReactNode;
+ }
+ 
+ /**
+  * The Keryx review interface of one PR's current range: the primary action, run history, the latest
+  * attempt with its report, answers, cancel, continue, publication and lifecycle actions, and the launch form.
+  */
+ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow, projectFlows, reviewModels, runCommand = reviewRun, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefreshBoard, onLeave, children }: Props) {
+   const toast = useToast();
+   // The run hook re-reads whenever its key changes identity, so the key follows the target's fields.
+   const { repo, repositoryId, viewer, number } = target;
+   const subject = useMemo(() => ({ repo, repositoryId, viewer, number }), [repo, repositoryId, viewer, number]);
+   const mounted = useRef(false);
+   useEffect(() => {
+     mounted.current = true;
+     return () => { mounted.current = false; };
+   }, []);
+   const [sessionId, setSessionId] = useState<string | null>(null);
+   const [launchCard, setLaunchCard] = useState<ReviewCard | null>(null);
+   const initialLaunch = useRef(reviewIntent);
+-  const publication = { cwd, target: subject, url: card.url, publishCommand };
+   const loadAttempt = useCallback(async (id: string) => {
+     const history = await runCommand(cwd, subject, { kind: "status", id });
+     return history.runs.find(run => run.id === id);
+   }, [cwd, subject, runCommand]);
+   const local = useReviewRuns(cwd, subject, card.baseSha, card.headSha, true, runCommand, onRunSnapshot, onAccessLost);
+   const syncRuns = local.request;
+   function openManagedRun(id: string) {
+     const run = local.runs.find(item => item.id === id);
+     if (!onOpenReviewSession || !run || run.source === "existing") {
+       setSessionId(id);
+       return;
+     }
+     void onOpenReviewSession(subject, run).then(() => onLeave?.(), reason => {
+       if (mounted.current) toast({ level: "error", title: "Could not open the review in Sessions", detail: errMessage(reason) });
+     });
+   }
+   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
+     const snapshot = await runCommand(cwd, subject, action);
+     if (action.kind === "decide") {
+       onRunSnapshot?.(subject, { baseSha: card.baseSha, headSha: card.headSha }, snapshot);
+       if (action.decision === "delete") setSessionId(current => current === action.id ? null : current);
+       await syncRuns({ kind: "status" });
+     }
+     return snapshot;
+   }, [cwd, subject, runCommand, onRunSnapshot, card.baseSha, card.headSha, syncRuns]);
+   const session = sessionId && local.runs.find(run => run.id === sessionId);
+   const action = launchAction(local.runs, card);
+   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
+   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
+   const revisionChanged = local.staleRange;
++  /**
++   * "Update review" in a head-moved publish dialog: the next round of the same Review on the PR's current range, with
++   * the reviewed attempt's settings except automatic publication. The panel stays open and shows the new attempt; a
++   * board that has not seen the push is re-read once the start succeeded, so the panel follows the new range.
++   */
++  const updateReview = useCallback((reviewed: DeskRun, revision: DeskRevision) => {
++    // Any attempt on the target range, in whatever state and whatever the board shows, is shown instead of a second one.
++    const covering = local.runs.filter(run => run.source !== "existing" && !reviewIsArchived(run) && sameRange(run, revision));
++    const existing = covering.find(runActive) ?? covering[0];
++    if (existing) {
++      setSessionId(existing.id === latestAttempt(local.runs, card)?.id ? null : existing.id);
++      toast({ level: "info", title: `Commit ${revision.headSha.slice(0, 7)} already has a review attempt`, body: "Showing it instead of starting another." });
++      return;
++    }
++    setSessionId(null);
++    const boardBehind = !sameRange(card, revision);
++    void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: updateRoundOptions(reviewed.options) }) })
++      .then(outcome => {
++        if (outcome === "done" && boardBehind) onRefreshBoard?.();
++        // The button is disabled while another action runs; this covers a click that raced it.
++        if (outcome === "skipped") toast({ level: "info", title: "Update review did not start", body: "Another action of this review is still running. Try again when it finishes." });
++      });
++  }, [card, local.runs, local.request, onRefreshBoard, toast]);
++  const publication = { cwd, target: subject, url: card.url, publishCommand, onUpdateReview: updateReview };
+   const start = useCallback(() => {
+     if (reviewModels) setLaunchCard(card);
+     else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });
+   }, [reviewModels, card, local.request]);
+   // A board action is tied to the clicked revision, and consumed once after status resolves.
+   // The backend validates this same range again before admitting the run.
+   useEffect(() => {
+     const next = initialLaunch.current;
+     if (!next) return;
+     if (local.error || (next.kind === "start" && (card.state !== "open" || revisionChanged)) ||
+       next.baseSha !== card.baseSha || next.headSha !== card.headSha) {
+       initialLaunch.current = undefined;
+       return;
+     }
+     if (!local.loaded) return;
+     initialLaunch.current = undefined;
+     if (next.kind === "answer" && action.sessionId && local.runs.some(run => run.id === action.sessionId && pendingManualQuestions(run).length > 0)) {
+       setSessionId(action.sessionId);
+     } else if (next.kind === "start" && !action.open) {
+       start();
+
+--- apps/desktop/src/review/SessionReviewActivity.tsx
+@@ 1,48 @@
+ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+ import { canContinueDeskRun, type CoordinatorEvent, type DeskQuestion, type DeskRun } from "../../../../src/review/desk-run-types";
+ import { errMessage } from "../lib/format";
+ import { Icon } from "../components/Icon";
+ import { publishSessionReview, reviewRun, type ReviewRunAction } from "../platform/reviewRuns";
+ import { pendingManualQuestions, ReviewProgress, runStatusLabel } from "./ReviewProgress";
+ import { ReviewRunDialog } from "./ReviewRunDialog";
+ import { AgentMessage } from "../session/Transcript";
+ import { UserMessage } from "../session/UserMessage";
+ import { ReviewTranscript } from "./ReviewTranscript";
+ import { ReviewOutcome } from "./ReviewOutcome";
+ import { readRunStatus } from "./runPolling";
+ import { runActive } from "./useReviewRuns";
+ import type { ReviewComposerTarget, SessionReviewLink } from "./sessionReview";
+ import type { ReviewLifecycleCommand } from "./ReviewLifecycle";
+ import "./ReviewDetail.css";
+ import "./SessionReviewActivity.css";
+ 
+ const PASSIVE_FOLLOW = () => () => {};
+ 
++/**
++ * Publication from Sessions offers no "Update review": this view follows one attempt on its recorded range and
++ * cannot see the PR's other attempts, so the next round starts from the Review panel.
++ */
++export function sessionReviewPublication(cwd: string, key: SessionReviewLink["key"]) {
++  return { cwd, target: key, url: `https://github.com/${key.repo}/pull/${key.number}` };
++}
++
+ export function SessionReviewActivity({ cwd, links, visible, onContinuation, onComposerTarget, focusComposer }: {
+   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
+   onContinuation: (link: SessionReviewLink) => void;
+   onComposerTarget: (target: ReviewComposerTarget | undefined) => void;
+   focusComposer: () => void;
+ }) {
+   const [limit, setLimit] = useState(5);
+   return <section className="session-review-activity" aria-label="Review activity">
+     {links.length > limit && <button className="btn btn-sm" onClick={() => setLimit(value => value + 5)}>Show earlier reviews</button>}
+     {links.slice(0, limit).map((link, index) => <FollowedReview cwd={cwd} link={link} visible={visible} key={link.id}
+       canContinue={!links.slice(0, index).some(next => next.key.repositoryId === link.key.repositoryId && next.key.number === link.key.number &&
+         next.key.viewer.toLowerCase() === link.key.viewer.toLowerCase() && next.revision.headSha === link.revision.headSha && next.revision.baseSha === link.revision.baseSha)}
+       onContinuation={onContinuation} onComposerTarget={index === 0 ? onComposerTarget : undefined} focusComposer={focusComposer} />).reverse()}
+   </section>;
+ }
+ 
+ function FollowedReview({ cwd, link, visible, canContinue, onContinuation, onComposerTarget, focusComposer }: {
+   cwd: string; link: SessionReviewLink; visible: boolean; canContinue: boolean;
+   onContinuation: (link: SessionReviewLink) => void;
+   onComposerTarget?: ((target: ReviewComposerTarget | undefined) => void) | undefined;
+
+--- apps/desktop/src/review/SessionReviewActivity.tsx
+@@ 232,264 @@
+         </details>}
+       </>}
+     </article>
+     {[...conversation, ...unloggedReplies].map((event, index) => event.kind === "answer"
+       ? <UserMessage key={event.questionId ? `answer-${event.questionId}` : index} message={event.text} />
+       : <AgentMessage key={event.questionId ? `question-${event.questionId}` : index}
+         label={event.reviewer ?? "Review orchestrator"} text={event.text} />)}
+     {questions.map(question => <AgentMessage key={question.id} label={question.reviewer ?? "Review orchestrator"} text={question.question}>
+       <div className="review-reply-actions" role="group" aria-label={`Respond to ${question.reviewer ?? "the review orchestrator"}`}>
+         {question.allowFreeform && onComposerTarget && <button className="btn btn-sm" type="button" disabled={working}
+           aria-pressed={replyTo?.id === question.id} onClick={() => { setSelectedQuestion(question.id); focusComposer(); }}>
+           {replyTo?.id === question.id ? "Replying in message field" : "Reply in message field"}
+         </button>}
+         {question.options.map(option => <button className="btn btn-sm" type="button" key={option.id} disabled={working}
+           title={option.description} onClick={() => void mutate({ kind: "answer", id: link.id, questionId: question.id, answer: option.id }, question)}>
+           {option.label}
+         </button>)}
+       </div>
+     </AgentMessage>)}
+     {visible && open && run && <ReviewRunDialog run={run} card={{ number: link.key.number, ...link.revision }}
+-      publication={{ cwd, target: link.key, url: `https://github.com/${link.key.repo}/pull/${link.key.number}` }}
++      publication={sessionReviewPublication(cwd, link.key)}
+       working={working} activity={{ follow: PASSIVE_FOLLOW, loaded: run.id, error }}
+       error={error} onClose={() => setOpen(false)} onRefresh={() => void refresh()}
+       loadAttempt={async id => {
+         const result = await reviewRun(cwd, link.key, { kind: "status", id });
+         return result.runs.find(item => item.id === id);
+       }}
+       onAccessLost={message => { setRun(null); setOpen(false); setError(message); }}
+       onLifecycle={lifecycle}
+       onAnswer={(id, questionId, answer) => void mutate({ kind: "answer", id, questionId, answer }, questions.find(question => question.id === questionId))}
+       onCancel={id => void mutate({ kind: "cancel", id })} />}
+   </>;
+ }
+
+--- apps/desktop/src/review/useReviewRuns.ts
+@@ 1,93 @@
+ import { useCallback, useEffect, useRef, useState } from "react";
+ import type { DeskRevision, DeskRunKey, DeskRunSnapshot } from "../../../../src/review/desk-run-types";
+ import { errMessage } from "../lib/format";
+ import { readRunStatus } from "./runPolling";
+ import { reviewRun } from "../platform/reviewRuns";
+ 
+ import { runActive } from "../../../../src/review/board-badges";
+ export { runActive, sameRange } from "../../../../src/review/board-badges";
+ 
+ type ActionError =
+   | { kind: "start" | "cancel"; message: string }
+   | { kind: "answer"; id: string; questionId: string; message: string };
+ 
+ export type RunObserver = (key: DeskRunKey, revision: DeskRevision, snapshot: DeskRunSnapshot) => void;
+ 
++/**
++ * What became of one `request`: `done` once the CLI answered; `skipped` when it was not sent, because another action
++ * was in flight or the read was skipped; `failed` when the CLI refused it (the hook's `error` carries the reason).
++ */
++export type RunRequestOutcome = "done" | "skipped" | "failed";
++
+ export function useReviewRuns(
+   cwd: string, key: DeskRunKey, baseSha: string, headSha: string, visible: boolean,
+   invoke: typeof reviewRun, onSnapshot?: RunObserver, onAccessLost?: (reason: string) => void,
+ ) {
+   const [snapshot, setSnapshot] = useState<DeskRunSnapshot | null>(null);
+   const [readError, setReadError] = useState("");
+   const [actionError, setActionError] = useState<ActionError | null>(null);
+   const [working, setWorking] = useState(false);
+   const generation = useRef(0);
+   const followers = useRef(new Map<symbol, string>());
+   const followedId = useCallback(() => Array.from(followers.current.values()).at(-1), []);
+   const [activityLoaded, setActivityLoaded] = useState<string>();
+   type PollAction = Exclude<Parameters<typeof reviewRun>[2], { kind: "continue" | "decide" | "readiness" }>;
+   const pending = useRef<PollAction["kind"] | null>(null);
+-  const request = useCallback(async function request(action: PollAction, automatic = false): Promise<void> {
++  const request = useCallback(async function request(action: PollAction, automatic = false): Promise<RunRequestOutcome> {
+     // A mutation can overtake a status read. A stale read must never roll it back.
+-    if (pending.current && (action.kind === "status" || pending.current !== "status")) return;
++    if (pending.current && (action.kind === "status" || pending.current !== "status")) return "skipped";
+     const activityId = followedId();
+     if (action.kind === "status" && activityId && !action.id) action = { ...action, activityId };
+     const id = ++generation.current;
+     pending.current = action.kind;
+     setWorking(action.kind !== "status");
+     if (action.kind !== "status") setActionError(null);
+     try {
+       const next = action.kind === "status" ? await readRunStatus(invoke, cwd, key, action, automatic) : await invoke(cwd, key, action);
+-      if (!next) return;
++      if (!next) return "skipped";
+       // Mutations belong to the PR even if its drawer closed while the CLI was working.
+       // The board observer checks viewer, repository and revision before updating a badge.
+       if (action.kind !== "status") onSnapshot?.(key, { baseSha, headSha }, next);
+-      if (id !== generation.current) return;
++      if (id !== generation.current) return "done";
+       setSnapshot(next);
+       setActivityLoaded(action.kind === "status" ? action.activityId : undefined);
+       setReadError("");
+       if (action.kind === "status") {
+         setActionError(error => error?.kind === "answer" && !next.runs.some(run =>
+           run.id === error.id && (run.pendingQuestion?.id === error.questionId ||
+             run.pendingQuestions?.some(question => question.id === error.questionId))) ? null : error);
+         onSnapshot?.(key, { baseSha, headSha }, next);
+       }
++      return "done";
+     } catch (cause) {
+-      if (id !== generation.current) return;
++      if (id !== generation.current) return "failed";
+       const message = errMessage(cause);
+       if (action.kind === "status") setReadError(message);
+       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
+       else setActionError({ kind: action.kind, message });
+       if (/^(access|configuration):/i.test(message)) {
+         setSnapshot(null);
+         if (action.kind === "status") setActionError(null);
+       }
+       if (/^access:/i.test(message)) onAccessLost?.(message);
++      return "failed";
+     } finally {
+       if (id === generation.current) {
+         pending.current = null;
+         setWorking(false);
+         // A dialog may have opened during a plain history read. Fetch its activity immediately.
+         const selected = followedId();
+         if (selected && (action.kind !== "status" || selected !== action.activityId)) void request({ kind: "status" });
+       }
+     }
+   }, [cwd, key, baseSha, headSha, invoke, onSnapshot, onAccessLost, followedId]);
+ 
+   useEffect(() => {
+     setActionError(null);
+     void request({ kind: "status" });
+     return () => { generation.current++; pending.current = null; };
+   }, [request]);
+ 
+   const follow = useCallback((id: string) => {
+     const subscriber = Symbol();
+     const previous = followedId();

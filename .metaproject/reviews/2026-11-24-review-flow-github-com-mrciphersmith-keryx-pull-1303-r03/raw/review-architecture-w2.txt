@@ -1,0 +1,91 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (PR #1304)
+- Merge-base: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`, head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`
+- Scope mode: explicit-hash-range (diff mode), wave 2, slice-02 read in full (ReviewPanel DOM test, docs/docs/desktop-app.md, desk-publication(-types).ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts, update-round.ts)
+- Stack detected: generic TS backend (`src/review`); the DOM test is React. No NestJS, no MobX.
+
+### Summary
+T14 closes the three round-2 architecture minors in this slice. update-round.ts now owns one rule for "the attempts before this round" (`earlierRoundAttempts`). The delta base (`priorAttemptCandidates` over it, via `previousRunInputs`) and the answer carry-over (desk-publication.ts) both read that rule. The desk-partial semantics live inside round-registry.ts: `registryVouches` excludes desk-partial itself, and `partialRoundVouch` is the only reader of those entries. "Has accepted findings" is now a metadata pre-filter (`findingsKnown`) followed by one authoritative disk check in the executor, which falls through to the next candidate. The dependency direction stays sound: update-round.ts is pure (imports only desk-run-types), and both desk-publication and desk-run-service import it, with no publication→service edge added for this. I found no blocker, major or minor in this lens, and one info.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Round-2 obligations in this lens (verified at head)
+- **r02 architecture-w1 F-001 (answers used a second prior-attempt rule): closed.** desk-publication.ts:350-357 now builds `earlier` from `earlierRoundAttempts(runs, found.run)` (update-round.ts:53), the same set `previousRoundAttempts` (update-round.ts:66) filters for the delta base. Both concrete failure cases from round 2 are gone. Archived and deleted attempts are excluded (`withdrawn`). Same-round siblings are excluded (`item.round < current.round`, or a different range when rounds are not placed). Other Reviews are excluded (`reviewId` guard). The `previousRunId` walk is removed. Residual difference, recorded as a decision: answers take the newest earlier-round attempt that has a draft (journal T14 B2 "newest draft wins"), while the delta base orders complete before partial within a round and then requires a qualifying package. The two can name different attempts of the same set. update-round.ts:4-7 states the shared set as the rule, which is the option round 2 offered. I did not re-file it.
+- **r02 architecture-w2 F-004 (desk-partial filter was caller-side): closed.** round-registry.ts:179-181 `registryVouches` filters `event !== "desk-partial"` internally, and :200-202 `partialRoundVouch` reads only desk-partial. Both go through the private `matchingEntry`. The caller-side filter at prior-round.ts:345 is gone (now `registryVouches(registry, …)`), and `registryVouchesPackage` (round-registry.ts:221) inherits the exclusion. Enumeration: `keryx ctx rg --all 'registryVouches\(|partialRoundVouch\(|desk-partial' src apps/desktop/src` (non-test) finds registryVouches at round-registry.ts:179/221 and prior-round.ts:345, and partialRoundVouch at prior-round.ts:335/429. No caller reads raw entries for a vouch.
+- **r02 architecture-w2 F-005 (three "accepted findings" predicates, no fallback): closed.** The selection is now an ordered list (`priorAttemptCandidates`, update-round.ts:28-42). The executor (desk-run-executor.ts @@ 494,556 @@) tries each candidate in order and `continue`s when a package cannot be handed on: target mismatch, not closed, or partial with `recordPartialRound` not writing. A partial attempt whose findingsKnown came from raw results no longer hides an older closed round. The remaining predicates are now consistent, not competing. `findingsKnown === true` is a documented metadata pre-filter (update-round.ts:5-7). `recordPartialRound` writes only when findings.json is an array, which implies `findingsSha256 !== null`, so `partialRoundVouch`'s null check can never reject an entry the executor wrote. The `findingsKnown: undefined` case is the recorded degradation F-002 follow-up, and I did not re-file it.
+
+### Other checks (clean)
+- Registry lock (T14 B3): `appendRoundRegistry` runs append and compaction under the sync `lib/file-lock.ts` lock and throws on contention. Both writers catch the throw. `recordFinishedRound` returns `{error}`. `recordPartialRound` returns `{error}`, so `.file === undefined`, and the executor moves to the next candidate. `appendRoundRegistry` has exactly these two production callers (round-registry.ts:260 and :303). Using the sync lock here instead of the async `lib/fs` withFileLock fits, because the registry API is synchronous. Both helpers already existed before this PR.
+- Compaction keeps the newest entry per packageId regardless of event. A desk-partial entry could evict a finished entry only if one package had both. That is not reachable: a closed package is handed on as closed before `recordPartialRound` is tried, and `recordFinishedRound` refuses a package that is not completed.
+- Superseded as-is (T14 B6): `newerRoundOf` sits in update-round.ts beside the other round rules, and desk-publication only consumes it. The publication policy stays server-side.
+- `ExecutorPorts.registryDir` and `RoundRegistryPorts.beforeCompactionWrite` are test seams on existing ports objects. The service passes the directory resolver into `previousRunInputs` as a function, so update-round.ts stays free of store I/O.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. update-round.ts → desk-run-types only. desk-publication → update-round. desk-run-service → update-round. desk-run-executor → round-registry. prior-round → round-registry. No cycle is added.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+[F-001] info: `selectPriorAttempt` and `previousRoundAttempt` are exported "first candidate, no fallback" selectors with no production caller, and the PR body still names `selectPriorAttempt` as the rule
+- File: src/review/update-round.ts:45 (also :76)
+- Problem: after T14 B1 the production path is `previousRunInputs` → `priorAttemptCandidates` plus the executor's ordered fallback. `selectPriorAttempt` (:45) and `previousRoundAttempt` (:76) return `[0]` of the list, which is exactly the no-fallback shape that r02 F-005 removed. `keryx ctx rg` finds them only in update-round.test.ts and desk-run-service.test.ts. pr-context.md:32 still says "One rule chooses the previous attempt: `selectPriorAttempt`".
+- Why info: no production code calls them, so there is no failure path today (shared law 1). The cost falls on the next caller, who would pick the advertised function and get a selector that skips the disk check and the fallback.
+- What would settle it: drop the two wrappers, or mark them test-only. Point the PR body at `priorAttemptCandidates` / `previousRunInputs` with the executor's hand-on check. The body wording itself belongs to the pr-contract lens.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A. The slice's React file is a test.
+
+### Suggested Patches
+None warranted.
+
+### Notes / not verified
+- This lens runs no tests. Test status comes from research-evidence/verify-tests-to-run-1.txt as the brief reports it.
+- I did not trace runDeskWorker end to end (it needs GitHub, as the journal records). The fallback loop is verified by reading the code only.
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc` is absent in this worktree (as wave 1 noted). It is not needed for this slice.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 after T14: r02 architecture-w1 F-001 (answers used a second prior rule), w2 F-004 (desk-partial filter caller-side) and w2 F-005 (three accepted-findings predicates, no fallback) are closed. update-round.ts owns one earlier-attempts rule read by both the delta base and the answer carry-over. round-registry.ts keeps the desk-partial semantics inside registryVouches/partialRoundVouch. The executor tries ordered candidates and falls through on a package it cannot hand on. Layering and dependency direction stay sound. One info: selectPriorAttempt/previousRoundAttempt remain exported no-fallback selectors with no production caller, and the PR body still names selectPriorAttempt as the rule.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/update-round.ts",
+      "line": 45,
+      "quote": "export function selectPriorAttempt(attempts: readonly DeskRun[], scope: string = DESK_RUN_SCOPE): PriorAttempt | undefined {",
+      "problem": "After T14 B1 the previous-attempt rule is priorAttemptCandidates (ordered) plus the executor's hand-on check with fallback. selectPriorAttempt (:45) and previousRoundAttempt (:76) are public first-of-list selectors without that fallback, used only by tests. The PR body (pr-context.md:32) still names selectPriorAttempt as the one rule.",
+      "impact": "No failure path today, because no production caller exists. A future caller that picks the advertised function would get the no-fallback behaviour that r02 F-005 removed.",
+      "suggested_fix": "Remove the two wrappers, or make them test-local. Describe the rule in the PR body as priorAttemptCandidates/previousRunInputs plus the executor's hand-on check (pr-contract owns the body wording).",
+      "evidence": "keryx ctx rg --all 'selectPriorAttempt\\b|previousRoundAttempt\\b' src apps/desktop/src: non-test hits are only their definitions in update-round.ts. Test hits are in update-round.test.ts and desk-run-service.test.ts. desk-run-service.ts @@ 350,404 @@ uses previousRunInputs. pr-context.md:32.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "unused-no-fallback-prior-selectors",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": [ { "id": "slice-02", "coverage": "read in full" } ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no (the call-site enumeration was done with keryx ctx rg, and no claim needed dependents beyond it). wiki_used: not-relevant (intent comes from the PR body, the journal and in-code comments). ctx_used: yes (keryx ctx rg/run). raw_rg_used: no.

@@ -1,0 +1,64 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage3, base 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (stage 2 tip) .. head 822192905b3d26eb976d83e5bbd46cee14ca9a6f, diff mode, round 3 (verification), wave 1, slice-01. I read the code parts of slice-01 line by line: ReviewPublishDialog.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, SessionReviewActivity.tsx and useReviewRuns.ts. I also read these flow 520 records in full: acceptance-criteria, description, journal, plan and tasks. I did not read flow.json or resolved/T*.implement.json line by line. I checked them with a de-duplicated line view, which showed only task state, history events, AC kinds and rule manifests (path, sha256, tier), with no executable code. Load profile: not provided, and the flow context states none. Concrete triggers I used:
+- a second panel mutation in flight when "Update review" is pressed;
+- two Desktop windows or panels pressing Update for one PR;
+- a board that has not seen the push;
+- the panel re-keying or unmounting while a start is in flight.
+
+Context read outside the slice:
+- ReviewWorkspace.tsx render, to see where `working` comes from (`working={local.working}` for both ReviewRuns and ReviewRunDialog);
+- ReviewLifecycle.tsx, where lifecycle actions run in their own modal with their own `working`;
+- desk-run-store.ts: `UNIQUE INDEX active_pr ... WHERE state IN liveStates`, immediate write transactions, and `requestAttempt` returning the same-range active attempt with `reused: true`.
+
+Summary: Both slice-01 findings of round 2 hold after T15. The Update button is disabled while the panel's hook has a mutation in flight (`updateDisabled={working}`). `request` now returns an outcome, so a start that is still overtaken surfaces as an info toast instead of disappearing, and `onRefreshBoard` runs only on `done`. The client-side "already has an attempt" guard is now range-based and applies to attempts in any state, whatever the board shows. The store's unique live-attempt index and same-range reuse still back it against a second window. T15 adds no new shared state, timer, listener, spawn, lock or unbounded structure. Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+Findings:
+
+CLI / Multi-Session: None detected. The slice adds no spawn, lock file, state-file write or JSONL append. Two windows pressing Update for one PR both pass their local `covering` check, then serialise in the store. Its immediate transaction, the `active_pr` unique index and `requestAttempt`'s same-range reuse give one worker.
+
+Concurrency & Races: None detected.
+- Round 2 F-001 (Update dropped silently while another mutation was in flight) is closed. ReviewRuns passes `updateDisabled={working}` to the dialog. The hook's `request` returns `"skipped"` at the in-flight gate (`if (pending.current && (action.kind === "status" || pending.current !== "status")) return "skipped";`). `updateReview` toasts "Update review did not start" on `skipped`, and calls `onRefreshBoard` only on `"done"`.
+- A start that overtakes a pending status read still goes out, which is the pre-existing intent: a mutation may overtake a read. The read's result is then dropped by the generation check.
+- Superseded starts return `done` (`id !== generation.current`) or `failed` (superseded catch), with no error set. `onSnapshot` has already applied the snapshot of a superseded `done`. The only follow-up is an idempotent board refresh, so nothing is lost.
+
+Resources: None detected. There is no new timer, AbortController, subscription or per-call listener. The `.then` on `local.request` can run after the panel unmounts. It then calls the global toast and the parent's board refresh, both harmless, and holds no handle.
+
+Caching: None detected. `headMoved.currentHead` comes from the last preview. If the head moves again before the click, the start names a superseded head, and the backend re-validates the range at start. Round 2 recorded this as failing safe, and T15 does not change it.
+
+Lock Contention: Not relevant. This slice holds no lock and no transaction. The T14 registry lock is in slice-02.
+
+Async / Queues: None detected. Repeated Update presses cannot queue: the button is disabled while working, the dialog closes on click, and the store supersedes a queued attempt for a different range.
+
+Retry / Timeout / Circuit Breaker: Not relevant. No retry or timeout is added.
+
+Idempotency & Distributed Invariants: None detected. Round 2 F-002 (info: the client guard was skipped for a board behind the push) is superseded by T15. The guard now filters `local.runs` by `sameRange(run, revision)` against the target range, not the card, and covers every non-archived, non-imported state. The store dedupe remains the real guard across windows.
+
+Clean Areas: Parts 0, A, B, C, D, E, F and G reviewed for slice-01 with no findings.
+
+Round obligations:
+- Round 2 highload-w1 F-001 (minor): closed, for the reasons and code above.
+- Round 2 highload-w1 F-002 (info): superseded by the range-based guard. The store's same-range reuse is unchanged.
+- Round 2 highload-w2 F-001 (major, registry compaction without a lock): its code is in slice-02, and verifying it is wave 2's job.
+
+Not verified / notes:
+- I ran no tests (allowed_tools read-only, exec_budget_s 0). Test evidence comes from the brief: backend 201 pass / 0 fail, Desktop src/review and src/reviews 151 pass / 0 fail.
+- No concurrent Desktop windows were exercised live. The cross-window conclusion rests on reading the desk-run-store.ts index and transaction code, not on a run.
+- Routing audit: graph_used no (not-relevant: the payload's `layers` supplied the affected set). wiki_used no (not-relevant to this lens). ctx_used yes (`keryx ctx rg/read`). raw_rg_used no. I ran a raw `awk`/`sed`/`grep` once, marked `keryx:raw`, to index the slice and de-duplicate the JSON record bodies.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Round 3 verification of slice-01 (Desktop). Round 2 highload-w1 F-001 is closed: Update is disabled while the panel's hook is working, request() returns done/skipped/failed, a skipped start toasts, and onRefreshBoard runs only on done. F-002 is superseded by the range-based, any-state guard. Cross-window double starts stay backed by the store's active_pr unique index and same-range reuse. T15 adds no shared state, timers, listeners, spawns, locks or unbounded structures. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-01", "coverage": "Desktop code hunks and the flow md records read line by line; flow.json and resolved/*.json checked by a de-duplicated line view (task state and rule manifests, no code)." }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

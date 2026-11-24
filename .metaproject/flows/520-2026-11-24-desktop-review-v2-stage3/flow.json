@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T09:52:22.686Z",
+  "updatedAt": "2026-11-24T10:38:24.686Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:137248605acbee3bc31841d56515a90018a1b54771c5abbd95c2329b79d6f135",
+  "acChecksum": "sha256:8c25ff6fec7fbd17e03c7fed86a5ca4beadcb52a1b9420728b162e758f33b424",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -310,6 +310,48 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T10:08:12.238Z",
+            "outcome": "started",
+            "detail": "520-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T10:08:12.424Z",
+            "outcome": "started",
+            "detail": "520-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -510,6 +552,46 @@
       "at": "2026-11-24T09:52:22.686Z",
       "event": "task-done",
       "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
+    },
+    {
+      "at": "2026-11-24T10:03:38.822Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" (Branch rebased onto stage 2 tip 20e4281a2 (PR #1304), whose 4 new commits change ReviewBoard.tsx and review.css; the invariant compares with the base this branch actually sits on (round 3 logic F-001). Re-point again if stage 2 moves before merge.)"
+    },
+    {
+      "at": "2026-11-24T10:08:11.280Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query"
+    },
+    {
+      "at": "2026-11-24T10:08:11.476Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs"
+    },
+    {
+      "at": "2026-11-24T10:08:12.238Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 520-T16"
+    },
+    {
+      "at": "2026-11-24T10:08:12.424Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 520-T17"
+    },
+    {
+      "at": "2026-11-24T10:15:03.924Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 3 Desktop: focus after Update, existing attempt on a behind board, toasts pinned, Update disabled while preview stale, docs"
+    },
+    {
+      "at": "2026-11-24T10:28:16.255Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests (including the attachBadges/localBadge parity test in src/review/desk-run-store.test.ts), the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, board-badges.ts and the toolbar container queries as stage 2 left them, and adds to desk-run-store.ts only a read-only query. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" (Round 3 performance F-001 fix (T16 B6) adds a read-only DeskRunStore.roundPlacements query; no attachBadges/localBadge line changes (verified by hunk listing), and the parity is guarded by its store test rather than a whole-file no-diff.)"
+    },
+    {
+      "at": "2026-11-24T10:38:24.686Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query"
     }
   ],
   "acKinds": {
@@ -543,7 +625,7 @@
     },
     "AC8": {
       "kind": "invariant",
-      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'"
+      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
     },
     "AC9": {
       "kind": "judged"

@@ -1,0 +1,33 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test --timeout 30000 src/review/desk-publication.test.ts src/review/desk-run-executor.test.ts src/review/desk-run-service.test.ts src/review/review-rules.test.ts src/review/l6-hardening.test.ts src/review/prior-round.test.ts src/review/second-look.test.ts src/review/update-round.test.ts src/review/head-move.test.ts src/review/round-registry.test.ts src/review/premise-question.test.ts src/commands/review-desk-publish.test.ts src/commands/review-desk-run.test.ts ; cd apps/desktop && bun test src/review src/reviews
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage3-5c3d6b
+time: 2026-11-24T09:57:28.555Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+src/review/prior-round.test.ts:
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+keryx review: --ref is an alias of --target-ref; prefer --target-ref.
+Switched to branch 'pr'
+Switched to branch 'base'
+Preparing worktree (detached HEAD 5cf4932)
+
+ 201 pass
+ 0 fail
+ 911 expect() calls
+Ran 201 tests across 12 files. [113.07s]
+
+ 151 pass
+ 0 fail
+ 1034 expect() calls
+Ran 151 tests across 7 files. [946.00ms]

@@ -1,0 +1,105 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract — PR #1303, round 3 (verification), wave 2 (slice-02, read in full)
+
+Inputs read: brief.md, drivers/review-pr-contract-w2.json, payload `review_context.pr.body`, slice-02.diff (all 1914 lines: ReviewPanel.dom.test.tsx, docs/docs/desktop-app.md, desk-publication-types.ts, desk-publication.ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts, update-round.ts). Range 20e4281a2..822192905; working tree at head.
+Also read, to settle rows: round 2 result `…-pull-1303-r02/raw/review-pr-contract-w2.txt` (PC-004, PC-005); flow 520 journal lines 100-110 (T14 B1-B6); src/lib/file-lock.ts:45-70; apps/desktop/src/reviews/ReviewPanel.dom.test.tsx:832-875, 930-940.
+Not re-filed, per the dispatch: the body still names base 98bec5904 (now 20e4281a2) and `selectPriorAttempt` as "the one rule" (now `priorAttemptCandidates`).
+Round 3 wave-1 result of this lane was not present in raw/ when this was written; nothing here restates slice-01 (Desktop components).
+
+## Round obligations (round 2 findings of this lane)
+
+- PC-004 (body said automatic refusal happens "before it makes any GitHub read"): FIXED. Body now reads "Automatic publication refuses a moved head right after reading the PR, before any compare or discussion read." desk-publication.ts:375 throws for `automatic && open && !current` after `previewSubject` and before `reviewedHeadInPull` / `publicationDiscussion`.
+- PC-005 (answer carry-over used a second, `previousRunId` chain): CODE FIXED, BODY NOT. T14 B2 replaced the chain with `earlierRoundAttempts` (same Review, earlier rounds, not deleted/archived). The body's answers bullet was not narrowed to that rule; see PC-006.
+
+## Checklist form (PR body claims in slice-02, and the Desktop guide)
+
+| Box or claim (quoted) | State | What the diff shows | Result |
+|---|---|---|---|
+| "this PR does not touch `ReviewBoard.tsx`, `model.ts`, `ReviewResults.tsx`, `board-badges.ts`, `desk-run-store.ts` or `review.css`" | claim | `git diff --name-only 20e4281a2..822192905` (195 files) contains none of the six names | holds |
+| "`desk-publish` returns `headMoved` and forces verdict `comment` with inline comments off" | claim | desk-publication-types.ts `headMoved?: {...}`; prepare `headMoved ? { inline: false, ... verdict: "comment", verdictOverride: "comment", answers }` | holds |
+| "The body starts with \"Reviewed commit `<sha>`. The pull request has moved to `<sha>` since; ...\"" | claim | `headMovedLine`, prepended after `applyReviewOverlay` | holds |
+| "The review posts with `commit_id` set to the reviewed head." | claim | `commit_id: run.headSha` | holds |
+| "Another push makes the preview stale. Before the write, the head shown in the preview is checked again." | claim | digest gains `headMoved.currentHead`; `expected = { baseSha, headSha: headMoved.currentHead }` into both `verifyDeskSubject` calls; submit never reads the preview cache | holds |
+| "These cases keep today's refusal: a rewritten history (diverged or behind), a failed compare, a changed base, or a closed PR." | claim | `open` needs OPEN and same base; `reviewedHeadInPull` true only for `ahead`, false on catch or unknown status; failed reads not cached (T14 B5) | holds |
+| "Automatic publication refuses a moved head right after reading the PR, before any compare or discussion read." | claim | desk-publication.ts:375 | holds (PC-004 fixed) |
+| "Partial previous round ... accepted only through a `desk-partial` record ... Only Desktop's executor writes that record ... Packages a PR can commit gain no trust." | claim | `keryx ctx rg "recordPartialRound\("`: one production call, desk-run-executor.ts:533, on the run-store package; `registryVouches` filters `desk-partial` out (T14 B4); `packageTrust` admits a draft only via `partialRoundVouch`, which also requires an ingested findings hash | holds |
+| "Answers carry over. Keep and dismiss answers from the previous round's draft are pre-selected in the new round's draft, matched by finding id. The new round's own draft always wins." | claim | `savedAnswers = saved?.answers ?? await earlierAnswers(earlier)`; `earlier = earlierRoundAttempts(...).slice(0, 8)`; first earlier attempt with a `publication-draft.json` wins | "matched by finding id" and "own draft wins" hold; "the previous round's draft" does not: PC-006 |
+| "`on_head_move` ... defaulting to `ask` for a manual review and `follow` for a rule-run review. `parseOnHeadMove` reads a missing or unknown stored value as the default" | claim | head-move.ts `source === "scheduled" ? "follow" : "ask"`; `ON_HEAD_MOVE.find(...) ?? default` | holds |
+| Decision: "With a moved head, Save locally stores the forced settings" | claim | `save` writes `state.settings` | holds |
+| Decision: "A failed compare refuses the as-is variant: it fails closed." | claim | `catch { return false; }` | holds |
+| Decision: "A retry on the same range builds only on earlier rounds ... a complete attempt is preferred over a later partial one. If the chosen attempt cannot be handed on, the next usable one is used." | claim | `earlierRoundAttempts` (`item.round < current.round`, or a different range); `priorAttemptCandidates` complete-then-partial per round; executor `for (const prior of previousRuns)` with `continue` | holds |
+| Decision: "'Update review' does not carry automatic publication ... A review dialog opened from Sessions offers no 'Update review'." | claim | DOM test :856-875 (`"onUpdateReview" in publication` false; footer without "Update review to") | holds (Desktop source is slice-01) |
+| Decision: "A superseded round (a newer round of the same Review exists, in any state) no longer offers publish as is: \"Round N of this review is newer. Publish from that round.\"" | claim | `headMoved` requires `newerRound === undefined` (:378); blockedReason :296-297; `newerRoundOf` counts any state in `history` | holds in the body; the Desktop guide omits it: PC-007 |
+| Decision: "Every round-registry write now takes a file lock. If the lock cannot be taken within 15 seconds, the entry is skipped, ... no trust is ever granted wrongly." | claim | `appendRoundRegistry` wraps append and compaction in `withFileLock` with no timeout override (`LOCK_TIMEOUT_MS = 15_000`), throws on `null`; `recordFinishedRound` and `recordPartialRound` return the error; executor then `continue`s. `keryx ctx rg roundRegistryFile|appendRoundRegistry\(` in src: appendRoundRegistry is the only writer | holds |
+| Verification: "`bun test` passes ...", "`eslint` passes on `src/review`", "root and Desktop `tsc` are clean" | claim | not runnable in this read-only lane; brief's research-evidence reports backend 201/0 and Desktop 151/0 | unverified here (tsc/eslint not seen) |
+| Review: "Round 3 has not been run yet." | claim | this round is running | stale by construction; orchestrator updates the body after the round |
+| docs/docs/desktop-app.md:143-148 Publish as is, comment only, first line, refresh on further commits, three save-locally cases | doc | as above | holds except the superseded case: PC-007 |
+| docs/docs/desktop-app.md:150-155 "Update review to ... previous round's settings except automatic publication ... answers carry over by finding id ... shows that attempt instead" | doc | labels match ReviewPublishDialog.tsx:160,169 and the DOM test | holds |
+
+## Documentation outside the diff
+
+Round 2 searched docs/docs, README and the wiki for the old previous-round rule and found no stale page; nothing in this round's diff changes a user-visible string outside desktop-app.md beyond what the Desktop slice holds. Searched `keryx ctx rg -n "Publish as is|Update review to|is newer|superseded" apps/desktop/src` to tie the guide's labels to the UI.
+
+## Findings
+
+### [PC-006] The body says answers come from "the previous round's draft"; the code takes the newest earlier-round attempt that saved a draft
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts:116
+- **Problem**: PR body, What changes 2: "Keep and dismiss answers from the previous round's draft are pre-selected in the new round's draft, matched by finding id." The code is `savedAnswers = saved?.answers ?? await earlierAnswers(earlier)` (:171) over `earlierRoundAttempts(runs, found.run).slice(0, 8)`. `earlierAnswers` (:116) returns the answers of the first attempt in that list with a `publication-draft.json`. So (a) when no attempt of round N-1 saved a draft, answers come from round N-2 or older; (b) inside round N-1, the newest attempt with a draft wins, while the findings come from `priorAttemptCandidates` (complete before partial). The two can be different attempts. Also option answers carry over, not only keep and dismiss. This is the T14 B2 decision recorded in the journal. Round 2 PC-005 asked to either align the code or narrow the body. The code moved to `earlierRoundAttempts` and the body was not changed.
+- **Why it matters**: A reader who trusts the body expects pre-selected answers from the round the update builds on. Answers from an older round, or from a different attempt of that round, can be pre-selected. They remain visible and editable before submit.
+- **Fix**: Reword the bullet to state B2, for example: "Answers (keep, dismiss and option choices) from the newest earlier round of the same Review that saved a draft are pre-selected, matched by finding id; deleted or archived attempts are skipped. The new round's own draft always wins."
+
+### [PC-007] The Desktop guide promises Publish as is whenever commits were pushed on top; a superseded round gets neither it nor Update review
+- **Severity**: minor
+- **File**: docs/docs/desktop-app.md:143
+- **Problem**: The guide says: "If new commits were pushed on top of the reviewed commit, the dialog names both commits and offers **Publish as is for** the reviewed commit instead." It lists only "closed, its base changed, or its history was rewritten" as the save-locally cases (:147-148). desk-publication.ts:378 sets `headMoved` only when `newerRoundOf(...) === undefined`. A round superseded by a newer round of the same Review (any state, a failed or running one included, T14 B6) gets `blockedReason` "Round N of this review is newer. Publish from that round." (:297), and no `headMoved`. So the dialog has no "Publish as is" and no "Update review to". The PR body lists this decision; the guide does not.
+- **Why it matters**: A user opens an earlier round's result after an update round started, which is the usual case once Update review exists. Following the guide, they expect Publish as is and get a refusal. The dialog does state the reason, so the cost is confusion, not a wrong post.
+- **Fix**: Add one sentence after :148: "If a newer round of the same review exists, publish from that round; the earlier round can only be saved locally."
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 3 verification of the PR body and docs/docs/desktop-app.md against slice-02. Round 2 PC-004 (automatic refusal wording) is fixed. Round 2 PC-005 is fixed in code (T14 B2: answers from earlierRoundAttempts), but the body bullet still says 'the previous round's draft' (PC-006). The rest holds: the untouched-file list, D1 forcing comment and no inline comments, the first body line, commit_id, the stale digest and the re-check before the write, every refusal case, fail-closed compare, desk-partial written only by the executor and never vouching for completion, the candidate ordering and fallback, the 15 s registry lock on the only writer, on_head_move defaults, and the Sessions dialog without Update review. The guide omits the superseded-round refusal (PC-007). Both findings are minor wording.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-006",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": 116,
+      "quote": "async function earlierAnswers(directories: readonly string[]): Promise<Record<string, unknown> | undefined> {",
+      "problem": "PR body: 'Keep and dismiss answers from the previous round's draft are pre-selected in the new round's draft, matched by finding id.' The code takes the answers of the first attempt in earlierRoundAttempts(...).slice(0, 8) that saved publication-draft.json. That can be round N-2 or older when round N-1 saved no draft, or a different attempt of round N-1 than the one priorAttemptCandidates hands on for findings. Option answers carry too. This is journal T14 B2. Round 2 PC-005's 'narrow the body' half was not applied.",
+      "impact": "A reader expects pre-selected answers from the round the update builds on. Answers from an older round or another attempt can be pre-selected. They stay visible and editable before submit.",
+      "suggested_fix": "Reword the bullet: answers (keep, dismiss, option choices) from the newest earlier round of the same Review that saved a draft, matched by finding id, skipping deleted/archived attempts; the new round's own draft always wins.",
+      "evidence": "slice-02 desk-publication.ts: `earlier: earlierRoundAttempts(runs, found.run).slice(0, answerSourceLimit)`, `earlierAnswers` returns on the first readable draft, `savedAnswers = saved?.answers ?? await earlierAnswers(earlier)`; update-round.ts priorAttemptCandidates orders complete before partial per round; journal.md T14 B2.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:answer-source-body-wording"
+    },
+    {
+      "id": "PC-007",
+      "severity": "minor",
+      "file": "docs/docs/desktop-app.md",
+      "line": 143,
+      "quote": "If new commits were pushed on top of the reviewed commit, the dialog names both",
+      "problem": "The guide promises Publish as is whenever commits were pushed on top and lists only closed / base changed / history rewritten as save-locally cases. desk-publication.ts:378 sets headMoved only when newerRoundOf(...) is undefined. A superseded round gets 'Round N of this review is newer. Publish from that round.' (:297) and has no Publish as is and no Update review to. The PR body lists this decision (T14 B6); the guide does not.",
+      "impact": "A user who opens an earlier round's result after starting an update round expects Publish as is from the guide and gets a refusal. The dialog states why.",
+      "suggested_fix": "Add after docs/docs/desktop-app.md:148: 'If a newer round of the same review exists, publish from that round; the earlier round can only be saved locally.'",
+      "evidence": "slice-02 docs/docs/desktop-app.md hunk @@ 121,175 (lines 143-148); desk-publication.ts `const headMoved = open && !current && newerRound === undefined && ...` and blockedReason `Round ${newerRound} of this review is newer...`.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:guide-superseded-round"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Not verified: the tests, tsc and eslint were not run by this read-only lane (see the brief's research-evidence for test counts). No real PR scenario (AC9). The Rust side was not checked. Desktop component sources (slice-01) were read only for the two labels quoted.
+
+Routing audit: graph_used: no (not-relevant; the contract rows were settled from the slice plus targeted ctx rg for callers and labels); wiki_used: no (not-relevant; round 2 already searched the wiki for the old rule and this round changes no wiki-described behaviour); ctx_used: yes (keryx ctx rg for registry writers, recordPartialRound callers, Desktop labels, journal decisions; keryx ctx read for driver and round 2 result); raw_rg_used: no (raw sed reads of 25 journal lines, 30 lines of file-lock.ts and 50 lines of the DOM test, and a filtered git diff --name-only, each with a keryx:raw marker).

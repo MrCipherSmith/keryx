@@ -1,0 +1,135 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, wave 2, round 3 (verification round). Slice read in full: slice-03 (backend tests: desk-publication, desk-run-executor, desk-run-service, head-move, prior-round, round-registry and update-round tests).
+I read the production code the fixtures claim to model where a fixture's shape or isolation was in question: round-registry.ts, lib/file-lock.ts, lib/config-dir.ts, update-round.ts, desk-run-store.ts `place`/`roundFor`, and desk-run-executor.ts:515-537.
+Wave 1's findings (F-001..F-006: newerRoundOf boundary, compare-status allowlist, lock-contention throw, Desktop covering filters, skipped race, answer bound) are not repeated. Round 2's F-001 (source-text assertion in desk-run-service.test.ts) is not re-filed either.
+
+## Mutation pass
+
+How it ran: a scratch `git worktree add --detach <scratchpad>/wt3 822192905b3d26eb976d83e5bbd46cee14ca9a6f`, with node_modules symlinked from the reviewed tree (used read-only).
+Each mutant was an exact single-occurrence text replacement, followed by `bun test <nearest file> [-t filter]`, and the file was restored afterwards.
+`git status` in the scratch tree showed only the symlink. The worktree was removed with `git worktree remove`, and the reviewed tree was never written.
+I did not use `keryx review mutate`: wave 1 measured that its per-pass copy of the whole tree costs more than the 300 s budget. The spec shape below is that tool's input, so the main session can re-run it unchanged.
+
+Baselines at head, all green:
+- desk-run-service.test 9/9
+- update-round.test 11/11
+- prior-round.test `-t AC7` 5 pass (10.2 s)
+- desk-run-executor.test `-t "T14 B1"` 2 pass (8.0 s)
+- round-registry.test 2/2 (2.79 s)
+
+The mutants are gates that the slice-03 tests claim to pin and that wave 1 did not run:
+
+| mutation | nearest suite | result |
+|---|---|---|
+| `earlierRoundAttempts`: `item.round < current.round` -> `<=` (update-round.ts:57) | desk-run-service.test | killed (2 fail) |
+| `earlierRoundAttempts` legacy range rule -> `return true` (update-round.ts:58) | desk-run-service.test | killed (1 fail) |
+| `roundOf` legacy key `range:${base}..${head}` -> constant `range` (update-round.ts:20) | update-round.test | killed (1 fail) |
+| `partialRoundVouch` drops `hashes.findingsSha256 === null` (round-registry.ts:201) | prior-round.test -t AC7 | killed (1 fail) |
+| `matchingEntry` findings-hash compare -> `true` (round-registry.ts:190) | prior-round.test -t AC7 | killed (1 fail) |
+| T14-B1-break-after-handon: drop the `break` after the first hand-on (desk-run-executor.ts:535) — wave 1 listed it as not run | desk-run-executor.test -t "T14 B1" | killed (1 fail) |
+| answer carry-over disabled: `.slice(0, answerSourceLimit)` -> `.slice(0, 0)` (desk-publication.ts:357) | desk-publication.test -t "never lends" | **1/1 green** |
+| same | desk-publication.test (whole file) | killed (3 fail) |
+
+Totals: 7 distinct mutants and 8 runs. 7 runs were red. 1 run was green, by design: it shows that one test passes on its own with the path under test switched off (F-002).
+Cap: every candidate I listed was run, so 0 were not reached. Exec time was about 150 s of the 300 s budget, including baselines and a timing run.
+Wave 1's other not-run candidate, `T15-existing-toast` (Desktop, presentation), is outside this slice and was not run.
+
+## Findings
+
+### [F-001] The B3 race test waits a fixed 2 s of wall-clock time on every passing run
+- Severity: major. tdd-workflow.mdc, Review severities: "Sleep or fixed delay for async work (Rule 6) | always | major".
+- File: src/review/round-registry.test.ts:87-88
+- Problem: the `beforeCompactionWrite` hook spawns a child appender, then runs `const until = Date.now() + 2_000; while (!existsSync(marker) && Date.now() < until) Bun.sleepSync(20);`.
+  With the correct (locked) code the child blocks in `withFileLock` until the compaction releases the lock. So the marker can never appear inside the hook, and the loop always runs out its full 2 s.
+  Measured in the scratch worktree: the B3 test alone took 2.73 s, and the 2-test file took 2.79 s. A cold `import` of round-registry.ts in a child takes about 0.09 s.
+- Why it matters:
+  - The test pays a real, fixed delay on every green run.
+  - Its ability to catch a missing lock depends on wall-clock timing: the unlocked child must land within 2 000 ms. On this Mac that margin is about 20x. On a loaded CI runner the margin shrinks, and the test would then pass with the lock removed.
+  - A clock-bounded poll is the pattern Rule 6 and Rule 7 exclude.
+- Fix: make the hook prove the property deterministically instead of racing a process.
+  - Inside `beforeCompactionWrite`, assert that the lock is held: `expect(withFileLock(`${file}.lock`, () => true, { timeoutMs: 0 })).toBeNull()`. Optionally, assert in-process that an `appendRoundRegistry` with a 0 ms timeout is refused.
+  - After the call, append the "concurrent" entry normally and assert `["old","compactor","concurrent"]` and that no lock file is left.
+  - The lock's waiting behaviour belongs to lib/file-lock.ts's own tests. The contention throw is wave 1 F-003.
+  - If a cross-process test is kept, have the child write a "started" marker before it calls append. The hook then waits on that marker (a state), and nothing waits on a fixed window.
+- class_scope:
+  - sites: ["src/review/round-registry.test.ts:87"]
+  - enumeration_method: `keryx ctx rg "^\+.*(sleep|setTimeout|Date\.now|new Date\(\))"` over slice-03.diff found 2 added lines, both at round-registry.test.ts:87-88. That is one site. The other `Date.now() + …` deadlines under src/review/*.test.ts (layers-signal, layers-refresh-lifecycle, agents/controller, desk-run-executor:566) predate this diff and are out of scope.
+
+### [F-002] "Another account or pull request never lends its answers" asserts only an empty result and passes with answer carry-over switched off
+- Severity: minor
+- File: src/review/desk-publication.test.ts:475
+- Problem: the test's only assertion is `settings.answers` `toEqual({})`. Its setup has no same-Review draft, so `{}` is also the result when the carry-over never runs.
+  Mutant `.slice(0, answerSourceLimit)` -> `.slice(0, 0)` (desk-publication.ts:357) leaves this test green (1/1). The same mutant fails 3 sibling tests in the whole file.
+- Why it matters: the test names a filter (other viewer, other PR) but proves nothing about it on its own. If the carry-over regressed in the same change that broke the filter, this test would say nothing. This is the skill's "falsy-only assertion with no positive artifact" class.
+- Fix: before creating the foreign attempts, write a round-1 draft for the same key, e.g. `roundOneDraft({ "fixture#F-002": "uphold" })`. The foreign attempts, which are newer and answer "dismiss", then sit between it and the update round.
+  Assert `{ "fixture#F-002": "uphold" }`. That proves the carry-over ran and that the newer foreign drafts were skipped.
+
+### [F-003] Executor fixture: the previous attempt's reviewed head equals the base
+- Severity: info
+- File: src/review/desk-run-executor.test.ts:797
+- Problem: `previousAttempt` writes `target: { base: baseSha, head: baseSha }`. That is an attempt whose reviewed range is empty. The Desktop store records an attempt's own `baseSha..headSha` (desk-run-store `request`), and the PR's head is past its base.
+  With head == base, the AC7 test's `range: { base: baseSha, head: headSha }` assertion holds for a delta round and for a merge-base..head first round alike. Only the explicit `mode: "delta"` assertion separates them.
+- Fix: optional. Commit a middle commit in the fixture repo and use it as the previous head. Then the range assertion pins the delta on its own.
+
+### [F-004] update-round fixtures carry a `round` with no `reviewId`, a shape the store cannot write
+- Severity: info
+- File: src/review/update-round.test.ts:50, :59
+- Problem: the base `run()` builder has no `reviewId`. The two T14 B1 tests add only `round: 1/2`. desk-run-store.ts `place()` sets `round` only when `reviewId` is a string, so `{round, no reviewId}` never comes out of the store.
+  `priorAttemptCandidates` keys rounds by `round` alone, so the outcome is the same, and that is why this is info.
+- Fix: optional. Add `reviewId: "review-1"` wherever a fixture sets `round`, as desk-run-service.test.ts's builder already does.
+
+### [F-005] prior-round tests without a `registry` read the developer's real round registry
+- Severity: info
+- File: src/review/prior-round.test.ts:271 (the new AC6 test). The same pattern is in the pre-existing siblings that omit `registry`.
+- Problem: `findPreviousRound` without `deps.registry` calls `readRoundRegistryReport(repoIdentity(cwd))` with no dir. `keryxConfigDir()` then resolves to `$XDG_DATA_HOME/keryx` or `~/.local/share/keryx`. The suite sets neither, and `KERYX_CONFIG_DIR` is not read by `keryxConfigDir`.
+  The read is harmless in practice, because the identity is `dir:<mkdtemp>/.git` and so unique per test. It is still a real-home read.
+- Fix: optional. Set `XDG_DATA_HOME` to a temp dir in `beforeEach`, or pass `registry: []` where the test does not exercise the registry.
+- What holds:
+  - Every new test that writes a registry passes an explicit temp dir: round-registry.test `dataDir`, the prior-round AC7 record test `dataDir`, and desk-run-executor `registryDir`.
+  - desk-publication.test isolates KERYX_CONFIG_DIR/KERYX_DATA_DIR, PATH (the fake `gh`), and GH_TOKEN/GITHUB_TOKEN. It restores them in `afterEach`.
+
+## Checklist (non-mutation)
+- Fixtures against producers:
+  - The desk-publication fixtures build their attempts through the real `DeskRunStore` (`request`/`requestAttempt`/`end`), not hand-built records.
+  - The same-round retry test asserts the producer's placement (`previousRunId`, equal `round`) before relying on it.
+  - The B2 archive uses a `decision` of the store's own shape.
+  - prior-round's `deskVouch` hand-builds an entry, but all of its hashes come from `packageFacts`, and the round-registry tests cover the real `recordPartialRound` writer.
+- No network: GitHub is a shell `gh` stub on PATH, with read counters (`FIXTURE_COMPARE_READS`, `FIXTURE_DISCUSSION_READS`) that the tests assert. Unhandled `gh` calls `exit 1`.
+- Falsy assertions with positive artifacts:
+  - The compare-not-called checks (`reads(...) === ""`) sit beside a positive outcome: a refusal message, `headMoved`, or a posted body.
+  - The B2 archived test's `{}` shares its exact setup with the positive "pre-selects the previous round's answers" test.
+  - F-002 is the exception.
+- The B5 test reaches into the private cache file `publication-preview-cache.json` (desk-publication.test.ts:530) to reset state. This is acceptable for a cache-semantics test, and no separate finding is filed.
+- The round-2 fixes hold under this lens: each slice-03 test added for T14 B1/B2/B4/B6 fails under a mutant of its gate, here or in wave 1.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Wave 2 reviewed the backend test code (slice-03). 7 new mutants in a scratch worktree at 822192905, 0 not reached: 6 killed, plus one designed run where carry-over is switched off and the 'never lends' test stays green alone (3 sibling tests fail). One major: the T14 B3 race test spins a fixed 2 s wall-clock poll on every green run, and its detection of a missing lock depends on that timing. One minor: a falsy-only assertion with no positive artifact. Three info: fixture shape and real-home registry reads.",
+  "slices": [{"id": "slice-03", "status": "DONE"}],
+  "findings": [
+    {"id": "F-001", "severity": "major", "file": "src/review/round-registry.test.ts", "line": 87, "quote": "while (!existsSync(marker) && Date.now() < until) Bun.sleepSync(20);", "problem": "The B3 race test waits on a 2 s wall-clock window. With the correct lock the child blocks, so the marker never appears and the full 2 s is spent on every green run. Catching a missing lock depends on the child landing within that window.", "impact": "A fixed real delay per run (tdd-workflow Rule 6, 'always major'). Lock-regression detection is timing-dependent and weakens on slow CI runners.", "suggested_fix": "In beforeCompactionWrite, assert the lock is held: withFileLock(`${file}.lock`, () => true, { timeoutMs: 0 }) is null. Then append the concurrent entry after the call and assert all three entries and no lock file left. If a child is kept, wait on a 'started' marker state, not a time window.", "evidence": "Scratch worktree at 822192905: round-registry.test.ts -t B3 ran in 2.73 s (the file in 2.79 s), and a child cold import of round-registry.ts takes ~0.09 s, so ~2 s is the fixed loop. Reading round-registry.ts:154 and file-lock.ts:56: the child waits on the O_EXCL lock while the hook runs.", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed", "class_scope": {"sites": ["src/review/round-registry.test.ts:87"], "enumeration_method": "keryx ctx rg '^\\+.*(sleep|setTimeout|Date\\.now|new Date\\(\\))' over slice-03.diff: 2 added lines, both round-registry.test.ts:87-88; other Date.now deadlines in src/review/*.test.ts predate the diff"}},
+    {"id": "F-002", "severity": "minor", "file": "src/review/desk-publication.test.ts", "line": 475, "quote": "expect((await requestDeskPublication(project, key, { kind: \"preview\", id: next })).settings.answers).toEqual({});", "problem": "Falsy-only assertion with no same-Review draft in setup, so it passes when answer carry-over never runs.", "impact": "The test names the foreign-attempt filter but proves nothing about it on its own.", "suggested_fix": "Add a same-key round-1 draft answering 'uphold' before the foreign attempts (which answer 'dismiss'), and assert {\"fixture#F-002\":\"uphold\"}.", "evidence": "Mutant .slice(0, answerSourceLimit) -> .slice(0, 0) at desk-publication.ts:357: desk-publication.test -t 'never lends' 1/1 green; the whole file 24 pass / 3 fail.", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "executed"},
+    {"id": "F-003", "severity": "info", "file": "src/review/desk-run-executor.test.ts", "line": 797, "quote": "target: { kind: \"pr\", ref: \"https://github.com/example/project/pull/12\", base: baseSha, head: baseSha }", "problem": "The previous attempt's reviewed head equals its base, an empty range no Desktop attempt records. The range assertion then cannot separate delta from first-round.", "impact": "Only the explicit mode: 'delta' assertion carries the AC7 test.", "suggested_fix": "Optional: add a middle commit and use it as the previous head.", "evidence": "desk-run-store request records the attempt's own baseSha..headSha; prior-round range is previous.reviewedHead..head for delta and merge-base..head for a first round, both baseSha..headSha here.", "confidence": "medium", "reviewer": "review-testing-practices", "evidence_kind": "static"},
+    {"id": "F-004", "severity": "info", "file": "src/review/update-round.test.ts", "line": 50, "quote": "const retry = run(\"retry\", { round: 1, state: \"partial\", result: result({ coverage: \"partial\" }) });", "problem": "Fixtures set round without reviewId, a combination desk-run-store place() never writes.", "impact": "None today: priorAttemptCandidates keys on round alone.", "suggested_fix": "Optional: add reviewId: 'review-1' wherever round is set.", "evidence": "desk-run-store.ts:45-48: place() returns before setting round unless reviewId is a string.", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "static"},
+    {"id": "F-005", "severity": "info", "file": "src/review/prior-round.test.ts", "line": 271, "quote": "const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });", "problem": "Without deps.registry, findPreviousRound reads the default registry under keryxConfigDir() (XDG_DATA_HOME or ~/.local/share), which the suite does not isolate.", "impact": "A read-only touch of the developer's real home. The identity is per-mkdtemp, so there is no collision in practice.", "suggested_fix": "Optional: set XDG_DATA_HOME to a temp dir in beforeEach, or pass registry: [] where the registry is not under test.", "evidence": "prior-round.ts:819, round-registry.ts:76, config-dir.ts:67 (ignores KERYX_CONFIG_DIR).", "confidence": "high", "reviewer": "review-testing-practices", "evidence_kind": "static"}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 1, "info": 3},
+  "follow_ups": ["Wave 1's T15-existing-toast (Desktop, presentation) is still not run; it is outside slice-03."],
+  "mutant_candidates": [
+    {"id": "W2-earlier-same-round", "file": "src/review/update-round.ts", "anchor": "return item.round < current.round;", "replacement": "return item.round <= current.round;", "result": "killed (desk-run-service.test, 2 fail)"},
+    {"id": "W2-earlier-legacy-range", "file": "src/review/update-round.ts", "anchor": "return item.baseSha !== current.baseSha || item.headSha !== current.headSha;", "replacement": "return true;", "result": "killed (desk-run-service.test, 1 fail)"},
+    {"id": "W2-roundOf-legacy", "file": "src/review/update-round.ts", "anchor": ": `range:${attempt.baseSha}..${attempt.headSha}`", "replacement": ": `range`", "result": "killed (update-round.test, 1 fail)"},
+    {"id": "W2-vouch-null-findings", "file": "src/review/round-registry.ts", "anchor": "if (hashes === undefined || hashes.findingsSha256 === null) return undefined;\n  return matchingEntry(entries.filter((entry) => entry.event === \"desk-partial\")", "replacement": "if (hashes === undefined) return undefined;\n  return matchingEntry(entries.filter((entry) => entry.event === \"desk-partial\")", "result": "killed (prior-round.test -t AC7, 1 fail)"},
+    {"id": "W2-match-findings-hash", "file": "src/review/round-registry.ts", "anchor": "entry.findingsSha256 === hashes.findingsSha256 &&", "replacement": "true &&", "result": "killed (prior-round.test -t AC7, 1 fail)"},
+    {"id": "T14-B1-break-after-handon", "file": "src/review/desk-run-executor.ts", "anchor": "        break;\n      }\n      signal.throwIfAborted();", "replacement": "      }\n      signal.throwIfAborted();", "result": "killed (desk-run-executor.test -t 'T14 B1', 1 fail)"},
+    {"id": "W2-no-answer-carry", "file": "src/review/desk-publication.ts", "anchor": ".slice(0, answerSourceLimit).map(", "replacement": ".slice(0, 0).map(", "result": "killed by the whole file (3 fail); survives the 'never lends' test alone (F-002)"}
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant; the slice names the test files, and the payload's layers gave the related suites). wiki_used: not-relevant (test-code lens; intent came from the test docblocks and production docblocks). ctx_used: yes (`keryx ctx rg` for the sleep/clock enumeration and prior-round duplicate checks). raw_rg_used: no. Raw `git show | sed/grep` with `# keryx:raw` markers was used for exact source excerpts at 822192905.
+Scratch worktree removed. Mutant evidence is in this file only. Nothing was written to `research-evidence/`.

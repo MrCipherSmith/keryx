@@ -1,0 +1,168 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage3, base 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b (stage 2 tip) .. head 822192905b3d26eb976d83e5bbd46cee14ca9a6f, diff mode, round 3 (verification), wave 2, slice-02.
+
+What I read:
+- The task asked me to focus on the T14 registry lock, so I did not read slice-02's 118 KB diff line by line. I read these at head instead:
+  - src/review/round-registry.ts, the whole file;
+  - src/lib/file-lock.ts, the whole file;
+  - the T14 B3 test (round-registry.test.ts:64-96);
+  - the hand-on loop in desk-run-executor.ts:514-537;
+  - runDeskWorker's start (desk-run-service.ts:306-365);
+  - update-round.ts:1-75;
+  - the flow 520 journal's T14 entries;
+  - round 2's raw/review-highload-w2.txt;
+  - this round's raw/review-highload-w1.txt.
+- The publication, compare-cache and superseded-round hunks of slice-02 are therefore not re-reviewed in this wave. The REVIEW_RESULT's `slices` entry says so.
+
+Load profile: not provided, and the flow context states none. These are the concrete triggers I used:
+- several Desktop workers, one process per PR key (`keryx review desk-run worker`), handing partial packages on for PRs of one repository;
+- a `review ingest`, `complete`, `publish` or decide-premise in another session of the same repository;
+- a writer killed (SIGKILL) while it holds the registry lock;
+- a registry directory the writer cannot create files in.
+
+Summary: Round 2 highload-w2 F-001 (registry compaction without a lock) is closed. Every append and every compaction now runs under one O_EXCL lock file beside the registry. The compaction re-reads the file under that lock. A spawned second writer is shown to survive a compaction (T14 B3 test). The release is nonce-guarded and runs in `finally`. A lock that cannot be taken within 15 s throws. recordPartialRound turns that into `error`, and the executor moves on to the next candidate, so no trust is granted wrongly. Two residual minors remain:
+- the sync helper's stale-lock break still has the two-reclaimer race, which the async lock in src/lib/fs.ts fixed in flow 272;
+- after a lock timeout, the executor retries the same registry lock once for every further partial candidate, each wait synchronous and 15 s long.
+Stats: blocker 0 | major 0 | minor 2 | info 1.
+
+Findings:
+
+CLI / Multi-Session
+
+### [F-001] Stale-lock recovery in lib/file-lock.ts can let two writers into the registry's critical section
+- Severity: minor (location_class pre-existing: the helper predates the PR; T14 chose it for the registry)
+- File: src/lib/file-lock.ts:109-117 (reached from src/review/round-registry.ts:154)
+- Pattern: Part 0 / concurrency-patterns.mdc, lock file stale recovery. The stale break is a stat-then-unconditional-rm (TOCTOU).
+- Failure mode, step by step:
+  1. A holder is killed inside the critical section and leaves `<registry>.jsonl.lock`.
+  2. Waiters A and B both see it older than 10 s through `statSync`.
+  3. A runs `rmSync`, then `openSync(wx)` succeeds, and A enters the critical section.
+  4. B's `rmSync(lockPath, {force:true})`, issued on its earlier stat, removes A's fresh lock.
+  5. 15 ms later B's `openSync(wx)` succeeds, and A and B are inside together.
+  With the registry past 512 KB, one compaction's rename drops the other's append. That is round 2 F-001's outcome: a lost desk-partial, complete or publish vouch, so the next round on this machine falls back to a fuller review. No trust is granted wrongly. A's nonce check keeps it from deleting B's lock afterwards, but it does not stop the overlap.
+- Why minor: the trigger needs a holder killed inside a critical section of a few milliseconds, at least two concurrent waiters and a file past 512 KB. The outcome is the registry's documented degradation (one fuller round), not one of the four blocker shapes. Under law 2 it is still recorded rather than dismissed as unlikely.
+- Evidence: the repository already holds the fixed shape. src/lib/fs.lock-reclaim.test.ts ("two reclaimers racing over a dead owner never both hold the lock", review r1 F3 of flow 272) pins it for the async `withFileLock` in src/lib/fs.ts. That lock moves a stale lock aside by rename and checks the owner, so A's live lock is never removed. The same file also has the sync lease, `acquireLeaseSync`/`reclaimStaleLeaseSync`, with pid-based "gone" detection.
+- Fix: take the registry lock through the sync lease in src/lib/fs.ts, which reclaims a gone holder safely. Or port its rename-aside reclaim into lib/file-lock.ts:
+  - rename the stale lock to `${lockPath}.stale.<nonce>`, then re-check the moved file's mtime and nonce before deleting it;
+  - add a test like fs.lock-reclaim.test.ts with an injected interleaving.
+
+Concurrency & Races: None detected beyond F-001.
+- Every write path to the registry file goes through appendRoundRegistry. Round 2's enumeration lists recordFinishedRound callers (publish.ts, premise-question.ts, managed.ts, commands/review.ts) and recordPartialRound (desk-run-executor.ts:533). `writeOwnerOnlyFileAtomic` on the registry appears only inside the lock (round-registry.ts:161, 165).
+- Readers take no lock. That is safe: the rewrite is an atomic rename, and a torn line in a concurrent append is skipped by parseEntries. A missed entry only costs trust.
+
+Resources: None detected.
+- The lock is released in `finally` on both the success and the throw path. The fd is closed, and the file is removed only while it holds our nonce.
+- The critical section is one append, one read of the file (at most 1 MB, the read cap) and at most one rewrite of up to 1 MB, a few milliseconds. That is far below LOCK_STALE_MS (10 s), so a live holder is never judged stale under ordinary load.
+
+Caching: Not relevant to this wave's scope. Round 2's F-002 (info, aheadHead memo key) is reported fixed by T14 B5. I did not re-read the compare-cache code here.
+
+Lock Contention
+### [F-002] After a lock timeout, the executor waits 15 s again on the same registry lock for each further partial candidate
+- Severity: minor
+- File: src/review/desk-run-executor.ts:525-537 (loop) and src/review/round-registry.ts:154-170
+- Pattern: Part 0, retry with no cap. The same unavailable resource is retried once per candidate, each attempt costing the full timeout, synchronously.
+- Failure mode: the loop calls `recordPartialRound` for each usable partial candidate in `previousRuns`. That list is every completed or partial attempt of the same Review's earlier rounds, with no count limit (update-round.ts:66-73). If the registry lock cannot be taken, each call spins in `withFileLock` until the 15 s deadline, using `Bun.sleepSync`, which blocks the event loop. It then returns `error`, and the loop tries the next partial candidate against the same lock. Two triggers make this happen:
+  - the registry's `review-rounds` directory is not writable by the worker, so `openSync(wx)` fails every time with no stat match, until the deadline;
+  - a lock file the worker cannot remove.
+  With k partial candidates, the worker stalls for k × 15 s before the reviewer spawns. During that time its 500 ms cancel poll (desk-run-service.ts:349) and its SIGTERM/SIGINT abort handlers cannot run, so a Cancel from Desktop takes effect only after the stall. The run still ends correctly: it falls back to a closed candidate or a first review, and no wrong trust is granted.
+- Why minor: the cost is degradation bounded by the number of partial attempts in one Review, normally a few. It needs a broken config directory or lock. Ordinary contention is resolved in milliseconds, and a crashed holder's lock is broken after 10 s.
+- Fix: stop handing on partial candidates after the first lock failure (the registry error), because a retry hits the same lock. One way is to remember `registryUnavailable` in the loop and skip `prior.partial` candidates after it, while still accepting closed ones. Optionally, pass `timeoutMs` and `onWaiting` from this call site so the worker's phase line shows "waiting for the round registry lock" instead of a silent stall.
+
+Async / Queues: None detected. No queue is added. Registry growth is bounded by per-package compaction. Round 2's optional item (evict the oldest packages when more than about 1,500 distinct packages keep the file over 512 KB, and the restart-at-1 MB that drops every vouch) was not taken in T14. It is no longer racy, because the rewrite is under the lock. It remains the documented "at most one full round per package" degradation, so I do not file it again.
+
+Retry / Timeout / Circuit Breaker
+### [F-003] A writer built before T14 (a stale `keryx` on PATH) still compacts without the lock
+- Severity: info
+- File: src/review/round-registry.ts:151 (contract), relation to .metaproject/memory/constraints/stale-installed-keryx-binary.md
+- Pattern: Part 0, mixed-version writers to one shared state file.
+- Failure mode: the registry file is shared by every clone and worktree of the repository on the machine. A `keryx review complete`, `ingest` or `publish` run by a pre-T14 binary takes no lock. The accepted memory constraint says the keryx on PATH is a stale build. Such a run can still drop a Desktop worker's locked append during its own unlocked compaction while the file is past 512 KB. The outcome is the same as round 2 F-001: one fuller round, no wrong trust. It goes away once every keryx on the machine is at or past this change.
+- Fix: no code change. Optionally, note in the PR body that the lock protects only writers built from this change onward.
+
+Idempotency & Distributed Invariants: None detected.
+- The timeout path holds its stated contract. appendRoundRegistry throws "locked by another keryx process; the entry was not recorded". recordFinishedRound returns that as `error`, which is best-effort for its callers. recordPartialRound returns `error`, and the executor does not hand that package on (T14 B1: next candidate, never a first review).
+- A missing entry only removes trust, so a lost or skipped write can never vouch for a package keryx did not finish.
+
+Clean Areas: Part 0 (apart from F-001 and F-002), A, B, D (apart from F-002), E, F and G reviewed for the T14 registry and lock path. Part C was not re-reviewed in this wave.
+
+Round obligations:
+- Round 2 highload-w2 F-001 (major, pre-existing: registry compaction without a lock): closed.
+  - round-registry.ts:154-170 runs `appendOwnerOnlyLine`, the re-read, `compactEntries` and `writeOwnerOnlyFileAtomic` inside `withFileLock(`${file}.lock`)`. It throws on `null`.
+  - The T14 B3 test spawns a second writer process from inside the compaction, between the re-read and the rename. It expects ["old", "compactor", "concurrent"] and no leftover lock.
+  - The lock was acquired with O_EXCL and mode 0600. The deadline is checked before the stale branch, so an unremovable lock degrades to a timeout rather than a spin. The release is nonce-guarded in `finally`. The 15 s timeout is longer than the 10 s stale window, so a crashed holder is waited out rather than reported as a failure.
+  - The residual reclaim race is F-001 above.
+- Round 2 highload-w2 F-002 (info): T14 B5 reports it fixed. Not re-verified in this wave.
+
+Not verified / notes:
+- I ran no tests (allowed_tools read-only, exec_budget_s 0). Test evidence is from the brief: backend 201 pass / 0 fail and Desktop 151 pass / 0 fail.
+- I did not reproduce the F-001 interleaving. It is derived from reading file-lock.ts:109-117 and checked against the interleaving that fs.lock-reclaim.test.ts pins for the other lock.
+- I did not run the k × 15 s stall in F-002. It is derived from the loop, the unbounded candidate list and the synchronous `sleepSync` wait.
+- Slice-02's publication, compare-cache and superseded-round hunks were not re-read line by line in this wave.
+- Routing audit:
+  - graph_used: no (not-relevant: the payload's `layers` and round 2's enumeration named the files);
+  - wiki_used: no (not-relevant);
+  - ctx_used: yes (`keryx ctx rg`, `keryx ctx read`);
+  - raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Round 2 highload-w2 F-001 is closed. Every registry append and compaction runs under an O_EXCL withFileLock with a re-read under the lock, a nonce-guarded release in finally, and a 15 s timeout that throws, so the caller skips the entry and falls back to a fuller review, never to wrong trust. A spawned-writer test pins it. Two minors remain: the sync lock helper's stale break is a stat-then-rm TOCTOU that can admit two writers after a crashed holder (fixed for the async lock in flow 272), and after a lock timeout the executor waits the full 15 s again on the same lock for each further partial candidate, synchronously, which delays Cancel. One info: pre-T14 keryx binaries still compact without the lock.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/lib/file-lock.ts",
+      "line": 110,
+      "quote": "if (age !== undefined && Date.now() - age > staleMs) {",
+      "problem": "Stale-lock recovery checks the lock's mtime and then removes the lock path unconditionally. A second waiter acting on its earlier stat removes the fresh lock that the first reclaimer just created. Both then hold the registry lock that T14 relies on.",
+      "impact": "Trigger: a registry writer killed inside the lock, two concurrent waiters, and a registry past 512 KB. One writer's compaction rename then drops the other's entry (desk-partial, complete or publish), and the next round on this machine falls back to a fuller review. No trust is granted wrongly.",
+      "suggested_fix": "Use the sync lease in src/lib/fs.ts (acquireLeaseSync/reclaimStaleLeaseSync, pid-based gone detection) for the registry lock. Or port the rename-aside reclaim from the async withFileLock in src/lib/fs.ts into lib/file-lock.ts, with an injected-interleaving test like src/lib/fs.lock-reclaim.test.ts.",
+      "evidence": "file-lock.ts:109-117: statSync(lockPath).mtimeMs, then rmSync(lockPath, {force:true}) with no ownership or inode re-check. round-registry.ts:154 takes this lock for every append and compaction. src/lib/fs.lock-reclaim.test.ts pins the fixed behaviour for the other lock ('two reclaimers racing over a dead owner never both hold the lock').",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing",
+      "publication": "omit"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/desk-run-executor.ts",
+      "line": 533,
+      "quote": "(prior.partial && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));",
+      "problem": "When the registry lock cannot be taken, recordPartialRound returns an error after a 15 s synchronous wait, and the loop retries the same lock for each further partial candidate. previousRuns is not bounded in count.",
+      "impact": "Trigger: an unwritable review-rounds directory or an unremovable lock file, plus a Review with k earlier partial attempts. The worker blocks for k x 15 s before the reviewer spawns. Its 500 ms cancel poll and its SIGTERM/SIGINT abort cannot run meanwhile, so Cancel from Desktop is delayed by that long. The outcome is still correct: a fallback to a closed candidate or a first review.",
+      "suggested_fix": "After the first recordPartialRound error, skip the remaining partial candidates (keep trying closed ones). Optionally pass timeoutMs/onWaiting from this call site so the phase shows the wait.",
+      "evidence": "desk-run-executor.ts:525-537 loop with `continue` on a failed hand-on. update-round.ts:66-73 previousRunInputs maps every priorAttemptCandidates entry. file-lock.ts:86-127 spins with Bun.sleepSync until LOCK_TIMEOUT_MS (15 s). desk-run-service.ts:349 uses a setInterval cancel poll.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/round-registry.ts",
+      "line": 151,
+      "quote": "export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string, ports: RoundRegistryPorts = {})",
+      "problem": "The lock protects only writers built from this change onward. A pre-T14 keryx (the accepted memory constraint says the keryx on PATH is a stale build) still compacts the shared registry without the lock.",
+      "impact": "Trigger: a stale-binary review complete/ingest/publish compacting while a Desktop worker appends, with the file past 512 KB. One entry is lost, which costs one fuller round. It is transitional.",
+      "suggested_fix": "No code change. Optionally, note it in the PR body.",
+      "evidence": ".metaproject/memory/constraints/stale-installed-keryx-binary.md. The registry file is shared per repository identity across clones and worktrees (round-registry.ts:55-78).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": [
+    { "id": "slice-02", "coverage": "Partial. Read in full at head for the T14 lock: round-registry.ts and lib/file-lock.ts. Also read the B3 test, the desk-run-executor hand-on loop, runDeskWorker's start and update-round.ts. The publication, compare-cache and superseded-round hunks were not re-read line by line in this wave." }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

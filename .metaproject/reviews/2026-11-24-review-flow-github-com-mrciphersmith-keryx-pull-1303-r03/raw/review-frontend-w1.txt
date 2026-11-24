@@ -1,0 +1,165 @@
+STATUS: DONE
+
+## Frontend Review (round 3, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..822192905b3d26eb976d83e5bbd46cee14ca9a6f` (stage 2 tip .. head), diff mode from the payload
+- Slice: slice-01. I read the Desktop hunks in full: `ReviewPublishDialog.tsx`, `ReviewRuns.tsx`, `ReviewWorkspace.tsx`, `SessionReviewActivity.tsx` and `useReviewRuns.ts`. I also read the flow markdown in full: acceptance-criteria, description, journal, plan and tasks. I read `resolved/T15.implement.json` and the opening of `context.md`.
+- Not read: `flow.json` and the `resolved/T5–T14.implement.json` rule manifests (slice lines 310–1407 and 1516–1915). They are machine records with no frontend code. Because of that gap, `slices` in REVIEW_RESULT is empty: the brief allows only slices read in full to be listed.
+- Context read outside the slice:
+  - the run observers `ReviewBoard.updateRunSummary` and `ReviewsView.observeRuns`
+  - the tail of `ReviewWorkspace.tsx`, which renders `ReviewRuns`, `ReviewRunDialog` and the launch dialog
+  - `useFocusTrap` in `components/ui.tsx`
+  - the DOM test titles and assertions for T15 in `reviews/ReviewPanel.dom.test.tsx`
+  - round 2 results `review-frontend-w1.txt` and `review-ui-ux-w1.txt`
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 2
+
+This surface has no MobX. It uses React `useState`, `useRef` and `useCallback` only, so the observer, action, store and inter-store callback laws do not apply.
+
+### Round 2 fixes checked (T15)
+
+All of these hold:
+
+- **Round 2 frontend F-001** (Update could close the dialog and silently drop the start).
+  - `RunAttempt` passes `updateDisabled={working}`. `working` is `local.working` in both render paths: `ReviewRuns` gets it through `{...local}`, and `ReviewRunDialog` gets it as `working={local.working}`.
+  - `local.working` is true exactly when `request` would skip a mutation. `setWorking` runs for non-status actions only, and the skip condition is `pending.current && (status || pending !== "status")`.
+  - `request` now returns `done | skipped | failed`. `updateReview` refreshes the board only on `done`, and shows a toast on `skipped`.
+  - DOM tests pin all three: the disabled button, the failed start that does not refresh, and the board refresh on `done`.
+- **Round 2 frontend F-002 / ui-ux UX-102** (the existing-attempt guard was too narrow and gave no feedback).
+  - The guard now matches any non-archived, non-imported attempt on the target range, in any state and whatever the board shows, preferring an active one.
+  - It shows the toast "Commit <sha> already has a review attempt".
+  - When that attempt is not the latest, it opens the attempt's dialog.
+  - A DOM test covers a failed attempt on the current head.
+- **Automatic publication is not carried over.** `updateRoundOptions` drops `autoPublish` by rest-destructuring, and a DOM test asserts the start options do not contain `autoPublish`.
+- **Sessions offers no Update.** `sessionReviewPublication` builds a publication target without `onUpdateReview`. The test asserts `"onUpdateReview" in publication === false` and that the footer contains no "Update review".
+- **Footer order** is Update, Publish as is, Close, Skip, Save, as the DOM test pins. There is exactly one `btn-primary` in each state.
+- **Board observer with a moved range.** `useReviewRuns.request` reports a mutation's snapshot under the card's (old) range, while the update start is on the new head. I checked whether that produces a wrong badge:
+  - `ReviewBoard.updateRunSummary` computes `localBadge(runs, revision)` for the card's own range, and applies it only to a card at that range.
+  - `ReviewsView.observeRuns` ignores the revision.
+  - So no badge is misattributed.
+
+### Findings
+
+### [F-001] Keyboard focus is lost after "Update review" once the new attempt replaces the opener
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewRuns.tsx (`onUpdateReview` wrapper in `RunAttempt`); apps/desktop/src/components/ui.tsx `useFocusTrap`
+- **Rule**: canonical rubric, accessibility. `.metaproject/rules/stacks/react/code-style-patterns.mdc` is still absent from this worktree; only `stacks/ts-js-node` exists.
+- **Problem**: The sequence is:
+  1. Clicking Update calls `setPublishOpen(false)`, then `updateReview(...)`.
+  2. When the dialog closes, `useFocusTrap` restores focus to the element focused when it opened, if that element is still in the document. That element is the "Publish to GitHub" / "Review publication" button of the reviewed attempt's `<article>`.
+  3. When the start answers, the new attempt on the current head becomes `latestAttempt` (`runActive && sameRange(card)`, or `runs.find(runActive)` when the board is behind).
+  4. `<RunAttempt key={latest.id}>` remounts, which removes the button that holds focus.
+  5. Focus falls to `<body>`.
+- **Why it matters**: A keyboard or screen-reader user who presses the dialog's primary action loses their place in the panel. They have to tab from the start of the document to reach the new attempt. This is the main Update path, not an edge case. Round 2 ui-ux listed "where focus lands after the dialog closes on Update review" as not checked.
+- **Fix**: After a `done` outcome, move focus to the new attempt. For example, give the Latest-review `<article>` `tabIndex={-1}` and focus it when `latest.id` changes after an update started from this panel. Alternatively, focus the panel's "Latest review" heading. Add a DOM assertion that `document.activeElement` is not `body` after the start answers.
+
+### [F-002] (info) "Update review" stays enabled while the preview is loading or stale, so it can start on a head the draft no longer vouches for
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewPublishDialog.tsx (Update button)
+- **Problem**: The button is disabled by `writing || updateDisabled` only. It reads `headMoved.currentHead` from the last draft. Two cases expose this:
+  - After a submit fails with `stale:` (the head moved again), the old draft stays and `previewStale` is true. Update then starts a round on the intermediate head instead of the PR's current one.
+  - While a refresh preview is in flight, Update also uses the older head.
+- **Impact**: No data loss. The workspace comment says the backend validates the range again before admitting the run, so the start is either refused (the error shows in the panel) or reviews a real commit of the PR that is no longer the newest. Either way, the user's intent ("update to the current head") is not quite met.
+- **Fix**: Also disable Update while `busy || previewStale`, or label the button from the refreshed preview only.
+
+### [F-003] (info) The reason Update is disabled is only in a `title` on a disabled button
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewPublishDialog.tsx
+- **Problem**: `title={updateDisabled ? "Another action of this review is still running." : undefined}` sits on a `disabled` button. Disabled buttons cannot take focus, so keyboard and screen-reader users never reach the tooltip. The state is transient, and the panel already shows `aria-busy` and "Updating review…", so the impact is low.
+- **Fix**: Optional. Render the reason as visible helper text in the footer, or use `aria-disabled` with a guarded click so the button stays focusable and announces its description.
+
+### Clean Areas
+- **MobX laws**: not applicable; there is no MobX in the changed files.
+- **API placement**: the dialog calls no IO directly. Update goes through `local.request`, which catches every error into `actionError`, so `void local.request(...).then(...)` leaves no unhandled rejection. `.then` handles only resolved outcomes.
+- **Hooks**: the `updateReview` `useCallback` deps are complete (`card`, `local.runs`, `local.request`, `onRefreshBoard`, `toast`; `setSessionId` is stable). No new effects. `headMoved`, `updateOffered` and `publishButton` are derived during render, with no duplicated state. `RunRequestOutcome` returns are consistent on every path, including the generation-superseded ones: a mutation that reached the CLI is `done`, a superseded failure is `failed`.
+- **TypeScript**:
+  - New props are typed `T | undefined`, consistent with `exactOptionalPropertyTypes`.
+  - The conditional spread keeps `onUpdateReview` absent rather than `undefined`.
+  - `onStarted: () => Promise<unknown>` correctly widens for `local.request` returning an outcome.
+  - There is no `any` and no non-null `!`.
+- **Lists and keys**: no new lists.
+- **Accessibility** (apart from F-001 and F-003):
+  - Button names carry the short SHA.
+  - The notice is `role="status"`, and both fieldsets carry `aria-describedby` pointing at it while the head has moved.
+  - The full SHAs are in `title` on the `<code>` elements.
+
+### Not verified / notes
+- No tests run: read-only, exec budget 0. The brief's evidence reports Desktop `src/review src/reviews` at 151 pass and 0 fail.
+- No live Desktop render, so F-001 is static reasoning from `useFocusTrap` (restore only if `document.contains(before)`) and the `key={latest.id}` remount. It is not observed in a browser.
+- Desktop `.tsx` files are not linted by the root ESLint config, as the PR states.
+- The `resolved/T15.implement.json` `files` list names `apps/desktop/src/sessions/SessionReviewActivity.tsx`, but the file is `apps/desktop/src/review/SessionReviewActivity.tsx`. That is a flow-record path slip, outside this lens, and not filed.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 3 verification of T15 (Desktop). The round 2 frontend F-001 fix holds: Update is disabled while local.working is true, request returns an outcome, the board is refreshed only on done, and a skipped start shows a toast. The round 2 F-002/UX-102 fix holds: any non-archived attempt on the target range is shown instead of starting another, with a toast. autoPublish is dropped, and Sessions offers no Update. Board badges are not misattributed by the old-range observer call. One new minor: keyboard focus falls to body after Update review, because the focus-restore target unmounts when the new attempt becomes latest. Two infos: Update is enabled while the preview is stale or loading, and the disabled-reason is shown only as a tooltip. The Desktop hunks and flow markdown of slice-01 were read in full; flow.json and the resolved T5-T14 rule manifests were not, so slices is empty.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": null,
+      "quote": "        setPublishOpen(false);",
+      "problem": "Clicking Update review closes the publish dialog. useFocusTrap restores focus to the opener, the 'Publish to GitHub' or 'Review publication' button in the reviewed attempt's article. When the start answers, the new attempt becomes latestAttempt, and <RunAttempt key={latest.id}> remounts. The focused button is removed and focus falls to document.body.",
+      "impact": "A keyboard or screen-reader user loses their place after the dialog's primary action, on the main Update path, and must tab from the document start to reach the new attempt.",
+      "suggested_fix": "After a 'done' outcome, focus the new Latest-review article (tabIndex={-1}) or the 'Latest review' heading. Add a DOM assertion that document.activeElement is not body after the start answers.",
+      "evidence": "ui.tsx useFocusTrap: `if (before && document.contains(before)) before.focus();`. ReviewRuns.tsx: `{latest && <RunAttempt key={latest.id} ...`. latestAttempt prefers `runActive(run) && sameRange(run, card)`, then `runs.find(runActive)`, and the new update attempt matches either. Round 2 ui-ux listed focus after Update as not checked.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-focus-lost-after-attempt-remount",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "<button type=\"button\" className=\"btn btn-primary\" disabled={writing || updateDisabled}",
+      "problem": "Update review is not disabled while the preview is loading or stale (busy or previewStale). It uses headMoved.currentHead from the last draft. After a submit fails with 'stale:' because the head moved again, Update starts a round on the intermediate head.",
+      "impact": "No data loss. The backend re-validates the range, so the start is refused with a panel error, or it reviews a commit that is no longer the newest. The user's intent is not quite met.",
+      "suggested_fix": "Also disable Update while busy || previewStale.",
+      "evidence": "ReviewPublishDialog.tsx Update button: `disabled={writing || updateDisabled}` and `onClick={() => onUpdateReview(headMoved.currentHead)}`. `writing` excludes the 'preview' kind.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-enabled-on-stale-preview",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "title={updateDisabled ? \"Another action of this review is still running.\" : undefined}",
+      "problem": "The reason Update is disabled is carried only by a title on a disabled, non-focusable button.",
+      "impact": "Keyboard and screen-reader users do not get the reason. The state is transient, and the panel shows aria-busy and 'Updating review…', so the impact is low.",
+      "suggested_fix": "Show the reason as visible footer text, or use aria-disabled with a guarded click.",
+      "evidence": "ReviewPublishDialog.tsx Update button props.",
+      "confidence": "high",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-review-disabled-reason-tooltip-only",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "slices": [],
+  "inputs_unreadable": [".metaproject/rules/stacks/react/code-style-patterns.mdc (absent in worktree)"]
+}
+```
+
+Routing audit:
+- metaproject: `index.md` read.
+- graph_used: no. Not relevant: the payload's `layers.affected` supplied the dependents.
+- wiki_used: no. Not relevant: the intent is in the PR body and the flow journal.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx run`).
+- raw_rg_used: no. A few bounded `sed` and `python` reads were marked `keryx:raw`.

@@ -1,0 +1,92 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 3 (verification), wave 2, slice-02, code mode only. No render was supplied, so everything was judged statically from the user-facing strings the backend returns and docs/docs/desktop-app.md. The round-1 copy fix holds: with the head moved and General comment off, the reason now reads \"Enable General comment. Inline comments are not available when publishing for an earlier commit.\", with no remedy that cannot be followed. The as-is body line names both commits and says the newer commits are not covered. The docs match the dialog labels (\"Publish as is for\", \"Update review to\", \"Save locally\"), the dropped automatic publication and the reuse of an existing attempt. Round numbers the superseded message cites are visible in the Reviews panel (\"Round {n}\" in ReviewPanel.tsx and ReviewsView.tsx), so the round it names can be found. One minor finding (UX-301): the new superseded-round reason always says \"Publish from that round\", but by the recorded T14 decision it also blocks when that newer round failed, is still running, or was deleted or archived. In those cases the stated remedy cannot be followed. One info finding (UX-302): the generic \"closed or its revision moved\" reason now also covers a failed GitHub compare read and a rewritten history. It gives no refresh hint for the transient case and no next step for the rewritten one, and the docs do not mention the superseded-round refusal. No blocker or major findings. Slop score 0.",
+  "slices": [
+    { "id": "slice-02", "coverage": "Read in full: the Desktop DOM test hunks, the docs/docs/desktop-app.md hunk, and every backend hunk (desk-publication-types, desk-publication, desk-run-executor, desk-run-service, head-move, prior-round, round-registry, update-round). Only the strings that reach the user were judged in this lens: blockedReason values, the as-is body line, and thrown `configuration:`/`stale:` messages. The prior-round and round-registry `why` and `detail` strings are diagnostics for the review package, not Desktop UI, and were read but not rated." }
+  ],
+  "findings": [
+    {
+      "id": "UX-301",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "? `Round ${newerRound} of this review is newer. Publish from that round. You can still save this draft locally.`",
+      "problem": "`newerRoundOf` (update-round.ts) returns the highest later round of the same Review whatever its state or decision. It does not filter `state`, and unlike `earlierRoundAttempts` it does not drop withdrawn attempts. The journal records the blocking itself as decided: \"B6 blocks on any newer round incl. a failed/running one\". Security-code w2 also confirms that deleted and archived newer rounds count, as a deliberate fail-closed choice. The copy was not decided, though, and it gives one remedy for every case: \"Publish from that round\". That remedy cannot be followed when the newer round failed or was cancelled, because it has no result to publish. It also cannot be followed when the newer round was deleted or archived, because the user removed it. While the newer round is still running, the remedy only works later, and the message does not say so.",
+      "impact": "Nielsen #9 (help users recognize, diagnose and recover from errors): the dialog's only submit action is disabled, and the reason sends the user to a round they cannot publish from. They are left with Save locally and no stated way forward, such as starting a new round on the current head. This is a secondary flow: an earlier attempt opened from History after a later round exists.",
+      "suggested_fix": "Keep the block (decided), and let the reason fit what the user can do. One option needs no new data: \"Round N of this review is newer. Publish from that round once it finishes, or start a new round if it did not. You can still save this draft locally.\" Alternatively, have `newerRoundOf` also return the newer round's state or decision. Then the message can name the case: still running, failed, or removed.",
+      "evidence": "desk-publication.ts blockedReason chain: `!current && newerRound !== undefined ? `Round ${newerRound} of this review is newer. Publish from that round. …`` with `newerRound` from `newerRoundOf(runs, found.run)`. update-round.ts `newerRoundOf`: the loop skips only `item.id === current.id`, a different reviewId, an undefined round, and `item.round <= current.round`. There is no `state` or `withdrawn` check, while `earlierRoundAttempts` calls `withdrawn(item)`. Journal flow 520: \"needs_operator (decided by orchestrator, listed in PR): B6 blocks on any newer round incl. a failed/running one.\" Round labels are visible: ReviewPanel.tsx `<strong>Round {round.number}</strong>`. Not verified on a render. Whether a deleted attempt stays in `store.history` was not checked; frontend w2 left that as a lead for logic.",
+      "confidence": "medium"
+    },
+    {
+      "id": "UX-302",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": ": !current && !headMoved ? \"The pull request is closed or its revision moved. You can still save this draft locally.\"",
+      "problem": "This PR gives a plain push its own path (the as-is variant), so the generic reason now covers what is left. That is a closed PR, a changed base, a force-push or rebase (compare reports `diverged` or `behind`), and any failed or unknown compare read, which by design fails closed and is not cached so that \"a refresh asks again\". The text is unchanged. In the transient case the user may have seen \"Publish as is\" moments earlier, and now reads a final-sounding \"closed or its revision moved\" with no hint that Refresh preview may restore it. In the rewritten-history case the message gives no next step; the natural one is a new round on the current head, which Update review does not offer there. The docs list closed, base changed and history rewritten. They do not mention the superseded-round refusal (UX-301's state), so a user who opens an earlier attempt from History finds it undocumented.",
+      "impact": "Nielsen #9 and #1: the reason is accurate but does not separate a retryable read from a final state, and it names no recovery. Rated info because the dialog already has a Refresh preview control and the flows are rare.",
+      "suggested_fix": "Split the reason. Use \"GitHub could not confirm that the reviewed commit is still in the pull request. Refresh the preview to try again.\" when the compare read failed or returned an unknown status (`reviewedHeadInPull` would need to tell that apart from a definitive `diverged`/`behind`). Keep the generic reason, plus \"Start a new round on the current head.\", for the definitive cases. In docs/docs/desktop-app.md, add one sentence: an attempt that a later round of the same Review superseded cannot be published as is, and you publish from the later round.",
+      "evidence": "desk-publication.ts `reviewedHeadInPull`: `catch { return false; }` and `if (![\"ahead\", \"behind\", \"diverged\", \"identical\"].includes(status)) return false;`, both uncached. The doc comment says \"any failed read, a transient `unavailable:` included, keeps the refusal … a refresh asks again\". docs/docs/desktop-app.md: \"If the PR was closed, its base changed, or its history was rewritten, you can still save the draft locally.\" No docs line covers a newer round. Not verified on a render.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "UX-105", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+## Summary (review-ui-ux, wave 2, round 3, slice-02)
+
+**Verdict:** DONE. No blocker or major findings; 1 minor and 1 info.
+
+**Context**
+- Product: Keryx Desktop's Publish to GitHub dialog, plus the review text it posts to GitHub. App screen.
+- Audience: the operator publishing a local review.
+- Primary task: publish the review, or learn why it cannot be published and what to do instead.
+- Mode: code only, with no URL or screenshots. The surface in this slice is copy: the `blockedReason` strings, the as-is body line, thrown messages and the docs.
+
+**Holds (verification)**
+- The round-1 inline/General remedy is fixed. With the head moved, the reason no longer suggests inline comments.
+- The as-is body line says which commit was reviewed, where the PR moved, and that the newer commits are not covered. The docs describe the same thing.
+- The docs match the dialog labels, the dropped automatic publication, carry-over of answers by finding id, and the reuse of an existing attempt. Round 2 UX-105 (closed by wave 1) is confirmed from this slice's docs hunk.
+- Automatic publication on a moved head fails with "This review needs a publication decision in Desktop.", and no as-is text is ever auto-posted.
+- The superseded message cites a round number the Reviews panel displays.
+
+**Findings**
+- **UX-301 (minor).** "Round N of this review is newer. Publish from that round." Per the recorded decision, it also blocks for a failed, running, deleted or archived newer round, where that remedy cannot be followed. Only the copy is filed, not the block.
+- **UX-302 (info).** The generic "closed or its revision moved" reason now also covers a transient compare failure, with no refresh hint, and a rewritten history, with no next step. The docs omit the superseded-round refusal.
+
+**Not re-filed:** wave 1's UX-201 and UX-202, the decided UX-101 and UX-103, and the open UX-104. Carried answers are still unmarked, and earlier-round carry-over now also pre-selects answers, which is the same info.
+
+**Scores**
+- Slop score 0 (T1 0 / T2 0 / T3 0). The slice adds no visual treatment, and no exemptions were needed.
+- WCAG 2.2 AA floor: no code-level failure in this slice. Contrast, focus and targets were not measured.
+- Viewports: not run.
+
+**Top 3 changes**
+1. Give the superseded reason a remedy that holds when the newer round failed or was removed (UX-301).
+2. Separate a retryable compare failure from a final refusal (UX-302).
+3. Document the superseded-round refusal (UX-302).
+
+**Checks not run**
+- No live render, so none of these ran: the 1440, 768 and 390 viewports; light and dark modes; how a long `blockedReason` reads in `p.review-detail-muted[role=status]`; screen-reader announcement of the reason. Layout w2 covers wrapping.
+- A render that would close the gap: screenshots of the publish dialog in three states (superseded attempt, transient compare failure, force-pushed PR) at 1440 and 390.
+- Tests were not run (read-only lens). The brief reports backend 201 pass and Desktop 151 pass.
+- Whether deleted or archived attempts remain in `store.history`, which decides whether UX-301's removed-round case is reachable, was not checked.
+
+**Routing audit**
+- metaproject: index.md read.
+- graph_used: no. Not relevant: the driver named the slice and its files.
+- wiki_used: no. Not relevant: the journal and PR records gave the decisions.
+- ctx_used: yes (`keryx ctx rg` for the round labels, the generic reason and the journal/raw decisions; `keryx ctx read` of the journal).
+- raw_rg_used: no. Short raw `grep` runs, marked `# keryx:raw`, were used on review-package text files (slice headers, sibling results, one rule table), not on project code.

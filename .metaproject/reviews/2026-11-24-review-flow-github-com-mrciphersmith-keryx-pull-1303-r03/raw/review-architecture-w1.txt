@@ -1,0 +1,87 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (PR #1304)
+- Merge-base: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`, head `822192905b3d26eb976d83e5bbd46cee14ca9a6f`
+- Scope mode: explicit-hash-range (diff mode), wave 1, slice-01 (flow 520 records + Desktop `ReviewPublishDialog`, `ReviewRuns`, `ReviewWorkspace`, `SessionReviewActivity`, `useReviewRuns`)
+- Stack detected: React (no MobX). Backend files are slice-02, owned by wave 2.
+
+### Summary
+The T15 Desktop fixes keep the round-2 layering. `ReviewWorkspace` is still the one owner of the start path. The update round goes through the same `local.request({ kind: "start" })` that the launch form and "Review again" use, and the backend's `previousRunInputs`/`selectPriorAttempt` choose the prior round, so the Desktop holds no second prior-attempt rule. `ReviewPublishDialog` stays a presentational dialog with one optional callback and one boolean (`onUpdateReview`, `updateDisabled`). It never decides the range or the options. The "latest attempt" rule was extracted once (`latestAttempt` in ReviewRuns.tsx), and `ReviewRuns` and `ReviewWorkspace` both call it instead of keeping two copies. `useReviewRuns.request` now returns a typed `RunRequestOutcome`, so the caller reacts to the outcome without reading hook internals. The Sessions surface now builds its publication target in one named function, `sessionReviewPublication`, that leaves out `onUpdateReview` on purpose. That closes round-2 architecture-w1 F-002 by an explicit, documented decision. No blocker, major or minor in this lens. One info.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Round-2 obligations in this lens (verified at head)
+- architecture-w1 F-002 (`onUpdateReview` reached 2 of 3 dialog surfaces): closed. `SessionReviewActivity.tsx:25` `sessionReviewPublication` returns `{ cwd, target, url }` and nothing else. Its doc comment gives the reason: Sessions follows one attempt and cannot see the PR's other attempts. Per the PR body, a DOM test pins it. The enumeration is unchanged from round 2: `keryx ctx rg --all "onUpdateReview|publication=" apps/desktop/src`. Surfaces: ReviewWorkspace (offers it), ReviewRuns/RunAttempt (forwards it), SessionReviewActivity (leaves it out on purpose).
+- architecture-w1 F-003 (info: the update revision is rebuilt from `run.baseSha`): unchanged and still commented at `ReviewRuns.tsx` ("The as-is variant exists only while the base is unchanged…"). Not re-filed.
+- architecture-w1 F-001 / w2 F-004 / w2 F-005: their anchors are in slice-02 (backend), so wave 2 verifies them. From this slice, the Desktop adds no prior-attempt or answer-selection logic of its own. `updateReview` checks only "does an attempt already cover the target range". That is a UI guard against a second start, not a prior-round rule.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. The new Desktop→backend imports are type-only (`DeskReviewOptions` from `src/review/desk-run-options`, `DeskRevision` from `desk-run-types`). They follow the existing sibling pattern (`desk-run-types`, `board-badges`) and add no runtime dependency.
+
+### Module Boundary Violations
+None detected. `ReviewWorkspace` now imports `latestAttempt` from ReviewRuns.tsx and `reviewIsArchived` from ReviewLifecycle.tsx. Both are sibling modules in the same Desktop `review/` feature folder, so no feature boundary is crossed.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. The dialog gets its I/O through the existing `command` prop and the update action through a callback. Nothing is newly constructed inside it.
+
+### Framework-Specific (NestJS / React+MobX)
+React: see the info below. MobX: N/A.
+
+[F-001] info: the "an update round does not carry automatic publication" policy exists only in a Desktop view module
+- File: apps/desktop/src/review/ReviewWorkspace.tsx:55 (`updateRoundOptions`), used at :144
+- Problem: the rule that each round decides auto-publication again is a review-domain policy. It is implemented as a helper exported from a React component file and applied only on the Desktop "Update review" path. The backend start path (`desk-run-service` start, the options parser in `desk-run-options.ts:43-44`) accepts `autoPublish` from any caller unchanged.
+- Why it is info, not a defect: no second entry point copies a previous round's options today. The launch form builds fresh options, and the `follow` auto-queue and watcher-driven update rounds are explicitly out of this PR's scope ("Not in this PR"). There is no failure path in this code (shared law 1). The PR body records the decision itself.
+- What would settle it: when stage 4 adds the `follow` auto-queue (a second caller that starts round N+1 with the previous round's options), move this rule next to `selectPriorAttempt`/`previousRunInputs` in `src/review/`, or apply it in the service when it builds an update round, so both callers share it.
+
+### Suggested Patches
+None warranted.
+
+### Notes / not verified
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc` (the payload names it, and the skill cites it for frontend layer rows) does not exist in this worktree. The React layering was judged against the skill's own React checklist and `clean-architecture.mdc` instead.
+- I did not run tests (read-only lens). Test status is taken from research-evidence/verify-tests-to-run-1.txt as the brief reports it.
+- `git log`/`git blame` were not needed: the deliberate choices were read from the PR body, the journal and the in-code comments.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-01 (Desktop + flow records) keeps sound layering after T15. The update round reuses the single start path, so prior-round selection stays in the backend. The publish dialog stays presentational, with one callback and one flag. latestAttempt is extracted once and shared. useReviewRuns exposes a typed request outcome. Sessions builds its publication target in one named function that leaves out Update review on purpose, which closes round-2 F-002. Remaining: one info. The 'update round does not carry autoPublish' policy lives only in a Desktop view module, which matters once a second caller (stage 4 follow auto-queue) starts update rounds.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "export function updateRoundOptions({ autoPublish: _automatic, ...options }: DeskReviewOptions): DeskReviewOptions {",
+      "problem": "The review-domain policy that an update round does not inherit automatic publication is implemented only as a helper in a React component module. It is applied only on the Desktop 'Update review' path, and the backend start path accepts autoPublish from any caller.",
+      "impact": "No failure path today: no other caller copies previous options into round N+1. When the stage 4 follow auto-queue or a watcher-driven update round starts round N+1 with copied options, it would have to re-implement or import a UI-module helper, or it would silently carry auto-publication.",
+      "suggested_fix": "When a second update-round caller is added, move the rule into src/review next to previousRunInputs/selectPriorAttempt, or apply it where the service builds an update round, and keep the Desktop helper as a thin re-export.",
+      "evidence": "Read at head: ReviewWorkspace.tsx:55 (definition) and :144 (only use). keryx ctx rg --all 'updateRoundOptions|autoPublish' src/review apps/desktop/src (non-test): no backend site strips autoPublish for update rounds. desk-run-options.ts:43-44 keeps autoPublish as given. The PR body lists the follow auto-queue under 'Not in this PR'.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "update-round-autopublish-policy-placement",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": [ { "id": "slice-01", "coverage": "read in full (flow records, resolved manifests, all Desktop hunks)" } ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: no. The payload's `layers.affected` already lists the dependents, and no claim here needed more. wiki_used: no (not relevant; PR body, journal and context doc gave the intent). ctx_used: yes (`keryx ctx rg`, `ctx run`, `ctx read`). raw_rg_used: no.
