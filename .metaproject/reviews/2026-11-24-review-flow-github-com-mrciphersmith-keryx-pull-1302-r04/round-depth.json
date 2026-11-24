@@ -1,0 +1,32 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 23 files exceeds 5",
+  "head": "45170dfa0b505427023d268fde3f2a6daf44d484",
+  "files": [
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md",
+    "apps/desktop/src/review/ReviewRunDialog.tsx",
+    "apps/desktop/src/review/ReviewRuns.tsx",
+    "apps/desktop/src/review/ReviewWorkspace.tsx",
+    "apps/desktop/src/review/useReviewRuns.ts",
+    "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+    "src/commands/operator-confirm-review.ts",
+    "src/commands/review.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+    "src/review/complete-head-gate.ts",
+    "src/review/desk-publication.test.ts",
+    "src/review/desk-run-types.ts",
+    "src/review/publish.test.ts",
+    "src/review/publish.ts",
+    "src/review/review-advance.test.ts",
+    "src/review/review-advance.ts",
+    "src/review/session-attempt.ts",
+    "src/review/session-publish-github.test.ts",
+    "src/review/session-publish-github.ts"
+  ],
+  "changedLines": 580
+}

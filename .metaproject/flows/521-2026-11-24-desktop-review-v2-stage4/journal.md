@@ -95,3 +95,12 @@
 - Out of scope, recorded: the session path posts with the ambient `gh` account while the Attempt is keyed by the project-bound one; registration still recomputes readiness (a few extra gh calls).
 - CI: "Core tests (2/4)" fails `src/lib/file-lock.reclaim.test.ts` on stage 3's head too (stage 3 commit 41779d177); left to stage 3.
 - 2026-11-24T11:45:15.144Z - task-done: T13: Fix round 3 findings of PR 1302 (T1-T16)
+- 2026-11-24T12:20:32.636Z - task-added: T14: Fix round 4 findings of PR 1302 (U1-U10)
+- 2026-11-24T12:20:33.001Z - task-attempt: T14: started (attempt 1) — 521-T14 fix round 4
+
+## 2026-11-24 Review round 4 (delta over T13) and fix round T14
+
+- Rebased onto stage 3 at 373976c9d (stage 3's file-lock CI fix; clean). Main conflicts on PR 1302 are stage 3's (same 11 files as PR 1303); the parent session coordinates the rebase order stage 2 → 3 → 4.
+- Round 4 planned with `--ref 98f777283` (round 3's head after the rebase): 2 slices, 10 reviewers, 12 dispatches in 5 subagents. Package `…-pull-1302-r04`. 42 raw findings → 10 canonical (1 major: the T3 lock order was untested; 9 minor), all acted on in T14; 32 others dispositioned in `dispositions-4.json`. Round-3 findings verified closed except T1/T4/T15 partial, which U2–U7 address; the base check at publish time stays a known gap.
+- Ledger READY (completion gate satisfied); the package was not ingested or completed. Mutation pass (testing reviewer): 31 mutants, 18 killed, 13 survived before T14; T14 adds the lock-order, unknown-receipt, ancestry tri-state, current-head later-round, retarget-base and Desktop moved-range tests.
+- 2026-11-24T12:20:33.826Z - task-done: T14: Fix round 4 findings of PR 1302 (U1-U10)

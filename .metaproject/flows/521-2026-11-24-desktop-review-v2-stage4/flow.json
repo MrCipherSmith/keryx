@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T11:45:15.144Z",
+  "updatedAt": "2026-11-24T12:20:33.826Z",
   "source": {
     "type": "description",
     "ref": null
@@ -291,6 +291,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 4 findings of PR 1302 (U1-U10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T12:20:33.001Z",
+            "outcome": "started",
+            "detail": "521-T14 fix round 4"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -466,6 +489,21 @@
       "at": "2026-11-24T11:45:15.144Z",
       "event": "task-done",
       "detail": "T13: Fix round 3 findings of PR 1302 (T1-T16)"
+    },
+    {
+      "at": "2026-11-24T12:20:32.636Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 4 findings of PR 1302 (U1-U10)"
+    },
+    {
+      "at": "2026-11-24T12:20:33.001Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 521-T14 fix round 4"
+    },
+    {
+      "at": "2026-11-24T12:20:33.826Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 4 findings of PR 1302 (U1-U10)"
     }
   ],
   "acKinds": {

@@ -1,0 +1,14 @@
+STATUS: DONE
+
+Scope (round 4 delta, slice-01): rendered-layout impact of `git diff 98f777283..HEAD` under apps/desktop. The delta changes no stylesheet, class name, sizing or spacing utility. The only rendered changes are text and element presence: the source label "Existing review" becomes "Session" for session attempts (shorter string, same inline <span>/<small> in ReviewRuns.tsx:132, ReviewRunDialog.tsx:33,75), and the coordinator icon button (ReviewRuns.tsx:118), ReviewSessions block (:169), coordinator transcript (ReviewRunDialog.tsx:98) and "Open in Sessions" footer button (ReviewWorkspace.tsx:213 -> ReviewRunDialog.tsx:80) are omitted for session attempts. Each of these was already omitted for `existing` attempts before this commit, so the resulting layouts are states that already existed and rendered.
+
+No measurement was run: per this lens a layout finding must be measured in a real engine, and the delta introduces no new geometry to measure (no new element, no longer string, no new state). Nothing is filed.
+
+Prior-finding verdicts
+- T5 -> closed (no layout aspect; the hidden controls collapse the action row the same way they did for `existing` attempts).
+- T10 -> closed (no layout aspect; refusals render in the existing inline-banner).
+- T6 -> closed (no layout aspect).
+
+```json
+{"status":"DONE","reviewer":"review-layout","wave":1,"slices":["slice-01"],"findings":[],"stats":{"blocker":0,"major":0,"minor":0,"info":0}}
+```
