@@ -104,6 +104,10 @@ test("refresh failure preserves last available snapshot, access loss hides its c
   await click(button("Refresh pull requests"));
   expect(document.body.textContent).toContain("Last available snapshot");
   expect(document.body.textContent).toContain(pr.title);
+  // AR-R4-002: the banner shows the reason without the CLI's category prefix (displayReason, shared with Issues).
+  const banner = document.body.querySelector('.review-board [role="alert"]')!;
+  expect(banner.textContent).toContain("GitHub timed out");
+  expect(banner.textContent).not.toContain("unavailable:");
   reason = "access: Sign in with gh";
   await click(button("Try again"));
   expect(document.body.textContent).not.toContain(pr.title);

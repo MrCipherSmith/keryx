@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { registerDom, unregisterDom } from "./dom";
 
 // AC9 and AC12 over the App wiring: "Create Flow" on a PR card (prefilled flow prompt in the bound session,
-// the one new package offered as "Link Flow #<id> · <title>?" and linked only on Link, Dismiss and two packages link
+// the one new package offered as "Link Flow #<id> · <title>" and linked only on Link, Dismiss and two packages link
 // nothing, a press coalesced into an open in flight registers nothing), one open per PR at a time, a new
 // session of the PR linked to the Flow its bound session works on, a session switch during an open leaving
 // the shown composer alone, and the Issue card's session slot counting a session bound to the issue. Runs in
@@ -20,8 +20,10 @@ const calls: string[] = [];
 let created = 0;
 /** While set, session/new answers only once it resolves: a press can land while an open is in flight. */
 let newGate: Promise<void> | undefined;
-/** Set: keryx refuses the next flow link with this reason (a held flags lock). */
+/** Set: keryx refuses the next flow link with this reason (a held flags lock), as its ACP server does. */
 let refuseFlowLink: string | undefined;
+/** While set, a flow link is answered only once it resolves: the offer can be seen linking. */
+let flowGate: Promise<void> | undefined;
 type Stored = { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } };
 const stored = new Map<string, Stored>([
   ["pr12-session", { sessionId: "pr12-session", cwd, title: "Work on #12", updatedAt: "2026-11-20T00:00:03Z", _meta: { keryx: { subject: subject("pr", 12) } } }],
@@ -62,11 +64,15 @@ mockIPC(async (cmd, args) => {
       let result: unknown;
       if (method === "_keryx/session_flags") {
         const { sessionId, cwd: _cwd, ...change } = params as { sessionId: string; cwd: string; flow?: string; subject?: { number: number } };
-        // Refused before it is recorded: nothing was written.
+        if (change.flow) await flowGate;
+        // Refused before it is recorded: nothing was written. src/acp/server.ts refuseStore answers a store
+        // refusal as JSON-RPC "Invalid request" with the reason, prefixed by the method, in error.data.reason.
         if (change.flow && refuseFlowLink) {
           const reason = refuseFlowLink;
           refuseFlowLink = undefined;
-          throw new Error(reason);
+          await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id,
+            error: { code: -32600, message: "Invalid request", data: { reason: `${method}: ${reason}`, method, sessionId } } }));
+          return;
         }
         flagWrites.push({ sessionId, ...(change.flow ? { flow: change.flow } : {}), ...(change.subject ? { subject: change.subject.number } : {}) });
         const entry = stored.get(sessionId);
@@ -124,12 +130,12 @@ function namedButton(label: string) {
   return button;
 }
 const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
-/** The slot's first element: its link or action, or the text of a Flow offer. */
+/** The slot's first element: its link or action, or a Flow offer's Link (its visible label, then the rest of its name). */
 const slot = (number: number, name: string) => host.querySelector(`[aria-label="Keryx work for #${number}"] [data-slot="${name}"] > *`)?.textContent;
 /** How an offer names the package: its number and title ("Flow #506 · Flow 506-for-twelve"). */
 const offerName = (dir: string) => `Flow #${dir.slice(0, 3)} · Flow ${dir}`;
 /** The Flow slot offers `dir` with its Link and Dismiss buttons. */
-const offers = (number: number, dir: string) => slot(number, "flow") === `Link ${offerName(dir)}?`
+const offers = (number: number, dir: string) => slot(number, "flow") === `Link ${offerName(dir)} for #${number}`
   && !!findButton(`Link ${offerName(dir)} for #${number}`) && !!findButton(`Dismiss ${offerName(dir)} for #${number}`);
 const newSessions = () => calls.filter(method => method === "session/new").length;
 const flowWrites = () => flagWrites.filter(write => write.flow);
@@ -146,6 +152,12 @@ function holdNewSessions() {
   let release!: () => void;
   newGate = new Promise(resolve => { release = resolve; });
   return () => React.act(async () => { newGate = undefined; release(); });
+}
+/** Holds flow-link flag writes until the returned release is called. */
+function holdFlowLinks() {
+  let release!: () => void;
+  flowGate = new Promise(resolve => { release = resolve; });
+  return () => React.act(async () => { flowGate = undefined; release(); });
 }
 /** One animation frame: the composer fill App schedules runs before it. */
 const nextFrame = () => React.act(async () => { await new Promise(resolve => requestAnimationFrame(() => resolve(undefined))); });
@@ -175,7 +187,13 @@ try {
   await packagesAppear("506-for-twelve");
   await waitFor("#12 offers Flow #506", () => offers(12, "506-for-twelve"));
   assert.deepEqual(flowWrites(), [], "Nothing is linked before Link");
+  // TP-R4-009: while keryx has not answered, the offer shows App's linking state: Link waits and says so.
+  const releaseLink = holdFlowLinks();
   await React.act(() => namedButton(`Link ${offerName("506-for-twelve")} for #12`).click());
+  await waitFor("#12's offer is linking", () => slot(12, "flow") === `Linking… ${offerName("506-for-twelve")} for #12`);
+  assert.equal(findButton(`Linking… ${offerName("506-for-twelve")} for #12`)?.getAttribute("aria-disabled"), "true", "Link waits while the write runs");
+  assert.equal(findButton(`Dismiss ${offerName("506-for-twelve")} for #12`)?.getAttribute("aria-disabled"), "true", "Dismiss waits too");
+  await releaseLink();
   await waitFor("#12 shows the linked Flow", () => slot(12, "flow") === "Flow #506 · Initializing");
   assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }]);
 
@@ -188,8 +206,10 @@ try {
   // A Link that keryx refuses keeps the offer and says why; Link stays to be pressed again.
   refuseFlowLink = "the flags of session pr13-session are locked by another keryx process; retry";
   await React.act(() => namedButton(`Link ${offerName("507-for-thirteen")} for #13`).click());
-  await waitFor("#13 says the link failed", () => /^Not linked: .*locked by another keryx process/.test(slot(13, "flow") ?? ""));
-  assert.ok(findButton(`Link ${offerName("507-for-thirteen")} for #13`), "Link is still offered");
+  await waitFor("#13 says the link failed", () => slot(13, "flow") === `Retry link ${offerName("507-for-thirteen")} for #13`);
+  // TP-R4-007/TP-R4-008: the person reads keryx's reason, not the JSON-RPC "Invalid request".
+  assert.equal(namedButton(`Retry link ${offerName("507-for-thirteen")} for #13`).getAttribute("title"),
+    `${offerName("507-for-thirteen")} was not linked: the flags of session pr13-session are locked by another keryx process; retry. Press Retry link to try again.`);
   await React.act(() => namedButton(`Dismiss ${offerName("507-for-thirteen")} for #13`).click());
   await waitFor("#13's offer is gone", () => slot(13, "flow") === "Create Flow");
   assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Dismiss links nothing");

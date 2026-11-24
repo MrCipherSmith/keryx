@@ -65,8 +65,11 @@ export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean,
     const { dir } = offer;
     // Read and marked at once, so a second press before the next render cannot write the link twice.
     offersRef.current = offersRef.current.map(item => item === offer ? { sessionId, dir, linking: true } : item);
-    const settle = (next: FlowLinkOffer | null) => setOffered(old => old.flatMap(item =>
-      item.sessionId === sessionId && item.dir === dir ? next ? [next] : [] : [item]));
+    // This offer is replaced by `next`, or dropped when it is null; the others stay.
+    const settle = (next: FlowLinkOffer | null) => setOffered(old => old.flatMap(item => {
+      if (item.sessionId !== sessionId || item.dir !== dir) return [item];
+      return next ? [next] : [];
+    }));
     settle({ sessionId, dir, linking: true });
     try {
       await linkRef.current(sessionId, dir);

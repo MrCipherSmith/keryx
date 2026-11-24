@@ -38,6 +38,7 @@ import {
   readSessionFlags,
   setSessionFlagsAsync,
   trashSession,
+  type FlagsLockTiming,
   type SessionFlags,
   type SessionFlagsChange,
   type TrashOptions,
@@ -196,6 +197,8 @@ export interface AcpServerOptions {
   readonly dataDir?: string;
   /** Test seam for `_keryx/session_trash`: where the trash is (default: the user's real one). */
   readonly trash?: Pick<TrashOptions, "home" | "platform" | "env">;
+  /** Test seam for `_keryx/session_flags`: how long a write waits for another process's flags lock (default: the store's). */
+  readonly sessionFlagsLock?: FlagsLockTiming;
   readonly idSeq?: () => string;
   /** Test seam: how a client-supplied MCP server is dialled. The shared dial procedure otherwise. */
   readonly mcpConnect?: ConnectFn;
@@ -2962,7 +2965,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     try {
       // Async: another process's flags lock is waited out without freezing this server's event loop.
-      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);
+      // The store applies this server's writes to one session in the order they arrive.
+      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir, { timing: options.sessionFlagsLock });
     } catch (error) {
       refuseStore(method, sessionId, error);
     }
@@ -3362,15 +3366,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * blocks on `session/request_permission`, whose answer is the NEXT LINE ON
    * STDIN — a line a loop parked inside the prompt handler will never read.
    *
-   * Not awaiting does not reorder anything that matters. `handleLine` runs
-   * synchronously into the handler body (through `handleMessage` ->
-   * `handleRequest` -> `handler(...)`), so handlers still START in wire order,
-   * and `session/new` — whose only `await` (the model list) comes AFTER the
-   * session is registered — has finished registering it before the next line
-   * is even decoded; its reply may then wait on that list. What changes
-   * is only that a handler which SUSPENDS no longer suspends the reader with
-   * it. JSON-RPC ids carry the correlation, so replies may land in completion
-   * order.
+   * Handlers still START in wire order: `handleLine` runs synchronously into
+   * the handler body (through `handleMessage` -> `handleRequest` ->
+   * `handler(...)`), and `session/new` — whose only `await` (the model list)
+   * comes AFTER the session is registered — has finished registering it
+   * before the next line is even decoded; its reply may then wait on that
+   * list. A handler that SUSPENDS no longer suspends the reader with it, so
+   * two handlers that both suspend can FINISH in either order. A handler whose
+   * effects must keep arrival order across its own suspension has to order
+   * them itself: `_keryx/session_flags` waits for another process's lock, and
+   * the store queues this process's writes to one session so they apply in
+   * the order they arrived. JSON-RPC ids carry the correlation, so replies
+   * may land in completion order.
    */
   const inflight = new Set<Promise<unknown>>();
   const dispatch = (line: string): void => {

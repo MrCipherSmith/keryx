@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { PREPARE_REVIEW_METHOD, type ReviewDraftHints } from "../../../../src/acp/review-draft";
 import { AcpClient, RpcError } from "../acp/client";
+import { refusalReason, writeSessionFlags, type SessionFlagsChange } from "./sessionFlagsWrite";
 import { hasCommandExtension } from "../acp/commands";
 import {
   extensionsOf,
@@ -69,10 +70,7 @@ export type Fatal =
 
 /** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
 function isLeaseError(e: unknown): boolean {
-  if (e instanceof RpcError) {
-    const reason = (e.data as { reason?: unknown } | undefined)?.reason;
-    if (reason === "session-leased") return true;
-  }
+  if (refusalReason(e) === "session-leased") return true;
   return /(^|[^\w-])session-leased([^\w-]|$)/.test(errMessage(e));
 }
 
@@ -225,22 +223,26 @@ export function useAcpSession(cwd: string) {
   /** Flow links waiting for keryx to store a new session (it lists one only after its first save). */
   const pendingFlow = useRef(new Map<string, string>());
 
+  /** Every `_keryx/session_flags` write except the subject binding: see writeSessionFlags. Throws on failure. */
+  const writeFlags = useCallback(
+    (sessionId: string, change: SessionFlagsChange) =>
+      writeSessionFlags(live, cwd, sessionId, change, (id, flags) => dispatch({ t: "flags", sessionId: id, flags })),
+    [cwd, dispatch],
+  );
+
   /** Link `sessionId` to its pending flow; quiet, kept for the next try when keryx does not have the session yet. */
   const applyPendingFlow = useCallback(
     async (sessionId: string) => {
-      const l = live.current;
-      const client = l.client;
       const flow = pendingFlow.current.get(sessionId);
-      if (!client || flow === undefined) return;
+      if (!live.current.client || flow === undefined) return;
       try {
-        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow });
+        await writeFlags(sessionId, { flow });
         pendingFlow.current.delete(sessionId);
-        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
       } catch {
         /* not stored yet: retried after its turn */
       }
     },
-    [cwd, dispatch],
+    [writeFlags],
   );
 
   /** The stored sessions of this project, newest first; null when the list could not be read. */
@@ -298,15 +300,14 @@ export function useAcpSession(cwd: string) {
       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
       for (const sessionId of ids) {
         try {
-          const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, archived: true });
-          if (l.client !== client) return;
-          dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+          await writeFlags(sessionId, { archived: true });
         } catch {
           /* in use elsewhere or gone: tried again next time */
         }
+        if (l.client !== client) return;
       }
     },
-    [cwd, dispatch],
+    [writeFlags],
   );
 
   /** Re-list a session's background tasks (keryx sends no output chunks, only start/phase/exit events). */
@@ -786,12 +787,8 @@ export function useAcpSession(cwd: string) {
    * reached, so the caller can keep its offer and say why; nothing is kept pending for a later retry.
    */
   const linkFlow = useCallback(async (sessionId: string, flowDir: string) => {
-    const l = live.current;
-    const client = l.client;
-    if (!client) throw new Error("keryx is not connected.");
-    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });
-    if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
-  }, [cwd, dispatch]);
+    await writeFlags(sessionId, { flow: flowDir });
+  }, [writeFlags]);
 
   /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
   const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
@@ -936,18 +933,17 @@ export function useAcpSession(cwd: string) {
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
   const setFlags = useCallback(
-    async (sessionId: string, change: { archived?: boolean; pinned?: boolean; flow?: string | null }) => {
+    async (sessionId: string, change: SessionFlagsChange) => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return;
       try {
-        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, ...change });
-        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+        await writeFlags(sessionId, change);
       } catch (e) {
         if (l.client === client) dispatch({ t: "banner", level: "error", text: `Could not update the session: ${errMessage(e)}` });
       }
     },
-    [cwd, dispatch],
+    [dispatch, writeFlags],
   );
 
   /**

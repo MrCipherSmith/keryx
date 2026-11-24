@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
@@ -102,7 +102,14 @@ describe("withIssueBinding: session subject", () => {
       await listed(root, sessionId, dataDir);
       const backfill = spyOn(organize, "backfillSessionSubject");
       try {
-        await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+        // Another process holds the flags lock: an open that took it would wait, then break or time out on it.
+        const lock = path.join(sessionDir(root, sessionId, dataDir), "flags.json.lock");
+        writeFileSync(lock, "another-writer");
+        let opened = false;
+        await withIssueBinding(viewer, project, issue(), dataDir, async () => { opened = true; });
+        expect(opened).toBe(true);
+        expect(readFileSync(lock, "utf8")).toBe("another-writer");
+        rmSync(lock);
         // Unlinked by the person: settled too, so no backfill either.
         setSessionFlags(root, sessionId, { subject: null }, dataDir);
         await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import type { SessionInfo, SessionSubject } from "../acp/types";
 import { flowStage, prSubject, reviewSlotState, type PrFlowOffer, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
@@ -48,8 +49,10 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
   const more = useRef<HTMLButtonElement>(null);
   const flowSlot = useRef<HTMLSpanElement>(null);
   // Link and Dismiss remove themselves with the offer: focus then moves to the control that replaces it.
+  // A failed Link keeps the offer, so that press no longer waits for it to go.
   const refocusFlow = useRef(false);
   useEffect(() => {
+    if (offer?.error) refocusFlow.current = false;
     if (offer || !refocusFlow.current) return;
     refocusFlow.current = false;
     const active = document.activeElement;
@@ -81,24 +84,38 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
 }
 
 /**
- * "Link Flow #<id> · <title>?" for a package that appeared after Create Flow: the link is written only on
- * Link, and Dismiss drops the question. While the write runs both wait; a failed write says why and keeps
- * Link. Fits the slot's fixed height: one line of text and two small buttons.
+ * A package that appeared after Create Flow, offered for the PR's session: the link is written only on Link,
+ * and Dismiss drops the question. Link carries the state, so it shows even in a narrow slot where its text
+ * truncates: "Link Flow #<id> · <title>", "Linking…" while the write runs (both buttons then wait), and
+ * "Retry link" in the warn tone after a failure, whose reason is Link's description. Dismiss is an icon.
+ * State changes are announced through a polite live region that is there from the offer's first render.
  */
 function FlowOffer({ offer, of, work, onAct }: { offer: PrFlowOffer; of: string; work: PrWork; onAct: () => void }) {
   const name = `Flow #${offer.flow.id} · ${offer.flow.title}`;
-  const text = offer.error ? `Not linked: ${offer.error}` : offer.linking ? `Linking ${name}…` : `Link ${name}?`;
-  const title = offer.error ? `${name} was not linked: ${offer.error} Press Link to try again.`
-    : `${name} appeared after Create Flow. Link it to this pull request's session?`;
+  const statusId = useId();
   // aria-disabled, not disabled: a disabled button would drop the keyboard focus while the write runs.
   const busy = offer.linking || undefined;
+  const reason = !busy && offer.error ? sentence(offer.error) : undefined;
+  // The visible label truncates; the rest of the name follows for assistive technology.
+  const [label, rest] = busy ? ["Linking…", ` ${name}${of}`] : reason ? ["Retry link", ` ${name}${of}`] : [`Link ${name}`, of];
+  const status = busy ? `Linking ${name}…` : reason ? `${name} was not linked: ${reason}` : "";
+  const title = busy ? status : reason ? `${status} Press Retry link to try again.`
+    : `${name} appeared after Create Flow. Link it to this pull request's session?`;
   return <>
-    <span className={"pr-work-offer" + (offer.error ? " is-attention" : "")} title={title} {...(offer.error && { role: "alert" })}>{text}</span>
-    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} aria-disabled={busy} disabled={!work.onLinkFlowOffer}
-      onClick={() => { if (busy) return; onAct(); work.onLinkFlowOffer?.(offer); }}>Link</button>
-    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} aria-disabled={busy} disabled={!work.onDismissFlowOffer}
-      onClick={() => { if (busy) return; onAct(); work.onDismissFlowOffer?.(offer); }}>Dismiss</button>
+    <button type="button" className={"pr-work-link pr-work-offer" + (reason ? " is-attention" : "")} title={title}
+      aria-describedby={statusId} aria-disabled={busy} disabled={!work.onLinkFlowOffer}
+      onClick={() => { if (busy) return; onAct(); work.onLinkFlowOffer?.(offer); }}>{label}<span className="sr-only">{rest}</span></button>
+    <button type="button" className="pr-work-more pr-work-icon" aria-label={`Dismiss ${name}${of}`} title={`Dismiss ${name}`}
+      aria-disabled={busy} disabled={!work.onDismissFlowOffer}
+      onClick={() => { if (busy) return; onAct(); work.onDismissFlowOffer?.(offer); }}><Icon name="x" size={12} /></button>
+    <span id={statusId} className="sr-only" aria-live="polite">{status}</span>
   </>;
+}
+
+/** A reason as a sentence: keryx's reasons may end without a period ("…; retry"), and the next sentence follows. */
+function sentence(text: string): string {
+  const trimmed = text.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : trimmed + ".";
 }
 
 /** The session menu: the bound sessions, then "New session". Built only while the menu is open. */

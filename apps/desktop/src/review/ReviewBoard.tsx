@@ -29,6 +29,7 @@ import {
 } from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+import { displayReason } from "../../../../src/integrations/issues-contract";
 
 export type ReviewTabIndicator = "attention" | "watching" | null;
 
@@ -495,29 +496,25 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const [focusNotice, setFocusNotice] = useState("");
   useEffect(() => {
     if (!focus || focused.current === focus.nonce || !snapshot) return;
+    // Every outcome marks the nonce, sets the notice (empty when the panel opens) and tells the App it is handled.
+    const settle = (notice: string) => {
+      focused.current = focus.nonce;
+      setFocusNotice(notice);
+      onFocusHandled?.(focus.nonce);
+    };
     if (snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()) {
       const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());
-      if (listed) {
-        selectRepo(listed);
-        return;
-      }
-      focused.current = focus.nonce;
-      setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
-      onFocusHandled?.(focus.nonce);
+      if (listed) selectRepo(listed);
+      else settle(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
       return;
     }
     if (!snapshot.cards.some(c => c.number === focus.number)) {
       // A load in flight, or a cached fallback, may still bring the PR in: wait for the settled list.
-      if (loading || stale) return;
-      focused.current = focus.nonce;
-      setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);
-      onFocusHandled?.(focus.nonce);
+      if (!loading && !stale) settle(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);
       return;
     }
-    focused.current = focus.nonce;
-    setFocusNotice("");
+    settle("");
     setSelected({ number: focus.number });
-    onFocusHandled?.(focus.nonce);
   }, [focus, snapshot, loading, stale, onFocusHandled, selectRepo]);
   const workRepo = snapshot?.repo ?? "";
   // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
@@ -602,7 +599,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </div>}
     </div>}
     {error && <div className="inline-banner tone-warn" role="alert">
-      <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+      <Icon name="alert" size={15} /><span>{displayReason(error)}</span>
       <button className="btn btn-sm" onClick={refresh}>Try again</button>
     </div>}
     {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">

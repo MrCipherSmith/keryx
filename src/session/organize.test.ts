@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { createSession, persistHistory, sessionDir } from ".";
+import { LOCK_RETRY_MS } from "../lib/file-lock";
 import { sessionLeasePath } from "./lease";
 import {
   type SessionFlags,
@@ -51,13 +52,13 @@ describe("session flags", () => {
     const { cwd, dataDir } = project();
     const id = stored(cwd, dataDir);
     const t1 = new Date("2026-11-17T10:00:00Z");
-    expect(setSessionFlags(cwd, id, { archived: true, pinned: true }, dataDir, () => t1)).toEqual({
+    expect(setSessionFlags(cwd, id, { archived: true, pinned: true }, dataDir, { now: () => t1 })).toEqual({
       archivedAt: t1.toISOString(),
       pinnedAt: t1.toISOString(),
     });
     // A flag already set keeps its first time.
     const t2 = new Date("2026-11-18T10:00:00Z");
-    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, () => t2).pinnedAt).toBe(t1.toISOString());
+    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, { now: () => t2 }).pinnedAt).toBe(t1.toISOString());
 
     const handle = createSession({ cwd, dataDir, id, provider: "test", model: "m" });
     persistHistory(handle, [{ role: "user", content: "again" }], { provider: "test", model: "m" });
@@ -187,7 +188,7 @@ describe("session flags", () => {
     try {
       await until(held, child);
       // The change starts while the lock is held: its first attempt fails before `go` is written.
-      change = setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, undefined, { timeoutMs: 30_000, staleMs: 30_000 });
+      change = setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, { timing: { timeoutMs: 30_000, staleMs: 30_000 } });
     } finally {
       writeFileSync(go, "");
     }
@@ -198,6 +199,28 @@ describe("session flags", () => {
     expect(readSessionFlags(dir)).toEqual(flags);
   }, 30_000);
 
+  test("two async changes to one session apply in the order they were called, even when the later one would take the lock first", async () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    const dir = sessionDir(cwd, id, dataDir);
+    const lock = path.join(dir, "flags.json.lock");
+    writeFileSync(lock, "another-writer");
+    const wait = { timing: { timeoutMs: 30_000, staleMs: 60_000 } };
+    const pin = setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, wait);
+    // The holder lets go between the pin's first retry, which still finds the lock held, and the unpin's first retry
+    // (timers of one delay fire in the order they were set). Each racing on its own timer, the unpin would take the
+    // lock first and the pin would land over it.
+    const released = new Promise<void>((resolve) => setTimeout(() => {
+      rmSync(lock);
+      resolve();
+    }, LOCK_RETRY_MS));
+    const unpin = setSessionFlagsAsync(cwd, id, { pinned: false }, dataDir, wait);
+    await released;
+    expect((await pin).pinnedAt).toBeDefined();
+    expect(await unpin).toEqual({});
+    expect(readSessionFlags(dir)).toEqual({});
+  });
+
   test("a flags change held off past its timeout fails with the retry error and leaves the other writer's lock", async () => {
     const { cwd, dataDir } = project();
     const id = stored(cwd, dataDir);
@@ -206,10 +229,13 @@ describe("session flags", () => {
     writeFileSync(lock, "another-writer");
     const held = { timeoutMs: 20, staleMs: 60_000 };
     const locked = /the flags of session .+ are locked by another keryx process; retry/;
-    expect(() => setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)).toThrow(locked);
-    await expect(setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, undefined, held)).rejects.toThrow(locked);
+    expect(() => setSessionFlags(cwd, id, { pinned: true }, dataDir, { timing: held })).toThrow(locked);
+    await expect(setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, { timing: held })).rejects.toThrow(locked);
     expect(readSessionFlags(dir)).toEqual({});
     expect(readFileSync(lock, "utf8")).toBe("another-writer");
+    // A refused write does not hold up the next one queued for the session.
+    rmSync(lock);
+    expect((await setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, { timing: held })).pinnedAt).toBeDefined();
   });
 
   test("a flags lock older than the stale window is taken over and the change lands", async () => {
@@ -219,10 +245,10 @@ describe("session flags", () => {
     const lock = path.join(dir, "flags.json.lock");
     const stale = { timeoutMs: 30_000, staleMs: 1 };
     writeFileSync(lock, "crashed-writer");
-    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, stale).pinnedAt).toBeDefined();
+    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, { timing: stale }).pinnedAt).toBeDefined();
     expect(existsSync(lock)).toBe(false);
     writeFileSync(lock, "crashed-writer");
-    expect(await setSessionFlagsAsync(cwd, id, { flow: "001-x" }, dataDir, undefined, stale)).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
+    expect(await setSessionFlagsAsync(cwd, id, { flow: "001-x" }, dataDir, { timing: stale })).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
     expect(existsSync(lock)).toBe(false);
   });
 
@@ -231,7 +257,7 @@ describe("session flags", () => {
     const dir = sessionDir(cwd, stored(cwd, dataDir), dataDir);
     writeFileSync(path.join(dir, "flags.json.lock"), "another-writer");
     const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
-    expect(() => backfillSessionSubject(dir, issue, { timeoutMs: 20, staleMs: 60_000 })).toThrow(/locked by another keryx process; retry/);
+    expect(() => backfillSessionSubject(dir, issue, { timing: { timeoutMs: 20, staleMs: 60_000 } })).toThrow(/locked by another keryx process; retry/);
     expect(readSessionFlags(dir).subject).toBeUndefined();
   });
 
@@ -252,16 +278,16 @@ describe("session flags", () => {
     // The directory is gone (moved to the trash): no write site may recreate it.
     const trashed = sessionDir(cwd, stored(cwd, dataDir), dataDir);
     rmSync(trashed, { recursive: true });
-    expect(() => updateSessionFlagsAt(trashed, { pinned: true }, undefined, quick)).toThrow(gone);
-    await expect(updateSessionFlagsAtAsync(trashed, { pinned: true }, undefined, quick)).rejects.toThrow(gone);
-    expect(() => backfillSessionSubject(trashed, issue, quick)).toThrow(gone);
+    expect(() => updateSessionFlagsAt(trashed, { pinned: true }, { timing: quick })).toThrow(gone);
+    await expect(updateSessionFlagsAtAsync(trashed, { pinned: true }, { timing: quick })).rejects.toThrow(gone);
+    expect(() => backfillSessionSubject(trashed, issue, { timing: quick })).toThrow(gone);
     expect(existsSync(trashed)).toBe(false);
     // The directory is still there but its summary is not (a move half done): refused, and no flags file appears.
     const half = sessionDir(cwd, stored(cwd, dataDir), dataDir);
     rmSync(path.join(half, "summary.json"));
-    expect(() => updateSessionFlagsAt(half, { pinned: true }, undefined, quick)).toThrow(gone);
-    await expect(updateSessionFlagsAtAsync(half, { pinned: true }, undefined, quick)).rejects.toThrow(gone);
-    expect(() => backfillSessionSubject(half, issue, quick)).toThrow(gone);
+    expect(() => updateSessionFlagsAt(half, { pinned: true }, { timing: quick })).toThrow(gone);
+    await expect(updateSessionFlagsAtAsync(half, { pinned: true }, { timing: quick })).rejects.toThrow(gone);
+    expect(() => backfillSessionSubject(half, issue, { timing: quick })).toThrow(gone);
     expect(existsSync(path.join(half, "flags.json"))).toBe(false);
   });
 
@@ -288,16 +314,16 @@ describe("session flags", () => {
     const child = spawnScript(`
       const { existsSync, writeFileSync } = await import("node:fs");
       const { updateSessionFlagsAt } = await import(${JSON.stringify(ORGANIZE)});
-      updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: true }, () => {
+      updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: true }, { now: () => {
         writeFileSync(${JSON.stringify(read)}, "");
         while (!existsSync(${JSON.stringify(go)})) Bun.sleepSync(2);
         return new Date();
-      }, { timeoutMs: 30_000, staleMs: 60_000 });`);
+      }, timing: { timeoutMs: 30_000, staleMs: 60_000 } });`);
     try {
       await until(read, child);
       // Locked out while the other writer is between its read and its write. Unlocked, this write would land now
       // and the other writer's stale read would roll it back.
-      expect(() => updateSessionFlagsAt(dir, { flow: "001-x" }, undefined, { timeoutMs: 20, staleMs: 60_000 })).toThrow(/locked by another keryx process; retry/);
+      expect(() => updateSessionFlagsAt(dir, { flow: "001-x" }, { timing: { timeoutMs: 20, staleMs: 60_000 } })).toThrow(/locked by another keryx process; retry/);
     } finally {
       writeFileSync(go, "");
     }

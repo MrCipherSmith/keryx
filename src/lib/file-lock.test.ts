@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -89,6 +90,30 @@ for (const [name, lock] of variants) {
         // An existing directory is used as it is.
         expect(await lock(path.join(root, "x.lock"), () => "ran", { createDir: false })).toBe("ran");
       } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    test("a nonce that does not land drops the lock file it opened, and the next attempt takes the lock", async () => {
+      const root = scratch();
+      const write = fs.writeFileSync;
+      let failed = 0;
+      // The boundary: the first write to the open lock file (the nonce, written by descriptor) fails, as on a full disk.
+      const spy = spyOn(fs, "writeFileSync").mockImplementation(((target: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+        if (typeof target === "number" && failed === 0) {
+          failed++;
+          throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+        }
+        return (write as (...args: unknown[]) => void)(target, ...rest);
+      }) as typeof fs.writeFileSync);
+      try {
+        const file = path.join(root, "x.lock");
+        // Never stale: a lock file left behind by the failed attempt would hold the next attempt off until the timeout.
+        expect(await lock(file, () => readFileSync(file, "utf8").length > 0, { timeoutMs: 2_000, staleMs: 60_000 })).toBe(true);
+        expect(failed).toBe(1);
+        expect(existsSync(file)).toBe(false);
+      } finally {
+        spy.mockRestore();
         rmSync(root, { recursive: true, force: true });
       }
     });

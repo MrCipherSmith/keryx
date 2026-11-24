@@ -11,7 +11,7 @@ export const SOURCES: Record<IssueListSource | "project", string> = {
 };
 
 export type IssueSource = keyof typeof SOURCES;
-/** The source shown when no preference is stored for the account. */
+/** The source shown when no preference is stored for this project and account (nor, from an earlier Desktop, for the account). */
 export const DEFAULT_SOURCE: IssueSource = "repository";
 
 export type ProjectSource = { owner: string; number: number };

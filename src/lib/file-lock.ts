@@ -81,7 +81,11 @@ class LockAttempt {
     this.staleMs = options.staleMs ?? LOCK_STALE_MS;
   }
 
-  /** Whether the lock's directory is there (created unless `createDir` is false). False when it cannot be made. */
+  /**
+   * Creates the lock's directory unless `createDir` is false; false when it
+   * cannot be made. With `createDir: false` it does not look: a missing
+   * directory surfaces as ENOENT from the first {@link step}.
+   */
   prepare(): boolean {
     if (this.options.createDir === false) return true;
     try {
@@ -153,7 +157,7 @@ class LockAttempt {
 }
 
 /** Pause between attempts on a contended lock. */
-const RETRY_MS = 15;
+export const LOCK_RETRY_MS = 15;
 
 /**
  * Run `fn` while holding an exclusive lock at `lockPath`.
@@ -161,9 +165,11 @@ const RETRY_MS = 15;
  * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
  * killed mid-write must not wedge every future write.
  *
- * Returns `null` when the lock could not be taken, which callers surface as a
- * write failure rather than a throw. `waitingMessage` is emitted once through
- * `onWaiting` when the wait becomes long enough to look like a hang.
+ * Returns `null` when the lock could not be taken in time (or, by default, its
+ * directory could not be created), which callers surface as a write failure
+ * rather than a throw. With `createDir: false` a missing directory is not
+ * waited out: its ENOENT is thrown at once. `waitingMessage` is emitted once
+ * through `onWaiting` when the wait becomes long enough to look like a hang.
  *
  * The wait blocks the thread; a long-lived server with other work on its event
  * loop uses {@link withFileLockAsync}, which takes the same lock.
@@ -173,7 +179,7 @@ export function withFileLock<T>(lockPath: string, fn: () => T, options: FileLock
   if (!attempt.prepare()) return null;
   let handle = attempt.step();
   while (handle === null) {
-    sleepSync(RETRY_MS);
+    sleepSync(LOCK_RETRY_MS);
     handle = attempt.step();
   }
   if (handle === "timeout") return null;
@@ -188,13 +194,15 @@ export function withFileLock<T>(lockPath: string, fn: () => T, options: FileLock
  * {@link withFileLock} with a wait that yields to the event loop between
  * attempts. The lock file, nonce, stale rule and timeout are the same, so a
  * synchronous holder in another process excludes this one and the reverse.
+ * Resolves `null` when the lock could not be taken, and rejects with ENOENT
+ * for a missing directory under `createDir: false`, as withFileLock throws it.
  */
 export async function withFileLockAsync<T>(lockPath: string, fn: () => T | Promise<T>, options: FileLockOptions = {}): Promise<T | null> {
   const attempt = new LockAttempt(lockPath, options);
   if (!attempt.prepare()) return null;
   let handle = attempt.step();
   while (handle === null) {
-    await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
     handle = attempt.step();
   }
   if (handle === "timeout") return null;

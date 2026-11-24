@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+import { displayReason, issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
 import { boundSessionIndex, type SessionInfo } from "../acp/types";
 import { Icon } from "../components/Icon";
 import { errMessage, relativeTime } from "../lib/format";
@@ -272,7 +272,7 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
       </div>}
       {error && (unavailable && fallback ? <div className="issues-notice" role="alert">
-        <p>{error.replace(/^configuration:\s*/i, "")}</p>
+        <p>{displayReason(error)}</p>
         <p>This project's repository issues are not available here.
           {unavailable === "older" && " If this keryx is older than Desktop, update keryx or choose Bundled keryx in Settings → Desktop."}</p>
         <button className="btn btn-sm" onClick={fallback}>Show issues assigned to me</button>

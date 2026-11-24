@@ -481,9 +481,11 @@ is what the keryx desktop app launches, and is open to any ACP client:
   other fields; `subject: null` unbinds) a stored session (kept in its
   `flags.json`), and answers `{hasIssue?, archivedAt?, pinnedAt?, flow?,
   subject?}`. A subject that is not a github.com pull request or issue is
-  refused. The change is written under a per-session lock; when another keryx
-  process holds it too long the request is refused with a message ending in
-  "retry". `session/list` reports set flags
+  refused. The change is written under a per-session lock. A writer waits for
+  the lock; a lock older than 2 seconds counts as abandoned and is taken over;
+  when the lock still cannot be taken within 3 seconds, the request is refused
+  with a message ending in "retry". A session that was moved to the trash is
+  refused with "no session …" and is not recreated. `session/list` reports set flags
   as `_meta.keryx`, together with `messageCount` (the messages the session
   holds; 0 for a session nobody has written in). The request `_keryx/session_trash {sessionId,
   cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the

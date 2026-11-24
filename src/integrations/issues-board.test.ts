@@ -2,7 +2,8 @@ import { defaultFilters, groupForRow, mergeRows, visibleRows, type Row } from ".
 import { expect, test } from "bun:test";
 import { issueComments, issueDetail, listIssuePage } from "./issues-board";
 import { authenticatedAccount, IssueGithub, issuesDisabled, type FetchIssues } from "./issues-github";
-import { issueKey, type IssueRef } from "./issues-contract";
+import { issueKey, repositoryUnavailable, type IssueRef } from "./issues-contract";
+import { selectRepository } from "../review/board-github";
 
 function json(value: unknown, init?: ResponseInit) {
   return Response.json(value, init);
@@ -402,5 +403,66 @@ test("AC3 source links reopen a private session or legacy Flow only after the se
     await expect(readIssueOrigin(root, auth, {sessionId,flowDir}, profile)).rejects.toThrow("Invalid Issues request");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** The reason a failed listing gives, which `keryx issues list` passes to Desktop unchanged. */
+async function reasonOf(listing: Promise<unknown>): Promise<string> {
+  try {
+    await listing;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("the listing did not fail");
+}
+
+test("contract: every reason the repository source cannot be read in this project is one Desktop classifies as unavailable", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const empty = await account(async () => json([]));
+  const disabled = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  const reasons: string[] = [];
+  // A folder that is not a Git checkout: `git remote -v` fails in reviewRepositories.
+  const plain = await mkdtemp(join(tmpdir(), "issues-not-git-"));
+  try {
+    reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, plain)));
+  } finally {
+    await rm(plain, { recursive: true, force: true });
+  }
+  // A Git project with no fetch remote at all: selectRepository has nothing to choose.
+  await withProject(null, async (cwd) => reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, cwd))));
+  reasons.push(await reasonOf(Promise.resolve().then(() => selectRepository([]))));
+  // A GitHub.com remote whose name is `..`.
+  await withProject("https://github.com/org/...git", async (cwd) => reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, cwd))));
+  // GitHub's 410: Issues turned off for the repository.
+  await withProject("https://github.com/fork-owner/base.git", async (cwd) => reasons.push(await reasonOf(listIssuePage(disabled, { source: "repository" }, cwd))));
+  // Each case reached its own producer: the reasons differ (the two no-remote cases share selectRepository's).
+  expect(new Set(reasons).size).toBe(4);
+  expect(reasons[1]).toBe(reasons[2]!);
+  for (const reason of reasons) {
+    expect(reason).toStartWith("configuration:");
+    expect([reason, repositoryUnavailable(reason, true), repositoryUnavailable(reason, false)]).toEqual([reason, "unavailable", "unavailable"]);
+  }
+});
+
+test("contract: an unknown source is an older keryx on the first page only; a stale cursor or a lost connection keeps Retry", async () => {
+  // A keryx that predates the repository source refuses it like any source it does not know.
+  const older = await reasonOf(listIssuePage(await account(async () => json([])), { source: "repository-v2" as never }));
+  expect(repositoryUnavailable(older, true)).toBe("older");
+  expect(repositoryUnavailable(older, false)).toBeNull();
+
+  const paged = await account(async (url) =>
+    json([row("a", "I_" + (url.searchParams.get("page") ?? 1))], { headers: { link: '<https://api.github.com/issues?page=2>; rel="next"' } }));
+  const first = await listIssuePage(paged, { source: "assigned", sort: "asc" });
+  const stale = await reasonOf(listIssuePage(paged, { source: "assigned", sort: "desc", cursor: first.nextCursor }));
+  expect(stale).toStartWith("configuration:");
+  const unreachable = await account(async () => {
+    throw new TypeError("offline");
+  });
+  const offline = await withProject("https://github.com/org/base.git", (cwd) => reasonOf(listIssuePage(unreachable, { source: "repository" }, cwd)));
+  expect(offline).toStartWith("offline:");
+  for (const reason of [stale, offline]) {
+    expect([reason, repositoryUnavailable(reason, true), repositoryUnavailable(reason, false)]).toEqual([reason, null, null]);
   }
 });

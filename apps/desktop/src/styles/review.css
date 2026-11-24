@@ -30,14 +30,14 @@
 .pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
 .pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
 .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
-.pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
-.pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
+.pr-work-link:hover:not(:disabled):not([aria-disabled="true"]), .pr-work-more:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--bg-hover); color: var(--fg); }
+/* aria-disabled (a Flow offer's buttons while Link runs) keeps focus but looks and acts like disabled. */
+.pr-work-link:disabled, .pr-work-more:disabled, .pr-work-link[aria-disabled="true"], .pr-work-more[aria-disabled="true"] { cursor: default; opacity: 0.55; }
 /* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
 .pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
-/* "Link Flow #<id> · <title>?" after Create Flow: plain text, not a control (no box, no hover); it truncates so
-   Link and Dismiss (flex: none) keep their size, and the slot clips so nothing reaches the session slot. */
-.pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }
-.pr-work-offer.is-attention { color: var(--warn); }
+/* A Flow offer after Create Flow: Link is a .pr-work-link and carries the text ("Link Flow #<id> · <title>",
+   "Linking…", "Retry link"), truncating in a narrow slot; Dismiss is a 24px icon that keeps its size. */
+.pr-work-more.pr-work-icon { width: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 /* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
 .pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }

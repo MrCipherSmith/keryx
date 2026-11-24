@@ -44,6 +44,8 @@ let storesSubject = false;
 const saved = new Set<string>();
 /** The session ids `session/prompt` was sent for. */
 const prompted: string[] = [];
+/** The session ids whose flags write the older keryx has refused (the refusal sent to the app). */
+const refusedFlags: string[] = [];
 let newSessions = 0;
 const stored = new Map<string, { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } }>();
 mockWindows("project-navigation");
@@ -89,6 +91,7 @@ mockIPC(async (cmd, args) => {
         const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
         if (!storesSubject && !saved.has(sessionId)) {
           await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32602, message: `session ${sessionId} not found` } }));
+          refusedFlags.push(sessionId);
           return;
         }
         const flags = storesSubject && subject ? { subject } : {};
@@ -153,12 +156,31 @@ async function go(label: string) {
   assert.ok(button, "Missing project view " + label);
   await React.act(() => button.click());
 }
+/**
+ * The app's short timers (up to 2 s) started while `trackTimers` is on and not yet run or cleared: a state a
+ * check can wait on, so a late reaction (a notice raised some milliseconds after a refusal) has run before it.
+ */
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+let tracked: Set<unknown> | null = null;
+globalThis.setTimeout = ((handler: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) => {
+  const into = tracked && (ms ?? 0) <= 2000 ? tracked : null;
+  const id = realSetTimeout((...callArgs: unknown[]) => { into?.delete(id); handler(...callArgs); }, ms, ...args);
+  into?.add(id);
+  return id;
+}) as unknown as typeof setTimeout;
+globalThis.clearTimeout = ((id?: Parameters<typeof clearTimeout>[0]) => { tracked?.delete(id); realClearTimeout(id); }) as typeof clearTimeout;
+function trackTimers() {
+  const set = new Set<unknown>();
+  tracked = set;
+  return { settled: () => set.size === 0, stop: () => { tracked = null; } };
+}
 /** Polls until `ok` holds, flushing React between polls; fails with `what` after `ms`. */
 async function waitFor(what: string, ok: () => boolean, ms = 2000) {
   const deadline = Date.now() + ms;
   while (!ok()) {
     if (Date.now() > deadline) assert.fail(`Timed out waiting for: ${what} (title: ${host.querySelector(".titlebar")?.textContent}, last calls: ${calls.slice(-6).join(", ")})`);
-    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    await React.act(async () => { await new Promise(resolve => realSetTimeout(resolve, 10)); });
   }
 }
 function findButton(label: string) {
@@ -310,15 +332,28 @@ try {
   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
   const opened = () => calls.filter(method => method === "session/new").length;
   const firstOpen = opened();
+  const timers = trackTimers();
   await React.act(() => namedButton("Open in session for #12").click());
   await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
   assert.equal(opened(), firstOpen + 1);
   assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
   // keryx has not saved the new session yet: it refuses the binding, which waits for the first turn without a notice.
   const flagWrites = () => calls.filter(method => method === "_keryx/session_flags").length;
-  await waitFor("the first binding attempt", () => flagWrites() > 0);
-  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
-  assert.ok(!/did not save the pull request binding/.test(host.textContent ?? ""), "No notice before keryx has saved the session");
+  // TP-R4-006: every notice element added from here on, with the turns sent when it appeared.
+  const notSaved = /did not save the pull request binding/;
+  const notices: number[] = [];
+  const watcher = new MutationObserver(records => {
+    for (const record of records) for (const node of record.addedNodes) {
+      if (node instanceof Element && node.matches(".notice") && notSaved.test(node.textContent ?? "")) notices.push(prompted.length);
+    }
+  });
+  watcher.observe(host, { childList: true, subtree: true });
+  // Wait on states, not on time: keryx refused the binding, and every short timer the app started since the
+  // press has run, so a notice raised some time after the refusal is there before the check.
+  await waitFor("keryx refused the first binding attempt and the app's timers ran", () => refusedFlags.length > 0 && timers.settled(), 4000);
+  timers.stop();
+  await React.act(async () => {});
+  assert.ok(!notSaved.test(host.textContent ?? ""), "No notice before keryx has saved the session");
   const refusedWrites = flagWrites();
   // The first turn saves the session; the binding is tried again after it and keryx answers without subject.
   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
@@ -331,6 +366,8 @@ try {
   await go("Pull requests");
   await React.act(() => namedButton("Open in session for #12").click());
   await waitFor("keryx stores the bound session", () => stored.size === 1 && shownComposer()?.value === prUrl);
+  watcher.disconnect();
+  assert.deepEqual(notices, [1], "The older keryx's notice appeared once, after the first turn");
   assert.equal(opened(), firstOpen + 2);
   await go("Pull requests");
   await waitFor("#12 counts its bound session", () => !!findButton("Session for #12"));

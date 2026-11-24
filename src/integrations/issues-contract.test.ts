@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  displayReason,
   type IssueRef,
   type IssueViewer,
   isIssueRef,
@@ -64,5 +65,18 @@ describe("adopting historical Flow.source records", () => {
     "#42",
   ])("rejects unqualified or mismatched sources: %s", (ref) => {
     expect(matchesIssueSource({ type: "github-issue", ref }, issue)).toBe(false);
+  });
+});
+
+describe("displayReason", () => {
+  test("drops the CLI's category prefix, including a hyphenated one", () => {
+    expect(displayReason("configuration: GitHub has Issues turned off for o/r.")).toBe("GitHub has Issues turned off for o/r.");
+    expect(displayReason("rate-limit: GitHub rate limit reached; retry at 10:00.")).toBe("GitHub rate limit reached; retry at 10:00.");
+    expect(displayReason("source_unavailable: the Project is gone.")).toBe("the Project is gone.");
+  });
+
+  test("leaves a reason without a category, or with a colon later in the text, as it is", () => {
+    expect(displayReason("Network unreachable")).toBe("Network unreachable");
+    expect(displayReason("Open https://github.com/o/r: then retry")).toBe("Open https://github.com/o/r: then retry");
   });
 });

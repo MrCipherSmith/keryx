@@ -466,6 +466,8 @@ test("AC13 an older keryx that refuses the default repository source offers Assi
 
 test("AC13 a project with no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry", async () => {
   for (const reason of [
+    // RG-R4-001: a project folder that is not a Git checkout (src/review/board-github.ts reviewRepositories).
+    "configuration: Open a Git project with a GitHub.com remote.",
     "configuration: This project has no GitHub.com fetch remote.",
     "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
     "configuration: This project's GitHub.com remote names no usable repository.",
@@ -488,6 +490,21 @@ test("AC13 a project with no GitHub.com remote, or a repository with Issues turn
   }
 });
 
+test("TP-R4-003: the board leaves focus where it is on mount and on a source change it did not ask to focus", async () => {
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    outside.focus();
+    await render(async () => page([issue]));
+    expect(document.activeElement).toBe(outside);
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+    select.value = "created";
+    await act(async () => { select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(select.value).toBe("created");
+    expect(document.activeElement).toBe(outside);
+  } finally { outside.remove(); }
+});
+
 test("UX-017: a repository source the person chose gets the same fallback as the default one", async () => {
   localStorage.setItem(sourceKey(), "repository");
   await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
@@ -495,12 +512,12 @@ test("UX-017: a repository source the person chose gets the same fallback as the
   expect(hasButton("Retry")).toBe(false);
 });
 
-test("AR-007/TP-R3-003: any other error of the repository source keeps Retry and offers no source switch", async () => {
+test("AR-007/TP-R3-003/RG-R4-001: any other error of the repository source keeps Retry and offers no source switch", async () => {
+  // Reasons the CLI really gives for a failure that a retry can fix (src/integrations/issues-github.ts, issues-board.ts).
   for (const reason of [
     "rate-limit: GitHub request limit reached.",
     "unavailable: connection lost",
     "configuration: Refresh before loading the next page.",
-    "configuration: This project has no remote.",
   ]) {
     await act(() => root.render(null)); localStorage.clear();
     await render(async () => { throw new Error(reason); });
