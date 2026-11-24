@@ -632,7 +632,7 @@ test("a moved head locks the dialog to the as-is Comment for the reviewed commit
   await click("Close");
 
   const React = await import("react");
-  const { ReviewPublishDialog } = await import("./ReviewPublishDialog");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
   let updates = 0;
   await act(async () => root.render(React.createElement(ReviewPublishDialog, {
     cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
@@ -647,7 +647,7 @@ test("a moved head locks the dialog to the as-is Comment for the reviewed commit
 
 test("Update review is offered only while the head has moved and the review is unpublished", async () => {
   const React = await import("react");
-  const { ReviewPublishDialog } = await import("./ReviewPublishDialog");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
   const reviewedHead = "b".repeat(40);
   const base: PublicationState = { version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
     verdict: "comment", verdictOverride: "comment", answers: {} }, body: "Draft", inlineCount: 0, questions: [],
