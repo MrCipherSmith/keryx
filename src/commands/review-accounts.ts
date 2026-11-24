@@ -5,13 +5,15 @@ import { keryxDataDir } from "../lib/config-dir";
 import { boardGraphql, reviewGitCommonDir, reviewGitEnvironment, reviewRepositories, selectRepository } from "../review/board-github";
 import { claimProjectGithubAccountIntent, projectGithubBinding } from "../review/github-account-store";
 import { listGithubAccounts, namedGithubEnvironment, validGithubLogin } from "../review/github-cli";
+import { projectGithubEnvironment } from "../review/project-github-env";
 import { beginWatcherOperation, changeProjectGithubBinding, readWatcher } from "../review/watcher";
 import { mainCheckout } from "../review/watcher-project";
 import { reconcileWatcherTimer, watcherLabel } from "../review/watch-launchd";
 
 export const ACCOUNTS_USAGE = `keryx review accounts list --json
   keryx review accounts project --json
-  keryx review accounts bind (--login LOGIN [--repo owner/name] | --skip) --json`;
+  keryx review accounts bind (--login LOGIN [--repo owner/name] | --skip) --json
+  keryx review accounts env --json   (the selected account's GH_TOKEN, for Desktop terminals)`;
 
 interface ProjectGithubAccount {
   eligible: boolean;
@@ -65,11 +67,18 @@ export async function runReviewAccounts(args: string[], cwd = process.cwd()): Pr
     console.log(ACCOUNTS_USAGE);
     return;
   }
-  if (action !== "list" && action !== "project" && action !== "bind") throw new Error(ACCOUNTS_USAGE);
+  if (action !== "list" && action !== "project" && action !== "bind" && action !== "env") throw new Error(ACCOUNTS_USAGE);
   const { values } = parseArgs({ args: flags, allowPositionals: false, options: {
     json: { type: "boolean" }, login: { type: "string" }, skip: { type: "boolean" }, repo: { type: "string" },
   } });
   if (!values.json) throw new Error(ACCOUNTS_USAGE);
+  if (action === "env") {
+    if (values.login !== undefined || values.skip || values.repo !== undefined) throw new Error(ACCOUNTS_USAGE);
+    const account = await readProjectGithubAccount(cwd);
+    const token = account.login ? (await projectGithubEnvironment(cwd, process.env)).GH_TOKEN : undefined;
+    console.log(JSON.stringify({ login: account.login, env: token ? { GH_TOKEN: token } : {} }));
+    return;
+  }
   if (action !== "bind") {
     if (values.login !== undefined || values.skip || values.repo !== undefined) throw new Error(ACCOUNTS_USAGE);
     console.log(JSON.stringify(action === "list" ? { accounts: await listGithubAccounts(cwd) } : await readProjectGithubAccount(cwd)));

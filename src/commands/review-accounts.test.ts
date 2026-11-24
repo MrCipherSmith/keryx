@@ -8,6 +8,7 @@ import { boardGraphql, reviewGitCommonDir, reviewRepositories } from "../review/
 import { applyReviewRuleAction } from "../review/review-rules";
 import type { ReviewBoardSnapshot, ReviewCard } from "../review/board-types";
 import { listGithubAccounts } from "../review/github-cli";
+import { applyProjectGithubAccount, projectGithubEnvironment } from "../review/project-github-env";
 import { verifyIdentity } from "../review/watcher-project";
 import { beginWatcherOperation, configureWatcher, pollWatcher, readWatcher } from "../review/watcher";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
@@ -265,4 +266,48 @@ test("first binding keeps the equivalent watcher and its queued work, but switch
   expect(readWatcher(project, key).state).toBe("paused");
   expect(ruleStatus()).toContainEqual(expect.objectContaining({ state: "skipped", headSha: "newer" }));
   expect(ruleStatus().every(item => item.state === "skipped")).toBe(true);
+});
+
+test("a project bound to an account runs GitHub calls with that account's token, not the ambient one", async () => {
+  await bindProjectGithubAccount(project, "bob");
+  const env = await projectGithubEnvironment(worktree, process.env);
+  expect(env.GH_TOKEN).toBe("fixture-account-bob");
+  expect(env.GITHUB_TOKEN).toBeUndefined();
+  expect(env.GH_DEBUG).toBeUndefined();
+});
+
+test("a project without a selected account keeps the environment unchanged", async () => {
+  expect((await projectGithubEnvironment(second, process.env)).GH_TOKEN).toBe("fixture-ambient-token");
+  expect((await bindProjectGithubAccount(second, null)).configured).toBe(true);
+  expect((await projectGithubEnvironment(second, process.env)).GH_TOKEN).toBe("fixture-ambient-token");
+});
+
+test("a selected account whose token cannot be read fails instead of using another account", async () => {
+  await bindProjectGithubAccount(project, "bob");
+  writeFileSync(path.join(root, "gh"), "#!/bin/sh\nexit 1\n", { mode: 0o700 });
+  await expect(projectGithubEnvironment(project, process.env)).rejects.toThrow("Reconnect @bob");
+});
+
+test("the CLI points its own gh calls at the project's account unless a token was exported", async () => {
+  await bindProjectGithubAccount(project, "bob");
+  const env: NodeJS.ProcessEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => name !== "GH_TOKEN" && name !== "GITHUB_TOKEN"));
+  await applyProjectGithubAccount(["review", "accounts", "project"], worktree, env);
+  expect(Object.keys(env)).not.toContain("GH_TOKEN");
+  await applyProjectGithubAccount(["status"], worktree, env);
+  expect(Object.keys(env)).not.toContain("GH_TOKEN");
+  await applyProjectGithubAccount(["flow", "status"], worktree, env);
+  expect(env["GH_TOKEN"]).toBe("fixture-account-bob");
+  const exported: NodeJS.ProcessEnv = { ...process.env, GH_TOKEN: "mine" };
+  await applyProjectGithubAccount(["review", "status"], worktree, exported);
+  expect(exported.GH_TOKEN).toBe("mine");
+});
+
+test("accounts env hands Desktop the selected account's token and nothing for an unbound project", async () => {
+  const cli = path.resolve(import.meta.dir, "../cli.ts");
+  const run = (cwd: string) => JSON.parse(execFileSync(process.execPath, [...SAFE_BUN_SPAWN_ARGS, cli, "review", "accounts", "env", "--json"],
+    { cwd, encoding: "utf8", timeout: 15_000 }));
+  expect(run(project)).toEqual({ login: null, env: {} });
+  await bindProjectGithubAccount(project, "bob");
+  expect(run(worktree)).toEqual({ login: "bob", env: { GH_TOKEN: "fixture-account-bob" } });
 });

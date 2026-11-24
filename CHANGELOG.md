@@ -5,6 +5,10 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A project's selected GitHub account now applies to everything started in it, not only the review board: `keryx review`, `flow`, `shell`, `ci` and `conform` commands, and Desktop terminals and agents, call GitHub as that account even when another one is active in `gh`. A token you export yourself still wins. `keryx review accounts env --json` prints the token for Desktop.
+
 ## [0.4.54] - 2026-11-24
 
 **Keryx Desktop 0.2.17** bundles Keryx 0.4.54 and supports Keryx 0.4.50 or newer.

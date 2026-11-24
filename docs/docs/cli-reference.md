@@ -5205,7 +5205,10 @@ remotes without contacting GitHub, with the origin repository first.
 Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
 for the project and its linked worktrees. Add `--repo owner/name` to check a connected
 remote other than the default. The board, private review fetch and local watcher
-use the selected account. The credentials stay in GitHub CLI.
+use the selected account. So do `keryx review`, `flow`, `shell`, `ci` and `conform` commands run in the project
+(unless `GH_TOKEN` or `GITHUB_TOKEN` is already exported) and, in Desktop, the terminals and agents opened in it,
+whichever account `gh` has active globally. `keryx review accounts env --json` prints the selected account's
+`GH_TOKEN` for that. The credentials stay in GitHub CLI.
 Use `keryx review accounts bind --skip --json` to continue without a connection.
 Changing or removing a connection pauses the project's watchers. Enable the
 watcher manually after choosing an account.

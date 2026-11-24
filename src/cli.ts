@@ -35,6 +35,7 @@
 // for those.
 // retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command
 
+import { applyProjectGithubAccount } from "./review/project-github-env";
 import { ensureSafeBunExec } from "./lib/safe-exec";
 
 // R1-01 / R2-01 / R2-07 (info): run as early as this module can — before
@@ -177,6 +178,7 @@ export async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
+    await applyProjectGithubAccount(args);
     await route(args.slice(1));
     return;
   }
