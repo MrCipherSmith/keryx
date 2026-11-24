@@ -16,3 +16,20 @@
 - 2026-11-24T07:19:18.913Z - task-added: T13: Implementation plan stage 2 state, deviation b closed, CLI reference
 - 2026-11-24T07:19:31.529Z - frozen: 12 criteria; checksum recorded
 - 2026-11-24T07:19:31.820Z - started
+- 2026-11-24T07:19:40.519Z - task-attempt: T5: started (attempt 1) — 519-T5
+
+## 2026-11-24 · T5 accepted (DONE_WITH_CONCERNS)
+
+- Orchestrator re-ran `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts` (46 pass, 0 fail) and `bun run typecheck` (clean).
+- Concern: `desk-run-store.ts` is 854 lines (over the 800-line readability threshold). Moving the assignment logic to its own module is left as a follow-up.
+- Concern: each writable open takes a short immediate lock for the migration check; it is covered by the 8 s busy_timeout.
+- Concern: Desktop `badgesEqual` does not compare `outdated.round`. T8 handles this.
+- Behaviour, as the plan specifies: a range that comes back after other ranges (A, B, A) rejoins its first round as a retry. A row without `createdAt` sorts first.
+- `board-types.ts` touched: `outdated.round?` is required by `LocalBadge`.
+- Worker saw `src/review/layers-payload.test.ts` time out under the full `src/review` run. That test does not import the changed files. CI will tell; not verified against base.
+
+## 2026-11-24 · T9 migration on a copy of the local working database
+
+`sqlite3 .backup` copy of `~/.local/share/keryx/desktop-review/runs.sqlite` into the session scratchpad (not committed), opened twice with the new writable store:
+attempts before 17 / after 17; unassigned 0; reviews 13 = distinct (repo, pr, lower(viewer)) keys 13; dangling review ids 0; rounds: round 1 x 13, round 2 x 4. The second open changed nothing.
+- 2026-11-24T07:37:04.175Z - task-attempt: T6: started (attempt 1) — 519-T6

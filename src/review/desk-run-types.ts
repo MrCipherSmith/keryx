@@ -138,6 +138,12 @@ export interface DeskRun extends DeskRevision {
   startedAt: string | null;
   finishedAt: string | null;
   result: DeskResult | null;
+  /** The Review this attempt belongs to. Projected from the store's columns, never kept in its details;
+   * absent when read from a store that predates Reviews. */
+  reviewId?: string;
+  round?: number;
+  /** The attempt this one follows; null for the first attempt of a Review. */
+  previousRunId?: string | null;
 }
 export interface DeskRunSnapshot {
   completion?: { checks: DeskReviewCheck[] };

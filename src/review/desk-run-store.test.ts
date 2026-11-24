@@ -1,5 +1,6 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
@@ -471,7 +472,7 @@ test("a finished review of an earlier head reaches the board as outdated until a
   const archived = finishAt({ ...revision, headSha: "e".repeat(40) }, "budget");
   archived.run.decision = { action: "archive", reason: "", at: "" };
   store.save(archived);
-  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+  expect(badge()).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 2 } });
   expect(badge(revision)).toMatchObject({ active: false, ready: true, runState: "completed" });
   expect(badge(revision)?.outdated).toBeUndefined();
   // Another account's history stays out.
@@ -508,7 +509,7 @@ test("the outdated lookup ignores newer finished runs of another PR, another vie
   finishFor(key, "2", "completed", false);
   const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
   store.attachBadges({ ...key, cards });
-  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed" } });
+  expect(cards[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: "b".repeat(40), state: "completed", round: 1 } });
   expect(cards[0]?.localReview).toEqual(localBadge(store.history(key).runs, next));
   expect(store.byId(wanted.run.id)?.run.state).toBe("completed");
 });
@@ -536,7 +537,7 @@ test("each term of the outdated lookup is pinned by its own fixture", async () =
   const filtered = { ...key, number: key.number + 1 };
   run(filtered, revision, "completed", revision);
   run(filtered, d, "failed", d);
-  expect(badge(filtered, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+  expect(badge(filtered, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } });
   // `reviewed` without `requested`: requested on one range, reviewed the card's range; a newer finished run of a third range must not displace it.
   const reviewed = { ...key, number: key.number + 2 };
   run(reviewed, revision, "completed", next);
@@ -546,7 +547,7 @@ test("each term of the outdated lookup is pinned by its own fixture", async () =
   const sameNumber = { ...key, number: key.number + 3 }, elsewhere = { ...sameNumber, repositoryId: "other-gid" };
   run(sameNumber, revision, "completed", revision);
   run(elsewhere, d, "completed", d);
-  expect(badge(sameNumber, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } });
+  expect(badge(sameNumber, next)).toEqual({ active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } });
 });
 
 test("in one batch, an active run or a reviewed range suppresses the outdated badge only for its own card", async () => {
@@ -562,7 +563,7 @@ test("in one batch, an active run or a reviewed range suppresses the outdated ba
   const cards: import("./board-badges").BadgeCard[] = [key, busy, done].map(({ number }) => ({ number, ...next }));
   store.attachBadges({ ...key, cards });
   expect(cards.map(card => card.localReview)).toEqual([
-    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed" } },
+    { active: false, ready: false, outdated: { headSha: revision.headSha, state: "completed", round: 1 } },
     { active: true, ready: false, runState: "queued" },
     { active: false, ready: true, runState: "completed", publicationPending: true },
   ]);
@@ -759,4 +760,198 @@ test("operator decisions preserve partial evidence until explicit deletion", asy
   expect(store.history(key).runs).toEqual([]);
   expect(store.byId(id)?.run.decision?.action).toBe("delete");
   expect(existsSync(artifact)).toBe(false);
+});
+
+// main's runs.sqlite schema before Reviews (a5d1ab236), copied verbatim with its constants expanded.
+const MAIN_DDL = `CREATE TABLE IF NOT EXISTS runs (
+      id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+      state TEXT NOT NULL, pid INTEGER, cwd TEXT NOT NULL, request TEXT NOT NULL, details TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS review_questions (
+      run_id TEXT PRIMARY KEY, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT
+    );
+    CREATE TABLE IF NOT EXISTS reviewer_questions (
+      run_id TEXT NOT NULL, question_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT,
+      PRIMARY KEY(run_id, question_id)
+    );
+    CREATE TRIGGER IF NOT EXISTS clear_stopped_reviewer_questions AFTER UPDATE OF state ON runs
+      WHEN OLD.state='running' AND NEW.state!='running' BEGIN
+        DELETE FROM reviewer_questions WHERE run_id=NEW.id;
+      END;
+    CREATE TABLE IF NOT EXISTS history_scans (
+      cwd TEXT NOT NULL, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+      scanned INTEGER NOT NULL, PRIMARY KEY(cwd,repo,pr,viewer)
+    );
+    CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
+    CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled';
+    CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ('running', 'cancelling');
+    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`;
+
+const range = (head: string) => ({ baseSha: "a".repeat(40), headSha: head.repeat(40) });
+type Placement = { id: string; review: string; round: number; previous: string | null };
+
+/** Two PRs, two viewers with a case variant, three ranges on one PR in shuffled insert order. */
+function writeMainFixture(file: string) {
+  const db = new Database(file);
+  db.exec(MAIN_DDL);
+  const row = (id: string, viewer: string, pr: number, head: string, state: string, second: number, extra: Record<string, unknown> = {}) => {
+    const reviewed = ["completed", "partial"].includes(state) ? range(head) : null;
+    db.run("INSERT INTO runs (id,repo,pr,viewer,state,pid,cwd,request,details) VALUES (?,?,?,?,?,?,?,?,?)", [
+      id, "gid", pr, viewer, state, null, "/project", JSON.stringify({ ...key, viewer, number: pr }),
+      JSON.stringify({ id, source: "manual", ...range(head), state, phase: state, reason: "", startedAt: null, finishedAt: null,
+        createdAt: `2026-01-01T00:00:0${second}.000Z`,
+        result: reviewed && { reviewed, verdict: null, coverage: "complete", findings: { blocker: 0, major: 0, minor: 0, info: 0 }, report: "" },
+        ...extra }),
+    ]);
+  };
+  const decision = (action: string) => ({ decision: { action, reason: "", at: "" } });
+  row("a5", "user", 12, "3", "completed", 5, { source: "existing" });
+  row("c1", "colleague", 12, "1", "completed", 1);
+  row("a1", "user", 12, "1", "completed", 1);
+  row("a8", "user", 12, "5", "queued", 8);
+  row("a3", "user", 12, "2", "partial", 3, decision("archive"));
+  row("p1", "user", 13, "1", "failed", 2);
+  row("a2", "User", 12, "1", "failed", 2);
+  row("a7", "user", 12, "4", "running", 7);
+  row("a4", "user", 12, "2", "completed", 4, { continuation: { previousId: "a3" } });
+  row("a6", "user", 12, "3", "cancelled", 6, decision("delete"));
+  db.close();
+}
+
+function placements(file: string) {
+  const db = new Database(file, { readonly: true });
+  try {
+    return {
+      runs: db.query<Placement, []>("SELECT id, review_id AS review, round, previous_run_id AS previous FROM runs ORDER BY id").all(),
+      reviews: db.query<{ id: string; repo: string; pr: number; viewer: string }, []>("SELECT id, repo, pr, viewer FROM reviews ORDER BY id").all(),
+      orphans: db.query<{ n: number }, []>("SELECT count(*) AS n FROM runs WHERE review_id IS NULL OR review_id NOT IN (SELECT id FROM reviews)").get()?.n,
+    };
+  } finally { db.close(); }
+}
+
+test("opening a copy of main's database migrates it in place into Reviews and rounds, once", async () => {
+  const { localBadge } = await import("./board-badges");
+  const fixture = mkdtempSync(path.join(tmpdir(), "keryx-review-main-"));
+  const unmigrated = mkdtempSync(path.join(tmpdir(), "keryx-review-copy-"));
+  try {
+    writeMainFixture(path.join(fixture, "runs.sqlite"));
+    copyFileSync(path.join(fixture, "runs.sqlite"), path.join(unmigrated, "runs.sqlite"));
+
+    // The read-only path keeps working on the unmigrated copy and never migrates it.
+    const reader = new DeskRunStore(unmigrated, true);
+    try {
+      const cards: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("4") }];
+      reader.attachBadges({ repositoryId: "gid", viewer: "user", cards });
+      expect(cards[0]?.localReview).toEqual({ active: true, ready: false, runState: "running" });
+      const colleague: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("2") }];
+      reader.attachBadges({ repositoryId: "gid", viewer: "colleague", cards: colleague });
+      expect(colleague[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: range("1").headSha, state: "completed" } });
+      expect(reader.activeReviewNumbers({ repositoryId: "gid", viewer: "USER" })).toEqual([12]);
+      expect(reader.byId("a4")?.run).not.toHaveProperty("round");
+      expect(reader.history({ ...key, repositoryId: "gid" }).runs.map(run => run.round)).toEqual(Array(7).fill(undefined));
+    } finally { reader.close(); }
+    const raw = new Database(path.join(unmigrated, "runs.sqlite"), { readonly: true });
+    try {
+      expect(raw.query("SELECT name FROM pragma_table_info('runs') WHERE name='review_id'").get()).toBeNull();
+      expect(raw.query("SELECT name FROM sqlite_schema WHERE name='reviews'").get()).toBeNull();
+    } finally { raw.close(); }
+
+    const file = path.join(fixture, "runs.sqlite");
+    new DeskRunStore(fixture).close();
+    const first = placements(file);
+    expect(first.runs).toHaveLength(10);
+    expect(first.orphans).toBe(0);
+    expect(first.reviews).toHaveLength(3);
+    const reviewOf = (id: string) => first.runs.find(run => run.id === id)?.review;
+    const user = reviewOf("a1");
+    expect(first.reviews.filter(review => review.pr === 12 && review.viewer.toLowerCase() === "user").map(r => r.id)).toEqual([user!]);
+    expect(new Set(["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"].map(reviewOf))).toEqual(new Set([user]));
+    expect(new Set([user, reviewOf("c1"), reviewOf("p1")]).size).toBe(3);
+    expect(Object.fromEntries(first.runs.map(({ id, round, previous }) => [id, [round, previous]]))).toEqual({
+      a1: [1, null], a2: [1, "a1"], // a retry on the first range, recorded under the case-variant viewer
+      a3: [2, "a2"], a4: [2, "a3"], // a continuation joins its predecessor's round
+      a5: [3, "a4"], a6: [3, "a5"], a7: [4, "a6"], a8: [5, "a7"],
+      c1: [1, null], p1: [1, null],
+    });
+
+    const reopened = new DeskRunStore(fixture);
+    try {
+      expect(placements(file)).toEqual(first);
+      const history = reopened.history({ ...key, repositoryId: "gid" }).runs;
+      expect(history.map(run => [run.id, run.round, run.previousRunId])).toEqual([
+        ["a8", 5, "a7"], ["a7", 4, "a6"], ["a5", 3, "a4"], ["a4", 2, "a3"], ["a3", 2, "a2"], ["a2", 1, "a1"], ["a1", 1, null],
+      ]);
+      expect(new Set(history.map(run => run.reviewId))).toEqual(new Set([user]));
+      const colleague: import("./board-badges").BadgeCard[] = [{ number: 12, ...range("2") }];
+      reopened.attachBadges({ repositoryId: "gid", viewer: "colleague", cards: colleague });
+      expect(colleague[0]?.localReview).toEqual({ active: false, ready: false, outdated: { headSha: range("1").headSha, state: "completed", round: 1 } });
+      expect(colleague[0]?.localReview).toEqual(localBadge(reopened.history({ ...other, repositoryId: "gid" }).runs, range("2")));
+    } finally { reopened.close(); }
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+    rmSync(unmigrated, { recursive: true, force: true });
+  }
+});
+
+test("one PR with three historical runs is one Review with rounds", () => {
+  const ids = ["1", "2", "3"].map(head => {
+    const id = store.request("/project", key, range(head))!;
+    store.end(store.byId(id)!, { ...finish, result: { ...finish.result!, reviewed: range(head) } });
+    return id;
+  });
+  const runs = store.history(key).runs;
+  expect(new Set(runs.map(run => run.reviewId)).size).toBe(1);
+  expect(runs[0]?.reviewId).toBeString();
+  expect(runs.map(run => [run.id, run.round, run.previousRunId])).toEqual([
+    [ids[2], 3, ids[1]], [ids[1], 2, ids[0]], [ids[0], 1, null],
+  ]);
+});
+
+test("a new attempt is assigned its Review and round when it is recorded: start, retry, continuation and new head", () => {
+  const place = (id: string) => {
+    const run = store.byId(id)?.run;
+    return [run?.reviewId, run?.round, run?.previousRunId];
+  };
+  const first = store.request("/project", key, revision)!;
+  const review = store.byId(first)?.run.reviewId;
+  expect(review).toBeString();
+  expect(place(first)).toEqual([review, 1, null]);
+  store.end(store.byId(first)!, { ...finish, state: "failed", result: null });
+
+  const retry = store.atomic(() => store.request("/project", key, revision))!;
+  expect(place(retry)).toEqual([review, 1, first]);
+  const retried = store.byId(retry)!;
+  store.end(retried, { ...finish, state: "partial", result: null });
+
+  // An imported package on the same range joins the round; projected fields it carries are ignored.
+  store.recordExisting("/project", key, [{ ...retried.run, id: "imported", source: "existing", reviewId: "forged", round: 9, previousRunId: "x" }]);
+  expect(place("imported")).toEqual([review, 1, retry]);
+
+  // A continuation links to the attempt it continues, not to the newest attempt of the round.
+  const continued = store.atomic(() => store.requestContinuation("/project", key, retry))!;
+  expect(place(continued)).toEqual([review, 1, retry]);
+  store.end(store.byId(continued)!, finish);
+
+  const moved = store.atomic(() => store.request("/project", key, next))!;
+  expect(place(moved)).toEqual([review, 2, continued]);
+  store.end(store.byId(moved)!, finish);
+
+  // The account is part of the key, case-insensitively.
+  const upper = store.request("/project", { ...key, viewer: "USER" }, { ...next, headSha: "d".repeat(40) })!;
+  expect(place(upper)).toEqual([review, 3, moved]);
+  const colleague = store.request("/project", other, revision)!;
+  expect(store.byId(colleague)?.run.reviewId).not.toBe(review);
+  expect(place(colleague).slice(1)).toEqual([1, null]);
+
+  // The projection is read from the columns and never written back into details.
+  const saved = store.byId(moved)!;
+  saved.run.reason = "saved again";
+  store.save(saved);
+  expect(place(moved)).toEqual([review, 2, continued]);
+  const db = new Database(path.join(directory, "runs.sqlite"), { readonly: true });
+  try {
+    const details = db.query<{ details: string }, []>("SELECT details FROM runs").all().map(row => JSON.parse(row.details) as object);
+    expect(details).toHaveLength(7);
+    for (const stored of details) for (const field of ["reviewId", "round", "previousRunId"]) expect(stored).not.toHaveProperty(field);
+  } finally { db.close(); }
 });

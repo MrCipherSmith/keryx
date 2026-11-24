@@ -35,14 +35,30 @@ export interface Attempt {
   pid: number | null;
   workerIdentity?: ProcessIdentity | undefined;
 }
+// An attempt's Review placement lives in these columns only; `details` never carries it.
+const reviewColumns = [["review_id", "TEXT"], ["round", "INTEGER"], ["previous_run_id", "TEXT"]] as const;
+const storedDetails = (run: DeskRun, extra?: object) =>
+  JSON.stringify({ ...run, ...extra, reviewId: undefined, round: undefined, previousRunId: undefined });
+type Placement = { reviewId?: string | null | undefined; round?: number | null | undefined; previousRunId?: string | null | undefined };
+/** A row read from a store that predates Reviews has no placement and the run stays as it was. */
+function place(run: DeskRun, { reviewId, round, previousRunId }: Placement) {
+  if (typeof reviewId !== "string") return;
+  run.reviewId = reviewId;
+  if (typeof round === "number") run.round = round;
+  run.previousRunId = previousRunId ?? null;
+}
 interface Row {
   request: string;
   details: string;
   pid: number | null;
   cwd: string;
+  review_id?: string | null;
+  round?: number | null;
+  previous_run_id?: string | null;
 }
 const decode = (row: Row): Attempt => {
   const { workerIdentity, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity };
+  place(run, { reviewId: row.review_id, round: row.round, previousRunId: row.previous_run_id });
   return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity };
 };
 const alive = (pid: number) => {
@@ -79,6 +95,7 @@ function finalizeReviewerProgress(run: DeskRun) {
 
 export class DeskRunStore {
   private readonly db: Database;
+  private placed?: boolean;
   constructor(readonly root = deskRunRoot(), readOnly = false) {
     if (readOnly) {
       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
@@ -110,11 +127,74 @@ export class DeskRunStore {
     CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
     CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE ${scheduledReservation};
     CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ${liveStates};
-    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`);
+    CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
+      closed_at TEXT, on_head_move TEXT NOT NULL DEFAULT 'ask' CHECK (on_head_move IN ('ask','follow','ignore')),
+      UNIQUE (repo, pr, viewer)
+    );`);
+    // One immediate transaction, so two windows opening an older database cannot both add the columns.
+    this.atomic(() => {
+      const present = this.runColumns();
+      for (const [name, type] of reviewColumns) if (!present.has(name)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${name} ${type}`);
+      this.db.exec("CREATE INDEX IF NOT EXISTS review_rounds ON runs(review_id, round)");
+      this.assignReviews();
+    });
   }
 
   close() {
     this.db.close();
+  }
+  private runColumns() {
+    return new Set(this.db.query<{ name: string }, []>("SELECT name FROM pragma_table_info('runs')").all().map(c => c.name));
+  }
+  /** A read-only store may open a database that predates Reviews; it reads absent columns as NULL and never migrates. */
+  private placement(alias = "") {
+    this.placed ??= reviewColumns.every(([name]) => this.runColumns().has(name));
+    const column = (name: string) => (this.placed ? alias + name : "NULL");
+    return { reviewId: column("review_id"), round: column("round"), previousRunId: column("previous_run_id") };
+  }
+
+  /** Place every attempt without a Review, in creation order. Runs inside the caller's transaction and
+   * touches only unassigned rows, so a round number once shown is never renumbered. */
+  private assignReviews() {
+    type Pending = { seq: number; repo: string; pr: number; viewer: string; base: string | null; head: string | null; previousId: string | null };
+    const pending = this.db.query<Pending, []>(`SELECT rowid AS seq, repo, pr, viewer,
+        json_extract(details,'$.baseSha') AS base, json_extract(details,'$.headSha') AS head,
+        json_extract(details,'$.continuation.previousId') AS previousId
+      FROM runs WHERE review_id IS NULL ORDER BY json_extract(details,'$.createdAt'), rowid`).all();
+    for (const row of pending) {
+      const reviewId = this.reviewFor(row.repo, row.pr, row.viewer);
+      const { round, previous } = this.roundFor(reviewId, row);
+      this.db.run("UPDATE runs SET review_id=?, round=?, previous_run_id=? WHERE rowid=? AND review_id IS NULL",
+        [reviewId, round, previous, row.seq]);
+    }
+  }
+
+  /** The account is part of the key: the viewer column compares case-insensitively. */
+  private reviewFor(repo: string, pr: number, viewer: string): string {
+    const existing = this.db.query<{ id: string }, [string, number, string]>(
+      "SELECT id FROM reviews WHERE repo=? AND pr=? AND viewer=?").get(repo, pr, viewer);
+    if (existing) return existing.id;
+    const id = randomUUID();
+    this.db.run("INSERT INTO reviews (id,repo,pr,viewer) VALUES (?,?,?,?)", [id, repo, pr, viewer]);
+    return id;
+  }
+
+  /** A continuation joins its predecessor's round; a known range is a retry in its round; any other range opens the next round. */
+  private roundFor(reviewId: string, run: { base: string | null; head: string | null; previousId: string | null }) {
+    const newest = (round: number) => this.db.query<{ id: string }, [string, number]>(`SELECT id FROM runs
+      WHERE review_id=? AND round=? ORDER BY json_extract(details,'$.createdAt') DESC, rowid DESC LIMIT 1`).get(reviewId, round)?.id ?? null;
+    const linked = run.previousId === null ? null : this.db.query<{ round: number }, [string, string]>(
+      "SELECT round FROM runs WHERE id=? AND review_id=? AND round IS NOT NULL").get(run.previousId, reviewId);
+    if (linked) return { round: linked.round, previous: run.previousId };
+    const retry = this.db.query<{ round: number }, [string, string | null, string | null]>(`SELECT round FROM runs
+      WHERE review_id=? AND round IS NOT NULL AND json_extract(details,'$.baseSha') IS ? AND json_extract(details,'$.headSha') IS ?
+      ORDER BY round DESC LIMIT 1`).get(reviewId, run.base, run.head);
+    if (retry) return { round: retry.round, previous: newest(retry.round) };
+    const last = this.db.query<{ round: number | null }, [string]>(
+      "SELECT max(round) AS round FROM runs WHERE review_id=?").get(reviewId)?.round ?? null;
+    return { round: (last ?? 0) + 1, previous: last === null ? null : newest(last) };
   }
   atomic<T>(fn: () => T) {
     return this.db.transaction(fn).immediate();
@@ -265,7 +345,7 @@ export class DeskRunStore {
     this.db.run("UPDATE runs SET state=?, pid=?, details=? WHERE id=?", [
       a.run.state,
       a.pid,
-      JSON.stringify({ ...a.run, workerIdentity: a.workerIdentity }),
+      storedDetails(a.run, { workerIdentity: a.workerIdentity }),
       a.run.id,
     ]);
   }
@@ -297,8 +377,8 @@ export class DeskRunStore {
   }
 
   recordExisting(cwd: string, key: DeskRunKey, runs: DeskRun[]) {
-    for (const run of runs) {
-      this.db.run(
+    this.atomic(() => {
+      for (const run of runs) this.db.run(
         `INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET details=excluded.details
         WHERE json_extract(runs.details,'$.source')='existing' AND json_extract(runs.details,'$.decision') IS NULL`,
@@ -310,10 +390,11 @@ export class DeskRunStore {
           run.state,
           cwd,
           JSON.stringify(key),
-          JSON.stringify(run),
+          storedDetails(run),
         ],
       );
-    }
+      this.assignReviews();
+    });
   }
 
   reportForSearch(key: DeskRunKey, id: string): string | undefined {
@@ -338,10 +419,12 @@ export class DeskRunStore {
     // Return small recent reports inline and load the rest by attempt id.
     const reportSelect =
       id === undefined ? "CASE WHEN cumulative <= 131072 THEN report ELSE '' END" : "substr(report,1,524288)";
-    type Item = { details: string; state: string; bytes: number; chars: number; report: string };
+    type Item = Placement & { details: string; state: string; bytes: number; chars: number; report: string };
     const selected = id === undefined ? "" : " AND id=?";
+    const placement = this.placement();
     const sql = `WITH scoped AS (
         SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
+          ${placement.reviewId} AS reviewId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?
           AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'${selected}
@@ -349,7 +432,7 @@ export class DeskRunStore {
         SELECT *,length(CAST(report AS BLOB)) AS bytes,
           sum(length(CAST(report AS BLOB))) OVER (ORDER BY created DESC,seq DESC) AS cumulative
         FROM scoped
-      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report
+      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report,reviewId,round,previousRunId
         FROM measured ORDER BY created DESC,seq DESC`;
     const params = [key.repositoryId, key.number, key.viewer];
     if (id !== undefined) params.push(id);
@@ -358,6 +441,7 @@ export class DeskRunStore {
       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
     const runs = rows.map((row) => {
       const run = JSON.parse(row.details) as DeskRun;
+      place(run, row);
       if (row.state === "recoverable") {
         run.state = "failed";
         run.phase = "Interrupted";
@@ -387,7 +471,8 @@ export class DeskRunStore {
 
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
     type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
-      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null };
+      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null;
+      round: number | null };
     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
     // cross the SQLite boundary; of other revisions only active runs and, per card, the single newest
     // finished run with a recorded result (the outdated badge) do. No reports or session histories are returned.
@@ -430,6 +515,7 @@ export class DeskRunStore {
         json_extract(r.details,'$.result.coverage') AS coverage,
         json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
         json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+        ${this.placement("r.").round} AS round,
         json_extract(r.details,'$.reviewerProgress.planned') AS planned,
         json_extract(r.details,'$.reviewerProgress.finished') AS finished,
         json_extract(r.details,'$.reviewerProgress.wave') AS wave,
@@ -601,6 +687,8 @@ export class DeskRunStore {
       JSON.stringify(key),
       JSON.stringify(run),
     ]);
+    // Inside the caller's dispatch transaction: no transaction of its own.
+    this.assignReviews();
     return { id: run.id, reused: false };
   }
 

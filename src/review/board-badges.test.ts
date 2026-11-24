@@ -51,6 +51,15 @@ test("archived, deleted, imported, unfinished and resultless runs never become o
   ], current)).toEqual({ active: false, ready: false });
 });
 
+test("an outdated result names its round when the run carries one", () => {
+  expect(localBadge([run(old, "completed", { round: 2 })], current).outdated)
+    .toEqual({ headSha: old.headSha, state: "completed", round: 2 });
+  // Rows read from a store that predates rounds carry null or nothing: the badge stays as before.
+  expect(localBadge([run(old, "completed", { round: null })], current).outdated)
+    .toEqual({ headSha: old.headSha, state: "completed" });
+  expect(localBadge([run(old, "completed")], current).outdated).not.toHaveProperty("round");
+});
+
 test("the newest of several outdated results wins", () => {
   expect(localBadge([run(old, "budget"), run(older, "completed")], current).outdated)
     .toEqual({ headSha: old.headSha, state: "budget" });
