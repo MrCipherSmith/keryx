@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T10:38:24.686Z",
+  "updatedAt": "2026-11-24T10:39:58.834Z",
   "source": {
     "type": "description",
     "ref": null
@@ -196,7 +196,7 @@
       "id": "T10",
       "title": "review-orchestrator round on the branch",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -204,7 +204,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Three review-orchestrator rounds on PR #1303 (packages ...-pull-1303, -r02, -r03); every blocker/major/minor fixed in T11, T14-T17; infos recorded in raw/"
     },
     {
       "id": "T11",
@@ -592,6 +594,11 @@
       "at": "2026-11-24T10:38:24.686Z",
       "event": "task-done",
       "detail": "T16: Fix round 3 backend: withdrawn newer round, superseded wording, package revision check, lock reclaim race, partial-candidate stall, lean history query"
+    },
+    {
+      "at": "2026-11-24T10:39:58.834Z",
+      "event": "task-done",
+      "detail": "T10: review-orchestrator round on the branch"
     }
   ],
   "acKinds": {

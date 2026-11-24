@@ -123,3 +123,4 @@
 - Known limit: when the board was behind, the board refresh remounts the panel (stage 2's ReviewPanel keys on the head) and keyboard focus drops after Update review; fixing it needs stage 2's ReviewPanel.tsx.
 - Found and fixed: an empty blast-radius.json left in the round 2 package by a refused recount broke `round-trip.test.ts` (every committed package must ingest).
 - Full backend `bun test src/review` + file-lock: 5535/5536, the one failure being that artifact; round-trip green after removing it. Desktop 155/155; root and Desktop tsc and eslint clean.
+- 2026-11-24T10:39:58.834Z - task-done: T10: review-orchestrator round on the branch
