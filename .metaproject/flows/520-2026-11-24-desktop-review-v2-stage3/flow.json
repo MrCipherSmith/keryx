@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "520",
+  "slug": "desktop-review-v2-stage3",
+  "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
+  "status": "in-progress",
+  "createdAt": "2026-11-24T07:28:08.299Z",
+  "updatedAt": "2026-11-24T07:29:44.073Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e9c6cb2bb278695575c47909ebaf0bd7ef164b4da67e452ef293d164418c1192",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T10"
+    },
+    {
+      "id": "T5",
+      "title": "D1: publish as is for the reviewed commit (server + dialog + tests)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "D2: on_head_move type, defaults and parse (head-move.ts + tests)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "review-orchestrator round on the branch",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-24T07:28:08.299Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-24T07:29:19.786Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-24T07:29:20.005Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T07:29:20.287Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T07:29:20.486Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-24T07:29:20.700Z",
+      "event": "task-added",
+      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.040Z",
+      "event": "task-added",
+      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.291Z",
+      "event": "task-added",
+      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
+    },
+    {
+      "at": "2026-11-24T07:29:21.529Z",
+      "event": "task-added",
+      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
+    },
+    {
+      "at": "2026-11-24T07:29:21.726Z",
+      "event": "task-added",
+      "detail": "T9: Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff"
+    },
+    {
+      "at": "2026-11-24T07:29:21.953Z",
+      "event": "task-added",
+      "detail": "T10: review-orchestrator round on the branch"
+    },
+    {
+      "at": "2026-11-24T07:29:43.882Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-24T07:29:44.073Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-publication.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-publication.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/head-move.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/update-round.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts"
+    },
+    "AC7": {
+      "kind": "none",
+      "reason": "blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
+    },
+    "AC9": {
+      "kind": "judged"
+    }
+  }
+}
