@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { withFileLock } from "./file-lock";
+import { withFileLock, withFileLockAsync } from "./file-lock";
 
 let dir: string;
 let lockPath: string;
@@ -45,6 +45,52 @@ test("a waiter whose stale judgement is outdated never removes the fresh lock an
   });
   expect(raced).toBe(true);
   // A waited for B (who never released here) and gave up; it never ran alongside B.
+  expect(entered).toBe(false);
+  expect(result).toBeNull();
+  expect(readFileSync(lockPath, "utf8")).toBe("holder-B");
+  expect(readdirSync(dir).filter((name) => name.includes(".aside."))).toEqual([]);
+});
+
+test("a fresh lock that reuses the stale lock's inode is still recognised as fresh", () => {
+  // Linux gives a just-freed inode number to the next file created, so on CI waiter B's fresh lock usually carries the
+  // dead lock's inode. Rewriting the same file in place reproduces that on every platform: same dev and ino, new mtime.
+  let entered = false;
+  let raced = false;
+  const result = withFileLock(lockPath, () => {
+    entered = true;
+    return "A";
+  }, {
+    staleMs: 1_000,
+    timeoutMs: 200,
+    raceHook: (point) => {
+      if (point !== "stale-judged" || raced) return;
+      raced = true;
+      writeFileSync(lockPath, "holder-B");
+    },
+  });
+  expect(raced).toBe(true);
+  expect(entered).toBe(false);
+  expect(result).toBeNull();
+  expect(readFileSync(lockPath, "utf8")).toBe("holder-B");
+  expect(readdirSync(dir).filter((name) => name.includes(".aside."))).toEqual([]);
+});
+
+test("the asynchronous wait keeps the same rule for a fresh lock on the stale lock's inode", async () => {
+  let entered = false;
+  let raced = false;
+  const result = await withFileLockAsync(lockPath, () => {
+    entered = true;
+    return "A";
+  }, {
+    staleMs: 1_000,
+    timeoutMs: 200,
+    raceHook: (point) => {
+      if (point !== "stale-judged" || raced) return;
+      raced = true;
+      writeFileSync(lockPath, "holder-B");
+    },
+  });
+  expect(raced).toBe(true);
   expect(entered).toBe(false);
   expect(result).toBeNull();
   expect(readFileSync(lockPath, "utf8")).toBe("holder-B");
