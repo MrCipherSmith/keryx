@@ -764,7 +764,7 @@ test("a refused Update review that says stale: is shown, but never as a moved ra
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
   expect(document.body.textContent).toContain("A later round of this Review already exists");
-  expect(document.body.textContent).not.toContain("The PR revision changed. Refresh the board to load the latest range.");
+  expect(document.body.textContent).not.toContain("The PR revision changed. Refresh to load the latest range.");
   expect(lost).toBe(0);
   await act(() => root.render(null));
 });
@@ -777,7 +777,7 @@ test("an Update review refused because the pull request moved again asks for a b
   }, { ...pr, number: 67, headSha: reviewedHead }, { publishCommand });
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
-  expect(document.body.textContent).toContain("The PR revision changed. Refresh the board to load the latest range.");
+  expect(document.body.textContent).toContain("The PR revision changed. Refresh to load the latest range.");
   await act(() => root.render(null));
 });
 
