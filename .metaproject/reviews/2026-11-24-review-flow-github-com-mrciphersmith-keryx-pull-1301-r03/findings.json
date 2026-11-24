@@ -61,7 +61,11 @@
     "merged_from": [
       "r4-degradation-w2-F-001",
       "r4-logic-w5-F-001"
-    ]
+    ],
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r4-clean-code-w2-F-002",
@@ -134,7 +138,11 @@
     ],
     "merged_from": [
       "r4-architecture-w2-F-001"
-    ]
+    ],
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r4-frontend-w2-F-002",
@@ -203,7 +211,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "plan.md:49 says 'Focus is never moved by data arriving'. Its matrix (:58-67) has no stale-snapshot state. plan.md has one commit (709c993fa, the initial plan), and both behaviours were changed after it under operator answers recorded in journal.md:35 ('На то же место', 'Баннер Refresh catalog') and :47 (stale parking). flow-orchestrator SKILL.md:144 has workers and fix rounds check behaviour against the matrix. So a stale plan can steer a later fix or the flow-complete verifier against an operator decision. The finding records a real contradiction, not a missing nicety. Amending the plan and citing the journal decisions is sound and does not touch acceptance-criteria.md, which is frozen."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "plan.md focus rule and stale-snapshot matrix row amended by the orchestrator in 0d6df2937; closed 9/9 in review round 5"
+    }
   },
   {
     "id": "r4-logic-w2-F-002",
@@ -264,7 +276,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "MetaprojectTree.tsx:179-180 nests a ternary inside a ternary with a `??` between the branches, and :181 adds a third conditional. The delta introduced all of it, so it is not an older deliberate form, and no lint exemption or comment marks it as one. The project's ts-js-node rules say nothing either way. Extracting a helper with early returns is common clean-code practice. The suggested helper preserves all three fallbacks, and the effect still uses lost.index when there is no target, so the fix is sound. Readability, minor as reported."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r4-style-w2-F-002",
@@ -358,7 +374,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The `stale` status and its three render/refuse branches (MetaprojectTree.tsx:42-43 and :59, the more() guard) are new in this delta, and they carry an operator decision: a stale read shows as Loading, banner only, no Retry (journal.md:35, :47). As the finding describes them, the existing stale tests assert only absences before Refresh catalog. No intent signal or project practice exempts a new state branch from a test, so the gap is real. The suggested assertions reuse existing fixtures and pin the operator's decision. The fix is sound."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r4-testing-practices-w1-F2",
@@ -384,7 +404,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The `|| folder.status === \"stale\"` in the reveal effect (MetaprojectTree.tsx:144) decides between waiting and setHandled (:145). Removing it would silently end a cross-tree reveal after a stale step, and the finding says no reveal test uses a stale fixture. The branch is new in this delta and has no exemption. The matrix row 'selection changes elsewhere' (plan.md:64-65) makes reveal behaviour part of the spec. One composed DOM test is a proportionate fix."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r4-testing-practices-w1-F3",
@@ -410,6 +434,10 @@
       "model": "claude-opus-5-5",
       "reasoning": "The recovery loop at useMetaprojectTree.ts:265 re-reads parked reads in both scopes. It is the fix for the round-3 major, and the operator decision on stale parking applies to Wiki groups as much as to graph folders. A test that parks a Wiki read but never runs Refresh catalog leaves the Wiki half unprotected. No intent signal limits recovery to the graph scope. Extending the existing :2139 test is the minimal sound fix."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T15 (commit 9b290b9d3), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   }
 ]

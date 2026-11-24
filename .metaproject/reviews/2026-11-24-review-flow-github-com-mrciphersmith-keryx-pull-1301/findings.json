@@ -66,7 +66,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The comment at useMetaprojectTree.ts:126 says the catch keeps the slot count right, but `.finally` at :127 releases the slot whether or not the chain rejects. read()'s task already ends in its own catch (:157), so only a throw from that handler reaches the limiter's catch, and it is dropped without a trace. The limiter is new in this branch (6c83eb7fb), so no earlier choice explains it. Rewording the comment and logging the error is a sound, local fix."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-clean-code-w1-F-002",
@@ -112,7 +116,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The doc at MetaprojectTree.tsx:84 states the plan's original rule ('data arriving never takes it'). The operator replaced that rule in fix round 1: the journal records the answer 'На то же место' (focus goes to the row now at the same place). The layout effect at :142-148 and its inline comment follow the new rule. The component doc is stale against both the code and the operator's decision, and rewording it makes the file consistent."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-clean-code-w2-F-002",
@@ -223,7 +231,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The loading and Show more rows share `statusId(parent)` (:38, :41, :55). The doc at :26-29 says the shared id is meant for Retry and Show more, where the focused row should update in place. It does not mention the loading-to-more transition, where the same <li> is pushed below up to 100 new children, and that comment was itself added in this branch. The operator's 'На то же место' answer points to the first child, the row now at the old index, which is where the last-page and Retry paths already land. The fix brings this path in line with those siblings."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-frontend-w1-F-002",
@@ -362,7 +374,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The Rust permit pool is process-wide and refuses rather than queues (metaproject.rs:184-204). Every project window shares it, while the limiter is per hook instance (useMetaprojectTree.ts:121). The comment at :13 assumes that one window owns the eight permits. The round-1 finding's optional retry on `unavailable` was not done, so a refusal still ends as a folder error. No intent signal or practice source contradicts this. Note for the fixer: each Tauri window runs its own webview JS context, so a module-level pool would not span windows. Only the retry-with-backoff option, together with the comment correction, addresses the cross-window case."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-highload-w2-F-002",
@@ -432,7 +448,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The hand-off at MetaprojectTree.tsx:144-148 uses an index recorded before the commit (:153-156). If rows above the focused row change in the same commit, focus lands on an unrelated row. The operator's 'На то же место' asks for the focused row's place, not its raw index, so anchoring to a surviving neighbour serves that decision better. The code was added in this branch, and no intent signal or practice source favours the raw index. Whether two answers batch into one commit is the verifier's question."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-logic-w2-F-001",
@@ -540,7 +560,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The layout effect has no dependency list and runs on every render. Through `remember` it calls `rowElements()` (querySelectorAll) twice in that one run, and moveTo and onFocus add more calls on each arrow key. The reviewer rates it low impact and keeps it minor. The operator's latency dismissal covers CLI read latency, not redundant DOM work on the client. Reusing the `elements` array the effect already computed is a local fix that does not change behaviour. No intent signal or practice source argues against it."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-pr-contract-w1-PC-001",
@@ -603,7 +627,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "In pr-context.md, line 21 still states `bun test src` 998 pass and line 23 says the Rust tests were 'Not run locally' and that this PR's CI is the first run. The journal records 1006 pass after fix round 1, and CI has now run. The body does not describe the fix round's behaviour changes. It no longer describes the head under review, and no signal shows that was intended."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR body Verification rewritten for each later head (now 1022 pass, Rust from CI); orchestrator edits after fix rounds 2-5"
+    }
   },
   {
     "id": "r2-style-w1-F-001",
@@ -696,7 +724,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "Every other `readError` result in apps/desktop/src/platform/metaproject.test.ts names the failure: `error` (:52, :95, :204), `lacking` (:71, :134), `failure` (:79), `invalid` (:86), `unrelated` (:109), `malformed` (:199). Only the new `tree` (:212) and `search` (:215) name the request instead. The rename suggested (`staleTree` / `staleSearch`) matches the siblings."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-testing-practices-w2-F1",
@@ -722,7 +754,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "In fix round 1 the operator kept the plan's rule that data arriving never takes focus from outside the tree. The onBlur microtask (MetaprojectTree.tsx:158-163) and the `active` guard (:146) are the only code that enforces it. The finding names a test gap for that exact path (a row is focused, focus moves outside, then the row leaves) and claims no defect. No intent or practice argues against covering it. Whether the existing tests miss it is the verifier's call."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T13 (commit 2ec5a0a9c), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r2-testing-practices-w2-F2",
@@ -776,6 +812,10 @@
       "model": "claude-opus-5-5",
       "reasoning": "After `onStale()` (useMetaprojectTree.ts:159), the catch falls through to the failure branch (:170-173). The inline Retry then re-sends the same pinned snapshot (:138, :142, :191-198), so it fails the same way until the user selects Refresh catalog. For the same cause on search Load more, the operator chose the banner only ('Баннер Refresh catalog'), and MetaprojectView.loadMoreSearch does just that. The suggested fix makes the tree consistent with that decision."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T14 (commit b5c8d5fe8), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   }
 ]

@@ -23,7 +23,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "The fact holds: MetaprojectView.dom.test.tsx patches HTMLElement.prototype.scrollIntoView and restores it in a finally at 698/710, 2082/2100 and 2185/2207. The third copy came in this delta (9b290b9d3), so the change crosses the 'Duplicated block: 3 or more copies' row of solid-principles.mdc:26. That rule exempts test files from the Readability rows only (:32, :88), and from the function-length row ('a long linear table, serializer or test', :20/:87). It does not exempt them from duplication. I found no intent signal against a helper: no comment or suppression says the copies are kept inline on purpose. Accepted practice also favours a helper here. A global prototype patch that has to be restored is the kind of setup test suites wrap in one helper, as spy/restore utilities do. The helper also matches the file's own manualTimer() helper (:1996). The fix is sound and small, and it does not touch the two variants in MetaprojectTree.dom.test.tsx, which record different values."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T16 (commit 281d0f2e1), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   },
   {
     "id": "r5-clean-code-w2-F-002",
@@ -124,7 +128,11 @@
       "r5-clean-code-w1-F-001",
       "r5-logic-w1-F-001",
       "r5-degradation-w1-F-001"
-    ]
+    ],
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "reload/TreeFolder docs narrowed to catalog replacement in 281d0f2e1; plan.md cell in f77f86dca; PR body round-3 line corrected"
+    }
   },
   {
     "id": "r5-pr-contract-w2-PC-001",
@@ -150,7 +158,11 @@
       "model": "claude-opus-5-5",
       "reasoning": "In the tree section of docs/docs/guides/desktop-metaproject.md:107-110, the guide says a folder shows Loading… 'until they arrive' and that a failed folder reads Could not load. with Retry. Since the operator decision recorded in the journal and in plan.md:66, a stale-snapshot answer leaves the row on Loading… with no Retry until Refresh catalog. That state is user-visible, and the tree section does not describe it. The troubleshooting row at :327 names Refresh catalog, but it does not link that action to a folder stuck on Loading…. The guide was written on this branch (T8), so nothing in its history signals a deliberate choice to leave the state out. A signal the branch introduces cannot ratify itself anyway. The suggested sentence restates the operator's own decision, adds no new behaviour, and matches the existing troubleshooting row. A senior reviewer would accept it."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Desktop guide describes the parked Loading row and Refresh catalog in 281d0f2e1"
+    }
   },
   {
     "id": "r5-testing-practices-w1-M3",
@@ -176,6 +188,10 @@
       "model": "claude-opus-5-5",
       "reasoning": "The guard at MetaprojectTree.tsx:88 carries a documented contract, stated in the handOffTarget doc (:82-84) and in the layout-effect comment (:184-186): with no anchor shown, return none so that the caller (:192) focuses the row at the old index. It is the fallback branch of the operator's decision that 'focus goes to the row now at the same place' (journal, fix round 1). Without the guard, at = -1, so `after` becomes every row. With no parent, the result is rows[0]; with a parent, it is that parent's first row from the top of the tree. In the commonest cases this matches the old-index result: the root status row, whose anchor d:<root> is never rendered, is replaced at index 0. When no row of that parent remains, the result is undefined anyway, because rows[-1] is undefined. That explains why M3 survives. The mutant is still not equivalent. Take an entry whose anchor (the row before it) left in the same commit, as a new snapshot can do, at index > 0: with the guard, focus goes to the old index; without it, focus goes to rows[0]. So this is a real, reachable branch with a documented rule and no test. I found no intent signal or practice source against pinning it. Under the Iron Laws, a surviving mutant stays as reported unless intent or practice shrinks it. The suggested fix is sound: one DOM test with an unshown anchor at an index > 0, confirmed to fail under M3. It changes no behaviour."
     },
-    "source": "internal"
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in flow 518 T16 (commit 281d0f2e1), merged in 93fe66b3c; later review rounds judged the fix or its successor closed"
+    }
   }
 ]
