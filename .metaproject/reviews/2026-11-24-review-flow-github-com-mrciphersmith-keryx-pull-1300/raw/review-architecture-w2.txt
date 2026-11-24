@@ -1,0 +1,102 @@
+STATUS: DONE
+
+## Architecture Review (round 3, fix range 88e3faba9..d7b0f7058, slice-02)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (explicit-hash-range, diff mode)
+- Stack detected: generic TS backend (src/integrations, src/commands) + React test fixtures (Desktop), no NestJS/MobX
+- Slice: slice-02, read in full (2103 lines: Desktop DOM tests and App fixtures, docs, src/commands/issues.ts(+test), src/integrations/issues-board.ts(+test), src/integrations/issues-github.ts, shell-session-organize.test.ts)
+
+### Withdrawn
+None.
+
+### Prior dispositions (judged against the code at d7b0f7058; the ones this slice touches)
+Wave 1 (slice-01) already gave AR-003, PF-004, PF-003, AR-004, AR-006, HL-001, LG-008, LG-011, DG-007, DG-006, UX-007, LG-009, PF-005, LG-007, DG-008. I don't repeat them here.
+- RG-001: closed. IssuesBoard.dom.test "AC13 an older keryx that refuses the default repository source…" rejects `source: "repository"` with `configuration: Invalid Issues request.`. It asserts the update/bundled-CLI hint, no Retry, and that "Show issues assigned to me" loads `assigned` and stores it. The Desktop code (IssuesBoard.tsx:147, :268) was read in wave 1. The fix's own regression is AR-007 (wave 1), not refiled.
+- UX-008: closed. The test "…no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry" covers both reasons.
+- LG-013: closed. issues-github.ts `failure()` maps 410 to `issuesDisabled`, and issues-board.ts `issuePage` rewraps it as `configuration: GitHub has Issues turned off for <repo>. Choose another source…`. A test asserts both `configuration:` and `fork-owner/base`. The remedy is the fallback rather than "try the next remote". That was the author's choice, and the misleading "Refresh and retry" is gone.
+- DG-009: closed. `REPOSITORY_PAGES = 3` loop in listIssuePage. The test asserts that a PR-only page continues to the next page, that the cursor resumes after the page used, and that an all-PR listing stops at three pages per request.
+- LG-015: closed. prWork.test "LG-015: latest opens the newest of two sessions bound to the PR" (both orders), and app-navigation.fixture waits for `loaded.at(-1) === newest12`.
+- TP-R2-001: closed. Both fixtures drop `settle`. `keryx ctx rg --all 'settle\b|setTimeout\(resolve, [0-9]+\)'` over both fixtures finds only the 10 ms sleeps inside deadline-bounded poll loops (`waitFor`, composer-ready). `nextFrame` waits one animation frame on purpose, before the composer fill that App schedules.
+- TP-R2-002: closed. The tests now exist: app-navigation presses the header PR link twice (panel opens both times) and checks no replay after the account-switch remount. app-work-row checks two presses in flight make one session/new, a coalesced Create Flow registers nothing, and a menu New session is linked to the bound session's Flow. Whether the named mutants are red was not re-run (exec_budget 0).
+- TP-R2-003: closed. The test "a focus that nobody clears opens the panel once per nonce" (no onFocusHandled) is present, and so is prWork.test "TP-R2-003: one request with a fresh package and one without". Mutant redness not re-run.
+- TP-R2-004: closed. PrWorkRow.dom.test asserts the exact titles for running+progress (no "Running" label), awaiting-answer without progress, and partial.
+- TP-R2-005: closed. The AC2 test now asserts #202's slot text at every tick. #202 is the viewer's own APPROVED PR, so it sits outside "Waiting for review" and in "Mine", and the loop runs for both groupings.
+- TP-R2-008: closed. src/commands/issues.test.ts drives `issuesCommand(["list", …], cwd, connect)` inside a git project and asserts `/repos/org/base/issues`. `connect` is injected as a defaulted parameter (proper DI, no production behaviour change).
+- TP-R2-009: closed. The new test covers S47 (viewer page refuses `/repositories/42/issues`), the case-sensitive viewer path (`/ISSUES` refused), S46 (repository page follows `/repos/Org/Base/issues`) and S44 (cursor from org/base accepted under remote Org/Base).
+- PC-001: closed. desktop-issues.md now describes the default "Project repository" source, Open/Closed columns, the work row slots, "Open in session" and the filter list without Flow stage. cli-reference.md documents the `repository` source and its cwd resolution.
+- PC-002, LG-010: closed. implementation-plan.md 0.1.5 "Создание из сессии" states the 15-minute window, the one-request/one-package rule and the Link/Dismiss offer. The PR body at head has the refreshed rule, owner choices and Verification.
+- PC-003: closed. The plan's deviation (g) and the PR body's Known gaps name the per-account and GitHub Enterprise limits, and the plan describes the backfill.
+- PC-004: closed (description half). The plan and the PR body now say the notice appears at the latest after the first turn. The fixture waits for it instead of asserting it at once.
+- PF-006, HW2-002: open (deferred info, still true). With the new page loop, the `missing` → `nodes(ids)` GraphQL hydration still runs once per listing request for the repository source, and the hunk does not change it.
+- No disposition from this slice: HW2-001, DG-010 and LG-012 have their code in src/session/organize.ts and src/session/issues/issue-session.ts, which are not in slice-02. TP-R2-006 and TP-R2-007 are only half in this slice. The `..` remote test (S42) and the array-subject wire test (S21) are present. Their organize.test.ts halves (S02/S03, S09/S17) are in another slice. HL-003, LG-014, LG-016, UX-006 and AR-005 stay deferred, and nothing in this slice touches them.
+
+### Summary
+On the backend side, the fix round splits listIssuePage into `turnPage` and `issuePage`, adds a bounded three-page continuation for the repository source, and maps GitHub 410 to a named `issuesDisabled` reason. issues-board.ts rewraps that reason with the repository name. The CLI command gains an injected `connect` for tests. The rest of the slice is tests, fixtures and docs. Dependency direction is unchanged: commands/issues.ts → integrations/issues/service (barrel) → issues-board/issues-github. No new architectural violation. The only open architectural point is AR-007 (wave 1): the new 410 reason also uses the generic `configuration:` category that Desktop decodes, and this slice adds no new site of it.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. issues-board.ts imports `issuesDisabled` from issues-github.ts (transport → listing, same direction as `denied`/`invalidInput`). commands/issues.ts still reaches integrations only through `integrations/issues/service`. issues.test.ts imports issues-github and review/test-git-fixture directly, which is test-only.
+
+### Module Boundary Violations
+None new. AR-007 (wave 1) already covers the `configuration:` category being decoded by Desktop for the 410 and old-keryx cases.
+
+### Design Pattern Misuse
+None detected. `issuesCommand(args, cwd, connect = connectIssueAccount)` is constructor-style injection of the I/O dependency, and production behaviour is unchanged.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A (no NestJS or MobX in this slice).
+
+### Verified clean (sites)
+- 410 mapping placement: `failure()` (issues-github.ts:13-14) is the shared transport mapping, and it now gives every 410 the meaning "Issues turned off". `keryx ctx rg --all -n 'api\.rest|\.rest\(|\.rest<|new IssueGithub|IssueAccount\b' src --glob '!*.test.ts'` finds two REST callers on that transport: issues-board.ts:181 (`issuePage`, the listing) and issues-github.ts:97 (`/user`). Detail, comments and Projects go through `graphql()`, whose error path calls `failure` with a 200 response, so it never reaches the 410 branch. No caller gets the generic "turned off" text for some other 410, so I filed nothing. If a REST detail call is added, this mapping should move to the listing.
+- Sentinel matching: issues-board.ts:183 `error.message === issuesDisabled` follows the sibling convention for `denied`/`invalidInput` (exported message constants), so it is a deliberate pattern (law 4) and I filed nothing.
+- Fixture helpers: `waitFor`/`findButton` are now defined in both app-navigation.fixture.tsx and app-work-row.fixture.tsx (as `namedButton` already was). This is test-helper duplication, which belongs to review-clean-code / review-testing-practices, so I filed nothing.
+
+### Not verified
+- No tests or mutants run (exec_budget_s 0). The TP-* dispositions rest on the tests being present and asserting the named input, not on observed red runs.
+- Graph layer not queried beyond the payload's layers block. Enumeration used `keryx ctx rg`.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-architecture",
+    "slices": ["slice-02"],
+    "summary": "slice-02 (tests, fixtures, docs, issues CLI/listing backend) adds no architectural violation. The listing splits into turnPage/issuePage with a bounded 3-page continuation, 410 becomes a named issuesDisabled reason rewrapped with the repository, and issuesCommand gets an injected connect. Dependency direction is unchanged. AR-007 (wave 1) still covers the configuration: category Desktop decodes; no new site here.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "RG-001", "disposition": "closed"},
+      {"id": "UX-008", "disposition": "closed"},
+      {"id": "LG-013", "disposition": "closed"},
+      {"id": "DG-009", "disposition": "closed"},
+      {"id": "LG-015", "disposition": "closed"},
+      {"id": "TP-R2-001", "disposition": "closed"},
+      {"id": "TP-R2-002", "disposition": "closed"},
+      {"id": "TP-R2-003", "disposition": "closed"},
+      {"id": "TP-R2-004", "disposition": "closed"},
+      {"id": "TP-R2-005", "disposition": "closed"},
+      {"id": "TP-R2-008", "disposition": "closed"},
+      {"id": "TP-R2-009", "disposition": "closed"},
+      {"id": "PC-001", "disposition": "closed"},
+      {"id": "PC-002", "disposition": "closed"},
+      {"id": "PC-003", "disposition": "closed"},
+      {"id": "PC-004", "disposition": "closed"},
+      {"id": "LG-010", "disposition": "closed"},
+      {"id": "PF-006", "disposition": "open"},
+      {"id": "HW2-002", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload layers block gives the affected set, and enumeration used ctx rg). wiki_used: no (not-relevant: intent is stated in doc comments, the plan and the PR body). ctx_used: yes (keryx ctx rg; files read with Read). raw_rg_used: no.

@@ -1,0 +1,92 @@
+STATUS: DONE
+
+## Performance Review (round 3, fix range)
+
+### Scope
+- Branch `feat/desktop-review-v2-stage1`, range 88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058, mode explicit-hash-range (diff mode).
+- slice-01 read in full (1905 lines: flow docs, App.tsx, acp/types.ts, IssueWorkRow.tsx, IssuesBoard.tsx, PrWorkRow.tsx, ReviewBoard.tsx, ReviewProgress.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css).
+- Outside slice-01, read only for the three cost questions the dispatch named: `git diff` of the range for src/session/organize.ts, src/integrations/issues-board.ts, src/integrations/issues-github.ts, src/session/issues/issue-session.ts, src/commands/issues.ts, and src/lib/file-lock.ts at head (unchanged in range). Findings below cite them only as context for an `info`; slice-01 is the reviewed slice.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Findings
+
+### [PF-R3-001] The flags lock waits synchronously on the ACP server's request thread
+- **Severity**: info
+- **File**: src/session/organize.ts (withFlagsLock) via src/lib/file-lock.ts sleepSync
+- **Hot path**: `_keryx/session_flags` (src/acp/server.ts:2964 → setSessionFlags → updateSessionFlagsAt → withFlagsLock). Per flag write: user action, end-of-turn PendingSubjects.apply, Link on a flow offer. Not per render or per keystroke.
+- **Problem**: on contention `withFileLock` retries with `Bun.sleepSync(15)` until a 3 s deadline, and a lock left by a holder killed inside the section is only broken after 2 s (`FLAGS_LOCK_STALE_MS`). The whole wait runs synchronously on the keryx process that serves one Desktop window, so every session stream of that window stalls for its length.
+- **Why it is info, not major**: the uncontended cost is four small sync fs calls, the same order as the read and atomic write that were already synchronous. A contended wait lasts about one 15 ms tick, because the critical section is one read and one write. A 2 s stall needs a holder that dies inside that sub-millisecond section. No named input reaches the long wait at a stated frequency (shared law 1). The choice is deliberate: the code comment says "Synchronous: callers are synchronous", and the PR body lists "A flags write waits up to 3 s for the lock" as an owner choice (law 4).
+- **What would settle it**: a timing under two Desktop windows that toggle flags on one session in a loop. If stalls above ~50 ms show up, the async `withFileLock` from lib/fs, awaited in the ACP handler, removes the block.
+- **Fix**: optional. Keep it as is, or use the async lock on the ACP path only.
+
+### Cost checks requested by the dispatch (no finding)
+- **New sync lock wait**: see PF-R3-001. `readSessionFlags` (session listing) takes no lock, so listing cost is unchanged. `bindIssueSubject` now runs on every `withIssueBinding` call, so each issue open adds one uncontended lock and read. That runs per user action and is negligible.
+- **Up-to-3-page issues loop** (issues-board.ts listIssuePage): bounded by `REPOSITORY_PAGES = 3`, and only for the `repository` source while every page so far held only pull requests. The pages are serial because each needs the previous Link header, which is inherent. The loop stops at the first page holding any issue. The nodes hydration runs once, after the loop, on the final page only, so it is not multiplied. The worst case is 3 REST round trips plus one GraphQL per load or "load more", which is bounded and user-triggered.
+- **Issues index** (IssuesBoard.tsx): `boundTo = useMemo(() => boundSessionIndex(sessions), [sessions])` builds the index once per sessions change. Each row does one Map lookup (`boundTo(issueSubject(issue)).length`). `sessions` comes from `state.sessions`, which is stable between session changes. This closes PF-003.
+- **Flow offers wiring** (App.tsx, usePendingFlowLinks.ts, ReviewBoard.tsx): `offers` gets a new identity on every sessions change because `flowOf` depends on `sessions`. When there is no offer, ReviewBoard's `flowOffer` memo returns `undefined`, so `work` keeps its identity and `memo(ReviewResults)` still hits. With an offer (rare and short-lived), `work` changes on a sessions change, and `index` changes then anyway. The per-row `work.flowOffer?.(sessions)` is O(bound sessions) and runs only while an offer exists. `flowLinkActions` is stable, so `createPrFlow`, `linkFlowOffer` and `dismissFlowOffer` keep their identity.
+- **boundSessions now via boundSessionIndex** (acp/types.ts): each call groups and sorts all sessions, not only the matching ones. The callers are per click only (App openPrSession, openSubjectSession), so this is negligible.
+- **Focus effect** (ReviewBoard.tsx): one `repositories.find` per snapshot or focus change. `selectRepo(listed)` with an unchanged value does not change state, so no render loop.
+
+### Clean Areas
+- CLI/TUI hot paths: no per-keystroke or per-frame work added. `IssuesBoard`'s error regexes are tested once per render on a short string.
+- N+1 / indexes: n/a (no DB). GitHub calls are bounded, see above.
+- React re-renders: PF-005 fixed with a stable `subscribe`; DG-007 removed `lastActivityAt` from `badgesEqual`. No new inline object or arrow reaches a memoised child: `FlowOffer` arrows are inside the non-memo PrWorkRow.
+- Memory: `offered` is pruned on Link, Dismiss and session-Flow; the `claimed` set grows by one dir per offer (bounded by packages created in a session lifetime). `inFlight` in subjectOpener deletes in finally.
+- Bundle imports, pagination, redundant calls: nothing new.
+
+### Prior dispositions (performance-relevant and verifiable from this range)
+- PF-003 closed: IssueWorkRow takes `bound: number`, and the board indexes sessions once.
+- PF-004 closed: `boundSessions` is now `boundSessionIndex(sessions)(subject)`, one rule. Its disposition was claimed "deferred", but the code resolves it.
+- PF-005 closed: `subscribe` is a `useCallback`, and `memo(ReviewResults)` can hit.
+- PF-006 open (deferred): the per-page nodes hydration for the repository source is unchanged. The new loop does not multiply it.
+- HW2-002 open (deferred): same as PF-006.
+- DG-007 closed: `lastActivityAt` was dropped from `badgesEqual`.
+- HW2-001 closed (perf lens: the added lock costs see PF-R3-001, info): read-modify-write is under `flags.json.lock` for updateSessionFlagsAt and backfillSessionSubject.
+- HL-001 closed under the owner decision: the offer replaces the silent link, and `expect` runs only when `opened.filled`.
+- HL-003 open (deferred): `inFlight.delete` still runs in `finally`, before the binding commits.
+- Not disposed by this lens (correctness, tests, docs or UX, owned by their lenses; not verified here): RG-001, TP-R2-001..009, AR-003, AR-004..006, DG-006, DG-008..010, LG-007..016, PC-001..004, UX-006..008.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-performance",
+    "slices": ["slice-01"],
+    "summary": "Round-3 fix range: no performance regression. PF-003, PF-004, PF-005 and DG-007 are closed. The new flags lock, the up-to-3-page repository loop and the Issues index are bounded and off any render or keystroke path. One info: the flags lock waits synchronously on the ACP server thread (rare, bounded at 3 s, owner choice).",
+    "findings": [
+      {
+        "id": "PF-R3-001",
+        "reviewer": "review-performance",
+        "severity": "info",
+        "file": "src/session/organize.ts",
+        "quote": "function withFlagsLock<T>(dir: string, apply: () => T): T {",
+        "location_class": "in-diff",
+        "problem": "withFlagsLock uses the synchronous withFileLock, which on contention retries with Bun.sleepSync(15) until a 3 s deadline, and breaks a lock left by a crashed holder only after 2 s. It runs on the ACP server thread in the `_keryx/session_flags` handler (src/acp/server.ts:2964 -> setSessionFlags -> updateSessionFlagsAt), so a wait stalls every session stream of that Desktop window.",
+        "impact": "Bounded and rare. The uncontended cost is a few small sync fs calls, about what the write already cost. A contended wait is about one 15 ms tick because the section is one read and one atomic write. A 2 s stall needs a holder killed inside that section. No named trigger reaches the long wait at a stated frequency, so this is info under shared law 1. The synchronous wait is a documented choice (code comment and PR body owner choice).",
+        "suggested_fix": "Optional: on the ACP path, await the async withFileLock (lib/fs) in the handler instead of the sync lock; keep the sync lock for synchronous CLI callers. A timing with two windows writing flags to one session in a loop would settle whether this is needed.",
+        "evidence": "git diff 88e3faba9..d7b0f7058 -- src/session/organize.ts (withFlagsLock, FLAGS_LOCK_TIMEOUT_MS = 3_000, FLAGS_LOCK_STALE_MS = 2_000); src/lib/file-lock.ts sleepSync/withFileLock at head; caller src/acp/server.ts:2964.",
+        "confidence": "high"
+      }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+    "prior_dispositions": [
+      { "id": "PF-003", "disposition": "closed" },
+      { "id": "PF-004", "disposition": "closed" },
+      { "id": "PF-005", "disposition": "closed" },
+      { "id": "PF-006", "disposition": "open" },
+      { "id": "HW2-002", "disposition": "open" },
+      { "id": "DG-007", "disposition": "closed" },
+      { "id": "HW2-001", "disposition": "closed" },
+      { "id": "HL-001", "disposition": "closed" },
+      { "id": "HL-003", "disposition": "open" }
+    ],
+    "follow_ups": [
+      "Prior findings not disposed by this lens (outside performance; left to their owning lenses): RG-001, TP-R2-001..009, AR-003, AR-004..006, DG-006, DG-008, DG-009, DG-010, LG-007..016, PC-001..004, UX-006, UX-007, UX-008."
+    ]
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; bounded slice review with the payload's layers block), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx read/rg), raw_rg_used: no. metaproject index not read: bounded subagent work per CLAUDE.md subagent guidance. Not verified: no timings were run (exec_budget_s 0); the lock stall estimate is reasoned from the code, not measured.

@@ -1,0 +1,59 @@
+STATUS: DONE
+
+## High-Load Review (round 3, wave 2)
+
+Scope: branch feat/desktop-review-v2-stage1, fix range 88e3faba9..d7b0f7058, diff mode. Load profile: not provided. Triggers checked: the number of GitHub requests one `keryx issues list` call can make on the new `repository` source, fixtures that hold `session/new` to land a second press while an open is in flight, and test-level global state (stdout patching, the `newGate` promise).
+Files reviewed: slice-02.diff read in full (2103 lines, 16 files: IssuesBoard/PrWorkRow/ReviewBoard/usePendingFlowLinks/ProjectNavigation DOM tests, prWork.test.ts, app-navigation and app-work-row fixtures, cli-reference.md, desktop-issues.md, implementation-plan.md, shell-session-organize.test.ts, src/commands/issues.ts and its test, issues-board.ts and its test, issues-github.ts). I also read src/integrations/issues-board.ts lines 236-271 at head (outside the hunk) to confirm where the cursor and the GraphQL hydration sit relative to the new page loop.
+Test evidence: verify-tests-to-run-1.txt exit 1, with one failure: src/lib/searchable-sources.test.ts timed out at 5000 ms. That test is outside this range. verify-tests-to-run-2.txt reran it and it passed (6 pass); Desktop `bun test src` 1051 pass, 0 fail. No tests were run by me (exec_budget_s 0).
+
+Summary: No new high-load finding in slice-02. The only new runtime code in this slice is the repository-source page loop in issues-board.ts. It is capped at REPOSITORY_PAGES = 3 sequential REST requests per call. It hydrates once per call after the loop, and only an explicit request reaches it. The tests and fixtures added here pin the round-2 concurrency fixes: a coalesced press reports filled:false and registers no request, a new package is only offered, and two presses in flight open one session.
+Stats: blocker 0 | major 0 | minor 0 | info 0
+
+### CLI / Multi-Session
+None detected. The app-work-row fixture's `holdNewSessions` gate shows that two "Open in session" presses during one in-flight `session/new` create one session. It also shows that "Open in session" followed by "Create Flow" in the same window registers no request (slot stays "Create Flow" after package 510-c appears, no flow write). Both are now executed through the App wiring, not only in prWork.test.ts.
+
+### Concurrency & Races
+None detected. prWork.test.ts "HL-001/LG-008" asserts the coalesced press returns `{ filled: false }` with exactly one fill. usePendingFlowLinks.dom.test.tsx asserts offers, not links, and that Link writes once (a second accept is a no-op). It also asserts that Dismiss writes nothing and that the dismissed package is not offered to a later request. One test checks that a request without a fresh package and one with a fresh package end with no offer (TP-R2-003).
+
+### Resources
+None detected. issues-board.ts listIssuePage: the loop `for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++)` makes at most 3 REST calls, serially, per request. It stops at the first page holding an issue or when no next link exists. Each link passes `pageLink` validation (origin, path, no credentials) before `turnPage` applies only `pageKeys`. The GraphQL `nodes` hydration runs once per call, on the issues of the last page fetched. The test "the search stops after three pages" pins the cap, including resumption from the cursor (pages 4-6 on the next call).
+
+### Caching
+None detected.
+
+### Lock Contention
+None in this slice. The flags lock is in slice-03; my wave-1 reply covered it (HL3-001, HL3-002, HL3-004).
+
+### Async / Queues
+None detected. The fixtures' `waitFor` polls with a 2 s deadline per condition. The process-level timeout of 8 s per fixture stays (`execFileSync(..., { timeout: 8000 })`). Whether the longer app-work-row fixture fits that budget on a slow CI runner is a testing-practices question, not a load one.
+
+### Retry / Timeout / Circuit Breaker
+None detected. The new 410 mapping (`issuesDisabled`) is checked before the 401/404 and rate-limit branches. It turns a permanent "Issues turned off" into a `configuration:` error. Desktop then offers "Show issues assigned to me" instead of Retry (IssuesBoard.dom.test AC13 tests), so a refused default source does not invite repeated identical requests.
+
+### Idempotency & Distributed Invariants
+None detected. The repository cursor scope includes the lowercased repository, so a cursor cannot be replayed against another project's repository. Case-insensitive matching is tested.
+
+Clean areas: Part 0 (multi-session), A, B, C, D, E, F, G. The rest of slice-02 is tests, fixtures and docs, with no runtime concurrency surface beyond what is listed above.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-highload",
+    "summary": "slice-02 read in full; no new high-load finding. The repository-source page loop is capped at 3 serial REST requests plus one GraphQL hydration per explicit request, with validated next links. The tests and fixtures added here execute the round-2 fixes through the App wiring: a coalesced press registers no request, packages are offered and linked only on Link, and two presses in flight open one session.",
+    "slices": ["slice-02"],
+    "inputs_unreadable": [],
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "HL-001", "disposition": "closed", "note": "Confirmed from slice-02 tests. prWork.test.ts 'HL-001/LG-008' asserts a press coalesced into an in-flight open returns filled:false with one fill. usePendingFlowLinks.dom.test.tsx asserts offers instead of links, Link writing once, and Dismiss writing nothing and never re-offering. app-work-row.fixture.tsx runs the coalesced Open in session → Create Flow case through App: with session/new held, a package that then appears is not offered and no flow flag is written. Desktop suite 1051 pass (verify-tests-to-run-2.txt)."},
+      {"id": "HW2-002", "disposition": "open", "note": "Deferred info stands. A correction to my wave-1 note: the GraphQL nodes hydration still runs once per listIssuePage call, after the new page loop, on the last page's issues only; it is not multiplied by the loop. What DG-009 adds is up to 3 serial REST requests per call when pages hold only pull requests. Each call is still one explicit user load."},
+      {"id": "HL-003", "disposition": "open", "note": "Deferred info stands. Slice-02's subjectOpener test checks the next press only after awaiting the settled open ('Settled: the next press opens again'). It does not cover a press between settle and the render commit, and prWork.ts keeps `.finally(() => inFlight.delete(key))`."}
+    ],
+    "follow_ups": [],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice named every file, and the payload carried the affected layers); wiki_used: no (not-relevant: the question was the code's request bounds, answered from the diff); ctx_used: yes (keryx ctx rg for nextCursor/REPOSITORY_PAGES in issues-board.ts, keryx ctx read for the test evidence); raw_rg_used: no.
+Prior dispositions are not given for other lenses' findings on slice-02 files (testing-practices TP major on app-work-row.fixture.tsx, the issues-board.ts findings of degradation/logic/testing/ui-ux/performance); their owning reviewers judge them. HW2-001 is in slice-03 and was closed in wave 1.

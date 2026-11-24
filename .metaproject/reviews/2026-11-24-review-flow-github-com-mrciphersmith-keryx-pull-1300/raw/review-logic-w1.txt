@@ -1,0 +1,208 @@
+STATUS: DONE
+
+## Logic Review (round 3, wave 1, slice-01)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (fix round 2: 80ef58bd5, c4e8e3e24, docs)
+- Scope mode: explicit-hash-range, slice-01 read in full (1905 lines)
+- Spec compliance gate: ran against `.metaproject/flows/517-.../acceptance-criteria.md` (AC8, AC9 as re-frozen)
+- Tests: not run (exec_budget_s 0). `research-evidence/verify-tests-to-run-1.txt` was not present when read. Mutant claims in the journal were not re-run.
+
+### Summary
+The fix range turns the silent Create Flow link into a confirmed offer ("Link Flow #N?", Link / Dismiss), registers a pending request only when this press filled the prompt into the shown session (`SubjectOpen.filled`, `isShown`), gates the warn tone on open PRs, drops `lastActivityAt` from `badgesEqual`, makes `boundSessions` and the progress caption delegate to one implementation, indexes Issue sessions once per board, and adds the default-source fallback on the Issues board. I traced each path against the code. The HL-001 blocker is closed by the owner's chosen remedy, and I found no new blocker or major. One residual of the LG-009 class remains (a focus for a PR the shown snapshot does not hold stays armed). The PR body misdescribes the new focus behaviour.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 2
+
+### Prior dispositions (slice-01 files, checked against code at d7b0f7058)
+- HL-001 closed: `resolveFlowLinks` output now becomes an offer (`usePendingFlowLinks` `offered`), and only `accept` calls `link`. Trigger B is closed: `subjectOpener` returns `filled: false` for a coalesced call, and `createPrFlow` calls `expect` only `if (opened?.filled)`.
+- RG-001 closed: an unchosen `repository` source plus a `configuration:` error shows "Show issues assigned to me" and the update/bundled-CLI hint for "Invalid Issues request" (IssuesBoard `unavailable`). Old keryx throws exactly `configuration: Invalid Issues request.` (src/integrations/issues-github.ts `invalidInput`).
+- AR-003 closed: `boundSessions` returns `[...boundSessionIndex(sessions)(subject)]`, `sameSubject` compares `subjectKey`, and `ReviewProgress` and `reviewProgressText` share `progressParts`.
+- DG-006 closed: `waitsOnViewer = card.state === "open" && ...`. The text "publication pending" on merged PRs is a recorded owner choice.
+- DG-007 closed: `lastActivityAt` was removed from `badgesEqual`. The only remaining non-test reader is `ReviewRuns.tsx` (`run.lastActivityAt`, from the run, not the board badge).
+- DG-008 closed: the PR body and Known gaps now state that several pending requests link nothing.
+- LG-007 closed: AC9 was re-frozen with the one-request / one-package / bounded-window rule.
+- LG-008 closed: see HL-001 Trigger B.
+- LG-009 partial: a repository the board lists is now selected, and an unlisted one gets a notice and is cleared. A focus whose repository is shown but whose PR is not in the snapshot still returns without clearing (F-002).
+- LG-011 closed: `fillShown` checks `deps.isShown(id)`, which reads `live.current.reg.shown`. The registry sets that synchronously in `created`/`loadDone` before the promise resolves.
+- LG-012 closed: `withIssueBinding` calls `bindIssueSubject` on every open (backfill, `backfillSessionSubject`). Counting across accounts is listed in Known gaps. Backfill internals are slice-03's to verify.
+- LG-015 closed: the tests "LG-015: latest opens the newest of two sessions bound to the PR" (prWork.test.ts) and the app fixture's `loaded.at(-1) === newest12` exist.
+- PF-003 closed: `boundTo = useMemo(() => boundSessionIndex(sessions), [sessions])`, and the row gets `bound` as a number.
+- PC-002 closed: the PR body lists the 15-minute window, the offer, the owner choices, and verification at 1051/0.
+- PC-003 closed: the body names the backfill and the GitHub Enterprise gap.
+- TP-R2-002 closed: app-work-row and app-navigation fixtures add a second header press, a remount without replay, a coalesced press and bound-session Flow cases. The mutants were not re-run by me.
+- TP-R2-003 closed: the ReviewBoard test "a focus that nobody clears opens the panel once per nonce" and the prWork test "TP-R2-003: one request with a fresh package and one without" were added.
+- TP-R2-004 closed: the PrWorkRow test "the review slot title carries the progress without the running label, and nothing for an answer without progress" was added.
+- PF-005 closed: `subscribe = useCallback(...)` replaces the inline arrow.
+- UX-007 closed: same change as DG-006.
+- PF-004 closed: deferred, but resolved by the AR-003 change (one rule).
+- AR-004, AR-005, AR-006, HL-003, UX-006 open: deferred info findings. The code they name is unchanged in this range (AR-005: `WorkAction` is still declared in both IssueWork.tsx and IssueDetail.tsx).
+
+### Spec Gaps (blocker)
+None detected.
+- AC9 (re-frozen): implemented. The prefilled flow prompt opens in the bound session. A request is registered only on `filled`. Exactly one request plus exactly one fresh package within `FLOW_LINK_WINDOW_MS` gives an offer. Only Link writes `flow` via `linkFlow`. Dismiss, several packages, several requests and a coalesced press link nothing. Covered by usePendingFlowLinks.dom.test.tsx and the App-level "AC9 Create Flow in the App" test.
+- AC8 (re-frozen): the Desktop half (a notice after the first turn) is asserted in app-navigation.fixture ("did not save the pull request binding"). The keryx half (repositoryId, organize/session_flags) is in slice-03 and was not assessed here.
+- AC5, AC6, AC14, AC17: no regression found in this range. The offer's controls carry text ("Link", "Dismiss"). The focus notice sits outside `.flows-toolbar`. No attention-set line was edited (`badgesEqual` is not one).
+
+### Logic Bugs
+
+### [F-001] PR body describes the cross-repository header focus as "stays armed"; the code switches or clears it
+- **Severity**: minor
+- **File**: PR #1300 body (owner choices)
+- **Problem**: The body says: "A header link to a PR of another repository shows a banner and stays armed until that repository is shown." In ReviewBoard's focus effect, a repository among `snapshot.repositories` is selected at once (`selectRepo(listed)`). A repository the board cannot show gets the notice and is handled at once (`focused.current = focus.nonce; ... onFocusHandled?.(focus.nonce)`), so it is not armed. The sentence is the round-1 behaviour that LG-009 asked to change.
+- **Why it matters**: The owner decides from the "Choices for the owner" list. That list records a behaviour the head no longer has, and it omits the one the head does have: the board switches its repository for the person.
+- **Fix**: Replace the line with: "A header link to a PR of another repository of this board switches the board to it and opens the panel; one the board cannot show gets a notice and is dropped."
+
+### [F-002] A focus request for a PR that the shown snapshot does not hold stays armed (residual of LG-009)
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewBoard.tsx
+- **Problem**: The fix handles a focus whose repository differs from the snapshot. When the repository matches but the PR is not among `snapshot.cards`, the effect still returns early, so the request is never handled and App never clears it. Example: a merged or closed PR while the State filter is the default "open", whose scope loads only open PRs (AC3).
+- **Why it matters**: Trigger: a session bound to a PR that has since been merged (bound sessions outlive the PR), whose header PR link is pressed. The board opens with no panel and no notice. Outcome: when the person later sets the State filter to include merged PRs, the snapshot holds the PR and its panel opens unrequested. This is LG-009's reported symptom (no feedback at click time, a panel at an unrelated later moment) at its remaining site. It is low cost, like LG-009, hence minor.
+- **Fix**: When the snapshot of the matching repository holds every PR of its scope and the PR is not there, refuse the request. Call `onFocusHandled(focus.nonce)` and set a notice such as "#N is not in the current filter (merged or closed?)". Alternatively, open the panel by number through `loadDetail` without requiring the card. Add a test: a focus for a number absent from an open-scope snapshot, followed by a filter change to "all", asserts the panel stays closed.
+
+### Async & Concurrency
+None detected. `accept` clears `offersRef` before the link write, so a double press writes once. `isShown` reads the synchronous registry. The rAF in `fillComposer` runs after the `isShown` check, a one-frame window I do not count as a defect.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected. `issueSubject` always returns a subject, so `boundTo(issueSubject(issue))` is safe.
+
+### Type Contract Violations
+None detected. `openSubjectSession` now returns `SubjectOpen | null`. Its callers are `subjectOpener` and `openPrSession` → `createPrFlow` (`opened?.filled`) and `openPrFromBoard` (`void`), enumerated with `keryx ctx rg "openPrSession|openSubject"` in App.tsx.
+
+### Edge Cases
+
+### [F-003] An offer ends the request: after a foreign package is dismissed, the session's own package is never offered
+- **Severity**: info
+- **File**: apps/desktop/src/review/prWork.ts
+- **Problem**: `resolveFlowLinks` returns `pending: []` whenever it makes an offer. If another producer's package appears first (the trigger HL-001 named), the person correctly presses Dismiss. The package their own prompt creates a minute later is then not offered, and the card keeps "Create Flow". AC9 as re-frozen allows this ("Dismiss ... link nothing"), and the body says Dismiss stops offering *that* package. It does not say Dismiss also ends the wait for the real one.
+- **Why it matters**: This is a spec'd behaviour, so it is not a defect. Recorded so the owner sees it.
+- **Fix**: Optional. On Dismiss, re-arm the request with the dismissed dir added to `knownDirs` until its original `expiresAt`. Alternatively, add the limit to Known gaps.
+
+### [F-004] `issueSessions` has no production caller after the PF-003 change
+- **Severity**: info
+- **File**: apps/desktop/src/issues/model.ts
+- **Problem**: IssueWorkRow now receives `bound` from the board's `boundSessionIndex`. `keryx ctx rg "issueSessions\("` over apps/desktop/src and src finds only model.ts and model.test.ts.
+- **Fix**: Optional. Remove it with its test, or keep it as the documented per-issue form.
+
+### Suggested Patches
+```diff
+--- apps/desktop/src/review/ReviewBoard.tsx
+-    if (!snapshot.cards.some(c => c.number === focus.number)) return;
++    if (!snapshot.cards.some(c => c.number === focus.number)) {
++      if (loading) return;
++      focused.current = focus.nonce;
++      setFocusNotice(`#${focus.number} is not on this board with the current filters.`);
++      onFocusHandled?.(focus.nonce);
++      return;
++    }
+```
+(Sketch only: the snapshot may be one page. Check `nextCursor`/paging before refusing.)
+
+### Routing audit
+- graph_used: no (the slice diff and the package layers named the affected files; the targeted reads went through ctx rg)
+- wiki_used: not-relevant (fix-round delta; behaviour judged against the AC file and the journal's owner decisions)
+- ctx_used: yes (`keryx ctx rg` for registry `shown`, error prefixes, `lastActivityAt` readers, `issueSessions` callers, test names in slice-02; `keryx ctx read` for sessionRegistry.ts)
+- raw_rg_used: no
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "slices": ["slice-01"],
+    "summary": "Fix round 2 (slice-01) is sound. HL-001 is closed by the owner-decided confirmed offer and the filled-prompt gate, and LG-008/LG-011/DG-006/DG-007/AR-003/PF-003/RG-001 are closed in code. LG-009 is partial: a focus for a PR the shown snapshot does not hold (e.g. a merged PR under the open filter) stays armed. The PR body misdescribes the new focus behaviour. No blocker or major; AC9 and the Desktop half of AC8 are implemented.",
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "reviewer": "review-logic",
+        "file": null,
+        "line": null,
+        "quote": null,
+        "problem": "The PR body's owner-choice line says 'A header link to a PR of another repository shows a banner and stays armed until that repository is shown.' At head, ReviewBoard selects a repository listed in snapshot.repositories at once (selectRepo(listed)). For an unlisted one it sets the notice and handles the request (focused.current = focus.nonce; onFocusHandled), so nothing stays armed.",
+        "impact": "The owner decides from 'Choices for the owner', which records the round-1 behaviour that LG-009 asked to change and omits the new one: the board switches its repository for the person.",
+        "suggested_fix": "Reword it to: 'A header link to a PR of another repository of this board switches the board to it and opens the panel; one the board cannot show gets a notice and is dropped.'",
+        "evidence": "apps/desktop/src/review/ReviewBoard.tsx focus effect at d7b0f7058 versus the PR body in payload review_context.pr.body.",
+        "confidence": "high"
+      },
+      {
+        "id": "F-002",
+        "severity": "minor",
+        "reviewer": "review-logic",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "    if (!snapshot.cards.some(c => c.number === focus.number)) return;",
+        "problem": "This is a residual of LG-009. The fix refuses or redirects a focus for another repository. A focus whose repository matches but whose PR is not in snapshot.cards still returns early, so the request is never handled and App never clears it. Example: a merged or closed PR while the State filter is the default 'open' (AC3: the open scope holds only open PRs).",
+        "impact": "Trigger: the header PR link of a session bound to a since-merged PR is pressed. The board shows with no panel and no notice. Outcome: when the person later includes merged PRs in the State filter, that PR's panel opens unrequested. This is LG-009's symptom at its remaining site, and low cost.",
+        "suggested_fix": "When a loaded snapshot of the matching repository does not hold the PR (and no further page could), handle the request: set focused.current and a notice ('#N is not on this board with the current filters'), and call onFocusHandled(focus.nonce). Alternatively, open the panel by number without needing the card. Add a ReviewBoard test: a focus for a number absent from an open-scope snapshot, then a filter change to 'all', asserts the panel stays closed.",
+        "evidence": "ReviewBoard.tsx focus effect (lines after 'A focus request waits for a snapshot of its repository'); App clears reviewFocus only in reviewFocusHandled; AC3 default state filter excludes merged/closed.",
+        "confidence": "medium"
+      },
+      {
+        "id": "F-003",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };",
+        "problem": "Making an offer ends the pending request. When a foreign package arrives first and the person dismisses it, the package their own prompt creates later in the window is not offered.",
+        "impact": "AC9 as re-frozen allows this. The body says Dismiss stops offering that package, but not that it ends the wait for the real one. Recorded for the owner; no change required.",
+        "suggested_fix": "Optional: on Dismiss, re-arm the request with the dismissed dir added to knownDirs until its original expiresAt, or list the limit under Known gaps.",
+        "evidence": "resolveFlowLinks and usePendingFlowLinks.dismiss at d7b0f7058.",
+        "confidence": "high"
+      },
+      {
+        "id": "F-004",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "apps/desktop/src/issues/model.ts",
+        "line": null,
+        "quote": "export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {",
+        "problem": "After the PF-003 change, IssueWorkRow receives a count from the board's boundSessionIndex, and issueSessions has no production caller.",
+        "impact": "None at runtime. It is a second entry point to the bound-session rule that nothing uses.",
+        "suggested_fix": "Optional: remove it with its model.test.ts case, or keep it as the documented per-issue form.",
+        "evidence": "keryx ctx rg \"issueSessions\\(\" apps/desktop/src src: only apps/desktop/src/issues/model.ts:68 and model.test.ts:64-65.",
+        "confidence": "high"
+      }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 },
+    "prior_dispositions": [
+      { "id": "HL-001", "disposition": "closed" },
+      { "id": "RG-001", "disposition": "closed" },
+      { "id": "AR-003", "disposition": "closed" },
+      { "id": "DG-006", "disposition": "closed" },
+      { "id": "DG-007", "disposition": "closed" },
+      { "id": "DG-008", "disposition": "closed" },
+      { "id": "LG-007", "disposition": "closed" },
+      { "id": "LG-008", "disposition": "closed" },
+      { "id": "LG-009", "disposition": "partial" },
+      { "id": "LG-011", "disposition": "closed" },
+      { "id": "LG-012", "disposition": "closed" },
+      { "id": "LG-015", "disposition": "closed" },
+      { "id": "PF-003", "disposition": "closed" },
+      { "id": "PC-002", "disposition": "closed" },
+      { "id": "PC-003", "disposition": "closed" },
+      { "id": "TP-R2-002", "disposition": "closed" },
+      { "id": "TP-R2-003", "disposition": "closed" },
+      { "id": "TP-R2-004", "disposition": "closed" },
+      { "id": "PF-005", "disposition": "closed" },
+      { "id": "UX-007", "disposition": "closed" },
+      { "id": "PF-004", "disposition": "closed" },
+      { "id": "AR-004", "disposition": "open" },
+      { "id": "AR-005", "disposition": "open" },
+      { "id": "AR-006", "disposition": "open" },
+      { "id": "HL-003", "disposition": "open" },
+      { "id": "UX-006", "disposition": "open" }
+    ],
+    "not_verified": [
+      "No tests or mutants run (exec_budget_s 0); research-evidence/verify-tests-to-run-1.txt absent when read.",
+      "Prior findings whose files are outside slice-01 (HW2-001, TP-R2-001, TP-R2-005..009, DG-009, DG-010, LG-010, LG-013, LG-014, LG-016, PC-001, PC-004, UX-008, HW2-002, PF-006) are not disposed here.",
+      "AC8 keryx half (organize.ts, session_flags, repositoryId) is in slice-03."
+    ]
+  }
+}
+```

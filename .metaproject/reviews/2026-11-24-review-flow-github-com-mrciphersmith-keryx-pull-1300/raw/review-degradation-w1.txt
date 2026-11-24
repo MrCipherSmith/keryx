@@ -1,0 +1,84 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 3, wave 1, slice-01 (read in full, 1905 lines). Range 88e3faba9..d7b0f7058 (fix round 2: 80ef58bd5, c4e8e3e24, plus docs/flow-record commits). Read-only; nothing run. The blast-radius consumer list was not supplied this round: consumers of every changed export were found with `keryx ctx rg` over apps/desktop/src and src (search-derived), and `keryx gdgraph affected` returned no output through the ctx wrapper, so the consumer sweep below is search-derived, not a graph walk.
+
+Findings: 0 blocker, 0 major, 2 minor, 0 info. No new behaviour loss on the PR board, the Create Flow path or the session open path; the two minors are on the Issues fallback banner and a leftover export.
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Fix round 2 (88e3faba9..d7b0f7058), slice-01 read in full. Two minor findings: the Issues fallback banner now catches every 'configuration:' error on the default source, replacing Retry and the snapshot note, and issueSessions is left as a dead export. Consumers were found by search because no graph list was supplied. Verified clean: (1) openSubjectSession/isShown: SessionRegistry.created()/loadDone()/showLocal() set reg.shown synchronously before newSession/loadSession resolve (sessionRegistry.ts, useAcpSession.ts openLoad/newSession), so isShown is true right after a normal open. A new bound session still gets its prompt; only a switch made during the open, or a load still pending, skips it. (2) subjectOpener coalesced press returns {..., filled:false}; App.createPrFlow registers expect only on filled; the only consumer is App.tsx. (3) usePendingFlowLinks return shape {known,expect} became {offers,actions}; App.tsx is the only consumer and was updated. Link writes through acp.current.linkFlow only in accept, and offers whose session got a Flow are filtered. (4) flowOffers identity: an empty offers list gives flowOffer undefined, a stable value, so work rows are not re-rendered more than on base. A non-empty list changes with sessions, as `index` already did on base. (5) sameSubject/boundSessions now delegate to subjectKey/boundSessionIndex with the same archived filter, case rule and comparator; returns a fresh array. Consumers are App.tsx:398, prWork.ts:201 and issues/model.ts:69 (search-derived). (6) IssueWorkRow prop sessions->bound: IssuesBoard.tsx:236 is the only consumer; issueSubject never returns null (model.ts:63), so boundTo(issueSubject(issue)) cannot throw. (7) badgesEqual dropping lastActivityAt: nothing renders card.localReview.lastActivityAt; the only non-test reader is ReviewRuns.tsx:133, which reads run.lastActivityAt from the run, not the card badge. Consumers are ReviewBoard.tsx:181 and :374. (8) ReviewProgress/progressParts: same caption for every state as base (wave, percent, state label only when not running/queued/completed, label). The base edge 'undefined · ' for a missing RUN_STATE_LABEL is now empty. (9) ReviewBoard focus: snapshot.repositories comes from the backend listReviewCards result (src/review/board.ts:197). A listed repo is selected and the board remounts with focused ref reset; an unlisted repo is refused with a notice and onFocusHandled. No loop, because selectRepo runs only when the repo differs without case. (10) PrWorkRow waitsOnViewer is now open-only, matching needsViewerAttention; the offer replaces the Flow button only when the PR has no Flow. (11) subscribe useCallback replaces an inline arrow, with the same behaviour. No frozen-criteria conflict: AC8/AC9 were re-frozen in this range and the code matches the new text. Not traced: test and fixture files of this range (other slices), and the backend files (src/integrations, src/session), which are not in slice-01.",
+  "findings": [
+    {
+      "id": "DG-R3-001",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "quote": "const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "problem": "The new fallback banner is chosen for every error with a 'configuration:' prefix on the default (unchosen) repository source. The PR body names only three cases: no GitHub.com remote, Issues turned off, or an older keryx. The CLI uses the same prefix for errors that are not 'repository unavailable', for example readCursor's 'configuration: Refresh before loading the next page.' (src/integrations/issues-github.ts:120) and the generic invalidInput (issues-github.ts:8). On base 88e3faba9 every non-access error rendered `{error} {snapshot && \"Showing the last available snapshot.\"} <button>Retry</button>`. On head, such an error renders 'This project's repository issues are not available here.' with only 'Show issues assigned to me', and drops Retry and the snapshot note. The already loaded rows stay drawn below a banner that says the issues are unavailable. An invalidInput from a current keryx also gets the 'update keryx' hint.",
+      "impact": "Misleading notice and one recovery action fewer on the default Issues source when a load fails with a 'configuration:' reason other than the three named ones. The person is not blocked: the toolbar Refresh button still reloads. The trigger is rare with an up-to-date keryx, because the cursor scope only goes stale across a keryx swap between pages.",
+      "suggested_fix": "Match only the unavailability reasons (no GitHub.com remote, Issues turned off/410, the older-keryx invalid request on the first page). Alternatively show the fallback block only when there is no snapshot (a first-page failure), and keep the Retry button in it.",
+      "evidence": "base-diff: slice-01 shows the base line `{error && <div className=\"issues-notice\" role=\"alert\">{error} {snapshot && \"Showing the last available snapshot.\"}` and `<button ... onClick={() => void load()}>Retry</button>`. On head the `unavailable ?` branch has neither. consumer-trace: useIssueCollection.ts:73-77 sets any non-access reason as `error`. issues-github.ts:120 throws the cursor error with the 'configuration:' prefix, and issues-board.ts:184 throws the Issues-off error with it as well. Refute: read the toolbar in IssuesBoard.tsx; the Refresh button is still present, so the result is not blocked, hence minor. The PR body names only the three unavailability cases, and the dom test (IssuesBoard.dom.test.tsx:443) drives only 'configuration: Invalid Issues request.'.",
+      "confidence": "medium",
+      "blocking_merge": false
+    },
+    {
+      "id": "DG-R3-002",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "file": "apps/desktop/src/issues/model.ts",
+      "quote": "export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff",
+      "publication": "finding",
+      "problem": "The PF-003 fix moved IssueWorkRow from issueSessions(sessions, issue) to a count from boundSessionIndex built once in IssuesBoard. issueSessions now has no production caller. Its only users are issues/model.test.ts:4,64,65, which keep pinning a helper the board no longer uses, beside the index path that is not pinned at that level.",
+      "impact": "A leftover of the old surface: a second entry point for 'sessions bound to an issue', tested while the one the UI uses goes through IssuesBoard. A later change to the board path would leave this green test and dead export misleading.",
+      "suggested_fix": "Delete issueSessions and repoint the model test at boundSessionIndex(sessions)(issueSubject(issue)). Alternatively make IssuesBoard call a model-level index helper that the test pins.",
+      "evidence": "consumer-trace: `keryx ctx rg \"issueSessions|boundSessions\\(\" src apps/desktop/src` finds issueSessions only in model.ts:68 (definition) and model.test.ts:4/64/65. The diff removes the IssueWorkRow import (`-import { issueName, issueSessions, STAGES } from \"./model\";`). Refute: checked root src/ for shared-model users; there are none.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "HL-001", "disposition": "closed" },
+    { "id": "RG-001", "disposition": "closed" },
+    { "id": "AR-003", "disposition": "closed" },
+    { "id": "DG-006", "disposition": "partial" },
+    { "id": "DG-007", "disposition": "closed" },
+    { "id": "DG-008", "disposition": "closed" },
+    { "id": "LG-007", "disposition": "closed" },
+    { "id": "LG-008", "disposition": "closed" },
+    { "id": "LG-009", "disposition": "closed" },
+    { "id": "LG-011", "disposition": "closed" },
+    { "id": "PF-003", "disposition": "closed" },
+    { "id": "PC-002", "disposition": "closed" },
+    { "id": "PC-003", "disposition": "closed" },
+    { "id": "PF-004", "disposition": "closed" },
+    { "id": "PF-005", "disposition": "closed" },
+    { "id": "UX-007", "disposition": "closed" },
+    { "id": "AR-004", "disposition": "open" },
+    { "id": "AR-005", "disposition": "open" },
+    { "id": "AR-006", "disposition": "open" },
+    { "id": "HL-003", "disposition": "open" },
+    { "id": "UX-006", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+Notes on prior dispositions:
+- HL-001: resolveFlowLinks now only yields offers. usePendingFlowLinks writes only in accept(), and Dismiss writes nothing, as the owner decided and as re-frozen AC9 says.
+- DG-006 is partial. The warn tone is now gated on `card.state === "open"`, but reviewSlotState still says 'publication pending' on merged or closed PRs. That half of the suggested fix was not taken; the PR body lists it as an owner choice, so it is accepted rather than fixed.
+- DG-007: lastActivityAt was dropped from badgesEqual, the fix's second option. The stamp's removal is listed in the PR body as an owner choice.
+- PF-004 was claimed deferred but is closed by the AR-003 change: boundSessions = [...boundSessionIndex(sessions)(subject)].
+- AR-004/005/006, HL-003 and UX-006 are deferred info and unchanged in this range.
+- Not given a disposition: prior findings whose fix lives outside slice-01 (tests/fixtures: TP-R2-001..009, LG-015; backend: HW2-001, DG-009, DG-010, LG-012, LG-013, UX-008, LG-014, PF-006, HW2-002; docs: PC-001, PC-004, LG-010; LG-016).
+
+Routing audit: graph_used: attempted (`keryx gdgraph affected` gave no output through the ctx wrapper; consumers search-derived); wiki_used: not-relevant (behaviour read directly from the code); ctx_used: yes (`keryx ctx rg`, `keryx ctx run`); raw_rg_used: no.

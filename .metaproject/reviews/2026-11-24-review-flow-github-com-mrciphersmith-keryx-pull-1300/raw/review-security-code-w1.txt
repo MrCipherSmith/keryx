@@ -1,0 +1,51 @@
+STATUS: DONE
+
+## Security Review (round 3, review-security-code, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`, PR #1300
+- Range: 88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058e919a5880319588ad95395b7ff66153 (round-2 fix range only)
+- Scope mode: diff (explicit range), payload slice text only
+- Slice read in full: slice-01 (1905 lines; 16 files: flow 517 metadata, App.tsx, acp/types.ts, issues/IssueWorkRow.tsx, issues/IssuesBoard.tsx, review/PrWorkRow.tsx, review/ReviewBoard.tsx, review/ReviewProgress.tsx, review/prWork.ts, review/usePendingFlowLinks.ts, session/useAcpSession.ts, styles/review.css)
+- Prior findings from review-security-code in the payload: none, so no prior_dispositions.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Coverage gap (stated, not a finding)
+The dispatch named four areas: the flags.json lock (paths, symlinks, stale-lock break), 410/error messages that echo repository names, issues pagination `turnPage`, and the subject backfill / `subjectUnlinked` marker. Their code lives in `src/session/organize.ts`, `src/integrations/issues-board.ts`, `src/integrations/issues-github.ts`, `src/commands/issues.ts` and `src/session/issues/issue-session.ts`. Per `slices/manifest.json` none of these files is in slice-01; they belong to slice-02/slice-03, which this wave did not assign to me. I did not read or review them. Whoever owns those slices must cover the lock path/symlink/stale-break handling, the backend error text, `turnPage` and `subjectUnlinked`. The only part of these areas that slice-01 contains is the Desktop side of the error messages and the subject handling, covered below.
+
+### What was checked in slice-01
+- **Error text that echoes repository names (Desktop side).** `IssuesBoard.tsx` renders `{error}` and `ReviewBoard.tsx` renders `{focusNotice}` (`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") ...})`) as React text children. React escapes them, and no `dangerouslySetInnerHTML` is involved, so XSS is not possible. The repository names come from the user's own session flags and their own board snapshot and are shown only in the user's local app. Nothing is logged or sent elsewhere. The regexes `/(?:^|\b)configuration:/i` and `/Invalid Issues request/i` are linear, with no ReDoS risk.
+- **Focus to another repository.** `selectRepo(listed)` takes the name from `snapshot.repositories`, the board's own list, not the raw `focus.repo`. So a session's subject cannot steer the board to an arbitrary repository string. An unlisted repository is refused with a notice and the nonce is consumed (no replay).
+- **Flow link confirmation (HL-001 fix).** `usePendingFlowLinks` no longer writes `flow` on arrival. `accept` reads and clears `offersRef` before calling `link`, so a double press cannot write twice. `dismiss` writes nothing. The `dir` written comes from keryx's own flow list (`flows.cards`) and is matched back in `App.tsx` (`flows.cards.find(card => card.dir === offer.dir)`), so no user-typed path reaches `linkFlow`. This change removes the earlier integrity weakness (any package created within the window was silently linked).
+- **Prefill into the shown session only.** `openSubjectSession` / `fillShown` check `isShown(id)` (read live from `live.current.reg.shown`) before `fill`. A session switch while opening cannot drop the PR/flow prompt into another session's composer. `subjectOpener` returns `filled: false` for coalesced presses, so a coalesced press registers no pending link. The prompt is never sent automatically.
+- **Subject identity.** `sameSubject` now goes through `subjectKey` (kind/lower-cased repo/number), the same key `boundSessionIndex` uses. A session cannot match a different PR or issue across code paths. Archived sessions are still excluded.
+- **Issues source fallback.** `fallback` exists only for the default, not-yet-chosen source. `change("assigned")` persists only the source id (validated on read with `Object.hasOwn(SOURCES, value)`). `clear` still deletes per-account filter keys that may hold private repository names. Nothing new is persisted.
+- **useAcpSession.isShown** is a pure read and exposes no new RPC surface.
+- Flow metadata, journal, resolved context JSON, CSS and the ReviewProgress refactor: no security-relevant content. No secrets, tokens or personal data in the added journal or AC text.
+
+### Clean Areas (checked, no findings)
+Injection (XSS/command/SQL/eval): none in slice-01. Auth/authz and IDOR: no new endpoints; `linkFlow`/`bindSubject` act on session ids Desktop itself created or listed. Input validation: source choice validated against `SOURCES`; project target validated on read. Secrets/logging: none. Crypto: none. CSRF/open redirect: none (no navigation to `focus.repo`; links are existing card URLs). Path traversal: no file paths built in slice-01 (flow `dir` comes from keryx's list). React patterns: no `dangerouslySetInnerHTML`, `eval`, `postMessage`; localStorage holds only UI preferences, as before.
+
+### Routing audit
+graph_used: no (not-relevant: payload supplied slice text and the layers block). wiki_used: no (not-relevant: diff-scoped security read). ctx_used: yes (`keryx ctx rg` on the payload, `keryx ctx read` on the slice manifest). raw_rg_used: no. History (`git log`/`blame`) not read: no deliberate override in slice-01 needed it.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-security-code",
+    "round": 3,
+    "status": "DONE",
+    "slices": ["slice-01"],
+    "findings": [],
+    "notes": [
+      "No prior review-security-code findings in the payload; no prior_dispositions.",
+      "Not reviewed (outside slice-01, assigned to slice-02/03): flags.json lock path/symlink/stale-lock break in src/session/organize.ts; 410/error message text in src/integrations/issues-board.ts, issues-github.ts and src/commands/issues.ts; turnPage pagination; subject backfill / subjectUnlinked in src/session/issues/issue-session.ts. These need a reviewer for those slices."
+    ]
+  }
+}
+```

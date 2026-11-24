@@ -1,0 +1,86 @@
+STATUS: DONE
+
+## Security Review (round 3, wave 2, slice-02)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (round-2 fix range only)
+- Scope mode: explicit-hash-range, diff mode
+- Slice: slice-02 (2103 lines), read in full: Desktop DOM tests and App fixtures, docs (cli-reference, desktop-issues guide, implementation plan), `src/acp/shell-session-organize.test.ts`, `src/commands/issues.ts` + new `issues.test.ts`, `src/integrations/issues-board.ts` (+ test), `src/integrations/issues-github.ts`.
+- Context read at head outside the slice (read-only, to settle the focus areas): `src/session/organize.ts` (withFlagsLock, backfillSessionSubject, updateSessionFlagsAt, locate, setSessionFlags), `src/session/paths.ts` sessionDir, `src/integrations/issues-board.ts` projectRepository/listUrl/pageKeys, `src/cli-registry.ts` issues entry.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness in this fix range.
+
+### Focus areas checked
+
+1. **Per-session `flags.json.lock` path (traversal).** The lock is `path.join(dir, "flags.json.lock")`, where `dir` comes either from `locate()` or from a caller that already holds the directory. `locate()` resolves the id through `findSession(cwd, sessionId)` and refuses unless `summary.id === sessionId` exactly, so the id is one keryx already stored and listed; a `../` id finds no stored session and throws before any path is built. `sessionDir` itself is a plain `path.join`, so the guard is the exact-id lookup, and every flags writer goes through it or through `updateSessionFlagsAt(dir)` / `backfillSessionSubject(dir)` with a binder-owned dir. All three writers (`applyFlagsChange`, `backfillSessionSubject`, via `setSessionFlags`) run inside `withFlagsLock` (enumerated: `keryx ctx rg -n "withFlagsLock|applyFlagsChange|writeFlags\(" src/session/organize.ts` → writeFlags is called only at lines 159 and 193, both inside the lock). The lock-timeout error echoes only `path.basename(dir)`. No finding.
+
+2. **GitHub `/repos/{o}/{r}/issues` request.** The repository comes from the project's own git remotes (`selectRepository(reviewRepositories(cwd))`), not from the Desktop request. Each part is `encodeURIComponent`-encoded, and parts made only of dots are refused before any request (`/^\.+$/`), which closes the one path rewrite `encodeURIComponent` leaves open (it does not encode `.`). The new test "a remote named `..` is refused before any request" pins it with `requested === 0`. The cursor scope adds `repository.toLowerCase()`, so a cursor cannot be replayed against another project's repository. No finding.
+
+3. **410 mapping.** `failure()` maps any 410 to the fixed `issuesDisabled` string; `issuePage` rewrites it only for the repository source, adding the owner/name from the local remote. No response body or token text reaches the message. No security finding (see follow-up for a non-security observation).
+
+4. **Multi-page loop.** Bounded by `REPOSITORY_PAGES = 3` per request. `pageLink` keeps the origin check (`url.origin !== API`), refuses userinfo, accepts only the same path (case-insensitive for the repository source) or `/repositories/<digits>/issues`, and copies only `pageKeys` (page/after/before/since_id). `turnPage` re-validates the keys and writes them onto the base URL, so the next request always targets the base `/repos/{o}/{r}/issues` path on api.github.com; a crafted Link header cannot redirect the token-bearing request. The viewer source keeps the exact-path rule, pinned by the new test that refuses `/repositories/42/issues` and `/ISSUES` for `assigned`. No finding.
+
+5. **Subject backfill writing to disk.** `backfillSessionSubject` parses the subject through `parseSessionSubject` (refuses invalid ones, error text truncated to 300 chars), writes under the lock with `writeOwnerOnlyFileAtomic`, and honours the `subjectUnlinked` marker. The wire refuses arrays for `subject` (-32602), pinned in `shell-session-organize.test.ts`. No finding.
+
+6. **`issuesCommand(args, cwd, connect)` test seam.** The only production caller (`src/cli-registry.ts:128`) passes `rest` alone, so `connect` defaults to `connectIssueAccount`; the seam is not reachable from the CLI. No finding.
+
+### Clean areas
+Injection (no shell, SQL or template construction in the slice), authn/authz (account selection unchanged; token stays in the GitHub client and is sent only to `API`), IDOR (session flags addressed by exact stored id), secrets/logging (no token or body echoed in new errors), crypto (none added), CSRF/open redirect (none), path traversal (focus 1 and 2), React (tests and fixtures only; no `dangerouslySetInnerHTML`/`eval`).
+
+### Follow-up (not a security finding; logic/UX lens)
+`failure()` in `src/integrations/issues-github.ts` maps every 410 to "Issues turned off for this repository", including non-list calls (issue detail or comments of a deleted issue, which GitHub also answers with 410). Only the list path rewrites it with the repository name. Worth a look by review-logic; no security impact.
+
+### Prior dispositions (findings slice-02 touches)
+- TP-R2-001 closed: both App fixtures replace the fixed 40 ms `settle()` with `waitFor` predicates.
+- TP-R2-005 closed: the AC2 test now asserts the polled badge reached the card's review slot at every step, for both groupings.
+- TP-R2-006 partial: the `..` refusal in projectRepository is pinned by the new test; REPO_REF in parseSessionSubject (S02/S03) is not pinned by anything in slice-02 (the new shell test pins only array refusal). Its code and tests may sit in another slice.
+- TP-R2-008 closed: `src/commands/issues.test.ts` drives `issuesCommand` with a cwd and asserts `/repos/org/base/issues`.
+- TP-R2-009 closed: new test separates viewer exact-path refusal from repository case-insensitive/`/repositories/N` acceptance.
+- DG-009 closed: list reads up to 3 pages when a page holds only pull requests; tested, including the cursor continuing after the used page.
+- UX-008 closed: a configuration error on the default source shows the reason and "Show issues assigned to me" (DOM tests for no remote, 410, older keryx).
+- LG-013 partial: a fork origin with Issues off now gives a named reason and an Assigned-to-me exit; the repository is still origin-first with no choice of another remote (doc states it).
+- LG-015 closed: test with two bound sessions asserts "latest" opens the newer, in either order; App fixture asserts the same.
+- PC-001 closed: `docs/docs/guides/desktop-issues.md` describes the repository default, GitHub-state columns, work row, "Open in session", and the unavailable-source recovery.
+- LG-010 closed: implementation plan section updated to the offer/Link/Dismiss behaviour and the lock.
+- HW2-001 closed (code read at head outside slice-02): every flags.json read-modify-write runs inside `withFlagsLock` (`flags.json.lock`, 3 s wait, 2 s stale).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-security-code",
+    "summary": "Round-2 fix range, slice-02: no security findings. flags.json.lock is built from a dir resolved by exact stored session id (no traversal); /repos/{o}/{r}/issues uses local-remote owner/name, per-part encoded, dot-only parts refused; pagination stays on api.github.com, base path, allowlisted page keys, bounded to 3 pages; 410 mapping leaks nothing; subject backfill is validated, locked and owner-only.",
+    "findings": [],
+    "follow_ups": [
+      "review-logic: failure() maps every GitHub 410 to 'Issues turned off for this repository', including detail/comments of a deleted issue; only the list path adds the repository name. Not a security issue."
+    ],
+    "prior_dispositions": [
+      { "id": "TP-R2-001", "disposition": "closed" },
+      { "id": "TP-R2-005", "disposition": "closed" },
+      { "id": "TP-R2-006", "disposition": "partial" },
+      { "id": "TP-R2-008", "disposition": "closed" },
+      { "id": "TP-R2-009", "disposition": "closed" },
+      { "id": "DG-009", "disposition": "closed" },
+      { "id": "UX-008", "disposition": "closed" },
+      { "id": "LG-013", "disposition": "partial" },
+      { "id": "LG-015", "disposition": "closed" },
+      { "id": "PC-001", "disposition": "closed" },
+      { "id": "LG-010", "disposition": "closed" },
+      { "id": "HW2-001", "disposition": "closed" }
+    ],
+    "slices": ["slice-02"],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
+
+Not verified: no tests run (exec_budget_s 0). TP-R2-006 and HW2-001 dispositions rest partly on code outside slice-02, read at head. `withFileLock` stale-recovery internals (lib) not re-read.
+
+Routing audit: graph_used: no (not-relevant: slice text and the payload's layers block named the files; no dependency question arose); wiki_used: no (not-relevant: intent stated in PR body and implementation plan); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.

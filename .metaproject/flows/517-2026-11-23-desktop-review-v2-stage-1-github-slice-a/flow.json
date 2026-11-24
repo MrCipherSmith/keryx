@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
   "status": "in-progress",
   "createdAt": "2026-11-23T19:41:25.622Z",
-  "updatedAt": "2026-11-24T06:06:20.351Z",
+  "updatedAt": "2026-11-24T07:41:18.017Z",
   "source": {
     "type": "description",
     "ref": null
@@ -417,6 +417,67 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:15:48.705Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Desktop fixes of review round 3; 32 mutation checks red; desktop tsc 0, bun test src 1070/0"
+    },
+    {
+      "id": "T22",
+      "title": "Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:15:48.890Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx fixes of review round 3; 14 mutation checks red; root tsc 0, focused suites 94/0, src/acp 455/0"
+    },
+    {
+      "id": "T23",
+      "title": "Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T21",
+        "T22"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "cli-reference ACP session_flags, acp help, desktop-issues guide, implementation plan, journal, PR body"
     }
   ],
   "history": [
@@ -672,6 +733,46 @@
       "at": "2026-11-24T06:06:20.351Z",
       "event": "task-done",
       "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
+    },
+    {
+      "at": "2026-11-24T07:15:43.909Z",
+      "event": "task-added",
+      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
+    },
+    {
+      "at": "2026-11-24T07:15:44.090Z",
+      "event": "task-added",
+      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
+    },
+    {
+      "at": "2026-11-24T07:15:44.266Z",
+      "event": "task-added",
+      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
+    },
+    {
+      "at": "2026-11-24T07:15:48.705Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T07:15:48.890Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T07:41:17.548Z",
+      "event": "task-done",
+      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
+    },
+    {
+      "at": "2026-11-24T07:41:17.792Z",
+      "event": "task-done",
+      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
+    },
+    {
+      "at": "2026-11-24T07:41:18.017Z",
+      "event": "task-done",
+      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
     }
   ],
   "acKinds": {

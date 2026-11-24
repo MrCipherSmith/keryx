@@ -1,0 +1,98 @@
+STATUS: DONE
+
+## Security Review (round 3, wave 3, slice-03)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (round-2 fix range only)
+- Scope mode: explicit-hash-range, diff mode
+- Slice: slice-03 (569 lines), read in full: `src/session/organize.ts` (+ test), `src/session/issues/issue-session.ts` (+ test).
+- Context read at head outside the slice, read-only: `src/lib/file-lock.ts` (whole file; unchanged in this range, last touched by 18f169be5), `src/acp/server.ts` handleSessionFlags (2940-2968), `src/session/organize.ts` lines 34-67 (REPO_REF, SUBJECT_URL, FLOW_REF, NODE_ID).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+No exploitable or reachable security weakness in this fix range. One info observation on the pre-existing lock helper that the new flags lock now relies on.
+
+### Focus areas checked
+
+1. **`withFlagsLock` lock path.** `path.join(dir, "flags.json.lock")`. `dir` comes from `locate()` (exact stored id, `summary.id === sessionId`) or from the issue binder, whose `launch.sessionId` is a keryx-minted `randomUUID()` in an owner-only binding record. No request-controlled path component. Clean.
+2. **Symlink / TOCTOU on `flags.json.lock`.** The lock is taken with `openSync(lockPath, "wx", 0o600)` (O_CREAT|O_EXCL): an existing symlink at that name fails with EEXIST and is never followed, so a planted link cannot redirect the nonce write. The stale branch `rmSync`s the name (removes a link, not its target). The finally `readFileSync`s through a link only to compare the nonce. Whoever could plant a link already writes the user's data dir (same user), so there is no privilege boundary. flags.json itself goes through `writeOwnerOnlyFileAtomic` (temp + rename). Clean; see SC3-001 for the one correctness gap in stale takeover.
+3. **Owner-only perms.** Lock file 0o600; `mkdirSync(dirname, { mode: 0o700 })` (a no-op on the existing session dir); flags.json owner-only atomic. The issue binder now calls `bindIssueSubject` only after `existsSync(dir)`, so `withFileLock`'s `mkdirSync(..., recursive)` cannot create a session dir that does not exist. Clean.
+4. **`_keryx/session_flags` input validation.** The handler builds `SessionFlagsChange` from four named keys only (archived/pinned boolean, flow string|null, subject object|null, arrays refused). `subjectUnlinked` is not settable from the wire: the marker is set only by `subject: null` and cleared by any subject write (`applyFlagsChange`: `change.subject === null ? true : change.subject !== undefined ? false : subjectUnlinked`). `readStoredFlags` honours it only when `raw.subjectUnlinked === true` and no valid subject is present; `readSessionFlags` never exposes it (pinned by the new test `toEqual({ pinnedAt: expect.any(String) })`). `parseSessionSubject` rebuilds the subject from five known fields, so client-supplied extra keys are dropped (new test asserts the raw keys). REPO_REF refuses `.`/`..` names and out-of-charset repos even when url and repo agree (new `bad` fixtures `org/..`, `org/.`, `org/re po`). SUBJECT_URL pins `https://github.com/`. FLOW_REF needs an alphanumeric first char and no `/`. Error text truncates the echoed subject to 300 chars. Clean.
+5. **Subject backfill writes.** `backfillSessionSubject` re-parses the subject, then under the lock writes only when there is no subject and no unlink marker. Its only production caller is `bindIssueSubject`, which builds the subject from the verified remote issue ref (`withIssueBinding` is "only called after the remote issue and viewer were verified"). A backfill never overwrites an existing subject, so a renamed or transferred issue cannot move a session's subject. Clean.
+6. **Issue-session binding.** `bindIssueSubject` now runs on every open, after the `issueKey`/`issueViewerKey`/`cloneId` consistency check and, for a non-registered stage, after the findSession/not-archived check. Lock order: binding lock (async `lib/fs` withFileLock), then the flags lock, never the reverse. The other writer inside a binding (`issues-launch` prepare-flow `setSessionFlags`) takes the same order. No deadlock path, no authorization change: the subject names no account (stated in the doc and the PR's Known gaps).
+
+### Findings
+
+### [SC3-001] Stale takeover in withFileLock can admit two flags writers at once (pre-existing helper, now reached with a 2 s stale window)
+- **Severity**: info
+- **File**: src/lib/file-lock.ts (outside the diff; unchanged in this range)
+- **Attack vector**: none. Every party that can touch the lock is a keryx process of the same user, so no attacker impact is claimed (security law: rated by trigger and outcome).
+- **Problem**: Two paths let two holders run the critical section together. (a) Stat-then-remove race: waiters A and B both stat a stale lock; A removes it and creates its own; B, still acting on its earlier stat, then `rmSync`s A's fresh lock and creates its own. (b) A holder whose section outlives `staleMs` (2 s for flags: a SIGSTOPped or suspended process, a stalled disk) has its lock broken. The nonce guard stops the old holder from deleting the new lock, but not from completing its write. In both cases the later rename silently drops the other writer's flag change, which is the lost update HW2-001 set out to close.
+- **Why it matters**: The trigger needs a crashed holder plus two concurrent waiters interleaving within microseconds, or a holder paused past 2 s. Both are rare, and the outcome is the narrow lost-update outcome from round 2, not data exposure.
+- **Fix**: Optional. Break a stale lock by renaming it to a unique name and re-checking its nonce/mtime before deleting (or `link`-based acquisition), so a waiter never removes a lock it did not stat. Track separately, since the helper is shared with the registry and the serve credential store.
+
+### Clean areas
+Injection (no shell, SQL or template construction), authn/authz (no new entry point; the wire method's keys are unchanged), IDOR (exact-id lookup), path traversal (focus 1, 4), symlink/TOCTOU (focus 2), secrets/logging (the lock error echoes only `path.basename(dir)`; the subject echo is truncated and holds no token), crypto (`randomUUID` nonce only), CSRF/open redirect/React (not in slice).
+
+### Follow-up (not security; other lenses)
+- highload/performance: `withFlagsLock` is synchronous and waits with `Bun.sleepSync` for up to 3 s. In the ACP server (one per Desktop window), a contended or crashed lock blocks that process's event loop for every session of the window for up to 2 to 3 s.
+- degradation: `bindIssueSubject` now runs on every issue open, inside the binding lock. A flags lock that cannot be taken within 3 s (for example an unremovable stale lock) now fails every issue open with "locked by another keryx process; retry". Before, this happened only on first bind.
+- LG-014 (deferred): an older keryx writer also drops the new `subjectUnlinked` marker. If such a writer touches an unlinked issue session, the next open backfills the subject again. This is the mixed-version case the PR body already names.
+
+### Prior dispositions (findings slice-03 touches)
+- HW2-001 closed: `updateSessionFlagsAt` and `backfillSessionSubject` run inside `withFlagsLock`; `setSessionFlags` delegates; the two-process test checks that neither field is rolled back over 150 writes each. Residual: SC3-001 (info, helper).
+- DG-010 closed: the subject is backfilled on every open when absent and not unlinked; the new issue-session test covers older-keryx flags, then unlink, then reopen.
+- PC-003 closed: the backfill covers earlier github.com bindings; the Enterprise limit and the account limit are stated in the doc comment and in the PR body's Known gaps.
+- TP-R2-006 closed: the REPO_REF `.`/`..`/charset gates are now pinned by consistent repo/url fixtures (organize.test.ts); the projectRepository `..` test was in slice-02.
+- TP-R2-007 closed: case-insensitive agreement and dropping of extra fields are pinned here; the array refusal at the wire was pinned in slice-02.
+- LG-014 open (deferred as claimed): `writeFlags` still writes a fixed key set; see the follow-up on the marker.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-security-code",
+    "summary": "Round-2 fix range, slice-03: no reachable security weakness. flags.json.lock path comes from an exact stored id or a keryx-minted UUID; O_EXCL open does not follow symlinks; lock 0o600 and flags owner-only atomic; the wire cannot set the unlink marker; subjects are rebuilt from known fields with REPO_REF/SUBJECT_URL gates now pinned; backfill writes only an absent, not-unlinked subject from a verified issue; lock order binding->flags. One info: the shared withFileLock stale takeover can admit two holders (pre-existing helper).",
+    "findings": [
+      {
+        "id": "SC3-001",
+        "severity": "info",
+        "reviewer": "review-security-code",
+        "file": "src/lib/file-lock.ts",
+        "quote": "      const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;\n      if (age !== undefined && Date.now() - age > staleMs) {\n        try {\n          rmSync(lockPath, { force: true });",
+        "problem": "Stale takeover can admit two holders. (a) Two waiters stat the same stale lock; one removes it and takes a fresh lock; the other then removes that fresh lock on the strength of its earlier stat and takes its own. (b) A holder whose section outlives staleMs (2 s for flags.json: a paused process or a stalled disk) is broken and still completes its write; the nonce only stops it deleting the new lock. The helper is unchanged in this range; this PR makes flags.json writers depend on it with a 2 s stale window.",
+        "impact": "No attacker vector: every lock party is a same-user keryx process. Outcome under the trigger (a crashed holder plus two concurrent waiters interleaving within microseconds, or a holder paused past 2 s): one flag change (pin, archive, flow, subject) is silently lost, the residual of HW2-001. Rare and narrow.",
+        "suggested_fix": "Optional, track separately (the helper is shared with the project registry and the serve credential store): break a stale lock by renaming it to a unique name and re-checking its mtime/nonce before deleting, or acquire through link(2), so a waiter never removes a lock it did not stat.",
+        "evidence": "src/lib/file-lock.ts withFileLock: acquire `openSync(lockPath, \"wx\", 0o600)`; on failure `statSync(...)?.mtimeMs` then `rmSync(lockPath)` with no re-check between them; the finally removes only when `readFileSync(lockPath) === nonce`. organize.ts withFlagsLock passes `staleMs: FLAGS_LOCK_STALE_MS` (2_000). git log -- src/lib/file-lock.ts: 18f169be5, 05a9a8e36 (both before base).",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "file-lock-stale-takeover-two-holders"
+      }
+    ],
+    "follow_ups": [
+      "highload: withFlagsLock busy-waits synchronously (Bun.sleepSync) up to 3 s inside the per-window ACP server, stalling its event loop under contention or after a crash.",
+      "degradation: bindIssueSubject now runs on every issue open inside the binding lock; a flags lock that cannot be taken within 3 s fails every issue open, not only the first bind.",
+      "LG-014: an older keryx writer also drops the new subjectUnlinked marker, so an unlinked issue session can be re-linked by the next open in a mixed-version data dir."
+    ],
+    "prior_dispositions": [
+      { "id": "HW2-001", "disposition": "closed" },
+      { "id": "DG-010", "disposition": "closed" },
+      { "id": "PC-003", "disposition": "closed" },
+      { "id": "TP-R2-006", "disposition": "closed" },
+      { "id": "TP-R2-007", "disposition": "closed" },
+      { "id": "LG-014", "disposition": "open" }
+    ],
+    "slices": ["slice-03"],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+  }
+}
+```
+
+Not verified: no tests run (exec_budget_s 0). The two-process lock test and the stale-lock timing test were read, not executed. SC3-001 was reasoned from the code; no interleaving was reproduced. HW2-001 and PC-003 closures rest partly on code outside slice-03 (the server handler and the PR body).
+
+Routing audit: graph_used: no (not-relevant: the payload's layers block named the affected files and writers; no dependency question arose); wiki_used: no (not-relevant: intent is stated in the doc comments and the PR body); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.

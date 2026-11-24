@@ -1,0 +1,114 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Parent ref: round-2 fix range
+- Merge-base: `88e3faba9a1732f45a4ff7200588832e8b83f121` (range 88e3faba9..d7b0f7058)
+- Scope mode: `explicit-hash-range`, slice-02 only (tests, App fixtures, docs, `src/commands/issues.ts`, `src/integrations/issues-board.ts`, `src/integrations/issues-github.ts`)
+- Spec compliance gate: ran against the frozen ACs (AC8 and AC9 as re-frozen). No gap in this slice: AC9's offer/Link/Dismiss/two-packages/several-requests cases are covered by `usePendingFlowLinks.dom.test.tsx`, `prWork.test.ts` and `app-work-row.fixture.tsx`; AC13 by `issues-board.test.ts`, `commands/issues.test.ts` and the IssuesBoard DOM tests; AC12 by the index test.
+
+### Summary
+slice-02 was read in full. The product changes in it (`issues-board.ts` multi-page loop and `turnPage`, the 410 mapping, the `connect` seam in `issuesCommand`) are correct. The cursor scope is computed from `base.search` before any page key is applied. `turnPage` clears earlier page keys before setting new ones. The final `nextCursor` comes from the last page fetched, so a resumed load continues after it, which the test asserts as pages [1,2,3] then [4,5,6]. The 410 translation applies only to the listing (`/user` is the only other REST call, and GraphQL errors do not reach `failure` with a 410). The new and rewritten tests close the round-2 test-gap findings. Each negative assertion is now preceded by a positive sign that the state it depends on has arrived, such as the Flows board listing the new dirs or "Signed in as second". `settle` is gone, and the three remaining `setTimeout(resolve, 10)` calls are deadline-bounded poll loops. I found no new defect in this slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. In the App fixtures, `calls.push(method)` runs before `await newGate`. The one-open-per-PR assertion therefore counts `session/new` while the gate is held and cannot pass if a second open were issued. The LG-011 check calls `nextFrame()` after the bind write is observed. The fill `requestAnimationFrame` is scheduled in the same tick as `bind`, so it runs first and the negative assertion is meaningful.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. One note, not filed because it belongs to wave 1's finding on the Issues fallback matching any `configuration:` error. The "older keryx" hint keys on `configuration: Invalid Issues request.` (`invalidInput`). The current keryx emits that same text in three cases:
+- `projectRepository` with no cwd.
+- A remote that resolves to a `.`/`..` name.
+- `pageLink` refusing a next link whose path is foreign.
+
+`turnPage` throws it too, but only for a key `pageLink` would not produce. So in those cases the hint tells an up-to-date user to update keryx. These are extra sites of the same class as wave 1's finding (`src/integrations/issues-board.ts` projectRepository, pageLink, turnPage). Enumerated with `keryx ctx rg 'invalidInput'` over `src/integrations/issues-board.ts` and `issues-github.ts`.
+
+### Prior dispositions (slice-02 evidence)
+- HL-001 closed: the hook now offers and never links, and only `accept` writes. Covered by `usePendingFlowLinks.dom.test.tsx` (Link/Dismiss/session-has-Flow), `prWork.test.ts` (HL-001/LG-008 coalesced press reports `filled: false`) and the App fixture (offer, then Link writes; Dismiss and a coalesced press write nothing).
+- LG-007 closed: AC9 is re-frozen, and the "Создание из сессии" section of implementation-plan.md states the one-request, one-package, 15-minute, filled-prompt rule.
+- LG-008 closed (test side): `prWork.test.ts` HL-001/LG-008, plus the App fixture's #15 case with `packagesAppear("510-c")` and no offer.
+- LG-009 partial: the cross-repository switch and the "not on this board" notice are tested in `PrWorkRow.dom.test.tsx`. Wave 1 found the remainder (a PR missing from the loaded snapshot stays armed).
+- LG-010 closed: the PR body and implementation-plan.md are both updated to the narrowed rule and the T17/T18/T19 choices.
+- LG-011 closed (test side): `prWork.test.ts` LG-011 with `isShown: () => false`, plus the App fixture's #16 switch case.
+- LG-013 closed: a 410 now becomes a `configuration:` error naming the repository, and there is a test. Desktop offers "Show issues assigned to me". Preferring another remote was not done, and the fallback makes up for it.
+- LG-015 closed: `prWork.test.ts` LG-015 checks both orders, and app-navigation asserts `loaded.at(-1) === newest12`.
+- DG-009 closed: up to 3 pages per request, with a continuation cursor after the last page used. Tested.
+- UX-008 closed (test side): there are tests for the no-remote and 410 reasons with the default source (no Retry; the switch button works) and for a chosen source (Retry kept).
+- RG-001 closed (test side): with an older keryx and the default source, the board shows the update hint and the assigned-source switch, and stores `assigned`. Wave 1 filed the breadth of the match separately.
+- PC-001 closed: desktop-issues.md and cli-reference.md now describe the repository default, Open/Closed lanes, the work-row slots, "Open in session", no stage filter, the 3-page read and the configuration errors.
+- TP-R2-001 closed: `settle` was removed from both fixtures, and every wait polls a state with a deadline.
+- TP-R2-002 closed: the App fixtures pin R2-17 (one `session/new` for two presses in flight), R2-22 and R2-25 (no panel replay after the account-switch remount, asserted after the second account's snapshot rendered), R2-23 (a second header press opens the panel again) and R2-26 (the menu's New session is linked to Flow #506).
+- TP-R2-003 closed: there is a ReviewBoard focus test with no `onFocusHandled` across a refresh, and `resolveFlowLinks` some-vs-every has a test.
+- TP-R2-004 closed: exact review-slot titles for running-with-progress, awaiting-without-progress and partial.
+- TP-R2-005 closed: the test asserts #202's slot text at every tick, #202 is approved and the viewer's own, and both the Status and My role groupings are exercised.
+- TP-R2-006 closed for slice-02's half: the `..` remote test in `issues-board.test.ts` pins S42. The `organize.test.ts` half (S02/S03) is not in slice-02 and I did not verify it.
+- TP-R2-007 partial in this slice: the wire refusal of `[]` and `[subject]` with -32602 pins S21. S09/S17 live in `organize.test.ts`, outside slice-02, and I did not verify them.
+- TP-R2-008 closed: `commands/issues.test.ts` drives `issuesCommand` with a cwd. Dropping cwd makes `projectRepository(undefined)` throw, so the test fails.
+- TP-R2-009 closed: tests for a viewer next link to `/repositories/42` (and `/ISSUES`) refused, a repository next link with different case followed, and a cursor replayed under the same repository spelled differently accepted. These pin S47, S46 and S44.
+- HW2-002 open (deferred info; the per-page GraphQL hydration is unchanged, and the loop hydrates only the final page).
+- PF-006 open (deferred info; unchanged).
+
+### Suggested Patches
+None.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-logic",
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "summary": "slice-02 read in full. The issues-board multi-page loop, the 410 mapping and the issuesCommand connect seam are correct: the cursor scope is taken before page keys, and the continuation cursor follows the last page used. The new tests and fixtures close the round-2 test-gap findings with meaningful negatives. No new findings. One class note for wave 1's configuration-fallback finding: the current keryx also throws `configuration: Invalid Issues request.` (no cwd, a '.'/'..' remote, a foreign next link), so the older-keryx hint can show to an up-to-date user.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "HL-001", "disposition": "closed"},
+      {"id": "LG-007", "disposition": "closed"},
+      {"id": "LG-008", "disposition": "closed"},
+      {"id": "LG-009", "disposition": "partial", "note": "slice-02 tests cover the cross-repo switch and the not-listed notice; wave 1 found the remainder (PR missing from the snapshot stays armed)"},
+      {"id": "LG-010", "disposition": "closed"},
+      {"id": "LG-011", "disposition": "closed"},
+      {"id": "LG-013", "disposition": "closed"},
+      {"id": "LG-015", "disposition": "closed"},
+      {"id": "DG-009", "disposition": "closed"},
+      {"id": "UX-008", "disposition": "closed"},
+      {"id": "RG-001", "disposition": "closed", "note": "fallback present and tested; wave 1 filed the breadth of its configuration: match separately"},
+      {"id": "PC-001", "disposition": "closed"},
+      {"id": "TP-R2-001", "disposition": "closed"},
+      {"id": "TP-R2-002", "disposition": "closed"},
+      {"id": "TP-R2-003", "disposition": "closed"},
+      {"id": "TP-R2-004", "disposition": "closed"},
+      {"id": "TP-R2-005", "disposition": "closed"},
+      {"id": "TP-R2-006", "disposition": "closed", "note": "issues-board.test half (S42) verified; organize.test half (S02/S03) is outside slice-02 and not verified here"},
+      {"id": "TP-R2-007", "disposition": "partial", "note": "only the wire half (S21, array subject -> -32602) is in slice-02; S09/S17 live in organize.test.ts, not verified here"},
+      {"id": "TP-R2-008", "disposition": "closed"},
+      {"id": "TP-R2-009", "disposition": "closed"},
+      {"id": "HW2-002", "disposition": "open", "note": "deferred info, unchanged"},
+      {"id": "PF-006", "disposition": "open", "note": "deferred info, unchanged"}
+    ],
+    "not_verified": [
+      "Tests were not run (exec_budget_s 0); the reported test evidence is research-evidence/verify-tests-to-run-1.txt and -2.txt.",
+      "No mutation re-run for the TP-R2 gates; closure is by reading that the new fixture separates each mutant.",
+      "The product code behind HL-001/LG-008/LG-011/LG-015/UX-008/RG-001 is slice-01 (wave 1); dispositions here rest on the slice-02 tests plus that code's observable contract."
+    ]
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; slice supplied, one targeted rg per question). wiki_used: no (not-relevant; the ACs and plan were in the payload). ctx_used: yes (`keryx ctx rg` for the payload index, REST callers, `lastActivityAt` readers, fixture delays, "Signed in as"). raw_rg_used: no.

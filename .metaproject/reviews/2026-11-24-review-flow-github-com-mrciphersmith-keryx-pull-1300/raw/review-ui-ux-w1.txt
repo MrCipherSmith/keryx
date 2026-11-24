@@ -1,0 +1,291 @@
+STATUS: DONE
+
+metaproject: index read (.metaproject/index.md). Mode: code only, static. No URL or screenshots were supplied.
+
+## Context
+
+- Product: Keryx Desktop. Audience: developers who use Keryx on their GitHub PRs and issues.
+- Primary tasks on the changed surfaces:
+  - Pull requests board work row: link a PR to its Keryx work (review, Flow, session). In this round that means confirming the "Link Flow #N?" offer.
+  - Issues board: see the project's issues. When the default source is unavailable, get to a source that works.
+  - Session header to PR: open the bound PR's panel.
+- Surface type: app screens. The marketing rows of ui-anti-slop do not apply.
+- Scope: round-2 fix range 88e3faba9..d7b0f7058, slice-01, read in full. I also read the copy that slice-02 added (the 410 and lock texts) so I could judge it. Findings stay on the slice-01 components that render that copy.
+
+## Scores
+
+- Slop score: 0. T1 0, T2 0, T3 0 on the changed surfaces. The new elements (offer, banner, notice, button) reuse the existing tokens (`pr-work-*`, `inline-banner tone-warn`, `issues-notice`, `btn btn-sm`). No new palette, radius, shadow, icon set or motion.
+- WCAG 2.2 AA floor, checked in code only:
+  - Every new button has a visible text label, or an aria-label where it is icon-only (Dismiss notice).
+  - Link and Dismiss names start with their visible label (2.5.3).
+  - Focus is drawn inside the clipped row (`outline-offset: -2px` on `.pr-work-more`).
+  - Contrast and target width were not measured.
+- Viewports checked: not run.
+
+## Top 3 changes
+
+1. Show which Flow the offer is about without hovering. Today the flow title is only in the `title` of a non-focusable span (UX-009).
+2. Give Link a pending and failure state. The offer is removed before the write, and a failed write is silent (UX-010).
+3. Make "Show issues assigned to me" a view for this project. Today it stores "assigned" as the account-wide source (UX-011).
+
+## Findings
+
+### [UX-009] The "Link Flow #N?" question names only the number; which Flow it is shows on hover only
+- Severity: minor
+- Criterion: Nielsen #6 (recognition rather than recall), #1
+- File: apps/desktop/src/review/PrWorkRow.tsx (`<span className="pr-work-link pr-work-offer"`)
+- Evidence:
+  - FlowOffer renders the visible text `Link Flow #${id}?` plus Link and Dismiss buttons.
+  - The flow's title, and the fact that it appeared after Create Flow, live only in the `title` of a `<span>`. The span is not focusable, so a keyboard user cannot reach it and a touch user cannot hover it.
+  - The Link button's aria-label (`Link Flow #N for #PR`) omits the title.
+  - The owner chose the confirm in HL-001 because arrival time cannot tell who made the package (another window, the CLI, the Issues board), so the user needs to tell which Flow it is. In the 1/3-width slot, next to two buttons, the visible "Link Flow #517?" is also the part most likely to truncate (geometry belongs to review-layout).
+- Impact:
+  - Trigger: every offer.
+  - Outcome: the user confirms or dismisses by number only. To check the Flow, they must go to the Flows board. A wrong Link writes the session's `flow` flag to someone else's package.
+- Fix:
+  - Put the title in the accessible name and in a reachable description. For example, `aria-label={`Link ${name} "${offer.flow.title}"${of}`}`, or `aria-describedby` pointing to a visually hidden span with the title.
+  - Or make "Flow #N" in the offer a button that opens the Flow (as the filled slot does), so the user can inspect it before linking.
+
+### [UX-010] Link has no pending or failure state: the offer disappears before the write, and a failed write is silent
+- Severity: minor
+- Criterion: Nielsen #1 and #9; State: loading and error
+- File: apps/desktop/src/review/usePendingFlowLinks.ts (`offersRef.current = offersRef.current.filter(item => item !== offer);`)
+- Evidence:
+  - `accept` removes the offer from state, then calls `linkRef.current(...)`.
+  - App wires that to `acp.current.linkFlow`, which calls `applyPendingFlow` (useAcpSession.ts). On error, `applyPendingFlow` catches and stays quiet ("not stored yet: retried after its turn") and shows no banner. The new flags lock (organize.ts) can throw after waiting 3 s: "the flags of session … are locked by another keryx process; retry".
+  - Until the flags dispatch arrives, `flow` is undefined, so the slot falls back to the dashed "Create Flow" action.
+  - The package is already claimed, so it is never offered again.
+- Impact:
+  - Trigger: every Link press shows "Create Flow" for the length of the RPC.
+  - On a failed write (lock timeout, a keryx disconnect) the slot stays on "Create Flow" with no message until the session's next turn retries. Pressing Create Flow again then starts a second Flow.
+  - The lock text's "retry" points to a control the board no longer shows.
+- Fix:
+  - Keep the offer in a "Linking…" state (buttons disabled) until `linkFlow` resolves.
+  - On failure, restore the offer and show an inline error in the slot or a banner. That needs `linkFlow` to report its result to this caller.
+
+### [UX-011] "Show issues assigned to me" silently changes the source for every project of the account
+- Severity: minor
+- Criterion: Nielsen #3 (user control) and #4 (a "Show" action that saves a preference)
+- File: apps/desktop/src/issues/IssuesBoard.tsx (`const fallback = source === "repository" && !choice.chosen ? () => change("assigned") : undefined;`)
+- Evidence:
+  - `fallback` calls `change("assigned")`, which runs `save(account + ".source", next)`.
+  - `account` is `"keryx.issues." + issueViewerKey(viewer)`. issues-contract.ts defines `issueViewerKey` as `[host, nodeId]`, so the key is per account and does not include the project (cwd).
+  - The fallback is offered for project-specific conditions: no GitHub.com remote in this project, Issues turned off on this repository, an older keryx.
+- Impact:
+  - Trigger: a person with several projects presses the button once, in a project without a GitHub.com remote or with Issues off.
+  - Outcome: from then on, every project, including those with a GitHub remote, opens Issues on "Assigned to me" instead of the D5 default "Project repository", with no indication why. The select still recovers it, and no data is lost.
+  - The PR body's owner choice says only where the button appears, not that it persists.
+- Fix:
+  - Switch the source for this board only (`setChoice({ source: "assigned", chosen: false })` without `save`, with a note "Showing issues assigned to you").
+  - Or key the stored source by project as well as account. Rename the button if it keeps persisting, for example "Use Assigned to me".
+
+### [UX-012] The offer text takes the work-row button look and its hover state, but does nothing
+- Severity: info
+- Criterion: Nielsen #4; Slop T3 "hover only where clickable"
+- File: apps/desktop/src/styles/review.css (`.pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }`)
+- Evidence:
+  - The span carries `pr-work-link`, which gives it the bordered and dashed box of the slot's actions (the dashed border matches `.is-empty` "Create Flow").
+  - The existing rule `.pr-work-link:hover:not(:disabled)` also matches a span, because a span is never `:disabled`. Hovering changes its background to `--bg-hover`.
+  - Clicking it does nothing. `cursor: default` softens the cue but does not remove it.
+  - Not observed on a render.
+- Impact: the question looks like a third button. A user may click it expecting to open the Flow.
+- Fix: give the offer its own class, not `pr-work-link`: no border, or a non-interactive tone. Or exclude it from the hover rule (`.pr-work-link:not(.pr-work-offer):hover`).
+
+### [UX-013] The fallback notice shows the machine prefix "configuration:" verbatim
+- Severity: info
+- Criterion: Nielsen #2 (the user's language), consistency with the PR board
+- File: apps/desktop/src/issues/IssuesBoard.tsx (`<p>{error}</p>`)
+- Evidence:
+  - The new unavailable branch renders `error` unchanged. All three errors that reach it carry the prefix:
+    - "configuration: This project has no GitHub.com fetch remote."
+    - "configuration: GitHub has Issues turned off for owner/repo. Choose another source, such as Assigned to me."
+    - "configuration: Invalid Issues request."
+  - ReviewBoard.tsx removes the same prefixes before showing them: `error.replace(/^(access|configuration|unavailable):\s*/i, "")`.
+  - UX-008 noted the prefix as pre-existing elsewhere. This is a new block that repeats it.
+- Impact: the first thing a user sees on first visiting the Issues tab is an internal error kind.
+- Fix: strip the prefix the way ReviewBoard does, or share one `displayError` helper between both boards.
+
+### [UX-014] The other-repository focus banner states the cause but offers no way to the PR
+- Severity: info
+- Criterion: Nielsen #9
+- File: apps/desktop/src/review/ReviewBoard.tsx (`is not in a repository this board shows`)
+- Evidence:
+  - The banner reads "`owner/repo#N is not in a repository this board shows (a/b, c/d).`" and has only a Dismiss button.
+  - The user arrived by clicking the PR link in the session header. App has `subject.url` there, but the focus request carries only `{repo, number, nonce}`.
+  - This is an improvement on base, where the request stayed armed silently. I did not check whether the session header also offers a direct GitHub link.
+- Impact: the user's intent, seeing that PR, ends in a dead end inside the app.
+- Fix: pass `url` with the focus request and add "Open on GitHub" to the banner.
+
+### [UX-015] The older-keryx hint names a setting that Settings labels differently
+- Severity: info
+- Criterion: Nielsen #4 and #6
+- File: apps/desktop/src/issues/IssuesBoard.tsx (`" If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings."`)
+- Evidence: SettingsView.tsx labels the option `"Bundled keryx"`. The hint says "the bundled CLI".
+- Impact: the user has to map the two names while looking for the option. Minor friction.
+- Fix: use the Settings label, "choose Bundled keryx in Settings". A button that opens that Settings tab would be better.
+
+### [UX-016] The offer appears only on the board, while Create Flow moved the user to the session view
+- Severity: info
+- Criterion: Nielsen #1
+- File: apps/desktop/src/review/PrWorkRow.tsx (`const offer = flow ? undefined : work.flowOffer?.(sessions);`)
+- Evidence:
+  - `openPrSession` calls `setView("session")`. The package is created during the session's turn, so the user is in the session when the offer comes up.
+  - The offer renders only in the PR work row. Nothing in the session (header, transcript notice) or in the tab indicator mentions it, and it has no live region.
+  - The owner chose the work row as the place for the offer (AC9 re-frozen), so this is filed as info.
+- Impact: a user who stays in the session never sees the question. The Flow then stays unlinked, which is safe but easy to miss.
+- Fix: also show the question where the user is, for example a notice in the bound session with the same Link and Dismiss. Or mark the PR tab while an offer is pending.
+
+## Prior dispositions
+
+- UX-008: closed. For the default, not-yet-chosen source, a configuration error now shows a reason, explains that "This project's repository issues are not available here", and replaces the futile Retry with "Show issues assigned to me". The 410 is mapped to a message with a remedy. An older keryx gets an update hint. The verbatim "configuration:" prefix, which UX-008 noted as pre-existing, is still there and is filed separately as UX-013 (info).
+- UX-007: closed. `waitsOnViewer` is now gated on `card.state === "open"`, matching `needsViewerAttention`.
+- UX-006: open. It was deferred. The ReviewProgress.tsx refactor (`progressParts`) shares the caption rule, but `reviewProgressText` is still used only in the review slot's `title`. The visible slot text is unchanged.
+
+## What works (keep)
+
+- Fixing the HL-001 owner decision as an explicit question with text labels (Link and Dismiss) rather than a silent link. Both buttons have names that start with their visible label.
+- The focus request is now refused with a visible, dismissible notice instead of staying armed silently.
+- The fallback removes a Retry that could not succeed and puts the working source one press away.
+- The 410 message names the repository and the remedy.
+- The warn tone on the review slot is now consistent with the tab indicator (UX-007).
+
+## Checks not run
+
+- Live render at 1440, 768 and 390 px, light and dark: no URL or screenshots were supplied.
+- Measured width of the offer slot and truncation of "Link Flow #N?" next to two buttons. That belongs to review-layout and needs a real engine.
+- Contrast of `--fg` on `--bg-sunken` and of `--warn` on `--warn-soft`, and the measured target width of the Link and Dismiss buttons: not measured.
+- Screen-reader announcement of the offer and of the focus banner: not run.
+- Whether the session header offers a direct GitHub link (affects UX-014): not checked.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-ui-ux",
+    "summary": "Round-3 fix-range review of slice-01, static code mode. The new pieces (Link Flow #N? offer, other-repository focus banner, Issues fallback with 'Show issues assigned to me', older-keryx hint, 410 text) are a clear improvement and reuse the existing tokens; slop score 0. Three minor findings: the offer identifies the Flow by number only, with the title on hover (UX-009); Link has no pending or failure state and the offer is removed before the write (UX-010); the fallback button saves 'assigned' as the account-wide source for every project (UX-011). Five info findings on copy and affordance. Prior: UX-008 closed, UX-007 closed, UX-006 open (deferred). No render was supplied.",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "UX-009",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "<span className=\"pr-work-link pr-work-offer\"",
+        "problem": "Criterion: Nielsen #6 and #1. The 'Link Flow #N?' offer names the package only by number. The flow's title is only in the title attribute of a non-focusable span, which a keyboard user cannot reach and a touch user cannot hover. The Link button's aria-label ('Link Flow #N for #PR') omits it. The owner chose the confirm (HL-001) because arrival time cannot tell who made the package, so identifying it is the user's whole decision.",
+        "impact": "Trigger: every offer. Outcome: the user links or dismisses by number only, or leaves for the Flows board to check. A wrong Link writes the session's flow flag to an unrelated package.",
+        "suggested_fix": "Put the flow title in the Link button's accessible name or an aria-describedby target. Or make 'Flow #N' in the offer a button that opens the Flow, as the filled slot does, so it can be inspected before linking.",
+        "evidence": "FlowOffer in the diff: visible text `Link {name}?`; `title={`${name} (${offer.flow.title}) appeared after Create Flow. ...`}` on a <span>; Link aria-label `Link ${name}${of}`. Not observed on a render.",
+        "confidence": "high",
+        "dedupe_key": "pr-flow-offer-title-hover-only"
+      },
+      {
+        "id": "UX-010",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "line": null,
+        "quote": "offersRef.current = offersRef.current.filter(item => item !== offer);",
+        "problem": "Criterion: Nielsen #1 and #9; State: loading and error. accept() removes the offer before calling link. App wires link to linkFlow, which calls applyPendingFlow; that catches every error silently ('retried after its turn') and shows no banner. Until the flags dispatch arrives, the Flow slot falls back to 'Create Flow'. The package is claimed, so it is never offered again. The new flags lock can fail after 3 s with '...locked by another keryx process; retry', and the board no longer has a control to retry with.",
+        "impact": "Trigger: every Link press shows 'Create Flow' for the length of the RPC. A failed write (lock timeout, a keryx disconnect) leaves 'Create Flow' with no message until the session's next turn. Pressing it starts a second Flow.",
+        "suggested_fix": "Keep the offer in a 'Linking…' state with its buttons disabled until linkFlow resolves. On failure, restore the offer and show an inline error or banner; linkFlow must report its result to this caller.",
+        "evidence": "usePendingFlowLinks.ts accept: offersRef filtered and setOffered before linkRef.current(...). App.tsx: `usePendingFlowLinks(..., (id, dir) => void acp.current.linkFlow(id, dir))`. useAcpSession.ts applyPendingFlow: `catch { /* not stored yet: retried after its turn */ }`. src/session/organize.ts withFlagsLock throws after FLAGS_LOCK_TIMEOUT_MS = 3_000. Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-link-no-pending-or-error-state"
+      },
+      {
+        "id": "UX-011",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "const fallback = source === \"repository\" && !choice.chosen ? () => change(\"assigned\") : undefined;",
+        "problem": "Criterion: Nielsen #3 and #4. The fallback calls change('assigned'), which saves account + '.source'. The account key is 'keryx.issues.' + issueViewerKey(viewer) = [host, nodeId], with no project in it. A button labelled 'Show issues assigned to me', offered for a project-specific failure (no GitHub.com remote here, Issues off on this repo, older keryx), therefore stores an account-wide source preference.",
+        "impact": "Trigger: a user with several projects presses the button once in a project without a GitHub.com remote or with Issues off. Outcome: every other project, including those with a GitHub remote, opens Issues on 'Assigned to me' instead of the D5 default 'Project repository', with no indication why. The select recovers it.",
+        "suggested_fix": "Switch the source for this board only (setChoice without save, with a status line 'Showing issues assigned to you'). Or key the stored source by project and account. If it keeps persisting, label it 'Use Assigned to me'.",
+        "evidence": "IssuesBoard.tsx: `const change = (next: Source) => { ...; save(account + \".source\", next); }`; `const account = \"keryx.issues.\" + issueViewerKey(viewer);`. src/integrations/issues-contract.ts: `issueViewerKey` returns `JSON.stringify([viewer.host.toLowerCase(), viewer.nodeId])`. The owner choice in the PR body covers only where the button appears.",
+        "confidence": "medium",
+        "dedupe_key": "issues-fallback-persists-account-wide-source"
+      },
+      {
+        "id": "UX-012",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/styles/review.css",
+        "line": null,
+        "quote": ".pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }",
+        "problem": "Criterion: Nielsen #4; Slop T3 (hover only where clickable). The offer span carries pr-work-link, so it gets the bordered and dashed box of the slot's actions. The existing `.pr-work-link:hover:not(:disabled)` also matches a span, because a span is never :disabled, so hovering changes its background. Clicking it does nothing.",
+        "impact": "The question reads as a third button next to Link and Dismiss. Users may click it expecting to open the Flow.",
+        "suggested_fix": "Give the offer its own class without the button box, or exclude it from the hover rule (`.pr-work-link:not(.pr-work-offer):hover`).",
+        "evidence": "review.css: `.pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }`; FlowOffer uses `<span className=\"pr-work-link pr-work-offer\">`. Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-false-affordance"
+      },
+      {
+        "id": "UX-013",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "<p>{error}</p>",
+        "problem": "Criterion: Nielsen #2, consistency. The new unavailable branch renders the error unchanged, so 'configuration: This project has no GitHub.com fetch remote.', 'configuration: GitHub has Issues turned off for owner/repo. ...' and 'configuration: Invalid Issues request.' all show the machine prefix. ReviewBoard strips the same prefixes.",
+        "impact": "The first thing a user sees on first visiting the Issues tab, in such a project, is an internal error kind.",
+        "suggested_fix": "Strip /^(access|configuration|unavailable):\\s*/i as ReviewBoard does, or share one display helper.",
+        "evidence": "ReviewBoard.tsx: `error.replace(/^(access|configuration|unavailable):\\s*/i, \"\")`. IssuesBoard.dom.test.tsx feeds 'configuration: This project has no GitHub.com fetch remote.' into this branch. Round-2 UX-008 noted the prefix as pre-existing elsewhere; this block is new.",
+        "confidence": "high",
+        "dedupe_key": "issues-fallback-error-prefix-verbatim"
+      },
+      {
+        "id": "UX-014",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "is not in a repository this board shows",
+        "problem": "Criterion: Nielsen #9. The other-repository focus banner states the cause and offers only Dismiss. The user came from the PR link in the session header, intending to see that PR. The focus request carries {repo, number, nonce} but not the url that App holds in subject.url.",
+        "impact": "The user's intent ends in a dead end in the app. They must open the PR on GitHub themselves.",
+        "suggested_fix": "Pass url with the focus request and add an 'Open on GitHub' action to the banner.",
+        "evidence": "App.tsx onOpenSubject: `setReviewFocus({ repo: subject.repo, number: subject.number, nonce: ++focusNonce.current })`. ReviewBoard focusNotice banner has only the Dismiss icon button. An improvement on base, where the request stayed armed silently. I did not check whether the session header also has a direct GitHub link.",
+        "confidence": "medium",
+        "dedupe_key": "review-focus-notice-no-remedy"
+      },
+      {
+        "id": "UX-015",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "\" If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings.\"",
+        "problem": "Criterion: Nielsen #4 and #6. The hint says 'the bundled CLI', but Settings labels the option 'Bundled keryx'.",
+        "impact": "The user has to map two names while searching Settings. Minor friction.",
+        "suggested_fix": "Use the Settings label ('choose Bundled keryx in Settings'), ideally as a button that opens that Settings tab.",
+        "evidence": "apps/desktop/src/shell/SettingsView.tsx: `{ id: \"bundled\", label: \"Bundled keryx\", ... }`.",
+        "confidence": "high",
+        "dedupe_key": "issues-older-keryx-hint-setting-name"
+      },
+      {
+        "id": "UX-016",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "const offer = flow ? undefined : work.flowOffer?.(sessions);",
+        "problem": "Criterion: Nielsen #1. Create Flow switches to the session view (openPrSession calls setView('session')), and the package is made during that session's turn. The offer is rendered only in the PR work row. Nothing in the session, the tab indicator or a live region mentions it. The owner chose the work row as its place (AC9 re-frozen), so this is info.",
+        "impact": "A user who stays in the session never sees the question, and the Flow stays unlinked: safe, but easy to miss.",
+        "suggested_fix": "Also show the question in the bound session (a notice with Link and Dismiss), or mark the Pull requests tab while an offer is pending.",
+        "evidence": "App.tsx openPrSession: `setView(\"session\")`. flowOffers reach only ReviewBoard to PrWork.flowOffer. Not observed in the app.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-not-visible-from-session"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "UX-008", "disposition": "closed" },
+      { "id": "UX-007", "disposition": "closed" },
+      { "id": "UX-006", "disposition": "open" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 5 }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload's layers carried the affected set; the review stays within one slice). wiki_used: no (not-relevant: copy and UX judgement against the PR's ACs and owner choices). ctx_used: yes (keryx ctx rg and keryx ctx run). raw_rg_used: no. One raw `git diff` of 4 backend files was run with a keryx:raw marker, to read the exact added copy.

@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058e919a5880319588ad95395b7ff66153` (round-2 fix range, round 3, wave 3)
+- Slice: slice-03, read in full (src/session/organize.ts, organize.test.ts, src/session/issues/issue-session.ts, issue-session.test.ts). `src/acp/server.ts` has no change in this range (`git diff --stat 88e3faba9..d7b0f7058 -- src/`); its `handleSessionFlags` was read at head for the writer enumeration, and the range's one wire test change (`src/acp/shell-session-organize.test.ts`, array subject → -32602) was read.
+- Scope mode: diff (explicit range)
+- Spec compliance gate: ran — AC8 (keryx half)
+
+### Summary
+The fix round puts every flags.json read-modify-write under a per-session `flags.json.lock` (`withFlagsLock` over `lib/file-lock` `withFileLock`, 3 s timeout > 2 s stale, nonce-guarded release), adds a store-private `subjectUnlinked` marker, and moves the issue subject write out of the `registered` branch into a `backfillSessionSubject` that runs on every `withIssueBinding` open. I traced the marker through `readStoredFlags` → `applyFlagsChange` → `writeFlags` and `backfillSessionSubject` and found it consistent: set only by an explicit `subject: null`, cleared by any subject write, carried unchanged through other flag changes, never written while a subject is present, and never returned by `readSessionFlags`. No new logic defect in this slice. The lock's residual costs are already filed on the lock (HL3-001 event-loop wait, HL3-002 mkdir of a trashed dir, HL3-004 age-only stale break, PF-R3-001) and are not repeated here.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected. AC8 keryx half: `_keryx/session_flags` accepts `subject` (server.ts `handleSessionFlags` → `setSessionFlags` → `parseSessionSubject`), refuses an invalid one at the wire (string, array: shell-session-organize.test) and at the store (organize.test `bad` list), persists it in flags.json (fresh `readSessionFlags` in tests), `null` unlinks; an issue session bound by `withIssueBinding` carries `subject.kind = "issue"` with `repositoryId` (issue-session.test, both the first-bind and the backfill test). Test evidence: research-evidence/verify-tests-to-run-1.txt runs these suites — 2722 pass, 1 fail; the one failure is `every source file can be found by a text search > the binary list holds nothing that is actually text` (src/lib, a 5 s timeout unrelated to this slice). verify-tests-to-run-2.txt: 6/0 and Desktop 1051/0.
+
+### Logic Bugs
+None detected. Checked:
+- Marker state machine (organize.ts): `unlinked = change.subject === null ? true : change.subject !== undefined ? false : subjectUnlinked`; `writeFlags` writes the marker only when `subjectUnlinked && flags.subject === undefined`; `readStoredFlags` honours it only when no valid subject is stored. An inconsistent file (subject plus marker) reads as linked and the next write drops the marker. A corrupt/absent file reads as `{subjectUnlinked: false}`, same as the pre-existing flag semantics.
+- `backfillSessionSubject`: read and write in one locked section; returns false when a subject is present or unlinked; throws only for an unparsable subject, which `bindIssueSubject` cannot pass (it only calls it with a parsed one).
+- `withIssueBinding`: `bindIssueSubject` now runs after `existsSync(dir)` on every open. Its one caller (`issues-launch.ts:99`) is reached only for `open-session`/`prepare-flow`; the `workspace` action returns at line 90 before the binding, so a board view does not write. `dir` comes from `launch.project.cwd`, so the `project_required` early return at line 101-102 still backfills the right session. A throw from the flags lock in the `registered` path leaves the binding at `registered` (not saved), and the next attempt finds the session and completes — recoverable.
+- Lock nesting: the comment "The flags lock is taken inside the binding lock, never the reverse" holds — `withFlagsLock`'s callback is synchronous and calls only `readStoredFlags`/`writeFlags`, so it cannot take the async binding lock; `issues-launch.ts:116` `setSessionFlags` runs after `bindIssueSubject` released the flags lock (not re-entrant, not nested).
+- `withFlagsLock` maps `withFileLock`'s `null` to a throw and wraps the value in `{value}` so a callback result is never confused with the timeout `null`.
+
+### Async & Concurrency
+None new. Writer enumeration (`keryx ctx rg -n "handleSessionFlags|updateSessionFlagsAt|setSessionFlags\(|backfillSessionSubject" src --glob '!*.test.ts' --all`): server.ts:2964 `setSessionFlags`; issues-launch.ts:116 `setSessionFlags`; issue-session.ts:56 `backfillSessionSubject`; organize.ts:217 `setSessionFlags` → `updateSessionFlagsAt`. All four reach `withFlagsLock`; no unlocked writer of flags.json remains. Residual lock costs: HL3-001/002/004, PF-R3-001 (filed by other lenses).
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None new. Note for the record, not a new finding: `subject: null` has no sender in Desktop (`keryx ctx rg -n "subject: null|subject:null|subject === null" apps/desktop/src src --glob '!*.test.*' --all` → only organize.ts), so the unlink marker is reached through the wire and tests in stage 1; AC8 requires `null` to unlink, so it is intended plumbing, not dead code.
+
+### Prior dispositions (slice-03 touches)
+- HW2-001 — closed. `updateSessionFlagsAt` and `backfillSessionSubject` both run under `withFlagsLock`; every non-test writer enumerated above goes through one of them. Pinned by organize.test "a flags change waits for another writer's lock and takes over an abandoned one" and the two-process "lose neither change" test. Residuals belong to HL3-001/002/004 and PF-R3-001.
+- DG-010 — closed. `bindIssueSubject` moved out of the `registered` branch and now backfills on every open, unless a subject exists or the marker is set. Pinned by issue-session.test "a session bound before subjects existed gets its subject on the next open; an unlink still wins".
+- LG-012 — closed for the keryx half (pre-upgrade issue sessions now get a subject on the next open). The second half, sessions bound under another GitHub account being counted, is not changed in code. The PR body's Known gaps and the new `bindIssueSubject` doc ("a client counting sessions by subject counts those bound under any account") disclose it as an owner-accepted limit. The IssueWorkRow side is outside slice-03.
+- LG-014 — open (deferred, info, unchanged). A pre-PR keryx's `writeFlags` still rewrites flags.json with only archivedAt/pinnedAt/flow. It now drops the `subjectUnlinked` marker too, so after such a write the next issue open re-links an unlinked issue subject. The same holds for a person's unlink. The backfill limits the subject loss for issue sessions only, by writing the subject back on the next open. The PR body names the related re-link case ("Subject backfill can re-link once a session unlinked before this version"), but not the mixed-version case. That is acceptable for info.
+- TP-R2-006 — closed for the organize half. The three new `bad` fixtures (`org/..`, `org/.`, `org/re po`, each with a matching URL) pass `SUBJECT_URL` (`[^/?#]+` admits `.`, `..` and space) and the repo/url agreement, so only `REPO_REF` refuses them. The issues-board half is outside slice-03.
+- TP-R2-007 — closed. Case-insensitive repo/url agreement and dropping of unknown fields are pinned, with the stored keys checked in the raw flags.json (organize.test). The wire array refusal is pinned in shell-session-organize.test (`subject: []` and `[subject]` → -32602).
+- LG-016 — not assessed: apps/desktop/src/review/model.test.ts is not in slice-03.
+
+### Suggested Patches
+None.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "summary": "slice-03 (round-2 fix range): flags.json read-modify-write now locked per session, store-private unlink marker, issue subject backfilled on every open. Marker state machine, backfill, lock nesting and writer enumeration checked; no new logic defect. Lock residuals already filed as HL3-001/002/004 and PF-R3-001. AC8 keryx half met.",
+    "slices": ["slice-03"],
+    "findings": [],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+    "prior_dispositions": [
+      { "id": "HW2-001", "disposition": "closed" },
+      { "id": "DG-010", "disposition": "closed" },
+      { "id": "LG-012", "disposition": "closed" },
+      { "id": "LG-014", "disposition": "open" },
+      { "id": "TP-R2-006", "disposition": "closed" },
+      { "id": "TP-R2-007", "disposition": "closed" }
+    ]
+  }
+}
+```
+
+Notes on dispositions: LG-012 is closed for the keryx backfill half. The per-account count is disclosed in Known gaps, and the Desktop row is not in this slice. LG-014 stays open as a deferred info item, and it now also covers the unlink marker. TP-R2-006 is closed for the organize half only, and the issues-board half belongs to another slice. LG-016 is not in this slice.
+
+Routing audit: graph_used: yes (payload layers.affected/relatedTests at head d7b0f70, used for the caller set); wiki_used: not-relevant (no wiki pages for these files in the layers block; intent stated in code comments and the PR body); ctx_used: yes (keryx ctx read/rg for the payload, file-lock.ts, writer and caller enumeration, test evidence); raw_rg_used: no. I ran no tests (exec_budget_s 0). I used one raw `git diff` with a keryx:raw marker to read the exact two-file hunk and the stat.

@@ -1,0 +1,125 @@
+STATUS: DONE
+
+## Architecture Review (round 3, fix range 88e3faba9..d7b0f7058, slice-01)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (commits 80ef58bd5, c4e8e3e24, 8f6a42fdd, 366818cc7, d7b0f7058)
+- Scope mode: `explicit-hash-range`, diff mode
+- Stack detected: React (Desktop, no MobX in these files) + TS backend contract (read for enumeration only)
+- Slice: slice-01, read in full (1905 lines)
+
+### Withdrawn
+None.
+
+### Prior dispositions (judged against the code at d7b0f7058)
+- AR-003 — closed. `boundSessions` is now `[...boundSessionIndex(sessions)(subject)]` and `sameSubject` is `subjectKey(a) === subjectKey(b)`, so the bound-session rule and the subject identity each have one implementation. `ReviewProgress` and `reviewProgressText` both build from `progressParts`, so the state-label rule `!["running","queued","completed"].includes(state)` now exists once (`keryx ctx rg 'RUN_STATE_LABEL\[|"running", "queued", "completed"'` finds only ReviewProgress.tsx:75 for that rule; ReviewProgress.tsx:30 and ReviewOutcome.tsx:18 are different captions).
+- PF-004 — closed. Same evidence as AR-003 part 1.
+- PF-003 — closed. IssuesBoard builds `boundSessionIndex(sessions)` once per `sessions` (useMemo) and passes `bound={boundTo(issueSubject(issue)).length}`. IssueWorkRow no longer gets the session list. Note: `issueSessions` (issues/model.ts:68) now has no production caller, only model.test.ts:64-65.
+- AR-004 — open (deferred info, still true, and it grew). This round adds `SubjectOpen`, `fillShown` and `isShown` on `SubjectSessionDeps` to review/prWork.ts. These are Subject-kind-neutral session-layer pieces too.
+- AR-006 — open (deferred info). useAcpSession.ts only gains `isShown` in this range. The two pending-flags mechanisms are unchanged.
+- HL-001 — closed under the owner decision (journal "Review round 2 owner decisions"). `usePendingFlowLinks` turns `resolveFlowLinks` output into `offered` state. `linkRef.current` (the flags write) is reached only from `accept`, and `PrWorkRow`'s `FlowOffer` shows Link and Dismiss. `createPrFlow` calls `expect` only when `opened?.filled` is true.
+- LG-008 — closed. `subjectOpener` gives a coalesced call `running.then(open => open && { ...open, filled: false })`, and `createPrFlow` skips `expect` when `filled` is false.
+- LG-011 — closed. `fillShown` checks `deps.isShown(id)` before `deps.fill`. `isShown` reads `live.current.reg.shown` (useAcpSession.ts), and `filled` reports the outcome to the caller.
+- DG-007 — closed (second option). `lastActivityAt` is removed from `badgesEqual`.
+- DG-006, UX-007 — closed. `waitsOnViewer` is now gated by `card.state === "open"`, the same gate as `needsViewerAttention`.
+- LG-009 — closed. A focus for another listed repository calls `selectRepo(listed)`. One the board cannot show sets `focused.current`, shows a notice and calls `onFocusHandled`.
+- PF-005 — closed. `onSubscribe` is now the stable `subscribe` callback.
+- LG-007, DG-008 — closed. AC9 was re-frozen through `keryx flow ac update` to describe the offer with Link/Dismiss. The `resolveFlowLinks` doc now says "offered", not "linked".
+- Attached findings outside this lens and not settled by slice-01 alone (RG-001, UX-008, LG-013, HW2-001, DG-009, TP-*, PC-*, DG-010, LG-012, LG-015): no disposition from me. Their backend, test and doc halves are in other slices. The IssuesBoard half of the RG-001/UX-008 fix is reviewed below as AR-007.
+
+### Summary
+The fix round fixes AR-003 by delegation: one bound-session rule, one subject identity and one caption rule. It replaces the silent Flow link with a confirmed offer, and injects `isShown` into the subject-open dependencies (proper DI, no platform import in prWork.ts). Dependency direction is unchanged: prWork.ts and usePendingFlowLinks.ts import only acp/types and platform types, and App owns the mapping from offers to FlowCards. One new minor: the Issues fallback added for RG-001/UX-008 infers two specific conditions from a coarse error category and from message text, inside the component.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Regressions the fixes introduced
+[AR-007] (answering RG-001 / UX-008 / LG-013) — IssuesBoard reads "the repository source is unavailable" from any `configuration:` error, and "keryx is too old" from the literal text of `invalidInput`.
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+[AR-007] Desktop decodes the CLI error contract by category prefix and by message text, in the view.
+
+- **Severity**: minor
+- **File**: apps/desktop/src/issues/IssuesBoard.tsx
+- **Problem**: The fallback decides that "This project's repository issues are not available here" from `/(?:^|\b)configuration:/i.test(error)`. It decides "this keryx is older than Desktop" from `/Invalid Issues request/i.test(error)`. Both checks sit in the Collection component; the sibling classifier `isAccessError` lives in useIssueCollection.ts. On the backend, `configuration:` is the category for many unrelated reasons, and `invalidInput` ("configuration: Invalid Issues request.") is thrown for more than an old keryx. Examples: a stale cursor (`readCursor`, issues-github.ts:120 "Refresh before loading the next page."), a malformed cursor (issues-github.ts:122), a `.`/`..` repository part or a missing cwd (issues-board.ts:115, :118), and a pagination link that fails validation (issues-board.ts:154, :168). The contract also already has a typed `problem.code` set (issues-contract.ts:115) that includes `source_unavailable`, which `isAccessError` treats as an access loss.
+- **Trigger and outcome**: The Issues board is on the default (unchosen) repository source with more pages to load. The project's resolved repository changes, for example origin is re-pointed or remotes are reordered. Then "Load more" runs. The cursor scope includes `repository.toLowerCase()` (issues-board.ts:203), so the CLI answers "configuration: Refresh before loading the next page.". Desktop replaces the Retry notice with "This project's repository issues are not available here." and offers only "Show issues assigned to me". Pressing it calls `change("assigned")`, which saves `assigned` as the person's chosen source, so a transient condition becomes a stored preference. Second path: a remote whose name parses as `.`/`..` gets `invalidInput`, and Desktop tells the person to update keryx, which is wrong advice.
+- **Fix**: Give the repository-source failures their own reason on the CLI side, for example a `repository_unavailable:` prefix, or a `code` on the error the way `IssueWorkspace.problem.code` does it. Use it for no GitHub.com remote (board-github.ts:45, when raised for the issues source), Issues turned off (issues-board.ts:184) and the dot-name refusal. Classify it next to `isAccessError` in useIssueCollection.ts, so one module owns the mapping from CLI reason to UI category. Keep the old-keryx text match only for the first-page request (no cursor), which is the one case an old keryx produces.
+
+### Design Pattern Misuse
+None detected. `SubjectSessionDeps.isShown` is injected, not reached for. `usePendingFlowLinks` keeps the write behind the injected `link` and exposes stable `actions`.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A (no NestJS or MobX in this slice).
+
+### Verified clean (sites)
+- One bound-session rule: `keryx ctx rg 'issueSessions|boundSessions\(|boundSessionIndex\(|sameSubject\(|subjectKey\(|archivedAt === undefined|archivedAt !== undefined' apps/desktop/src src --glob '!*.test.*'` found these callers: acp/types.ts:176, :201 (delegating); prWork.ts:81 (index), :201 (boundSessions), :227 (subjectKey); App.tsx:398 (boundSessions); IssuesBoard.tsx:145 (index); issues/model.ts:69 (boundSessions). The remaining `archivedAt` sites (startup.ts:17/32, App.tsx:361, SessionSidebar.tsx:169, sessionGroups.ts:31) are other rules (startup pick, flow-linked sessions, sidebar grouping). src/review/premise.ts:625 `sameSubject` is an unrelated premise-decision subject.
+- `openPrSession`'s return type changed from string to `SubjectOpen | null`. Its callers are App.tsx:418 (reads `.filled`/`.sessionId`) and App.tsx:435 (voided).
+- Offer types: `PrFlowOffer` is used by App.tsx, ReviewBoard.tsx and PrWorkRow.tsx. `FlowLinkOffer` (usePendingFlowLinks.ts:7) has the same shape as `FlowLinkPass.links` (prWork.ts:149). That is type duplication, which belongs to review-clean-code, so I filed nothing.
+
+### Not verified
+- No tests run (exec_budget_s 0). Behavioural claims rest on reading the code.
+- Graph layer not queried. The package layers list and the slice manifest give the file set, and enumeration used `keryx ctx rg`.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-architecture",
+    "slices": ["slice-01"],
+    "summary": "Fix round delegates the bound-session rule, subject identity and progress caption to one implementation each (AR-003 closed), replaces the silent Flow link with a confirmed offer and injects isShown into subject-open deps. One new minor: the Issues repository-source fallback infers 'source unavailable' and 'keryx too old' from the generic configuration: prefix and invalidInput text inside the component.",
+    "findings": [
+      {
+        "id": "AR-007",
+        "severity": "minor",
+        "reviewer": "review-architecture",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "  const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;",
+        "problem": "The RG-001/UX-008 fallback decodes the CLI error contract in the view. It decides 'This project's repository issues are not available here' from any `configuration:` reason, and 'this keryx is older than Desktop' from the literal text of `invalidInput` (`/Invalid Issues request/i`). The backend uses the `configuration:` category, and `invalidInput` itself, for unrelated reasons: a stale cursor (issues-github.ts:120), a malformed cursor (:122), a missing cwd or a '.'/'..' repository part (issues-board.ts:115, :118), and a pagination link that fails validation (issues-board.ts:154, :168). The classifier sits inline in Collection, while its sibling `isAccessError` lives in useIssueCollection.ts. The contract already has typed problem codes (issues-contract.ts:115).",
+        "impact": "Trigger: default (unchosen) repository source, more pages loaded, the project's resolved repository changes (origin re-pointed or remotes reordered), then 'Load more'. The cursor scope includes the repository (issues-board.ts:203), so the CLI answers 'configuration: Refresh before loading the next page.' Outcome: Desktop drops Retry, says the repository's issues are not available, and offers only 'Show issues assigned to me'. Pressing it calls change('assigned'), which stores 'assigned' as the person's chosen source, so a transient error becomes a persisted preference. Second path: a remote whose name parses as '.'/'..' gets invalidInput, and Desktop advises updating keryx, which is wrong advice.",
+        "suggested_fix": "Give the repository-source failures (no GitHub.com remote for the issues source, Issues turned off at issues-board.ts:184, the dot-name refusal) a reason of their own on the CLI side, for example a `repository_unavailable:` prefix or a code like IssueWorkspace.problem.code. Classify it beside isAccessError in useIssueCollection.ts so one module maps CLI reasons to UI categories. Keep the old-keryx text match only for a first-page request (no cursor), the one case an old keryx produces.",
+        "evidence": "slice-01 IssuesBoard.tsx hunk @@ 42,167 @@ (unavailable/fallback) and @@ 216,292 @@ (notice). src/integrations/issues-github.ts:8 invalidInput, :120 readCursor, :122; src/integrations/issues-board.ts:110-118, :154, :168, :184, :203 cursorScope includes repository.toLowerCase(); apps/desktop/src/issues/useIssueCollection.ts:16-18 isAccessError; src/integrations/issues-contract.ts:115 problem codes. Enumerated with `keryx ctx rg -n 'invalidInput|issuesDisabled|source_unavailable|Refresh before' src/integrations src/commands` and `keryx ctx rg -n 'configuration:' src/integrations/issues-board.ts src/integrations/issues-github.ts src/commands/issues.ts`.",
+        "confidence": "medium",
+        "dedupe_key": "desktop-issues-fallback-decodes-configuration-category",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/issues/IssuesBoard.tsx:147 (configuration: -> source unavailable)",
+            "apps/desktop/src/issues/IssuesBoard.tsx (notice: /Invalid Issues request/ -> old keryx hint)"
+          ],
+          "enumeration_method": "keryx ctx rg for 'configuration:|Invalid Issues request|isAccessError' over apps/desktop/src: the only Desktop sites that read a configuration: reason or the invalidInput text are these two in IssuesBoard.tsx; ReviewBoard.tsx strips the prefix for display only."
+        }
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "AR-003", "disposition": "closed"},
+      {"id": "PF-004", "disposition": "closed"},
+      {"id": "PF-003", "disposition": "closed"},
+      {"id": "AR-004", "disposition": "open"},
+      {"id": "AR-006", "disposition": "open"},
+      {"id": "HL-001", "disposition": "closed"},
+      {"id": "LG-008", "disposition": "closed"},
+      {"id": "LG-011", "disposition": "closed"},
+      {"id": "DG-007", "disposition": "closed"},
+      {"id": "DG-006", "disposition": "closed"},
+      {"id": "UX-007", "disposition": "closed"},
+      {"id": "LG-009", "disposition": "closed"},
+      {"id": "PF-005", "disposition": "closed"},
+      {"id": "LG-007", "disposition": "closed"},
+      {"id": "DG-008", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the file set came from the slice manifest and layers block; enumeration used ctx rg). wiki_used: no (not-relevant: intent stated in the doc comments and the journal). ctx_used: yes (keryx ctx rg, keryx ctx run git log). raw_rg_used: no.

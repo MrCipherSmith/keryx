@@ -1,0 +1,92 @@
+STATUS: DONE
+
+## Frontend Review (round 3, wave 3, fix range 88e3faba9..d7b0f7058)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058e919a5880319588ad95395b7ff66153` (explicit-hash-range)
+- Slice: slice-03, read in full (569 lines). It holds src/session/organize.ts (flags lock, the private `subjectUnlinked` marker, `backfillSessionSubject`), src/session/issues/issue-session.ts (the subject is now written on every open), and their tests. The slice has no hunk in src/acp/server.ts.
+- Lens: the wire contract Desktop relies on: what `_keryx/session_flags` returns, the errors it surfaces, and the backfilled subject Desktop sees in the session list. Backend design is out of this lens.
+- Context read at head beyond the slice: server.ts handleSessionFlags/refuseStore (:2935-2968), src/lib/file-lock.ts (withFileLock), organize.ts REPO_REF/SUBJECT_URL (:55-56), apps/desktop/src/session/subjectBinding.ts (PendingSubjects), shell-session-organize.test.ts (:93-96), the plan's limit (g) and the PR body's Known gaps.
+- History: I did not run `git log`/`git blame`, because the hook routes raw git output through gdctx. The reasons I needed are in the code comments and the plan.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Wire contract check (clean)
+- The unlink marker stays private. `readSessionFlags` returns `readStoredFlags(dir).flags`, so `subjectUnlinked` never reaches the `_keryx/session_flags` reply or the session list. A test asserts `readSessionFlags(dir)` equals `{ pinnedAt }` after an unlink.
+- The reply shape has not changed: `applyFlagsChange` returns the public `SessionFlags`. A subject's unknown client fields are dropped on write, as the test with `title`/`flow` extras shows. So Desktop never gets back text it sent and never stored.
+- How Desktop reads a lock error. A lock that cannot be taken throws "the flags of session X are locked by another keryx process; retry". `refuseStore` turns that into `invalidRequest`. PendingSubjects.apply treats any throw as "not stored yet": it keeps the binding pending and tries again after the turn. So a contended lock never shows SUBJECT_NOT_SAVED and never drops the binding. That notice is shown only for a successful reply that has no `subject`, which is unchanged.
+- Writers. Every non-test writer of flags.json goes through `withFlagsLock`: setSessionFlags → updateSessionFlagsAt (server.ts:2964, issues-launch.ts:116) and backfillSessionSubject (issue-session.ts:56). Enumerated with `keryx ctx rg setSessionFlags|updateSessionFlagsAt|backfillSessionSubject src` excluding tests: 10 matches in 4 files.
+- Backfill seen from the frontend. An issue session bound by an older keryx gets its subject on the next open, so IssueWorkRow counts it. A person's unlink is respected, and linking again clears the marker. The account and Enterprise limits are recorded in the plan (g) and in the PR body's Known gaps.
+
+### Findings
+
+### [FE-R3-004] An issue open can now fail on the optional subject write
+- **Severity**: info
+- **File**: src/session/issues/issue-session.ts
+- **Problem**: `bindIssueSubject` now runs on every `withIssueBinding`, not only the first. It runs inside the binding lock and is not guarded. If the flags lock cannot be taken within 3 s, `withFlagsLock` throws, and the whole open fails. The Issues board then shows "the flags of session … are locked by another keryx process; retry". The same text appears for a session directory that is not writable, because `withFileLock` catches every `openSync` error and waits until its deadline. Before this range a reopen never wrote flags.json, so a cosmetic subject could not block reopening an issue session.
+- **Why it is info**: I found no realistic trigger. The stale threshold (2 s) is below the timeout (3 s), so a crashed holder's lock is broken in time, and the critical section is a single small read plus one write. Only a lock file that cannot be removed or written, or constant contention, reaches the throw.
+- **Fix (optional)**: on the reuse path, treat the backfill as best effort (catch and continue, since the next open retries it). Or let `withFlagsLock` report EACCES/EROFS as a storage error rather than as "locked by another keryx process".
+
+### Prior dispositions (what slice-03 shows)
+- HW2-001 closed. `withFlagsLock` (exclusive create, nonce, 2 s stale, 3 s timeout) wraps both updateSessionFlagsAt and backfillSessionSubject, and every writer goes through one of them. Tests cover waiting for a fresh lock, breaking an abandoned one, and two child processes that write different flags 150 times each with nothing lost.
+- LG-012 closed. A session bound before subjects existed gets its subject on the next open, and an unlink still wins (issue-session.test). The cross-account count is now a stated limit: the code doc, plan (g) and PR Known gaps all say "`subject` names no GitHub account".
+- DG-010 closed. The fix is the suggested one: backfill on reopen when there is no subject, with an explicit unlink marker instead of inferring it from absence.
+- PC-003 closed. The PR body's Known gaps names both limits: accounts counted together, and no subject for Enterprise issues. Pre-upgrade sessions are now backfilled.
+- TP-R2-006 closed (S02/S03 part; S42 was closed in wave 2). The new `bad` fixtures `org/..`, `org/.` and `org/re po` have URLs that SUBJECT_URL (`[^/?#]+`) and the repo/url agreement check accept, so only REPO_REF refuses them.
+- TP-R2-007 closed. Mixed case is accepted (`org/repo` against `Org/Repo`), extra fields are dropped and never reach the raw file, and a `subject: []` on the wire is refused with -32602 (shell-session-organize.test.ts:95).
+- LG-014 deferred (accepted). The mixed-version case gets slightly wider: a pre-PR keryx rewriting flags.json drops `subjectUnlinked` along with `subject`, so the next issue open by a current keryx would backfill a subject the person had unlinked. The trigger is the same (two keryx versions on one data dir), so this does not reopen the finding.
+
+### Clean Areas
+- Public `SessionFlags` shape and `_keryx/session_flags` reply: unchanged, and the marker is not exposed.
+- Error classification on the Desktop side (PendingSubjects): the lock error lands on the retry branch.
+- MobX parts and React parts: not applicable (backend slice).
+
+### Routing audit
+- graph_used: no. The payload `layers` gave the affected files and related tests at the PR head.
+- wiki_used: not-relevant. The contract under review is stated in the code docs, the plan and the PR body.
+- ctx_used: yes. `keryx ctx rg` for the flag writers, the lock helper, the subject regexes, the wire array test, Desktop error handling and the doc limits.
+- raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "slices": ["slice-03"],
+    "summary": "slice-03 (flags lock, private unlink marker, issue subject backfill) keeps the _keryx/session_flags wire contract Desktop relies on. The reply shape is unchanged, the marker stays private, extra client fields are dropped, and a lock error lands on PendingSubjects' retry branch, not on SUBJECT_NOT_SAVED. HW2-001, LG-012, DG-010, PC-003, TP-R2-006 and TP-R2-007 are closed. One info: the backfill now runs on every issue open, unguarded, so a flags-lock failure would abort the open.",
+    "findings": [
+      {
+        "id": "FE-R3-004",
+        "severity": "info",
+        "reviewer": "review-frontend",
+        "file": "src/session/issues/issue-session.ts",
+        "line": null,
+        "quote": "    // On first bind, and for a session an older keryx bound without a subject. The flags lock is\n    // taken inside the binding lock, never the reverse, so the two cannot deadlock.\n    bindIssueSubject(dir, issue.ref);",
+        "problem": "The subject backfill now runs on every withIssueBinding, unguarded. If withFlagsLock cannot take flags.json.lock within 3 s, it throws, and the whole issue open fails with 'the flags of session … are locked by another keryx process; retry'. The same message appears for a session directory that is not writable, because withFileLock catches every openSync error and waits until its deadline. Before this range a reopen wrote no flags, so the optional subject could not block it.",
+        "impact": "Observation only. The stale threshold (2 s) is below the timeout (3 s), so a crashed holder is broken in time. Only a lock that cannot be removed or written, or constant contention, reaches the throw, and I found no such trigger.",
+        "suggested_fix": "On the reuse path, treat the backfill as best effort: catch, continue, and let the next open retry. Or have withFlagsLock report EACCES/EROFS as a storage error instead of 'locked by another keryx process'.",
+        "evidence": "slice-03 issue-session.ts (bindIssueSubject moved out of the registered branch); organize.ts withFlagsLock (null → throw); src/lib/file-lock.ts:94-126 (any openSync error retried until the deadline).",
+        "confidence": "low",
+        "location_class": "in-diff",
+        "blocking_merge": false,
+        "dedupe_key": "issue-open-fails-on-subject-backfill-lock"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HW2-001", "disposition": "closed", "note": "withFlagsLock wraps updateSessionFlagsAt and backfillSessionSubject; all 3 non-test writers covered; wait, stale-break and two-process tests" },
+      { "id": "LG-012", "disposition": "closed", "note": "reopen backfills the subject for pre-upgrade bindings, unlink wins; cross-account counting recorded as a limit in the code doc, plan (g) and PR Known gaps" },
+      { "id": "DG-010", "disposition": "closed", "note": "backfill on reopen with an explicit subjectUnlinked marker" },
+      { "id": "PC-003", "disposition": "closed", "note": "PR Known gaps names the account and Enterprise limits; pre-upgrade sessions are backfilled" },
+      { "id": "TP-R2-006", "disposition": "closed", "note": "S02/S03: org/.., org/. and 'org/re po' with agreeing URLs are refused only by REPO_REF; S42 closed in wave 2" },
+      { "id": "TP-R2-007", "disposition": "closed", "note": "mixed case accepted, extra fields dropped from the raw file, subject [] on the wire is -32602" },
+      { "id": "LG-014", "disposition": "deferred", "note": "accepted; a pre-PR keryx rewrite also drops subjectUnlinked, so a current keryx could backfill an unlinked subject. Same mixed-version trigger" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+  }
+}
+```

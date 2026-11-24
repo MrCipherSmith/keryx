@@ -1,0 +1,200 @@
+[
+ {
+  "id": "review-degradation-w1:DG-R3-001",
+  "status": "finding",
+  "finding": "AR-007",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-degradation-w1.txt",
+  "reason": "duplicate of AR-007, folded at ingest"
+ },
+ {
+  "id": "review-frontend-w1:FE-R3-003",
+  "status": "finding",
+  "finding": "AR-007",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-frontend-w1.txt",
+  "reason": "duplicate of AR-007, folded at ingest"
+ },
+ {
+  "id": "review-logic-w1:F-002",
+  "status": "finding",
+  "finding": "FE-R3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-logic-w1.txt",
+  "reason": "duplicate of FE-R3-001, folded at ingest"
+ },
+ {
+  "id": "review-logic-w1:F-001",
+  "status": "finding",
+  "finding": "PC-005",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-logic-w1.txt",
+  "reason": "duplicate of PC-005, folded at ingest"
+ },
+ {
+  "id": "review-logic-w1:F-004",
+  "status": "finding",
+  "finding": "DG-R3-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-logic-w1.txt",
+  "reason": "duplicate of DG-R3-002, folded at ingest"
+ },
+ {
+  "id": "review-performance-w1:PF-R3-001",
+  "status": "finding",
+  "finding": "HL3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w1.txt",
+  "reason": "duplicate of HL3-001, folded at ingest"
+ },
+ {
+  "id": "review-frontend-w3:FE-R3-004",
+  "status": "finding",
+  "finding": "DG3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-frontend-w3.txt",
+  "reason": "duplicate of DG3-001, folded at ingest"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-017",
+  "status": "finding",
+  "finding": "UX-011",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-ui-ux-w2.txt",
+  "reason": "duplicate of UX-011, folded at ingest"
+ },
+ {
+  "id": "review-highload-w1:HL3-002",
+  "status": "finding",
+  "finding": "HL3-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-highload-w1.txt",
+  "reason": "duplicate of HL3-002, folded at ingest"
+ },
+ {
+  "id": "review-logic-w1:F-003",
+  "status": "finding",
+  "finding": "LG-R3-003",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-logic-w1.txt",
+  "reason": "renamed to LG-R3-003 at ingest (bare F-003 collides across rounds)"
+ },
+ {
+  "id": "review-highload-w3:HL3-002",
+  "status": "finding",
+  "finding": "HL3-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-highload-w3.txt",
+  "reason": "wave-3 re-filing that adds a site; same canonical HL3-002"
+ },
+ {
+  "id": "review-highload-w1:fu1",
+  "status": "finding",
+  "finding": "HL3-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-highload-w1.txt",
+  "reason": "execution check of HL3-002; the fix round removes the mkdir path, so the finding stands as filed"
+ },
+ {
+  "id": "review-highload-w3:fu1",
+  "status": "finding",
+  "finding": "HL3-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-highload-w3.txt",
+  "reason": "same as w1 fu1, carried by HL3-002"
+ },
+ {
+  "id": "review-layout-w1:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-layout-w1.txt",
+  "reason": "measurement needs the running Desktop app at 720/1180px, not available in this round; LY-005 stays a finding and the gap is named in the PR body"
+ },
+ {
+  "id": "review-layout-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-layout-w2.txt",
+  "reason": "same measurement as layout w1 fu1; not available in this round"
+ },
+ {
+  "id": "review-performance-w1:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w1.txt",
+  "reason": "prior findings outside the performance lens; each was disposed by its owning lens in this round"
+ },
+ {
+  "id": "review-performance-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w2.txt",
+  "reason": "PF-006/HW2-002 are round-2 deferred info findings, unchanged in this range"
+ },
+ {
+  "id": "review-performance-w2:fu2",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w2.txt",
+  "reason": "prior findings owned by other lenses; disposed by them in this round"
+ },
+ {
+  "id": "review-performance-w3:fu1",
+  "status": "finding",
+  "finding": "HL3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w3.txt",
+  "reason": "dedupe request: PF-R3-001 folded into HL3-001"
+ },
+ {
+  "id": "review-performance-w3:fu2",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-performance-w3.txt",
+  "reason": "prior findings owned by other lenses; disposed by them in this round"
+ },
+ {
+  "id": "review-pr-contract-w1:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w1.txt",
+  "reason": "prior-round PC-004 (partial); its fixture half is taken into the round-3 fix round"
+ },
+ {
+  "id": "review-pr-contract-w1:fu2",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w1.txt",
+  "reason": "prior findings with evidence in slices 02/03; disposed by the wave-2/3 reviewers"
+ },
+ {
+  "id": "review-pr-contract-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w2.txt",
+  "reason": "same PC-004 fixture half as pr-contract w1 fu1; taken into the fix round"
+ },
+ {
+  "id": "review-pr-contract-w2:fu2",
+  "status": "finding",
+  "finding": "PC-007",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w2.txt",
+  "reason": "TP-R2-002 mutant confirmation is the subject of PC-007; testing-practices w1 re-ran the R2 mutants red"
+ },
+ {
+  "id": "review-pr-contract-w3:fu1",
+  "status": "finding",
+  "finding": "PC-008",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w3.txt",
+  "reason": "the action of PC-008"
+ },
+ {
+  "id": "review-pr-contract-w3:fu2",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-pr-contract-w3.txt",
+  "reason": "LG-014 is a round-2 deferred info finding; the wider trigger is recorded in the PR body Known gaps by the fix round"
+ },
+ {
+  "id": "review-security-code-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-security-code-w2.txt",
+  "reason": "architecture w2 and logic w2 checked: only the REST listing and /user reach failure(); detail and comments use GraphQL, so no other 410 gets the text"
+ },
+ {
+  "id": "review-security-code-w3:fu1",
+  "status": "finding",
+  "finding": "HL3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-security-code-w3.txt",
+  "reason": "same defect as HL3-001"
+ },
+ {
+  "id": "review-security-code-w3:fu2",
+  "status": "finding",
+  "finding": "DG3-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-security-code-w3.txt",
+  "reason": "same defect as DG3-001"
+ },
+ {
+  "id": "review-security-code-w3:fu3",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/raw/review-security-code-w3.txt",
+  "reason": "LG-014 is a round-2 deferred info finding; recorded in Known gaps by the fix round"
+ }
+]

@@ -1,0 +1,74 @@
+STATUS: DONE
+
+## Architecture Review (round 3, fix range 88e3faba9..d7b0f7058, slice-03)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058` (explicit-hash-range, diff mode)
+- Stack detected: generic TS backend (src/session store, issue binder); no NestJS/MobX
+- Slice: slice-03, read in full (569 lines). It covers src/session/organize.ts (+test) and src/session/issues/issue-session.ts (+test). The dispatch also names src/acp/server.ts, but this range does not change it (`git diff --stat 88e3faba9..d7b0f7058 -- src/` lists no server.ts). Its one flags call (server.ts:2964 → setSessionFlags) was checked as a writer only.
+
+### Summary
+The fix serialises every read-modify-write of flags.json behind a per-session `flags.json.lock`, using the existing synchronous `lib/file-lock` primitive. It keeps the unlink marker (`subjectUnlinked`) private to the store: `StoredFlags` is internal, and the public `readSessionFlags`/`SessionFlags` contract is unchanged. The policy "backfill only if absent and not unlinked" lives in the store (`backfillSessionSubject`), the one module that can see the marker. The issue binder calls it instead of building that rule itself. The dependency direction is correct: session store → lib, and issues binder → session store. flags.json still has a single owner module. The documented lock order (binding lock, then flags lock, never the reverse) holds for every caller. Architecture is sound in this slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. organize.ts adds `import { withFileLock } from "../lib/file-lock"`. That is the same synchronous helper config-update.ts, project-registry.ts, serve-credential.ts and permission-mode-config.ts use. issue-session.ts drops `updateSessionFlagsAt` for `backfillSessionSubject`, which narrows what it needs from the store.
+
+### Module Boundary Violations
+None detected. `keryx ctx rg -n "flags\.json|FLAGS_FILE" src apps/desktop/src-tauri` shows that only src/session/organize.ts reads or writes the file. The other hits are comments and an unrelated `flags.json` CLI option in commands/app.ts. The marker never leaves the store; the test asserts `readSessionFlags` returns `{ pinnedAt }` only.
+
+### Design Pattern Misuse
+None detected. Lock ordering: the async binding lock (lib/fs `withFileLock` on the issue-sessions record) is taken first, then the sync flags lock. Every flags writer was enumerated with `keryx ctx rg -n "setSessionFlags|updateSessionFlagsAt|backfillSessionSubject" src --glob '!*.test.ts'` (10 matches, 4 files):
+- organize.ts (definitions; setSessionFlags → updateSessionFlagsAt → withFlagsLock)
+- issues-launch.ts:116 setSessionFlags inside withIssueBinding (binding → flags)
+- issue-session.ts:56 backfillSessionSubject inside withIssueBinding (binding → flags)
+- server.ts:2964 setSessionFlags (flags only)
+
+No path takes the flags lock and then the binding lock, so the comment's no-deadlock claim holds.
+
+### Dependency Inversion
+None detected. The lock is a file-system primitive used inside the store that owns the file. No interface is warranted: there is one internal implementation, not a substitution boundary.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+### Not re-filed (other lanes own them)
+HL3-001 (the sync lock blocks the ACP event loop), HL3-002 (withFileLock's mkdirSync recreates a trashed session dir) and PF-R3-001 are filed by other lanes. Wave 1 and wave 2 findings (AR-007 and the dispositions given there) are not repeated.
+
+### Prior dispositions (judged against the code at d7b0f7058; only those this slice touches)
+- HW2-001: closed. All four non-test writers go through `withFlagsLock` (enumeration above): `updateSessionFlagsAt` wraps `applyFlagsChange`, and `backfillSessionSubject` does its read-check-write under the same lock. organize.test adds a two-process test, with one writer per field over 150 iterations, that asserts neither change is lost. A second test covers waiting for a fresh lock and breaking a stale one. The residual costs of the chosen lock are filed separately as HL3-001 and HL3-002. Whether the tests pass was not re-run (exec_budget 0); the test-evidence files were not needed for an architecture disposition.
+- DG-010: closed. `bindIssueSubject(dir, issue.ref)` moved out of the `stage === "registered"` block and now runs on every open, after the session-exists check. It is backfill-only, so a later open fills a missing subject without overwriting one. issue-session.test "a session bound before subjects existed gets its subject on the next open; an unlink still wins" covers both halves.
+- LG-012: closed. This is the same mechanism as DG-010: a session bound before subjects existed (stage past `registered`) now gets `subject.kind = "issue"` on its next open, so IssueWorkRow can find it.
+- TP-R2-006: closed for the organize half. The new bad-subject cases (`org/..`, `org/.`, `org/re po`, each with a consistent url) can be refused only by REPO_REF (S02/S03). wave 2 judged the projectRepository half (S42) in slice-02.
+- TP-R2-007: closed. The new test pins S09: mixed-case url vs lower-case repo is accepted and stored as given. It also pins S17: unknown fields are dropped, and the raw flags.json subject has only kind/number/repo/url keys.
+- LG-014: open (deferred info, unchanged in severity). It is now wider. An older keryx rewrites flags.json with archivedAt/pinnedAt/flow only, so it drops the new `subjectUnlinked` marker as well as the subject. Path: the person unlinks an issue subject, an older keryx pins or archives the session, and the next issue open on a new keryx backfills the subject the person removed. This is the same mixed-version root as LG-014, so it is noted here and not filed as a separate finding (logic lens owns it).
+- PC-003: closed (wave 2). The code side, a backfill for older bindings, is confirmed here.
+
+Routing audit: graph_used: no (writer and owner sets enumerated with keryx ctx rg over src; the change adds no new export consumers beyond backfillSessionSubject, which has 1 caller) · wiki_used: not-relevant (the design rationale is in the code docs and the round-2 finding) · ctx_used: yes (keryx ctx rg, keryx ctx read) · raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "slices": ["slice-03"],
+    "findings": [],
+    "withdrawn": [],
+    "prior_dispositions": [
+      {"id": "HW2-001", "disposition": "closed", "evidence": "All 4 non-test flags writers (organize.ts setSessionFlags/updateSessionFlagsAt, backfillSessionSubject; issues-launch.ts:116; issue-session.ts:56; server.ts:2964) go through withFlagsLock (lib/file-lock, flags.json.lock). Two-process lost-update test and lock wait/stale tests added in organize.test.ts. Residuals filed as HL3-001/HL3-002. Tests not re-run (exec_budget 0)."},
+      {"id": "DG-010", "disposition": "closed", "evidence": "issue-session.ts: bindIssueSubject moved out of the registered-stage block and runs on every open via backfillSessionSubject (absent and not unlinked only); test 'a session bound before subjects existed gets its subject on the next open; an unlink still wins'."},
+      {"id": "LG-012", "disposition": "closed", "evidence": "Same mechanism as DG-010: sessions past stage registered get subject.kind=issue on the next withIssueBinding open."},
+      {"id": "TP-R2-006", "disposition": "closed", "evidence": "organize.test adds repo/url-consistent bad cases org/.., org/., 'org/re po' that only REPO_REF can refuse (S02/S03). projectRepository half judged in slice-02 (wave 2)."},
+      {"id": "TP-R2-007", "disposition": "closed", "evidence": "organize.test 'a subject's repo and url agree without case, and fields the store does not know are dropped' pins S09 and S17, including the raw stored keys."},
+      {"id": "LG-014", "disposition": "open", "evidence": "Still deferred info. Widened: an older keryx's writeFlags also drops the new subjectUnlinked marker, so after an old-keryx pin/archive the next issue open backfills a subject the person unlinked. Same mixed-version root; not filed separately."},
+      {"id": "PC-003", "disposition": "closed", "evidence": "Closed in wave 2 (docs); the code-side backfill for older bindings is confirmed in issue-session.ts."}
+    ]
+  }
+}
+```

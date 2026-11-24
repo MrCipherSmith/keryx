@@ -1,0 +1,1301 @@
+{
+  "review_context": {
+    "request": {
+      "text": "Run the review-orchestrator round on PR #1300 (flow 517 completion step)",
+      "flags": [],
+      "mode": "diff",
+      "range": {
+        "base": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+        "head": "d7b0f7058e919a5880319588ad95395b7ff66153"
+      }
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat/desktop-review-v2-stage1",
+      "base": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+      "head": "d7b0f7058e919a5880319588ad95395b7ff66153"
+    },
+    "pr": {
+      "number": 1300,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1300",
+      "title": "feat(desktop): Review v2 stage 1 — GitHub slice and Keryx links",
+      "body": "Desktop Review v2, stage 1 \"GitHub slice and links\" (Flow 517): the Pull requests and Issues boards group by GitHub data only, every card gets a Keryx work row, and sessions can be bound to a PR or Issue. Two review rounds are done and their findings fixed; owner choices and known gaps are listed below. Requirements: `docs/requirements/keryx-desktop-review-v2/` (PRD R1–R3, R5, R6, parts of R4 and R7; decisions D5, D6). Stage 0 was #1294. Current state and deviations: section \"Состояние этапа 1\" of `implementation-plan.md`.\n\n## What changes\n\n- **Pull requests board, GitHub only (R1, R2, D6).** Groupings \"Status\" (default: Draft · Waiting for review · Changes requested · Approved; Merged and Closed only when the state filter includes them) and \"My role\" (Requested from me · Mine · Others). Quick filters \"Requested from me\", \"Mine\", \"CI failed\" sit in the context row, so the stage 0 toolbar measurements still hold. The attention and \"In review\" lanes are gone; the reason line uses GitHub data only.\n- **Keryx work row (R4 part, R7 part).** A fixed 24px row on every PR card and list row with Review (`Review · <state>` from `localReview`, no round or behind count), Flow (by `prUrl` or a bound session's `flow` flag) and Session slots (count, newest, menu with all and \"New session\"). An empty slot shows its labelled action. \"Fix review comments\" is stage 4.\n- **Sessions bound to a Subject (R5).** `subject` `{kind, repo, number, url, repositoryId?}` in the session's `flags.json`, written through `_keryx/session_flags` under a per-session `flags.json.lock`. \"Open in session\" reopens the newest bound session or creates and binds one, prefilling the PR URL without sending. The session header links to the PR or Issue and its Flow. Issue sessions get `subject` from `withIssueBinding`; sessions an older keryx bound without one are backfilled on the next open unless the person unlinked it.\n- **Older keryx.** keryx stores a new session only after its first turn, so the notice \"binding was not saved\" appears after that turn at the latest; the session keeps working.\n- **Work from a bound session (R6).** `/review` with no target preselects the bound PR. \"Create Flow\" opens the bound session with a prefilled flow prompt. When exactly one new flow package appears within 15 minutes while exactly one request with a filled prompt is pending, the PR work row asks \"Link Flow #N?\" with Link and Dismiss. Only Link writes the session's `flow` flag; Dismiss, several new packages or several pending requests link nothing (AC9 as re-frozen in round 2).\n- **Issues (R3, D5).** Default source \"Project repository\" (`keryx issues list` with `source: \"repository\"`, `/repos/{owner}/{repo}/issues`, pull requests dropped, up to 3 pages per load); a stored choice wins. Lanes Open · Closed by GitHub state. The Flow stage filter is gone; the work row has Flow and Session slots (\"Open in session\"). If the default source is unavailable (no GitHub.com remote, Issues turned off → 410, or an older keryx), the board shows the reason and \"Show issues assigned to me\", plus an update hint for an older keryx.\n\nNo Rust changes. User docs: `docs/docs/guides/desktop-issues.md`, `docs/docs/cli-reference.md` (`issues`).\n\n## Verification\n\nAt head (after fix round 2):\n\n- `cd apps/desktop && bunx tsc --noEmit`: clean. `bun test src`: 1051 pass, 0 fail.\n- Root `bunx tsc --noEmit -p .`: clean. Root focused suites: 44 pass, 0 fail.\n- The scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" is an App-level test; named mutants from both review rounds are red.\n- Stage 0 attention set: no lines edited in either fix round.\n\nNot verified: no run in the real app with real GitHub data; work row in narrow lanes, session menu placement, list width (1000px) and the LY-002/LY-004 widths not measured; lint and the Rust CI path not run locally.\n\n## Review\n\n- Round 1 (head 6a2a3031f): 32 findings (2 blocker, 6 major); fixed in a34d8961b.\n- Round 2 (head 88e3faba9): 44 findings (1 blocker, 3 major); HL-001 decided by the owner (confirmed link instead of a silent one); fixed in 80ef58bd5 and c4e8e3e24.\n- Packages: `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300` and `…-pull-1300-r02`. Decisions: the Flow 517 journal.\n\n## Choices for the owner\n\nTaken by the orchestrator during the fix rounds; each can be reverted:\n\n- Create Flow waits 15 minutes from the press, not \"until the next turn\".\n- A shown \"Link Flow #N?\" does not expire; Dismiss also stops offering that package.\n- A session switch while \"Open in session\" runs leaves no prompt and no pending request; a repeat press during an open reuses it without a prompt.\n- New PR sessions also count a Flow found through a bound session; the launch dialog preselects the newest of several Flows.\n- Review progress shows only in the slot title; the \"Transcript updated\" stamp left the card.\n- A header link to a PR of another repository shows a banner and stays armed until that repository is shown.\n- Warn tone for \"needs answer\" and \"publication pending\"; a merged PR keeps the \"publication pending\" text without the warn tone.\n- \"Show issues assigned to me\" appears only for the default (not yet chosen) source.\n- Issues load up to 3 GitHub pages when a page holds only pull requests.\n- A flags write waits up to 3 s for the lock, then fails with \"retry\".\n- Subject backfill can re-link once a session unlinked before this version (no unlink marker then).\n- Earlier UI choices: review slot state words; disabled \"Run review\" on merged or closed PRs; session menu button \"More\"; \"not saved yet\" for an unsaved session; \"Create Flow\" replaces the composer draft; Issue card buttons became work-row links.\n\n## Known gaps\n\n- Deviation (a), team review requests for the tab indicator, stays open; (b) is unchanged until stage 2.\n- An Issue has no \"another or new session\" choice: the binding backend keeps one session per issue and account.\n- A Flow created outside the Create Flow window, or with two or more requests pending, is not offered; it shows on the PR once it has a `prUrl`.\n- `subject` names no GitHub account, so issue sessions bound under different accounts count together. GitHub Enterprise issues get no `subject`.\n- Deferred info findings: PF-006/HW2-002, AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004, UX-003..006 (round 2 package).\n\nFlow package: `.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`. Still to do: the merge decision.\n",
+      "state": "open",
+      "base": "main",
+      "head": "d7b0f7058e919a5880319588ad95395b7ff66153"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T18.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T19.implement.json",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/acp/types.ts",
+        "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "apps/desktop/src/issues/IssuesBoard.tsx",
+        "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "apps/desktop/src/review/PrWorkRow.tsx",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/prWork.test.ts",
+        "apps/desktop/src/review/prWork.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "apps/desktop/src/session/useAcpSession.ts",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/styles/review.css",
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/desktop-issues.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "src/acp/shell-session-organize.test.ts",
+        "src/commands/issues.test.ts",
+        "src/commands/issues.ts",
+        "src/integrations/issues-board.test.ts",
+        "src/integrations/issues-board.ts",
+        "src/integrations/issues-github.ts",
+        "src/session/issues/issue-session.test.ts",
+        "src/session/issues/issue-session.ts",
+        "src/session/organize.test.ts",
+        "src/session/organize.ts"
+      ],
+      "changed_lines": 1813,
+      "risk_areas": [
+        "session flags storage (src/session/organize.ts, src/acp/server.ts)",
+        "GitHub REST listing (src/integrations/issues-board.ts)",
+        "PR board attention set (apps/desktop/src/review/ReviewBoard.tsx)",
+        "App session wiring (apps/desktop/src/App.tsx, session/useAcpSession.ts)"
+      ]
+    },
+    "requirements": {
+      "flow": "517",
+      "context_doc": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "task_docs": [
+        "docs/requirements/keryx-desktop-review-v2/prd.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md"
+      ],
+      "acceptance_criteria": [
+        "AC1: The PR lane function reads no field of the local review: a model test iterates every local review state (none, queued, running, awaiting answer, ready, partial, publication pending, outdated) for the same GitHub card and gets the same lane; the attention lane and the Keryx \"In review\" lane no longer exist (R1, D6, spec AC1) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/model.test.ts`]",
+        "AC2: On the Pull requests board, a local review starting, finishing or being published changes neither the lane, the position nor the visibility of the card (a DOM test updates `localReview` on a shown card and asserts the same lane and index); cards are ordered by `updatedAt` descending (R1) [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC3: Default grouping \"Status\" shows Draft · Waiting for review (no decision or REVIEW_REQUIRED) · Changes requested · Approved, with Merged and Closed only when the state filter includes them; grouping \"My role\" shows Requested from me · Mine · Others; quick filters \"Requested from me\", \"Mine\" and \"CI failed\" narrow the board; every shown card satisfies all filters and the search (no active-review bypass, a test with an active review and a non-matching author shows nothing); a lane that cannot hold a card under the current filters is not drawn (R2, spec AC2, AC13) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC4: The card reason line is derived from GitHub data only; Keryx review state appears only in the work row [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC5: Every PR card and list row renders a Keryx work row with exactly three slots (review, Flow, session) whose DOM structure is the same with zero and with three links, and the row has a fixed height in `apps/desktop/src/styles/review.css`; the review slot shows the state from `localReview` without a round number or behind count and opens the current review panel; the Flow slot shows \"Flow #<id> · <stage>\" and opens the Flow; empty slots show the labelled actions \"Run review\", \"Create Flow\", \"Open in session\" (R4 part, R7, spec AC14) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); \"Fix review comments\" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]",
+        "AC7: \"Open in session\" on a PR with no bound session creates a new session bound to the PR Subject and prefills the composer with the PR URL without sending it; pressing it again opens the same session (newest non-archived bound session); the session slot menu lists the bound sessions and \"New session\", which creates another bound session (R5, spec AC8 part) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]",
+        "AC9: \"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers \"Link Flow #<id>?\" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC10: In a PR-bound session, `/review` without a target opens the launch dialog with that PR preselected, and the review started there appears as the review link on that PR card without a manual refresh (R6, spec AC9) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC11: Issues board default grouping is by GitHub state (Open · Closed, Closed drawn only when the state filter includes closed issues); GitHub Project grouping is unchanged; the Flow stage filter is gone; issues without a Flow are spread over the GitHub columns (R3, spec AC12) [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC12: Each Issue card has a work row with a Flow slot (link with stage, or \"Create Flow\") and a session slot (bound sessions found through `subject`, or \"Open in session\") [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC13: The default Issues source is the project repository: `keryx issues list` with `source: \"repository\"` lists `/repos/{owner}/{repo}/issues` of the repository resolved from the project cwd and excludes pull requests; \"Assigned to me\" and the other sources stay selectable and a stored source preference wins (D5) [verify: exec `bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues`]",
+        "AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC15: `attachBadges` (`src/review/desk-run-store.ts`) and `localBadge` (`src/review/board-badges.ts`) still agree [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]",
+        "AC16: Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" passes as one integrated test over the App wiring (bound session created, launch dialog preselects the PR, the started run shows on the card) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]",
+        "AC18: Desktop typecheck and the full Desktop test suite pass [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+        "AC19: Deviation (a) (team review requests) stays open because stage 1 introduces no team membership; the implementation plan records it [verify: none — documentation statement, checked in review]"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/activity/review.mdc",
+      ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      ".metaproject/rules/stacks/ts-js-node/security.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc"
+    ],
+    "cross_repo": [],
+    "memory": {
+      "query": "desktop review board pull requests issues session flags subject",
+      "status_filter": "accepted",
+      "entries": [
+        {
+          "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "gdctx-flag-allowlist-no-bundle-expansion",
+          "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+        },
+        {
+          "path": "known-mistakes/review-ingest-discards-verdicts.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+          "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+        },
+        {
+          "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+          "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+        },
+        {
+          "path": "constraints/stale-installed-keryx-binary.md",
+          "type": "constraint",
+          "status": "accepted",
+          "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+          "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+        },
+        {
+          "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+          "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+        },
+        {
+          "path": "lessons/theme-switch-repaint.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+          "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+        },
+        {
+          "path": "lessons/allowlist-not-a-boundary.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A shell allowlist matched against the raw command string is not a security boundary",
+          "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+        },
+        {
+          "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+          "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+        },
+        {
+          "path": "task-notes/sac-proposal-7854a304859a4170.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: найди все не завершенные flow",
+          "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+        },
+        {
+          "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+          "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+        }
+      ],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-security-code",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "default": "keryx review required --depth auto roster (operator asked to run the review; defaults taken)"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "budget": {
+        "max_findings_per_reviewer": 25
+      },
+      "omissions": [],
+      "model_plan": {
+        "strategy": "adaptive",
+        "current_model": "claude-opus-5-5"
+      }
+    }
+  },
+  "reviewer": "review-logic",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "scope_mode": "diff",
+  "slices": [
+    "slice-02"
+  ],
+  "branch": "feat/desktop-review-v2-stage1",
+  "base_sha": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "pr_context": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/pr-context.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_findings": 25
+  },
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "layers": {
+    "version": 1,
+    "files": [
+      "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "apps/desktop/src/review/prWork.test.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "docs/docs/cli-reference.md",
+      "docs/docs/guides/desktop-issues.md",
+      "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "src/acp/shell-session-organize.test.ts",
+      "src/commands/issues.test.ts",
+      "src/commands/issues.ts",
+      "src/integrations/issues-board.test.ts",
+      "src/integrations/issues-board.ts",
+      "src/integrations/issues-github.ts"
+    ],
+    "prHead": "d7b0f7058e919a5880319588ad95395b7ff66153",
+    "graphCommit": "d7b0f7058e919a5880319588ad95395b7ff66153",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": [
+        "scripts/verify-native-coverage.ts",
+        "src/cli-registry.ts",
+        "src/cli.ts",
+        "src/commands/agents-external.ts",
+        "src/commands/approvals.test.ts",
+        "src/commands/help.ts",
+        "src/commands/issue-workspace.ts",
+        "src/commands/permissions-command.test.ts",
+        "src/commands/skills-references.test.ts",
+        "src/commands/skills-remove.test.ts",
+        "src/integrations/issue-source.ts",
+        "src/integrations/issues-projects.test.ts",
+        "src/integrations/issues-projects.ts",
+        "src/integrations/issues/service.ts",
+        "src/session/issues/issue-origin.ts",
+        "src/session/issues/issues-launch.ts"
+      ]
+    },
+    "symbols": [],
+    "relatedTests": [
+      "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "apps/desktop/src/review/prWork.test.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "src/acp/shell-session-organize.test.ts",
+      "src/commands/approvals.test.ts",
+      "src/commands/issues.test.ts",
+      "src/commands/permissions-command.test.ts",
+      "src/commands/skills-references.test.ts",
+      "src/commands/skills-remove.test.ts",
+      "src/integrations/issues-board.test.ts",
+      "src/integrations/issues-projects.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  },
+  "metaproject": {
+    "memory": [
+      {
+        "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "gdctx-flag-allowlist-no-bundle-expansion",
+        "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+      },
+      {
+        "path": "known-mistakes/review-ingest-discards-verdicts.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+        "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+      },
+      {
+        "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+        "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+      },
+      {
+        "path": "constraints/stale-installed-keryx-binary.md",
+        "type": "constraint",
+        "status": "accepted",
+        "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+        "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+      },
+      {
+        "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+        "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+      },
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+      },
+      {
+        "path": "lessons/allowlist-not-a-boundary.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A shell allowlist matched against the raw command string is not a security boundary",
+        "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+      },
+      {
+        "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+        "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+      },
+      {
+        "path": "task-notes/sac-proposal-7854a304859a4170.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: найди все не завершенные flow",
+        "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+      },
+      {
+        "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+        "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+      }
+    ]
+  },
+  "round": 3,
+  "prior_findings": [
+    {
+      "round": 2,
+      "finding": {
+        "id": "HL-001",
+        "severity": "blocker",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const only = live.length === 1 ? live[0] : undefined;\n  const fresh = only ? freshFor(only) : [];\n  return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };",
+        "problem": "The round-1 fix makes resolveFlowLinks link nothing when several requests are pending, and gives each request a 15-minute expiry. Attribution is still by arrival, though. When exactly one request is pending, the single package that appears in the checkout's flow list within the window is linked to it, whoever created it. The function's own doc names the reason several pending requests link none: 'which package belongs to which request cannot be told otherwise'. The same holds for one request and one package made by another producer. The fix for HL-002 also opens a new path into this residual. subjectOpener hands a repeat call the in-flight open's promise, 'whatever its target or prompt'. createPrFlow then still calls `flowLinks.expect(id, known)` on the id it gets back. So 'Open in session' followed by 'Create Flow' before session/new answers registers a pending flow link for a session whose composer holds only the PR URL, never the flow prompt (the journal records 'flow prompt not applied to that session'). That session will never make a package of its own. The only package its request can ever link is someone else's.",
+        "impact": "Trigger A: the person presses 'Create Flow' on PR #A, and within 15 minutes exactly one other flow package appears in the same checkout. It can come from another agent session (this repository runs parallel flows), the keryx CLI, or the Issues board's 'Create Flow' / prepare-flow in the same window. The person may not have sent the prefilled prompt yet, or may never send it. Trigger B, new in this round: 'Open in session' then 'Create Flow' on the same PR while session/new is in flight, then any one package appears within 15 minutes. Outcome, persisted in both cases: linkFlow → `_keryx/session_flags` writes `flow = <foreign dir>` into the PR session's flags.json. The dir is then claimed, so it is never re-attributed. prFlows adds the flows of bound sessions, so PR #A's card shows 'Flow #<foreign>'. The session header links to it, and new sessions opened from the card are created through `workOnFlow(<foreign dir>)`. Nothing warns that the link was inferred. This is silently wrong persisted data, shape 2.",
+        "suggested_fix": "Attribute positively, not by arrival. (1) Link a fresh package only when it names the request. For example, have flowPrompt ask the orchestrator to record the PR URL as the flow's prUrl (prFlows then finds it by URL and no inferred link is needed), or record the requesting session id. Link only a fresh FlowCard whose prUrl matches card.url or whose recorded session matches. (2) If arrival must stay, arm the request only once the session's own prompt is sent: start the window from the session's first turn after expect, not from the button press. A request whose prompt was never sent then never links. (3) In createPrFlow, call expect only when this call made the open and filled flowPrompt. Have openSubject report whether the returned promise was coalesced, or keep the flow intent in the in-flight entry. Add tests: one pending request plus one package from another producer asserts no link, or only the matching prUrl. A coalesced 'Open in session' → 'Create Flow' asserts no pending link.",
+        "evidence": "prWork.ts resolveFlowLinks: `live` keeps unexpired requests with no session Flow. `candidates` are the unclaimed dirs. With `live.length === 1` and `freshFor(only).length === 1`, it returns a link for `fresh[0]` and nothing checks who made the package. FLOW_LINK_WINDOW_MS = 15 * 60_000, and its doc says only that a package appearing *later* is not linked. usePendingFlowLinks.ts passes `flows.map(flow => flow.dir)`, the whole project flow list, and calls linkRef.current(sessionId, dir). App.tsx wires that to `(id, dir) => void s.linkFlow(id, dir)`. App.tsx createPrFlow: `const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true); if (id) flowLinks.expect(id, known);`. prWork.ts subjectOpener: `const running = inFlight.get(key); if (running) return running;`, which returns the first open's promise and ignores this call's prompt and prefillExisting. Journal T17: 'a repeat press during an open reuses it (flow prompt not applied to that session)'. It does not mention the pending link that is still registered. Tests: usePendingFlowLinks.dom.test.tsx covers one pending request plus one package (linked), several packages, two pending requests, and expiry. It has no case where a foreign package arrives inside the window, and no coalesced Create Flow case. prWork.test.ts:119 asserts the single-pending link. Law 4: the deliberate choice was read in the resolveFlowLinks doc, the FLOW_LINK_WINDOW_MS doc and the journal's 'Behavior changes accepted by the orchestrator, listed for the owner'. Its stated premise, that attribution cannot be told when it is ambiguous, applies equally to a single foreign package. No owner acceptance of a within-window foreign link is recorded.",
+        "confidence": "medium",
+        "blocking_merge": true,
+        "dedupe_key": "pending-flow-link-attribution-by-arrival",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/prWork.ts resolveFlowLinks (single-pending branch links any fresh unclaimed dir)",
+            "apps/desktop/src/review/usePendingFlowLinks.ts (effect feeds the whole project flow list; expect arms on button press)",
+            "apps/desktop/src/App.tsx createPrFlow (expect after a possibly coalesced openPrSession)",
+            "apps/desktop/src/review/prWork.ts subjectOpener (returns the in-flight open regardless of prompt)"
+          ],
+          "enumeration_method": "keryx ctx rg 'HL-001|HL-002|FLOW_LINK_WINDOW|subjectOpener' over apps/desktop/src and the flow 517 journal: FLOW_LINK_WINDOW_MS is defined in prWork.ts and used only by usePendingFlowLinks.ts. subjectOpener is used only in App.tsx:392 (openSubject), and its one caller is openPrSession. createPrFlow is the only caller of flowLinks.expect in slice-02. Read in full in slice-02."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "HW2-001",
+        "severity": "major",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {\n  const current = readSessionFlags(dir);",
+        "problem": "A session's flags.json is a shared state file. updateSessionFlagsAt reads it, merges the change and writes the whole object back ({archivedAt, pinnedAt, flow, subject}) without taking a lock. The temp-file-and-rename write prevents torn files, not lost updates. concurrency-patterns.mdc Rule 2 requires a lock for a read-modify-write of a shared state file. The unlocked read-modify-write predates the PR: base setSessionFlags had the same body. This PR widens it in three ways. (1) The new `subject` field rides in the same unlocked write. (2) updateSessionFlagsAt is exported and called from the issue binder in the `keryx issue-workspace` child process (bindIssueSubject). (3) Desktop now writes flags automatically, with no user action: PendingSubjects.apply at the end of a turn and linkFlow from a pending Create Flow.",
+        "impact": "Trigger: two keryx processes write the same session's flags.json at once. Two processes do exist. Desktop spawns one keryx ACP server per window (bridge.rs launch, \"Locate and spawn keryx for one window\"), and AppShell offers \"New window\" on the same project. The Issues board runs `keryx issue-workspace` as a separate child, whose prepare-flow calls setSessionFlags({flow}) on the issue session. Example: window A finishes the first turn of a new PR session S, and PendingSubjects.apply writes {subject}. At the same moment window B pins or archives S (archiveIdle or the Sessions list). Both read the old flags and each writes back its own merge, so the later rename silently drops the other's change. Outcome: a lost subject (the PR card no longer finds its session, and Desktop has already dropped its pending entry because the write returned success), or a lost flow link, pin or archive. Each write is synchronous and short, so the window is narrow. Law 2 still applies: the race is not dismissed for improbability, and its outcome is a silently lost persisted value. Rated major, not the table's blocker default, because the unlocked read-modify-write is pre-existing; this PR widens it but does not introduce it. Round obligation 4: the pre-existing defect needs a disposition. I recommend fixing it here, since it is small and in the same contract.",
+        "suggested_fix": "Serialise the read-modify-write per session directory with an exclusive-create lock file (O_EXCL, released in finally, stale recovery by PID or age), following Rule 1. For example, add a synchronous `withFileLockSync(path.join(dir, \"flags.json.lock\"), () => { read; merge; writeFlags })` in updateSessionFlagsAt, so that setSessionFlags, handleSessionFlags, issues-launch prepare-flow and bindIssueSubject all go through it. Alternatively, make the store async and reuse lib/fs withFileLock. Add a test that runs two child processes, each applying a different flag change to one session in a loop, and asserts both flags survive.",
+        "evidence": "slice-05 organize.ts: updateSessionFlagsAt = readSessionFlags(dir) → `next = { ...current }` → writeFlags(dir, next), and writeFlags = writeOwnerOnlyFileAtomic (config-dir.ts:461: temp file + renameSync, no lock). `keryx ctx rg -n \"lock|concurren|race\" src/session/organize.ts` returns 0 matches, and no comment or commit gives a reason for the missing lock (git log -- src/session/organize.ts: ae25e5de4, eaac31a23, 4fc021cdf, ec1687550, 5b7b8be56; none mentions locking). Writers, enumerated by `keryx ctx rg -n \"setSessionFlags|updateSessionFlagsAt|withIssueBinding\\(\" src --glob '!*.test.ts'`: server.ts:2964 handleSessionFlags (ACP process, per window); issues-launch.ts:116 setSessionFlags({flow}) inside withIssueBinding (run by src/commands/issue-workspace.ts, a CLI child); issue-session.ts:53 updateSessionFlagsAt({subject}) (bindIssueSubject, same child). Desktop callers of `_keryx/session_flags`: useAcpSession PendingSubjects write (new), applyPendingFlow/linkFlow (linkFlow new), archiveIdle, setFlags. Process model: apps/desktop/src-tauri/src/bridge.rs acp_start → launch \"spawn keryx for one window\"; issues.rs builds `[\"issues\", action, ...]` for a child. The withIssueBinding lock is per issue binding file, not per flags.json, so it does not serialise the ACP server's writes.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "session-flags-rmw-no-lock",
+        "class_scope": {
+          "sites": [
+            "src/session/organize.ts updateSessionFlagsAt (the read-modify-write; setSessionFlags delegates to it)",
+            "src/acp/server.ts handleSessionFlags → setSessionFlags (ACP server, one per Desktop window)",
+            "src/session/issues/issues-launch.ts:116 setSessionFlags({flow}) (issue-workspace CLI child)",
+            "src/session/issues/issue-session.ts:53 bindIssueSubject → updateSessionFlagsAt({subject}) (issue-workspace CLI child, new)"
+          ],
+          "enumeration_method": "keryx ctx rg -n \"setSessionFlags|updateSessionFlagsAt|withIssueBinding\\(\" src --glob '!*.test.ts' (10 matches, 4 files: every non-test writer of flags.json goes through updateSessionFlagsAt), plus keryx ctx rg over apps/desktop/src-tauri/src for acp_start/issues to establish the process model"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "RG-001",
+        "severity": "major",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;",
+        "problem": "This change makes `DEFAULT_SOURCE = \"repository\"` (apps/desktop/src/issues/model.ts) the source of every account with no stored choice; a choice is stored only when the user changes the select. useIssueCollection.ts sends it through requestIssues/issues_request to whichever keryx CLI Desktop runs. A keryx that predates this PR rejects it: base src/integrations/issues-board.ts:97 (b147408) accepts only assigned|created|mentioned|subscribed and throws invalidInput \"configuration: Invalid Issues request.\". Only the keryx built from this same PR accepts \"repository\".",
+        "impact": "Trigger: Desktop at this head with the CLI setting \"Automatic\" (the recommended default, which prefers the keryx on PATH; SettingsView.tsx), \"keryx on PATH\" or \"Custom\", that keryx older than this PR, and Issues opened for an account that never chose a source. Outcome: base loaded \"Assigned to me\"; head fails the first load with \"configuration: Invalid Issues request.\" and shows no issues. Retry repeats the failure (isAccessError does not match `configuration:`), and requestIssues does not turn this error into its \"Choose the bundled CLI\" hint. The PR covers the same skew for `subject` with a notice, but not for this default.",
+        "suggested_fix": "When a list with the default (unstored) `repository` source fails with `configuration:`, fall back to \"assigned\" for that load and show a one-line update/bundled-CLI hint. Or map this error in requestIssues to the existing \"Choose the bundled CLI in Desktop Settings\" message. Add an IssuesBoard test whose request rejects `source: \"repository\"` with that error and asserts the board still lists issues or shows the hint.",
+        "evidence": "Head: model.ts `export const DEFAULT_SOURCE: IssueSource = \"repository\";`. IssuesBoard.tsx VerifiedBoard falls back to DEFAULT_SOURCE when nothing is stored; `change()` is the only writer of `.source`. useIssueCollection.ts passes `source` in the list request. platform/issues.ts invoke(\"issues_request\"). src-tauri/src/issues.rs issue_args passes the request JSON to `keryx issues list` via invoke_review, the user-selected CLI. Base b147408 src/integrations/issues-board.ts listUrl lines 96-105: `![\"assigned\", \"created\", \"mentioned\", \"subscribed\"].includes(source) || ... throw new Error(invalidInput)`. issues-github.ts: `invalidInput = \"configuration: Invalid Issues request.\"`. useIssueCollection.ts isAccessError matches only access|account_mismatch|source_unavailable. SettingsView.tsx SOURCES: \"Automatic\" means keryx on PATH, else the bundled one. Law 4: the flow docs, journal and PR body record no decision on older CLIs for the default source (keryx ctx rg 'older keryx|bundled|Invalid Issues request' over the flow package and docs/requirements/keryx-desktop-review-v2). This is a runtime edge (spawned CLI process) the code graph does not carry; it was traced by reading source, not taken from the computed set.",
+        "confidence": "medium",
+        "reviewer": "review-regression",
+        "dedupe_key": "issues-default-source-repository-older-cli",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/issues/IssuesBoard.tsx VerifiedBoard source initializer (falls back to DEFAULT_SOURCE)",
+            "apps/desktop/src/issues/useIssueCollection.ts list request (sends `source` to the CLI)"
+          ],
+          "enumeration_method": "keryx ctx rg --all 'useIssueCollection|defaultFilters|groupForRow|SOURCES|IssueScope|IssueListSource' over apps/desktop/src (non-test): DEFAULT_SOURCE has one reader (the IssuesBoard initializer); useIssueCollection has one caller (IssuesBoard Collection). IssueOriginDetail imports only isAccessError and never lists by source, so the class has these two sites only."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-001",
+        "severity": "major",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "line": null,
+        "quote": "const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });",
+        "problem": "The App fixtures order their asserts after session/new, the flow-list refresh on window focus and the _keryx/session_flags write with a fixed 40 ms delay (settle, twice in packagesAppear), not by waiting on a state. tdd-workflow.mdc Rule 6.",
+        "impact": "On a loaded CI runner the refresh can land after the delay. The positive asserts (flagWrites, composer value, the 'Flow #506' slot) then fail at random. The negative asserts after packagesAppear('507-a','508-b') ('Nothing more is linked', slot(13) 'Create Flow') pass without proving the refreshed list was seen. R2-07 is red on this fixture locally, so the path ran here, but nothing in the fixture proves it.",
+        "suggested_fix": "Replace settle with waitFor(predicate, deadline), the same shape as the composer-ready loop in the file. Wait for flagWrites.some(w => w.flow) or for the slot text. For the 'two link none' case, first wait for a positive artifact that the new list arrived (a flows_list call count after the focus event, or 507/508 visible on the Flows tab), then assert that nothing was written. Do the same in app-navigation.fixture.tsx.",
+        "evidence": "app-work-row.fixture.tsx (added in a34d8961b) defines settle as a fixed 40 ms setTimeout and uses it at every async step. app-navigation.fixture.tsx has the same definition, added in this PR by 21030edf0, which is not an ancestor of base b147408a8 (git merge-base --is-ancestor exit 1). The rule table in tdd-workflow.mdc rates 'Sleep or fixed delay for async work' as major, always. No reason for the delay is given in either file. The composer-ready loop in both files polls a state with a deadline, so it is not part of this finding.",
+        "confidence": "high",
+        "dedupe_key": "testing:app-fixtures-fixed-delay-settle",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/test/app-work-row.fixture.tsx: const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });",
+            "apps/desktop/src/test/app-navigation.fixture.tsx: const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });"
+          ],
+          "enumeration_method": "keryx ctx rg --all --json 'setTimeout\\(resolve, [0-9]+\\)' apps/desktop/src: the two 40 ms settle definitions are the fixed-delay waits added by this PR. The two 10 ms hits in the same fixtures are poll loops with a deadline on composer readiness (a wait on state). ReviewBoard.dom.test.tsx:633 and Composer.dom.test.tsx:351 are outside the changed gates of this round. The blame of the app-navigation settle line is 21030edf0, which is not on base."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "AR-003",
+        "severity": "minor",
+        "file": "apps/desktop/src/acp/types.ts",
+        "line": null,
+        "quote": "export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {",
+        "problem": "The fix round wrote two rules out a second time instead of delegating to one implementation (round obligation 7, 'one rule, one implementation'). (1) Bound sessions: `boundSessions` filters on `archivedAt === undefined && sameSubject(...)`. `boundSessionIndex`, added in a34d8961b, filters on `archivedAt !== undefined || !flags.subject` and groups by `subjectKey`, a second encoding of the same equality. Its doc says it is 'equal ... exactly when sameSubject holds'. Only the sort comparator is shared. (2) Review progress caption: `reviewProgressText` (ReviewProgress.tsx) rebuilds the visible caption of the `ReviewProgress` component: wave, percent, the `![\"running\",\"queued\",\"completed\"].includes(state) && RUN_STATE_LABEL[state]` rule, then label. The same file holds both copies. In the same commit, `prFlows` was correctly made to delegate to `prFlowIndex`. These two pairs were not.",
+        "impact": "No wrong output today: prWork.test.ts asserts that the index and boundSessions agree, and the two captions read the same inputs. The cost falls on the next change. Suppose an archived-but-pinned session, or a repositoryId match, is added to one copy of the bound-session rule. The work row (the index) and App.openPrSession or the Issues board (boundSessions) then disagree about which session is 'the PR's newest', and only the equivalence test notices. The same holds for the caption, between the slot title and the panel progress line.",
+        "suggested_fix": "Mirror prFlows/prFlowIndex. Make `boundSessions(sessions, subject)` return `boundSessionIndex(sessions)(subject)` (as a fresh array), or build the index on `sameSubject` and drop the second equality. Have the `ReviewProgress` component render its caption from the same parts function that `reviewProgressText` joins, so the state-label rule exists once.",
+        "evidence": "slice-02 diff: acp/types.ts adds boundSessions, subjectKey and boundSessionIndex. ReviewProgress.tsx adds reviewProgressText. `git show --stat a34d8961b` lists acp/types.ts (+23) and ReviewProgress.tsx (+22), so both copies came from the fix round. `keryx ctx rg --all -n 'archivedAt === undefined|archivedAt !== undefined|subjectKey\\(|sameSubject\\(|RUN_STATE_LABEL\\[' apps/desktop/src --glob '!*.test.*'` finds acp/types.ts:203 (boundSessions), acp/types.ts:217-224 (boundSessionIndex), ReviewProgress.tsx:74 (component caption) and ReviewProgress.tsx:96 (reviewProgressText).",
+        "confidence": "high",
+        "reviewer": "review-architecture",
+        "dedupe_key": "desktop-rule-restated-not-delegated",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/acp/types.ts:201-205 (boundSessions)",
+            "apps/desktop/src/acp/types.ts:213-225 (boundSessionIndex + subjectKey)",
+            "apps/desktop/src/review/ReviewProgress.tsx:74 (ReviewProgress caption)",
+            "apps/desktop/src/review/ReviewProgress.tsx:90-99 (reviewProgressText)",
+            "apps/desktop/src/review/prWork.ts:68-70 (prFlows -> prFlowIndex, already delegating: the correct form)"
+          ],
+          "enumeration_method": "keryx ctx rg --all over apps/desktop/src (non-test) for archivedAt checks, subjectKey(/sameSubject( and RUN_STATE_LABEL[; the files a34d8961b touched (git show --stat) cross-checked against the paired index/plain functions in prWork.ts and acp/types.ts"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "DG-006",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);",
+        "problem": "Base showed the publication cue only on open PRs (ReviewTags 'Action required' and ReviewAction 'Review publication' were both gated by card.state === \"open\"). On the head, the work row's review slot takes the warn tone (is-attention) and the text 'Review · publication pending' for publicationPending whatever the PR state is. localBadge (src/review/board-badges.ts:49) sets publicationPending with no PR-state gate, so a merged or closed PR whose run was left at publication 'pending' gets a 'waits on you' cue that needsViewerAttention, and so the tab indicator, does not count.",
+        "impact": "A merged or closed card in the Merged or Closed lane looks like it needs the viewer's action, and the board disagrees with the tab indicator.",
+        "suggested_fix": "Gate waitsOnViewer's publicationPending, and reviewSlotState's 'publication pending', on card.state === \"open\" as base did; otherwise fall through to the run state.",
+        "evidence": "base-diff: base ReviewResults ReviewTags/ReviewAction (slice-02, removed lines) gate on card.state === \"open\"; head PrWorkRow.tsx waitsOnViewer and prWork.ts reviewSlotState do not. Refute: read src/review/board-badges.ts:49 (no state gate) and model.ts needsViewerAttention (gated on open); no comment or PR text gives a reason for the change.",
+        "confidence": "medium",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "base-diff"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "DG-007",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/review/ReviewProgress.tsx",
+        "line": null,
+        "quote": "export function reviewProgressText(badge: ReviewCard[\"localReview\"]): string | null {",
+        "problem": "Fix a34d8961b replaced CardReviewProgress, which on base rendered <TranscriptUpdate at={badge?.lastActivityAt} /> for a running review, with reviewProgressText, which never reads lastActivityAt. The 'Transcript updated …' stamp is now gone from the board, slot title included. Yet ReviewBoard's badgesEqual still compares lastActivityAt, and that comparison is now the only non-test reader of card.localReview.lastActivityAt. A poll that moves only the timestamp replaces the snapshot and re-renders ReviewResults and every work row for a value nothing on the board shows.",
+        "impact": "A stalled running review can no longer be spotted from the board (only from the panel's ReviewRuns), and every running-review tick re-renders the board for nothing.",
+        "suggested_fix": "Either append the relative 'updated …' time to reviewProgressText for running reviews, or drop lastActivityAt from badgesEqual.",
+        "evidence": "base-diff: base ReviewProgress.tsx CardReviewProgress rendered TranscriptUpdate (fix diff a34d8961b); head reviewProgressText omits it. keryx ctx rg lastActivityAt (non-test): ReviewBoard.tsx:75 badgesEqual and ReviewRuns.tsx:133 (the run's own field) only. Refute: the doc comment justifies moving the progress block (AC4, fixed row height), not dropping a text stamp or keeping its change-tracking.",
+        "confidence": "medium",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "base-diff"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "DG-008",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "const only = live.length === 1 ? live[0] : undefined;",
+        "problem": "The PR body and AC9 say the new package that appears while a request is pending is linked to that request's session. After the fix, resolveFlowLinks links only when exactly one request is live. With two Create Flow requests pending (PR A, then PR B within 15 minutes), the first fresh package ends both requests unlinked, so B's own later package is not linked either. The code comment documents this and its reason holds; the PR description and Known gaps do not.",
+        "impact": "A user who starts Create Flow on two PRs gets neither Flow on its card, with no notice, contrary to what the description promises.",
+        "suggested_fix": "Add to Known gaps: 'With two or more Create Flow requests pending, none is linked automatically.' Or keep the other requests pending instead of ending all of them.",
+        "evidence": "consumer-trace: App.tsx createPrFlow -> usePendingFlowLinks.expect -> effect -> resolveFlowLinks (prWork.ts) with two live entries -> only undefined -> { pending: [], links: [] }. Refute: PR body Known gaps names only the outside-window case; the fixture test 'two link none' covers two packages, not two requests.",
+        "confidence": "high",
+        "degradation_class": "diff-vs-description",
+        "evidence_kind": "consumer-trace"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "DG-009",
+        "severity": "minor",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "    ...(repository ? {} : { pulls: \"false\" }),",
+        "problem": "The new 'repository' source (now the Desktop default) lists /repos/{owner}/{repo}/issues with per_page=40 and no pulls parameter, and drops pull requests only after the fetch (data.filter(x => !x.pull_request)). Each page holds 40 minus the PRs on it. On base every source used /issues with pulls=false, so a page could hold up to 40 issues.",
+        "impact": "In a repository whose most recently updated items are mostly PRs, the first load of the default Issues board shows few issues, or none. useIssueCollection.load does not continue on an empty page. IssuesBoard shows 'No matching issues on the loaded pages.' and a 'Load more issues' button, and the user pages through PRs by hand.",
+        "suggested_fix": "For the repository source, keep fetching the next page until the batch reaches N issues or a small request cap. Or auto-load the next page in useIssueCollection when a page returns zero rows and nextCursor is set. Add a test with a page made only of PRs.",
+        "evidence": "base-diff: base listUrl set { filter: source, ..., per_page: '40', pulls: 'false' } on new URL('/issues', API). Head listUrl uses '/repos/'+repository+'/issues' and spreads `...(repository ? {} : { pulls: 'false' })`, and listIssuePage keeps `data.filter((x) => !x.pull_request)`. The AC13 test feeds a PR row into the repository response, so the code expects PRs on the page. consumer-trace: useIssueCollection.ts:59-72 sets cursor and rows with no auto-continue. IssuesBoard.tsx:263 shows 'No matching issues on the loaded pages.' and :292 shows 'Load more issues'. Refute: read both; nothing refills a short page. How many PRs a page holds depends on the data, hence minor.",
+        "confidence": "medium",
+        "reviewer": "review-degradation",
+        "dedupe_key": "issues-repository-source-page-includes-prs",
+        "degradation_class": "default-change",
+        "evidence_kind": "base-diff"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-007",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "quote": "  const only = live.length === 1 ? live[0] : undefined;",
+        "problem": "Frozen AC9 says the first new flow package that appears while the request is pending is linked; when several packages appear, none is. After T17, resolveFlowLinks links only when exactly one request is live, and a request expires after FLOW_LINK_WINDOW_MS (15 min). Two pending requests, or a package that appears after 15 minutes, link nothing. Neither the AC, the plan's State x event matrix nor implementation-plan.md 'Создание из сессии' states this.",
+        "impact": "The narrowing is correct (literal AC9 would reintroduce the HL-001 blocker), but the frozen AC and the code disagree, and nobody has accepted the difference before `keryx flow ac confirm AC9`. Not a blocker: the AC's single-request scenario is implemented and tested.",
+        "suggested_fix": "Have the owner amend AC9 via `keryx flow ac update` (link only when it is the one new package and the one pending request, within 15 minutes of the press), or record the narrowing as an accepted deviation before confirming. Update the plan matrix and implementation-plan.md to match.",
+        "evidence": "prWork.ts resolveFlowLinks: `const live = pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId))`, `const only = live.length === 1 ? live[0] : undefined`, returns `pending: []` with no link otherwise; FLOW_LINK_WINDOW_MS = 15 * 60_000. acceptance-criteria.md AC9 text; plan.md matrix row 'Create Flow pending for a session'.",
+        "confidence": "high",
+        "dedupe_key": "ac9-flow-link-rule-vs-text"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-008",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "apps/desktop/src/App.tsx",
+        "quote": "    const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true);\n    if (id) flowLinks.expect(id, known);",
+        "problem": "subjectOpener (added in T17 for HL-002) returns the in-flight open's promise for a repeat call on the same Subject, whatever its prompt. createPrFlow still calls flowLinks.expect(id, known) afterwards. Pressing 'Open in session' and then 'Create Flow' before session/new answers registers a 15-minute pending flow link on a session whose composer holds only the PR URL, not the flow prompt.",
+        "impact": "If one foreign package appears within 15 minutes (another session, the CLI, Issues prepare-flow) and no other request is pending, linkFlow persists it as that session's `flow` flag. The PR card and the session header then show an unrelated Flow the user never asked this session to create. Introduced by the fix round. Narrow trigger: a double press within the open latency, plus a foreign package in the window.",
+        "suggested_fix": "Call expect only when the flow prompt was applied. For example, have subjectOpener report a reused in-flight open and skip expect then, or apply the flow prompt after the reused open resolves and then expect. Add a test: an in-flight open, then createPrFlow, then one new package links nothing.",
+        "evidence": "prWork.ts subjectOpener: `const running = inFlight.get(key); if (running) return running;` (doc: 'whatever its target or prompt'). App.tsx createPrFlow lines 411-415. Journal T17: 'a repeat press during an open reuses it (flow prompt not applied to that session)'.",
+        "confidence": "medium",
+        "dedupe_key": "create-flow-expect-after-reused-open"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-009",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "    if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()\n      || !snapshot.cards.some(c => c.number === focus.number)) return;",
+        "problem": "A header-link focus for a repository the board is not showing returns early and is never cleared, since App clears only on onFocusHandled. The click switches to Pull requests and nothing opens, with no message. When the user later selects that repository for any reason, the PR panel opens unrequested.",
+        "impact": "No feedback at click time, and a panel opens at an unrelated later moment. This is the shape of LG-003's repro B, now limited to a PR the user once asked for. Low impact. The journal accepts it without a stated reason.",
+        "suggested_fix": "Select focus.repo on the board when it is among snapshot.repositories, then open the panel. Otherwise drop the request (call onFocusHandled) with a short notice that the repository is not on this board.",
+        "evidence": "ReviewBoard.tsx focus effect (fix commit a34d8961b); App.tsx reviewFocusHandled clears only on a matching nonce; journal T17 'a header focus for another repo stays armed until that repo is shown'.",
+        "confidence": "high",
+        "dedupe_key": "header-focus-cross-repo-armed"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-010",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "quote": "«Create Flow» открывает привязанную сессию с подготовленным текстом; первый новый пакет Flow, появившийся, пока запрос ждёт, привязывается к сессии.",
+        "problem": "The PR body at head 88e3faba9 is the round 1 text. It says the single new package that appears while the request is pending gets linked (no one-pending-request condition, no 15-min window). It says the session header links back to the PR, which does nothing for another repository (LG-009). It still says 'Still to do: a review-orchestrator round', and it still reports '1016 pass' (now 1034). It lists none of the T17 behaviour changes that the journal says are 'listed for the owner': the Create Flow window, progress moved to the slot title with 'Transcript updated' removed, the armed cross-repo focus, new sessions linking a Flow via a bound session, the launch dialog preselecting the newest Flow, and repeat-press reuse. implementation-plan.md 'Состояние этапа 1' has the same staleness.",
+        "impact": "The owner decides the merge from the body; its 'Known gaps and choices for the owner' list is incomplete, and two statements claim more than the code does.",
+        "suggested_fix": "Update the PR body: add the T17 behaviour changes under the owner-choices list, correct the counts, replace 'Still to do'. Update implementation-plan.md 'Создание из сессии' to match the narrowed rule.",
+        "evidence": "pr-context.md (body at head 88e3faba9); journal.md section 'T17 fix round 1'; git diff base..head of implementation-plan.md (T17 commit a34d8961b does not touch it); research-evidence/verify-tests-to-run-1.txt '1034 pass'.",
+        "confidence": "high",
+        "dedupe_key": "pr-body-stale-after-t17"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-011",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const id = await deps.newSession();\n  if (!id) return null;\n  deps.bind(id, subject);\n  deps.fill(prompt);\n  return id;",
+        "problem": "openSubjectSession awaits newSession, then fills the composer through App's fillComposer, which calls composer.current?.setText: the composer of whichever session is shown. openNew (useAcpSession.ts) adds a new session without showing it when the user switched elsewhere meanwhile, and still returns its id. The binding goes to the new hidden session, but the prompt replaces the draft of the session the user switched to. For Create Flow, createPrFlow then registers flowLinks.expect on the hidden session while the flow prompt sits in the other session.",
+        "impact": "Trigger: press Open in session or Create Flow on a PR with no bound session, then pick another session before session/new answers. Outcome: that session's draft is replaced by the PR URL or the flow prompt. If the user sends the flow prompt there, the single package it creates within 15 minutes is linked by linkFlow to the empty hidden session, so the PR card shows the Flow while the session that did the work is not linked to it. The window is the session/new latency, so the trigger is narrow.",
+        "suggested_fix": "Fill (and, in createPrFlow, expect) only when the new session is the one shown: pass isShown(id) through SubjectSessionDeps and skip fill and expect when it is false. Or hold the prompt as a per-session pending draft that is applied when that session is shown.",
+        "evidence": "App.tsx:352 fillComposer = setView(\"session\"); requestAnimationFrame(() => composer.current?.setText(text)). useAcpSession.ts openNew doc: 'The new session is added and shown unless the user switched elsewhere meanwhile', `const show = l.reg.created(r.sessionId, intent); ... return r.sessionId;`. App.tsx createPrFlow: `const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true); if (id) flowLinks.expect(id, known);`.",
+        "confidence": "medium",
+        "reviewer": "review-logic",
+        "dedupe_key": "subject-open-fills-shown-composer"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-012",
+        "severity": "minor",
+        "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "line": null,
+        "quote": "  const bound = issueSessions(sessions, issue).length;",
+        "problem": "The Issue work row labels its session slot from sessions whose flags.json subject names the issue, but keryx writes that subject only in withIssueBinding's `launch.stage === \"registered\"` branch (bindIssueSubject in src/session/issues/issue-session.ts), so only when a binding is first created. The click goes through the private per-account binding record instead. An issue bound before this version never gets a subject, even on reuse. Sessions bound under another GitHub account are counted although the private binding is per account (issueViewerKey).",
+        "impact": "For every issue bound before the upgrade, the row shows 'Open in session' in the empty style on every visit, while the click opens the existing session. With a second account, the row shows 'Session' and the click creates a new session. The slot misreports whether the issue has a session (AC12 'bound sessions found through subject'). No data is lost: the action itself is correct.",
+        "suggested_fix": "In withIssueBinding, also write the subject on the reuse path when readSessionFlags(dir).subject is absent, keeping the 'an unlinked subject is not written back' rule (for example, a marker that the subject was written once). Or count only the sessions of the current viewer's binding in the row.",
+        "evidence": "issue-session.ts: `if (launch.stage === \"registered\") { ... bindIssueSubject(dir, issue.ref); launch.stage = \"session_bound\"; }`; bindIssueSubject doc: 'Written once, when the session is bound'. There is no other call. IssueWorkRow.tsx: `onClick={() => onAction(\"open-session\")}`.",
+        "confidence": "high",
+        "reviewer": "review-logic",
+        "dedupe_key": "issue-work-row-subject-count-vs-binding"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-013",
+        "severity": "minor",
+        "reviewer": "review-logic",
+        "file": "src/integrations/issues-board.ts",
+        "quote": "  const repository = selectRepository(await reviewRepositories(cwd));",
+        "problem": "The default 'repository' Issues source always lists the first configured GitHub remote (origin first), with no repository choice. In a fork checkout, origin is a fork, whose Issues GitHub disables by default; /repos/{o}/{r}/issues then answers 410 Gone. issues-github.ts failure() has no 410 branch and reports 'unavailable: GitHub returned an unexpected Issues response. Refresh and retry.'",
+        "impact": "Trigger: first visit to Issues with no stored source, in a fork checkout or a project whose first GitHub remote has Issues disabled. Outcome: the default board shows an error telling the user to refresh, refreshing never helps, and the upstream repository's issues cannot be chosen for this source. Distinct from UX-008 (no GitHub.com remote at all, configuration error).",
+        "suggested_fix": "Map 410 to a configuration-kind message naming the repository and pointing to the Source select. Prefer the PR board's selected repository or the next configured remote with Issues enabled. Add a test where the repository listing answers 410.",
+        "evidence": "board-github.ts configuredRepositories puts origin first; selectRepository returns repositories[0] when nothing is requested; issues-github.ts failure maps only 401/404/403/429, and every other status becomes invalidResponse ('Refresh and retry'). GitHub's 410 for disabled Issues is documented behaviour, not reproduced.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "issues-repository-source-issues-disabled-410",
+        "class_scope": {
+          "sites": [
+            "src/integrations/issues-board.ts projectRepository",
+            "src/integrations/issues-github.ts failure (no 410 branch)"
+          ],
+          "enumeration_method": "keryx ctx rg 'listIssuePage\\(' (one production caller: src/commands/issues.ts); keryx ctx rg 'status ===' src/integrations/issues-github.ts (the complete status mapping)"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-015",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const existing = target === \"latest\" ? bound[0]?.sessionId : target === \"new\" ? undefined : bound.find(s => s.sessionId === target)?.sessionId;",
+        "problem": "AC7 requires that pressing 'Open in session' again opens the newest non-archived bound session. No test has two sessions bound to the same subject and asserts which one 'latest' opens. In prWork.test.ts every 'latest' call has at most one session bound to that subject. PrWorkRow.dom.test.tsx only checks that the stub received target 'latest'. app-navigation.fixture.tsx presses '2 sessions for #12' with two bound sessions, but asserts only that the titlebar contains 'PR org/project#12', which both satisfy. boundSessions ordering is tested on its own; the bound[0] pick is not.",
+        "impact": "Trigger: a change that resolves 'latest' to another member of bound, for example bound.at(-1). Outcome: by reading, the suite stays green while Open in session reopens the oldest bound session, against the AC7 text. I did not run this mutation.",
+        "suggested_fix": "In app-navigation.fixture.tsx, after `namedButton(\"2 sessions for #12\").click()`, assert `loaded.at(-1)` equals the id of the newest #12 session (the menu-created one, since the stored updatedAt grows with stored.size). Or add a prWork.test case with two bound sessions that have distinct updatedAt and assert that openSubjectSession(..., \"latest\", ...) returns the newer id.",
+        "evidence": "slice-04: prWork.test.ts tests 'Open in session…', 'the session menu's New session…' (s1 opened by id after s2 exists), 'Create Flow opens the bound session…', 'a repeat Open in session…' (the final 'latest' has only s1 bound to #101); PrWorkRow.dom.test.tsx `expect(calls.sessions).toEqual([[101, \"latest\", …]])`; app-navigation.fixture.tsx `await React.act(() => namedButton(\"2 sessions for #12\").click()); … assert.ok(host.querySelector(\".titlebar\")?.textContent?.includes(\"PR org/project#12\"), \"Another session is shown first\");`. Enumerated with keryx ctx rg '\"latest\"|sessions for|loaded' over apps/desktop/src tests and fixtures.",
+        "confidence": "high",
+        "reviewer": "review-logic",
+        "dedupe_key": "ac7-latest-bound-session-untested",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/prWork.ts"
+          ],
+          "enumeration_method": "keryx ctx rg '\"latest\"|sessions for|loaded' over apps/desktop/src *.test.ts* and *fixture*. These are every call that reaches the 'latest' branch: 11 in prWork.test.ts, 2 in PrWorkRow.dom.test.tsx, 2 presses in app-navigation.fixture.tsx. None has two bound sessions together with an assertion on which session is opened."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PF-003",
+        "severity": "minor",
+        "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "line": null,
+        "quote": "  const bound = issueSessions(sessions, issue).length;",
+        "problem": "PF-001 residual. IssueWorkRow calls issueSessions -> boundSessions (a filter with sessionFlags/sameSubject over every session, then a sort) once per issue row on every render. The PR board moved to boundSessionIndex for exactly this reason; the Issues board did not. The journal records it as left: 'Left: ARCH-2 re-export, IssueWorkRow per-row sessions'.",
+        "impact": "Reasoned, not measured. While the Issues view is the work view, App re-renders per flushed session-update batch (rAF / 250 ms) when any session streams. IssuesView and IssuesBoard are not memoised and get inline onWork arrows, so every row recomputes: rows x sessions cheap comparisons per frame (e.g. 200 x 300 = ~60k). Sub-frame on its own; jank risk at scale only.",
+        "suggested_fix": "In IssuesBoard Collection: const lookup = useMemo(() => boundSessionIndex(sessions), [sessions]); pass lookup(issueSubject(issue)).length (or the lookup) to IssueWorkRow instead of the raw session list.",
+        "evidence": "slice-02 IssueWorkRow.tsx render body; issues/model.ts issueSessions -> boundSessions; IssuesBoard.tsx workActions renders IssueWorkRow per card/list row/detail; App.tsx passes sessions={state.sessions} and an inline onWork; journal.md 'T17 fix round 1' Left line.",
+        "confidence": "high",
+        "reviewer": "review-performance",
+        "dedupe_key": "desktop-issueworkrow-per-row-bound-sessions",
+        "degradation_class": "performance"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PC-001",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "docs/docs/guides/desktop-issues.md",
+        "line": null,
+        "quote": "**Filters** can narrow the queue by repository, state, update date, author, label, assignee and Flow stage.",
+        "problem": "The PR changes the Issues default source to the project repository, removes the Flow stage filter, renames the card action to \"Open in session\", groups by GitHub state and adds a `repository` source to `keryx issues list`. User docs outside the diff were not updated: desktop-issues.md still says the board 'initially shows open issues assigned to the selected account', offers a 'Flow stage' filter, tells the user to 'Select **Open session**', and says 'The personal board groups those same issues by Keryx stage.'; cli-reference.md still says 'Use `assigned`, `created`, `mentioned` or `subscribed` for the source.' and 'The current directory does not restrict the personal queue.'",
+        "impact": "A user following the guide looks for a filter and a button that no longer exist and expects the assigned queue by default; a CLI or agent reader of the reference does not learn the cwd-resolved `repository` source.",
+        "suggested_fix": "Update docs/docs/guides/desktop-issues.md (default source, Open/Closed grouping, stage as work-row link, 'Open in session', no stage filter) and the issues section of docs/docs/cli-reference.md (add `repository`, reads the current directory's repository).",
+        "evidence": "Code at head: apps/desktop/src/issues/model.ts `export const DEFAULT_SOURCE: IssueSource = \"repository\";`; apps/desktop/src/issues/IssueWorkRow.tsx `: stage === \"needs_answer\" ? \"Open question\" : \"Open in session\";`; src/integrations/issues-contract.ts `export type IssueListSource = IssueScope | \"repository\";`. Docs unchanged in the PR: `git log b147408a8..88e3faba9 -- docs/docs/guides/desktop-issues.md docs/docs/cli-reference.md` is empty. Found with `keryx ctx rg -i \"issues list|source.*(assigned|mentioned|created)|Needs attention|In review lane|Flow stage filter|Open in Sessions\" docs README.md`. Other sites: desktop-issues.md lines 3, 13, 31; cli-reference.md issues section.",
+        "confidence": "high",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:issues-user-docs-stale"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PC-002",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const only = live.length === 1 ? live[0] : undefined;",
+        "problem": "The PR body was written before fix commit a34d8961b and no longer describes the head. (1) It says 'The single new flow package that appears while that request is pending gets linked to the session.'; the code links only when exactly one request is pending and within `FLOW_LINK_WINDOW_MS = 15 * 60_000`, so two concurrent Create Flow requests link nothing. The diff's docs/requirements/keryx-desktop-review-v2/implementation-plan.md stage-1 bullet and frozen AC9 ('the first new flow package that appears while that request is pending is linked') state the pre-fix rule. (2) The owner list 'UI choices taken without an owner decision' has six items; the journal's T17 entry adds seven more (15-min window; review progress only in the slot title and 'Transcript updated' stamp gone; header focus for another repo stays armed; new PR sessions link a Flow via a bound session; launch dialog preselects the newest of several Flows; repeat press reuses an in-flight open without the flow prompt; warn tone). (3) Verification says 'bun test src: 1016 pass, 0 fail.'; the head run reports 1034 pass.",
+        "impact": "The owner decides the merge from the body's 'Known gaps and choices for the owner'; seven fix-round behaviour choices, one narrowing frozen AC9, are only in the flow journal. The stage-1 state doc, the hand-off for stages 2-4, states the old linking rule.",
+        "suggested_fix": "Edit the PR body: describe the 15-minute window and the one-request/one-package rule, add the T17 choices to the owner list (flag the AC9 narrowing), refresh Verification to the head. Update the 'Создание из сессии' bullet of implementation-plan.md the same way.",
+        "evidence": "prWork.ts at head: `export const FLOW_LINK_WINDOW_MS = 15 * 60_000;` and the resolveFlowLinks doc comment 'several new packages or several pending requests link none and end every request'. journal.md T17: 'Behavior changes accepted by the orchestrator, listed for the owner: Create Flow window 15 min ...'. research-evidence/verify-tests-to-run-1.txt: 'Ran 1034 tests across 95 files.' Sites: PR body (pr-context.md 'What changes' / 'Known gaps' / 'Verification'), docs/requirements/keryx-desktop-review-v2/implementation-plan.md 'Состояние этапа 1', acceptance-criteria.md AC9.",
+        "confidence": "high",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:body-predates-fix-a34d8961b"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PC-003",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "line": null,
+        "quote": "  const bound = issueSessions(sessions, issue).length;",
+        "problem": "PR body: 'Issue sessions get it when `withIssueBinding` binds them.' At head the subject is written once, at the first bind, and only for github.com issues (src/session/issues/issue-session.ts: 'Written once, when the session is bound ... An issue whose URL is not a github.com issue page (GitHub Enterprise) has no subject keryx can store.'). The new Issue work row counts sessions by `subject` only, so an issue session bound before this version, or on a GitHub Enterprise host, shows 'Open in session' in the empty style although a bound session exists.",
+        "impact": "The owner reads the body as every issue session now showing on its card; after upgrade all earlier issue sessions and all Enterprise issue sessions show as unbound, and neither limit is listed under 'Known gaps and choices for the owner'.",
+        "suggested_fix": "State both limits in the body's Sessions bullet and in Known gaps, or backfill `subject` for existing issue bindings and let the row fall back to `hasIssue`.",
+        "evidence": "IssueWorkRow.tsx `const sessionText = bound > 1 ? `${bound} sessions` : bound ? \"Session\" : stage === \"needs_answer\" ? \"Open question\" : \"Open in session\";`; model.ts `issueSessions` → `boundSessions(sessions, issueSubject(issue))`; issue-session.ts `bindIssueSubject(dir, issue.ref);` inside the first-bind block next to `writeOwnerOnlyFileAtomic(path.join(dir, \"issue-link.json\"), ...)`; organize.ts `const SUBJECT_URL = /^https:\\/\\/github\\.com\\/...`.",
+        "confidence": "medium",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:issue-subject-only-new-github-com-bindings"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PC-004",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/session/subjectBinding.ts",
+        "line": null,
+        "quote": "      return; // not stored yet: tried again after its turn",
+        "problem": "PR body: 'On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved.' Open in session on an older keryx always creates a new, not-yet-stored session, so `_keryx/session_flags` is refused and PendingSubjects keeps the binding; the only retry is in the turn's finally (useAcpSession.ts `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId))`), so the SUBJECT_NOT_SAVED notice appears only after the first prompt. The scenario fixture asserts the notice right after open because its mock answers flags for any session id (`const flags = storesSubject && subject ? { subject } : {}; ... result = flags;`). implementation-plan.md repeats the claim ('сессия открывается, в ней появляется уведомление, что привязка не сохранена').",
+        "impact": "The owner and the stage-2 hand-off expect a warning on open; a person who opens a PR session on an older keryx and does not send sees none, and the card counts the session as bound for the app's lifetime. The App-level test cited as evidence passes only through a mock behaviour no keryx has.",
+        "suggested_fix": "State in the body and implementation-plan.md that the notice comes after the session's first turn, and make app-navigation.fixture.tsx's older-keryx mock refuse session_flags for an unstored session (assert the notice after a turn); or detect missing subject support and warn at open.",
+        "evidence": "subjectBinding.ts apply(): `try { flags = (await this.deps.write(sessionId, subject)) ?? {}; } catch { return; // not stored yet: tried again after its turn }` ... `if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED);`; useAcpSession.ts (slice-03) turn finally; base server.ts handleSessionFlags → setSessionFlags → locate throws `no session ${sessionId} in this project` for an unsaved session (issue-session.test.ts: 'keryx lists a session only after its first save'); app-navigation.fixture.tsx (slice-04) `assert.match(host.textContent ?? \"\", /did not save the pull request binding/);` directly after `namedButton(\"Open in session for #12\").click()`; prWork.test.ts 'After the first turn keryx has stored the session and answers, but without the subject.'",
+        "confidence": "medium",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:older-keryx-notice-after-first-turn"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-002",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/App.tsx",
+        "line": null,
+        "quote": "const openSubject = useMemo(() => subjectOpener(), []);",
+        "problem": "The App-level halves of the fix-round gates are unpinned. Each of these survives the full Desktop suite (1034 pass / 0 fail): R2-17 (a fresh subjectOpener per call, so the in-flight dedupe is gone), R2-22 (reviewFocusHandled never clears), R2-23 (header focus nonce constant 1), R2-25 (onFocusHandled not passed to ReviewBoard), R2-26 (openPrSession's Flow lookup ignores bound sessions).",
+        "impact": "The code is correct today. The HL-002, DG-002/FE-001/LG-003 and AR-001 fixes are pinned only at unit and component level, the focus fix through a test-local Host that does its own clearing. A later edit to App.tsx that re-opens those defects stays green. Under R2-23, for example, a second header click never opens the panel.",
+        "suggested_fix": "In app-work-row.fixture.tsx (or app-navigation.fixture.tsx): click the session header's PR link twice and assert the panel opens both times; switch the board repository and back and assert no replay; press 'Open in session' twice before session/new answers and assert one session/new; give a bound session a Flow and press 'New session', then assert workOnFlow with that dir. Then re-run R2-17, R2-22, R2-23, R2-25 and R2-26.",
+        "evidence": "Scratch worktree at 88e3faba9, full Desktop bun test src: R2-17 GREEN 1034/0, R2-22 GREEN 1034/0, R2-23 GREEN 1034/0, R2-25 GREEN 1034/0, R2-26 GREEN 1034/0. Over the same area, R2-24 (focus repo '') is RED on the AC16 App test, and R2-18/R2-19/R2-20 are RED on the PrWorkRow.dom focus test, so the board half is pinned.",
+        "confidence": "high",
+        "dedupe_key": "testing:fix-round-app-wiring-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-003",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()",
+        "problem": "Two gates added in a34d8961b have no fixture that separates them. R2-21 (delete `focused.current === focus.nonce ||`) is green because the only focus test clears focus via onFocusHandled. R2-05 (resolveFlowLinks `if (!live.some(entry => freshFor(entry).length))` → `live.every`) is green because every multi-request fixture gives both entries the same knownDirs.",
+        "impact": "Coverage gap only. Both separating inputs are reachable: a board whose owner does not clear focus gets a snapshot refresh after the panel closes; s1 takes known() before package B appears, s2 after, then both expect.",
+        "suggested_fix": "ReviewBoard test with a fixed focus and no onFocusHandled: open, close, refresh, assert the panel stays closed. prWork test: resolveFlowLinks([entry('s1',['1-a']), entry('s2',['1-a','2-b'])], ['1-a','2-b'], noFlow, new Set(), 0) equals { pending: [], links: [] }.",
+        "evidence": "R2-21 GREEN 1034/0 and R2-05 GREEN 1034/0 on full bun test src. Neighbouring gates in the same expressions are red: R2-19, R2-20, R2-06, R2-07 and R2-08.",
+        "confidence": "high",
+        "dedupe_key": "testing:focus-ref-guard-and-flowlink-some-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-004",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/ReviewProgress.tsx",
+        "line": null,
+        "quote": "if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;",
+        "problem": "The two suppression branches of the new reviewProgressText (the LG-001 fix moved progress into the slot title) are unpinned. R2-33 (drop the awaitingAnswer-without-progress null) and R2-34 (always append RUN_STATE_LABEL) are green.",
+        "impact": "Presentation only: the review slot's title could gain a duplicate 'Running' label or a progress line for a review that waits on an answer, and no test would notice.",
+        "suggested_fix": "Assert the exact title of the review slot for a running card with progress (no 'Running' label) and for an awaiting-answer card without progress (no progress suffix), in PrWorkRow.dom.test.tsx.",
+        "evidence": "R2-33 GREEN 1034/0 and R2-34 GREEN 1034/0 on full bun test src. The AC4 and warn-tone tests use toContain on titles or check the class only. R2-35 (drop the other-revision line) is RED.",
+        "confidence": "high",
+        "dedupe_key": "testing:review-progress-text-branches-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-005",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "line": null,
+        "quote": "      expect({ step, layout: layout() }).toEqual({ step, layout: before });",
+        "problem": "The AC2 DOM test asserts only that the layout is unchanged after each badge tick, plus polls === 3. It never asserts that the polled badge reached the card (for example #202's review slot text). The only card whose review changes sits in Waiting for review, and only Status grouping is exercised.",
+        "impact": "The test passes when the board never applies a polled local review: W2-01 is GREEN on this test (1 pass, 0 fail) and is caught only by an older test in the same file. Forcing active reviews into Waiting (W2-05) is green on this test. Forcing them into Others under My role (W2-06) is green on the whole Desktop suite (1034/0). In that grouping, lane independence in the DOM path is pinned only at model level.",
+        "suggested_fix": "After each tick, assert #202's review slot text ('Review · running', 'Review · needs your answer', 'Review · publication pending') before comparing layouts. Give the changing card a decision that puts it outside Waiting for review (APPROVED or CHANGES_REQUESTED). Repeat the tick loop after chooseGrouping('My role').",
+        "evidence": "Scratch worktree at 88e3faba9. W2-01: ReviewBoard.tsx poll `return { ...card, localReview: badge.localReview };` → `return card;`: `bun test src/review/ReviewBoard.dom.test.tsx -t \"a local review starting, progressing and finishing\"` 1 pass / 0 fail. The full file gives 68 pass / 1 fail, failing only 'one board tick updates every active PR from scoped badges…'. W2-05 (ReviewResults lane: active && status → 'waiting') is green on the AC2 test. W2-06 (active && role → 'others') gives 1034 pass / 0 fail on `bun test src`. The neighbouring probes W2-02 (active first) and W2-03 (no newestFirst) are red on the AC2 test, so the ordering half is pinned.",
+        "confidence": "high",
+        "dedupe_key": "testing:ac2-dom-test-no-positive-badge-artifact"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-006",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  if (repository.split(\"/\").some((part) => /^\\.+$/.test(part))) throw new Error(invalidInput);",
+        "problem": "The '.'/'..' refusal in projectRepository (S42), REPO_REF in parseSessionSubject (S02) and REPO_REF's '.'/'..' lookahead (S03) each survive deletion with all 25 tests green. No test builds a '..' remote. The organize.test 'bad' fixtures that name these cases ('../x/y' with a three-segment URL; 'org/re po' with the url still '…/org/repo/…') are refused by SUBJECT_URL's shape or by the repo/url agreement check, not by REPO_REF.",
+        "impact": "Coverage gap only, and the code is correct today. Both inputs are reachable: reviewRepositories returns ['org/..'] for remote https://github.com/org/...git, and new URL('/repos/org/../issues', API) resolves to /repos/issues. parseSessionSubject accepts {repo:'org/..', url:'https://github.com/org/../pull/1'} once S03 is applied. A later edit that removes these gates stays green.",
+        "suggested_fix": "issues-board.test.ts: withProject('https://github.com/org/...git') then expect listIssuePage(auth,{source:'repository'},cwd) rejects and requested === 0. organize.test.ts: add {…good, repo:'org/..', url:'https://github.com/org/../pull/1'} and {…good, repo:'org/re po', url:'https://github.com/org/re po/pull/1'} to `bad`.",
+        "evidence": "Scratch worktree at 88e3faba9, bun test of the four named suites: S42 GREEN 25/0, S02 GREEN 25/0, S03 GREEN 25/0. Neighbours are RED: S07 (repo agreement), S12 (https), S41 (!cwd), S51 (missing remote). The probe in the scratch tree printed reviewRepositories → ['org/..'] for 'https://github.com/org/...git' and pathname '/repos/issues'. The unmutated parseSessionSubject refused both consistent pairs, while SUBJECT_URL matches both URLs.",
+        "confidence": "high",
+        "dedupe_key": "testing:repo-name-dot-and-charset-gates-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-007",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "  return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };",
+        "problem": "Subject normalisation is unpinned. S09 (case-sensitive repo/url compare) is green: every fixture uses one case. S17 (keep unknown fields from the raw object) is green: no test sends an extra field. S21 (server drops the Array.isArray wire check) is green: only a string subject is tested at the wire.",
+        "impact": "Coverage gap only. A later edit could store client-supplied extra fields in flags.json, refuse a subject whose URL case differs from its repo, or answer an array subject with a different error code, and no test would fail.",
+        "suggested_fix": "organize.test.ts: accept {repo:'org/repo', url:'https://github.com/Org/Repo/pull/1'}; assert setSessionFlags(…,{subject:{…good, extra:'x'}}).subject has no 'extra'. shell-session-organize.test.ts: expect subject: [] → error.code -32602.",
+        "evidence": "S09, S17 and S21 are each GREEN 25/0 on the four named suites. S06, S07, S08, S10, S11, S12, S13 and S14 are RED, so the agreement and refusal clauses themselves are pinned.",
+        "confidence": "high",
+        "dedupe_key": "testing:subject-normalisation-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-008",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/commands/issues.ts",
+        "line": null,
+        "quote": "      const page = await listIssuePage(account, request as unknown as ListIssueRequest, cwd);",
+        "problem": "No test drives issuesCommand, so the new cwd plumbing for the repository source is unpinned: S60 (drop cwd) is green. AC13's verify command runs only issues-board.test.ts, which calls listIssuePage directly.",
+        "impact": "Coverage gap only. With cwd dropped, every 'source: repository' request through `keryx issues list`, Desktop's new default, fails with 'configuration:', and every test stays green.",
+        "suggested_fix": "Add an issuesCommand(['list', …], cwd) test inside a withProject repo with a stubbed account that asserts the /repos/{owner}/{repo}/issues request. Or route the CLI through a function the existing suite already calls.",
+        "evidence": "S60 GREEN 25/0. `keryx ctx rg -l \"commands/issues|runIssues|issuesCommand\" src --glob '*.test.ts'` returns 0 files.",
+        "confidence": "high",
+        "dedupe_key": "testing:issues-cli-cwd-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "TP-R2-009",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  if (!repository) return next.pathname === base.pathname;",
+        "problem": "The pagination path gates are not separated by fixtures. S47 (drop the viewer-source branch, so viewer cursors accept /repositories/N/issues and any case) is green. S46 (case-sensitive repository path compare) is green. S44 (repository not lower-cased in the cursor scope) is green.",
+        "impact": "Coverage gap only. A later edit could let a viewer-scope page follow a repository next link, or refuse a GitHub next link that differs only in case, with no test failing.",
+        "suggested_fix": "A viewer-source page whose link is '<https://api.github.com/repositories/42/issues?page=2>; rel=\"next\"' must throw. A repository page whose next link is /repos/Org/Base/issues?page=2 is followed. A cursor from org/base replayed under remote https://github.com/Org/Base.git is accepted.",
+        "evidence": "S44, S46 and S47 are each GREEN 25/0. S43 (no repository in the scope), S45 (no /repositories/ID allowance) and S52 (repository=false) are RED.",
+        "confidence": "high",
+        "dedupe_key": "testing:issue-pagination-path-gates-unpinned"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "UX-008",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  const repository = request.source === \"repository\" ? await projectRepository(cwd) : null;",
+        "problem": "Criterion: Nielsen #9 (help users recognize, diagnose and recover from errors), State: error. D5 makes 'repository' the default Issues source (apps/desktop/src/issues/model.ts DEFAULT_SOURCE). For that source, `projectRepository` calls `selectRepository(await reviewRepositories(cwd))`, and in a project without a GitHub.com fetch remote it throws 'configuration: This project has no GitHub.com fetch remote.' (or 'configuration: Open a Git project with a GitHub.com remote.' when git fails). useIssueCollection passes that through errMessage unchanged. IssuesBoard renders it as `{error} ... <button>Retry</button>`. The message states the cause but gives no remedy. Retry repeats the same request, which fails the same way. The text does not mention the 'Source' select in the toolbar, where 'Assigned to me' and the other sources still work. The `configuration:` machine prefix is shown verbatim. That pattern was already there for other Issues errors and is not new here.",
+        "impact": "Trigger: the first visit to the Issues tab, with no stored source preference, in a project whose remotes are not on github.com (no remote, GitLab, or a local-only repository). Outcome: instead of the viewer's issues, which the old 'assigned' default showed in any project, the user gets an error with a futile Retry and has to find the Source select on their own. The data is not lost and the workaround is one select away, so this is minor.",
+        "suggested_fix": "Give the error a remedy next to it. Change the copy, for example: 'This project has no GitHub.com remote, so it has no repository issues. Choose another source, such as Assigned to me.' Or, in the Issues view, when the source is 'repository' and the error has the configuration kind, replace Retry with a button that switches to 'assigned'. A softer alternative is to fall back to 'assigned' for the session when no stored preference exists, and say so in a status line. Add a DOM test for the no-remote case.",
+        "evidence": "slice-05 issues-board.ts: `projectRepository` is called only for `source === \"repository\"`. src/review/board-github.ts `selectRepository`: `if (!repositories.length) throw new Error(\"configuration: This project has no GitHub.com fetch remote.\");`. The test 'AC13 the repository source needs a project with a GitHub remote' asserts exactly this text for a project with no remote and for a gitlab.com remote. apps/desktop/src/issues/useIssueCollection.ts: `const reason = errMessage(e); if (isAccessError(reason)) denied(reason); else setError(reason);`. errMessage (lib/format.ts) returns e.message unchanged. IssuesBoard.tsx: `{error && <div className=\"issues-notice\" role=\"alert\">{error} ... <button className=\"btn btn-sm\" onClick={() => void load()}>Retry</button>`. model.ts: `DEFAULT_SOURCE: IssueSource = \"repository\"`. Not observed on a render. I did not check whether Desktop opens the Issues tab for projects without a GitHub remote; the tab is listed in project navigation and nothing I read gates it on a remote.",
+        "confidence": "medium",
+        "dedupe_key": "issues-repository-default-no-remote-error-no-remedy"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "AR-004",
+        "severity": "info",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "export function withPendingSubjects(sessions: readonly SessionInfo[], pending: ReadonlyMap<string, SessionSubject>): SessionInfo[] {",
+        "problem": "Several pieces of review/prWork.ts work for either Subject kind ('pr' | 'issue') and belong to the session layer, not to PR review: `withPendingSubjects`, `openSubjectSession`, `subjectOpener`, `SubjectSessionDeps` and `SubjectSessionTarget`. App.tsx uses them to build `subjectSessions`, which only the PR board receives. IssuesView gets the raw `state.sessions`. So the merge of pending bindings into the session list is a review-feature helper that the other Subject consumer does not use. Today, issue bindings go through keryx `withIssueBinding` rather than `PendingSubjects`, so I can name no wrong output.",
+        "impact": "No defect today. If Issues later binds through `bindSubject` (the stage 4 plan), its board would miss pending bindings until someone notices that the helper lives under review/.",
+        "suggested_fix": "Optional: move the Subject-session part (withPendingSubjects, openSubjectSession, subjectOpener and their types) next to session/subjectBinding.ts, and keep PR-specific rules in prWork.ts.",
+        "evidence": "slice-02 prWork.ts. App.tsx passes `sessions={subjectSessions}` to ReviewBoard and `sessions={state.sessions}` to IssuesView.",
+        "confidence": "medium",
+        "reviewer": "review-architecture"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "AR-005",
+        "severity": "info",
+        "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "line": null,
+        "quote": "import type { WorkAction } from \"./IssueWork\";",
+        "problem": "Pre-existing: `export type WorkAction = \"open-session\" | \"prepare-flow\" | \"open-flow\";` is declared in both issues/IssueWork.tsx:9 and issues/IssueDetail.tsx:12. Neither file changed in this range. The new IssueWorkRow imports it from ./IssueWork, while IssuesBoard imports it from ./IssueDetail, and the same `act(action, ...)` flow uses both. The types are structurally identical, so it compiles and behaves correctly.",
+        "impact": "No defect. Adding an action to one declaration and not the other would split the issue work row from the card actions at compile time or quietly at runtime.",
+        "suggested_fix": "Keep the declaration in IssueWork.tsx and re-export or import it in IssueDetail.tsx. This is small enough to fold into this change, or else record it as a follow-up issue.",
+        "evidence": "`keryx ctx rg --all -n 'export type WorkAction|WorkAction' apps/desktop/src/issues/IssueWork.tsx apps/desktop/src/issues/IssueDetail.tsx`. `git diff --stat b147408..88e3faba9` on both files is empty, so the duplication is pre-existing.",
+        "confidence": "high",
+        "reviewer": "review-architecture"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "AR-006",
+        "severity": "info",
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "line": null,
+        "quote": "            // One flags write at a time: the flow link first, then the subject binding.\n            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());",
+        "problem": "This change adds `PendingSubjects` (a class with injected deps, its own pending map and an onChange state mirror) for the subject binding. Its own doc says it is 'applied like the pending flow link'. Beside it, the same change keeps and extends the older mechanism for flow links: a `pendingFlow` useRef Map with `applyPendingFlow`, and the new `linkFlow` writes into that ref. Both do the same job: hold a `_keryx/session_flags` write for a session keryx has not stored yet, and retry it after the session's turn. They differ in testability (only the subject path is a unit-testable class), in visibility (only subjects are exposed as `pendingSubjects` state), and in failure reporting (only subjects have onNotice). The 'one flags write at a time' invariant lives only in the `.then` chain at this one call site. `workOnFlow` and `linkFlow` call `applyPendingFlow` directly, outside that chain.",
+        "impact": "No defect named. `linkFlow` and `bindSubject` are each called for new sessions, and the store's write is a whole-file atomic replace of a read-modify-write, so I could not reach two concurrent writes for one session that lose a flag. The cost falls on the next change. A third pending flag, a fix to the retry rule, or a caller that links a flow and binds a subject outside sendPrompt's finally must remember the hand-written ordering, and must fix the rule in two places.",
+        "suggested_fix": "Optional: generalise PendingSubjects into one pending-flags queue keyed by session that holds a SessionFlagsChange (flow and/or subject), and write it as one `_keryx/session_flags` call. linkFlow and bindSubject then enqueue, and the ordering comment is no longer needed.",
+        "evidence": "slice-03: useAcpSession.ts adds `const subjects = useMemo(() => new PendingSubjects({...}))` with the doc 'applied like the pending flow link', and `linkFlow` doing `pendingFlow.current.set(sessionId, flowDir); return applyPendingFlow(sessionId);`. Head useAcpSession.ts:226 `const pendingFlow = useRef(new Map<string, string>());`. subjectBinding.ts:22-23 `export class PendingSubjects { private readonly pending = new Map<string, SessionSubject>();`.",
+        "confidence": "medium",
+        "reviewer": "review-architecture",
+        "dedupe_key": "desktop-two-pending-flags-mechanisms"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "DG-010",
+        "severity": "info",
+        "file": "src/session/issues/issue-session.ts",
+        "line": null,
+        "quote": "      bindIssueSubject(dir, issue.ref);",
+        "problem": "The issue subject is written only on the 'registered' stage. A session bound to an issue before this change (stage session_bound or later) is reopened by withIssueBinding with no subject written. IssueWorkRow counts bound sessions only through subject, so that card shows the empty 'Open in session' while a bound session exists.",
+        "impact": "The work row misreports existing issue sessions as absent until the person rebinds. Clicking still reuses the bound session through open-session, so no work is lost. Base labelled every issue 'Open session'.",
+        "suggested_fix": "On a non-registered reopen, write the subject when flags.json has none and no unlink was recorded. Record an explicit unlink marker rather than inferring it from absence. Or name the gap in the plan's known gaps.",
+        "evidence": "Read: issue-session.ts. `if (launch.stage === 'registered') { ... bindIssueSubject(dir, issue.ref); launch.stage = 'session_bound'; }`, and there is no other write. The doc comment says a subject is written once on purpose, so that an unlink is respected (law 4). That reason does not cover sessions bound before this change. IssueWorkRow.tsx computes `bound = issueSessions(sessions, issue).length` via boundSessions(subject). Base IssuesBoard.tsx:220-222 showed 'Open session' for every issue.",
+        "confidence": "high",
+        "reviewer": "review-degradation",
+        "dedupe_key": "issue-subject-not-backfilled-for-existing-bindings",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "consumer-trace"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "HL-003",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "    const open = openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key));",
+        "problem": "The in-flight entry is removed when the open settles. The bound session becomes visible to the next open only after React commits the pendingSubjects state that bindSubject set, through subjectSessionsRef.current, which is assigned during render. A press dispatched after the promise settles but before that commit would see no bound session and start a second one.",
+        "impact": "No concrete trigger shown. The window lasts from a microtask to the next render commit, and a user click is a separate macrotask that normally runs after the commit. Recorded so that someone can settle it. A test that presses twice with the render deferred (or React's act boundaries removed) would show whether a second session can appear.",
+        "suggested_fix": "Optional: keep the subject key in inFlight until subjectSessionsRef reflects the binding, or have the opener remember the last created id per subject until it shows up in sessions().",
+        "evidence": "App.tsx: `subjectSessionsRef.current = subjectSessions;` is assigned in render. `bind: (id, value) => void s.bindSubject(id, value)`. prWork.ts subjectOpener deletes the key in `.finally`. subjectBinding.ts PendingSubjects.bind calls `changed()` → onChange, which is presumably a state setter in useAcpSession (outside slice-02, not read).",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "subject-opener-post-settle-window"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "HW2-002",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  const missing = issues.filter((x) => !x.repository?.node_id);",
+        "problem": "On the new `repository` source, GET /repos/{owner}/{repo}/issues rows carry no embedded `repository`, so every non-empty page takes the hydration branch: one GraphQL `nodes(ids)` call for up to 40 ids, to learn a repository id that is the same for the whole page. The listing also includes pull requests, which are dropped after the fetch. A page from a repository with mostly PRs can therefore hold few or no issues, and can still carry a next cursor.",
+        "impact": "No failure under a concrete trigger. Desktop pages by hand: useIssueCollection loads the next page only on an explicit append, one request at a time, and has no auto-fill loop. The cost is one extra GraphQL request per page, and possibly near-empty pages, which count against the user's GitHub rate limit but stay bounded by clicks. The AC13 test itself shows the extra call (its mock answers /graphql).",
+        "suggested_fix": "Optional: resolve the repository node id once per listing (one `repository(owner,name){id}` query, or cache it with the cursor scope) and fill every row's repositoryId from it, skipping the per-page nodes call. A note that PR-heavy repositories can yield short pages would also help.",
+        "evidence": "slice-05 issues-board.ts listIssuePage: `const issues = data.filter((x) => !x.pull_request);` then `missing` / `api.graphql(\"query($ids:[ID!]!) { nodes(ids:$ids) ...\")`. issues-board.test.ts AC13 repoRow strips `repository` (`const { repository: _omitted, ...rest } = row(repo, node)`), and the mock serves /graphql. apps/desktop/src/issues/useIssueCollection.ts load(append): `if (append && (loading.current || !cursor.current)) return;`, one request per call.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "issues-repository-source-per-page-hydration"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-014",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "src/session/organize.ts",
+        "quote": "  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };",
+        "problem": "A keryx from before this change rewrites flags.json with only archivedAt/pinnedAt/flow, so an archive, pin or flow link it performs drops a stored subject.",
+        "impact": "Only when two keryx versions share one data dir. Not shown to happen between Desktop and the shell, so this is an observation.",
+        "suggested_fix": "Optional: record the downgrade limit in the stage-1 notes, or preserve unknown keys in future writeFlags versions.",
+        "evidence": "slice-05 organize.ts writeFlags (new) versus the removed base line writing only {archivedAt, pinnedAt, flow}.",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "session-flags-subject-dropped-by-older-writer"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "LG-016",
+        "severity": "info",
+        "file": "apps/desktop/src/review/model.test.ts",
+        "line": null,
+        "quote": "test(\"every card the filters keep lands in a drawn lane\", () => {",
+        "problem": "The property test claims every kept card lands in drawnLanes. drawnLanes('role', {mine: true}) returns ['mine'], but a card authored by the viewer that also lists the viewer as a reviewer lands in 'requested'. ReviewBoard.dom.test's 'a shown card is never dropped because its lane was ruled out by the filters' builds exactly that card. The property test passes only because its card set lacks it. The board stays correct through ReviewResults' `possible.has(lane) || lanes.has(lane)` fallback, which is what actually upholds AC3's 'no shown card vanishes'.",
+        "impact": "No wrong output; no change asked. The test title and the drawnLanes doc overstate the guarantee. A reader trusting them could drop the fallback, though W2-04 shows the DOM test would catch that.",
+        "suggested_fix": "Optional: add the author-is-reviewer card to the property test and state the exception, or reword the test title to 'lands in a drawn lane or the board's fallback'.",
+        "evidence": "model.ts drawnLanes: `requested: !f.mine && otherAuthor && …`; ReviewResults.tsx: `const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => possible.has(lane) || lanes.has(lane));`; slice-04 ReviewBoard.dom.test: `const both: ReviewCard = { ...pr, author: \"ann\", reviewers: [\"ann\"] }; … await click(button(\"Mine\")); expect(laneNumbers(\"Requested from me\")).toEqual([\"#101\"]);`.",
+        "confidence": "high",
+        "reviewer": "review-logic",
+        "dedupe_key": "drawnlanes-property-test-omits-author-reviewer"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PF-004",
+        "severity": "info",
+        "file": "apps/desktop/src/acp/types.ts",
+        "line": null,
+        "quote": "export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {",
+        "problem": "The rule 'non-archived sessions bound to a subject, newest first' is implemented twice: boundSessions (sameSubject filter + sort) and boundSessionIndex (subjectKey grouping + sort). They agree today by construction (same archived check, same comparator, subjectKey equality matches sameSubject), but round obligation 7 is one rule, one implementation.",
+        "impact": "No runtime cost today. A later edit to one copy (for example how the repo is compared) silently splits the PR board's lookup from openSubjectSession and the Issues board.",
+        "suggested_fix": "Define boundSessions(sessions, subject) as boundSessionIndex(sessions)(subject) (the same O(n) per call), or have both callers use the index. Owned by review-architecture if it files it.",
+        "evidence": "slice-02 acp/types.ts boundSessions and boundSessionIndex; prWork.ts openSubjectSession uses boundSessions, prWorkIndex uses boundSessionIndex.",
+        "confidence": "high",
+        "reviewer": "review-performance",
+        "dedupe_key": "desktop-bound-sessions-two-implementations"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PF-005",
+        "severity": "info",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "{...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })}",
+        "problem": "Pre-existing, outside the diff. With a watcher target, onSubscribe is a new arrow on every render, so memo(ReviewResults) never hits, and every PrWorkRow re-renders on each App render despite the now-stable work memo. The T17 journal entry describes PF-001 as fixed with 'stable callbacks'.",
+        "impact": "Small after the fix: per card it is index lookups plus one prUrlKey. Recorded so the memo is not assumed effective.",
+        "suggested_fix": "Optional: const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []); pass it instead of the inline arrow.",
+        "evidence": "ReviewBoard.tsx at head: the onSubscribe spread on ReviewResults (context line in slice-02); ReviewResults is memo(...).",
+        "confidence": "high",
+        "reviewer": "review-performance",
+        "dedupe_key": "desktop-reviewresults-memo-inline-onsubscribe"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "PF-006",
+        "severity": "info",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "  const missing = issues.filter((x) => !x.repository?.node_id);\n  const repositories = new Map<string, Repository>();\n  if (missing.length) {",
+        "problem": "With source \"repository\" (now the default Issues source, D5) the REST endpoint is /repos/{owner}/{repo}/issues. The PR's own fixture expects it to return rows without an embedded `repository` (repoRow strips it, and the AC13 test answers /graphql for every row). So every page runs a second, serial GitHub request, a nodes(ids) GraphQL query over up to 40 issues, to learn one repository whose owner/name listIssuePage already holds.",
+        "impact": "Reasoned, not measured: one extra serial round trip per page on the default Issues load, refresh and load-more, roughly doubling that request's network latency. It is bounded (one request per page, not N+1). It rests on GitHub's REST response shape, which has no pinned file:line behind it, so it is info under the cross-repo rule. It would be settled by a recorded /repos/{o}/{r}/issues response or a first-load timing against source \"assigned\".",
+        "suggested_fix": "Optional: for the repository source, build Repository from the known owner/name and resolve its id once, with a repository(owner,name){id} query run concurrently with the REST page or with the id carried in the scoped cursor for later pages. Keep nodes hydration for the viewer scopes.",
+        "evidence": "slice-05 issues-board.ts listIssuePage: `const repository = request.source === \"repository\" ? await projectRepository(cwd) : null;`, then the REST call, then the `missing` -> api.graphql nodes hydration. issues-board.test.ts `repoRow` (`const { repository: _omitted, ...rest } = row(repo, node);`) and the AC13 test's `/graphql` branch.",
+        "confidence": "medium",
+        "reviewer": "review-performance",
+        "dedupe_key": "issues-repository-source-graphql-hydration-per-page",
+        "degradation_class": "performance"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "UX-006",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "  const reviewTitle = [state === \"outdated\" ? reviewNote(card) ?? reviewText : canReview ? reviewText : \"Only an open pull request can be reviewed\", progress]\n    .filter(Boolean).join(\" — \");",
+        "problem": "Criterion: Nielsen #1 (visibility of system status). The fix commit replaced the card's `CardReviewProgress` (wave, percent, progress bar, last transcript update) with `reviewProgressText`. That text is used only in the review slot's `title`. The board now shows a running review as just 'Review · running', in an 11px slot that review-layout expects to truncate (LY-002). Wave and percent appear only on mouse hover. The `TranscriptUpdate` liveness line is gone entirely. The list view lost the same block. AC4 and the 24px row height are the stated reason (comment on `reviewProgressText`); that explains why the block left the card body, not why the progress has no visible form at all.",
+        "impact": "During a long review, a sighted keyboard user cannot see the run's progress without opening the panel, and a mouse user sees it only by hovering. Screen readers probably get it, because `title` becomes the accessible description when `aria-label` provides the name.",
+        "suggested_fix": "Put the percent in the slot text while the run is active, e.g. 'Review · running 27%'. It fits the 24px row and stays within AC4 (the work row). Keep the full line in the title.",
+        "evidence": "Diff: ReviewResults.tsx removes `<CardReviewProgress badge={card.localReview} />` from ReviewTile and from the list's Reason cell. ReviewProgress.tsx turns `CardReviewProgress` into `reviewProgressText(): string | null`. Its only consumer is `reviewTitle` in PrWorkRow.tsx. review.css drops `.review-table .review-progress-caption`. Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "pr-work-row-progress-title-only"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 2,
+      "finding": {
+        "id": "UX-007",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "  const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);",
+        "problem": "Criterion: Nielsen #4 (consistency), state. The UX-002 fix gives the review slot the warn tone (`.pr-work-link.is-attention`) whenever `publicationPending` is set, whatever the PR state. The code it replaced, and the tab indicator it echoes, both limit that cue to open PRs. The removed badge was `card.state === \"open\" && card.localReview?.publicationPending`, and `needsViewerAttention` returns false when `c.state !== \"open\"`. `localBadge` (src/review/board-badges.ts) sets `publicationPending` from the run's publication state and range, with no PR-state check.",
+        "impact": "When the state filter includes Merged or Closed, a merged PR with an unpublished Keryx review shows 'Review · publication pending' in the warn tone. The Pull requests tab indicator and the 'Show N waiting on you' count do not include it, so the board and the tab disagree about what needs the user.",
+        "suggested_fix": "Gate the tone the way the tab is gated: `const waitsOnViewer = card.state === \"open\" && !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);`. If the owner wants publication on a merged PR flagged, record that choice and also count it in `needsViewerAttention`.",
+        "evidence": "Fix commit a34d8961b adds `waitsOnViewer` and `.pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }`. Base ReviewResults.tsx gated the 'Action required' badge on `card.state === \"open\"`. model.ts `needsViewerAttention` begins `if (c.state !== \"open\") return false;`. board-badges.ts line with `latest.publication === \"pending\" && sameRange(...)` has no PR-state condition. I did not confirm that a merged PR's card carries `localReview` at run time, so this is filed as info.",
+        "confidence": "medium",
+        "dedupe_key": "pr-work-attention-tone-non-open"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commits 80ef58bd5 (T19) and c4e8e3e24 (T18); tests listed in journal.md section Review round 2 on PR #1300 and its fix round"
+    }
+  ]
+}

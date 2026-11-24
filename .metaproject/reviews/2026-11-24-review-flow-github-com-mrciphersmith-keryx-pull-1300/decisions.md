@@ -1,0 +1,35 @@
+# Decisions
+
+- FE-R3-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- FE-R3-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-008: create follow-up task or learning proposal (valid_followup, standalone_review).
+- AR-007: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG-R3-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- HL3-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- HL3-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PC-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PC-006: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PC-008: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-006: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-007: create follow-up task or learning proposal (valid_followup, standalone_review).
+- TP-R3-009: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-009: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-010: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-011: create follow-up task or learning proposal (valid_followup, standalone_review).
+- DG3-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- HL3-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- HL3-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LY-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- LG-R3-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- PC-007: create follow-up task or learning proposal (valid_followup, standalone_review).
+- SC3-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-012: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-013: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-014: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-015: create follow-up task or learning proposal (valid_followup, standalone_review).
+- UX-016: create follow-up task or learning proposal (valid_followup, standalone_review).

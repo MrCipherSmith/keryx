@@ -1,0 +1,118 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 3, wave 1, slice-01 (fix range 88e3faba9..d7b0f7058), read in full (1906 lines).
+Two new minor findings (PR body vs code / review record). All four PC-* prior findings checked: 3 closed, 1 partial.
+
+## Prior dispositions (checked against the code at d7b0f7058, not the commit messages)
+
+- PC-001 closed — docs/docs/guides/desktop-issues.md no longer offers a Flow stage filter and documents the "Project repository unavailable" case (line 46); docs/docs/cli-reference.md:5178-5181 documents `"source":"repository"`.
+- PC-002 closed — body now states the one-request/one-package rule, the 15-minute window and the confirm offer; the T17 choices are in "Choices for the owner"; Verification says 1051/0, matching research-evidence/verify-tests-to-run-2.txt; implementation-plan.md:36 is updated. (A new inaccuracy in one owner-choice line is filed as PC-005.)
+- PC-003 closed — IssueWorkRow counts through `boundTo(issueSubject(issue))`; src/session/issues/issue-session.ts:53-56 backfills `subject` (`backfillSessionSubject`); the GitHub Enterprise and per-account limits are in Known gaps and implementation-plan.md (g).
+- PC-004 partial — the claim is fixed: the body says the notice appears "after that turn at the latest", and AC8 was re-frozen with that wording (acceptance-criteria.md, diff line 25). The fixture half is still open. apps/desktop/src/test/app-navigation.fixture.tsx:81-83 still answers `_keryx/session_flags` for any session id (`const flags = storesSubject && subject ? { subject } : {}; ... result = flags;`), and :304 waits for the notice right after open, before any turn. The older-keryx path the body now describes (refused until the first turn, retried after it) has no test.
+- HL-001 closed — resolveFlowLinks only offers; usePendingFlowLinks.accept is the only caller of `link`; PrWorkRow renders "Link Flow #N?" with Link/Dismiss. This is the owner decision recorded in journal.md "Review round 2 owner decisions".
+- LG-008 closed — createPrFlow registers only `if (opened?.filled)`, and subjectOpener returns `filled: false` for a coalesced open.
+- LG-011 closed — `fillShown` checks `deps.isShown(id)` before filling; `isShown` reads `live.current.reg.shown`.
+- LG-009 closed — the focus effect selects a listed repository, or refuses with a notice and calls `onFocusHandled`.
+- RG-001 closed — the `fallback` applies only to the default, unchosen source and is shown on a `configuration:` error. The base keryx's `invalidInput` is "configuration: Invalid Issues request." (git grep at b147408a8), so an older keryx reaches the fallback and the update hint.
+- DG-006 closed, UX-007 closed — `waitsOnViewer = card.state === "open" && ...`; the "publication pending" text on a merged PR is listed as an owner choice.
+- DG-007 closed — `lastActivityAt` was removed from `badgesEqual`.
+- DG-008 closed, LG-007 closed — Known gaps and implementation-plan.md (f) name the two-request case, and AC9 was re-frozen via `keryx flow ac update`.
+- AR-003 closed, PF-004 closed — `boundSessions` returns `[...boundSessionIndex(sessions)(subject)]`, and `ReviewProgress` and `reviewProgressText` share `progressParts`.
+- PF-003 closed — IssuesBoard memoises `boundSessionIndex(sessions)`, and IssueWorkRow takes a count.
+- LG-012 closed — reuse-path backfill (issue-session.ts:56); the account limit is in Known gaps.
+- PF-005 closed — `subscribe` is a `useCallback`.
+- AR-004 open, AR-005 open, AR-006 open, UX-006 open — deferred info, unchanged in this range; listed in the body's Known gaps.
+- HL-003 open — deferred info, unchanged in this range, but missing from the body's Known gaps list (PC-006).
+
+Not disposed by this lane: LG-015, TP-R2-001..009, HW2-001, DG-009, DG-010, LG-010, LG-013, UX-008, LG-014, LG-016, PF-006, HW2-002. Their evidence is test files or backend files in slice-02 and slice-03, which this lane did not read in full.
+
+## Checklist form (PR body has no checkboxes; each claim touching slice-01 is a row)
+
+| Claim (quoted) | State | What the code shows | Result |
+|---|---|---|---|
+| "When exactly one new flow package appears within 15 minutes while exactly one request with a filled prompt is pending, the PR work row asks "Link Flow #N?"" | claim | prWork.ts `resolveFlowLinks` (`only = live.length === 1`, `fresh.length === 1`); App.tsx `if (opened?.filled) flowLinkActions.expect(...)` | holds |
+| "Only Link writes the session's `flow` flag; Dismiss ... link nothing" | claim | usePendingFlowLinks.ts: `accept` is the only caller of `linkRef.current`; `dismiss` only filters state | holds |
+| "A shown "Link Flow #N?" does not expire; Dismiss also stops offering that package." | owner choice | `claimed.current.add(dir)` on offer; `offered` has no expiry, and is dropped only when the session gets a Flow | holds |
+| "A session switch while "Open in session" runs leaves no prompt and no pending request; a repeat press during an open reuses it without a prompt." | owner choice | `fillShown` / `isShown`; `running.then(open => open && { ...open, filled: false })` | holds |
+| "A header link to a PR of another repository shows a banner and stays armed until that repository is shown." | owner choice | ReviewBoard.tsx focus effect: listed repo → `selectRepo(listed)` with no banner; unlisted → banner plus `onFocusHandled` (cleared) | **contradicted → PC-005** |
+| "Warn tone for "needs answer" and "publication pending"; a merged PR keeps the "publication pending" text without the warn tone." | owner choice | PrWorkRow `waitsOnViewer = card.state === "open" && ...` | holds (also closed PRs, which the line does not name; not filed) |
+| "Review progress shows only in the slot title; the "Transcript updated" stamp left the card." | owner choice | `reviewProgressText` feeds only `reviewTitle`; `lastActivityAt` removed from `badgesEqual` | holds |
+| "If the default source is unavailable (no GitHub.com remote, Issues turned off → 410, or an older keryx), the board shows the reason and "Show issues assigned to me", plus an update hint for an older keryx." | claim | IssuesBoard `unavailable = fallback && /(?:^|\b)configuration:/i.test(error)`; hint on `/Invalid Issues request/`; issues-board.ts:184 maps 410 to `configuration:`; base `invalidInput` carries `configuration:` | holds |
+| ""Show issues assigned to me" appears only for the default (not yet chosen) source." | owner choice | `fallback = source === "repository" && !choice.chosen ? ... : undefined` | holds |
+| "older keryx ... the notice "binding was not saved" appears after that turn at the latest" | claim | AC8 re-frozen to the same wording; fixture still answers flags before any turn | holds as a claim; test gap under PC-004 |
+| "Stage 0 attention set: no lines edited in either fix round." | verification | slice-01 ReviewBoard.tsx hunks touch `badgesEqual`, focus, `work`, `subscribe` and the notice; none of `carriedAttention`/`seeded`/`seedFor`/`attentionPrs`/`stale` | holds |
+| "`bun test src`: 1051 pass, 0 fail." | verification | research-evidence/verify-tests-to-run-2.txt: desktop 1051/0 | holds |
+| "Deferred info findings: PF-006/HW2-002, AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004, UX-003..006 (round 2 package)." | known gap | round-2 package also defers HL-003, LG-014, LG-016; AR-002, PF-002, LG-004, LY-002, LY-004 and UX-003..005 are round-1 ids | **contradicted → PC-006** |
+| "No Rust changes." | claim | slice-01 has no Rust file | holds for this slice |
+
+Documentation outside the diff: `keryx ctx rg` for "Link Flow|Create Flow" over docs/ found only implementation-plan.md (updated, :36, :44) and desktop-issues.md (Issues only). The search "Pull requests board|work row|Open in session|In review|attention lane" over docs/docs and README.md found no PR-board user page describing the work row or Create Flow. docs/docs/desktop-app.md §"Find a pull request in Review" (:70-108) describes no lanes or work-row behaviour changed in this range. No stale document filed.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "slices": ["slice-01"],
+    "summary": "Fix range 88e3faba9..d7b0f7058, slice-01 read in full. The fix-round body matches the code for Create Flow confirmation, filled-prompt gating, the Issues fallback, warn tone and Verification counts. Two minor body-vs-record disagreements: the foreign-repository header-link owner choice describes behaviour the code no longer has, and the deferred-info list omits three round-2 deferrals and mislabels round-1 ids. PC-001..003 closed; PC-004 partial (claim fixed, fixture still answers flags before the first turn).",
+    "findings": [
+      {
+        "id": "PC-005",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "      const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());\n      if (listed) {\n        selectRepo(listed);\n        return;\n      }\n      focused.current = focus.nonce;\n      setFocusNotice(",
+        "problem": "PR body, Choices for the owner: 'A header link to a PR of another repository shows a banner and stays armed until that repository is shown.' That describes the round-1 behaviour (journal T17: 'a header focus for another repo stays armed until that repo is shown'). The round-2 LG-009 fix replaced it. A repository among the board's repositories is now selected automatically, with no banner. A repository the board cannot show gets the banner, and the request is cleared through onFocusHandled. The code comment says 'so the request is not left armed for a later, unrelated switch'. Neither branch both shows a banner and stays armed.",
+        "impact": "The owner is asked to accept or revert a behaviour from this list, and this line describes one that no longer exists. They cannot see that the board now switches repository on its own, which is a new choice not listed, or that an unshowable repository drops the request.",
+        "suggested_fix": "Replace the line with: 'A header link to a PR of another repository switches the board to that repository when the board lists it; otherwise it shows a notice and drops the request.' Keep journal.md line 79 ('foreign-repo header link shows a banner') consistent.",
+        "evidence": "slice-01 diff ReviewBoard.tsx @@471 focus effect and its comment 'one it cannot show is refused with a notice, so the request is not left armed'; App.tsx reviewFocusHandled clears reviewFocus on the nonce; PR body from payload review_context.pr.body.",
+        "confidence": "high"
+      },
+      {
+        "id": "PC-006",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "quote": "+Deferred info: PF-006/HW2-002 (one nodes hydration per request), AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004 (need real-engine measurement), UX-003..006.",
+        "problem": "PR body Known gaps: 'Deferred info findings: PF-006/HW2-002, AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004, UX-003..006 (round 2 package).' The journal entry in this range says the same. In the round-2 package (…-pull-1300-r02/findings.json), the info findings left deferred also include HL-003 (prWork.ts: a press after the open settles but before the pendingSubjects commit can start a second bound session), LG-014 and LG-016. The fix-round claims mark all three 'deferred', yet neither list names them. AR-002, PF-002, LG-004, LY-002, LY-004 and UX-003..005 exist only in the round-1 package (…-pull-1300/findings.json), so '(round 2 package)' mislabels them.",
+        "impact": "A reader who takes Known gaps as the full set of accepted leftovers does not see HL-003, a residual second-session race on 'Open in session'. Looking up the listed ids in the named package does not find most of them.",
+        "suggested_fix": "List HL-003, LG-014 and LG-016 among the deferred info findings, and split the list by package: round 1 for AR-002, PF-002, LG-004, LY-002/LY-004 and UX-003..005; round 2 for the rest. Do the same in journal.md.",
+        "evidence": "jq over both packages' findings.json: round 1 holds AR-002, LG-004, LY-002, LY-004, PF-002 and UX-003..005 (info); r02 holds HL-003, LG-014, LG-016, PF-004 and UX-006 (info). The payload prior_findings claimed_disposition is 'deferred' for HL-003, LG-014 and LG-016. PF-004 is effectively fixed by the AR-003 change, so its omission is correct.",
+        "confidence": "high"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "PC-001", "disposition": "closed"},
+      {"id": "PC-002", "disposition": "closed"},
+      {"id": "PC-003", "disposition": "closed"},
+      {"id": "PC-004", "disposition": "partial"},
+      {"id": "HL-001", "disposition": "closed"},
+      {"id": "RG-001", "disposition": "closed"},
+      {"id": "AR-003", "disposition": "closed"},
+      {"id": "DG-006", "disposition": "closed"},
+      {"id": "DG-007", "disposition": "closed"},
+      {"id": "DG-008", "disposition": "closed"},
+      {"id": "LG-007", "disposition": "closed"},
+      {"id": "LG-008", "disposition": "closed"},
+      {"id": "LG-009", "disposition": "closed"},
+      {"id": "LG-011", "disposition": "closed"},
+      {"id": "LG-012", "disposition": "closed"},
+      {"id": "PF-003", "disposition": "closed"},
+      {"id": "PF-004", "disposition": "closed"},
+      {"id": "PF-005", "disposition": "closed"},
+      {"id": "UX-007", "disposition": "closed"},
+      {"id": "AR-004", "disposition": "open"},
+      {"id": "AR-005", "disposition": "open"},
+      {"id": "AR-006", "disposition": "open"},
+      {"id": "HL-003", "disposition": "open"},
+      {"id": "UX-006", "disposition": "open"}
+    ],
+    "follow_ups": [
+      "PC-004 fixture half: make app-navigation.fixture.tsx refuse _keryx/session_flags for an unstored session while storesSubject is false, and assert the notice after a turn (test lane to confirm).",
+      "Not disposed here (evidence in slice-02/03): LG-015, TP-R2-001..009, HW2-001, DG-009, DG-010, LG-010, LG-013, UX-008, LG-014, LG-016, PF-006, HW2-002."
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the documents were found by text search, and no symbol had to be traced), wiki_used: no (not-relevant: the claims are checked against code and the review packages), ctx_used: yes (keryx ctx rg/run for docs, error strings, fixtures and the base git grep), raw_rg_used: no. No tests were run; exec budget 0.

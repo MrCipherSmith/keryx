@@ -1,0 +1,569 @@
+--- src/session/issues/issue-session.test.ts
+@@ 1,22 @@
+ import { describe, expect, test } from "bun:test";
+-import { mkdtempSync, rmSync } from "node:fs";
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
+ import { readSessionFlags, setSessionFlags, type SessionSubject } from "../organize";
+ import { sessionDir } from "../paths";
+ import { type BoundIssue, withIssueBinding } from "./issue-session";
+ 
+ const viewer: IssueViewer = { host: "github.com", login: "reader", nodeId: "user-reader" };
+ 
+ function issue(overrides: Partial<IssueDetail["ref"]> = {}): IssueDetail {
+   return {
+     ref: { host: "github.com", nodeId: "I_9", repositoryId: "R_9", owner: "Org", repo: "repo", number: 9, url: "https://github.com/Org/repo/issues/9", ...overrides },
+     title: "Bind me", state: "open", author: "reader", assignees: [], labels: [],
+     createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z", body: "Body",
+   };
+ }
+ 
+ /** The bound session's id; every binding in these tests reserves one, so a missing id fails the test. */
+ async function boundSessionId(record: BoundIssue): Promise<string> {
+   const id = record.launch.sessionId;
+
+--- src/session/issues/issue-session.test.ts
+@@ 46,99 @@
+     }
+   });
+ 
+   test("a subject unlinked by the person is not written back by a later open", async () => {
+     const { root, dataDir, project } = workspace();
+     try {
+       const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+       const dir = sessionDir(root, sessionId, dataDir);
+       // keryx lists a session only after its first save; write the flag change straight to the store.
+       const { persistHistory, createSession } = await import("../index");
+       const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
+       persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+       setSessionFlags(root, sessionId, { subject: null }, dataDir);
+       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+       expect(readSessionFlags(dir).subject).toBeUndefined();
+     } finally {
+       rmSync(root, { recursive: true, force: true });
+     }
+   });
+ 
++  test("a session bound before subjects existed gets its subject on the next open; an unlink still wins", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
++      const dir = sessionDir(root, sessionId, dataDir);
++      const { persistHistory, createSession } = await import("../index");
++      const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
++      persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
++      // What an older keryx left: the binding and a pin, no subject and no unlink marker.
++      writeFileSync(path.join(dir, "flags.json"), JSON.stringify({ pinnedAt: "2026-11-01T00:00:00.000Z" }));
++      expect(readSessionFlags(dir).subject).toBeUndefined();
++      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++      expect(readSessionFlags(dir)).toEqual({ hasIssue: true, pinnedAt: "2026-11-01T00:00:00.000Z",
++        subject: { kind: "issue", repo: "Org/repo", number: 9, url: "https://github.com/Org/repo/issues/9", repositoryId: "R_9" } });
++      // The person unlinks it; the next open leaves it unlinked.
++      setSessionFlags(root, sessionId, { subject: null }, dataDir);
++      await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++      expect(readSessionFlags(dir).subject).toBeUndefined();
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
+   test("an issue outside github.com binds without a subject", async () => {
+     const { root, dataDir, project } = workspace();
+     try {
+       const enterprise = issue({ host: "git.example.com", url: "https://git.example.com/Org/repo/issues/9" });
+       const sessionId = await withIssueBinding({ ...viewer, host: "git.example.com" }, project, enterprise, dataDir, boundSessionId);
+       expect(readSessionFlags(sessionDir(root, sessionId, dataDir))).toEqual({ hasIssue: true });
+     } finally {
+       rmSync(root, { recursive: true, force: true });
+     }
+   });
+ });
+
+--- src/session/organize.test.ts
+@@ 1,28 @@
+ import { describe, expect, test } from "bun:test";
+ import { randomUUID } from "node:crypto";
+-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+ import { hostname, tmpdir } from "node:os";
+ import path from "node:path";
+ import { createSession, persistHistory, sessionDir } from ".";
+ import { sessionLeasePath } from "./lease";
+-import { readSessionFlags, setSessionFlags, trashDirectory, trashSession } from "./organize";
++import { backfillSessionSubject, readSessionFlags, setSessionFlags, trashDirectory, trashSession } from "./organize";
+ 
+ function project(): { cwd: string; dataDir: string; home: string } {
+   const root = mkdtempSync(path.join(tmpdir(), "keryx-organize-"));
+   return { cwd: root, dataDir: path.join(root, "data"), home: path.join(root, "home") };
+ }
+ 
+ function stored(cwd: string, dataDir: string): string {
+   const handle = createSession({ cwd, dataDir, provider: "test", model: "m" });
+   persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+   return handle.summary.id;
+ }
+ 
+ describe("session flags", () => {
+   test("archive and pin are stored beside the summary and survive a later save", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const t1 = new Date("2026-11-17T10:00:00Z");
+     expect(setSessionFlags(cwd, id, { archived: true, pinned: true }, dataDir, () => t1)).toEqual({
+       archivedAt: t1.toISOString(),
+       pinnedAt: t1.toISOString(),
+
+--- src/session/organize.test.ts
+@@ 69,209 @@
+   });
+ 
+   test("an invalid subject is refused on write and the stored one is kept", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const good = { kind: "pr", repo: "org/repo", number: 1, url: "https://github.com/org/repo/pull/1" };
+     setSessionFlags(cwd, id, { subject: good as never }, dataDir);
+     const bad: unknown[] = [
+       "org/repo#1",
+       { ...good, kind: "commit" },
+       { ...good, url: "https://github.com/org/repo/issues/1" },
+       { ...good, url: "http://github.com/org/repo/pull/1" },
+       { ...good, url: "https://evil.example/org/repo/pull/1" },
+       { ...good, url: "https://github.com/org/other/pull/1" },
+       { ...good, url: "https://github.com/org/repo/pull/2" },
+       { ...good, number: 0, url: "https://github.com/org/repo/pull/0" },
+       { ...good, number: 1.5 },
+       { ...good, repo: "org" },
+       { ...good, repo: "../x/y", url: "https://github.com/../x/y/pull/1" },
+       { ...good, repo: "org/re po" },
++      // Consistent repo and url, so only REPO_REF can refuse them: `..` is not a name, a space is not in the charset.
++      { ...good, repo: "org/..", url: "https://github.com/org/../pull/1" },
++      { ...good, repo: "org/.", url: "https://github.com/org/./pull/1" },
++      { ...good, repo: "org/re po", url: "https://github.com/org/re po/pull/1" },
+       { ...good, repositoryId: 5 },
+       { ...good, repositoryId: "" },
+     ];
+     for (const subject of bad) {
+       expect(() => setSessionFlags(cwd, id, { subject: subject as never }, dataDir)).toThrow(/not a GitHub subject/);
+     }
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir)).subject).toEqual(good as never);
+   });
+ 
++  test("a subject's repo and url agree without case, and fields the store does not know are dropped", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const mixed = { kind: "pr" as const, repo: "org/repo", number: 1, url: "https://github.com/Org/Repo/pull/1" };
++    expect(setSessionFlags(cwd, id, { subject: mixed }, dataDir).subject).toEqual(mixed);
++    const extra = { ...mixed, title: "client text", flow: "x" };
++    const kept = setSessionFlags(cwd, id, { subject: extra as never }, dataDir).subject;
++    expect(kept).toEqual(mixed);
++    const raw = JSON.parse(readFileSync(path.join(sessionDir(cwd, id, dataDir), "flags.json"), "utf8"));
++    expect(Object.keys(raw.subject).sort()).toEqual(["kind", "number", "repo", "url"]);
++  });
++
++  test("an unlinked subject is not backfilled; a session that never had one is", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
++    expect(backfillSessionSubject(dir, issue)).toBe(true);
++    expect(readSessionFlags(dir).subject).toEqual(issue);
++    // Present already: left as it is.
++    expect(backfillSessionSubject(dir, { ...issue, number: 8, url: "https://github.com/org/repo/issues/8" })).toBe(false);
++    expect(readSessionFlags(dir).subject).toEqual(issue);
++    // Unlinked by the person: the marker survives other flag changes and blocks the backfill.
++    setSessionFlags(cwd, id, { subject: null }, dataDir);
++    setSessionFlags(cwd, id, { pinned: true }, dataDir);
++    expect(backfillSessionSubject(dir, issue)).toBe(false);
++    expect(readSessionFlags(dir).subject).toBeUndefined();
++    // The marker stays private to the store.
++    expect(readSessionFlags(dir)).toEqual({ pinnedAt: expect.any(String) });
++    // Linking again clears the marker.
++    setSessionFlags(cwd, id, { subject: issue }, dataDir);
++    setSessionFlags(cwd, id, { subject: null }, dataDir);
++    setSessionFlags(cwd, id, { subject: issue }, dataDir);
++    expect(JSON.parse(readFileSync(path.join(dir, "flags.json"), "utf8")).subjectUnlinked).toBeUndefined();
++  });
++
++  test("a flags change waits for another writer's lock and takes over an abandoned one", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const lock = path.join(dir, "flags.json.lock");
++    // Just taken by another writer: this change waits for it (here until the lock goes stale) before it lands.
++    writeFileSync(lock, "another-writer");
++    const started = Date.now();
++    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir).pinnedAt).toBeDefined();
++    expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
++    expect(existsSync(lock)).toBe(false);
++    // Abandoned long ago: broken at once, and the change lands.
++    writeFileSync(lock, "crashed-writer");
++    const old = new Date(Date.now() - 60_000);
++    utimesSync(lock, old, old);
++    const again = Date.now();
++    expect(setSessionFlags(cwd, id, { flow: "001-x" }, dataDir)).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
++    expect(Date.now() - again).toBeLessThan(1500);
++    expect(existsSync(lock)).toBe(false);
++  });
++
++  test("two processes changing different flags of one session lose neither change", async () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const organize = path.join(import.meta.dir, "organize.ts");
++    const startAt = Date.now() + 1500;
++    // Each writer owns one field and checks, after every write, that the other writer did not roll it back.
++    const writer = (field: "pinned" | "flow") => `
++      const { updateSessionFlagsAt, readSessionFlags } = await import(${JSON.stringify(organize)});
++      while (Date.now() < ${startAt}) {}
++      let lost = 0;
++      for (let i = 0; i < 150; i++) {
++        ${field === "pinned"
++          ? `const want = i % 2 === 0; updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: want });
++             if ((readSessionFlags(${JSON.stringify(dir)}).pinnedAt !== undefined) !== want) lost++;`
++          : `const want = "flow-" + i; updateSessionFlagsAt(${JSON.stringify(dir)}, { flow: want });
++             if (readSessionFlags(${JSON.stringify(dir)}).flow !== want) lost++;`}
++      }
++      process.stdout.write(String(lost));`;
++    const run = (field: "pinned" | "flow") =>
++      Bun.spawn([process.execPath, "-e", writer(field)], { stdout: "pipe", stderr: "inherit" });
++    const children = [run("pinned"), run("flow")];
++    const lost = await Promise.all(children.map(async (child) => {
++      const out = await new Response(child.stdout).text();
++      expect(await child.exited).toBe(0);
++      return Number(out);
++    }));
++    expect(lost).toEqual([0, 0]);
++    expect(readSessionFlags(dir)).toEqual({ flow: "flow-149" });
++  }, 30_000);
++
+   test("an invalid subject in flags.json reads as absent and leaves the other flags", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const file = path.join(sessionDir(cwd, id, dataDir), "flags.json");
+     writeFileSync(file, JSON.stringify({ pinnedAt: "2026-11-17T10:00:00.000Z", subject: { kind: "pr", repo: "org/repo", number: 3, url: "https://github.com/org/repo/issues/3" } }));
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({ pinnedAt: "2026-11-17T10:00:00.000Z" });
+   });
+ 
+   test("an unreadable flags file reads as none; an unknown session is refused", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     writeFileSync(path.join(sessionDir(cwd, id, dataDir), "flags.json"), "{not json");
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({});
+     expect(() => setSessionFlags(cwd, "no-such-session", { archived: true }, dataDir)).toThrow(/no session/);
+   });
+ });
+ 
+ describe("trash", () => {
+   test("macOS: the session folder moves to ~/.Trash under a free name", () => {
+     const { cwd, dataDir, home } = project();
+
+--- src/session/issues/issue-session.ts
+@@ 1,107 @@
+ import { randomUUID } from "node:crypto";
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+ import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+ import { withFileLock } from "../../lib/fs";
+ import { createSession, findSession, sessionDir } from "../index";
+-import { parseSessionSubject, readSessionFlags, updateSessionFlagsAt } from "../organize";
++import { backfillSessionSubject, parseSessionSubject, readSessionFlags } from "../organize";
+ import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
+ 
+ export interface BoundIssue {
+   launch: IssueLaunch;
+   /** The independently fetched description is available to the ACP conversation as untrusted external context. */
+   body: string;
+   updatedAt: string;
+   /** Persisted before dispatch so retries survive title, login and issue URL changes or a client upgrade. */
+   preparationPrompt?: string;
+   flowSourceUrl?: string;
+ }
+ 
+ export function issueBindingFile(viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail["ref"], dataDir?: string): string {
+   const key = issueSessionKey("shell", viewer, project.cloneId, issue);
+   return path.join(keryxDataDir(dataDir), "issue-sessions", issueDigest(key) + ".json");
+ }
+ 
+ export function privateJson<T>(file: string): T | undefined {
+   const read = readConfigFile(file);
+   if (read.ok) return JSON.parse(read.text) as T;
+   if (isDefiniteAbsence(read.reason)) return undefined;
+   throw new Error("The local issue-session record could not be read. Check the storage permissions and try again.");
+ }
+ 
+ export function saveBinding(file: string, record: BoundIssue): void {
+   writeOwnerOnlyFileAtomic(file, JSON.stringify(record));
+ }
+ 
+ export function issueContextForSession(dir: string, dataDir?: string): BoundIssue | undefined {
+   const id = privateJson<{ key: string }>(path.join(dir, "issue-link.json"))?.key;
+   if (!id || !/^[0-9a-f]{64}$/.test(id)) return undefined;
+   const binding = privateJson<BoundIssue>(path.join(keryxDataDir(dataDir), "issue-sessions", id + ".json"));
+   return binding?.launch.sessionId === path.basename(dir) && binding.launch.version === 1 ? binding : undefined;
+ }
+ 
+ /**
+  * Records the issue as the session's public subject in `flags.json`, so a
+  * client can tell which issue the session works on (the private record above
+- * stays the authority). Written once, when the session is bound: a subject the
+- * person later unlinks is not written back. An issue whose URL is not a
+- * github.com issue page (GitHub Enterprise) has no subject keryx can store.
++ * stays the authority). Written when the session is bound, and on a later open
++ * when the session has none (bound by a keryx that wrote no subject); a subject
++ * the person unlinked is never written back (the store keeps an unlink marker).
++ * An issue whose URL is not a github.com issue page (GitHub Enterprise) has no
++ * subject keryx can store. The subject names no GitHub account: a client
++ * counting sessions by subject counts those bound under any account.
+  */
+ function bindIssueSubject(dir: string, ref: IssueDetail["ref"]): void {
+   const subject = parseSessionSubject({ kind: "issue", repo: `${ref.owner}/${ref.repo}`, number: ref.number, url: ref.url,
+     ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });
+-  if (subject !== undefined) updateSessionFlagsAt(dir, { subject });
++  if (subject !== undefined) backfillSessionSubject(dir, subject);
+ }
+ 
+ /** Only called after the remote issue and viewer were verified. The intent reserves the UUID before creating the session. */
+ export async function withIssueBinding<T>(
+   viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail, dataDir: string | undefined,
+   apply: (record: BoundIssue, file: string) => Promise<T>,
+ ): Promise<T> {
+   const file = issueBindingFile(viewer, project, issue.ref, dataDir);
+   ensureKeryxSubdir(["issue-sessions"], keryxDataDir(dataDir));
+   return withFileLock(file + ".lock", async () => {
+     let record = privateJson<BoundIssue>(file);
+     if (!record) {
+       const launchId = randomUUID();
+       record = {
+         launch: { version: 1, launchId, issue: issue.ref, viewer, project, stage: "registered",
+           sessionId: randomUUID(), initialTurn: { key: launchId, state: "unsent" } },
+         body: issue.body, updatedAt: issue.updatedAt,
+       };
+       saveBinding(file, record);
+     }
+     const launch = record.launch;
+     if (launch.version !== 1 || issueKey(launch.issue) !== issueKey(issue.ref) || issueViewerKey(launch.viewer) !== issueViewerKey(viewer)
+         || launch.project.cloneId !== project.cloneId || !launch.sessionId) {
+       throw new Error("Invalid issue-session binding. Inspect the session storage before continuing.");
+     }
+     const root = launch.project.cwd;
+     const dir = sessionDir(root, launch.sessionId, dataDir);
+     if (launch.stage !== "registered" && (!findSession(root, launch.sessionId, dataDir) || readSessionFlags(dir).archivedAt)) {
+       throw new Error("The linked session is archived or missing. Restore it in Sessions and retry.");
+     }
+     if (launch.stage === "registered") {
+       // Only the new intent can materialize its reserved UUID, including after a crash at creation.
+       if (!findSession(root, launch.sessionId, dataDir)) {
+         createSession({ cwd: root, id: launch.sessionId, title: `${issue.ref.owner}/${issue.ref.repo}#${issue.ref.number} ${issue.title}`,
+           ...(dataDir !== undefined ? { dataDir } : {}) });
+       }
+       writeOwnerOnlyFileAtomic(path.join(dir, "issue-link.json"), JSON.stringify({ key: path.basename(file, ".json") }));
+-      bindIssueSubject(dir, issue.ref);
+       launch.stage = "session_bound";
+     }
+     if (!existsSync(dir)) throw new Error("The linked session is missing. Restore it in Sessions and retry.");
++    // On first bind, and for a session an older keryx bound without a subject. The flags lock is
++    // taken inside the binding lock, never the reverse, so the two cannot deadlock.
++    bindIssueSubject(dir, issue.ref);
+     if (launch.flow) record.flowSourceUrl ??= launch.issue.url;
+     launch.issue = issue.ref;
+     record.body = issue.body;
+     record.updatedAt = issue.updatedAt;
+     saveBinding(file, record);
+     return apply(record, file);
+   });
+ }
+
+--- src/session/organize.ts
+@@ 1,33 @@
+ // How a person organises their sessions: archived, pinned, or moved to the trash.
+ //
+ // The flags live in `<sessionDir>/flags.json`, a file of their own: a live
+ // session rewrites `summary.json` from its in-memory copy on every save, so a
+ // flag kept there would be lost to the next turn of a session open elsewhere.
+ // Every client of the store (the desktop app over ACP, later `keryx shell`)
+ // reads the same file.
+ 
+ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+ import { homedir } from "node:os";
+ import path from "node:path";
+ import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
++import { withFileLock } from "../lib/file-lock";
+ import { sessionLeaseState } from "./lease";
+ import { sessionDir } from "./paths";
+ import { findSession, shortSessionId } from "./store";
+ 
+ export interface SessionFlags {
+   /** Derived from the private link marker, without exposing its issue or owner. */
+   hasIssue?: true;
+   /** ISO time the session was archived; absent when it is not. */
+   archivedAt?: string;
+   /** ISO time the session was pinned; absent when it is not. */
+   pinnedAt?: string;
+   /** The flow package (its directory name) this session works on; absent when none. */
+   flow?: string;
+   /** The GitHub pull request or issue this session works on; absent when none. */
+   subject?: SessionSubject;
+ }
+ 
+ /** A GitHub pull request or issue a session is bound to. `url` is its github.com page and agrees with `kind`, `repo` and `number`. */
+ export interface SessionSubject {
+   kind: "pr" | "issue";
+
+--- src/session/organize.ts
+@@ 68,213 @@
+  * `issue`, `owner/name` repo, positive integer number, and a
+  * `https://github.com/<repo>/pull|issues/<number>` url that agrees with all
+  * three (the repo compared without case, as GitHub does).
+  */
+ export function parseSessionSubject(value: unknown): SessionSubject | undefined {
+   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+   const raw = value as Record<string, unknown>;
+   const { kind, repo, number, url, repositoryId } = raw;
+   if (kind !== "pr" && kind !== "issue") return undefined;
+   if (typeof repo !== "string" || !REPO_REF.test(repo)) return undefined;
+   if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) return undefined;
+   if (typeof url !== "string") return undefined;
+   const match = SUBJECT_URL.exec(url);
+   if (match === null) return undefined;
+   const [, urlRepo = "", urlKind = "", urlNumber = ""] = match;
+   if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || urlRepo.toLowerCase() !== repo.toLowerCase() || Number(urlNumber) !== number) return undefined;
+   if (repositoryId !== undefined && (typeof repositoryId !== "string" || !NODE_ID.test(repositoryId))) return undefined;
+   return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };
+ }
+ 
+-/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
+-export function readSessionFlags(dir: string): SessionFlags {
++/**
++ * flags.json as stored: the public flags, plus whether the person unlinked the
++ * subject (`subjectUnlinked`), which only the store reads. The marker lets a
++ * binder backfill a missing subject without writing back one the person removed.
++ */
++interface StoredFlags {
++  flags: SessionFlags;
++  subjectUnlinked: boolean;
++}
++
++function readStoredFlags(dir: string): StoredFlags {
+   const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
+   const read = readConfigFile(path.join(dir, FLAGS_FILE));
+-  if (!read.ok) return origin;
++  if (!read.ok) return { flags: origin, subjectUnlinked: false };
+   try {
+     const raw = JSON.parse(read.text) as Record<string, unknown>;
+     const subject = parseSessionSubject(raw["subject"]);
+-    return {
++    const flags: SessionFlags = {
+       ...origin,
+       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
+       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
+       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
+       ...(subject !== undefined ? { subject } : {}),
+     };
++    return { flags, subjectUnlinked: subject === undefined && raw["subjectUnlinked"] === true };
+   } catch {
+-    return origin;
++    return { flags: origin, subjectUnlinked: false };
+   }
+ }
+ 
+-function writeFlags(dir: string, flags: SessionFlags): void {
+-  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };
++/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
++export function readSessionFlags(dir: string): SessionFlags {
++  return readStoredFlags(dir).flags;
++}
++
++function writeFlags(dir: string, { flags, subjectUnlinked }: StoredFlags): void {
++  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject,
++    ...(subjectUnlinked && flags.subject === undefined ? { subjectUnlinked: true } : {}) };
+   writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
+ }
+ 
++/** How long a flags writer waits for another, and when a lock is taken as abandoned (the critical section is one small file). */
++const FLAGS_LOCK_TIMEOUT_MS = 3_000;
++const FLAGS_LOCK_STALE_MS = 2_000;
++
++/**
++ * Runs a read-modify-write of flags.json holding `<dir>/flags.json.lock`, so
++ * that writers in other keryx processes (one ACP server per Desktop window, the
++ * issue-workspace child) cannot lose each other's change. Synchronous: callers
++ * are synchronous, and the section is one read and one atomic write.
++ */
++function withFlagsLock<T>(dir: string, apply: () => T): T {
++  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {
++    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,
++    staleMs: FLAGS_LOCK_STALE_MS,
++  });
++  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
++  return held.value;
++}
++
++/**
++ * Writes `subject` as the session's subject when it has none and the person
++ * has not unlinked one. Returns whether it wrote. For a binder that learns the
++ * subject after the session was bound (a binding made before subjects existed).
++ */
++export function backfillSessionSubject(dir: string, subject: SessionSubject): boolean {
++  const parsed = parseSessionSubject(subject);
++  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);
++  return withFlagsLock(dir, () => {
++    const current = readStoredFlags(dir);
++    if (current.flags.subject !== undefined || current.subjectUnlinked) return false;
++    writeFlags(dir, { flags: { ...current.flags, subject: parsed }, subjectUnlinked: false });
++    return true;
++  });
++}
++
+ /**
+  * Applies a change to the flags stored in `dir` and returns them as stored.
+  * For a caller that already holds the session directory, such as a binder
+  * that has just created the session and cannot look it up yet.
+  */
+ export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
+-  const current = readSessionFlags(dir);
++  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now));
++}
++
++function applyFlagsChange(dir: string, change: SessionFlagsChange, now: () => Date): SessionFlags {
++  const { flags: current, subjectUnlinked } = readStoredFlags(dir);
+   const stamp = now().toISOString();
+   const next: SessionFlags = { ...current };
+   if (change.archived === true) next.archivedAt ??= stamp;
+   if (change.archived === false) delete next.archivedAt;
+   if (change.pinned === true) next.pinnedAt ??= stamp;
+   if (change.pinned === false) delete next.pinnedAt;
+   if (typeof change.flow === "string") {
+     if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
+     next.flow = change.flow;
+   }
+   if (change.flow === null) delete next.flow;
+   if (change.subject !== undefined && change.subject !== null) {
+     const subject = parseSessionSubject(change.subject);
+     if (subject === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(change.subject).slice(0, 300)}`);
+     next.subject = subject;
+   }
+   if (change.subject === null) delete next.subject;
+-  writeFlags(dir, next);
++  const unlinked = change.subject === null ? true : change.subject !== undefined ? false : subjectUnlinked;
++  writeFlags(dir, { flags: next, subjectUnlinked: unlinked });
+   return next;
+ }
+ 
+ /** The project root and directory of a stored session, by its exact id. */
+ function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
+   const summary = findSession(cwd, sessionId, dataDir);
+   if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
+   return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+ }
+ 
+ /**
+  * Archives or unarchives, pins or unpins a session, links or unlinks its flow
+  * and subject. A flag already in the asked state keeps its original time.
+  * Returns the flags as stored.
+  */
+ export function setSessionFlags(
+   cwd: string,
+   sessionId: string,
+   change: SessionFlagsChange,
+   dataDir?: string,

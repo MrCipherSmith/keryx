@@ -1,0 +1,96 @@
+STATUS: DONE
+
+## Frontend Review (round 3, wave 2, fix range 88e3faba9..d7b0f7058)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058e919a5880319588ad95395b7ff66153` (explicit-hash-range)
+- Slice: slice-02, read in full (2103 lines). It holds the Desktop tests (IssuesBoard, PrWorkRow, ReviewBoard, prWork, usePendingFlowLinks, ProjectNavigation), the two App fixtures, the docs (cli-reference, desktop-issues guide, implementation plan), and the backend for the repository Issues source (commands/issues.ts, issues-board.ts, issues-github.ts) with their tests.
+- Stack note: Desktop is React without MobX, so the MobX parts and Part D do not apply. Backend code in this slice is outside this lens (review-logic / review-architecture). I read it only for what it feeds into the frontend.
+- Head context read beyond the slice: IssuesBoard.tsx:147 (`unavailable` regex) and :268 (older-keryx hint regex), and issues-github.ts `failure` and its callers.
+- Test evidence: `research-evidence/verify-tests-to-run-2.txt` shows Desktop `bun test src` at 1051 pass, 0 fail. `-1.txt` shows root 2722 pass and 1 fail. The failure is a timeout in `src/lib/searchable-sources.test.ts`, which is unrelated to this slice and passes in the `-2.txt` rerun.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No new findings in slice-02 for this lens. FE-R3-001..003 (wave 1) are not filed again. One note adds to FE-R3-003 below.
+
+### Note on FE-R3-003 (not a new finding)
+The older-keryx hint in IssuesBoard.tsx:268 is shown whenever the error matches `/Invalid Issues request/i`. A current keryx also throws that same `invalidInput` text from paths added or kept in this range: `pageLink` (a next link outside the source's path), `turnPage` (an unknown continuation key) and `validateListRequest`. For the default source, any of these errors would show the "repository issues are not available" panel and the "update keryx" hint, though keryx is current. I found no realistic input that reaches these paths. GitHub's own next links for the repository source are `/repos/o/r/issues` or `/repositories/N/issues`, and both are accepted. So this stays at the FE-R3-003 info level. Matching the three reasons by name would settle both.
+
+### Prior dispositions (what slice-02 shows)
+- HL-001 closed. usePendingFlowLinks tests cover offer, then Link writes once; Dismiss writes nothing and never offers that package again; the offer goes away once the session has a Flow. The App fixture checks that nothing is linked before Link, that Dismiss links nothing, and that a press coalesced into an in-flight open (#15) registers no request, so `510-c` is not offered.
+- LG-008 closed. prWork.test "a press coalesced into an in-flight open reports that it filled nothing" covers it, as does fixture #15.
+- LG-011 closed. prWork.test LG-011 has `isShown: () => false` and no fill. The fixture's #16 case switches session during the open and keeps the shown draft.
+- LG-009 partial. The tests cover a foreign repository the board lists, one it does not list, and a nonce that is not replayed. Nothing covers a card absent from the loaded snapshot of the right repository, which is still armed (FE-R3-001).
+- LG-015 closed. prWork.test LG-015 covers newest of two either order, and app-navigation checks `loaded.at(-1) === newest12`.
+- RG-001 closed. Three IssuesBoard tests cover the older-keryx hint without Retry, the two configuration reasons for the fallback, and a chosen source that keeps Retry.
+- UX-008 closed. issues-github maps 410 to `issuesDisabled`, and issuePage rethrows it as a `configuration:` error that names the repository. A test asserts that.
+- DG-009 closed. A repository request reads up to 3 pages while they hold only pull requests, and the cursor continues after the page used. A test covers both, plus an endless run of PR-only pages.
+- LG-013 partial. A fork origin with Issues off now gets a named reason and "Show issues assigned to me". There is still no way to list the upstream repository; the plan records this as a limit.
+- TP-R2-001 closed. `settle` is gone from both fixtures (`keryx ctx rg` found 0 matches), and every wait polls a state with a deadline. One `nextFrame` stays before a negative check. It is tied to App's rAF fill, which is the testing lens's call.
+- TP-R2-002 closed. #14 double press while session/new is held covers R2-17. A second header press reopens the panel, which covers R2-22.
+- TP-R2-003 closed. resolveFlowLinks gets a `some` vs `every` case, and the "focus nobody clears" test pins the nonce guard.
+- TP-R2-004 closed. A review-slot title test drops the running label and returns nothing for an answer without progress.
+- TP-R2-005 closed. The AC2 test now asserts that the polled slot text reaches #202 at each step, for both groupings.
+- TP-R2-006 partial. The `..` remote test pins S42. S02/S03 (parseSessionSubject REPO_REF) are not in slice-02.
+- TP-R2-008 closed. src/commands/issues.test.ts drives issuesCommand with an injected `connect` and checks `/repos/org/base/issues`.
+- TP-R2-009 closed. The viewer next-link refusal (S47) and the case-insensitive repository path (S46) are tested.
+- DG-006 / UX-007 closed: the warn tone is tested only on open PRs. DG-007 closed: a `badgesEqual` test ignores `lastActivityAt`. PF-003 closed: the one-index read-count test.
+- DG-008 / LG-007 / LG-010 / PC-002 closed. The implementation plan (0.1.5) and the PR body describe the confirmed offer, the 15-minute window, and "several pending requests offer nothing". PC-001 closed: desktop-issues.md describes the repository source, the work row and the unavailable path.
+
+### Clean Areas
+- Test harnesses: `focusHost` and `renderRow` remount through `key`, and React `act` wraps every state change. No test leaks a global: `setTimeout` is restored in `finally`, and `process.stdout.write` and git discovery are restored.
+- The fixtures' `waitFor` failure messages include composer, title and recent calls. Each negative check comes after a positive artifact (the Flows board lists the dirs).
+- Labels in the tests use the aria-labels that name the PR, which matches AC6.
+- MobX parts: not applicable.
+
+### Routing audit
+- graph_used: no. Not needed: the payload `layers` gave affected files and related tests.
+- wiki_used: not-relevant. This round reviews tests and the fix range, and the payload carries the ACs.
+- ctx_used: yes. `keryx ctx rg` for settle/40 ms, the IssuesBoard error regexes and `failure`/`.rest<` callers; `keryx ctx read` for the test evidence.
+- raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "slices": ["slice-02"],
+    "summary": "slice-02 (tests, fixtures, docs, repository-source backend) holds no new frontend-lens defect. The tests confirm the round-2 fixes for HL-001, LG-008, LG-011, LG-015, RG-001, UX-008, DG-009 and the testing findings. LG-009 stays partial (FE-R3-001, no test for a card absent from the loaded snapshot). FE-R3-003 also covers invalidInput thrown by a current keryx's paging paths.",
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "HL-001", "disposition": "closed", "note": "offer-only tests in usePendingFlowLinks and the App fixture; coalesced press (#15) registers no request" },
+      { "id": "LG-008", "disposition": "closed" },
+      { "id": "LG-011", "disposition": "closed" },
+      { "id": "LG-009", "disposition": "partial", "note": "card absent from the loaded snapshot still armed and untested (FE-R3-001)" },
+      { "id": "LG-015", "disposition": "closed" },
+      { "id": "RG-001", "disposition": "closed" },
+      { "id": "UX-008", "disposition": "closed" },
+      { "id": "DG-009", "disposition": "closed" },
+      { "id": "LG-013", "disposition": "partial", "note": "fork origin now explained with an Assigned-to-me fallback; no upstream repository choice (recorded as a limit)" },
+      { "id": "TP-R2-001", "disposition": "closed" },
+      { "id": "TP-R2-002", "disposition": "closed" },
+      { "id": "TP-R2-003", "disposition": "closed" },
+      { "id": "TP-R2-004", "disposition": "closed" },
+      { "id": "TP-R2-005", "disposition": "closed" },
+      { "id": "TP-R2-006", "disposition": "partial", "note": "S42 pinned in slice-02; S02/S03 are outside this slice" },
+      { "id": "TP-R2-008", "disposition": "closed" },
+      { "id": "TP-R2-009", "disposition": "closed" },
+      { "id": "DG-006", "disposition": "closed" },
+      { "id": "UX-007", "disposition": "closed" },
+      { "id": "DG-007", "disposition": "closed" },
+      { "id": "PF-003", "disposition": "closed" },
+      { "id": "DG-008", "disposition": "closed" },
+      { "id": "LG-007", "disposition": "closed" },
+      { "id": "LG-010", "disposition": "closed" },
+      { "id": "PC-001", "disposition": "closed" },
+      { "id": "PC-002", "disposition": "closed" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
