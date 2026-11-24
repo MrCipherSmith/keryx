@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T08:16:03.283Z",
+  "updatedAt": "2026-11-24T08:18:00.971Z",
   "source": {
     "type": "description",
     "ref": null
@@ -182,7 +182,7 @@
       "id": "T9",
       "title": "Review round on the branch via review-orchestrator",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -193,7 +193,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Rounds 1 and 2 ran via review-orchestrator on PR 1302; findings fixed in T11 and T12; next round deferred to after the rebase onto stages 2/3"
     },
     {
       "id": "T10",
@@ -408,6 +410,11 @@
       "at": "2026-11-24T08:16:03.283Z",
       "event": "task-done",
       "detail": "T12: Fix round 2 findings of PR 1302 (S1-S9)"
+    },
+    {
+      "at": "2026-11-24T08:18:00.971Z",
+      "event": "task-done",
+      "detail": "T9: Review round on the branch via review-orchestrator"
     }
   ],
   "acKinds": {

@@ -60,3 +60,10 @@
 - T12 fixed S1–S3, S5, S7–S9 (skill text, the SKILL.md publication ending rewritten in place, test title, no keryx source paths in the bundled skill, absence assertions, cross-file test via buildAutonomousPrompt). S6: AC6 verify now also runs the preflight test. S4: PR body refreshed by the orchestrator. Tests: preflight + parity + autonomous-profile 108 pass; bun test src/gdskills 8472 pass, 1 known unrelated fail (install.test.ts EACCES). 10 hand mutations each fail a preflight test.
 - Info noted, not acted on: committed review packages carry absolute local paths, as all 619 existing package files do (package-writer convention).
 - 2026-11-24T08:16:03.283Z - task-done: T12: Fix round 2 findings of PR 1302 (S1-S9)
+
+## 2026-11-24 Stage 3 pushed partially; review loop paused
+
+- `origin/feat/desktop-review-v2-stage3` (9e871b17f, flow 520) is based on main, not on stage 2; it adds head-move.ts (on_head_move ask/follow/ignore, scheduled → follow), update-round selection, D1 publish-as-is in desk-publication.ts. No `keryx review advance` command, no rounds model. The rebase condition (stage 3 on stage 2 with rounds model and publish/update code) is not met: T7, T8, T10 stay blocked.
+- Overlap for T7: stage 3 Desktop D1 first line is "Reviewed commit `<sha>`. The pull request has moved to `<new>` since; this review does not cover the newer commits." while the skill/template use "Reviewed `<sha>` — the PR has since moved on to `<new>`." Shared publish code must pick one form that also passes the `review complete` head gate.
+- Review loop paused after round 2 (decision): a third round on bc24e74a6 would spend round 3 of the 5-round cap on minor text fixes, while T7/T8 add the publish/update code that needs the remaining rounds. T12 fixes are covered by tests and 10 hand mutations, not yet re-reviewed; the next round runs after the rebase.
+- 2026-11-24T08:18:00.971Z - task-done: T9: Review round on the branch via review-orchestrator
