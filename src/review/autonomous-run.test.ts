@@ -488,6 +488,27 @@ describe("one run per pull request", () => {
     expect(again.summary.target.head).toBe("def456");
   });
 
+  test("resuming a pinned review preserves coordinator history and charges each event once", async () => {
+    const first = await runAutonomousReview(options(scripted(async child => {
+      child.emit(call("keryx review plan"));
+      child.emit({ type: "usage", usage: { totalTokens: 20 } });
+      writePackage("rv-1", "reviewed");
+      return 0;
+    })));
+    const events = path.join(first.runDir, "events.ndjson");
+    const before = readFileSync(events, "utf8");
+    const second = await runAutonomousReview(options(scripted(async child => {
+      child.emit(call("keryx review ingest"));
+      child.emit({ type: "usage", usage: { totalTokens: 30 } });
+      writePackage("rv-1", "closed");
+      return 0;
+    })));
+    expect(before).toContain("keryx review plan");
+    expect(readFileSync(events, "utf8")).toStartWith(before);
+    expect(readFileSync(events, "utf8").slice(before.length)).toContain("keryx review ingest");
+    expect(second.summary.tokens).toBe(50);
+  });
+
   test("an unfinished run on the same head resumes its package", async () => {
     await runAutonomousReview(options(scripted(async () => (writePackage("rv-1", "reviewed"), 0))));
     const seen: ChildSpec[] = [];

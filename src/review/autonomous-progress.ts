@@ -220,8 +220,8 @@ export interface EventTail {
   bytesSeen(): number;
 }
 
-export function createEventTail(file: string, observe?: (event: Record<string, unknown>) => void): EventTail {
-  let offset = 0;
+export function createEventTail(file: string, observe?: (event: Record<string, unknown>) => void, startOffset = 0): EventTail {
+  let offset = startOffset;
   let pending = "";
   const decoder = new StringDecoder("utf8");
   let state = emptyProgress();

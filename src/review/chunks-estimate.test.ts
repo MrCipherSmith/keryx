@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   process.chdir(originalCwd);
-  process.exitCode = originalExitCode;
+  process.exitCode = originalExitCode ?? 0;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -115,7 +115,7 @@ test("interactive mode: a run over the ceiling waits for a yes, and `chunks next
   const refused = await capture(() => runChunks(["next", "--package", pkg], { rejectUnknownFlags: () => {} }));
   expect(refused).toContain("blocked:");
   expect(process.exitCode).toBe(1);
-  process.exitCode = originalExitCode;
+  process.exitCode = originalExitCode ?? 0;
 
   const estimate = (await estimateChunkRun(pkg, root))!;
   await recordChunkEstimate(pkg, estimate, "interactive");
