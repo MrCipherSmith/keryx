@@ -1,5 +1,5 @@
 # Спецификация · Review v2
-Version: 0.1.2
+Version: 0.1.3
 
 Статус: этап 0 реализован и влит в main (Flow 516, PR #1294), остальное — draft. Раздел «Основания» описывает код на коммите `1b994df18`. Все остальные разделы — планируемое поведение, кроме этапа 0 (см. [план реализации](implementation-plan.md), «Состояние этапа 0»); имена новых команд, полей и таблиц предварительные.
 
@@ -67,7 +67,7 @@ PullRequest (GitHub)        Issue (GitHub)
 | `published` | последний раунд опубликован |
 | `closed` | PR слит или закрыт, либо пользователь закрыл Review |
 
-Отдельный признак **freshness**: `current`, если head последнего проверенного раунда равен head PR, иначе `behind` с числом коммитов и признаком `rewritten` при force-push. Freshness не зависит от состояния: Review может быть `running` и `behind` одновременно.
+Отдельный признак **freshness**: `current`, если head последнего проверенного раунда равен head PR, иначе `behind` с числом коммитов и признаком `rewritten` при force-push. Freshness не зависит от состояния: Review может быть `running` и `behind` одновременно. Если head PR неизвестен (карточку PR не удалось прочитать или PR не найден), freshness — `unknown`: карточка показывает «head unknown», и Review не попадает в колонку «Отстаёт» (решение оператора от 2026-11-24, этап 2).
 
 ## Хранение
 
@@ -207,7 +207,7 @@ interface Review {
   id: string;
   key: { repositoryId: string; repo: string; number: number; viewer: string };
   state: "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
-  freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean };
+  freshness: { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean } | { kind: "unknown" };
   onHeadMove: "ask" | "follow" | "ignore";
   rounds: Round[];
 }

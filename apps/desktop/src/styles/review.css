@@ -128,7 +128,8 @@
 .session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }
 
 /* Reviews tab: shares the Pull requests toolbar rules above through .review-board (labels collapse at 1100px and 760px). */
-.reviews-board .flows-toolbar > select { max-width: 9.5rem; }
+/* The filter selects shrink before the row wraps: a small basis decides the line break, they grow back to 9.5rem. */
+.reviews-board .flows-toolbar > select { flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem; }
 @container (max-width: 760px) {
   .reviews-board .flows-toolbar > select { max-width: 6.5rem; }
 }

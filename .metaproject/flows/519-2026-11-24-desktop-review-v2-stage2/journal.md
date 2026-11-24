@@ -81,3 +81,18 @@ Not asked, kept as implemented because each keeps the previous PR-panel behaviou
 - ReviewBoard.tsx: the only T8 edit is the `badgesEqual` line, which now also compares outdated.round. The orchestrator checked the diff; the attention-set code is unchanged.
 - Title wording without a round ('Reviewed abc1234 — start a new round on the current head') was the worker's choice. The orchestrator accepted it as plain and accurate, without an operator question.
 - The orchestrator re-ran apps/desktop `bun test src` (989 pass, 0 fail) and `tsc --noEmit` (clean).
+- 2026-11-24T08:26:21.029Z - task-done: T8: Pull requests board: indicator without local review, New review round label, F-024
+
+## 2026-11-24 · T11 Reviews toolbar measurement (orchestrator)
+
+The Reviews toolbar was measured in the browser dev build (`bun run dev:browser`) with KERYX_DATA_DIR set to a scratch copy of the working DB. That kept the operator's real store from being migrated. The board was the keryx repo on real GitHub; the list was empty because every Review in the copy belongs to another repository. Viewport 1700x900; the section width was forced through the panel widths.
+- First measurement: the row wrapped at 1180, 900, 820 and 760-560 px. The cause: the three filter selects had a fixed width under `flex: none`.
+- Fix in review.css: the Reviews selects get `flex: 1 1 5rem; min-width: 5rem; max-width: 9.5rem`.
+- After the fix: one row with nothing clipped at 760, 800, 820, 900, 1000, 1100, 1101, 1180 and 1380 px. Two rows at 700, 660, 620 and 560 px; three at 340 px. Nothing is clipped at any width.
+- At 560 px the toolbar needs 648 px even with every item at its minimum. One row there would require hiding a control. This is recorded as a known limit in the implementation plan, in the spirit of stage 0 deviation (c).
+- The PR toolbar was not re-measured: stage 2 only removed the Review rules button from it, which only shrinks it.
+- The live check also covered: tab order and the ⌘3 label, the Reviews tab loading `review reviews` against real GitHub through the working-tree CLI, and the empty state 'No Keryx reviews yet'. A 'Choose a GitHub account' prompt was dismissed with Later; no settings were changed.
+
+## 2026-11-24 · T13 docs
+
+implementation-plan.md 0.1.4 adds a «Состояние этапа 2» section; deviation (b) and F-024 are marked closed and decision (d) is relabelled. specification.md 0.1.3 adds the freshness kind `unknown`. The orchestrator corrected two lines with facts from the live check and the toolbar numbers.
