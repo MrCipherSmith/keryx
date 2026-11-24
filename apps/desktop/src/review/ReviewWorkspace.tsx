@@ -1,4 +1,4 @@
-import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
@@ -91,7 +91,6 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const initialLaunch = useRef(reviewIntent);
   const intentConsumed = useRef(onIntentConsumed);
   intentConsumed.current = onIntentConsumed;
-  const publication = { cwd, target: subject, url: card.url, publishCommand };
   const loadAttempt = useCallback(async (id: string) => {
     const history = await runCommand(cwd, subject, { kind: "status", id });
     return history.runs.find(run => run.id === id);
@@ -122,6 +121,20 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
   const revisionChanged = local.staleRange;
+  /**
+   * "Update review" in a head-moved publish dialog: the next round of the same Review on the PR's current range, with
+   * the reviewed attempt's settings. The panel stays open and shows the new attempt; a board that has not seen the push
+   * is re-read so the panel follows the new range.
+   */
+  const updateReview = useCallback((reviewed: DeskRun, revision: DeskRevision) => {
+    setSessionId(null);
+    const boardBehind = !sameRange(card, revision);
+    // The board's current range already has an attempt: the panel shows it, and a second one is not started.
+    if (!boardBehind && action.open) return;
+    void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: reviewed.options }) })
+      .then(() => { if (boardBehind) onRefreshBoard?.(); });
+  }, [card, action.open, local.request, onRefreshBoard]);
+  const publication = { cwd, target: subject, url: card.url, publishCommand, onUpdateReview: updateReview };
   const start = useCallback(() => {
     if (reviewModels) setLaunchCard(card);
     else void local.request({ kind: "start", baseSha: card.baseSha, headSha: card.headSha });

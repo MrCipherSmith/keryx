@@ -80,6 +80,8 @@ interface PublicationTarget {
   target: DeskRunKey;
   url: string;
   publishCommand?: typeof reviewPublish | undefined;
+  /** Starts the next round of the same Review on `revision`, the PR's current range, after `reviewed`. */
+  onUpdateReview?: ((reviewed: DeskRun, revision: DeskRevision) => void) | undefined;
 }
 
 export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, publication, onPublicationDecision, onOpenSession, children, onAnswer, onLifecycle, answerError = "", showOutcome = true }: ReportProps & {
@@ -103,6 +105,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
   const draft = publication && run.source !== "existing" && (run.state === "completed" || run.state === "partial") &&
     result?.reviewed && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i.test(publication.url) ? publication : undefined;
   const publicationPending = draft && !historic && run.publication === "pending";
+  const updateReview = draft?.onUpdateReview;
   return <article className="desk-run" aria-label={'Review attempt ' + run.id}>
     <header className="desk-run-head">
       <div className="desk-run-state">
@@ -171,7 +174,12 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
       {run.publication === "skipped" && <span className="review-detail-muted">Publication skipped</span>}
     </div>}
     {draft && publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
-      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)} />}
+      onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)}
+      {...(updateReview && { onUpdateReview: (currentHead: string) => {
+        setPublishOpen(false);
+        // The as-is variant exists only while the base is unchanged, so the current range keeps this attempt's base.
+        updateReview(run, { baseSha: run.baseSha, headSha: currentHead });
+      } })} />}
   </article>;
 }
 

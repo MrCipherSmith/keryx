@@ -372,6 +372,66 @@ test("local answers reopen without storing rendered GitHub content", async () =>
   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.answers).toEqual(answers);
 });
 
+/** Round 2 of the same Review on `movedHead`: its package holds F-002 again plus a new held finding F-003. */
+function updateRound(): { next: string; nextDirectory: string } {
+  const moved = { baseSha: revision.baseSha, headSha: movedHead };
+  const store = new DeskRunStore();
+  let next: string;
+  let nextDirectory: string;
+  try {
+    next = store.request(project, key, moved)!;
+    store.end(store.byId(next)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
+      result: { reviewed: moved, coverage: "partial", verdict: "REQUEST_CHANGES",
+        findings: { blocker: 0, major: 1, minor: 2, info: 0 }, report: "Fixture review." } });
+    expect(store.byId(next)!.run.previousRunId).toBe(id);
+    nextDirectory = store.directory(next);
+  } finally {
+    store.close();
+  }
+  cpSync(path.join(directory, "package"), path.join(nextDirectory, "package"), { recursive: true });
+  json(path.join(nextDirectory, "package", "manifest.json"), {
+    reviewId: "fixture-round", status: "closed",
+    target: { kind: "pr", ref: "https://github.com/example/project/pull/7", base: moved.baseSha, head: moved.headSha },
+    artifacts: {}, coverage: [],
+  });
+  const findingsFile = path.join(nextDirectory, "package", "findings.json");
+  json(findingsFile, [...JSON.parse(readFileSync(findingsFile, "utf8")),
+    { id: "F-003", global_id: "fixture#F-003", severity: "minor", reviewer: "review-logic", problem: "A new name is unclear.",
+      premise: { verdict: "challenged", question: "Is the new name intentional?" } }]);
+  setHead(movedHead);
+  return { next, nextDirectory };
+}
+
+test("an update round pre-selects the previous round's answers by finding id, and its own draft wins", async () => {
+  // Round 1's draft: an answer for F-002, an answer for a finding round 2 does not have, and settings that must not carry.
+  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
+    inline: true, general: false, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment",
+    answers: { "fixture#F-002": "dismiss", "fixture#F-404": "uphold" } } });
+  const { next, nextDirectory } = updateRound();
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
+  expect(preview.headMoved).toBeUndefined();
+  expect(preview.questions.map(question => question.id)).toEqual(["fixture#F-002", "fixture#F-003"]);
+  expect(preview.settings.answers).toEqual({ "fixture#F-002": "dismiss" });
+  expect(preview.settings).toMatchObject({ inline: false, general: true, verdictOverride: null });
+  expect(preview.blockedReason).toContain("Answer each finding question");
+  expect(existsSync(path.join(nextDirectory, "publication-draft.json"))).toBe(false);
+
+  await requestDeskPublication(project, key, { kind: "save", id: next,
+    settings: { ...preview.settings, answers: { "fixture#F-002": "uphold" } } });
+  const reopened = await requestDeskPublication(project, key, { kind: "preview", id: next });
+  expect(reopened.settings.answers).toEqual({ "fixture#F-002": "uphold" });
+});
+
+test("an update round carries only answers that are valid for its own questions", async () => {
+  json(path.join(directory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
+    inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
+    answers: { "fixture#F-002": "option:not-an-option-here", "fixture#F-003": "dismiss" } } });
+  const { next } = updateRound();
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
+  // F-003 was not a question in round 1, but an answer under its id is still that finding's answer.
+  expect(preview.settings.answers).toEqual({ "fixture#F-003": "dismiss" });
+});
+
 test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {
   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
   const settings = { ...preview.settings, inline: true };

@@ -26,6 +26,9 @@ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
 type Draft = { settings: PublicationSettings; savedAt: string };
+type Attempt = NonNullable<ReturnType<DeskRunStore["byId"]>>;
+/** How many earlier attempts an update round looks through for a draft to take answers from. */
+const answerSourceLimit = 8;
 type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
@@ -108,6 +111,34 @@ async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConn
   return true;
 }
 
+const sameReview = (a: Attempt, b: Attempt) => a.key.number === b.key.number && a.key.repositoryId === b.key.repositoryId &&
+  a.key.repo.toLowerCase() === b.key.repo.toLowerCase() && a.key.viewer.toLowerCase() === b.key.viewer.toLowerCase() &&
+  (typeof a.run.reviewId !== "string" || typeof b.run.reviewId !== "string" || a.run.reviewId === b.run.reviewId);
+
+/** The directories of the attempts this one follows in the same Review, newest first (`previousRunId` links). */
+function earlierAttemptDirectories(store: DeskRunStore, attempt: Attempt): string[] {
+  const directories: string[] = [];
+  const seen = new Set([attempt.run.id]);
+  let previousId = attempt.run.previousRunId;
+  while (previousId && !seen.has(previousId) && directories.length < answerSourceLimit) {
+    seen.add(previousId);
+    const previous = store.byId(previousId);
+    if (!previous || !sameReview(previous, attempt)) break;
+    directories.push(store.directory(previous.run.id));
+    previousId = previous.run.previousRunId;
+  }
+  return directories;
+}
+
+/** The finding answers of the newest earlier attempt that saved a publication draft; never its other settings. */
+async function earlierAnswers(directories: readonly string[]): Promise<Record<string, unknown> | undefined> {
+  for (const directory of directories) {
+    // An unreadable earlier draft only means nothing is pre-selected from it; the current draft does not depend on it.
+    const earlier = await json<Draft>(directory, "publication-draft.json", draftLimit).catch(() => undefined);
+    if (earlier) return object(object(object(earlier)?.settings)?.answers);
+  }
+}
+
 /** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
 function headMovedLine(moved: HeadMoved): string {
   return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
@@ -117,8 +148,10 @@ function headMovedLine(moved: HeadMoved): string {
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
   key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
+  /** Earlier attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
+  earlier: readonly string[];
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current, headMoved, cache } = input;
+  const { cwd, directory, run, key, auth, request, current, headMoved, cache, earlier } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -150,11 +183,13 @@ async function prepare(input: {
     return options.length ? { ...question, options } : { ...question, recommendation };
   });
   const saved = request.settings ?? draft?.settings;
+  // An update round starts with the answers given to the same findings before; only answers, never the verdict or content.
+  const savedAnswers: Record<string, unknown> | undefined = saved?.answers ?? await earlierAnswers(earlier);
   const selections = new Map<string, PublicationAnswer>();
   const selectedLabels = new Map<string, string>();
   for (const question of questions) {
-    if (!saved || !Object.hasOwn(saved.answers, question.id)) continue;
-    const answer = saved.answers[question.id];
+    if (!savedAnswers || !Object.hasOwn(savedAnswers, question.id)) continue;
+    const answer = savedAnswers[question.id];
     if (question.options) {
       const selected = question.options.find(option => option.id === answer);
       if (selected) {
@@ -326,9 +361,11 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
   const store = new DeskRunStore(undefined, true);
   const directory = store.directory(request.id);
-  const attempt = (() => {
-    try { return store.byId(request.id); }
-    finally { store.close(); }
+  const { attempt, earlier } = (() => {
+    try {
+      const found = store.byId(request.id);
+      return { attempt: found, earlier: found ? earlierAttemptDirectories(store, found) : [] };
+    } finally { store.close(); }
   })();
   const run = attempt?.run;
   if (!attempt || !run?.result?.reviewed || run.source === "existing" ||
@@ -352,7 +389,7 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
   // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
   const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache });
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache, earlier });
   if (request.kind === "preview") {
     const { state } = await render();
     verifyGithubBindingUnchanged(connection);
