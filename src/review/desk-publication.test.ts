@@ -10,7 +10,8 @@ import { isolateGitDiscovery } from "./test-git-fixture";
 const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
 const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
 const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
-  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS"] as const;
+  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS",
+  "FIXTURE_COMPARE", "FIXTURE_COMPARE_READS", "FIXTURE_DISCUSSION", "FIXTURE_DISCUSSION_READS"] as const;
 let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
 let restoreGit: () => void;
 let root: string;
@@ -33,6 +34,10 @@ function setHead(headRefOid: string, viewer = key.viewer) {
 }
 
 const posted = () => JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"));
+const reads = (name: "FIXTURE_COMPARE_READS" | "FIXTURE_DISCUSSION_READS") =>
+  existsSync(process.env[name]!) ? readFileSync(process.env[name]!, "utf8") : "";
+/** GitHub's compare status of the reviewed head against the current head, or `fail:<stderr>` for a failing gh call. */
+const setCompare = (status: string) => writeFileSync(process.env.FIXTURE_COMPARE!, `${status}\n`);
 const movedHead = "c".repeat(40);
 const movedLine = `Reviewed commit \`${revision.headSha}\`. The pull request has moved to \`${movedHead}\` since; ` +
   "this review does not cover the newer commits.";
@@ -57,6 +62,12 @@ beforeEach(() => {
   process.env.FIXTURE_PR = path.join(root, "pr.json");
   process.env.FIXTURE_DIFF = path.join(root, "diff.txt");
   process.env.FIXTURE_DIFF_READS = path.join(root, "diff-reads");
+  process.env.FIXTURE_COMPARE = path.join(root, "compare.txt");
+  process.env.FIXTURE_COMPARE_READS = path.join(root, "compare-reads");
+  process.env.FIXTURE_DISCUSSION = path.join(root, "discussion.json");
+  process.env.FIXTURE_DISCUSSION_READS = path.join(root, "discussion-reads");
+  setCompare("ahead");
+  writeFileSync(process.env.FIXTURE_DISCUSSION, "[[]]\n");
   delete process.env.GH_TOKEN;
   delete process.env.GITHUB_TOKEN;
   delete process.env.FIXTURE_NAMED_PR;
@@ -69,6 +80,9 @@ beforeEach(() => {
     "  auth:*) printf 'fixture-value-only\\n' ;;",
     '  api:graphql) if [ -n "$GH_TOKEN" ] && [ -n "$FIXTURE_NAMED_PR" ]; then cat "$FIXTURE_NAMED_PR"; else cat "$FIXTURE_PR"; fi ;;',
     '  api:-H) printf x >> "$FIXTURE_DIFF_READS"; cat "$FIXTURE_DIFF" ;;',
+    '  api:--paginate) printf x >> "$FIXTURE_DISCUSSION_READS"; cat "$FIXTURE_DISCUSSION" ;;',
+    `  api:repos/*/compare/*) printf '%s %s %s\\n' "$4" "$5" "$6" >> "$FIXTURE_COMPARE_READS"; read -r status < "$FIXTURE_COMPARE"`,
+    `    case "$status" in fail:*) printf '%s\\n' "\${status#fail:}" >&2; exit 1 ;; *) printf '%s\\n' "$status" ;; esac ;;`,
     '  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
     "  *) exit 1 ;;",
     "esac",
@@ -144,6 +158,7 @@ test("draft questions, template and saved settings are local until one explicit 
     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
   });
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
+  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
 });
 
 test("partial approval, a changed base and a closed pull request cannot send a review", async () => {
@@ -183,6 +198,56 @@ test("a moved head publishes as is: a Comment on the reviewed commit whose first
   const sent = posted();
   expect(sent).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
   expect(sent.body.split("\n")[0]).toBe(movedLine);
+  expect(reads("FIXTURE_COMPARE_READS").split("\n")[0])
+    .toBe(`repos/${key.repo}/compare/${revision.headSha}...${movedHead}?per_page=1 --jq .status`);
+});
+
+test("a head that no longer contains the reviewed commit keeps the refusal and posts nothing", async () => {
+  setHead(movedHead);
+  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
+    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
+  // A force-push or rebase (diverged), an older head (behind), and a compare call that fails for any reason.
+  for (const status of ["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"]) {
+    setCompare(status);
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+    expect(preview.headMoved).toBeUndefined();
+    expect(preview.body).not.toContain("Reviewed commit");
+    expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
+    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
+      .rejects.toThrow("revision moved");
+  }
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("a current head that is not a commit id keeps the refusal without asking GitHub to compare", async () => {
+  setHead("not-a-commit");
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(preview.headMoved).toBeUndefined();
+  expect(preview.blockedReason).toContain("revision moved");
+  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+});
+
+test("a moved head with General comment off names the only control that can unblock it", async () => {
+  setHead(movedHead);
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: { inline: true, general: false,
+    keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
+  expect(preview.headMoved).toBeDefined();
+  expect(preview.blockedReason).toBe("Enable General comment. Inline comments are not available when publishing for an earlier commit.");
+});
+
+test("a moved head re-reads the discussion an overlay requires, and a changed discussion makes the submit stale", async () => {
+  installDiscussionOverlay();
+  setHead(movedHead);
+  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
+    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  expect(preview.headMoved).toBeDefined();
+  expect(preview.canSubmit).toBe(true);
+  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("xxx");
+  writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1,"body":"A new comment"}]]\n');
+  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
+    .rejects.toThrow(/^stale:/);
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
 });
 
 test("a moved head ignores a requested verdict and inline comments", async () => {
@@ -213,7 +278,8 @@ test("a head that moves again after the preview or before the write posts nothin
   expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
 });
 
-test("automatic publication posts at the reviewed head and never after the head moved", async () => {
+/** A completed auto-publish attempt with a complete package, so only the head decides whether it posts. */
+async function automaticRun(): Promise<string> {
   const store = new DeskRunStore();
   let auto: string;
   let autoDirectory: string;
@@ -233,12 +299,40 @@ test("automatic publication posts at the reviewed head and never after the head 
   // A complete package needs coverage.md for readiness; without it automatic publication is refused at any head.
   writeFileSync(path.join(autoDirectory, "package", "coverage.md"), "# Coverage\n");
   json(path.join(autoDirectory, DESK_TEMPLATE_SELECTION), reportTemplateFingerprint((await projectReviewOverlay(project)).overlay));
+  return auto;
+}
+
+/** A Keryx slots overlay whose instructions require re-reading the PR discussion before posting. */
+function installDiscussionOverlay() {
+  const templates = path.join(project, ".metaproject", "skills", "gdskills", "review", "review-orchestrator", "templates");
+  mkdirSync(templates, { recursive: true });
+  writeFileSync(path.join(templates, "review-report.md"), "# Review\n\n<!-- slot:how-run -->\n");
+  const overlay = path.join(project, ".metaproject", "project-skills", "orchestration", "fixture-overlay", "templates");
+  mkdirSync(overlay, { recursive: true });
+  writeFileSync(path.join(overlay, "report-overlay.md"), [
+    "```yaml", "extends: review-orchestrator", "overlay: fixture-overlay", "slots: [how-run]", "reread_discussion: true", "```",
+    "", "## slot: how-run", "", "Fixture run notes.", "",
+  ].join("\n"));
+}
+
+test("automatic publication posts at the reviewed head and never after the head moved", async () => {
+  const auto = await automaticRun();
   setHead(movedHead);
   await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
   setHead(revision.headSha);
   await publishCompletedDeskReview(project, key, auto);
   expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha });
+});
+
+test("automatic publication after the head moved refuses before any compare or discussion read", async () => {
+  installDiscussionOverlay();
+  const auto = await automaticRun();
+  setHead(movedHead);
+  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
+  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+  expect(reads("FIXTURE_DISCUSSION_READS")).toBe("");
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
 });
 
 test("uses the standard report when a project overlay is invalid", async () => {

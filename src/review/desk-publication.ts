@@ -31,7 +31,9 @@ type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
 type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
 type HeadMoved = NonNullable<PublicationState["headMoved"]>;
-type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
+type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string;
+  /** A current head GitHub confirmed is ahead of the reviewed head. */
+  aheadHead?: string };
 const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheFile = "publication-preview-cache.json";
@@ -83,6 +85,27 @@ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubC
     "api", "--hostname", "github.com", "--paginate", "--slurp", `${base}/${resource}?per_page=100`,
   ], auth)));
   return hash(pages);
+}
+
+/**
+ * Whether the reviewed head is still in the pull request: GitHub reports the current head `ahead` of it.
+ * Anything else (a force-push or rebase reports `diverged`, an older head `behind`) or any failed read, a transient
+ * `unavailable:` included, keeps the refusal: posting `commit_id` for a commit outside the PR is never attempted, the
+ * draft still saves locally, and a refresh asks again.
+ */
+async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConnection, cache: PreviewCache,
+  reviewedHead: string, currentHead: string): Promise<boolean> {
+  if (cache.aheadHead === currentHead) return true;
+  let status: string;
+  try {
+    status = (await boardGh(cwd, ["api", "--hostname", "github.com",
+      `repos/${key.repo}/compare/${reviewedHead}...${currentHead}?per_page=1`, "--jq", ".status"], auth)).trim();
+  } catch {
+    return false; // Fail closed, as described above.
+  }
+  if (status !== "ahead") return false;
+  cache.aheadHead = currentHead;
+  return true;
 }
 
 /** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
@@ -263,7 +286,9 @@ async function prepare(input: {
     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
     : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
       ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
-    : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
+    : !settings.general && !comments.length ? headMoved
+      ? "Enable General comment. Inline comments are not available when publishing for an earlier commit."
+      : "Enable General comment or select inline comments that are on the diff." : undefined;
   return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
     questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay && !emptyOverlay,
     ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
@@ -319,8 +344,11 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   const pr = cache.subject;
   const open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha;
   const current = open && pr.headRefOid === run.headSha;
-  // Same base, newer head: the draft becomes the as-is Comment for the reviewed commit.
-  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)
+  // Automatic publication never posts the as-is variant, so it is refused before any further GitHub read.
+  if (request.kind === "automatic" && open && !current) throw new Error("configuration: This review needs a publication decision in Desktop.");
+  // Same base, a newer head that still contains the reviewed commit: the draft becomes the as-is Comment for it.
+  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid) &&
+    await reviewedHeadInPull(cwd, key, connection, cache, run.headSha, pr.headRefOid)
     ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
   // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
   const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;

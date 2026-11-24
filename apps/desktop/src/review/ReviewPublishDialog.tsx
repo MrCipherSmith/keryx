@@ -62,6 +62,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   decision.current = onDecision;
   const verdictName = useId();
   const answerName = useId();
+  const headMovedNotice = useId();
 
   const send = useCallback(async (initialRequest: PublicationRequest) => {
     if (activeRequest.current) {
@@ -175,13 +176,14 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
         {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
       </div>}
       {settings && draft && !posted && <>
-        {headMoved && <p className="review-detail-muted review-publish-head-moved" role="status">
+        {headMoved && <div id={headMovedNotice} className="inline-banner tone-warn review-publish-head-moved" role="status"><span>
           Reviewed commit <code title={headMoved.reviewedHead}>{shortSha(headMoved.reviewedHead)}</code>. The pull request has moved
           to <code title={headMoved.currentHead}>{shortSha(headMoved.currentHead)}</code> since. Publishing as is posts a Comment
-          for the reviewed commit only.
-        </p>}
+          for the reviewed commit only. The verdict is Comment only, and inline comments are off because they cannot be
+          placed on an earlier commit.
+        </span></div>}
         <div className="review-publish-settings">
-          <fieldset disabled={writing}>
+          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
             <legend>Include in the review</legend>
             <label><input type="checkbox" checked={settings.general}
               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
@@ -191,7 +193,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
             {draft.overlayRequiresApproval && <small className="review-detail-muted">This project requires confirmation of the finished report.</small>}
             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
           </fieldset>
-          <fieldset disabled={writing}>
+          <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
             <legend>Review verdict</legend>
             <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null} disabled={!!headMoved}
               onChange={() => update({ verdictOverride: null })} />

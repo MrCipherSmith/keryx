@@ -612,6 +612,14 @@ test("a moved head locks the dialog to the as-is Comment for the reviewed commit
   const status = dialog.querySelector(".review-publish-head-moved")!;
   expect(status.textContent).toContain("bbbbbbb");
   expect(status.textContent).toContain("ccccccc");
+  expect(status.matches(".inline-banner.tone-warn[role=status]")).toBe(true);
+  expect(status.textContent).toContain("The verdict is Comment only, and inline comments are off");
+  // Each locked control is explained by the notice.
+  for (const legend of ["Include in the review", "Review verdict"]) {
+    const fieldset = [...dialog.querySelectorAll("fieldset")].find(node => node.querySelector("legend")?.textContent === legend)!;
+    expect(fieldset.getAttribute("aria-describedby")).toBe(status.id);
+  }
+  expect(status.id).not.toBe("");
   expect(input("Comment only").checked).toBe(true);
   for (const name of ["Use recommendation", "Approve", "Request changes", "Comment only", "Inline comments"]) {
     expect(input(name).matches(":disabled")).toBe(true);
@@ -635,6 +643,30 @@ test("a moved head locks the dialog to the as-is Comment for the reviewed commit
   await click("Update review to ccccccc");
   expect(updates).toBe(1);
   await act(async () => root.render(null));
+});
+
+test("Update review is offered only while the head has moved and the review is unpublished", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("./ReviewPublishDialog");
+  const reviewedHead = "b".repeat(40);
+  const base: PublicationState = { version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
+    verdict: "comment", verdictOverride: "comment", answers: {} }, body: "Draft", inlineCount: 0, questions: [],
+    overlayAvailable: false, canSubmit: true, digest: "f".repeat(64) };
+  // Each pair: the state, and text that proves the dialog rendered that state.
+  const states: Array<[PublicationState, string]> = [
+    [base, "Submit review"],
+    [{ ...base, canSubmit: false, headMoved: { reviewedHead, currentHead: "c".repeat(40) },
+      publishedUrl: "https://github.com/owner/repo/pull/47#pullrequestreview-1" }, "Review published on GitHub."],
+  ];
+  for (const [state, rendered] of states) {
+    await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+      cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
+      command: async () => state, onUpdateReview: () => {}, onClose() {},
+    })));
+    expect(document.querySelector(".dialog")?.textContent).toContain(rendered);
+    expect(document.querySelector(".review-publish-footer")?.textContent).not.toContain("Update review to");
+    await act(async () => root.render(null));
+  }
 });
 
 test("the current head keeps the dialog's verdict choice and Submit review", async () => {
