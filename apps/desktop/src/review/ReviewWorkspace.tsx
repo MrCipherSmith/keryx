@@ -19,6 +19,17 @@ import "./ReviewDetail.css";
 /** What a board action asked of the review interface, tied to the revision it was clicked on. */
 export interface ReviewIntent { kind: "start" | "view" | "answer"; baseSha: string; headSha: string }
 
+function pinnedPlanSummary(run: DeskRun) {
+  const plan = run.reviewerProgress?.planSummary;
+  return plan?.baseSha === run.baseSha && plan.headSha === run.headSha ? plan : undefined;
+}
+
+function latestTerminalPlanRun(runs: readonly DeskRun[]) {
+  return runs.filter(run => (run.state === "completed" || run.state === "partial") && !reviewIsArchived(run) &&
+      (pinnedPlanSummary(run) || (run.options?.orchestrator === false && run.pullRequestScope)))
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0];
+}
+
 /** The launch form for one PR's current range: it refuses a range that moved since the form opened. */
 export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defaultFlow, runCommand, onRunSnapshot, onStarted, onClose }: {
   cwd: string;
@@ -122,6 +133,8 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const session = sessionId && local.runs.find(run => run.id === sessionId);
   const action = launchAction(local.runs, card);
   const active = local.runs.find(run => runActive(run) && sameRange(run, card));
+  const planRun = active ?? (!local.runs.some(runActive) ? latestTerminalPlanRun(local.runs) : undefined);
+  const planRunIsCurrent = planRun !== undefined && planRun === active;
   const questions = active ? pendingManualQuestions(active) : [];
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
@@ -213,16 +226,17 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       <span>The PR revision changed. Refresh to load the latest range.</span>
       {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
     </div>}
-    {active && <ReviewPlanSummary data={{
-      title: card.title,
-      headSha: active.headSha,
-      ...(card.changeStats && { changeStats: card.changeStats }),
-      ...reviewPlanEvidence(active.reviewerProgress?.planSummary, active.pullRequestScope),
-      ...(active.options?.orchestrator === false && { singleReviewer: true }),
-      stage: active.phase,
-      runState: active.state,
-      ...(active.reviewerProgress && { assignmentProgress: active.reviewerProgress }),
-      ...(questions.length > 0 && { operatorStep: active.reason || "Reply to the requested review context." }),
+    {planRun && <ReviewPlanSummary data={{
+      title: planRunIsCurrent ? (card.title || planRun.pullRequestTitle || `${target.repo} #${target.number}`)
+        : (planRun.pullRequestTitle || `${target.repo} #${target.number}`),
+      headSha: planRun.headSha,
+      ...(planRunIsCurrent && card.changeStats && { changeStats: card.changeStats }),
+      ...reviewPlanEvidence(pinnedPlanSummary(planRun), planRun.pullRequestScope),
+      ...(planRun.options?.orchestrator === false && { singleReviewer: true }),
+      stage: planRun.phase,
+      runState: planRun.state,
+      ...(planRun.reviewerProgress && { assignmentProgress: planRun.reviewerProgress }),
+      ...(planRunIsCurrent && questions.length > 0 && { operatorStep: planRun.reason || "Reply to the requested review context." }),
     }} />}
     {children}
     <ReviewRuns headingRef={latestHeading} publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}

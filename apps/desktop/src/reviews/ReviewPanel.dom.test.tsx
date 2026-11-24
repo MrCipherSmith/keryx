@@ -167,6 +167,57 @@ test("historic result survives a push, and retry and stop target the correct att
   expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "next" });
 });
 
+test("shows the latest completed plan with its own revision and scope, not current card metadata", async () => {
+  const oldBase = "a".repeat(40), oldHead = "b".repeat(40);
+  const newerBase = "c".repeat(40), newerHead = "d".repeat(40);
+  const historical = (id: string, createdAt: string, title: string, files: number, additions: number): DeskRun => ({
+    ...complete,
+    id,
+    baseSha: oldBase,
+    headSha: oldHead,
+    pullRequestTitle: title,
+    createdAt,
+    pullRequestScope: {
+      changeStats: { files, additions, deletions: 4 },
+      files: [{ path: `src/${id}.ts`, additions, deletions: 4 }],
+      filesComplete: true,
+    },
+    reviewerProgress: {
+      planned: 1, finished: 1, completed: 1, wave: 1, sessions: [],
+      planSummary: {
+        baseSha: oldBase, headSha: oldHead, files: [`src/${id}.ts`], filesComplete: true,
+        checks: [{ name: "review-logic", category: "baseline", slices: ["slice-01"], assignments: [
+          { wave: 1, slices: ["slice-01"], tier: "middle", tierReason: "Reviewer default", provider: "openai-codex", model: "gpt-6.1-terra" },
+        ] }],
+        sliceReasons: [], checksComplete: true,
+      },
+    },
+  });
+  const latest = historical("latest-plan", "2026-11-19T12:00:00Z", "Title at reviewed head", 3, 31);
+  const older = historical("older-plan", "2026-11-18T12:00:00Z", "Older title", 2, 21);
+  const currentCard = {
+    ...pr, title: "Current card title", baseSha: newerBase, headSha: newerHead,
+    changeStats: { files: 1, additions: 2, deletions: 1 },
+  };
+  await show(async () => ({ version: 1, runs: [older, latest] }), currentCard);
+
+  const summaryNode = document.querySelector<HTMLElement>(".review-plan-summary")!;
+  expect(summaryNode.dataset.headSha).toBe(oldHead);
+  expect(summaryNode.querySelector("h3")?.textContent).toBe("Title at reviewed head");
+  expect(summaryNode.textContent).toContain("3 files changed");
+  expect(summaryNode.textContent).toContain("+31");
+  expect(summaryNode.textContent).toContain("src/latest-plan.ts");
+  expect(summaryNode.textContent).not.toContain("Current card title");
+  expect(summaryNode.textContent).not.toContain("+2");
+  await act(() => root.render(null));
+});
+
+test("does not show a terminal plan summary when the attempt has no pinned plan data", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), pr);
+  expect(document.querySelector(".review-plan-summary")).toBeNull();
+  await act(() => root.render(null));
+});
+
 test("a late status from another PR cannot reveal its report and a closed PR cannot launch", async () => {
   let finish!: (r: DeskRunSnapshot) => void;
   const waiting: typeof reviewRun = () => new Promise(resolve => { finish = resolve; });
