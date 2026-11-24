@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-testing-practices, wave 2, round 3 (delta f43a13c3f..b2043b98d). Slice read in full: slice-02 (new).
+
+Concern: the mutation pass was NOT run. `keryx review mutate` writes mutation-<n>.json/.md into the review package's research-evidence/, and this dispatch lets me write only this result file and does not list `keryx review mutate` among the allowed commands. Every changed gate is listed in `mutant_candidates` below (14 mutants, 0 run, 14 not reached) for the main session to run unchanged. No mutation result is claimed anywhere in this report.
+
+What did run: `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts` at b2043b98d: 141 pass, 0 fail (via `keryx ctx run`, which wrote its own raw log under .metaproject/data/gdctx/; I wrote no other file).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Fix round 2's tests are well shaped: clock injected through `wait` (no sleeps, no wall clock), each negative assertion (no 'Could not load.' row, focus stays outside) is paired with a positive artifact (onStale count, appended rows present), and the focus hand-off tests drive the exact two-folders-in-one-commit and loading-to-Show-more cases. One new branch has no test: the permit retry's two snapshot-generation guards. One info on a dead branch in the new test helper. Mutation pass not run (writes into the package; not permitted to this lane); 14 candidates listed.",
+  "slices": [{ "id": "slice-02", "coverage": "read in full; production context read from MetaprojectTree.tsx lines 140-165 and useMetaprojectTree.ts lines 14-32 and 150-175 at the head" }],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;",
+      "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). The permit retry added in this round has two snapshot-generation guards: `|| !current()` before the wait and `if (!current()) throw cause;` after it, so a read whose snapshot was retired during the jittered wait is not re-sent with the retired expectedSnapshotId. Neither retry test changes the snapshot: 'a read refused for want of a read permit is retried after a short wait' and 'a permit refusal that outlasts the retries, or another unavailable answer, marks the folder failed' both render one Harness with the default SNAPSHOT and a `wait` that resolves at once.",
+      "impact": "Deleting either guard leaves nothing in the diff's tests to notice; the next edit to the retry loop can re-send a retired snapshot (an extra stale-snapshot round trip and permit use per refused read) unprotected. No user-visible defect is claimed: the generation check after `attempt` still drops the answer.",
+      "suggested_fix": "In MetaprojectTree.dom.test.tsx add one test with `refusing(1)` and a `wait` that returns a held promise: expand src, re-render the Harness with `snapshot: \"s2\"` while the wait is pending, then resolve the wait; assert the src calls made with expectedSnapshotId SNAPSHOT number exactly 1 (no retry under the retired snapshot) and that the s2 re-read of src lands (client.ts present) as the positive artifact.",
+      "evidence": "Read the two retry tests in slice-02 (MetaprojectTree.dom.test.tsx, `refusing` helper and the two tests after it): neither passes `snapshot` to Harness nor re-renders mid-wait. The guards are at useMetaprojectTree.ts inside `attempt` (head lines ~159-166). Mutants M1 and M2 below would settle it; not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F2",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "line": null,
+      "quote": "const answer = input.parent === \"src\" ? SRC_PAGE : ROOT_PAGE;",
+      "problem": "In the new `refusing` helper, the following `if (answer instanceof Error) return Promise.reject(answer);` can never run: `answer` is always SRC_PAGE or ROOT_PAGE, neither an Error. Refusals are produced by the line above it.",
+      "impact": "Dead branch in a fixture; a reader may think the helper can serve an error page. No effect on what the tests pin.",
+      "suggested_fix": "Drop the `instanceof Error` line (and widen nothing else).",
+      "evidence": "slice-02, `refusing()` body.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "publication": "finding"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "M1", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;", "replacement": "if (retries <= 0 || !isPermitRefusal(cause)) throw cause;", "kind": "behavior" },
+    { "id": "M2", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        if (!current()) throw cause;\n        return attempt(retries - 1);", "replacement": "        return attempt(retries - 1);", "kind": "behavior" },
+    { "id": "M3", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (retries <= 0 || !isPermitRefusal(cause) || !current()) throw cause;", "replacement": "if (retries < 0 || !isPermitRefusal(cause) || !current()) throw cause;", "kind": "behavior" },
+    { "id": "M4", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\")", "replacement": "errMessage(cause).startsWith(\"unavailable:\")", "kind": "behavior" },
+    { "id": "M5", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        latest.current.onStale();\n        return;", "replacement": "        latest.current.onStale();", "kind": "behavior" },
+    { "id": "M6", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "console.error(\"Metaproject tree read failed unexpectedly\", error);", "replacement": "void error;", "kind": "behavior" },
+    { "id": "M7", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const moreId = (parent: string) => `more:${parent}`;", "replacement": "const moreId = (parent: string) => `status:${parent}`;", "kind": "behavior" },
+    { "id": "M8", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] : elements[anchor + 1] ?? elements[anchor];", "replacement": "const next = elements[Math.min(lost.index, elements.length - 1)];", "kind": "behavior" },
+    { "id": "M9", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": ": elements[anchor + 1] ?? elements[anchor];", "replacement": ": elements[anchor + 1];", "kind": "behavior" },
+    { "id": "M10", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const next = anchor < 0 ? elements[Math.min(lost.index, elements.length - 1)] :", "replacement": "const next = anchor < 0 ? undefined :", "kind": "behavior" },
+    { "id": "M11", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {", "replacement": "if (lost && !lost.element.isConnected) {", "kind": "behavior" },
+    { "id": "M12", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (element.isConnected && focused.current?.element === element) remember(document.activeElement, rowElements());", "replacement": "void element;", "kind": "behavior" },
+    { "id": "M13", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "focused.current = { element: event.target, index, before: rows[index - 1]?.id };", "replacement": "focused.current = { element: event.target, index };", "kind": "behavior" },
+    { "id": "M14", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "before: elements[index - 1]?.dataset.row } : null;", "replacement": "} : null;", "kind": "behavior" }
+  ],
+  "mutation_pass": {
+    "run": false,
+    "reason": "keryx review mutate writes into <package>/research-evidence/; this lane may write only its result file and the dispatch does not list keryx review mutate",
+    "nearest_suite": "cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx",
+    "mutated": 0,
+    "not_reached": 14,
+    "notes": "Previous-round gates first: M11 and M12 (the two 'focus outside is never taken' mechanisms that round 2's F1 asked to pin) are redundant with each other in the new tests, so each alone may survive; M13/M14 likewise (the layout effect's remember() overwrites onFocus's record after every render). M10 covers the clamped-index fallback, which no new test drives (every focus test has a surviving preceding row). These are leads for the run, not results."
+  },
+  "prior_dispositions": [],
+  "inputs_unreadable": [],
+  "follow_ups": ["Run mutant_candidates M1-M14 with keryx review mutate against the nearest suite in apps/desktop; any green mutant is a minor 'gate unpinned' finding for this lane."],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Summary
+- Round-2 asks checked in the tests: r2-testing-practices-w2-F1 is answered by two focus-leaves-the-tree tests, each with a positive artifact (appended rows present, Show more gone) beside the `activeElement === outside` assertion. r2-frontend-w1-F-001 and r2-logic-w1-F-001 have direct tests (Loading row -> children + Show more lands on client.ts; two folders released in one act keep focus in src). r2-ui-ux-w2-UX-001 is pinned in both MetaprojectTree (next page, with an onStale counter) and MetaprojectView (folder, `deadRetry()` beside the banner). r2-clean-code-w1-F-001 has a test that the unexpected throw reaches console.error. r2-highload-w2-F-001's retry is tested with an injected `wait`, so no wall clock or sleep (Rules 5/6 hold).
+- F1 (minor): the retry's two `!current()` guards have no test that retires the snapshot during the wait.
+- F2 (info): dead `instanceof Error` branch in the `refusing` helper.
+- Not verified: no mutation ran (0 of 14); Rust untouched this round and not run here.
+
+Routing audit: graph_used: no (payload layers block read; affected/related tests came from it), wiki_used: not-relevant (test-practice lens on a bounded delta), ctx_used: yes (keryx ctx run, ctx rg, ctx read), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":138429,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

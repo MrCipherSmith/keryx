@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.fix_context.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T13.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+    ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T13.implement.json",
+    "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+    "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "apps/desktop/src/platform/metaproject.test.ts"
+  ],
+  "changedLines": 583
+}

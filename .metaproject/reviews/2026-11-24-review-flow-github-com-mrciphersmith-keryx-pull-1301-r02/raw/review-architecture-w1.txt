@@ -1,0 +1,91 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Fix round 2 (f43a13c3f..b2043b98d) changes only Desktop TS: MetaprojectTree focus hand-off anchored on the preceding row, the stale-snapshot tree read returns after onStale, permit-refusal retries in useMetaprojectTree, and a test rename. No layer or dependency-direction violation. One minor boundary finding: the new retry recognises the Rust permit refusal by its raw message text inside the React hook. The transport (platform/metaproject.ts) is the layer that already turns Rust error strings into typed codes, and the hook bypasses it. Of the 9 prior findings, 6 are closed, 2 partial and 1 open.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "r3-architecture-w1-F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "problem": "This answers r2-architecture-w1-F-001, which suggested treating the transport's 'unavailable' as a retryable back-off. The fix puts that classification in the view-model hook (useMetaprojectTree.ts), which matches the raw Rust error text 'unavailable: Too many Metaproject reads'. The transport layer is the one that maps Rust error strings to typed errors: requestMetaprojectV2 matches METAPROJECT_ERROR_CODES prefixes and throws MetaprojectRequestError. Here the hook reaches past that boundary to a string owned by apps/desktop/src-tauri/src/metaproject.rs:199. Nothing ties the two: the Rust side has no reference to the TS consumer, and the DOM test defines its own copy of the literal (MetaprojectTree.dom.test.tsx:503 PERMIT_REFUSAL).",
+      "impact": "No defect today: the strings match. If the Rust message is reworded, isPermitRefusal stops matching and retries silently stop. Folders then fail on the first busy permit, the behaviour this fix round removed. The test suite stays green because it injects its own copy of the string. Any other caller that wants the same back-off, such as the explorer's own reads, would have to copy the literal a third time.",
+      "suggested_fix": "Classify the refusal once, in the transport. For example, in platform/metaproject.ts, export an isMetaprojectPermitRefusal(error) helper (or a typed 'busy' error) next to the existing code mapping in requestMetaprojectV2. Have the hook and the test import it. Add a comment at metaproject.rs:199 naming the Desktop consumer so the Rust side sees the contract.",
+      "evidence": "useMetaprojectTree.ts:24 `const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");`. platform/metaproject.ts:293-296 maps `<code>: ` prefixes to MetaprojectRequestError. 'unavailable' is not in METAPROJECT_ERROR_CODES (metaproject-explorer-contract.ts:329-331), so the raw Error passes through and the hook re-parses it. `keryx ctx rg --all \"Too many Metaproject\" apps/desktop` finds 3 sites: metaproject.rs:199 (producer), useMetaprojectTree.ts:24 (consumer), MetaprojectTree.dom.test.tsx:503 (test's own copy).",
+      "confidence": "high",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "dedupe_key": "metaproject-permit-refusal-string-coupled-in-hook",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r2-architecture-w2-F-001", "disposition": "partial"},
+    {"id": "r2-clean-code-w1-F-002", "disposition": "partial"},
+    {"id": "r2-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r2-logic-w2-F-001", "disposition": "open"},
+    {"id": "r2-performance-w2-F-001", "disposition": "closed"},
+    {"id": "r2-style-w2-F-002", "disposition": "closed"},
+    {"id": "r2-testing-practices-w2-F1", "disposition": "closed"},
+    {"id": "r2-ui-ux-w2-UX-001", "disposition": "closed"}
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `f43a13c3f..b2043b98d` (fix round 2 delta), slice-01 (fix)
+- Scope mode: explicit-hash-range
+- Stack detected: React (Desktop TS, no MobX); no Rust changed this round
+
+### Summary
+The fix round keeps the existing layering: the component does focus handling, the hook does reads and state, and the transport is unchanged. It adds one cross-boundary coupling. The permit-refusal retry recognises a Rust error string in the hook instead of through the transport's error classification.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+[r3-architecture-w1-F-001] (minor) useMetaprojectTree.ts:24. The hook parses Rust's raw `unavailable: Too many Metaproject reads` text, which bypasses platform/metaproject.ts. That module is where Rust error strings become typed errors. Fix: one transport-level classifier, imported by the hook and the test, plus a comment at metaproject.rs:199.
+
+### Design Pattern Misuse
+None detected. The injectable `wait` for the retry delay is the right seam for the clock.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A: no NestJS or MobX in this delta.
+
+### Prior findings (judged against code at b2043b98d)
+- r2-architecture-w1-F-001: closed. A refused permit is now retried with a jittered back-off, one of the fixes the finding suggested, and the doc comment no longer promises headroom. The string coupling this introduced is F-001 above.
+- r2-architecture-w2-F-001: partial. The comment still hard-codes "eight", and metaproject.rs has no note at MAX_ACTIVE. The claim that tree reads leave the explorer's permits free was withdrawn, and tree reads now retry.
+- r2-clean-code-w1-F-002: partial. Same as above: the comment still names the number, not its source (MAX_ACTIVE).
+- r2-frontend-w2-F-001: closed. The catch returns after onStale(), so no failed row or dead Retry appears.
+- r2-logic-w2-F-001: open. A slot is still released only when the promise settles. Retired-generation reads no longer retry (the `!current()` checks), but an in-flight one still holds its slot.
+- r2-performance-w2-F-001: closed. remember() reuses the layout effect's `elements`, and onFocus takes the index from `rows`.
+- r2-style-w2-F-002: closed. The variables are renamed treeError / searchError.
+- r2-testing-practices-w2-F1: closed. Two DOM tests were added that move focus outside before the focused Show more or Loading row is replaced. I did not run them; the round's test evidence reports the Desktop suite at exit 0.
+- r2-ui-ux-w2-UX-001: closed. A stale-snapshot read now shows only the banner, and a test was added for a stale next page.
+
+### Not verified
+I ran no tests (exec budget 0). History was read with `git diff` only. Dispositions rest on reading the code at the head.
+
+Routing audit: graph_used: payload layers block (graph at the head) only, no live query (not-relevant to a 5-file delta) · wiki_used: not-relevant (payload wiki layer empty; the delta changes no domain concepts) · ctx_used: yes (keryx ctx rg/read) · raw_rg_used: no (one raw `git diff` and one `sed` with an escape marker, to read the full fix hunks the abbreviated slice omits).
+KERYX_USAGE {"tokens_in":114423,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

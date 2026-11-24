@@ -1,0 +1,51 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: f43a13c3f..b2043b98d (round 3, delta after fix round 2); merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, slice-05 (second-look)
+- Files in slice: metaproject.rs, MetaprojectTree.tsx, MetaprojectView.tsx, metaproject.css, useMetaprojectTree.ts, platform/metaproject.ts, their tests, two docs pages
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### What changed in the delta (code)
+- `useMetaprojectTree.ts`: a read refused with Desktop's permit refusal (`unavailable: Too many Metaproject reads. Retry shortly.`, metaproject.rs:199) is retried at most `PERMIT_RETRIES` = 2 times after a jittered wait (150 ms steps plus `Math.random()` jitter), stopping if the snapshot generation retires; the slot pool's catch now logs an unexpected throw with `console.error`; a `stale-snapshot` answer now only calls `onStale` and returns.
+- `MetaprojectTree.tsx`: focus hand-off uses a separate `more:` row id and the id of the preceding row; no data-flow change.
+
+### Checked, no finding
+- Injection / command execution: tree requests still go through `metaproject_args`, which validates `RequestV2::Tree` (graph parent via `relative_path`: no `..`, `.`, empty segment, backslash, control char or drive letter; wiki parent and cursor via `valid_text`; `expectedSnapshotId` must be a 64-hex digest; `deny_unknown_fields`, null values refused, 16 KiB cap) and passes the JSON as one argv element to `metaproject-explorer --request`, not through a shell. The delta did not touch this path.
+- Path traversal: unchanged from round 2; Desktop never opens a file from a tree parent, and response folder paths are checked with `isMetaprojectRelativePath`.
+- XSS: CLI-supplied names, titles and error messages render as React text children (`{entry.name}`, `{row.message}`); no `dangerouslySetInnerHTML`, `eval` or HTML construction in the slice.
+- Insecure randomness: `Math.random()` is used only for retry jitter, not for a token, nonce or identifier.
+- Resource exhaustion: the retry is bounded (2 retries per read, at most 3 tree reads in flight, queued reads of a retired snapshot never start, retries stop when the generation changes), so it cannot turn into an unbounded request loop against the shared permits.
+- Secrets / logging: `console.error` logs only an unexpected exception from the tree's own state handling, which holds no credentials; no secret, token or personal data is logged or sent.
+- Response validation: the stale-snapshot check in `requestMetaprojectV2` and the tree response validator (`validTree`, `validTreeEntry`, 100-entry bound, byte cap) are unchanged and still refuse malformed or other-snapshot answers.
+- Permit-refusal match: `unavailable` is not in `METAPROJECT_ERROR_CODES`, so the Tauri error string reaches `isPermitRefusal` with its prefix intact; the match is exact to the Rust literal.
+
+### Not verified
+- No commands run (exec budget 0); the test output at the head (verify-tests-to-run-1.txt, exit 0) was taken as given, not re-run.
+- `.metaproject/rules/core/security-baseline.mdc` and the review activity rule were not re-read this round; no finding depended on them.
+- The core-side `tree` handler (src/integrations/metaproject-explorer-v2.ts) is not in slice-05 and was not reviewed here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 3 delta (f43a13c3f..b2043b98d), slice-05 second look: the permit-refusal retry is bounded (2 retries, 3 reads in flight, stops on snapshot change), Math.random is jitter only, the new console.error logs no secret, and the Rust request validation, argv-only CLI call and React text rendering are unchanged. No security finding.",
+  "findings": [],
+  "slices": [{ "id": "slice-05", "coverage": "read in full (2664 lines); delta code also read with git diff f43a13c3f b2043b98d", "status": "DONE" }],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (payload layers block used; delta is small and self-contained), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg / ctx read), raw_rg_used: no. One raw `git diff` of the delta with a `keryx:raw` marker to read exact changed lines.
+KERYX_USAGE {"tokens_in":161826,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

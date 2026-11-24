@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "tracked": true,
+  "counts": {
+    "inScope": 17,
+    "covered": 17,
+    "omitted": 0,
+    "uncovered": 0
+  },
+  "omissionReasons": {},
+  "files": [
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "apps/desktop/src/platform/metaproject.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "docs/docs/guides/desktop-metaproject.md",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "src/integrations/metaproject-explorer-contract.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-02"
+    },
+    {
+      "file": "src/integrations/metaproject-explorer-tree.test.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    },
+    {
+      "file": "src/integrations/metaproject-explorer-v2.ts",
+      "scope": "A",
+      "status": "covered",
+      "by": "slice-01"
+    }
+  ],
+  "omissions": [],
+  "waived": false
+}

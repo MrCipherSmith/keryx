@@ -1,0 +1,98 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 3 (delta f43a13c3f..b2043b98d), slices 02 and 03 read in full. Naming and readability of fix round 2 are sound: the new `moreId`/`statusId` split is documented, the reworded component and limiter comments now match the code, and the renamed `treeError`/`searchError` test variables close r2-style-w2-F-002. No change crosses a Readability threshold (MetaprojectTree.tsx 314 lines, useMetaprojectTree.ts 251; the new boolean conditions have at most 3 clauses; no nested ternary; test files are exempt). Three info observations only. Slice-03 note: it shows two deletions in apps/desktop/src/platform/metaproject.ts, but `git diff f43a13c3f..b2043b98d` does not touch that file and both lines are still present at the head (metaproject.ts:268 and :304), so the slice is layer context rendered as a diff, not a change; nothing to review there.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "export const PERMIT_RETRIES = 2;",
+      "problem": "`PERMIT_RETRIES` is newly exported, but nothing imports it: its only uses are inside useMetaprojectTree.ts, and the new tests assert the count with literals (`toHaveLength(3)`, `waits` length 2) rather than importing it, unlike `MAX_TREE_READS`, which the test file does import.",
+      "impact": "An export with no importer widens the module surface and suggests a contract that nothing relies on.",
+      "suggested_fix": "Drop `export`, or import it in MetaprojectTree.dom.test.tsx and assert `PERMIT_RETRIES + 1` calls and `PERMIT_RETRIES` waits, as the limiter test does with `MAX_TREE_READS`.",
+      "evidence": "keryx ctx rg -n 'PERMIT_RETRIES' apps/desktop/src: 3 matches, all in useMetaprojectTree.ts (lines 21, 165, 171).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "console.error(\"Metaproject tree read failed unexpectedly\", error);",
+      "problem": "The style checklist rates `console.error` in production code as minor and suggests the project logger. Here it is the fix that r2-clean-code-w1-F-001 asked for, Desktop has no logger (no logger module under apps/desktop/src/lib), and two other production files in Desktop already report this way (acp/client.ts, platform/panels.ts). Recorded as info, not minor, for that reason.",
+      "impact": "None today; if Desktop gains a logger this call is one of three to move.",
+      "suggested_fix": "No change now. If a Desktop logger is introduced, route this and the two other console.error/warn calls through it.",
+      "evidence": "keryx ctx rg -c 'console\\.(error|warn)\\(' apps/desktop/src --glob '!*.test.*': acp/client.ts 1, platform/panels.ts 1, metaproject/useMetaprojectTree.ts 1.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "await pause(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);",
+      "problem": "In `attempt(retries)`, `retries` is the number of retries still left, and the wait derives the retry ordinal back from it (`PERMIT_RETRIES - retries + 1`). The name reads as a total or a count done, so the backoff line takes a second look.",
+      "impact": "Readability only; behaviour is correct (the tests assert 3 calls and 2 positive waits).",
+      "suggested_fix": "Rename the parameter to `retriesLeft` (or pass the ordinal `retry` counting up and compare with `PERMIT_RETRIES`).",
+      "evidence": "useMetaprojectTree.ts `const attempt = async (retries: number)` with `retries <= 0` guard and `attempt(retries - 1)` recursion; initial call `attempt(PERMIT_RETRIES)`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 3 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1181 lines); context read from MetaprojectTree.tsx and useMetaprojectTree.ts at head for the hunks the slice elides (attempt/PERMIT_* definitions, layout-effect anchor logic)" },
+    { "id": "slice-03", "coverage": "read in full; its two '-' lines are not in the delta (file unchanged f43a13c3f..b2043b98d, lines present at head)" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+# Style Review Report
+
+## Summary
+Fix round 2 keeps naming and readability clean: the split of a parent's first-read row (`status:`) from its next-page row (`more:`) is documented in one place, both reworded doc comments now describe the code's actual focus and limiter behaviour, and the platform test variables were renamed as asked. No Readability threshold is crossed by the change. Three info observations only.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `f43a13c3f` (round-3 delta base)
+- Merge-base: `f43a13c3f35e488744bb8906c2c275d433f8d98b`
+- Scope mode: `explicit-hash-range` (f43a13c3f..b2043b98d)
+- Changed files in slices: 5 code/test files plus flow records (T13 dispatch, resolved context, flow.json, journal)
+
+## Stats
+- major: 0
+- minor: 0
+- info: 3
+
+## Major Issues
+None.
+
+## Minor & Info
+- [F-001] info: `PERMIT_RETRIES` exported with no importer (useMetaprojectTree.ts).
+- [F-002] info: `console.error` in the limiter catch; matches Desktop's existing practice (no logger exists) and the r2 fix that asked for it.
+- [F-003] info: `attempt(retries)` counts retries left; `retriesLeft` would make the backoff arithmetic read directly.
+
+## Positive Notes
+- `statusId`/`moreId` and their doc comment state why the two ids differ.
+- `remember(element, elements)` and the `onFocus` index from `rows` remove repeated DOM queries without obscuring intent.
+- New tests have descriptive names that state the behaviour they pin.
+
+## Not verified / notes
+- Slice-03 shows deletions in apps/desktop/src/platform/metaproject.ts that are not in the delta (the file is unchanged in f43a13c3f..b2043b98d and both lines are present at the head); treated as rendered context, not a change. The orchestrator may want to check the slicer for this.
+- No commands beyond read-only `keryx ctx rg/read/run -- git diff|status` were run; tests were not re-run (exec_budget_s = 0).
+- Routing audit: graph_used: no (payload layers supplied the affected set); wiki_used: not-relevant (style lens); ctx_used: yes; raw_rg_used: no.
+KERYX_USAGE {"tokens_in":135000,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

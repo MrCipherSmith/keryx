@@ -1,0 +1,92 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 3 (fix delta f43a13c3f..b2043b98d, slice-01). The fix round anchors focus hand-off to the row that preceded the lost row, stops a stale-snapshot tree read from showing a Retry that cannot work, retries a read refused a Tauri read permit twice with jittered waits, reports unexpected throws in the limiter, and renames two test variables. The new code is logically sound: the permit retry can be reached (the `unavailable:` prefix is not one of METAPROJECT_ERROR_CODES, so requestMetaprojectV2 rethrows the raw Rust string and isPermitRefusal sees it), a retired generation stops between attempts, and the anchor/fallback focus logic falls back to the old index rule when the anchor row is gone. One minor defect came in with the stale-snapshot fix: when Refresh catalog returns the same content-addressed snapshot id, the folder stays at Loading… with no way to retry. Five prior findings are closed, one is partial, one is open, and two are closed as information that needs no action.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "Answering r2-ui-ux-w2-UX-001 / r2-frontend-w2-F-001: a stale-snapshot tree read now returns after onStale() and leaves the folder (or its Show more row) in `loading`. The comment says Refresh catalog 're-reads the tree', but that holds only if the catalog it loads has a different snapshotId. The hook resets folders only when its `snapshot` prop changes (useMetaprojectTree.ts `if (state.current.graph.snapshot !== snapshot)`). Refresh catalog (MetaprojectView.tsx, non-quiet catalog read) calls setCatalog(result) and setSnapshotMismatch(false) even when result.snapshotId equals the pinned one. snapshotId is content-addressed: sha256 over nodes, edges, page digests and layerStats (src/integrations/metaproject-explorer.ts:174). Trigger: a wiki page is edited while a folder read is in flight (the read answers stale-snapshot, and the banner shows). The edit is reverted, or a rebuild produces the same content, before the user selects Refresh catalog. Refresh then loads the original id, the banner goes, and the folder row keeps showing 'Loading…'. ensure() skips it (`folders.has(parent)`), retry() needs status 'failed', and more() refuses while `more.status === 'loading'`. Collapsing and expanding, or leaving and returning to the view, cannot recover it, because the explorer keeps the tree state. Only a later snapshot change does.",
+      "impact": "In that narrow case, a folder or its next page shows Loading… indefinitely with no control to recover it. Before this fix, the Retry row would have succeeded here, because the pinned snapshot is current again. No data is lost or shown wrongly.",
+      "suggested_fix": "Mark the stale rows instead of leaving them loading. For example, record the stale parents (or set the folder to a 'stale' status) and re-issue them when the explorer clears the mismatch. A simpler option is to have the hook re-read every loading folder whose read was refused stale when onStale's banner is dismissed by a catalog load with the same snapshot. One way: expose a `reload()` on the model that MetaprojectView calls after a non-quiet catalog read, which drops folders still in `loading` with no read in flight. Alternatively, make Refresh catalog bump the hook's generation even when snapshotId is unchanged.",
+      "evidence": "Read useMetaprojectTree.ts at b2043b98d: in the read() catch, the stale branch returns. Also read ensure(), retry() and more(), and the snapshot-reset block at the top of the hook. MetaprojectView.tsx:403-421 (catalog read: setCatalog + setSnapshotMismatch(false) with no tree reset when the id is unchanged) and :757-758 (onStale = markStale; snapshot = catalog.snapshotId). src/integrations/metaproject-explorer.ts:174 (content-addressed snapshotId). Verified by reading code only; no test was run.",
+      "confidence": "medium",
+      "dedupe_key": "metaproject-tree-stale-read-stuck-loading-same-snapshot",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r2-architecture-w2-F-001", "disposition": "closed"},
+    {"id": "r2-clean-code-w1-F-002", "disposition": "partial"},
+    {"id": "r2-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r2-logic-w2-F-001", "disposition": "open"},
+    {"id": "r2-performance-w2-F-001", "disposition": "closed"},
+    {"id": "r2-style-w2-F-002", "disposition": "closed"},
+    {"id": "r2-testing-practices-w2-F1", "disposition": "closed"},
+    {"id": "r2-ui-ux-w2-UX-001", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `f43a13c3f..b2043b98d` (fix round 2); PR merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, slice-01 (fix)
+- Spec compliance gate: ran against plan.md/AC1-AC9 for the delta. No criterion is regressed. AC5/AC6 behaviour is extended by tests (per the supplied test log: Desktop tsc and suite exit 0).
+
+### Summary
+The fix hunks are correct as written. The permit retry is reachable, bounded (2 retries, about 150-300 ms and 300-450 ms waits), and holds its limiter slot while it waits, so MAX_TREE_READS is still respected. It also stops early if the generation is retired. The anchored focus hand-off fixes the two-answers-in-one-commit case and falls back to the old index rule. The one regression is a narrow case: a stale-snapshot read followed by Refresh catalog that returns the same snapshot id leaves the folder at Loading….
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+- [F-001] (minor) A stale-snapshot tree read leaves the folder in Loading… indefinitely when Refresh catalog returns the same content-addressed snapshot id (an edit reverted before refresh). The fix for r2-ui-ux-w2-UX-001 removed the Retry that would have worked in this case.
+
+### Async & Concurrency
+None detected. The retry loop checks `current()` before and after each wait. A retired read that is waiting on a permit releases its slot once the wait ends.
+
+### Error Handling
+None detected. The limiter's catch now logs instead of swallowing, and read() handles every request failure itself.
+
+### Null / Undefined Safety
+None detected. In `elements[anchor + 1] ?? elements[anchor]`, anchor >= 0 guarantees `elements[anchor]` exists.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None beyond F-001. If two answers in one commit remove both the lost row and its `before` row, focus falls back to the old index rule. That is no regression.
+
+### Prior dispositions (judged against the code)
+- r2-architecture-w1-F-001: closed. The suggested alternative was implemented: a permit refusal is now retried with back-off. The comment no longer claims headroom against a per-process pool.
+- r2-architecture-w2-F-001: closed. The comment no longer promises that the explorer keeps headroom.
+- r2-clean-code-w1-F-002: partial. The comment still hard-codes "Desktop's eight read permits" instead of naming MAX_ACTIVE in metaproject.rs. The isPermitRefusal doc does name `metaproject.rs`.
+- r2-frontend-w2-F-001: closed. The code returns after onStale() and no dead Retry is shown. The new edge case is in F-001.
+- r2-logic-w2-F-001: open. Not reported fixed. A retired in-flight read still holds its slot until it settles. Only a read waiting on a permit retry now gives the slot up early.
+- r2-performance-w2-F-001: closed. remember() reuses the effect's `elements`, and onFocus uses `rows.findIndex`.
+- r2-style-w2-F-002: closed. The variables are renamed to `treeError` / `searchError`.
+- r2-testing-practices-w2-F1: closed. Two new DOM tests focus a row, move focus outside, release the read, and assert that `document.activeElement === outside`. One covers Show more and one covers a folder's Loading row.
+- r2-ui-ux-w2-UX-001: closed. No "Could not load." row appears and onStale is called. View and tree tests assert this. F-001 records the edge case the fix introduced.
+
+### Not verified
+I ran no tests (exec_budget_s = 0); I relied on the supplied test log. F-001 rests on reading the code only. The MetaprojectTree.dom.test.tsx / MetaprojectView.dom.test.tsx hunks are outside slice-01; I scanned their added test names only, to judge the prior testing finding.
+
+Routing audit: graph_used: no (the payload's layers block, built at the head, was enough; the delta is three files). wiki_used: not-relevant (narrow fix-round logic). ctx_used: yes (keryx ctx rg). raw_rg_used: no. raw git diff and sed were used with keryx:raw markers to get the exact hunks.
+KERYX_USAGE {"tokens_in":132133,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

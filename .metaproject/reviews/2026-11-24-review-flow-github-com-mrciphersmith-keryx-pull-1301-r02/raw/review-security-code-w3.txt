@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: f43a13c3f..b2043b98d (round 3, delta); merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, supplied slice text
+- Slice read in full: slice-06 (second-look): src/integrations/metaproject-explorer-contract.ts, src/integrations/metaproject-explorer-v2.ts, src/integrations/metaproject-explorer-tree.test.ts
+- Delta check: `git diff --stat f43a13c3f..b2043b98d -- src/` shows no change to these three files in this round (fix round 2 touched Desktop only), so this is a second read of the code round 1 covered.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No round-2 finding from review-security-code exists in the round-2 findings.json, so there is nothing to carry or re-check.
+
+### Clean Areas (checked)
+- Input validation (tree request): `parseV2` `case "tree"` takes only exact keys; `scope` is limited to graph or wiki; a graph `parent` must pass `isMetaprojectRelativePath`, which rejects absolute paths, drive letters, backslashes, control characters and empty, `.` or `..` segments. A wiki `parent` is only looked up as a Map key (`groups.get(parent)`) and never reaches the filesystem. `cursor` is bounded to 4096 characters, and `expectedSnapshotId` must be a sha256.
+- Path traversal: the tree action reads no file. `graphTree` and `wikiTree` filter the in-memory model, and in `metaprojectExplorerV2` (metaproject-explorer-v2.ts:460) that model has already passed through `safeGraphNode`, so an index line holding `../` or an absolute path never reaches a tree entry. The `parent` prefix match is slash-terminated (`${parent}/`), so `src` cannot match `srcfoo/`.
+- Cursor tampering: `cursorValue` checks that the encoding is canonical base64url, that the payload is a 3-tuple, that the key equals hash(["tree", scope, parent]) and the snapshot ID equals the current one (otherwise stale-snapshot), and that the continuation is a safe positive integer. `offsetPage` refuses a string continuation or an out-of-range offset as invalid-input. A cursor from a different parent or scope is refused (tested).
+- DoS / response size: each page is capped by METAPROJECT_PAGE_SIZE_V2 (100) and TREE_ITEMS_BYTES (900 KiB), and the whole response by the 1 MiB check. Building a tree takes one linear pass over the nodes already loaded. Tree does not call `freshness()` (no `git status` per read).
+- Information disclosure: the error messages ("Unknown Metaproject tree parent.", the cursor errors) do not echo the input, and unexpected errors map to a generic source-unavailable.
+- Injection / eval / crypto / secrets / authz: none of these occur in the slice. `createHash("sha256")` is used for identity only, not as a secret. The CLI explorer is local and read-only, with no auth surface.
+
+### Not verified
+- No command was run beyond read-only git and keryx ctx reads (exec_budget_s = 0). I relied on the supplied test evidence (exit 0 at b2043b98d) and did not re-run it.
+- The Desktop rendering of entry names and group names (from wiki pageType) is outside slice-06 and was not reviewed here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-06 (core tree action: contract, v2 reader, tests); the files are unchanged in f43a13c3f..b2043b98d. Request validation, path handling (no fs access; nodes pre-filtered by safeGraphNode), snapshot- and request-bound cursors, page and byte caps, and non-echoing errors are sound. No findings.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-06"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":109812,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

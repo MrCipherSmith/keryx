@@ -1,0 +1,67 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta f43a13c3f..b2043b98d (fix round 2), diff mode, round 3. Slices read in full: slice-02 (new), slice-03 (new). No load profile was given. The concrete triggers used: several project windows sharing the process-wide Rust read permit pool (metaproject.rs `static ACTIVE`, `MAX_ACTIVE = 8`, refused with "unavailable: Too many Metaproject reads. Retry shortly."), the per-explorer FIFO limiter (MAX_TREE_READS = 3), and many expanded folders re-read after a snapshot change.
+
+Files reviewed: apps/desktop/src/metaproject/useMetaprojectTree.ts (I read the whole read/limit/attempt path at head, lines 1-240, because the slice leaves out the new `attempt` helper at lines 159-169), apps/desktop/src/metaproject/MetaprojectTree.tsx, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, the flow bookkeeping files in slice-02, and slice-03 (platform/metaproject.ts). For context I also read metaproject.rs:184-204 and lib/format.ts errMessage.
+
+Summary: The fix for r2-highload-w2-F-001 is sound under concurrency. A read refused a permit is retried at most PERMIT_RETRIES = 2 times. The wait grows linearly (150 ms, then 300 ms) and adds up to 150 ms of random jitter, so windows that collide do not retry in lockstep. The generation is checked before and after each wait, so a retired snapshot's read is not re-sent. The retry runs inside its limiter slot, so retries never add in-flight reads beyond MAX_TREE_READS. The longest a slot is held is about 750 ms of waiting plus three request times. errMessage handles the string rejection that Tauri actually produces, as well as the Error the tests use. The limiter's catch now reports unexpected throws, and `.finally` still keeps the slot count right. The stale-snapshot early return is safe here: Refresh catalog changes the snapshot, which drops the folders and re-reads them. I found no blocker, major or minor issue in my lens.
+Stats: blocker 0 | major 0 | minor 0 | info 1
+
+Concern (input, not code): slice-03 shows two hunks of apps/desktop/src/platform/metaproject.ts as deletions: the `capabilities` early return and the `expectedSnapshotId` check in matchesRequest. But `git log f43a13c3f..b2043b98d -- apps/desktop/src/platform/metaproject.ts` is empty, and `git diff --stat` for the range lists no change to that file. At head the snapshot check is still at metaproject.ts:304-305, now in the caller rather than in matchesRequest, and the `capabilities` check is at :268. Fix round 2 did not change this file. The slice probably shows a difference from another base, so I raise no finding on it. The orchestrator should check how slice-03 was built.
+
+Findings:
+- CLI / Multi-Session: [F-001] (info), below.
+- Concurrency & Races: None detected.
+- Resources: None detected.
+- Caching: None detected.
+- Lock Contention: None detected.
+- Async / Queues: None detected.
+- Retry / Timeout / Circuit Breaker: None detected (the permit retry is capped, backs off and has jitter).
+- Idempotency & Distributed Invariants: None detected.
+
+### [F-001] The permit-refusal match is a copy of the Rust error string, and no test ties the two together
+- Severity: info
+- File: apps/desktop/src/metaproject/useMetaprojectTree.ts
+- Pattern: Retry F — retry trigger coupled by string literal
+- Failure mode: if the message at metaproject.rs:199 is ever reworded, `isPermitRefusal` stops matching. Permit refusals then become terminal folder errors again whenever several windows exhaust the 8 shared permits, which is exactly what F-001 of round 2 fixed. The DOM tests build the refusal from their own copy of the literal (`PERMIT_REFUSAL`), so they would still pass. Today the two strings match, so nothing fails yet. This is a drift risk, not a current defect.
+- Fix: export the prefix as one shared constant, or have the Rust side return a stable code (for example `unavailable:busy`), and assert in metaproject.rs's tests that the refusal text starts with it.
+
+Clean Areas: Part 0. The windows share the Rust permit pool, and the retry with jitter now covers that. I saw no AbortController or timer leak: `sleep` timers are short and harmless after unmount, and the generation is checked after each wait. Part A: the limiter, generation counter and state ref run on the single JS thread, and the stale-snapshot path does not mark the folder failed. Parts B through G were reviewed and nothing in them applies to this delta.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Delta f43a13c3f..b2043b98d: the permit retry (2 retries, linear backoff with jitter, a generation check around each wait, run inside its limiter slot), the reporting limiter catch and the stale-snapshot early return are sound under concurrency, and I found no blocker, major or minor issue. One info: the permit-refusal match copies the Rust error string and no test ties the two together. Concern: slice-03 shows deletions in platform/metaproject.ts, but that file is unchanged in this range (empty git log; the checks are still at :268 and :304-305), so the slice looks mis-built.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "problem": "The retry trigger matches a prefix of the error text from metaproject.rs:199 (\"unavailable: Too many Metaproject reads. Retry shortly.\"). The tests build the refusal from their own copy of the literal (PERMIT_REFUSAL in MetaprojectTree.dom.test.tsx), so nothing ties the TypeScript match to the Rust message.",
+      "impact": "If the Rust message is reworded, permit refusals under multi-window pressure (8 process-wide permits) become terminal folder errors again, the round-2 highload defect, and the tests still pass. Nothing fails today: this is a drift risk.",
+      "suggested_fix": "Share one constant for the prefix, or have the Rust side return a stable code (e.g. `unavailable:busy`), and assert in metaproject.rs's tests that the refusal text starts with it.",
+      "evidence": "useMetaprojectTree.ts:24 isPermitRefusal; metaproject.rs:199 Err(\"unavailable: Too many Metaproject reads. Retry shortly.\"); MetaprojectTree.dom.test.tsx PERMIT_REFUSAL literal.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read in full; the hidden attempt() helper read from useMetaprojectTree.ts at head" },
+    { "id": "slice-03", "status": "DONE", "coverage": "read in full; the hunks do not match git diff f43a13c3f..b2043b98d (the file is unchanged in the range)" }
+  ],
+  "follow_ups": [
+    "Check how slice-03 was built: it shows deletions in apps/desktop/src/platform/metaproject.ts, but the file has no change in f43a13c3f..b2043b98d."
+  ]
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slices name every file, and the payload's layers already list the affected set). wiki_used: no (not-relevant: a delta of a fix round with no domain question). ctx_used: yes (keryx ctx rg and keryx ctx run for git log). raw_rg_used: no. I ran one raw `git diff` with a keryx:raw marker to check the slice-03 hunks against the real range.
+KERYX_USAGE {"tokens_in":134801,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,36 @@
+{
+  "reviewer": "review-security-code",
+  "wave": 1,
+  "waves": 4,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02/slices/slice-04.diff",
+      "bytes": 110247
+    }
+  ],
+  "result": "raw/review-security-code-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "floor:security",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  }
+}

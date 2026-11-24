@@ -1,0 +1,89 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "round": 3,
+  "is_fix_round": true,
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "problem": "One function has three names in fix round 2's permit-retry code. The module default is `sleep`. The hook's injected option is `wait` (`wait = sleep`). Inside read() it is destructured as `wait: pause` and called as `await pause(...)`. A reader at the call site must follow pause -> wait -> sleep to learn that this is the injectable test seam. The fix hunk added this code to answer prior finding r2-architecture-w1-F-001, which suggested retrying 'unavailable'.",
+      "impact": "Readability only. The call site does not say it is the injected `wait`, and grepping for `wait(` or `pause` finds only half of the path. No behavioural effect.",
+      "suggested_fix": "Keep one name. Destructure `wait` without renaming it (`const { cwd: root, request: send, wait } = latest.current;` then `await wait(...)`). Optionally name the default `defaultWait`, or keep `sleep`.",
+      "evidence": "Slice-01 hunk @@ 158,170 `await pause(PERMIT_WAIT_MS * ...)`; head useMetaprojectTree.ts:155 `const { cwd: root, request: send, wait: pause } = latest.current;`; the hook signature `wait = sleep` with the doc comment 'Waits before a permit retry'. The existing `cwd: root` / `request: send` aliases are older and are not flagged.",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 155,
+      "quote": "const { cwd: root, request: send, wait: pause } = latest.current;",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-style",
+      "severity": "info",
+      "problem": "`PERMIT_RETRIES` is exported, but nothing outside useMetaprojectTree.ts imports it. The only references are its declaration (:21) and two uses inside the module (:165, :171). Its sibling `PERMIT_WAIT_MS` is module-private. Fix round 2 added this export while answering prior finding r2-architecture-w1-F-001.",
+      "impact": "A small widening of the module's public surface, with no consumer. It may be meant for tests, but none uses it.",
+      "suggested_fix": "Optional. Drop `export`, or have the new permit-retry tests in MetaprojectTree.dom.test.tsx import it to state how many retries they expect.",
+      "evidence": "keryx ctx rg 'PERMIT_RETRIES' apps/desktop/src/metaproject: 3 matches, all in useMetaprojectTree.ts (21, 165, 171). The rest of apps/desktop/src was not searched, but the hook is only consumed from apps/desktop/src/metaproject.",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 21,
+      "quote": "export const PERMIT_RETRIES = 2;",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r2-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r2-architecture-w2-F-001", "disposition": "closed" },
+    { "id": "r2-clean-code-w1-F-002", "disposition": "partial" },
+    { "id": "r2-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r2-logic-w2-F-001", "disposition": "open" },
+    { "id": "r2-performance-w2-F-001", "disposition": "closed" },
+    { "id": "r2-style-w2-F-002", "disposition": "closed" },
+    { "id": "r2-testing-practices-w2-F1", "disposition": "closed" },
+    { "id": "r2-ui-ux-w2-UX-001", "disposition": "closed" }
+  ]
+}
+```
+
+# Style Review Report
+
+## Summary
+Fix round 2 reads cleanly. The new focus-handoff code (`anchor`, `next`, `before`) is named well and has no nested ternary, and the renamed test variables match their siblings. Two low-severity points remain. The permit-retry wait goes by three names (sleep, wait, pause), and `PERMIT_RETRIES` is exported but nothing outside the module imports it.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `f43a13c3f..b2043b98d` (fix round 2), slice-01 (kind: fix) read in full
+- Scope mode: `explicit-hash-range`
+- Changed files in slice: 3 (MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.test.ts)
+
+## Stats
+- major: 0
+- minor: 1
+- info: 1
+
+## Prior dispositions (judged against code at b2043b98d)
+- r2-style-w2-F-002: **closed**. `tree` / `search` are renamed to `treeError` / `searchError` (metaproject.test.ts:212-218).
+- r2-performance-w2-F-001: **closed**. The layout effect passes its `elements` to `remember(document.activeElement, elements)`, and onFocus takes the index from `rows.findIndex` with no DOM query. onBlur still calls `rowElements()`, but only on blur, not on every keystroke.
+- r2-ui-ux-w2-UX-001 and r2-frontend-w2-F-001: **closed**. The catch now `return`s after `onStale()`, so no failed row and no dead Retry appear. MetaprojectView.dom.test asserts `deadRetry()` is false for both scopes, and a new tree test covers a stale next page.
+- r2-testing-practices-w2-F1: **closed**. Two new tests cover a focused Show more row and a focused Loading row: focus moves outside, then the data arrives. Each asserts that focus stays on `outside`. I read only the test titles and assertions; I did not run the tests.
+- r2-architecture-w1-F-001: **closed**. The suggested alternative is implemented: an 'unavailable: Too many Metaproject reads' refusal is retried with a jittered back-off (PERMIT_RETRIES = 2). The comment now says the 8 permits are shared across windows instead of promising headroom.
+- r2-architecture-w2-F-001: **closed**. The comment no longer promises fixed headroom, and the retry covers exhaustion. The Rust side is unchanged, but the finding said that was optional.
+- r2-clean-code-w1-F-002: **partial**. The MAX_TREE_READS comment still hard-codes "eight read permits" without naming `MAX_ACTIVE`. Only the new `isPermitRefusal` comment points to `metaproject.rs`.
+- r2-logic-w2-F-001: **open** (info, unreported). A read already sent under a retired snapshot still holds its slot until it settles. The new retry loop does check `current()` after each wait, so a retired read stops retrying early.
+
+## Minor & Info
+See F-001 (minor, naming) and F-002 (info, export with no importer) in REVIEW_RESULT.
+
+## Not reviewed / notes
+- The fix delta also adds `console.error("Metaproject tree read failed unexpectedly", ...)` in `limit()` (useMetaprojectTree.ts, about line 140). That hunk is not in slice-01, so this lens did not rate it under the console-usage rule. It is left to whichever slice owns it.
+- Tests were not run (exec_budget_s = 0). I relied on research-evidence verify-tests-to-run-1.txt (exit 0) as stated in the brief.
+
+Routing audit: graph_used: no (not-relevant: a three-file supplied slice); wiki_used: no (not-relevant: a style lens on supplied hunks); ctx_used: yes (keryx ctx rg; raw git diff with a keryx:raw marker to judge the fix hunks); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":106274,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

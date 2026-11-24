@@ -1,0 +1,51 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B (regression) over the delta f43a13c3f..b2043b98d, slices slice-02 and slice-03 read in full. One major: the fix for r2-ui-ux-w2-UX-001 (useMetaprojectTree read() catch returns after onStale() and leaves the folder or its next page 'loading') removes the only recovery path the tree had when Refresh catalog comes back with the same snapshot id. The snapshot id is a content hash (src/integrations/metaproject-explorer.ts:174), so an A->B->A content change makes that reachable; the folder then shows 'Loading…' forever with no Retry, ensure()/more()/retry() all refuse it, and a reveal through it stalls. Checked and found no regression in: the status:/more: id split (no consumer outside MetaprojectTree.tsx keys on status ids; scrollRequest uses d:/n: only; first-read error/loading keep one id, page error/more keep another, so Retry and Show more still update the focused row in place); the `before`-anchored focus hand-off (falls back to the clamped index exactly as before when the anchor row is gone, e.g. a new snapshot dropping the folder's children); remember()/onFocus reusing rows (rows map 1:1 to [data-row] li in order); the permit retry (holds its limiter slot during the wait, checks current() before and after; MetaprojectView passes no `wait`, so the real sleep is used); the limiter catch now logging with console.error (Desktop suite at the head passes, 1014 tests). Radius: the payload's layers block names one changed file (apps/desktop/src/platform/metaproject.ts) with 9 dependents at depth 2 and truncated: [] (nothing dropped by the cap); I was given no separate `keryx review blast-radius` record, so I walked those 9 dependents plus the changed Desktop files. The radius cannot see runtime edges: the Tauri permit pool in metaproject.rs and the CLI's snapshot computation are reached only through invoke/spawn and were read as code, not via the graph. Concern about the slice itself: slice-03.diff shows two '-' hunks in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` line and the expectedSnapshotId check inside matchesRequest), but `git diff f43a13c3f b2043b98d` changes no line of that file; both hunks are round-1 (6c83eb7fb) movements, and at the head the snapshot check lives at platform/metaproject.ts:303-307 and the capabilities branch at :268-270. So slice-03 contains no change of this round and I report nothing on it; the slicer should be checked for emitting a stale hunk. No Rust was changed in this delta; nothing run beyond read-only git and keryx ctx rg (exec_budget_s 0).",
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read in full (1181 lines): flow bookkeeping files, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, MetaprojectTree.tsx, useMetaprojectTree.ts" },
+    { "id": "slice-03", "status": "DONE", "coverage": "read in full (2 hunks of apps/desktop/src/platform/metaproject.ts); verified against git diff f43a13c3f..b2043b98d, which has no change to that file" }
+  ],
+  "findings": [
+    {
+      "id": "regression-w2-R-001",
+      "severity": "major",
+      "reviewer": "review-regression",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "This round's change to useMetaprojectTree's read() catch (fix for r2-ui-ux-w2-UX-001) now returns after onStale() and leaves the folder in status 'loading' (or its next page in more.status 'loading'). The comment says Refresh catalog re-reads the tree. That holds only when Refresh catalog yields a different snapshot id. Refresh catalog in MetaprojectView (setRevision, then the non-quiet catalog read) calls setCatalog(result) and setSnapshotMismatch(false). useMetaprojectTree bumps its generation and drops loaded folders only when the `snapshot` prop changes (`if (state.current.graph.snapshot !== snapshot)`). If the catalog comes back with the snapshot id the tree pinned, nothing re-reads the folder. ensure() returns because folders.has(parent). more() returns because more.status is 'loading'. retry() acts only on 'failed'. Before this delta the same path ended in 'Could not load. … Retry', and that Retry re-sent the pinned snapshot, so it recovered.",
+      "impact": "Trigger: a tree read (expand a folder, or Show more) answered stale-snapshot while the CLI was briefly on another snapshot B, and the project content then returns to the state of snapshot A (for example, an edited wiki page or file is reverted, or a branch is switched and switched back, and the graph is rebuilt). The snapshot id is a sha256 of nodes, edges, pages and layerStats (src/integrations/metaproject-explorer.ts:174), so A->B->A gives the same id. The user presses Refresh catalog. Outcome: the banner goes away, but the folder row (or its Show more row) shows 'Loading…' for good, with no Retry. Collapsing and expanding the folder does not re-read it. A reveal of a selection under that folder stops at `if (folder.status === \"loading\") return;` in MetaprojectTree.tsx. The only way out is another content change or reopening the window. The previous behaviour (an error row whose Retry succeeds) is gone.",
+      "suggested_fix": "Keep the banner-only behaviour, but make Refresh catalog re-read what the stale answer left pending even when the snapshot id did not change. For example, record the parents (and next pages) retired by a stale-snapshot answer in the scope state, expose a model method such as invalidateStale() that resets them (drop the folder entry, or clear `more`) so the tree's unread/ensure path re-reads them, and call it from MetaprojectView where the Refresh catalog read sets setSnapshotMismatch(false). Do not drop the folder inside the catch itself: while the CLI stays on B, that would loop stale-snapshot reads. Add a MetaprojectView DOM test: src answers stale-snapshot, Refresh catalog returns the same snapshot id, src is read again and shows its children. Add a twin for a Show more page.",
+      "evidence": "Delta hunk at useMetaprojectTree.ts read() catch (slice-02, lines 1155-1160). MetaprojectView.tsx:881 (Refresh catalog -> setRevision), :414-416 (non-quiet catalog read: setCatalog(result); setSnapshotMismatch(false), with no tree call), :758 (useMetaprojectTree({ snapshot: catalog?.snapshotId ?? \"\", …, onStale: markStale })). useMetaprojectTree.ts:1068-1072 (generation is bumped only on a snapshot prop change), :208-231 (ensure/more/retry guards). MetaprojectTree.tsx reveal effect (`if (folder.status === \"loading\") return;`). Core snapshot id = sha256 of content, src/integrations/metaproject-explorer.ts:174. At f43a13c3f the catch fell through to setFolder(... status: 'failed' ...), so a Retry row was shown. Not reproduced by running (exec budget 0); traced in code.",
+      "confidence": "medium",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts:187",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx:416",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx:43",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx:58",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx:126"
+        ],
+        "enumeration_method": "Followed the changed symbol (useMetaprojectTree read() stale-snapshot branch) to every consumer of a folder left in 'loading' / more 'loading'. keryx ctx rg over apps/desktop/src for onStale|markStale|snapshotMismatch|useMetaprojectTree( found one hook instance (MetaprojectView.tsx:758) and one place that clears the stale state (MetaprojectView.tsx:416, which does not touch the tree). In MetaprojectTree.tsx, the readers of folder.status / more.status are flatten() (first-read loading row and Show more row) and the reveal effect. The hook's own guards (ensure/more/retry, :208-231) are the reason none of these recovers. Other dependents in the radius (OpenSpecView.tsx, useExplorerNavigation.ts, App.tsx, platform/metaproject.ts) do not read tree folder state."
+      },
+      "blocking_merge": false
+    }
+  ],
+  "follow_ups": [
+    "slice-03.diff lists two removed lines in apps/desktop/src/platform/metaproject.ts that are not part of f43a13c3f..b2043b98d (git diff shows no change to that file in this range). Check how the slicer produced it, so a later round does not review a hunk that is not in the delta."
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+Summary: 1 major (regression-w2-R-001). The stale-snapshot fix in this round can leave a tree folder or its Show more page permanently 'Loading…' with no Retry. That happens when Refresh catalog returns the snapshot id the tree had pinned, which is reachable because the snapshot id is a content hash. I found no regression in the focus hand-off, the status:/more: id split, the permit retry or the limiter logging. slice-03 contains no change of this delta, and I flagged it for the slicer. The cap dropped no files (`truncated: []`). Runtime edges (Tauri permits, the CLI's snapshot) are not in the graph and were read as code. Nothing was executed.
+
+Routing audit: graph_used: no (the payload's layers block, built from the graph at the head, gave the dependent set; I ran no live gdgraph call); wiki_used: not-relevant (a narrow delta, and the payload's wiki layer was empty); ctx_used: yes (keryx ctx rg for every search); raw_rg_used: no. I ran one raw `git diff` (marked keryx:raw) to check the content of slice-03.
+KERYX_USAGE {"tokens_in":143738,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

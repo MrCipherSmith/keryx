@@ -1,8 +1,11 @@
-Reviewed SHA: f43a13c3f35e488744bb8906c2c275d433f8d98b (head of https://github.com/MrCipherSmith/keryx/pull/1301; delta round over 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b; merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
+Partial review: pr-files waived by the operator: Раунд 2 — delta-ревью фикс-раунда; остальные файлы PR — артефакты flow и ревью, а список PR на GitHub обрезан на 100 файлах
+
+Reviewed SHA: f43a13c3f35e488744bb8906c2c275d433f8d98b — the PR has since moved on (now b2043b98d, fix round 2) (head of https://github.com/MrCipherSmith/keryx/pull/1301; delta round over 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b; merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
 
 # Managed Review Report — round 2 (delta, fix round 1)
 
 Evidence level: ran — tests-to-run at the head (core tree/explorer + Desktop platform/tree/view, exit 0: research-evidence/verify-tests-to-run-1.txt); two testing reviewers re-ran the Desktop (133 pass) and core tree (12 pass) suites; CI at the head 29 success / 1 skipped incl. Rust cargo test. Reviewer findings themselves are static reads.
+Plan estimate vs actual: plan 16-40 min (31 dispatches); actual 12 min from first to last raw reply (32 replies); pauses over 10 min: 0
 
 round cap: round 2 of 5
 
@@ -603,3 +606,14 @@ round cap: round 2 of 5
  }
 ]
 ```
+
+## Review parity
+
+- **Not verified:** Measure LY-001 in a real engine: at a 720px window with the details panel docked (list column 150px), the width of `.metaproject-tree-name` on a level-3 module folder row with a 4-digit count, at --te (review-layout-w1:fu1, narrowed, remains: a real-engine measurement of the Module label at the 150px list column)
+- **Not verified:** Out of my slices, not reviewed here: the Module kind label added to module folder rows (MetaprojectTree.tsx, `{module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}`, hunk @@ (review-layout-w2:fu1, narrowed, remains: a layout-engine measurement of the Module label)
+- **Not verified:** Run mutant_candidates TP2-M1..TP2-M12 through `keryx review mutate` (nearest suites: apps/desktop `bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx sr (review-testing-practices-w1:fu1, narrowed, remains: the mutation pass over TP2-M1..M12)
+- **Not verified:** Run the 15 mutant_candidates of review-testing-practices-w2 through `keryx review mutate` against the nearest suites in mutant_notes, previous-round gates first. A survivor among M6-M10 settles or ext (review-testing-practices-w2:fu1, narrowed, remains: the mutation pass over M1..M15)
+
+## Token spend
+
+token spend: 4919323 in, 0 out over 31 dispatch(es)

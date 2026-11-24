@@ -1,0 +1,80 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, delta f43a13c3f..b2043b98d (fix round 2), explicit-hash-range. Slice read in full: slice-01 (fix). It covers MetaprojectTree.tsx, useMetaprojectTree.ts and platform/metaproject.test.ts. I also read the head files for context: MetaprojectTree.tsx lines 110-284 and useMetaprojectTree.ts lines 60-251.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 1
+
+### Findings
+
+### [F-001] A permit retry waits while it holds one of the tree's three read slots
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts (attempt() inside read())
+- **Hot path**: This runs only when Desktop refuses a read permit, which means every one of the 8 shared permits is in use. That happens with several windows open, or during a re-read of many expanded folders after a snapshot change. It is not a per-keystroke or per-render path.
+- **Problem**: `attempt` is called inside the `limit()` task, so `await pause(...)` keeps its slot for the whole backoff. The first wait is 150 ms plus up to 150 ms of jitter. The second is 300 ms plus up to 150 ms. Both waits come on top of the refused CLI call. In the worst case one read holds a slot for about 750 ms of waiting. Tree reads queued behind it wait that long too.
+- **Why it matters**: The cost is latency only, and only under permit exhaustion. Even then, freeing the slot during the wait would mostly let a queued read run into the same refusal. Holding the slot is arguably the better back-pressure. Retries are bounded (PERMIT_RETRIES = 2) and jittered, so there is no thundering herd and no unbounded loop. After each wait, `current()` is checked, so a retired generation stops retrying. Nobody measured a before/after, but this is a resilience mechanism, not an optimisation, so law 3 does not apply.
+- **Fix**: None needed. Optionally, note in the comment that the backoff holds the slot on purpose.
+
+### Clean Areas
+- Per-keystroke and per-render DOM work: closed. The layout effect calls `rowElements()` once, and `remember` takes that array. `onFocus` gets its index from `rows.findIndex` with no DOM query. The new anchor lookup (`elements.findIndex` on `before`) runs only when the focused row was lost. `moveTo` makes one query per navigation key, which it needs. `onBlur` re-queries only when the blurred row is still connected and still the focused one.
+- Re-renders: `focused` and the slot pool live in refs, the model is memoised and no new state was added.
+- Memory: the limiter queue drains in `.finally`, the retry is bounded, and `sleep`'s timer resolves once. Nothing grows without bound.
+- Redundant calls: a stale-snapshot answer now returns after `onStale()` and leaves no Retry, so no repeated doomed reads come from that path.
+- Bundle, sync I/O, N+1, pagination, indexes: nothing in the delta touches these.
+
+### Prior findings
+- r2-performance-w2-F-001: closed. The layout effect reuses `elements` via `remember(document.activeElement, elements)`, and onFocus uses `rows.findIndex`.
+- r2-ui-ux-w2-UX-001 and r2-frontend-w2-F-001: closed. The catch returns after `latest.current.onStale()`. The test "a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row" covers it (MetaprojectTree.dom.test.tsx:489).
+- r2-style-w2-F-002: closed. The values are renamed to `treeError` and `searchError`.
+- r2-testing-practices-w2-F1: closed. MetaprojectTree.dom.test.tsx:450 and :471 add both outside-focus cases.
+- r2-architecture-w1-F-001: closed. Its alternative fix, treating 'unavailable' as a retryable back-off, is implemented (`isPermitRefusal`, `PERMIT_RETRIES`), and the comment now says the permits are shared across windows.
+- r2-architecture-w2-F-001: partial. The comment was reworded and a retry softens the impact. No note was added next to MAX_ACTIVE in metaproject.rs. The coupling is still by comment, plus a matched error-string prefix.
+- r2-clean-code-w1-F-002: open. The comment still hard-codes "Desktop's eight read permits" rather than naming MAX_ACTIVE in src-tauri/src/metaproject.rs.
+- r2-logic-w2-F-001: open. A retired read's in-flight `send` still holds its slot until it settles. Only the new backoff wait checks `current()`.
+
+### Verification notes
+- I read the code only. I ran no tests, as exec_budget_s = 0. The test output supplied for b2043b98d exits 0.
+- Routing: graph_used: no (the payload layers were enough). wiki_used: not-relevant. ctx_used: yes (keryx ctx diff, rg, read). raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Fix round 2 adds no performance defect. The prior per-keystroke DOM-query finding is closed: the layout effect reuses one rowElements() array and onFocus uses rows.findIndex. The new permit retry is bounded and jittered. It holds its limiter slot while it waits, which costs latency only under permit exhaustion (info).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "await pause(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);",
+      "problem": "The permit retry added in fix round 2 (answering r2-architecture-w1-F-001's back-off suggestion) runs inside the limit() task, so its backoff wait holds one of the MAX_TREE_READS = 3 slots. The waits are 150 ms + U(0,150) and then 300 ms + U(0,150), up to about 750 ms per read on top of the refused calls.",
+      "impact": "This costs latency only, and only while all 8 shared read permits are taken (several windows, or a re-read of many expanded folders after a snapshot change). Queued tree reads wait behind the backoff. They would mostly hit the same refusal if the slot were freed, so holding it is reasonable back-pressure. The retries are bounded, jittered and stop for a retired generation.",
+      "suggested_fix": "None required. Optionally add a comment saying the backoff keeps its slot on purpose.",
+      "evidence": "useMetaprojectTree.ts read(): `limit(() => current() && attempt(PERMIT_RETRIES).then(...))`. attempt() catches isPermitRefusal, awaits pause(...), re-checks current(), then recurses with retries - 1. limit() frees a slot only in `.finally` of the task promise. PERMIT_RETRIES = 2 and PERMIT_WAIT_MS = 150. Read from code; not measured.",
+      "confidence": "high",
+      "dedupe_key": "metaproject-tree-permit-retry-holds-slot",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "r2-architecture-w1-F-001", "disposition": "closed"},
+    {"id": "r2-architecture-w2-F-001", "disposition": "partial"},
+    {"id": "r2-clean-code-w1-F-002", "disposition": "open"},
+    {"id": "r2-frontend-w2-F-001", "disposition": "closed"},
+    {"id": "r2-logic-w2-F-001", "disposition": "open"},
+    {"id": "r2-performance-w2-F-001", "disposition": "closed"},
+    {"id": "r2-style-w2-F-002", "disposition": "closed"},
+    {"id": "r2-testing-practices-w2-F1", "disposition": "closed"},
+    {"id": "r2-ui-ux-w2-UX-001", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+KERYX_USAGE {"tokens_in":113466,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

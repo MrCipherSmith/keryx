@@ -1,0 +1,72 @@
+STATUS: DONE
+
+## Frontend Review (wave 2, round 3 delta)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: f43a13c3f..b2043b98d (fix round 2); merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, supplied slices
+- Slices read in full: slice-02 (new), slice-03 (new)
+- Code files in the delta: MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+slice-03 note: its two hunks show lines of apps/desktop/src/platform/metaproject.ts as removed, but `git diff --stat f43a13c3f b2043b98d` lists no change to that file in this round. At the head the snapshot check sits in requestMetaprojectV2 (after the shape check, throwing stale-snapshot) and the capabilities branch reads `isMetaprojectV2Response(response, "capabilities") && "actions" in response`, so the hunks reflect round-1 code that moved, not a removal in this delta. Nothing to report on it.
+
+### Findings
+
+### [r3-frontend-w2-F-001] A stale-snapshot tree read now leaves its row loading with no way to re-read it when Refresh catalog returns the same snapshot
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts (the stale-snapshot branch of read's catch)
+- **Rule**: canonical rubric (UI state with no recovery on a reachable path; no row in the React rules covers it)
+- **Problem**: see REVIEW_RESULT.
+- **Fix**: see REVIEW_RESULT.
+
+### Clean Areas
+- Status-row ids: the first-read row (`status:`) and the next-page row (`more:`) now differ, so a Loading row answered with a nextCursor is replaced and the hand-off reaches the first child; Retry and Show more still keep one id through their own states.
+- Focus hand-off: the anchor on the preceding row's `data-row` handles rows added above in the same commit; it falls back to the clamped index when the anchor is gone or the row was first. Focus outside the tree is still never taken (the `active` guard is unchanged; two new tests cover focus leaving before the row is removed).
+- onFocus takes the index from this render's `rows`, which match the committed DOM the event fires on; the layout effect passes its own `elements` to `remember`, so there is one DOM query per commit.
+- Permit retry: `isPermitRefusal` matches the production path. `unavailable` is not in METAPROJECT_ERROR_CODES, so requestMetaprojectV2 rethrows the Tauri string "unavailable: Too many Metaproject reads. Retry shortly." (metaproject.rs) unchanged, and errMessage keeps the prefix. A retired generation stops the retry before and after the wait. The wait holds the limiter slot, which is acceptable under the 3-read bound.
+- Limiter catch now reports with console.error instead of swallowing.
+- Hooks: `wait` goes through `latest` like the other props, so it is not a stale closure and needs no new deps. No MobX in these files; no API calls added to components; no `any` or `!` added outside test indexing.
+- Tests: the new tests restore console.error and remove the `outside` button in finally blocks. The renamed treeError/searchError variables are correct.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 3 delta (fix round 2) of the Desktop Metaproject tree, React/TS lens. The fixes for the focus hand-off (distinct status/more ids, anchoring on the preceding row), the DOM-query reuse, the permit retry and the limiter's catch are correct. The permit-refusal match also holds on the real transport path, because `unavailable` is not a mapped MetaprojectRequestError code. One minor finding: the stale-snapshot branch now leaves the folder 'loading' with no Retry. That is right while the banner shows. But if Refresh catalog returns the pinned snapshot, the hook never resets, the banner goes and the folder (or the whole root) shows Loading forever, and collapse/expand cannot re-read it. The view test's own fixture keeps snapshot s1 across Refresh catalog, so it reaches this state without asserting on it. slice-03's hunks reflect round-1 code that moved: platform/metaproject.ts is unchanged in this delta.",
+  "slices": ["slice-02", "slice-03"],
+  "findings": [
+    {
+      "id": "r3-frontend-w2-F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "      if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") {\n        latest.current.onStale();\n        return;\n      }",
+      "problem": "New in fix round 2 (the r2-ui-ux-w2-UX-001 fix). On stale-snapshot, read() calls onStale and returns, so the folder stays {status: 'loading'}, or its `more` stays loading. The only way out is a snapshot change: the hook resets folders only when the `snapshot` prop differs from state.current.graph.snapshot. Refresh catalog (MetaprojectView: setRevision -> catalog read -> setCatalog + setSnapshotMismatch(false)) clears the banner even when the catalog answers the same snapshotId that was pinned. The hook then keeps the stuck folder: flatten() renders it as a Loading row, does not list it in `unread`, and `ensure` refuses because the folder exists, so collapsing and re-expanding does not re-read it either. For the root (parent TREE_ROOT) the whole tree is a single permanent Loading row.",
+      "impact": "When a tree read is refused as stale (by the CLI, or by the transport check because an answer carried another snapshotId) but the refreshed catalog reports the pinned snapshot, the folder, the Show more row or the whole tree spins forever. No Retry and no banner are left, so the user cannot recover in the view short of a later snapshot change or reopening the project. Before this round the row at least offered Retry. Reachability in production depends on the CLI's tree and catalog snapshots disagreeing transiently (not established here), so this is minor. The view test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' reaches this state: its treeExplorer fixture keeps state.snapshot = 's1' across Refresh catalog, and the test never checks the src row afterwards.",
+      "suggested_fix": "Re-read what the stale refusal left loading once the explorer refreshes, whether or not the snapshot changed. For example, give the model a `reset()` (generation++ and the per-scope folders cleared, keeping `expanded`, the same as a snapshot change) and have MetaprojectView call it from the Refresh catalog handler. Or have the catalog effect call it when snapshotMismatch was set and the new catalog's snapshotId equals the old one. Do not delete the folder inside the stale branch: flatten would list it as unread and re-read it right away with the retired snapshot. Extend the view test: after Refresh catalog with the fixture still on s1 and the src answer fixed, assert that src's children load and no 'Loading…' row remains under src.",
+      "evidence": "useMetaprojectTree.ts read(): the stale branch returns without setFolder. The snapshot reset sits in the hook body (`if (state.current.graph.snapshot !== snapshot) { generation.current++; ... }`) and is the only path that clears folders. `ensure` returns early when `state.current[scope].folders.has(parent)`. MetaprojectTree.tsx flatten() pushes `unread` only when `!folder`. MetaprojectView.tsx about 878-881: Refresh catalog runs setRevision. About 410-416: a non-quiet catalog read runs setCatalog(result) and setSnapshotMismatch(false) whatever the snapshotId. MetaprojectView.dom.test.tsx treeExplorer(): `const state = { snapshot: \"s1\" }` is never changed by that test.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "useMetaprojectTree:stale-snapshot-row-stuck-loading",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: payload layers (graph at the PR head) consulted; no extra gdgraph query was needed. wiki_used: not-relevant (wiki layer empty in the payload; a UI state question). ctx_used: yes (keryx ctx rg for every code search; git diff and short sed excerpts run with keryx:raw markers). raw_rg_used: no.
+Not verified: no test was run (exec_budget_s = 0). The stuck-loading state was traced by reading the code, not reproduced. Whether the CLI's tree and catalog snapshots can disagree in production was not established.
+KERYX_USAGE {"tokens_in":143106,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

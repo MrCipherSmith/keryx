@@ -4,7 +4,7 @@ target: report
 ref: https://github.com/MrCipherSmith/keryx/pull/1301
 mode: ingest
 flow: 518 (explicit-flow-id)
-created_at: 2026-11-24T07:28:00.696Z
+created_at: 2026-11-24T07:39:36.810Z
 context_mode: light
 
 ## Stage counts

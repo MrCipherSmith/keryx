@@ -1,0 +1,59 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `f43a13c3f35e488744bb8906c2c275d433f8d98b` (round 3 delta base); merge-base with main `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a`
+- Scope mode: `explicit-hash-range` (delta), slice-04 only (kind: second-look)
+- Spec compliance gate: ran against acceptance-criteria.md / plan.md as far as this slice reaches (it holds no code)
+
+### Summary
+slice-04 is flow-package metadata only: acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md, dispatch/T5-T8 and T12 (+ T12.fix_context.json), flow.json, and resolved/T5-T7, T12 implement context files. It contains no executable code, so there is no logic, async, null-safety or type-contract surface to review. I checked the flow records against the actual delta (`git diff f43a13c3f b2043b98d` on journal.md and flow.json): the T13 task, its history events and the journal entries agree with each other (task-added 07:31:25.961Z, attempt 07:31:46.127Z, done 07:38:01.554Z; status done, disposition completed). The acceptance criteria in the slice match the payload's frozen criteria verbatim. Nothing in this slice is wrong now.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected. (The slice carries the criteria and plan, not their implementation. AC coverage by code is in other slices, which were not assigned to me.)
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected (no code in slice).
+
+### Error Handling
+None detected (no code in slice).
+
+### Null / Undefined Safety
+None detected (no code in slice).
+
+### Type Contract Violations
+None detected (no code in slice).
+
+### Edge Cases
+None detected (no code in slice).
+
+### Not verified / notes
+- Code slices of this round (the fix-round-2 changes to MetaprojectTree.tsx, useMetaprojectTree.ts and tests) were not assigned to me and were not reviewed here.
+- T13's dispatch and resolved files (dispatch/T13.json, T13.fix_context.json, resolved/T13.implement.json) are in the delta but not in slice-04, so I did not review them.
+- Layers in the payload were empty (affected, symbols, related tests, wiki, memory), and I did not need any for metadata-only content.
+- Routing audit: graph_used: no (not-relevant, the slice is metadata); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read for the schema; git diff run raw with a keryx:raw marker for the small flow-file delta); raw_rg_used: no.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-04 (second-look) holds only flow-518 metadata (criteria, plan, context, journal, tasks, flow.json, dispatch T5-T8/T12, resolved T5-T7/T12) and no executable code. The T13 records in flow.json and journal.md agree with each other, and the criteria match the frozen set. No logic defect present now.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-04", "coverage": "read in full (1676 lines); flow metadata only, no code", "status": "DONE" }
+  ],
+  "inputs_unreadable": []
+}
+```
+KERYX_USAGE {"tokens_in":141093,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

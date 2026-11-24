@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "https://github.com/MrCipherSmith/keryx/pull/1301",
@@ -21,9 +21,74 @@
   },
   "coverage": [
     {
-      "reviewer": "review-orchestrator",
+      "reviewer": "review-architecture",
       "status": "run",
-      "reason": "selected for managed review package"
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-clean-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-degradation",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-frontend",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-highload",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-layout",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-performance",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-pr-contract",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-style",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-ui-ux",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
     }
   ],
   "filter_stats": {
@@ -56,10 +121,17 @@
   "report_fields": [
     "evidence-level"
   ],
-  "createdAt": "2026-11-24T07:28:00.696Z",
-  "updatedAt": "2026-11-24T07:28:00.696Z",
+  "createdAt": "2026-11-24T07:39:36.810Z",
+  "updatedAt": "2026-11-24T07:41:25.815Z",
   "flow": {
     "id": "518",
     "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree"
-  }
+  },
+  "readiness_waivers": [
+    {
+      "item": "pr-files",
+      "operator_quote": "Раунд 2 — delta-ревью фикс-раунда; остальные файлы PR — артефакты flow и ревью, а список PR на GitHub обрезан на 100 файлах",
+      "time": "2026-11-24T07:41:24.966Z"
+    }
+  ]
 }

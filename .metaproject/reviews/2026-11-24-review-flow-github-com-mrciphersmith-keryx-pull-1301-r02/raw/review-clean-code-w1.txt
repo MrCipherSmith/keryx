@@ -1,0 +1,113 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Fix round 2 (f43a13c3f..b2043b98d) closes most round-2 findings. The stale-snapshot catch now returns after onStale(), the layout effect reuses its element list, onFocus indexes from `rows`, the outside-focus tests were added and the test variables were renamed. The new permit-retry path adds three smaller issues. A comment on the limiter still says reads 'never exhaust' the permits, while the new constant doc and the retry say they can (minor). The retry policy is embedded in an already-long read() as a second change driver (minor). The retry depends on the exact Rust error text (info).",
+  "slices": [{ "id": "slice-01", "coverage": "full; slice text is abridged, so the full f43a13c3f..b2043b98d diff of MetaprojectTree.tsx and useMetaprojectTree.ts was also read (git diff) to judge the prior findings" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 131,
+      "quote": "// Reads wait in order for a free slot, so re-reading many expanded folders never exhausts the\n  // read permits Desktop shares with the explorer's own reads.",
+      "problem": "Documentation drift introduced by the fix for r2-architecture-w1-F-001 and r2-clean-code-w1-F-002. The rewritten MAX_TREE_READS doc (:14-17) now says the permits are shared by every project window, that the cap 'only bounds this tree's share', and that a read refused a permit is retried. The new attempt() retry (:159-169) exists because exhaustion can still happen. The comment above limit() (:131-132), whose body this delta edited, still promises the opposite: the limiter 'never exhausts the read permits'. Two comments describe one behaviour in opposite ways.",
+      "impact": "A reader trusting :131 will treat the permit-refusal retry as dead code, or will remove it. The next person sizing MAX_TREE_READS gets two contradictory statements of what it guarantees.",
+      "suggested_fix": "Reword :131-132 to match :14-17, for example: '// Reads wait in order for a free slot, so this tree holds at most MAX_TREE_READS of the read permits; a refusal while other windows hold the rest is retried in read().'",
+      "evidence": "useMetaprojectTree.ts:14-17 (new doc: 'this only bounds this tree's share; a read refused a permit is retried'), :131-132 (unchanged comment: 'never exhausts the read permits'), :138-141 (limit body edited in this delta), :159-169 (new retry on isPermitRefusal). apps/desktop/src-tauri/src/metaproject.rs:186 `const MAX_ACTIVE: usize = 8;` on a process-wide static.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "dedupe_key": "metaproject-tree-limiter-comment-contradicts-permit-retry"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 160,
+      "quote": "const attempt = async (retries: number): Promise<MetaprojectTreeV2> => {",
+      "problem": "SRP, two change drivers in one function. read() was about 40 lines before this delta and is 56 now, past the 40-line threshold. It builds the request, schedules through the limiter, checks the snapshot, merges pages and classifies failures into tree state. The delta adds a third concern inside it: the transport's permit-contention back-off. That covers recognising the refusal, a linear-plus-jitter delay formula, a retry count and the generation check between attempts. The two concerns change for different reasons: Rust permit semantics on one side, and the tree's folder model on the other. The back-off captures only `send`, `root`, `input`, `pause` and `current` from read(), so it does not belong there.",
+      "impact": "Tuning the retry policy (count, delay, which errors qualify) means editing the tree's state-update function. The policy can be tested only through the DOM tree tests (MetaprojectTree.dom.test.tsx:518-544), not on its own.",
+      "suggested_fix": "Lift it to module scope next to isPermitRefusal, for example `async function withPermitRetry<T>(run: () => Promise<T>, { wait, live }: { wait: (ms: number) => Promise<void>; live: () => boolean }, retries = PERMIT_RETRIES): Promise<T>`. read() then calls `withPermitRetry(() => send(root, input), { wait: pause, live: current })`.",
+      "evidence": "useMetaprojectTree.ts:151-206 (read, 56 lines at head; about 40 of them before this delta's 16 added lines, per the hunk offsets -137/+152 and -156/+182), :159-169 (attempt closure), :21-25 (the retry constants and predicate are already module-scope).",
+      "confidence": "medium",
+      "location_class": "in-diff",
+      "dedupe_key": "metaproject-tree-read-embeds-permit-retry-policy"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 24,
+      "quote": "const isPermitRefusal = (cause: unknown) => errMessage(cause).startsWith(\"unavailable: Too many Metaproject reads\");",
+      "problem": "The retry recognises a permit refusal only by the English text of a Rust error string. Nothing shared ties the two: `unavailable` is not in METAPROJECT_ERROR_CODES, so the transport passes the raw message through. The literal now lives in three places: metaproject.rs:199, useMetaprojectTree.ts:24 and the test fixture MetaprojectTree.dom.test.tsx:503.",
+      "impact": "If the Rust message is reworded, the retry silently stops and the folders show the error right away. The test keeps passing, because the fixture holds its own copy of the string. No defect today: the strings match.",
+      "suggested_fix": "Optional. At metaproject.rs:199, add a comment saying that Desktop's tree matches this prefix (useMetaprojectTree.ts isPermitRefusal), or add a Rust test that asserts the exact refusal text. Longer term, a typed code for permit refusal would replace the string match.",
+      "evidence": "keryx ctx rg 'Too many Metaproject' apps/desktop/src-tauri/src finds only metaproject.rs:199 `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\".into())`. platform/metaproject.ts:294-296 maps only METAPROJECT_ERROR_CODES prefixes and rethrows the rest unchanged. metaproject-explorer-contract.ts:329-331 has no 'unavailable'. Test fixture: MetaprojectTree.dom.test.tsx:503.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "dedupe_key": "metaproject-tree-permit-refusal-string-coupling"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r2-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r2-architecture-w2-F-001", "disposition": "partial" },
+    { "id": "r2-clean-code-w1-F-002", "disposition": "partial" },
+    { "id": "r2-frontend-w2-F-001", "disposition": "closed" },
+    { "id": "r2-logic-w2-F-001", "disposition": "open" },
+    { "id": "r2-performance-w2-F-001", "disposition": "closed" },
+    { "id": "r2-style-w2-F-002", "disposition": "closed" },
+    { "id": "r2-testing-practices-w2-F1", "disposition": "closed" },
+    { "id": "r2-ui-ux-w2-UX-001", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `f43a13c3f` | Merge-base: `f43a13c3f35e488744bb8906c2c275d433f8d98b`
+- Scope mode: `explicit-hash-range` (f43a13c3f..b2043b98d, fix round 2) | Changed files reviewed: 3 (MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.test.ts)
+
+### Summary
+The fix round closes the stale-snapshot dead-Retry findings, the redundant DOM queries, the test gap and the test naming. The new permit-retry path leaves the limiter's comment contradicting the new constant doc, and puts a separable back-off policy inside read(). The retry also relies on matching the exact Rust error text.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Findings
+#### Functions
+- [F-002] minor: useMetaprojectTree.ts:160. The permit back-off policy is embedded in read() as a second change driver; lift it to a module-scope `withPermitRetry`.
+#### Comments
+- [F-001] minor: useMetaprojectTree.ts:131. The limiter comment says reads "never exhaust" the permits; the new doc at :14-17 and the retry say they can.
+#### Error Handling
+- [F-003] info: useMetaprojectTree.ts:24. Permit refusal is detected by Rust message text, with copies in 3 places and no shared code.
+#### DRY
+No DRY issues found. onFocus and remember() both build `{ element, index, before }`, but 2 copies is under the threshold.
+#### SOLID
+See F-002.
+
+### Prior dispositions (judged against code at b2043b98d)
+- r2-architecture-w1-F-001: closed. Its alternative fix was applied: a permit refusal is retried with jittered back-off (:159-169), and the doc no longer claims a fixed headroom.
+- r2-architecture-w2-F-001: partial. The doc no longer promises headroom, but it still hard-codes "eight" with no pointer to MAX_ACTIVE.
+- r2-clean-code-w1-F-002: partial. :14-17 still says "Desktop's eight read permits"; the suggested "name the source, not the number" was not applied. Its reasoning no longer depends on the number, and the refusal now degrades through retries.
+- r2-frontend-w2-F-001: closed. The catch returns after onStale() (:187-190), and test :489 covers it.
+- r2-logic-w2-F-001: open. Not addressed. A retired read still holds its slot until send settles. The retry stops early only between attempts (:164, :166).
+- r2-performance-w2-F-001: closed. The layout effect passes `elements` to remember (:160), and onFocus indexes `rows`. That leaves 2 DOM queries per arrow key: the layout effect and moveTo :197.
+- r2-style-w2-F-002: closed. The variables are now treeError / searchError (metaproject.test.ts:212-217).
+- r2-testing-practices-w2-F1: closed. Tests at MetaprojectTree.dom.test.tsx:450 and :471 drive focus outside before the focused row leaves. The tests were not re-run by this reviewer; the verify log reports the Desktop suite at exit 0.
+- r2-ui-ux-w2-UX-001: closed. The early return after onStale() leaves no dead Retry. MetaprojectView.dom.test.tsx:2150 asserts no "Could not load." row.
+
+### Clean Areas
+The rest of the MetaprojectTree.tsx focus hand-off (anchor on the preceding row id) matches its updated docs (:26-31, :84-90, :106-110, :150-152). The limit() catch now reports an unexpected throw, with a comment giving the reason (error-handling Rule 3 satisfied). The `wait` injection is documented.
+
+### Notes
+- Not run: no tests executed (exec_budget_s = 0); test claims rest on reading the test names and assertions.
+- Routing: graph_used: no (not-relevant, a bounded fix delta with given slices); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no. One raw `git diff` (keryx:raw marker), because slice-01 is abridged and leaves out the stale-snapshot return hunk and the remember() changes.
+KERYX_USAGE {"tokens_in":138974,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

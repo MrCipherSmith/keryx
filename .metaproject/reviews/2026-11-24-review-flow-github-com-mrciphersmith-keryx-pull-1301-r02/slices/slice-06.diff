@@ -1,0 +1,779 @@
+--- src/integrations/metaproject-explorer-contract.ts
+@@ 133,173 @@
+     else if (node.title.toLowerCase() === needle) names.push(hit);
+     else if (node.kind === "wiki" && snippet !== undefined) wikiText.push(hit);
+     else partial.push(hit);
+   }
+ 
+   const result = paths.slice(0, METAPROJECT_NODE_LIMIT);
+   // Repeated basenames and common wiki terms must both survive a full page.
+   for (let i = 0; i < Math.max(names.length, wikiText.length) && result.length < METAPROJECT_NODE_LIMIT; i++) {
+     const name = names[i];
+     const text = wikiText[i];
+     if (name) result.push(name);
+     if (text && result.length < METAPROJECT_NODE_LIMIT) result.push(text);
+   }
+   return result.concat(partial.slice(0, METAPROJECT_NODE_LIMIT - result.length));
+ }
+ 
+ export const METAPROJECT_SCHEMA_V2 = 2;
+ export const METAPROJECT_RESPONSE_BYTES_V2 = 1024 * 1024;
+ export const METAPROJECT_PAGE_SIZE_V2 = 100;
+ export const METAPROJECT_CAPABILITIES = [
+-  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history",
++  "catalog", "detail", "search", "neighbors", "openspec-list", "openspec-history", "tree",
+ ] as const;
+ export const METAPROJECT_SCOPES = ["graph", "wiki", "spec", "change", "archive"] as const;
+ export type MetaprojectScope = typeof METAPROJECT_SCOPES[number];
+ 
+ export interface MetaprojectEdgeEvidence {
+   path: string;
+   digest: string;
+   index?: number;
+ }
+ 
+ /** Transport DTOs are checked independently from the filesystem service. */
+ export type MetaprojectOpenSpecKind = "spec" | "change" | "archive";
+ 
+ export interface MetaprojectSourceRef {
+   path: string;
+   digest: string;
+   startLine?: number;
+   endLine?: number;
+ }
+ 
+
+--- src/integrations/metaproject-explorer-contract.ts
+@@ 259,444 @@
+   hits: MetaprojectHitV2[];
+   nextCursor?: string;
+   partial: boolean;
+ }
+ 
+ export interface MetaprojectOpenSpecList extends SnapshotV2 {
+   collection: MetaprojectOpenSpecKind;
+   entries: MetaprojectOpenSpecEntry[];
+   nextCursor?: string;
+   partial: boolean;
+   openSpec: MetaprojectOpenSpecState;
+ }
+ 
+ export interface MetaprojectOpenSpecHistory extends SnapshotV2 {
+   id: string;
+   entries: MetaprojectOpenSpecHistoryItem[];
+   nextCursor?: string;
+   partial: boolean;
+ }
+ 
++export const METAPROJECT_TREE_SCOPES = ["graph", "wiki"] as const;
++export type MetaprojectTreeScope = typeof METAPROJECT_TREE_SCOPES[number];
++
++/** The wiki tree group of pages without a page type. */
++export const METAPROJECT_WIKI_UNTYPED_GROUP = "other";
++
++/** The key of the wiki tree group that holds `node`: its page type, or the untyped group. */
++export function metaprojectWikiGroupKey(node: Pick<MetaprojectNode, "pageType">): string {
++  return node.pageType || METAPROJECT_WIKI_UNTYPED_GROUP;
++}
++
++/** One child of a tree parent: a graph folder, a wiki page-type group, or a node. */
++export type MetaprojectTreeEntry =
++  | { type: "folder"; path: string; name: string; files: number; module?: MetaprojectNode }
++  | { type: "group"; key: string; name: string; pages: number }
++  | { type: "node"; node: MetaprojectNode };
++
++export interface MetaprojectTreeV2 extends SnapshotV2 {
++  scope: MetaprojectTreeScope;
++  parent: string | null;
++  entries: MetaprojectTreeEntry[];
++  /** More entries of this parent. */
++  nextCursor?: string;
++  /** The source behind the scope is missing or incomplete. */
++  partial: boolean;
++}
++
+ export interface MetaprojectCapabilities {
+   schemaVersion: 2;
+   /** Every action the answering reader serves. A client requires the ones it sends and ignores the rest. */
+   actions: readonly string[];
+ }
+ 
+ export type MetaprojectV2Response =
+   | MetaprojectCapabilities | MetaprojectCatalogV2 | MetaprojectDetailV2 | MetaprojectSearchV2
+-  | MetaprojectNeighborsV2 | MetaprojectOpenSpecList | MetaprojectOpenSpecHistory;
++  | MetaprojectNeighborsV2 | MetaprojectOpenSpecList | MetaprojectOpenSpecHistory | MetaprojectTreeV2;
+ 
+ type V2Data<T> = T & { version: 2; expectedSnapshotId?: string };
+ export type MetaprojectRequestV2 =
+   | { version: 2; action: "capabilities" }
+   | V2Data<{ action: "catalog" }>
+   | V2Data<{ action: "detail"; id: string; artifact?: string; section?: string; digest?: string }>
+   | V2Data<{ action: "search"; query: string; scopes?: MetaprojectScope[]; cursor?: string }>
+   | V2Data<Extract<MetaprojectRequest, { action: "neighbors" }> & { includeArchive?: boolean }>
+   | V2Data<{ action: "openspec-list"; collection: MetaprojectOpenSpecKind; cursor?: string }>
+-  | V2Data<{ action: "openspec-history"; id: string; cursor?: string }>;
++  | V2Data<{ action: "openspec-history"; id: string; cursor?: string }>
++  | V2Data<{ action: "tree"; scope: MetaprojectTreeScope; parent?: string; cursor?: string }>;
+ 
+ export type MetaprojectAnyRequest = MetaprojectRequest | MetaprojectRequestV2;
+ 
+ export const METAPROJECT_ERROR_CODES = [
+   "unsupported-version", "invalid-input", "stale-snapshot", "stale-section", "not-found", "source-changed", "source-unavailable", "response-limit",
+ ] as const;
+ export type MetaprojectErrorCode = typeof METAPROJECT_ERROR_CODES[number];
+ 
+ export class MetaprojectRequestError extends Error {
+   constructor(readonly code: MetaprojectErrorCode, message: string) {
+     super(message);
+     this.name = "MetaprojectRequestError";
+   }
+ }
+ 
+ export function isMetaprojectScope(value: unknown): value is MetaprojectScope {
+   return METAPROJECT_SCOPES.some((scope) => scope === value);
+ }
+ 
++export function isMetaprojectTreeScope(value: unknown): value is MetaprojectTreeScope {
++  return METAPROJECT_TREE_SCOPES.some((scope) => scope === value);
++}
++
+ export function isMetaprojectV2EdgeKind(value: unknown): value is MetaprojectEdgeKind {
+   return METAPROJECT_EDGE_KINDS_V2.some((kind) => kind === value);
+ }
+ 
+ export function isOpenSpecKind(value: unknown): value is MetaprojectOpenSpecKind {
+   return value === "spec" || value === "change" || value === "archive";
+ }
+ 
+ export function isSha256(value: unknown): value is string {
+   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+ }
+ 
+ export function isMetaprojectRelativePath(value: unknown): value is string {
+   return typeof value === "string" && value.length <= 4096 && !/^[a-z]:/i.test(value)
+     && !value.includes("\\") && [...value].every((char) => char >= " " && char !== "\x7f")
+     && value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+ }
+ 
+ function validId(value: unknown): value is string {
+   return typeof value === "string" && value.length > 0 && value.length <= 4096;
+ }
+ 
+ function validDirection(value: unknown): value is MetaprojectDirection {
+   return value === "both" || value === "incoming" || value === "outgoing";
+ }
+ 
++/** A graph parent is a checkout-relative folder; a wiki parent is a page-type group key. */
++function validTreeParent(scope: MetaprojectTreeScope, value: unknown): value is string {
++  return scope === "graph" ? isMetaprojectRelativePath(value) : validId(value);
++}
++
+ function parseV2(input: Record<string, unknown>): MetaprojectRequestV2 {
+   const keys = Object.keys(input);
+   const exact = (...allowed: string[]): boolean => keys.every((key) => allowed.includes(key));
+   if (input.action === "capabilities" && exact("action", "version")) return { action: "capabilities", version: 2 };
+   const common = ["action", "version", "expectedSnapshotId"];
+   const allowed = (...specific: string[]) => exact(...common, ...specific);
+   const invalid = () => new MetaprojectRequestError("invalid-input", "Invalid Metaproject v2 request.");
+   if (input.expectedSnapshotId !== undefined && !isSha256(input.expectedSnapshotId)) throw invalid();
+   const base = { version: 2 as const, ...(input.expectedSnapshotId !== undefined && { expectedSnapshotId: input.expectedSnapshotId }) };
+-  const { action, id, artifact, section, digest, scopes, query, collection, cursor, depth, kinds, direction, includeArchive } = input;
++  const { action, id, artifact, section, digest, scopes, query, collection, cursor, depth, kinds, direction, includeArchive, scope, parent } = input;
+   switch (action) {
+     case "catalog":
+       if (allowed()) return { ...base, action };
+       break;
+     case "detail":
+       if (allowed("id", "artifact", "section", "digest") && validId(id)
+         && (artifact === undefined || isMetaprojectRelativePath(artifact))
+         && (section === undefined || validId(section))
+         && (digest === undefined || isSha256(digest))) {
+         return { ...base, action, id, ...(artifact !== undefined && { artifact }),
+           ...(section !== undefined && { section }), ...(digest !== undefined && { digest }) };
+       }
+       break;
+     case "search":
+       if (allowed("query", "scopes", "cursor") && typeof query === "string" && query.length <= 4096
+         && (scopes === undefined || (Array.isArray(scopes) && scopes.length > 0 && scopes.length <= METAPROJECT_SCOPES.length
+           && scopes.every(isMetaprojectScope) && new Set(scopes).size === scopes.length))
+         && (cursor === undefined || validId(cursor))) {
+         return { ...base, action, query, ...(scopes !== undefined && { scopes }), ...(cursor !== undefined && { cursor }) };
+       }
+       break;
+     case "neighbors":
+       if (allowed("id", "depth", "direction", "kinds", "includeArchive") && validId(id)
+         && (depth === 1 || depth === 2) && validDirection(direction) && Array.isArray(kinds)
+         && kinds.length <= METAPROJECT_EDGE_KINDS_V2.length && kinds.every(isMetaprojectV2EdgeKind)
+         && (includeArchive === undefined || typeof includeArchive === "boolean")) {
+         return { ...base, action, id, depth, direction, kinds, ...(includeArchive !== undefined && { includeArchive }) };
+       }
+       break;
+     case "openspec-list":
+       if (allowed("collection", "cursor") && isOpenSpecKind(collection) && (cursor === undefined || validId(cursor))) {
+         return { ...base, action, collection, ...(cursor !== undefined && { cursor }) };
+       }
+       break;
+     case "openspec-history":
+       if (allowed("id", "cursor") && validId(id) && (cursor === undefined || validId(cursor))) {
+         return { ...base, action, id, ...(cursor !== undefined && { cursor }) };
+       }
+       break;
++    case "tree":
++      if (allowed("scope", "parent", "cursor") && isMetaprojectTreeScope(scope)
++        && (parent === undefined || validTreeParent(scope, parent))
++        && (cursor === undefined || validId(cursor))) {
++        return { ...base, action, scope, ...(parent !== undefined && { parent }), ...(cursor !== undefined && { cursor }) };
++      }
++      break;
+   }
+   throw invalid();
+ }
+ 
+ export function parseExplorerRequest(value: unknown): MetaprojectAnyRequest {
+   if (!value || typeof value !== "object" || Array.isArray(value) || !("version" in value)) return parseExplorerRequestV1(value);
+   if (value.version !== 2) throw new MetaprojectRequestError("unsupported-version", "Unsupported Metaproject request version.");
+   return parseV2(value as Record<string, unknown>);
+ }
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 1,51 @@
+ import { createHash } from "node:crypto";
+ import { realpath, stat } from "node:fs/promises";
+ import path from "node:path";
+ 
+ import type { OpenSpecDiagnostic, OpenSpecKind } from "../openspec/catalog";
+ import { OpenSpecReadError, normalizeOpenSpecSearchText, readOpenSpec, type OpenSpecEntrySummary, type OpenSpecSnapshot } from "../openspec/service";
+ import {
+   METAPROJECT_CAPABILITIES, METAPROJECT_EDGE_LIMIT, METAPROJECT_NODE_LIMIT, METAPROJECT_PAGE_SIZE_V2,
+   METAPROJECT_RESPONSE_BYTES_V2, METAPROJECT_SCHEMA_V2, METAPROJECT_SCOPES, MetaprojectRequestError,
+-  isMetaprojectRelativePath, isOpenSpecKind, type MetaprojectEdge, type MetaprojectEdgeEvidence,
++  isMetaprojectRelativePath, isOpenSpecKind, metaprojectWikiGroupKey, type MetaprojectEdge, type MetaprojectEdgeEvidence,
+   type MetaprojectHitV2, type MetaprojectNode, type MetaprojectOpenSpecState, type MetaprojectProjection,
+-  type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectV2Response,
++  type MetaprojectRequest, type MetaprojectRequestV2, type MetaprojectScope, type MetaprojectTreeEntry,
++  type MetaprojectTreeV2, type MetaprojectV2Response,
+ } from "./metaproject-explorer-contract";
+ import type { ExplorerGraphFreshness, loadExplorerGraph } from "./metaproject-explorer";
+ import { indexMetaprojectGraph, projectMetaprojectGraph } from "./metaproject-projection";
+ 
+ type DataRequest = Exclude<MetaprojectRequestV2, { action: "capabilities" }>;
+ type SearchRequest = Extract<DataRequest, { action: "search" }>;
++type TreeRequest = Extract<DataRequest, { action: "tree" }>;
+ type GraphModel = Awaited<ReturnType<typeof loadExplorerGraph>>;
+ type ReadFreshness = () => Promise<ExplorerGraphFreshness>;
+ type LoadGraph = (root: string, request: MetaprojectRequest) => Promise<{ graph: GraphModel; freshness: ReadFreshness; confirm: () => Promise<void>; track: (relative: string) => Promise<void> }>;
+ 
+ const DEFAULT_SCOPES: readonly MetaprojectScope[] = ["graph", "wiki", "spec", "change"];
+ const MAX_DIAGNOSTICS = 64;
+ const MAX_EDGE_EVIDENCE = 3;
+ const MAX_DETAIL_RELATIONSHIPS = 40;
+ const CATALOG_METADATA_BYTES = 128 * 1024;
+ const SEARCH_ITEMS_BYTES = 900 * 1024;
++const TREE_ITEMS_BYTES = 900 * 1024;
+ const MAX_LEGACY_HITS_PER_SCOPE = 12_000;
+ 
+ const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value));
+ const hash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+ const compareText = (a: string, b: string): number => a < b ? -1 : Number(a > b);
+ 
+ function safeGraphNode(node: MetaprojectNode): boolean {
+   return isMetaprojectRelativePath(node.path) || (node.kind === "module" && node.path === ".");
+ }
+ 
+ function entryNode(entry: OpenSpecEntrySummary): MetaprojectNode {
+   return { id: entry.id, kind: entry.kind, title: entry.title, path: entry.path };
+ }
+ 
+ function checkSnapshot(actual: string, expected?: string): void {
+   if (expected !== undefined && actual !== expected) {
+     throw new MetaprojectRequestError("stale-snapshot", "Metaproject changed. Refresh and retry.");
+   }
+ }
+ 
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 69,177 @@
+   snapshotId: string, key: string, value?: string,
+ ): string | number | undefined {
+   if (value === undefined) return undefined;
+   try {
+     const decoded = Buffer.from(value, "base64url");
+     if (decoded.toString("base64url") !== value) throw new Error("encoding");
+     const input: unknown = JSON.parse(decoded.toString("utf8"));
+     if (!Array.isArray(input) || input.length !== 3 || input[1] !== key || typeof input[0] !== "string"
+       || !/^[a-f0-9]{64}$/.test(input[0])) throw new Error("fields");
+     const continuation: unknown = input[2];
+     if (typeof continuation !== "string" && (typeof continuation !== "number"
+       || continuation < 1 || !Number.isSafeInteger(continuation))) throw new Error("offset");
+     checkSnapshot(snapshotId, input[0]);
+     return continuation;
+   } catch (error) {
+     if (error instanceof MetaprojectRequestError) throw error;
+     throw new MetaprojectRequestError("invalid-input", "The Metaproject cursor does not match this request.");
+   }
+ }
+ 
++/** One bounded page of `items` from `offset`, with the cursor to the next page when items remain. */
++function offsetPage<T>(
++  items: readonly T[], offset: string | number,
++  { next, action, item, byteLimit }: { next: (offset: number) => string; action: string; item: string; byteLimit: number },
++): { page: T[]; nextCursor?: string } {
++  if (typeof offset !== "number" || (offset > 0 && offset >= items.length)) {
++    throw new MetaprojectRequestError("invalid-input", `The Metaproject ${action} cursor offset is out of range.`);
++  }
++  const page = boundedItems(items.slice(offset), METAPROJECT_PAGE_SIZE_V2, byteLimit);
++  if (!page.length && offset < items.length) throw new MetaprojectRequestError("response-limit", `Metaproject ${action} ${item} exceeds the response limit.`);
++  const end = offset + page.length;
++  return { page, ...(end < items.length && { nextCursor: next(end) }) };
++}
++
++function notFoundParent(): MetaprojectRequestError {
++  return new MetaprojectRequestError("not-found", "Unknown Metaproject tree parent.");
++}
++
++/** Folders directly under `parent` that hold indexed files, then its file nodes. */
++function graphTree(model: GraphModel, parent?: string): { entries: MetaprojectTreeEntry[]; partial: boolean } {
++  // Without a built graph no folder can be confirmed or refused.
++  if (!model.graphPresent) return { entries: [], partial: true };
++  const prefix = parent === undefined ? "" : `${parent}/`;
++  const folders = new Map<string, number>();
++  const files: MetaprojectNode[] = [];
++  const modules = new Map<string, MetaprojectNode>();
++  for (const node of model.nodes) {
++    if (node.kind === "module") modules.set(node.path, node);
++    if (node.kind !== "file" || !node.path.startsWith(prefix)) continue;
++    const rest = node.path.slice(prefix.length);
++    const slash = rest.indexOf("/");
++    if (slash < 0) files.push(node);
++    else folders.set(rest.slice(0, slash), (folders.get(rest.slice(0, slash)) ?? 0) + 1);
++  }
++  if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();
++  const folderEntries = [...folders].sort(([a], [b]) => compareText(a, b)).map(([name, count]): MetaprojectTreeEntry => {
++    const folderPath = `${prefix}${name}`;
++    const module = modules.get(folderPath);
++    return { type: "folder", path: folderPath, name, files: count, ...(module && { module }) };
++  });
++  const fileEntries = files.sort((a, b) => compareText(a.path, b.path)).map((node): MetaprojectTreeEntry => ({ type: "node", node }));
++  return { entries: [...folderEntries, ...fileEntries], partial: false };
++}
++
++function wikiGroupName(key: string): string {
++  const words = key.replaceAll("-", " ");
++  return words.charAt(0).toUpperCase() + words.slice(1);
++}
++
++/** Page-type groups at the root; a group's pages under it. */
++function wikiTree(nodes: readonly MetaprojectNode[], parent?: string): MetaprojectTreeEntry[] {
++  const groups = new Map<string, MetaprojectNode[]>();
++  for (const node of nodes) {
++    if (node.kind !== "wiki") continue;
++    const key = metaprojectWikiGroupKey(node);
++    const group = groups.get(key);
++    if (group) group.push(node);
++    else groups.set(key, [node]);
++  }
++  if (parent === undefined) {
++    return [...groups].map(([key, pages]) => ({ type: "group" as const, key, name: wikiGroupName(key), pages: pages.length }))
++      .sort((a, b) => compareText(a.name, b.name) || compareText(a.key, b.key));
++  }
++  const pages = groups.get(parent);
++  if (!pages) throw notFoundParent();
++  return pages.sort((a, b) => compareText(a.title, b.title) || compareText(a.path, b.path))
++    .map((node) => ({ type: "node", node }));
++}
++
+ function graphRequest(request: DataRequest): MetaprojectRequest {
+   switch (request.action) {
+     case "detail": return { action: request.action, id: request.id };
+     case "neighbors": return { action: request.action, id: request.id, depth: request.depth, direction: request.direction, kinds: request.kinds };
+     case "search": return request.scopes?.every(isOpenSpecKind)
+       ? { action: "catalog" }
+       : { action: request.action, query: request.query.normalize("NFC") };
+     default: return { action: "catalog" };
+   }
+ }
+ 
+ async function knownLinkTarget(node: MetaprojectNode, root: string): Promise<boolean> {
+   // A stale index can name a removed path or a directory redirected by a symlink.
+   const candidate = path.resolve(root, node.path);
+   const relative = path.relative(root, candidate);
+   if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false;
+   try {
+     if (await realpath(candidate) !== candidate) return false;
+     const info = await stat(candidate);
+     return node.kind === "module" ? info.isDirectory() : info.isFile();
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 312,352 @@
+     private readonly source: OpenSpecSnapshot,
+     private readonly openEdges: MetaprojectEdge[],
+     diagnostics: OpenSpecDiagnostic[],
+   ) {
+     // Data only: graph freshness follows `git status`, so it would retire the ID for an unrelated untracked file.
+     this.base = { schemaVersion: METAPROJECT_SCHEMA_V2, snapshotId: hash([model.base.snapshotId, source.catalog.snapshotId, openEdges, diagnostics]) };
+     this.state = sourceState(source, diagnostics);
+     this.openNodes = source.catalog.entries.map(entryNode);
+   }
+ 
+   /** `freshness` runs `git status`; only an action whose response reports it may call it. */
+   async read(request: DataRequest, freshness: ReadFreshness): Promise<MetaprojectV2Response> {
+     checkSnapshot(this.base.snapshotId, request.expectedSnapshotId);
+     switch (request.action) {
+       case "catalog": return this.catalog(await freshness());
+       case "detail": return this.detail(request);
+       case "neighbors": return this.neighbors(request);
+       case "search": return this.search(request);
+       case "openspec-list": return this.list(request.collection, request.cursor);
+       case "openspec-history": return this.history(request.id, request.cursor);
++      case "tree": return this.tree(request);
+     }
+   }
+ 
+   private catalog({ graph, graphReason }: ExplorerGraphFreshness) {
+     const { hasWikiLayer, hasSymbolLayer, counts } = this.model;
+     const groups = [
+       this.model.nodes.filter((node) => node.kind === "wiki"),
+       this.model.nodes.filter((node) => node.kind !== "wiki"),
+       this.openNodes.filter((node) => node.kind === "spec"),
+       this.openNodes.filter((node) => node.kind === "change"),
+     ];
+     const nodes: MetaprojectNode[] = [];
+     for (let i = 0; i < Math.max(...groups.map((group) => group.length)) && nodes.length <= METAPROJECT_NODE_LIMIT; i++) {
+       for (const group of groups) {
+         const node = group[i];
+         if (node) nodes.push(node);
+       }
+     }
+     return { ...this.base, ...capProjection(nodes, [...this.openEdges, ...this.model.edges]), graph,
+       ...(graphReason && { graphReason }), hasWikiLayer, hasSymbolLayer, counts, openSpec: this.state };
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 381,436 @@
+     const projection = projectMetaprojectGraph(index, this.base, request);
+     if (!projection) throw new MetaprojectRequestError("not-found", "Unknown Metaproject node.");
+     return { ...projection, ...capProjection(projection.nodes, projection.edges, projection.truncated), openSpec: this.state };
+   }
+ 
+   private search(request: SearchRequest) {
+     const needle = normalizeOpenSpecSearchText(request.query.trim());
+     const scopes = request.scopes ?? DEFAULT_SCOPES;
+     const key = hash(["search", needle, [...scopes].sort()]);
+     const offset = cursorValue(this.base.snapshotId, key, request.cursor) ?? 0;
+     const scope = scopes.filter(isOpenSpecKind);
+     const { items, partial } = this.openSpecSearch(needle, scope, scopes);
+     const legacy = legacySearch(this.model, needle, scopes);
+     const hits = interleave([
+       ...legacy.items,
+       ...items.map(({ entry, rank, source, snippet, section, matchType }) => ({
+         rank, hit: { node: entryNode(entry), scope: entry.kind, ...(source !== undefined && { source }),
+           snippet, matchType, ...(section !== undefined && { section }) },
+       })),
+     ]);
+-    if (typeof offset !== "number" || (offset > 0 && offset >= hits.length)) {
+-      throw new MetaprojectRequestError("invalid-input", "The Metaproject search cursor offset is out of range.");
+-    }
+-    const page = boundedItems(hits.slice(offset), METAPROJECT_PAGE_SIZE_V2, SEARCH_ITEMS_BYTES);
+-    if (!page.length && offset < hits.length) throw new MetaprojectRequestError("response-limit", "Metaproject search hit exceeds the response limit.");
+-    const next = offset + page.length;
+-    return { ...this.base, hits: page, partial: partial || legacy.partial,
+-      ...(next < hits.length && { nextCursor: cursor(this.base.snapshotId, key, next) }) };
++    const { page, nextCursor } = offsetPage(hits, offset, {
++      next: (end) => cursor(this.base.snapshotId, key, end), action: "search", item: "hit", byteLimit: SEARCH_ITEMS_BYTES,
++    });
++    return { ...this.base, hits: page, partial: partial || legacy.partial, ...(nextCursor && { nextCursor }) };
++  }
++
++  private tree(request: TreeRequest): MetaprojectTreeV2 {
++    const { scope, parent } = request;
++    const key = hash(["tree", scope, parent ?? null]);
++    // The cursor is checked before the parent, so a foreign cursor is refused as such.
++    const offset = cursorValue(this.base.snapshotId, key, request.cursor) ?? 0;
++    const { entries, partial } = scope === "graph" ? graphTree(this.model, parent) : { entries: wikiTree(this.model.nodes, parent), partial: false };
++    const { page, nextCursor } = offsetPage(entries, offset, {
++      next: (end) => cursor(this.base.snapshotId, key, end), action: "tree", item: "entry", byteLimit: TREE_ITEMS_BYTES,
++    });
++    return { ...this.base, scope, parent: parent ?? null, entries: page, partial, ...(nextCursor && { nextCursor }) };
+   }
+ 
+   private openSpecSearch(needle: string, scope: OpenSpecKind[], scopes: readonly MetaprojectScope[]) {
+     if (!needle || !scope.length) return { items: [], partial: false };
+     const changed = this.source.catalog.diagnostics.some((diagnostic) => diagnostic.code === "source-changed" && diagnostic.retryable);
+     if (changed && (scopes.includes("graph") || scopes.includes("wiki"))) return { items: [], partial: true };
+     const result = this.source.searchHits({ query: needle, scope });
+     return { ...result, partial: result.partial || this.state.availability === "partial" || this.state.availability === "unavailable" };
+   }
+ 
+   private list(collection: OpenSpecKind, previous?: string) {
+     const key = hash(["list", collection]);
+     const inner = this.sourceCursor(key, previous);
+     const result = this.source.list({ kind: collection, ...(inner !== undefined && { cursor: inner }) });
+     return { ...this.base, collection, entries: result.items, partial: result.partial, openSpec: this.state,
+       ...(result.nextCursor && { nextCursor: cursor(this.base.snapshotId, key, result.nextCursor) }) };
+   }
+ 
+   private history(id: string, previous?: string) {
+     const key = hash(["history", id]);
+
+--- src/integrations/metaproject-explorer-tree.test.ts
+@@ 1,261 @@
++import { afterEach, describe, expect, test } from "bun:test";
++import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
++import os from "node:os";
++import path from "node:path";
++
++import {
++  METAPROJECT_CAPABILITIES, METAPROJECT_PAGE_SIZE_V2, MetaprojectRequestError, parseExplorerRequest,
++  parseExplorerRequestV1, type MetaprojectNode, type MetaprojectRequestV2, type MetaprojectTreeEntry, type MetaprojectTreeV2,
++} from "./metaproject-explorer-contract";
++import { explorerGraphFreshness, loadExplorerGraph, metaprojectExplorer } from "./metaproject-explorer";
++import { metaprojectExplorerV2 } from "./metaproject-explorer-v2";
++
++type TreeRequest = Extract<MetaprojectRequestV2, { action: "tree" }>;
++
++const roots: string[] = [];
++const storage = ".metaproject/data/gdgraph/storage";
++
++async function writeSource(root: string, relative: string, text: string): Promise<void> {
++  const destination = path.join(root, relative);
++  await mkdir(path.dirname(destination), { recursive: true });
++  await writeFile(destination, text);
++}
++
++/** Wiki pages of two types, titled against their file order; no graph is built. */
++async function wikiOnly(): Promise<string> {
++  const root = await mkdtemp(path.join(os.tmpdir(), "keryx-explorer-tree-"));
++  roots.push(root);
++  await writeSource(root, ".metaproject/wiki/components/zeta.md", "# Alpha\n");
++  await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Zeta\n");
++  await writeSource(root, ".metaproject/wiki/domain-models/order.md", "# Order\n");
++  return root;
++}
++
++const MANY_FOLDERS = 120;
++const MANY_FILES = 15;
++
++/** Wiki plus a built graph whose files nest in folders, with a folder too large for one page. */
++async function builtGraph(): Promise<string> {
++  const root = await wikiOnly();
++  const files = [
++    "root.ts", "src/a.ts", "src/lib/b.ts", "src/lib/deep/c.ts", "src/lib/deep/d.ts", "docs/readme.md", "pkg/inner/x.ts",
++    ...Array.from({ length: MANY_FOLDERS }, (_, index) => `many/dir-${String(index).padStart(3, "0")}/f.ts`),
++    ...Array.from({ length: MANY_FILES }, (_, index) => `many/file-${String(index).padStart(2, "0")}.ts`),
++  ];
++  // Written in reverse, so only the tree's own sort can put them in order.
++  await writeSource(root, `${storage}/nodes.jsonl`, [...files].reverse().map((file) => JSON.stringify({ id: file, kind: "file", path: file, language: "typescript" })).join("\n"));
++  await writeSource(root, `${storage}/edges.jsonl`, "");
++  await writeSource(root, `${storage}/symbols.jsonl`, JSON.stringify({ id: "src/a.ts#run", path: "src/a.ts", name: "run", startLine: 1 }));
++  await writeSource(root, `${storage}/calls.jsonl`, "");
++  return root;
++}
++
++afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
++
++async function tree(root: string, request: Omit<TreeRequest, "version" | "action">): Promise<MetaprojectTreeV2> {
++  const response = await metaprojectExplorer(root, { version: 2, action: "tree", ...request });
++  if (!("entries" in response) || !("scope" in response)) throw new Error("Expected a tree response");
++  return response;
++}
++
++function label(entry: MetaprojectTreeEntry): string {
++  switch (entry.type) {
++    case "folder": return `folder:${entry.path}:${entry.files}${entry.module ? `:${entry.module.id}` : ""}`;
++    case "group": return `group:${entry.key}:${entry.name}:${entry.pages}`;
++    case "node": return `node:${entry.node.id}`;
++  }
++}
++
++function codeOf(run: () => unknown): string | undefined {
++  try {
++    run();
++  } catch (error) {
++    return error instanceof MetaprojectRequestError ? error.code : `untyped:${String(error)}`;
++  }
++  return undefined;
++}
++
++describe("metaproject explorer tree (AC1)", () => {
++  test("lists the root's folders with counts and modules, then its files, never symbols", async () => {
++    const root = await builtGraph();
++    const result = await tree(root, { scope: "graph" });
++    expect(result).toMatchObject({ schemaVersion: 2, scope: "graph", parent: null, partial: false });
++    expect(result.nextCursor).toBeUndefined();
++    expect(result.entries.map(label)).toEqual([
++      "folder:docs:1:module:docs",
++      `folder:many:${MANY_FOLDERS + MANY_FILES}:module:many`,
++      "folder:pkg:1",
++      "folder:src:4:module:src",
++      "node:file:root.ts",
++    ]);
++    const file = result.entries.at(-1);
++    expect(file?.type === "node" && file.node).toMatchObject({ kind: "file", title: "root.ts", path: "root.ts" });
++  });
++
++  test("lists a nested folder's children", async () => {
++    const root = await builtGraph();
++    const src = await tree(root, { scope: "graph", parent: "src" });
++    expect(src.parent).toBe("src");
++    expect(src.entries.map(label)).toEqual(["folder:src/lib:3:module:src/lib", "node:file:src/a.ts"]);
++    const lib = await tree(root, { scope: "graph", parent: "src/lib" });
++    expect(lib.entries.map(label)).toEqual(["folder:src/lib/deep:2:module:src/lib/deep", "node:file:src/lib/b.ts"]);
++    const deep = await tree(root, { scope: "graph", parent: "src/lib/deep" });
++    expect(deep.entries.map(label)).toEqual(["node:file:src/lib/deep/c.ts", "node:file:src/lib/deep/d.ts"]);
++    const pkg = await tree(root, { scope: "graph", parent: "pkg" });
++    expect(pkg.entries.map(label)).toEqual(["folder:pkg/inner:1:module:pkg/inner"]);
++  });
++
++  test("leaves symbols out of listings and folder counts even when the graph model holds them", async () => {
++    const root = await builtGraph();
++    const symbols: MetaprojectNode[] = [
++      { id: "symbol:src/a.ts#run", kind: "symbol", title: "run", path: "src/a.ts" },
++      { id: "symbol:only/x.ts#y", kind: "symbol", title: "y", path: "only/x.ts" },
++      { id: "symbol:top.ts#z", kind: "symbol", title: "z", path: "top.ts" },
++    ];
++    let loaded: MetaprojectNode[] = [];
++    const read = (request: TreeRequest) => metaprojectExplorerV2(root, request, async (checkout, graphRequest) => {
++      const graph = await loadExplorerGraph(checkout, graphRequest);
++      loaded = [...graph.nodes, ...symbols];
++      return { graph: { ...graph, nodes: loaded }, freshness: () => explorerGraphFreshness(checkout, graph), confirm: async () => {}, track: async () => {} };
++    });
++    const top = await read({ version: 2, action: "tree", scope: "graph" });
++    expect(loaded.filter((node) => node.kind === "symbol")).toHaveLength(symbols.length);
++    if (!("entries" in top) || !("scope" in top)) throw new Error("Expected a tree response");
++    expect(top.entries.map(label)).toEqual([
++      "folder:docs:1:module:docs", `folder:many:${MANY_FOLDERS + MANY_FILES}:module:many`, "folder:pkg:1", "folder:src:4:module:src", "node:file:root.ts",
++    ]);
++    const src = await read({ version: 2, action: "tree", scope: "graph", parent: "src" });
++    if (!("entries" in src) || !("scope" in src)) throw new Error("Expected a tree response");
++    expect(src.entries.map(label)).toEqual(["folder:src/lib:3:module:src/lib", "node:file:src/a.ts"]);
++    await expect(read({ version: 2, action: "tree", scope: "graph", parent: "only" })).rejects.toMatchObject({ code: "not-found" });
++  });
++
++  test("answers an empty, complete root for a built graph without files", async () => {
++    const root = await wikiOnly();
++    await writeSource(root, `${storage}/nodes.jsonl`, "");
++    await writeSource(root, `${storage}/edges.jsonl`, "");
++    expect(await tree(root, { scope: "graph" })).toMatchObject({ entries: [], partial: false, parent: null });
++    await expect(tree(root, { scope: "graph", parent: "src" })).rejects.toMatchObject({ code: "not-found" });
++  });
++
++  test("chains pages of at most the page size to the full child list", async () => {
++    const root = await builtGraph();
++    const seen: string[] = [];
++    let page = await tree(root, { scope: "graph", parent: "many" });
++    let pages = 1;
++    expect(page.entries).toHaveLength(METAPROJECT_PAGE_SIZE_V2);
++    while (page.nextCursor) {
++      page = await tree(root, { scope: "graph", parent: "many", cursor: page.nextCursor, expectedSnapshotId: page.snapshotId });
++      pages++;
++      seen.push(...page.entries.map(label));
++    }
++    const first = await tree(root, { scope: "graph", parent: "many" });
++    const all = [...first.entries.map(label), ...seen];
++    expect(pages).toBe(2);
++    expect(all).toHaveLength(MANY_FOLDERS + MANY_FILES);
++    expect(new Set(all).size).toBe(all.length);
++    expect(all).toEqual([
++      ...Array.from({ length: MANY_FOLDERS }, (_, index) => {
++        const folder = `many/dir-${String(index).padStart(3, "0")}`;
++        return `folder:${folder}:1:module:${folder}`;
++      }),
++      ...Array.from({ length: MANY_FILES }, (_, index) => `node:file:many/file-${String(index).padStart(2, "0")}.ts`),
++    ]);
++  });
++
++  test("groups wiki pages by page type at the root and lists a group's pages by title", async () => {
++    const root = await builtGraph();
++    const groups = await tree(root, { scope: "wiki" });
++    expect(groups).toMatchObject({ scope: "wiki", parent: null, partial: false });
++    expect(groups.entries.map(label)).toEqual(["group:component:Component:2", "group:domain-model:Domain model:1"]);
++    const pages = await tree(root, { scope: "wiki", parent: "component" });
++    expect(pages.parent).toBe("component");
++    // By title (Alpha, Zeta), not by file name.
++    expect(pages.entries.map(label)).toEqual(["node:wiki:components/zeta.md", "node:wiki:components/alpha.md"]);
++  });
++
++  test("answers an empty, partial graph tree while the graph is not built, and the wiki tree as usual", async () => {
++    const root = await wikiOnly();
++    expect(await tree(root, { scope: "graph" })).toMatchObject({ entries: [], partial: true, parent: null });
++    expect(await tree(root, { scope: "graph", parent: "src" })).toMatchObject({ entries: [], partial: true, parent: "src" });
++    const wiki = await tree(root, { scope: "wiki" });
++    expect(wiki.partial).toBe(false);
++    expect(wiki.entries.map(label)).toEqual(["group:component:Component:2", "group:domain-model:Domain model:1"]);
++  });
++});
++
++describe("metaproject explorer tree (AC2)", () => {
++  test("refuses malformed tree requests as invalid input", () => {
++    const base = { version: 2, action: "tree", scope: "graph" };
++    const malformed: unknown[] = [
++      { version: 2, action: "tree" },
++      { ...base, extra: true },
++      { ...base, scope: "spec" },
++      { ...base, scope: ["graph"] },
++      { ...base, parent: "/src" },
++      { ...base, parent: "../outside" },
++      { ...base, parent: "src/../outside" },
++      { ...base, parent: "src/" },
++      { ...base, parent: "" },
++      { ...base, parent: "C:/src" },
++      { ...base, parent: 1 },
++      { ...base, scope: "wiki", parent: "" },
++      { ...base, cursor: "" },
++      { ...base, cursor: 3 },
++      { ...base, expectedSnapshotId: "not-a-sha" },
++    ];
++    for (const request of malformed) {
++      expect({ request, code: codeOf(() => parseExplorerRequest(request)) }).toEqual({ request, code: "invalid-input" });
++    }
++    expect(parseExplorerRequest({ ...base, parent: "src/lib", cursor: "c" })).toEqual({
++      version: 2, action: "tree", scope: "graph", parent: "src/lib", cursor: "c",
++    });
++    expect(parseExplorerRequest({ version: 2, action: "tree", scope: "wiki", parent: "component" })).toEqual({
++      version: 2, action: "tree", scope: "wiki", parent: "component",
++    });
++  });
++
++  test("refuses a cursor that is not one this request issued", async () => {
++    const root = await builtGraph();
++    await expect(tree(root, { scope: "graph", parent: "many", cursor: "garbage" })).rejects.toMatchObject({ code: "invalid-input" });
++    const first = await tree(root, { scope: "graph", parent: "many" });
++    if (!first.nextCursor) throw new Error("Expected a next cursor");
++    await expect(tree(root, { scope: "graph", parent: "src", cursor: first.nextCursor })).rejects.toMatchObject({ code: "invalid-input" });
++    await expect(tree(root, { scope: "wiki", parent: "many", cursor: first.nextCursor })).rejects.toMatchObject({ code: "invalid-input" });
++  });
++
++  test("answers not-found for an unknown parent", async () => {
++    const root = await builtGraph();
++    for (const parent of ["missing", "src/missing", "src/a.ts", "many/dir-000/f.ts"]) {
++      await expect(tree(root, { scope: "graph", parent })).rejects.toMatchObject({ code: "not-found" });
++    }
++    await expect(tree(root, { scope: "wiki", parent: "architecture" })).rejects.toMatchObject({ code: "not-found" });
++    await expect(tree(root, { scope: "wiki", parent: "components" })).rejects.toMatchObject({ code: "not-found" });
++  });
++
++  test("answers stale-snapshot for a cursor or expected snapshot from another snapshot", async () => {
++    const root = await builtGraph();
++    const first = await tree(root, { scope: "graph", parent: "many" });
++    if (!first.nextCursor) throw new Error("Expected a next cursor");
++    await expect(tree(root, { scope: "graph", expectedSnapshotId: "0".repeat(64) })).rejects.toMatchObject({ code: "stale-snapshot" });
++    await writeSource(root, ".metaproject/wiki/components/alpha.md", "# Zeta\n\nRevised.\n");
++    await expect(tree(root, { scope: "graph", parent: "many", cursor: first.nextCursor })).rejects.toMatchObject({ code: "stale-snapshot" });
++    await expect(tree(root, { scope: "wiki", expectedSnapshotId: first.snapshotId })).rejects.toMatchObject({ code: "stale-snapshot" });
++  });
++
++  test("lists tree among the capabilities and leaves v1 parsing and responses unchanged", async () => {
++    expect(METAPROJECT_CAPABILITIES).toContain("tree");
++    const root = await builtGraph();
++    expect(await metaprojectExplorer(root, { version: 2, action: "capabilities" })).toEqual({
++      schemaVersion: 2, actions: METAPROJECT_CAPABILITIES,
++    });
++    const unversioned = { action: "tree", scope: "graph" };
++    expect(() => parseExplorerRequestV1(unversioned)).toThrow("Invalid request");
++    expect(() => parseExplorerRequest(unversioned)).toThrow("Invalid request");
++    expect(parseExplorerRequest({ action: "catalog" })).toEqual({ action: "catalog" });
++    const legacy = await metaprojectExplorer(root, { action: "catalog" });
++    expect(legacy.schemaVersion).toBe(1);
++    expect("openSpec" in legacy).toBe(false);
++    expect("nodes" in legacy && legacy.nodes.some((node) => node.id === "file:src/a.ts")).toBe(true);
++  });
++});

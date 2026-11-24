@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 3 delta f43a13c3f..b2043b98d, slice-02 (new) read in full. No layout surface changed: git diff --stat of the range shows no CSS file (metaproject.css untouched), and the rendered-code changes in MetaprojectTree.tsx are row ids (status:/more:), focus bookkeeping (focused ref with `before`, onFocus index from `rows`) and a doc comment. The only inline dimension, `paddingInlineStart: calc(var(--sp-3) + ${row.level - 1} * var(--sp-4))`, is unchanged context. useMetaprojectTree.ts changes (permit retry with injectable wait, stale-snapshot leaves the row loading, limiter catch logs) are data/state, not sizing. The rows rendered in the new stale state (a Loading row that persists while the Refresh catalog banner shows) reuse the existing loading-row markup and class, so their geometry is the same as before. No findings; nothing to measure, so no engine was run (exec_budget_s = 0).",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read in full (lines 1-1181): flow artefacts T13.*, flow.json, journal.md, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, MetaprojectTree.tsx, useMetaprojectTree.ts" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+- Scope checked: slice-02 only, read in full. The delta touches no stylesheet and no sizing, spacing, overflow or position code on a rendered element. The one inline computed dimension (tree row `paddingInlineStart`) is unchanged.
+- The new behaviour that changes what renders (after a stale-snapshot answer the row stays "Loading…" instead of becoming "Could not load." with Retry) reuses the existing `metaproject-tree-status` loading row, so its box is the one prior rounds already saw. Whether a persistent Loading row is the right UX belongs to review-ui-ux, not this lane.
+- Not verified: no real-engine measurement was run (read-only, exec_budget_s = 0). None was needed, because there is no layout claim to measure in this delta.
+- Commands used: `git diff --stat f43a13c3f..b2043b98d` (to confirm no CSS file changed). No raw rg/grep.
+
+Routing audit: graph_used: no (not-relevant: diff slice given, no navigation); wiki_used: no (not-relevant); ctx_used: no (slice read with Read; one short git command); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":120901,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}
