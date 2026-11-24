@@ -243,7 +243,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     v: 1,
     ...(launchOptions ? { launchOptions } : {}),
     package: packageDir,
-    target: { kind, ref: target, base: baseRef ?? null, head: round?.range.head ?? head ?? null },
+    target: { kind, ref: target, base: base ?? baseRef ?? null, head: round?.range.head ?? head ?? null },
     round: {
       number: round?.round ?? 1,
       mode: round?.mode ?? "first",

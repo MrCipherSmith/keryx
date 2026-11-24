@@ -80,6 +80,7 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     const name = (await readdir(reviews)).find(entry => existsSync(path.join(reviews, entry, PLAN_FILE)))!;
     const dir = path.join(reviews, name);
     expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")).target.base).toBe(base);
+    expect(JSON.parse(await readFile(path.join(dir, PLAN_FILE), "utf8")).target.base).toBe(base);
     const scope = JSON.parse(await readFile(path.join(dir, "scope.json"), "utf8"));
     expect(scope.files).toContain("src/a.ts");
     expect(scope.files).not.toContain("src/base-only.ts");
