@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review (round 3, wave 3)
+
+Scope: branch feat/desktop-review-v2-stage1, fix range 88e3faba9..d7b0f7058, diff mode. Load profile: not provided. Triggers used: several keryx processes writing one session's flags.json (one ACP server per Desktop window, the issue-workspace child), a session trashed in one process while another writes its flags, a lock left by a writer killed mid-section.
+Files reviewed: slice-03.diff read in full (569 lines, 4 files: src/session/organize.ts, organize.test.ts, src/session/issues/issue-session.ts, issue-session.test.ts). The dispatch also named src/acp/server.ts, but slice-03 holds no hunk for it, and `git diff --stat 88e3faba9..d7b0f7058 -- src/acp/server.ts src/session` lists only the four session files: server.ts is unchanged in this range. I also read src/lib/file-lock.ts in full (keryx ctx read) and src/session/organize.ts lines 205-279 (setSessionFlags, trashSession) at head.
+Enumeration (round obligation 1): `keryx ctx rg "setSessionFlags\(|updateSessionFlagsAt\(|backfillSessionSubject\(|withIssueBinding\(" src --glob '!*.test.ts'` gives 8 matches in 4 files. The flags.json writers are setSessionFlags (src/acp/server.ts:2964, src/session/issues/issues-launch.ts:116), updateSessionFlagsAt (organize.ts:217) and backfillSessionSubject (issue-session.ts:56). All of them reach writeFlags only inside withFlagsLock. `keryx ctx rg "trashSession\(|function trashSession"` returns organize.ts:252 and one caller in src/acp/server.ts. trashSession takes no flags lock.
+Quantified claims (obligation 2): commit 80ef58bd5 says "Session flags are written under a per-session lock, and issue sessions bound earlier get their subject on the next open unless it was unlinked". The enumeration above confirms both parts.
+Test evidence: none run by me (exec_budget_s 0).
+
+Summary: Slice-03 confirms the wave-1 reading of the lock. HL3-001, HL3-002 and HL3-004 stand as filed, with one correction to HL3-002: the issue binder's backfill is a second site. HW2-001 is closed and now executed: a two-process test makes 150 interleaved writes per process to different fields and loses none. The backfill moved out of the "registered" branch, so it now runs on every open inside the binding lock. The lock order is still binding → flags only, and the flags section takes no other lock, so the two cannot deadlock. No new finding.
+Stats (new this wave): blocker 0 | major 0 | minor 0 | info 0
+
+### CLI / Multi-Session
+
+HL3-001 (minor), confirmed against slice-03. withFlagsLock calls lib/file-lock withFileLock with timeoutMs 3_000 and staleMs 2_000. withFileLock's wait is `sleepSync(15)`, which is Bun.sleepSync or a busy-wait fallback, repeated until the deadline. src/acp/server.ts:2964 calls `setSessionFlags(cwd, sessionId, change, options.dataDir)` synchronously. A lock that another writer left behind therefore stops the ACP server's event loop for up to the stale window (about 2 s). An unremovable lock stops it for the full 3 s on each write. The comment's reason ("callers are synchronous, and the section is one read and one atomic write") bounds how long a holder keeps the lock, not how long a waiter blocks. The organize.test case "waits for another writer's lock" measures this wait at ≥1500 ms.
+
+HL3-002 (minor), confirmed, with one site added. withFileLock begins with `mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 })`, and for `<dir>/flags.json.lock` that dirname is the session directory. trashSession renames or copies the directory away under the session lease only. Two paths can recreate it:
+- setSessionFlags runs `locate()` and then `updateSessionFlagsAt(dir, …)`. A trash in another process between those two steps lets the lock recreate `<sessions>/<id>/` and write an orphan flags.json there.
+- withIssueBinding checks `if (!existsSync(dir)) throw …` and then calls `bindIssueSubject(dir, …)`, which calls `backfillSessionSubject` and takes the same lock. A trash in that window has the same outcome: an empty session directory holding only flags.json. That directory has no summary.json, so listSessions skips it.
+
+Since this range the backfill runs on every open of an issue session, not only at first bind, so the second window is opened on every open. The fix from wave 1 covers both sites. Inside the critical section, refuse when the session directory (or its summary.json) is gone. Or give withFileLock a `createDir: false` option for these callers.
+
+HL3-004 (info), confirmed. Stale recovery in file-lock.ts checks lock-file age only (`Date.now() - age > staleMs`) against FLAGS_LOCK_STALE_MS = 2_000. It does not check the holder's PID. The nonce keeps a stalled holder from deleting its successor's lock, but both read-modify-writes still run. I still show no concrete stall trigger in the repository.
+
+HL3-003 is in apps/desktop/src/review/prWork.ts (slice-01), not in slice-03. It is unchanged by this wave.
+
+### Concurrency & Races
+None new. backfillSessionSubject runs parseSessionSubject outside the lock and then reads, checks `subject !== undefined || subjectUnlinked` and writes, all inside withFlagsLock. That makes check-then-act atomic against setSessionFlags in another process. applyFlagsChange carries `subjectUnlinked` through every change: it is set by `subject: null`, cleared by a subject, and otherwise kept. A concurrent pin therefore cannot drop the unlink marker and let a later backfill write the subject back. The organize.test case "an unlinked subject is not backfilled" pins this.
+
+### Resources
+None detected. The lock file lives in the session directory. If trashSession moves the directory while the lock is held, the lock goes with it, and the holder's atomic write fails with ENOENT. The change is then refused, not lost silently.
+
+### Caching
+None detected.
+
+### Lock Contention
+Order: withIssueBinding holds the binding lock (lib/fs, async) and calls bindIssueSubject → backfillSessionSubject → flags lock (lib/file-lock, sync). Neither applyFlagsChange nor the backfill closure takes a lock. issues-launch.ts:116 calls setSessionFlags (flow) from inside the withIssueBinding apply callback, which is the same binding → flags order. No path takes flags → binding. The binding lock can now be held through one flags-lock wait (≤3 s) per open; that cost is covered by HL3-001.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+The lock retry is capped by its 3 s deadline, which is checked before the stale branch. A timeout surfaces as a thrown "locked by another keryx process; retry". Desktop retries a refused flags write only after the session's next turn, so there is no retry storm.
+
+### Idempotency & Distributed Invariants
+Backfill is idempotent: it returns false when a subject is present or the subject was unlinked. withIssueBinding opens therefore write at most once per session. The test "a session bound before subjects existed gets its subject on the next open; an unlink still wins" covers that path.
+
+Clean areas: Part A (check-then-act under the lock), B, C, E, F, G. Part D: no transactions in this range.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "slice-03 read in full. All flags.json writers (server.ts:2964 and issues-launch.ts:116 via setSessionFlags, and backfillSessionSubject from issue-session.ts:56) write only inside withFlagsLock. The lost update (HW2-001) is closed and executed by a two-process test. The lock order is binding → flags only. HL3-001, HL3-002 and HL3-004 from wave 1 are confirmed against the slice-03 code. HL3-002 gains a second site, the per-open subject backfill in withIssueBinding. No new findings.",
+    "slices": ["slice-03"],
+    "inputs_unreadable": [],
+    "findings": [
+      {
+        "id": "HL3-002",
+        "severity": "minor",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {",
+        "problem": "Correction to the wave-1 filing, which only adds a site. withFileLock starts with mkdirSync(path.dirname(lockPath), { recursive: true }), and that dirname is the session directory. trashSession (organize.ts:252) takes no flags lock. Two callers check that the directory exists and only then lock: setSessionFlags (locate(), then updateSessionFlagsAt) and withIssueBinding (`if (!existsSync(dir)) throw`, then bindIssueSubject → backfillSessionSubject). A trash in another keryx process in either window has the lock recreate <sessions>/<id>/, and flags.json is written into it.",
+        "impact": "An orphan session directory with no summary.json, so listSessions skips it and nothing removes it. The flags change is reported as stored for a trashed session, and a later 'Put Back' collides with the orphan. Since this range the backfill runs on every issue-session open, so the second window opens on every open.",
+        "suggested_fix": "Inside withFlagsLock's critical section, refuse when the session directory (or its summary.json) no longer exists, before readStoredFlags. Or add a createDir:false option to withFileLock for this caller, so that a missing directory is a refusal ('session not found').",
+        "evidence": "src/lib/file-lock.ts: `mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 })` runs before the O_EXCL open. organize.ts setSessionFlags: `const { dir } = locate(cwd, sessionId, dataDir); return updateSessionFlagsAt(dir, change, now);`. issue-session.ts: `if (!existsSync(dir)) throw ...; bindIssueSubject(dir, issue.ref);`. trashSession: renameSync(dir, target), or cpSync then rmSync on EXDEV, with no flags lock. Not executed; the interleaving is read from the code.",
+        "confidence": "medium",
+        "dedupe_key": "flags-lock-mkdir-recreates-trashed-session",
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": ["src/session/organize.ts setSessionFlags → updateSessionFlagsAt", "src/session/issues/issue-session.ts withIssueBinding → bindIssueSubject → backfillSessionSubject"],
+          "enumeration_method": "keryx ctx rg 'setSessionFlags\\(|updateSessionFlagsAt\\(|backfillSessionSubject\\(|withIssueBinding\\(' src --glob '!*.test.ts' (8 matches). Every flags-lock entry is reached through one of these two."
+        }
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "HW2-001", "disposition": "closed", "note": "Confirmed on slice-03. writeFlags is called only inside withFlagsLock: updateSessionFlagsAt → applyFlagsChange, and backfillSessionSubject. Callers were enumerated with keryx ctx rg (server.ts:2964, issues-launch.ts:116, issue-session.ts:56, organize.ts:217). organize.test 'two processes changing different flags of one session lose neither change' runs two Bun children with 150 writes each to separate fields and expects 0 lost and the final state {flow:'flow-149'}. Limit, for the testing lens: the start barrier is a busy-wait to Date.now()+1500. A child that takes longer than 1.5 s to start runs without overlap, and the test still passes. Residual side effects are HL3-001, HL3-002 and HL3-004."},
+      {"id": "HL3-001", "disposition": "open", "note": "Confirmed against slice-03 code; unchanged since wave 1. withFlagsLock → lib/file-lock withFileLock → sleepSync(15) until a 3 s deadline (staleMs 2 s), called synchronously from the ACP server's handler (src/acp/server.ts:2964 setSessionFlags). The wait-test asserts it blocks ≥1500 ms."},
+      {"id": "HL3-002", "disposition": "open", "note": "Confirmed, and the class has a second site: the per-open backfill in withIssueBinding (existsSync(dir), then bindIssueSubject → lock mkdir). Re-filed above with class_scope."},
+      {"id": "HL3-004", "disposition": "open", "note": "Confirmed: FLAGS_LOCK_STALE_MS = 2_000, and file-lock.ts breaks a lock by mtime age only, with no PID check. Still info, because no concrete stall trigger is shown."}
+    ],
+    "follow_ups": [
+      "Verify HL3-002 by execution: remove the session directory between locate() and updateSessionFlagsAt (or between withIssueBinding's existsSync and bindIssueSubject), and check whether <sessions>/<id>/flags.json reappears."
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+  }
+}
+```
+
+Note on stats: the one minor finding listed is HL3-002, re-filed to add a site; it is not a new defect. HL3-001 (minor) and HL3-004 (info) stand as filed in wave 1 and are not re-filed.
+Prior dispositions are not given for the other slice-03 prior findings: LG-012, PC-003 and DG-010 (subject only at first bind, now backfilled on every open), TP-R2-006 and TP-R2-007 (new organize.test fixtures for REPO_REF and normalisation), and LG-014 (downgrade). They belong to the logic, pr-contract, degradation and testing lenses. Factually: issue-session.ts now calls bindIssueSubject on every open, and the tests named in those findings exist in slice-03.
+
+Routing audit: graph_used: no (not-relevant: slice-03 named every file, and the callers were enumerated with keryx ctx rg); wiki_used: no (not-relevant: a lock-semantics question answered from file-lock.ts and organize.ts); ctx_used: yes (keryx ctx read src/lib/file-lock.ts; keryx ctx rg for the flags writers and trashSession; raw git diff --stat/log and python payload reads with keryx:raw markers); raw_rg_used: no.

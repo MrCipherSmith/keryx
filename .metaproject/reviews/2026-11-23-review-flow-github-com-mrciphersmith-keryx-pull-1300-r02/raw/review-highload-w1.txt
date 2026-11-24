@@ -1,0 +1,93 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review
+
+Scope: PR #1300, branch feat/desktop-review-v2-stage1, base b147408a8 .. head 88e3faba9, diff mode, round 2 (fallback-first, whole range). Slice-02 read in full (2458 lines; App.tsx, acp/types.ts, issues/*, review/PrWorkRow.tsx, ReviewBoard.tsx, ReviewFilters.tsx, ReviewLaunchDialog.tsx, ReviewProgress.tsx, ReviewResults.tsx, model.ts, prWork.ts, reviewFilterStorage.ts, usePendingFlowLinks.ts, session/SessionSubjectLinks.tsx, session/subjectBinding.ts). Load profile: not provided. Concrete triggers used: several Desktop "Create Flow"/"Open in session" presses in one app run, and several producers of flow packages in one checkout (other agent sessions, the CLI, the Issues board prepare-flow).
+
+Summary: The fix commit a34d8961b closes HL-002 (subjectOpener serialises opens per Subject) and closes HL-001's first trigger (several pending requests now link nothing). HL-001's second trigger is still there, narrowed to a 15-minute window: a single pending request still takes any single new package in the checkout, including one another session made. The HL-002 fix adds a path into that residual. When "Create Flow" is coalesced into an "Open in session" already in flight, `expect` is still registered, but the composer never gets the flow prompt. That session asks for no package of its own, so the only package it can be linked to is someone else's. Stats: blocker 1 | major 0 | minor 0 | info 1.
+
+### CLI / Multi-Session
+- [HL-001 re-raised, partial] Create Flow still attributes a package to a request by when it arrives (blocker).
+
+### Concurrency & Races
+- HL-001 above. HL-002 closed (see dispositions).
+- [HL-003, info] A gap remains between the end of an in-flight open and React committing the pending binding.
+
+### Resources
+None detected. `claimed` (Set of linked dirs) grows by one per link for the app run. `subjectOpener.inFlight` holds only opens still in flight. `boundSessionIndex` and `prFlowIndex` are rebuilt once when sessions or Flows change.
+
+### Caching
+None detected. `prWorkIndex` is memoised on `[flows, sessions]`. `withPendingSubjects` is memoised on `[state.sessions, s.pendingSubjects]`. Nothing keeps a stale cache.
+
+### Lock Contention / Async Queues / Retry / Idempotency
+None detected beyond HL-001. `PendingSubjects.apply` re-checks identity (`this.pending.get(sessionId) !== subject`) after each await, so a newer bind wins. The retry happens after a turn, not in a loop.
+
+Clean Areas: Part B (resources), Part C (caching), Part D (no transactions or locks in this slice), Part E (no queues), Part F (no retry loop: the PendingSubjects retry is driven by events). These were checked against the slice-02 sites named above.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "HL-002 closed by subjectOpener. HL-001 partial: several pending requests now link none, but one pending request still links any single new package in the checkout within 15 minutes, a foreign one included. The HL-002 coalescing adds a path: a Create Flow folded into an in-flight open registers a pending link for a session that never got the flow prompt.",
+    "slices": ["slice-02"],
+    "prior_dispositions": [
+      {"id": "HL-001", "disposition": "partial"},
+      {"id": "HL-002", "disposition": "closed"}
+    ],
+    "findings": [
+      {
+        "id": "HL-001",
+        "severity": "blocker",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  const only = live.length === 1 ? live[0] : undefined;\n  const fresh = only ? freshFor(only) : [];\n  return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };",
+        "problem": "The round-1 fix makes resolveFlowLinks link nothing when several requests are pending, and gives each request a 15-minute expiry. Attribution is still by arrival, though. When exactly one request is pending, the single package that appears in the checkout's flow list within the window is linked to it, whoever created it. The function's own doc names the reason several pending requests link none: 'which package belongs to which request cannot be told otherwise'. The same holds for one request and one package made by another producer. The fix for HL-002 also opens a new path into this residual. subjectOpener hands a repeat call the in-flight open's promise, 'whatever its target or prompt'. createPrFlow then still calls `flowLinks.expect(id, known)` on the id it gets back. So 'Open in session' followed by 'Create Flow' before session/new answers registers a pending flow link for a session whose composer holds only the PR URL, never the flow prompt (the journal records 'flow prompt not applied to that session'). That session will never make a package of its own. The only package its request can ever link is someone else's.",
+        "impact": "Trigger A: the person presses 'Create Flow' on PR #A, and within 15 minutes exactly one other flow package appears in the same checkout. It can come from another agent session (this repository runs parallel flows), the keryx CLI, or the Issues board's 'Create Flow' / prepare-flow in the same window. The person may not have sent the prefilled prompt yet, or may never send it. Trigger B, new in this round: 'Open in session' then 'Create Flow' on the same PR while session/new is in flight, then any one package appears within 15 minutes. Outcome, persisted in both cases: linkFlow → `_keryx/session_flags` writes `flow = <foreign dir>` into the PR session's flags.json. The dir is then claimed, so it is never re-attributed. prFlows adds the flows of bound sessions, so PR #A's card shows 'Flow #<foreign>'. The session header links to it, and new sessions opened from the card are created through `workOnFlow(<foreign dir>)`. Nothing warns that the link was inferred. This is silently wrong persisted data, shape 2.",
+        "suggested_fix": "Attribute positively, not by arrival. (1) Link a fresh package only when it names the request. For example, have flowPrompt ask the orchestrator to record the PR URL as the flow's prUrl (prFlows then finds it by URL and no inferred link is needed), or record the requesting session id. Link only a fresh FlowCard whose prUrl matches card.url or whose recorded session matches. (2) If arrival must stay, arm the request only once the session's own prompt is sent: start the window from the session's first turn after expect, not from the button press. A request whose prompt was never sent then never links. (3) In createPrFlow, call expect only when this call made the open and filled flowPrompt. Have openSubject report whether the returned promise was coalesced, or keep the flow intent in the in-flight entry. Add tests: one pending request plus one package from another producer asserts no link, or only the matching prUrl. A coalesced 'Open in session' → 'Create Flow' asserts no pending link.",
+        "evidence": "prWork.ts resolveFlowLinks: `live` keeps unexpired requests with no session Flow. `candidates` are the unclaimed dirs. With `live.length === 1` and `freshFor(only).length === 1`, it returns a link for `fresh[0]` and nothing checks who made the package. FLOW_LINK_WINDOW_MS = 15 * 60_000, and its doc says only that a package appearing *later* is not linked. usePendingFlowLinks.ts passes `flows.map(flow => flow.dir)`, the whole project flow list, and calls linkRef.current(sessionId, dir). App.tsx wires that to `(id, dir) => void s.linkFlow(id, dir)`. App.tsx createPrFlow: `const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true); if (id) flowLinks.expect(id, known);`. prWork.ts subjectOpener: `const running = inFlight.get(key); if (running) return running;`, which returns the first open's promise and ignores this call's prompt and prefillExisting. Journal T17: 'a repeat press during an open reuses it (flow prompt not applied to that session)'. It does not mention the pending link that is still registered. Tests: usePendingFlowLinks.dom.test.tsx covers one pending request plus one package (linked), several packages, two pending requests, and expiry. It has no case where a foreign package arrives inside the window, and no coalesced Create Flow case. prWork.test.ts:119 asserts the single-pending link. Law 4: the deliberate choice was read in the resolveFlowLinks doc, the FLOW_LINK_WINDOW_MS doc and the journal's 'Behavior changes accepted by the orchestrator, listed for the owner'. Its stated premise, that attribution cannot be told when it is ambiguous, applies equally to a single foreign package. No owner acceptance of a within-window foreign link is recorded.",
+        "confidence": "medium",
+        "blocking_merge": true,
+        "dedupe_key": "pending-flow-link-attribution-by-arrival",
+        "location_class": "in-diff",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/prWork.ts resolveFlowLinks (single-pending branch links any fresh unclaimed dir)",
+            "apps/desktop/src/review/usePendingFlowLinks.ts (effect feeds the whole project flow list; expect arms on button press)",
+            "apps/desktop/src/App.tsx createPrFlow (expect after a possibly coalesced openPrSession)",
+            "apps/desktop/src/review/prWork.ts subjectOpener (returns the in-flight open regardless of prompt)"
+          ],
+          "enumeration_method": "keryx ctx rg 'HL-001|HL-002|FLOW_LINK_WINDOW|subjectOpener' over apps/desktop/src and the flow 517 journal: FLOW_LINK_WINDOW_MS is defined in prWork.ts and used only by usePendingFlowLinks.ts. subjectOpener is used only in App.tsx:392 (openSubject), and its one caller is openPrSession. createPrFlow is the only caller of flowLinks.expect in slice-02. Read in full in slice-02."
+        }
+      },
+      {
+        "id": "HL-003",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "    const open = openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key));",
+        "problem": "The in-flight entry is removed when the open settles. The bound session becomes visible to the next open only after React commits the pendingSubjects state that bindSubject set, through subjectSessionsRef.current, which is assigned during render. A press dispatched after the promise settles but before that commit would see no bound session and start a second one.",
+        "impact": "No concrete trigger shown. The window lasts from a microtask to the next render commit, and a user click is a separate macrotask that normally runs after the commit. Recorded so that someone can settle it. A test that presses twice with the render deferred (or React's act boundaries removed) would show whether a second session can appear.",
+        "suggested_fix": "Optional: keep the subject key in inFlight until subjectSessionsRef reflects the binding, or have the opener remember the last created id per subject until it shows up in sessions().",
+        "evidence": "App.tsx: `subjectSessionsRef.current = subjectSessions;` is assigned in render. `bind: (id, value) => void s.bindSubject(id, value)`. prWork.ts subjectOpener deletes the key in `.finally`. subjectBinding.ts PendingSubjects.bind calls `changed()` → onChange, which is presumably a state setter in useAcpSession (outside slice-02, not read).",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "subject-opener-post-settle-window",
+        "location_class": "in-diff",
+        "publication": "question"
+      }
+    ],
+    "stats": {"blocker": 1, "major": 0, "minor": 0, "info": 1}
+  }
+}
+```
+
+Prior dispositions:
+- HL-001 partial. Trigger 1 (two pending requests, one package) is closed: resolveFlowLinks links none when `live.length !== 1`, and claimed dirs are excluded. Trigger 2 (a foreign package with one request pending) remains, limited to a 15-minute window. The HL-002 coalescing adds a new path into it. Re-raised above with the same dedupe_key.
+- HL-002 closed. subjectOpener, memoised once in App.tsx, makes a repeat press for the same Subject while session/new is in flight reuse the first open, so there is no second bound session and no phantom. The regression it introduced (expect on a coalesced Create Flow) is folded into HL-001 because it is the same defect class.
+
+Not verified: no tests run (exec_budget 0). Test evidence is P/research-evidence/verify-tests-to-run-1.txt, exit 0, not re-read. useAcpSession (bindSubject, linkFlow, newSession) is outside slice-02 and was not read this round. Its behaviour is taken from the round-1 evidence.
+
+Routing audit: graph_used: no (not-relevant: the slice and payload supplied the scope, and callers were enumerated with ctx rg). wiki_used: no (not-relevant: a concurrency lens on a supplied diff). ctx_used: yes (keryx ctx rg/run/read). raw_rg_used: no.

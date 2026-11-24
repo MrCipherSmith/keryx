@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { Root } from "react-dom/client";
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
+import type { SessionInfo } from "../acp/types";
 import type { IssuesAction, requestIssues } from "../platform/issues";
 import { registerDom, unregisterDom } from "../test/dom";
 
@@ -29,11 +31,15 @@ beforeEach(async () => { await act(() => root.render(null)); localStorage.clear(
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
 type Read = (login: string, action: IssuesAction, args: object) => Promise<unknown>;
-function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}) {
+function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[], cwd = "/fixture") {
   const request: typeof requestIssues = async <T,>(_cwd: string, account: string, action: IssuesAction, args: object) => (action === "viewer" ? { viewer: { ...viewer, login: account, nodeId: account === viewer.login ? viewer.nodeId : "U_b" } } : await read(account, action, args)) as T;
-  return act(async () => { root.render(createElement(Board, { cwd: "/fixture", login, request,
-    onSettings: () => {}, onWork: async action => onWork(action) })); });
+  return act(async () => { root.render(createElement(Board, { cwd, login, request,
+    onSettings: () => {}, onWork: async action => onWork(action), ...(sessions ? { sessions } : {}) })); });
 }
+const account = "keryx.issues." + JSON.stringify([viewer.host, viewer.nodeId]);
+/** The source stored for a project and account; `account + ".source"` alone is the older, per-account key. */
+const sourceKey = (cwd = "/fixture") => account + ".source." + JSON.stringify(cwd);
+const lanes = () => [...host.querySelectorAll(".issue-lanes .lane")].map(lane => lane.getAttribute("aria-label"));
 function button(label: string) {
   const result = [...host.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
   if (!result) throw new Error("Missing button: " + label);
@@ -53,7 +59,7 @@ test("board and list open one detail panel; comments load on demand and Flow sta
     throw new Error("Unexpected " + action);
   }, viewer.login, a => work.push(a));
   expect(calls).toEqual(["list"]);
-  expect(host.querySelector('[aria-label="Done"] .flow-card')?.textContent).toContain("open");
+  expect(host.querySelector('[aria-label="Open"] .flow-card')?.textContent).toContain("open");
   await click(button("List"));
   expect(calls).toEqual(["list"]);
   const trigger = host.querySelector<HTMLButtonElement>("tbody button.review-list-link")!;
@@ -64,7 +70,7 @@ test("board and list open one detail panel; comments load on demand and Flow sta
   expect(content.includes("See") && content.indexOf("See") < content.indexOf("More context")).toBe(true);
   expect(detail.querySelector('a[href="https://github.com/org/sample/issues/42"]')).not.toBeNull();
   expect(detail.querySelector('a[href="https://github.com/org/sample/blob/HEAD/docs/README.md"]')).not.toBeNull();
-  await click(button("Open Flow for org/sample#3"));
+  await click(button("Flow · Done for org/sample#3"));
   expect(work).toEqual(["open-flow"]);
   await click(button("Close issue"));
   expect(host.querySelector("aside")).toBeNull();
@@ -133,9 +139,8 @@ test("AC2 refreshing page one leaves a selected later-page issue open and revali
 });
 
 test("AC14 keyboard Project Status control uses observed value and surfaces a conflicting move", async () => {
-  const acc = 'keryx.issues.' + JSON.stringify([viewer.host, viewer.nodeId]);
-  localStorage.setItem(acc + ".source", "project");
-  localStorage.setItem(acc + ".project", JSON.stringify({owner: "demo", number: 18}));
+  localStorage.setItem(account + ".source", "project");
+  localStorage.setItem(account + ".project", JSON.stringify({owner: "demo", number: 18}));
   let moves = 0;
   await render(async (_login, action, args) => {
     if (action === "project") return { ...page([{ issue, itemId: "item", optionId: "todo" }]),
@@ -175,7 +180,7 @@ test("AC11 busy session leaves its Flow openable and its unsent preparation retr
   expect(host.textContent).toContain("The conversation is busy.");
   const retrySelector = 'button[aria-label="Resume preparation for org/sample#3"]';
   expect(host.querySelector(".flow-card " + retrySelector)).not.toBeNull();
-  expect(button("Open Flow for org/sample#3")).not.toBeUndefined();
+  expect(button("Flow · Preparing for org/sample#3")).not.toBeUndefined();
   await click(button("List"));
   expect(host.querySelector("tbody " + retrySelector)).not.toBeNull();
   await click(host.querySelector<HTMLButtonElement>("tbody .review-list-link")!);
@@ -305,4 +310,283 @@ test("AC4 Escape from a narrow Board and List detail returns focus to the exact 
     if (original) Object.defineProperty(proto, "clientWidth", original);
     else Reflect.deleteProperty(proto, "clientWidth");
   }
+});
+
+test("every action on an Issue card and list row has visible text", async () => {
+  await render(async (_login, action) => {
+    if (action === "list") return page([issue, {...issue, ref: {...issue.ref, nodeId: "I_b", number: 4, url: "https://github.com/org/sample/issues/4"},
+      work: {stage: "none", canResumePreparation: true}}]);
+    throw new Error("Unexpected " + action);
+  });
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    const containers = [...host.querySelectorAll(mode === "Board" ? ".issue-lanes .flow-card" : ".issue-table tbody tr")];
+    expect(containers.length).toBe(2);
+    for (const container of containers) {
+      const controls = [...container.querySelectorAll(".issue-work-row button, .card-actions button, .card-actions a")];
+      expect(controls.length).toBeGreaterThan(1);
+      for (const control of controls) expect(control.textContent?.trim()).not.toBe("");
+    }
+  }
+  expect(button("Open in session for org/sample#3").textContent).toBe("Open in session");
+  expect(button("Flow · Done for org/sample#3").textContent).toBe("Flow · Done");
+  expect(button("Create Flow for org/sample#4").textContent).toBe("Create Flow");
+  expect(button("Resume preparation for org/sample#4").textContent).toBe("Resume preparation");
+});
+
+const other = (number: number, patch: Partial<IssueSummary> = {}): IssueSummary => ({ ...issue, ...patch,
+  ref: { ...issue.ref, nodeId: "I_" + number, number, url: "https://github.com/org/sample/issues/" + number } });
+
+test("AC13 the project repository is the default source; the other sources stay selectable", async () => {
+  const sources: unknown[] = [];
+  await render(async (_login, action, args) => {
+    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+    throw new Error("Unexpected " + action);
+  });
+  expect(sources).toEqual(["repository"]);
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+  expect(select.value).toBe("repository");
+  expect([...select.options].map(o => o.textContent)).toEqual(["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]);
+  await act(async () => { select.value = "assigned"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(sources).toEqual(["repository", "assigned"]);
+  expect(localStorage.getItem(sourceKey())).toBe("assigned");
+});
+
+test("AC13 a stored source preference wins over the project repository default", async () => {
+  localStorage.setItem(account + ".source", "assigned");
+  const sources: unknown[] = [];
+  await render(async (_login, action, args) => {
+    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
+    throw new Error("Unexpected " + action);
+  });
+  expect(sources).toEqual(["assigned"]);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
+});
+
+test("AC11 issues without a Flow spread over Open and Closed; Closed appears only when the state filter includes it", async () => {
+  const rows = [other(5, { work: { stage: "none" } }), other(6, { state: "closed", work: { stage: "none" } }), other(7, { work: { stage: "active" } })];
+  const read: Read = async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { state } = args as { state: string };
+    return page(rows.filter(r => state === "all" || r.state === state));
+  };
+  await render(read);
+  expect(lanes()).toEqual(["Open"]);
+  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
+  // The Flow stage is a link on the card, never a column.
+  expect(host.querySelector('[aria-label="Open"] [data-slot="flow"] button')?.textContent).toBe("Create Flow");
+  expect(button("Flow · In progress for org/sample#7").closest('[aria-label="Open"]')).not.toBeNull();
+
+  await act(() => root.render(null));
+  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { state: "all" }, list: false }));
+  await render(read);
+  expect(lanes()).toEqual(["Open", "Closed"]);
+  expect(host.querySelector('[aria-label="Closed"] .flow-card')?.textContent).toContain("org/sample#6");
+  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
+});
+
+test("AC11 the Flow stage filter is gone and a stored stage preference is ignored", async () => {
+  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { stage: "done", label: "sync" }, list: false }));
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { work: { stage: "none" } })]);
+    throw new Error("Unexpected " + action);
+  });
+  expect(host.textContent).toContain("org/sample#5");
+  expect(host.querySelector('button[aria-label="Remove stage filter"]')).toBeNull();
+  expect(host.querySelector('button[aria-label="Remove label filter"]')).not.toBeNull();
+  await click(button("Filters (1)"));
+  expect(host.textContent).not.toContain("Keryx stage");
+  expect(host.textContent).not.toContain("All stages");
+});
+
+test("AC12 the work row has a Flow slot and a session slot counted from sessions bound through subject", async () => {
+  const subject = (number: number, kind = "issue", repo = "Org/Sample") => ({ kind, repo, number, url: "https://github.com/org/sample/issues/" + number });
+  const session = (id: string, keryx: Record<string, unknown>): SessionInfo =>
+    ({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id, _meta: { keryx } }) as SessionInfo;
+  const sessions = [
+    session("1", { subject: subject(5) }), session("2", { subject: subject(5) }),
+    session("3", { subject: subject(5), archivedAt: "2026-11-04" }), session("4", { subject: subject(5, "pr") }),
+    session("5", { subject: subject(6) }), session("6", { flow: "001-unrelated" }),
+  ];
+  const work: string[] = [];
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { work: { stage: "needs_answer" } }), other(6, { work: { stage: "none" } }), other(7)]);
+    throw new Error("Unexpected " + action);
+  }, viewer.login, a => work.push(a), sessions);
+  const row = (n: number) => [...host.querySelectorAll<HTMLElement>(".issue-work-row")].find(r => r.getAttribute("aria-label") === "Keryx work for org/sample#" + n)!;
+  const slots = (n: number) => [...row(n).querySelectorAll("[data-slot] button")].map(b => [b.closest("[data-slot]")!.getAttribute("data-slot"), b.textContent]);
+  expect(slots(5)).toEqual([["flow", "Flow · Needs an answer"], ["session", "2 sessions"]]);
+  expect(slots(6)).toEqual([["flow", "Create Flow"], ["session", "Session"]]);
+  expect(slots(7)).toEqual([["flow", "Flow · Done"], ["session", "Open in session"]]);
+  await click(button("2 sessions for org/sample#5"));
+  await click(button("Create Flow for org/sample#6"));
+  await click(button("Flow · Done for org/sample#7"));
+  await click(button("Open in session for org/sample#7"));
+  expect(work).toEqual(["open-session", "prepare-flow", "open-flow", "open-session"]);
+  await click(button("List"));
+  expect(host.querySelectorAll(".issue-table tbody .issue-work-row")).toHaveLength(3);
+});
+
+test("the Issue work row's two columns beat the PR row's three whatever order the stylesheets load in", () => {
+  const css = readFileSync(new URL("./IssuesBoard.css", import.meta.url), "utf8");
+  // Same specificity as `.pr-work-row` (styles/review.css, loaded later) would lose; both classes win.
+  expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
+});
+
+const hasButton = (label: string) => [...host.querySelectorAll("button")].some(b => b.textContent?.trim() === label);
+
+test("AC13 an older keryx that refuses the default repository source offers Assigned to me and an update hint", async () => {
+  const sources: string[] = [];
+  await render(async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { source } = args as { source: string };
+    sources.push(source);
+    if (source === "repository") throw new Error("configuration: Invalid Issues request.");
+    return page([issue]);
+  });
+  const alert = host.querySelector('[role="alert"]')!;
+  // Named as Settings names it.
+  expect(alert.textContent).toContain("update keryx or choose Bundled keryx in Settings → Desktop");
+  expect(alert.textContent).not.toContain("configuration:");
+  // Retry would send the same refused request again.
+  expect(hasButton("Retry")).toBe(false);
+  const fallback = button("Show issues assigned to me");
+  fallback.focus();
+  await click(fallback);
+  expect(sources).toEqual(["repository", "assigned"]);
+  expect(localStorage.getItem(sourceKey())).toBe("assigned");
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+  expect(select.value).toBe("assigned");
+  // FE-R3-002: the button is gone with the notice; focus lands on the source select, not the page body.
+  expect(fallback.isConnected).toBe(false);
+  expect(document.activeElement).toBe(select);
+  expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+});
+
+test("AC13 a project with no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry", async () => {
+  for (const reason of [
+    // RG-R4-001: a project folder that is not a Git checkout (src/review/board-github.ts reviewRepositories).
+    "configuration: Open a Git project with a GitHub.com remote.",
+    "configuration: This project has no GitHub.com fetch remote.",
+    "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
+    "configuration: This project's GitHub.com remote names no usable repository.",
+  ]) {
+    await act(() => root.render(null)); localStorage.clear();
+    await render(async (_login, action, args) => {
+      if (action !== "list") throw new Error("Unexpected " + action);
+      if ((args as { source: string }).source === "repository") throw new Error(reason);
+      return page([issue]);
+    });
+    const alert = host.querySelector('[role="alert"]')!;
+    // UX-013: the reason without its machine prefix.
+    expect(alert.textContent).toContain(reason.replace("configuration: ", ""));
+    expect(alert.textContent).not.toContain("configuration:");
+    expect(alert.textContent).toContain("This project's repository issues are not available here.");
+    expect(alert.textContent).not.toContain("Bundled keryx");
+    expect(hasButton("Retry")).toBe(false);
+    await click(button("Show issues assigned to me"));
+    expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
+  }
+});
+
+test("TP-R4-003: the board leaves focus where it is on mount and on a source change it did not ask to focus", async () => {
+  const outside = document.createElement("button");
+  document.body.append(outside);
+  try {
+    outside.focus();
+    await render(async () => page([issue]));
+    expect(document.activeElement).toBe(outside);
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
+    select.value = "created";
+    await act(async () => { select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(select.value).toBe("created");
+    expect(document.activeElement).toBe(outside);
+  } finally { outside.remove(); }
+});
+
+test("UX-017: a repository source the person chose gets the same fallback as the default one", async () => {
+  localStorage.setItem(sourceKey(), "repository");
+  await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
+  expect(hasButton("Show issues assigned to me")).toBe(true);
+  expect(hasButton("Retry")).toBe(false);
+});
+
+test("AR-007/TP-R3-003/RG-R4-001: any other error of the repository source keeps Retry and offers no source switch", async () => {
+  // Reasons the CLI really gives for a failure that a retry can fix (src/integrations/issues-github.ts, issues-board.ts).
+  for (const reason of [
+    "rate-limit: GitHub request limit reached.",
+    "unavailable: connection lost",
+    "configuration: Refresh before loading the next page.",
+  ]) {
+    await act(() => root.render(null)); localStorage.clear();
+    await render(async () => { throw new Error(reason); });
+    expect({ reason, retry: hasButton("Retry"), fallback: hasButton("Show issues assigned to me") }).toEqual({ reason, retry: true, fallback: false });
+  }
+});
+
+test("AR-007: an Invalid Issues request on a later page is not an older keryx: Retry and the snapshot stay", async () => {
+  await render(async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    if ("cursor" in args && args.cursor) throw new Error("configuration: Invalid Issues request.");
+    return page([issue], "more");
+  });
+  await click(button("Load more issues"));
+  const alert = host.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain("Showing the last available snapshot.");
+  expect(hasButton("Retry")).toBe(true);
+  expect(hasButton("Show issues assigned to me")).toBe(false);
+});
+
+test("UX-011: the source is stored per project; the fallback in one project leaves another's source alone", async () => {
+  const sources: string[] = [];
+  const read = (failing: boolean): Read => async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    const { source } = args as { source: string };
+    sources.push(source);
+    if (failing && source === "repository") throw new Error("configuration: This project has no GitHub.com fetch remote.");
+    return page([issue]);
+  };
+  await render(read(true), viewer.login, () => {}, undefined, "/no-remote");
+  await click(button("Show issues assigned to me"));
+  expect(localStorage.getItem(sourceKey("/no-remote"))).toBe("assigned");
+  expect(localStorage.getItem(account + ".source")).toBeNull();
+  sources.length = 0;
+  await render(read(false), viewer.login, () => {}, undefined, "/with-remote");
+  expect(sources).toEqual(["repository"]);
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("repository");
+});
+
+test("UX-011: a source stored per account by an earlier Desktop is read until the project has its own", async () => {
+  localStorage.setItem(account + ".source", "created");
+  localStorage.setItem(sourceKey("/chosen"), "mentioned");
+  const sources: string[] = [];
+  const read: Read = async (_login, action, args) => {
+    if (action !== "list") throw new Error("Unexpected " + action);
+    sources.push((args as { source: string }).source);
+    return page([issue]);
+  };
+  await render(read, viewer.login, () => {}, undefined, "/legacy");
+  await render(read, viewer.login, () => {}, undefined, "/chosen");
+  expect(sources).toEqual(["created", "mentioned"]);
+});
+
+test("AC12 the work rows read the bound sessions from one index, not once per row", async () => {
+  const reads = new Map<string, number>();
+  const sessions = Array.from({ length: 5 }, (_, n) => {
+    const id = String(n + 1);
+    const meta = { keryx: { subject: { kind: "issue", repo: "org/sample", number: 5, url: "https://github.com/org/sample/issues/5" } } };
+    return Object.defineProperty({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id }, "_meta", {
+      get: () => { reads.set(id, (reads.get(id) ?? 0) + 1); return meta; },
+    }) as SessionInfo;
+  });
+  const rows = Array.from({ length: 12 }, (_, n) => other(n + 5));
+  await render(async (_login, action) => {
+    if (action === "list") return page(rows);
+    throw new Error("Unexpected " + action);
+  }, viewer.login, () => {}, sessions);
+  expect(button("5 sessions for org/sample#5")).not.toBeUndefined();
+  // Read for the index, a few times at most across renders; never once per row (12 rows).
+  expect(reads.size).toBe(5);
+  for (const count of reads.values()) expect(rows.length).toBeGreaterThan(count);
 });

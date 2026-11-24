@@ -1,0 +1,108 @@
+STATUS: DONE
+
+metaproject: index read (.metaproject/index.md). Mode: code only, static. No URL or screenshots were supplied.
+
+## Context
+
+- Product: Keryx Desktop and the `keryx issues` CLI. Audience: developers who use Keryx on their GitHub PRs and issues.
+- Slice-02 holds tests, fixtures, docs, and the backend error texts users see: the 410 message, the `issuesDisabled` constant, and paging through pages that hold only pull requests.
+- Primary task on the surfaces this slice touches: open Issues and see the project's issues. When the default source fails, get to a source that works.
+- Surface type: app screens. The marketing rows of ui-anti-slop do not apply.
+- Scope: round-2 fix range 88e3faba9..d7b0f7058. Slice-02 was read in full. I read the IssuesBoard.tsx lines that render this slice's copy only to settle one path (the `chosen` gate). UX-009..016 from wave 1 are not filed again.
+
+## Scores
+
+- Slop score: 0. This slice adds no markup or styles. The only user-visible strings are error copy and docs.
+- WCAG 2.2 AA floor: nothing new to check in this slice. The tests confirm the existing names: `role="alert"` on the fallback notice, and buttons named "Link Flow #N for #PR", "Dismiss Flow #N for #PR" and "Dismiss notice".
+- Viewports: not run.
+
+## Findings
+
+### [UX-017] A source chosen in another project turns off the fallback: a project without a GitHub.com remote is back to the error and a Retry that cannot work
+- Severity: minor
+- Criterion: Nielsen #9 (error recovery). State: error.
+- File: apps/desktop/src/issues/IssuesBoard.dom.test.tsx (`localStorage.setItem(account + ".source", "repository");`)
+- Evidence:
+  - The new test "AC13 a repository source the person chose keeps Retry on a configuration error" pins this branch. It shows "configuration: This project has no GitHub.com fetch remote." with Retry and without "Show issues assigned to me".
+  - In IssuesBoard.tsx, `chosen` is true whenever `stored(account + ".source")` holds any value. The `account` key is `[host, nodeId]` and does not include the project (the same key as UX-011).
+  - So a choice made in one project counts as a choice in every project.
+  - The docs and the plan describe the gate as "If you have not chosen a source yet" and "только пока источник не выбран пользователем". Neither says the choice may have been made in another project.
+- Path:
+  1. In project B, which has no GitHub.com remote, the user presses "Show issues assigned to me". This stores `assigned`.
+  2. In project A, which has a remote, the user picks "Project repository" in Source. This stores `repository` with `chosen: true`.
+  3. The user opens Issues in project B again.
+  - Result: the error has no remedy, and Retry repeats a request that fails the same way every time. This is the UX-008 condition, now reached by a different route.
+- Impact:
+  - Trigger: a user with several projects who has ever picked Project repository explicitly.
+  - Outcome: every project without a GitHub.com remote, and every repository with Issues off, shows the bare error and a Retry that cannot help. The user has to find the Source select on their own. No data is lost.
+- Fix:
+  - Store the source per project and account. That also fixes UX-011.
+  - Or base the gate on the error's kind, not on `chosen`: for a configuration error, always offer "Show issues assigned to me" and drop Retry.
+- Not observed on a render.
+
+## Prior dispositions (touched by this slice)
+
+- UX-008: **closed**.
+  - Fixed for the trigger UX-008 named: the first visit, with no stored source.
+  - Backend: the 410 now becomes "configuration: GitHub has Issues turned off for <owner/repo>. Choose another source, such as Assigned to me." The text names the repository and gives a remedy (issues-board.ts `issuePage`; test "AC13 GitHub's 410 ...").
+  - The no-remote, 410 and older-keryx branches each have a DOM test that also checks Retry is gone.
+  - A different route back to the same state is filed as UX-017.
+- UX-007: **closed**. The new test "the warn tone marks a review waiting on the viewer only on an open PR" checks open, merged and closed, for both publication and answer.
+- UX-006: **open** (deferred). The new test "the review slot title carries the progress ..." confirms that the progress is still only in `title`.
+- UX-015 (wave 1, not filed again):
+  - The new DOM test pins the UI string "choose the bundled CLI in Desktop Settings".
+  - desktop-issues.md already uses the Settings label: "select **Bundled keryx** in **Settings → Desktop**". Copying the docs wording into the UI string would close it.
+- UX-011 (wave 1, not filed again): desktop-issues.md now says "Desktop remembers the chosen source for the account" and that the fallback "switches to that source and remembers it". The persistence is now documented. The finding stands, because the docs describe the behavior but do not say why the account-wide scope is right.
+
+## Verified clean
+
+- An empty result from pages of only pull requests:
+  - After three such pages the request returns `items: []` with a `nextCursor` (issues-board.ts `REPOSITORY_PAGES`; test "... the search stops after three pages").
+  - IssuesBoard.tsx renders that as "No matching issues on the loaded pages." plus "Load more issues". It does not show a misleading "No matching issues."
+- 410 copy on other sources: `failure()` in issues-github.ts maps every 410 to the generic `issuesDisabled` text. The only `api.rest` caller is issues-board.ts `issuePage` (found with `keryx ctx rg "api\.rest|rest<"` over src/integrations and src/session/issues). It adds the repository name for the repository source. I found no reachable path where the generic text shows for a source that is not a repository.
+- cli-reference.md: the `repository` source, the three-page lookahead and the `configuration:` failures match issues-board.ts.
+- desktop-issues.md:
+  - "Open in session" and the Flow and session slot labels match the strings the fixtures assert ("Flow · Needs an answer", "N sessions", "Open in session", "Create Flow").
+  - "Bundled keryx" matches SettingsView.
+
+## Checks not run
+
+- Live render at 1440, 768 and 390 px, light and dark: no URL or screenshots were supplied.
+- Screen-reader announcement of the fallback alert: not run.
+- I ran no tests. exec_budget is 0, so the parent-red obligation belongs to the testing lens.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-ui-ux",
+    "summary": "Round-3 wave-2 review of slice-02 (tests, fixtures, docs, backend error copy), static code mode. The 410 copy names the repository and a remedy. The three-page lookahead ends in an honest 'No matching issues on the loaded pages.' with Load more. The docs match the UI labels. One minor: the fallback gate counts a source chosen in any project (account-wide key), so a project without a GitHub.com remote can again show the bare error with a Retry that cannot work (UX-017; same root as UX-011). Prior: UX-008 closed, UX-007 closed, UX-006 open (deferred). Slop score 0. No render was supplied.",
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "UX-017",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "line": null,
+        "quote": "localStorage.setItem(account + \".source\", \"repository\");",
+        "problem": "Criterion: Nielsen #9; State: error. The fallback ('Show issues assigned to me' instead of Retry) appears only while `!choice.chosen`. `chosen` is true for any stored value under `account + \".source\"`, and that key is per account ([host, nodeId]), not per project. A Project repository choice made in a project that has a remote therefore turns off the fallback everywhere. The test 'AC13 a repository source the person chose keeps Retry on a configuration error' pins that branch: 'configuration: This project has no GitHub.com fetch remote.' with Retry and no fallback. The docs and the plan describe the gate as 'not chosen yet' and do not mention choices made in other projects.",
+        "impact": "Trigger: a user with several projects who once picked Project repository explicitly, for example after the fallback switched them to Assigned to me in another project. Outcome: every project without a GitHub.com remote, and every repository with Issues off, shows the error with no remedy and a Retry that fails the same way every time. This is the UX-008 state by another route. The Source select still recovers it.",
+        "suggested_fix": "Store the source per project and account, which also fixes UX-011. Or gate the fallback on the error kind (a configuration error on the repository source) instead of on `chosen`, and drop Retry for that kind.",
+        "evidence": "IssuesBoard.tsx: `const value = stored(account + \".source\"); return value && Object.hasOwn(SOURCES, value) ? { source: value as Source, chosen: true } : ...`. `issueViewerKey` = JSON [host, nodeId]. desktop-issues.md: 'If you have not chosen a source yet, Issues shows the reason and **Show issues assigned to me**'. implementation-plan.md: 'Кнопка есть, только пока источник не выбран пользователем.' Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "issues-fallback-gate-chosen-account-wide",
+        "class_scope": null
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "UX-008", "disposition": "closed", "evidence": "issues-board.ts issuePage maps the 410 to a configuration error that names the repository and the remedy; DOM tests cover the no-remote, 410 and older-keryx branches without Retry. The cross-project route back is UX-017." },
+      { "id": "UX-007", "disposition": "closed", "evidence": "PrWorkRow.dom.test.tsx 'the warn tone marks a review waiting on the viewer only on an open PR' covers open, merged and closed." },
+      { "id": "UX-006", "disposition": "open", "evidence": "Deferred; PrWorkRow.dom.test.tsx shows the progress is still only in the review slot's title." }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload's layers carried the affected set, and the review stays in one slice). wiki_used: no (not-relevant: copy and UX judgement against the PR's ACs, docs and plan). ctx_used: yes (keryx ctx rg for the REST callers, the Issues empty-state copy and the `chosen` gate). raw_rg_used: no.

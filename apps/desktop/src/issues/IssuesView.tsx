@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import type { IssueRef } from "../../../../src/integrations/issues-contract";
+import type { SessionInfo } from "../acp/types";
 import { errMessage } from "../lib/format";
 import { listGitHubAccounts, type GitHubAccount } from "../platform/githubAccounts";
 import { IssueOriginDetail, type IssueOriginRequest } from "./IssueOriginDetail";
 import { IssuesBoard } from "./IssuesBoard";
 import type { WorkAction } from "./IssueWork";
 
-export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, origin, onCloseOrigin}: {
+export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, origin, onCloseOrigin, sessions}: {
   origin?: IssueOriginRequest | null; onCloseOrigin?: () => void;
+  /** The project's sessions, for the issue work row's session slot. */
+  sessions?: readonly SessionInfo[];
   cwd: string; preferred?: string; onSettings: () => void;
   onViewerChange: (login?: string) => void;
   onWork: (login: string, action: WorkAction, issue: IssueRef, flowDir?: string) => Promise<void>;
@@ -42,7 +45,7 @@ export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, 
       {origin && onCloseOrigin
         ? <IssueOriginDetail key={JSON.stringify([cwd,login,origin])} cwd={cwd} login={login} origin={origin} close={onCloseOrigin} onAccessDenied={invalidateWork}
             onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />
-        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings} onAccessDenied={invalidateWork}
+        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings} onAccessDenied={invalidateWork} {...(sessions ? {sessions} : {})}
         onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />}</>}
     {!loaded && <p role="status">Loading GitHub accounts…</p>}
     {loaded && !login && <div role="status"><p>{error || "Connect a GitHub account to view issues."}</p>

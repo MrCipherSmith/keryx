@@ -1,0 +1,522 @@
+{
+  "review_context": {
+    "request": {
+      "text": "Run the review-orchestrator round on PR #1300 (flow 517 completion step)",
+      "flags": [],
+      "mode": "diff",
+      "range": {
+        "base": "b147408a8748cdbd8506b371adb5957947e4477a",
+        "head": "6a2a3031f740833e60b82856a9a266b5ffab5e10"
+      }
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat/desktop-review-v2-stage1",
+      "base": "b147408a8748cdbd8506b371adb5957947e4477a",
+      "head": "6a2a3031f740833e60b82856a9a266b5ffab5e10"
+    },
+    "pr": {
+      "number": 1300,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1300",
+      "title": "feat(desktop): Review v2 stage 1 — GitHub slice and Keryx links",
+      "body": "Desktop Review v2, stage 1 \"GitHub slice and links\" (Flow 517). Requirements: `docs/requirements/keryx-desktop-review-v2/` — PRD R1–R3, R5, R6, parts of R4 and R7; decisions D5 and D6. Stage 0 was #1294.\n\n## What changes\n\n- **Pull requests board, GitHub only (R1, R2, D6).** Lanes and order no longer read the local review. Two groupings:\n  - \"Status\" (default): Draft · Waiting for review · Changes requested · Approved. Merged and Closed appear only when the state filter includes them.\n  - \"My role\": Requested from me · Mine · Others.\n\n  Quick filters \"Requested from me\", \"Mine\" and \"CI failed\" sit in the context row, not the toolbar. Lanes the filters rule out are not drawn. Cards are sorted by `updatedAt`, newest first. The attention lane and the \"In review\" lane are gone, and the card's reason line is built from GitHub data only.\n- **Keryx work row on every PR card and list row (R4 part, R7 part).** A fixed 24px row with three slots:\n  - Review: `Review · <state>`, from `localReview`, with no round number and no behind count. It opens the current review panel.\n  - Flow: `Flow #id · stage`. A Flow counts if its `prUrl` matches or if it is linked to a session bound to the PR.\n  - Session: the count of bound sessions. It opens the newest; a menu lists all of them plus \"New session\".\n\n  An empty slot shows a labelled action instead: \"Run review\", \"Create Flow\" or \"Open in session\". Every card action now has visible text. \"Fix review comments\" is not included; it is stage 4.\n- **Sessions bound to a Subject (R5).** A new `subject` field in the session's `flags.json`, written through `_keryx/session_flags`, records `{kind, repo, number, url}`. Issue sessions get it when `withIssueBinding` binds them.\n  - \"Open in session\" on a PR reopens the newest bound session, or creates one, binds it and prefills the composer with the PR URL without sending.\n  - On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved.\n  - The session header links back to the PR or Issue and to its Flow.\n- **Work from a bound session (R6).**\n  - `/review` with no target in a PR-bound session preselects that PR. The started run shows on the card without a refresh.\n  - \"Create Flow\" opens the bound session with a flow prompt. The single new flow package that appears while that request is pending gets linked to the session.\n- **Issues (R3, D5).**\n  - Default grouping is by GitHub state: Open, plus Closed when the filter includes closed issues.\n  - The default source is the project repository: `keryx issues list` with `source: \"repository\"` reads `/repos/{owner}/{repo}/issues`. \"Assigned to me\" and the other sources stay selectable, and a stored choice wins.\n  - The Flow stage filter is removed; the stage now shows in the card's work row.\n\nNo Rust changes.\n\n## Verification\n\n- `cd apps/desktop && bunx tsc --noEmit`: clean.\n- `cd apps/desktop && bun test src`: 1016 pass, 0 fail.\n- Root `bunx tsc --noEmit -p .`: clean.\n- Root focused suites (`desk-run-store`, `board-badges`, `session/organize`, `shell-session-organize`, `session/issues`, `issues-board`): 67 pass, 0 fail.\n- Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" is one integrated App-level test in `ProjectNavigation.dom.test.tsx`. Four product mutations each break it: the preselect, the publish, session reuse and the binding.\n- The stage 0 attention set (`carriedAttention`, `seeded`, `seedFor`, `attentionPrs`, `stale`) is unchanged. The one adjacent edited line, the `visible` memo, was mutation-checked.\n- The toolbar is unchanged, so the stage 0 measurements still hold.\n\nNot verified:\n- No run in the real app with real GitHub data.\n- Not checked: the work row in narrow lanes, the session menu placement, the list width (now 1000px).\n- Not run: lint, and the Rust CI path.\n\n## Known gaps and choices for the owner\n\n- Deviation (a), team review requests for the tab indicator, stays open: this stage adds no team membership. Deviation (b) is unchanged.\n- An Issue has no \"another or new session\" choice. The issue binding backend keeps one session per issue and account.\n- A Flow created outside the pending \"Create Flow\" window is not linked to the PR until it has a `prUrl`.\n- UI choices taken without an owner decision, listed in the flow journal:\n  - review slot state words;\n  - a disabled \"Run review\" on a merged or closed PR;\n  - the session menu button reads \"More\";\n  - an unsaved new session shows as \"not saved yet\";\n  - \"Create Flow\" replaces the composer draft;\n  - Issue card buttons became work-row links.\n\nFlow package: `.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`. Still to do: a review-orchestrator round on this PR, and the merge decision.\n",
+      "state": "open",
+      "base": "main",
+      "head": "6a2a3031f740833e60b82856a9a266b5ffab5e10"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/description.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T5.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T6.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T7.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T8.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T9.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T5.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T6.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T7.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T8.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T9.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/tasks.md",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/acp/types.test.ts",
+        "apps/desktop/src/acp/types.ts",
+        "apps/desktop/src/issues/IssueFilters.tsx",
+        "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "apps/desktop/src/issues/IssuesBoard.css",
+        "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "apps/desktop/src/issues/IssuesBoard.tsx",
+        "apps/desktop/src/issues/IssuesView.tsx",
+        "apps/desktop/src/issues/model.test.ts",
+        "apps/desktop/src/issues/model.ts",
+        "apps/desktop/src/issues/useIssueCollection.ts",
+        "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "apps/desktop/src/review/PrWorkRow.tsx",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/review/prWork.test.ts",
+        "apps/desktop/src/review/prWork.ts",
+        "apps/desktop/src/review/reviewFilterStorage.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+        "apps/desktop/src/session/SessionSubjectLinks.tsx",
+        "apps/desktop/src/session/subjectBinding.ts",
+        "apps/desktop/src/session/useAcpSession.ts",
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/styles/review.css",
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "src/acp/server.ts",
+        "src/acp/shell-session-organize.test.ts",
+        "src/commands/issues.ts",
+        "src/integrations/issues-board.test.ts",
+        "src/integrations/issues-board.ts",
+        "src/integrations/issues-contract.ts",
+        "src/session/issues/issue-session.test.ts",
+        "src/session/issues/issue-session.ts",
+        "src/session/organize.test.ts",
+        "src/session/organize.ts"
+      ],
+      "changed_lines": 4670,
+      "risk_areas": [
+        "session flags storage (src/session/organize.ts, src/acp/server.ts)",
+        "GitHub REST listing (src/integrations/issues-board.ts)",
+        "PR board attention set (apps/desktop/src/review/ReviewBoard.tsx)",
+        "App session wiring (apps/desktop/src/App.tsx, session/useAcpSession.ts)"
+      ]
+    },
+    "requirements": {
+      "flow": "517",
+      "context_doc": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "task_docs": [
+        "docs/requirements/keryx-desktop-review-v2/prd.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md"
+      ],
+      "acceptance_criteria": [
+        "AC1: The PR lane function reads no field of the local review: a model test iterates every local review state (none, queued, running, awaiting answer, ready, partial, publication pending, outdated) for the same GitHub card and gets the same lane; the attention lane and the Keryx \"In review\" lane no longer exist (R1, D6, spec AC1) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/model.test.ts`]",
+        "AC2: On the Pull requests board, a local review starting, finishing or being published changes neither the lane, the position nor the visibility of the card (a DOM test updates `localReview` on a shown card and asserts the same lane and index); cards are ordered by `updatedAt` descending (R1) [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC3: Default grouping \"Status\" shows Draft · Waiting for review (no decision or REVIEW_REQUIRED) · Changes requested · Approved, with Merged and Closed only when the state filter includes them; grouping \"My role\" shows Requested from me · Mine · Others; quick filters \"Requested from me\", \"Mine\" and \"CI failed\" narrow the board; every shown card satisfies all filters and the search (no active-review bypass, a test with an active review and a non-matching author shows nothing); a lane that cannot hold a card under the current filters is not drawn (R2, spec AC2, AC13) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC4: The card reason line is derived from GitHub data only; Keryx review state appears only in the work row [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC5: Every PR card and list row renders a Keryx work row with exactly three slots (review, Flow, session) whose DOM structure is the same with zero and with three links, and the row has a fixed height in `apps/desktop/src/styles/review.css`; the review slot shows the state from `localReview` without a round number or behind count and opens the current review panel; the Flow slot shows \"Flow #<id> · <stage>\" and opens the Flow; empty slots show the labelled actions \"Run review\", \"Create Flow\", \"Open in session\" (R4 part, R7, spec AC14) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); \"Fix review comments\" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]",
+        "AC7: \"Open in session\" on a PR with no bound session creates a new session bound to the PR Subject and prefills the composer with the PR URL without sending it; pressing it again opens the same session (newest non-archived bound session); the session slot menu lists the bound sessions and \"New session\", which creates another bound session (R5, spec AC8 part) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]",
+        "AC9: \"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC10: In a PR-bound session, `/review` without a target opens the launch dialog with that PR preselected, and the review started there appears as the review link on that PR card without a manual refresh (R6, spec AC9) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC11: Issues board default grouping is by GitHub state (Open · Closed, Closed drawn only when the state filter includes closed issues); GitHub Project grouping is unchanged; the Flow stage filter is gone; issues without a Flow are spread over the GitHub columns (R3, spec AC12) [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC12: Each Issue card has a work row with a Flow slot (link with stage, or \"Create Flow\") and a session slot (bound sessions found through `subject`, or \"Open in session\") [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC13: The default Issues source is the project repository: `keryx issues list` with `source: \"repository\"` lists `/repos/{owner}/{repo}/issues` of the repository resolved from the project cwd and excludes pull requests; \"Assigned to me\" and the other sources stay selectable and a stored source preference wins (D5) [verify: exec `bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues`]",
+        "AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC15: `attachBadges` (`src/review/desk-run-store.ts`) and `localBadge` (`src/review/board-badges.ts`) still agree [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]",
+        "AC16: Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" passes as one integrated test over the App wiring (bound session created, launch dialog preselects the PR, the started run shows on the card) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]",
+        "AC18: Desktop typecheck and the full Desktop test suite pass [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+        "AC19: Deviation (a) (team review requests) stays open because stage 1 introduces no team membership; the implementation plan records it [verify: none — documentation statement, checked in review]"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/activity/review.mdc",
+      ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      ".metaproject/rules/stacks/ts-js-node/security.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc"
+    ],
+    "cross_repo": [],
+    "memory": {
+      "query": "desktop review board pull requests issues session flags subject",
+      "status_filter": "accepted",
+      "entries": [
+        {
+          "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "gdctx-flag-allowlist-no-bundle-expansion",
+          "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+        },
+        {
+          "path": "known-mistakes/review-ingest-discards-verdicts.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+          "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+        },
+        {
+          "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+          "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+        },
+        {
+          "path": "constraints/stale-installed-keryx-binary.md",
+          "type": "constraint",
+          "status": "accepted",
+          "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+          "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+        },
+        {
+          "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+          "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+        },
+        {
+          "path": "lessons/theme-switch-repaint.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+          "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+        },
+        {
+          "path": "lessons/allowlist-not-a-boundary.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A shell allowlist matched against the raw command string is not a security boundary",
+          "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+        },
+        {
+          "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+          "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+        },
+        {
+          "path": "task-notes/sac-proposal-7854a304859a4170.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: найди все не завершенные flow",
+          "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+        },
+        {
+          "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+          "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+        }
+      ],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "default": "keryx review required --depth auto roster (operator asked to run the review; defaults taken)"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "budget": {
+        "max_findings_per_reviewer": 25
+      },
+      "omissions": [],
+      "model_plan": {
+        "strategy": "adaptive",
+        "current_model": "claude-opus-5-5"
+      }
+    }
+  },
+  "reviewer": "review-layout",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "scope_mode": "diff",
+  "slices": [
+    "slice-02"
+  ],
+  "branch": "feat/desktop-review-v2-stage1",
+  "base_sha": "b147408a8748cdbd8506b371adb5957947e4477a",
+  "pr_context": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300/pr-context.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_findings": 25
+  },
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "layers": {
+    "version": 1,
+    "files": [
+      "apps/desktop/src/App.tsx",
+      "apps/desktop/src/acp/types.ts",
+      "apps/desktop/src/issues/IssueFilters.tsx",
+      "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "apps/desktop/src/issues/IssuesBoard.css",
+      "apps/desktop/src/issues/IssuesBoard.tsx",
+      "apps/desktop/src/issues/IssuesView.tsx",
+      "apps/desktop/src/issues/model.ts",
+      "apps/desktop/src/issues/useIssueCollection.ts",
+      "apps/desktop/src/review/PrWorkRow.tsx",
+      "apps/desktop/src/review/ReviewBoard.tsx",
+      "apps/desktop/src/review/ReviewFilters.tsx",
+      "apps/desktop/src/review/ReviewResults.tsx",
+      "apps/desktop/src/review/model.ts",
+      "apps/desktop/src/review/prWork.ts",
+      "apps/desktop/src/review/reviewFilterStorage.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "apps/desktop/src/session/SessionSubjectLinks.tsx",
+      "apps/desktop/src/session/subjectBinding.ts",
+      "apps/desktop/src/session/useAcpSession.ts",
+      "apps/desktop/src/shell/AppShell.tsx"
+    ],
+    "prHead": "6a2a3031f740833e60b82856a9a266b5ffab5e10",
+    "graphCommit": "6a2a3031f740833e60b82856a9a266b5ffab5e10",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": [
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/acp/commands.test.ts",
+        "apps/desktop/src/acp/commands.ts",
+        "apps/desktop/src/acp/providers.ts",
+        "apps/desktop/src/acp/types.test.ts",
+        "apps/desktop/src/issues/IssueDetail.tsx",
+        "apps/desktop/src/issues/IssueOriginDetail.tsx",
+        "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "apps/desktop/src/issues/model.test.ts",
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/panels/RunButton.dom.test.tsx",
+        "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+        "apps/desktop/src/project/WikiEnrichDialog.dom.test.tsx",
+        "apps/desktop/src/project/WikiEnrichDialog.tsx",
+        "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx",
+        "apps/desktop/src/review/SessionReviewActivity.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "apps/desktop/src/review/prWork.test.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "apps/desktop/src/session/ActivityPanel.dom.test.tsx",
+        "apps/desktop/src/session/ActivityPanel.tsx",
+        "apps/desktop/src/session/Approvals.tsx",
+        "apps/desktop/src/session/CommandCard.dom.test.tsx",
+        "apps/desktop/src/session/CommandCard.tsx",
+        "apps/desktop/src/session/Composer.dom.test.tsx",
+        "apps/desktop/src/session/Composer.tsx",
+        "apps/desktop/src/session/ComposerCommands.dom.test.tsx",
+        "apps/desktop/src/session/ComposerMentions.dom.test.tsx",
+        "apps/desktop/src/session/ComposerProvider.dom.test.tsx",
+        "apps/desktop/src/session/ContentBlockView.tsx",
+        "apps/desktop/src/session/ContextMeter.dom.test.tsx",
+        "apps/desktop/src/session/ContextMeter.tsx",
+        "apps/desktop/src/session/DelegateResultCard.dom.test.tsx",
+        "apps/desktop/src/session/DelegateResultCard.tsx",
+        "apps/desktop/src/session/LineComments.dom.test.tsx",
+        "apps/desktop/src/session/ProvidersDialog.dom.test.tsx",
+        "apps/desktop/src/session/ProvidersDialog.tsx",
+        "apps/desktop/src/session/RunsTab.tsx",
+        "apps/desktop/src/session/SchedulesTab.tsx",
+        "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+        "apps/desktop/src/session/SessionInfoPanel.tsx",
+        "apps/desktop/src/session/SessionSidebar.dom.test.tsx",
+        "apps/desktop/src/session/SessionSidebar.tsx",
+        "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+        "apps/desktop/src/session/SessionView.tsx",
+        "apps/desktop/src/session/Transcript.dom.test.tsx",
+        "apps/desktop/src/session/Transcript.tsx",
+        "apps/desktop/src/session/activity.test.ts",
+        "apps/desktop/src/session/agentRequests.test.ts",
+        "apps/desktop/src/session/agentRequests.ts",
+        "apps/desktop/src/session/commandRunner.test.ts",
+        "apps/desktop/src/session/commandRunner.ts",
+        "apps/desktop/src/session/contentBlock.test.ts",
+        "apps/desktop/src/session/contentBlock.ts",
+        "apps/desktop/src/session/delegateTerminals.test.ts",
+        "apps/desktop/src/session/delegateTerminals.ts",
+        "apps/desktop/src/session/dialogQueue.test.ts",
+        "apps/desktop/src/session/dialogQueue.ts",
+        "apps/desktop/src/session/feedSplit.test.ts",
+        "apps/desktop/src/session/reducer.test.ts",
+        "apps/desktop/src/session/reducer.ts",
+        "apps/desktop/src/session/sessionGroups.test.ts",
+        "apps/desktop/src/session/sessionGroups.ts",
+        "apps/desktop/src/session/sessionRegistry.test.ts",
+        "apps/desktop/src/session/sessionRegistry.ts",
+        "apps/desktop/src/session/startup.test.ts",
+        "apps/desktop/src/session/startup.ts",
+        "apps/desktop/src/session/subagentHistory.test.ts",
+        "apps/desktop/src/session/taskStream.test.ts",
+        "apps/desktop/src/session/taskStream.ts",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "apps/desktop/src/shell/projectRail.test.ts",
+        "apps/desktop/src/shell/projectRail.ts",
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+        "src/integrations/issues-board.test.ts"
+      ]
+    },
+    "symbols": [],
+    "relatedTests": [
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/acp/commands.test.ts",
+      "apps/desktop/src/acp/types.test.ts",
+      "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "apps/desktop/src/issues/model.test.ts",
+      "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "apps/desktop/src/project/WikiEnrichDialog.dom.test.tsx",
+      "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "apps/desktop/src/review/model.test.ts",
+      "apps/desktop/src/review/prWork.test.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "apps/desktop/src/session/ActivityPanel.dom.test.tsx",
+      "apps/desktop/src/session/CommandCard.dom.test.tsx",
+      "apps/desktop/src/session/Composer.dom.test.tsx",
+      "apps/desktop/src/session/ComposerCommands.dom.test.tsx",
+      "apps/desktop/src/session/ComposerMentions.dom.test.tsx",
+      "apps/desktop/src/session/ComposerProvider.dom.test.tsx",
+      "apps/desktop/src/session/ContextMeter.dom.test.tsx",
+      "apps/desktop/src/session/DelegateResultCard.dom.test.tsx",
+      "apps/desktop/src/session/LineComments.dom.test.tsx",
+      "apps/desktop/src/session/ProvidersDialog.dom.test.tsx",
+      "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "apps/desktop/src/session/SessionSidebar.dom.test.tsx",
+      "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+      "apps/desktop/src/session/Transcript.dom.test.tsx",
+      "apps/desktop/src/session/activity.test.ts",
+      "apps/desktop/src/session/agentRequests.test.ts",
+      "apps/desktop/src/session/commandRunner.test.ts",
+      "apps/desktop/src/session/contentBlock.test.ts",
+      "apps/desktop/src/session/delegateTerminals.test.ts",
+      "apps/desktop/src/session/dialogQueue.test.ts",
+      "apps/desktop/src/session/feedSplit.test.ts",
+      "apps/desktop/src/session/reducer.test.ts",
+      "apps/desktop/src/session/sessionGroups.test.ts",
+      "apps/desktop/src/session/sessionRegistry.test.ts",
+      "apps/desktop/src/session/startup.test.ts",
+      "apps/desktop/src/session/subagentHistory.test.ts",
+      "apps/desktop/src/session/taskStream.test.ts",
+      "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "apps/desktop/src/shell/projectRail.test.ts",
+      "src/integrations/issues-board.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  },
+  "metaproject": {
+    "memory": [
+      {
+        "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "gdctx-flag-allowlist-no-bundle-expansion",
+        "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+      },
+      {
+        "path": "known-mistakes/review-ingest-discards-verdicts.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+        "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+      },
+      {
+        "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+        "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+      },
+      {
+        "path": "constraints/stale-installed-keryx-binary.md",
+        "type": "constraint",
+        "status": "accepted",
+        "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+        "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+      },
+      {
+        "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+        "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+      },
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+      },
+      {
+        "path": "lessons/allowlist-not-a-boundary.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A shell allowlist matched against the raw command string is not a security boundary",
+        "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+      },
+      {
+        "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+        "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+      },
+      {
+        "path": "task-notes/sac-proposal-7854a304859a4170.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: найди все не завершенные flow",
+        "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+      },
+      {
+        "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+        "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+      }
+    ]
+  },
+  "round": 1
+}

@@ -1,0 +1,26 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "3 findings, 3 executed, 3 confirmed, 0 refuted, 0 unverifiable. Severity is not a verifier field; the major rating of each was checked against the canonical rubric (trigger + observable outcome named) and tdd-workflow Rule 5 table, and left as reported.",
+  "verifications": [
+    {
+      "finding": "FE-R3-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Site: apps/desktop/src/review/ReviewBoard.tsx:508 `if (!snapshot.cards.some(c => c.number === focus.number)) return;` (no focused.current, no notice, no onFocusHandled). Reachable: App.tsx:655 sets reviewFocus for any PR subject; model.ts:28 default state filter is [\"open\",\"draft\"] and ReviewBoard.tsx:149 loads the snapshot by stateQuery(filters.state). Scratch repro (scratchpad/verify/repro.test.tsx, run from apps/desktop with `bun test <abs path>`): board loads [#101], focus {org/repo, #55, nonce 1} set -> printed `after focus: panel= false handled= [] notice= false`; then Refresh returns [#101, #55] -> printed `after refresh: loads= 2 panelShowsMerged= true handled= [1]`. The panel opened on a later snapshot without a new request. 2 pass, 0 fail (assertions encode the defect). Same root as LG F-002."
+    },
+    {
+      "finding": "FE-R3-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Sites: ReviewBoard.tsx:602 Dismiss notice onClick={() => setFocusNotice(\"\")} with no focus target (contrast :609 warningToggle.current?.focus()); PrWorkRow.tsx:84-87 FlowOffer Link/Dismiss call work.onLink/onDismissFlowOffer with no focus handling; IssuesBoard.tsx:78,269 fallback change(\"assigned\") remounts Collection (key at :115). Scratch repro (same file, happy-dom): focused Dismiss notice then clicked -> `notice: after active= BODY button connected= false`; with a host that drops the offer on Link (as App.tsx:709 linkFlowOffer does) focused Link then clicked -> `offer: after active= BODY link connected= false`. 2 of 4 named sites executed and reproduced; the IssuesBoard site was site-checked only (code shape present), not executed."
+    },
+    {
+      "finding": "TP-R3-008",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Sites: src/session/organize.test.ts:145-147 `expect(Date.now() - started).toBeGreaterThanOrEqual(1500)`, :153-155 `expect(Date.now() - again).toBeLessThan(1500)`, :164-168 `startAt = Date.now() + 1500` and child busy-wait `while (Date.now() < startAt) {}`; organize.ts:130-142 hard-codes FLAGS_LOCK_TIMEOUT_MS/STALE_MS (no injection seam). `keryx ctx run -- bun test src/session/organize.test.ts -t \"lock|two processes\"` -> 2 pass, 0 fail, 10 expect() calls, [4.50s]: the time-based assertions are reached and real wall-clock time is spent. tdd-workflow.mdc:20 Rule 5 and :33 table row (time-based assertion reachable -> major) match. Not re-measured: the reviewer's mutant red-rate (3/7, 7/8) for the two-process test without the lock."
+    }
+  ],
+  "stats": { "confirmed": 3, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

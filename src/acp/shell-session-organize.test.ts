@@ -3,10 +3,11 @@
 // the flags as `_meta.keryx`. The editor profile serves none of it.
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSession, persistHistory, sessionDir } from "../session";
+import { readSessionFlags } from "../session/organize";
 import { KERYX_ACP_EXTENSION_METHODS } from "./profile";
 import { shellHarness, textRound, toolRound, type ShellHarness } from "./shell-profile.test-helpers";
 
@@ -25,6 +26,35 @@ function storedSession(h: ShellHarness): string {
 async function call(h: ShellHarness, method: string, params: Record<string, unknown>) {
   const id = h.request(method, params);
   return h.waitFor((f) => f.id === id);
+}
+
+/**
+ * Another keryx process (another Desktop window's server, the issue-workspace
+ * child) holding the session's flags lock until `release` is called.
+ */
+async function holdFlagsLock(dir: string): Promise<{ release: () => Promise<number> }> {
+  const barrier = mkdtempSync(path.join(tmpdir(), "keryx-acp-flags-barrier-"));
+  const held = path.join(barrier, "held");
+  const go = path.join(barrier, "go");
+  const child = Bun.spawn([process.execPath, "-e", `
+    const { existsSync, writeFileSync } = await import("node:fs");
+    const { withFileLock } = await import(${JSON.stringify(path.join(import.meta.dir, "../lib/file-lock.ts"))});
+    const done = withFileLock(${JSON.stringify(path.join(dir, "flags.json.lock"))}, () => {
+      writeFileSync(${JSON.stringify(held)}, "");
+      while (!existsSync(${JSON.stringify(go)})) Bun.sleepSync(2);
+      return true;
+    }, { createDir: false, timeoutMs: 30_000 });
+    if (done !== true) process.exit(3);`], { stdout: "ignore", stderr: "inherit" });
+  while (!existsSync(held)) {
+    if (child.exitCode !== null) throw new Error(`the lock holder exited (${child.exitCode}) before taking the lock`);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+  return {
+    release: () => {
+      writeFileSync(go, "");
+      return child.exited;
+    },
+  };
 }
 
 function trashSeam() {
@@ -66,6 +96,104 @@ describe("shell profile: organise sessions", () => {
 
         expect((await call(h, FLAGS, { sessionId: id, archived: "yes" })).error?.code).toBe(-32602);
         expect((await call(h, FLAGS, { sessionId: "missing", cwd: h.projectDir, archived: true })).error).toBeDefined();
+      } finally {
+        await h.end();
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a subject is linked, listed after a fresh read, unlinked by null; an invalid one is refused",
+    async () => {
+      const h = shellHarness();
+      try {
+        await h.initialize();
+        const id = storedSession(h);
+        const subject = { kind: "pr", repo: "org/repo", number: 12, url: "https://github.com/org/repo/pull/12" };
+        const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject });
+        expect(linked.error).toBeUndefined();
+        expect(linked.result?.["subject"]).toEqual(subject);
+        // session/list reads flags.json again, as after a restart.
+        const listed = await call(h, "session/list", { cwd: h.projectDir });
+        const info = (listed.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        expect(info?.["_meta"]?.keryx?.subject).toEqual(subject);
+
+        // Refused at the wire (wrong type) and at the store (URL that does not match).
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: "org/repo#12" })).error?.code).toBe(-32602);
+        // An array is an object to `typeof`; the wire refuses it as a bad parameter, before the store sees it.
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [] })).error?.code).toBe(-32602);
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [subject] })).error?.code).toBe(-32602);
+        const mismatch = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: { ...subject, url: "https://github.com/org/repo/issues/12" } });
+        expect(mismatch.error).toBeDefined();
+        expect(mismatch.result).toBeUndefined();
+        // Omitted: a flag change leaves the subject as it is.
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true })).result?.["subject"]).toEqual(subject);
+
+        const unlinked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: null });
+        expect(unlinked.result?.["subject"]).toBeUndefined();
+        const again = await call(h, "session/list", { cwd: h.projectDir });
+        const cleared = (again.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        expect(cleared?.["_meta"]?.keryx?.subject).toBeUndefined();
+      } finally {
+        await h.end();
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a flags write waiting for another process's lock leaves the server answering, and two writes to one session apply in arrival order",
+    async () => {
+      // Never stale, a long timeout: only the holder letting go can let the writes in.
+      const h = shellHarness({ serverOptions: { sessionFlagsLock: { timeoutMs: 10_000, staleMs: 60_000 } } });
+      try {
+        await h.initialize();
+        const id = storedSession(h);
+        const dir = sessionDir(h.projectDir, id, dataDirOf(h));
+        const holder = await holdFlagsLock(dir);
+        let released = false;
+        try {
+          const pin = h.request(FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true });
+          const unpin = h.request(FLAGS, { sessionId: id, cwd: h.projectDir, pinned: false });
+          // A server that waited for the lock on its own thread would answer nothing before the writes.
+          const listed = await call(h, "session/list", { cwd: h.projectDir });
+          expect(listed.error).toBeUndefined();
+          expect(h.frames.filter((f) => f.id === pin || f.id === unpin)).toEqual([]);
+          released = true;
+          expect(await holder.release()).toBe(0);
+          expect((await h.waitFor((f) => f.id === pin)).result?.["pinnedAt"]).toBeDefined();
+          const last = await h.waitFor((f) => f.id === unpin);
+          expect(last.error).toBeUndefined();
+          expect(last.result?.["pinnedAt"]).toBeUndefined();
+          expect(readSessionFlags(dir).pinnedAt).toBeUndefined();
+        } finally {
+          if (!released) await holder.release();
+        }
+      } finally {
+        await h.end();
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a store refusal (unknown session, lock not taken in time) comes back as the request's invalid-request error with its reason",
+    async () => {
+      // A short wait and a never-stale lock: the planted lock is refused, not broken.
+      const h = shellHarness({ serverOptions: { sessionFlagsLock: { timeoutMs: 20, staleMs: 60_000 } } });
+      try {
+        await h.initialize();
+        const missing = await call(h, FLAGS, { sessionId: "no-such-session", cwd: h.projectDir, pinned: true });
+        expect(missing.error?.code).toBe(-32600);
+        expect(missing.error?.data).toMatchObject({ reason: `${FLAGS}: no session no-such-session in this project`, sessionId: "no-such-session" });
+
+        const id = storedSession(h);
+        writeFileSync(path.join(sessionDir(h.projectDir, id, dataDirOf(h)), "flags.json.lock"), "another-writer");
+        const locked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true });
+        expect(locked.error?.code).toBe(-32600);
+        expect((locked.error?.data as { reason?: string } | undefined)?.reason).toMatch(/locked by another keryx process; retry$/);
+        expect(h.stderr.filter((line) => /dispatch failed|unhandled/i.test(line))).toEqual([]);
       } finally {
         await h.end();
       }

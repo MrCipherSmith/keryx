@@ -31,7 +31,11 @@ import { IssuesView } from "./issues/IssuesView";
 import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
-import { sessionFlags } from "./acp/types";
+import { boundSessions, sessionFlags, type SessionSubject } from "./acp/types";
+import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
+import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
+import type { ReviewCard } from "./review/types";
+import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
 import type { FlowCard } from "./platform/commands";
 import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
@@ -375,6 +379,66 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     return id;
   }, [s, fillComposer]);
 
+  /** The sessions the cards see: the stored list plus Subject bindings keryx has not stored yet. */
+  const subjectSessions = useMemo(() => withPendingSubjects(state.sessions, s.pendingSubjects), [state.sessions, s.pendingSubjects]);
+  const subjectSessionsRef = useRef(subjectSessions);
+  subjectSessionsRef.current = subjectSessions;
+  // Read at call time, so the board's callbacks below keep their identity and its work rows can stay memoised.
+  const acp = useRef(s);
+  acp.current = s;
+  const flowCards = useRef(flows.cards);
+  flowCards.current = flows.cards;
+  /** One open per PR at a time: a second press while `session/new` is in flight gets the same open. */
+  const openSubject = useMemo(() => subjectOpener(), []);
+
+  /** Open the PR's bound session (newest, named or new); a new one is bound to the PR and gets `prompt`, never sent. */
+  const openPrSession = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject, prompt: string, prefillExisting = false) => {
+    setView("session");
+    const s = acp.current;
+    const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
+    return openSubject({
+      sessions: () => subjectSessionsRef.current,
+      loadSession: s.loadSession,
+      // The PR's Flow (one naming it, or one a bound session works on) is linked to the new session.
+      newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
+      bind: (id, value) => void s.bindSubject(id, value),
+      fill: fillComposer,
+      isShown: s.isShown,
+    }, subject, target, prompt, prefillExisting);
+  }, [fillComposer, openSubject]);
+
+  /**
+   * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
+   * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
+   */
+  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => acp.current.linkFlow(id, dir));
+  const flowLinkActions = flowLinks.actions;
+  const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
+    const known = flowLinkActions.known();
+    const opened = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+    // Only a prompt this press put into the shown session can make the package: a press coalesced into an open in
+    // flight, or an open the user switched away from, registers nothing.
+    if (opened?.filled) flowLinkActions.expect(opened.sessionId, known);
+  }, [flowLinkActions, openPrSession]);
+  const flowOffers = useMemo(() => flowLinks.offers.flatMap((offer): PrFlowOffer[] => {
+    const flow = flows.cards.find(card => card.dir === offer.dir);
+    return flow ? [{ sessionId: offer.sessionId, flow, ...(offer.linking && { linking: true }), ...(offer.error && { error: offer.error }) }] : [];
+  }), [flowLinks.offers, flows.cards]);
+  const linkFlowOffer = useCallback((offer: PrFlowOffer) => void flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
+  const dismissFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.dismiss(offer.sessionId), [flowLinkActions]);
+
+  const [reviewFocus, setReviewFocus] = useState<{ repo: string; number: number; nonce: number } | null>(null);
+  // Never reused, also after a handled request is cleared: the board opens each nonce once.
+  const focusNonce = useRef(0);
+  const reviewFocusHandled = useCallback((nonce: number) => setReviewFocus(old => old?.nonce === nonce ? null : old), []);
+  const openPrFromBoard = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) =>
+    void openPrSession(card, target, subject, card.url), [openPrSession]);
+  const createFlowFromBoard = useCallback((card: ReviewCard, subject: SessionSubject) => void createPrFlow(card, subject), [createPrFlow]);
+  const openFlowFromBoard = useCallback((dir: string) => {
+    setLinkedFlow(dir);
+    setView("flows");
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
@@ -542,6 +606,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (routingSession !== null && (routingSession !== state.sessionId || view !== "session")) setRoutingSession(null);
   }, [routingSession, state.sessionId, view]);
   const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
+  const shownSubject = (sessionFlow && sessionFlags(sessionFlow).subject) ?? (state.sessionId ? s.pendingSubjects.get(state.sessionId) : undefined);
+  const shownFlowDir = sessionFlow && sessionFlags(sessionFlow).flow;
+  const shownFlow = shownFlowDir ? flows.cards.find(card => card.dir === shownFlowDir) : undefined;
   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
   const viewer = reviewViewer ?? currentNotice?.viewer;
   const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
@@ -578,6 +645,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onView={go}
       onProjectSettings={openProjectSettings}
       title={title}
+      titleLinks={<SessionSubjectLinks subject={shownSubject} flow={shownFlow}
+        onOpenSubject={subject => {
+          if (subject.kind === "issue") {
+            if (state.sessionId) openIssueOrigin({ sessionId: state.sessionId });
+            return;
+          }
+          go("review");
+          setReviewFocus({ repo: subject.repo, number: subject.number, nonce: ++focusNonce.current });
+        }}
+        onOpenFlow={dir => { setLinkedFlow(dir); setView("flows"); }} />}
       onOpenSourceIssue={sessionFlow && sessionFlags(sessionFlow).hasIssue
         ? () => openIssueOrigin({sessionId: sessionFlow.sessionId}) : undefined}
       hasSession={state.sessionId !== null}
@@ -612,6 +689,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {issueWork.chooser}
       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+          sessions={state.sessions}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
@@ -625,11 +703,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
-              flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
-            setLinkedFlow(dir);
-            setView("flows");
-          }} />
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
+            sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
+            onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
+            flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />
         )}
       </div>
       {view === "settings" ? (
@@ -645,7 +722,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
       {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
-          initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
+          initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)} models={reviewModels} loadTargets={loadReviewTargets}
           onApply={async (key, revision, options) => {
             const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
             const id = result.startedRunId;

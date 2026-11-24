@@ -1,0 +1,125 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, round 3. Diff mode over the round-2 fix range 88e3faba9..d7b0f7058. I read slice-01 in full (1905 lines).
+
+There was no running app and the exec budget was 0, so every judgement here is static: I read the cascade and did hand arithmetic. No computed style or getBoundingClientRect value was read. Per the lens's Rule 1, the one finding is therefore `info` and marked unverified.
+
+## Findings
+
+### [LY-005] The "Link Flow #N?" offer needs about 94px, but the Flow slot is 60px: the question collapses and Dismiss is covered by the Session button (info, unverified)
+
+- **Severity**: info (unmeasured; the `layout-rendering.mdc` row "Content clipped" would make it `major` once it is measured at a supported width)
+- **File**: apps/desktop/src/review/PrWorkRow.tsx (`FlowOffer`), with apps/desktop/src/styles/review.css
+- **Problem**: In offer state the Flow slot holds three items:
+  - `span.pr-work-link.pr-work-offer` (`flex: 1 1 auto; min-width: 0`)
+  - two `.pr-work-more` buttons, "Link" and "Dismiss" (`flex: none; padding: 0 4px; margin-inline-start: 2px`, 1px border)
+
+  The buttons cannot shrink, and `.pr-work-slot` is `display: flex` with no overflow clip. The row's tracks are `minmax(0, 1fr)`, so the slot does not grow either. The result:
+  - The question text shrinks to its 14px of padding and border, so "Link Flow #N?" shows no text at all.
+  - The buttons overflow past the slot's end into the session slot. Grid items paint in DOM order, so the session slot's button paints over them.
+  - An offer only exists for a PR with a bound session, so that button is "Session" or "N sessions", which is not `is-empty`. It has an opaque `var(--bg-sunken)` background and it receives the clicks in the overlap.
+- **Measurement (hand arithmetic, not an engine)**:
+
+  Tokens: `--fs-xs` 11px, `--sp-1` 4px, `--sp-2` 8px, `--sp-3` 12px. Text widths are estimated for SF Pro at 11px.
+
+  Element widths:
+  - "Link" button ≈ 19 + 8 + 2 = 29px, plus a 2px margin
+  - "Dismiss" button ≈ 37 + 8 + 2 = 47px, plus a 2px margin
+  - The question span at its minimum is 14px. With the text "Link Flow #517?" it is about 80 + 14 ≈ 94px.
+
+  ```
+  host                                   slot width   offer min   overflow into session slot   question text
+  board lane at basis 230px              60.0px       ~94px       ~30px (Dismiss ~17 of 47px visible)   0px (hidden)
+  list column th:nth-child(6) = 16rem    ~74.7px      ~94px       ~16px                        0px (hidden)
+  width at which the text also fits      ~174px       —           —                            needs a lane ≥ ~572px
+  ```
+
+  How the widths were derived:
+  - **Board lane.** `.review-lanes .lane { flex: 1 0 230px }`. Subtract the `.lane-body` padding of 8px on each side, then the `.flow-card` padding (12px each side) and border (1px each side), which leaves 188px. The row has 3 tracks and two 4px gaps, so each slot is 60px.
+  - **List column.** 256px minus the `.flow-list td` padding of 12px on each side leaves 232px. Three tracks and two gaps give about 74.7px per slot.
+- **Supported width**: the Tauri window has `minWidth: 720` (apps/desktop/src-tauri/tauri.conf.json). Four status lanes need 4 × 230 + 36 + 48 = 1004px of board, so 230px lanes occur at any window up to roughly 1000px plus the shell chrome. 720px is a supported width.
+- **Why it matters**: after Create Flow, the only place the confirmation question appears is the work row (owner decision on HL-001). In a lane at the supported widths:
+  - The person sees two bare buttons, "Link" and a mostly hidden "Dis…", without the question or the Flow number. The text survives only in the span's `title`, which keyboard users cannot reach.
+  - A click on the visible right part of "Dismiss" lands on the Session button.
+  - The row's fixed 24px height still holds: the span is `box-sizing: border-box; line-height: 22px` and the buttons are 24px. So the defect is horizontal only.
+- **Fix**: make the offer fit 60px rather than overflow. For example:
+  - Let the offer's buttons shrink: `.pr-work-offer ~ .pr-work-more { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }`.
+  - Or render the offer as one truncating `Link #N?` button plus a "Dismiss" text button, dropping the static span.
+
+  Whichever you choose, give the slot `overflow: hidden`, so a future flex-none child cannot paint over the session slot. Then measure in a real engine at a 230px lane and at the 16rem list column (see "What would settle it").
+- **class_scope**:
+  - Sites: `apps/desktop/src/review/PrWorkRow.tsx` `FlowOffer`, rendered at both PrWorkRow call sites in `apps/desktop/src/review/ReviewResults.tsx` (the board tile and the list `<td>`). IssueWorkRow has no offer.
+  - Enumeration: `keryx ctx rg "pr-work"` over `apps/desktop/src`. `.pr-work-offer` occurs only in PrWorkRow.tsx and review.css. PrWorkRow is rendered only from ReviewResults.tsx.
+  - Related but different shape: LY-002 (round 2) is truncation in these slots. This finding is overflow and overlap from the new offer content.
+
+## Prior dispositions (LY lens, only those this range touches)
+
+- **LY-002 still open.** This range changed the Flow slot's content (the offer) but not the row tracks, `.pr-work-slot`, the "More" button or the lane and column widths. The truncation it describes stands. LY-005 is the new and worse case in the same slots.
+- LY-004 (title-bar subject links) is not touched by this range: neither SessionSubjectLinks nor its CSS is in the slice. Its disposition is unchanged and is not returned.
+
+## Other changes in the range: checked, no layout finding
+
+- **`.review-focus-notice`**
+  - It is an `.inline-banner.tone-warn` rendered as a direct child of `section.flows`, so `.flows > .inline-banner` sets its margins, the same as the error and "Partial sync" banners beside it.
+  - `.inline-banner > span { flex: 1; min-width: 0 }` pushes the `.icon-btn` dismiss button to the end. The text has break opportunities at the ", " between repository names.
+  - No CSS rule targets `.review-focus-notice`; it is only a hook class.
+  - Unmeasured; I see no clipping path at 720px.
+- **Issues fallback alert**
+  - `.issues-notice` holds two `<p>` and a button. Under `.issues-notice button { margin-left: var(--sp-2) }`, the button sits on its own line, indented 8px from the paragraphs.
+  - The viewer-error notice in the same file (`<p>` then buttons) has the same shape, so I read this as the established sibling pattern (shared law 4), not a defect. The physical `margin-left` predates this range.
+- **No geometry change**
+  - IssueWorkRow (the count is now passed in as `bound`).
+  - The ReviewProgress refactor: the caption markup is unchanged, and empty strings render nothing.
+  - PrWorkRow `waitsOnViewer`: only toggles the class, the box stays the same.
+  - App.tsx, useAcpSession.ts, prWork.ts and usePendingFlowLinks.ts: wiring only.
+- **Note for review-ui-ux (not filed here)**: `.pr-work-link:hover:not(:disabled)` also matches the static `span.pr-work-offer`. The question text gets a hover background like a control, although `cursor: default` and it is not interactive.
+
+## What would settle it
+
+In the running app (or a real-CSS probe) at a 720px window and at 1180px, with a PR that has a bound session and a pending offer:
+- read `getBoundingClientRect()` for `[data-slot=flow]`, `.pr-work-offer` and the two `[data-slot=flow] .pr-work-more` buttons
+- run `document.elementFromPoint` at the visible centre of the Dismiss button
+
+Repeat in the list view (`.review-table`). The DOM-stub tests (PrWorkRow.dom.test.tsx) cannot fail on this.
+
+Routing audit:
+- graph_used: no (not relevant; the payload and slice named the files)
+- wiki_used: no (not relevant to cascade arithmetic)
+- ctx_used: yes (`keryx ctx rg` for the pr-work, inline-banner, lane and token selectors and the Tauri minWidth; `keryx ctx run` for git log; `keryx ctx read` for layout-rendering.mdc and the finding schema)
+- raw_rg_used: no
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Round 3, fix range 88e3faba9..d7b0f7058, static only: no running app, exec budget 0. One new info finding (LY-005, unverified). The 'Link Flow #N?' offer needs about 94px in a Flow slot that is 60px in a 230px board lane and about 75px in the 16rem list column. The question text collapses to 0px and the flex-none Dismiss button overflows by about 30px into the session slot, where the Session button paints over it and takes its clicks. The 24px height holds. LY-002 stays open. The focus-notice banner and the Issues fallback alert follow their sibling banners and notices; no layout finding.",
+  "findings": [
+    {
+      "id": "LY-005",
+      "severity": "info",
+      "reviewer": "review-layout",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "quote": "<button type=\"button\" className=\"pr-work-more\" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}",
+      "problem": "In offer state the Flow slot (display:flex, no overflow clip, a minmax(0,1fr) grid track) holds the question span (flex 1 1 auto, min-width 0) and two flex:none .pr-work-more buttons, 'Link' and 'Dismiss'. The buttons need about 80px with their margins, and the span keeps 14px of padding and border, so about 94px in all. The slot is 60px in a 230px board lane and about 74.7px in the 16rem list column. The question text shrinks to 0px, and the buttons overflow by about 30px (lane) or 16px (list) into the session slot. That slot paints later and holds an opaque 'Session' button, which covers most of Dismiss and receives clicks in the overlap.",
+      "impact": "After Create Flow, at supported widths (the Tauri minWidth is 720; 230px lanes hold up to about a 1000px board), the confirmation the owner chose for HL-001 shows as two bare buttons, 'Link' and a mostly hidden 'Dismiss', with no question and no Flow number; the text is only in a title tooltip. A click on the visible part of 'Dismiss' can land on the Session button.",
+      "suggested_fix": "Make the offer fit the slot instead of overflowing it. Either let the offer buttons shrink (`.pr-work-offer ~ .pr-work-more { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis }`), or render the offer as one truncating 'Link #N?' button plus a 'Dismiss' text button without the static span. Add `overflow: hidden` to `.pr-work-slot`. Then measure in a real engine at a 230px lane and at the 16rem list column.",
+      "evidence": "Static cascade arithmetic, no engine. Tokens: fs-xs 11px, sp-1 4px, sp-2 8px, sp-3 12px. Lane: .review-lanes .lane flex 1 0 230px; minus .lane-body padding 8px x2 and .flow-card padding 12px x2 and border 1px x2 leaves 188px; 3 tracks with 2 gaps of 4px give 60px per slot. List: th:nth-child(6) 16rem (256px) minus td padding 12px x2 leaves 232px, about 74.7px per slot. Button width estimates for SF Pro 11px: Link about 29px, Dismiss about 47px, each with a 2px margin-inline-start. Tauri minWidth 720 (apps/desktop/src-tauri/tauri.conf.json). Settle it with getBoundingClientRect on [data-slot=flow], .pr-work-offer and the two buttons, plus elementFromPoint at the Dismiss centre, at a 720px and a 1180px window, in board and list view.",
+      "confidence": "medium",
+      "location_class": "in-diff",
+      "dedupe_key": "layout:pr-work-row:flow-offer-overflow",
+      "class_scope": {
+        "sites": ["apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (board tile via ReviewResults.tsx ReviewTile)", "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (list <td> via ReviewResults.tsx)"],
+        "enumeration_method": "keryx ctx rg \"pr-work\" over apps/desktop/src: .pr-work-offer occurs only in PrWorkRow.tsx and styles/review.css, and PrWorkRow is rendered only from ReviewResults.tsx (board tile and list row). IssueWorkRow renders no offer."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "LY-002", "disposition": "open"}
+  ],
+  "follow_ups": [
+    "Measure LY-005 (and LY-002) in the running Desktop app at a 720px and a 1180px window with a pending Link Flow offer; the DOM-stub tests cannot observe it."
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```

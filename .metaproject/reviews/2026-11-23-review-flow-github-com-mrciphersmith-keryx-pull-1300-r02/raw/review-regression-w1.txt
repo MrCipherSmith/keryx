@@ -1,0 +1,77 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-regression (scope B, round 2), slice-02 read in full (2458 lines). Question answered: does the change break an existing behaviour at a site in the blast-radius set or a changed file? One regression found (major), on a runtime edge the code graph cannot see.
+
+## Findings
+
+### [RG-001] Issues board's new default source "repository" fails on any keryx CLI that predates this PR (the "Automatic" CLI choice included)
+
+- Severity: major
+- File: apps/desktop/src/issues/IssuesBoard.tsx (VerifiedBoard source initializer)
+- Problem: The change sets the board's default source to `DEFAULT_SOURCE = "repository"` (apps/desktop/src/issues/model.ts) for every account with no stored source. A source is stored only when the user picks one in the select (`change()`), so on update almost every account starts on "repository". useIssueCollection.ts sends that `source` through requestIssues and `issues_request` to whichever keryx CLI Desktop runs. Before this PR, keryx's `listUrl` accepted only `["assigned","created","mentioned","subscribed"]` and threw `invalidInput` ("configuration: Invalid Issues request.") for anything else (src/integrations/issues-board.ts:97 at base b147408). "repository" is accepted only by the keryx built from this PR (src/integrations/issues-board.ts, src/commands/issues.ts, same PR).
+- Trigger: Desktop at this head, with the CLI setting on "Automatic" (the recommended default: "keryx on your PATH … else the keryx inside this app", apps/desktop/src/shell/SettingsView.tsx), "keryx on PATH" or "Custom", and that keryx older than this PR. The user opens Issues for an account that never chose a source explicitly.
+- Outcome: On base, that board loaded "Assigned to me". At head, the first load fails with "configuration: Invalid Issues request." and shows no issues. `isAccessError` does not match `configuration:`, so the user gets a Retry button that fails the same way. Nothing says the CLI is too old: requestIssues maps only "unknown command" and "invalid response" errors to "Choose the bundled CLI". The user gets issues back only by guessing to change Source. The PR handles the same version skew for `subject` (a notice on an older keryx). It does not handle it for the default source, and the PR, the journal and the D5 decision say nothing about it.
+- Fix: Do not let the default depend on a CLI feature the Desktop cannot assume. Two options:
+  - When a list with the default (not stored) `repository` source fails with `configuration:`/invalid input, fall back to "assigned" for that load and show a one-line hint ("This keryx cannot list the project repository; update keryx or choose the bundled CLI").
+  - Or map that error in requestIssues to the existing "Choose the bundled CLI in Desktop Settings" message.
+  Add a board test where the request rejects `source: "repository"` with `configuration: Invalid Issues request.` and the board still shows issues or the update hint.
+
+## What the radius could and could not answer
+
+- Slice-02's changed files reach 19 of the 40 set entries. I checked each edge from a slice-02 file, reading each caller where the import names a changed symbol:
+  - `apps/desktop/src/acp/types.ts` → reducer, Composer, Transcript, CommandCard, ContentBlockView, RunsTab, SchedulesTab, SessionSidebar, sessionGroups, startup. Every change there adds something: `SessionFlags.subject` is optional, and `SessionSubject`, `sameSubject`, `boundSessions`, `subjectKey` and `boundSessionIndex` are new. No existing signature or field changed. Synthetic sessions (`withPendingSubjects`) reach only the ReviewBoard prop, not `state.sessions`.
+  - `ReviewProgress.tsx` → ReviewOutcome, ReviewRuns, ReviewRunDialog, ReviewSessions, SessionReviewActivity. Only `CardReviewProgress` was removed. `keryx ctx rg --all 'CardReviewProgress' apps src` finds no remaining importer. `ReviewProgress`, `TranscriptUpdate`, `RUN_STATE_LABEL`, `runStatusLabel`, `pendingManualQuestions` and `singleReviewerFinished`, which these files import, are unchanged.
+  - `ReviewLaunchDialog.tsx` → ReviewDetail, PrSubscriptionDialog. PrSubscriptionDialog imports only `ModelPicker` and the model type, both unchanged. In ReviewDetail, `linked` now goes through `prFlows(card, eligibleFlows, [])`. It matches the same flows by URL, with a trailing slash and case ignored, but orders them newest first, where the old `.find` took list order. This changes the default only when two flows name the same PR. That is not a break.
+  - `ReviewBoard` → ReviewDetail: `onOpenSession` now reopens the newest bound session, and `flow` now includes a bound session's Flow. These are intended (R5, PR body). ReviewDetail's `associatedFlow` fallback still works.
+  - `issues/model.ts` and `useIssueCollection.ts` → IssueDetail, IssueOriginDetail. IssueDetail uses `issueName` and `STAGES` (unchanged), plus an `actions` node. IssueOriginDetail uses `isAccessError` (unchanged) and builds its own actions. Removing `Filters.stage` reaches no reader outside IssuesBoard and IssueFilters (`keryx ctx rg` for defaultFilters, groupForRow, SOURCES, `.stage`).
+  - Removed review-model symbols (`stateFilterShowsDone`, `attentionReason`, `secondaryNote`, the old `LANES` keys `attention`/`review`/`open`/`done`): `keryx ctx rg --all` over apps and src (excluding tests) finds no consumer outside ReviewResults.tsx and model.ts. FlowsBoard's `LANES` is a separate symbol in flows/model.ts.
+- Not answerable by the graph:
+  - The finding above crosses a spawned process (Desktop → `keryx issues list`) and a version boundary. I traced it by reading source, not through the computed set.
+  - The hub-web, FlowsBoard, FlowDetail, ProjectMenu, styles.css and panels entries are linked to the slice through text-hub edges ("→ slices/slice-02.diff"), not imports. They import none of the changed names. I recorded them as unresolved by the graph rather than clean.
+- Cap: the brief records 57 of 135 candidate files dropped (blast_radius_max_files=40) and 134 changed files absent from the code graph, so their radius is unknown. This wave covers slice-02's edges only. Approvals, SessionInfoPanel and SessionView depend on useAcpSession.ts, which is not in slice-02. I did not check them, nor any of the server-side entries (cli-registry, issues-projects, issue-origin, issues-launch, acp server harness, commands/acp).
+- Tests: P/research-evidence/verify-tests-to-run-1.txt exited 0. None of those suites runs Desktop against a keryx that rejects `source: "repository"`, so a green run does not cover RG-001.
+
+## Prior findings
+
+No round-1 finding was raised by review-regression, so there are no dispositions in this lens. I did not judge the other lenses' claimed fixes (HL-001, DG-001 and others), apart from reading the code in the slice: `resolveFlowLinks` now links only when exactly one request is pending and exactly one new package exists, and adds a claimed set and a 15-minute expiry. I found no new regression on its consumers.
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B over slice-02's edges into the blast-radius set: one major regression. The new default Issues source \"repository\" (IssuesBoard.tsx DEFAULT_SOURCE) is rejected as invalid input by any keryx CLI older than this PR, which Desktop runs under the default \"Automatic\" CLI setting. Accounts with no stored source then lose the board they had on base. Every other edge from slice-02 changes nothing existing callers rely on. The cap dropped 57 files; 134 changed files are outside the graph; text-hub entries are unresolved.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "major",
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "line": null,
+      "quote": "    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;",
+      "problem": "This change makes `DEFAULT_SOURCE = \"repository\"` (apps/desktop/src/issues/model.ts) the source of every account with no stored choice; a choice is stored only when the user changes the select. useIssueCollection.ts sends it through requestIssues/issues_request to whichever keryx CLI Desktop runs. A keryx that predates this PR rejects it: base src/integrations/issues-board.ts:97 (b147408) accepts only assigned|created|mentioned|subscribed and throws invalidInput \"configuration: Invalid Issues request.\". Only the keryx built from this same PR accepts \"repository\".",
+      "impact": "Trigger: Desktop at this head with the CLI setting \"Automatic\" (the recommended default, which prefers the keryx on PATH; SettingsView.tsx), \"keryx on PATH\" or \"Custom\", that keryx older than this PR, and Issues opened for an account that never chose a source. Outcome: base loaded \"Assigned to me\"; head fails the first load with \"configuration: Invalid Issues request.\" and shows no issues. Retry repeats the failure (isAccessError does not match `configuration:`), and requestIssues does not turn this error into its \"Choose the bundled CLI\" hint. The PR covers the same skew for `subject` with a notice, but not for this default.",
+      "suggested_fix": "When a list with the default (unstored) `repository` source fails with `configuration:`, fall back to \"assigned\" for that load and show a one-line update/bundled-CLI hint. Or map this error in requestIssues to the existing \"Choose the bundled CLI in Desktop Settings\" message. Add an IssuesBoard test whose request rejects `source: \"repository\"` with that error and asserts the board still lists issues or shows the hint.",
+      "evidence": "Head: model.ts `export const DEFAULT_SOURCE: IssueSource = \"repository\";`. IssuesBoard.tsx VerifiedBoard falls back to DEFAULT_SOURCE when nothing is stored; `change()` is the only writer of `.source`. useIssueCollection.ts passes `source` in the list request. platform/issues.ts invoke(\"issues_request\"). src-tauri/src/issues.rs issue_args passes the request JSON to `keryx issues list` via invoke_review, the user-selected CLI. Base b147408 src/integrations/issues-board.ts listUrl lines 96-105: `![\"assigned\", \"created\", \"mentioned\", \"subscribed\"].includes(source) || ... throw new Error(invalidInput)`. issues-github.ts: `invalidInput = \"configuration: Invalid Issues request.\"`. useIssueCollection.ts isAccessError matches only access|account_mismatch|source_unavailable. SettingsView.tsx SOURCES: \"Automatic\" means keryx on PATH, else the bundled one. Law 4: the flow docs, journal and PR body record no decision on older CLIs for the default source (keryx ctx rg 'older keryx|bundled|Invalid Issues request' over the flow package and docs/requirements/keryx-desktop-review-v2). This is a runtime edge (spawned CLI process) the code graph does not carry; it was traced by reading source, not taken from the computed set.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "dedupe_key": "issues-default-source-repository-older-cli",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/issues/IssuesBoard.tsx VerifiedBoard source initializer (falls back to DEFAULT_SOURCE)",
+          "apps/desktop/src/issues/useIssueCollection.ts list request (sends `source` to the CLI)"
+        ],
+        "enumeration_method": "keryx ctx rg --all 'useIssueCollection|defaultFilters|groupForRow|SOURCES|IssueScope|IssueListSource' over apps/desktop/src (non-test): DEFAULT_SOURCE has one reader (the IssuesBoard initializer); useIssueCollection has one caller (IssuesBoard Collection). IssueOriginDetail imports only isAccessError and never lists by source, so the class has these two sites only."
+      }
+    }
+  ],
+  "prior_dispositions": [],
+  "follow_ups": [
+    "Blast-radius entries reached only from changed files outside slice-02 (Approvals, SessionInfoPanel, SessionView via useAcpSession.ts; cli-registry, issues-projects, issue-origin, issues-launch, acp server harness, commands/acp via server-side files) were not checked in this wave.",
+    "Text-hub entries (hub-web global-flows/project-overview, FlowsBoard, FlowDetail, ProjectMenu, styles.css, panels) link to the slice diff, not to code; the graph cannot answer for them."
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (the blast-radius set in the brief and the payload's layers.affected came from the graph at the PR head; I did not run gdgraph separately) · wiki_used: not-relevant (I read the PR context and flow docs directly) · ctx_used: yes (keryx ctx rg for every enumeration) · raw_rg_used: no.

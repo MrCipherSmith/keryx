@@ -1,0 +1,1627 @@
+--- docs/docs/guides/desktop-issues.md
+@@ 1,23 @@
+ # Work on a GitHub issue in Keryx Desktop
+ 
+-Open **Issues** and select the GitHub account that has access to the ticket. The account menu uses the accounts connected through GitHub CLI. To connect another account, sign in with `gh auth login` and reopen the account settings. The board initially shows open issues of the project's GitHub repository (source **Project repository**). Choose **Assigned to me**, **Created by me**, **Mentioned** or **Subscribed** to see a personal queue across repositories, or **GitHub Project** to open a Project. Desktop remembers the chosen source for the account.
++Open **Issues** and select the GitHub account that has access to the ticket. The account menu uses the accounts connected through GitHub CLI. To connect another account, sign in with `gh auth login` and reopen the account settings. The board initially shows open issues of the project's GitHub repository (source **Project repository**). Choose **Assigned to me**, **Created by me**, **Mentioned** or **Subscribed** to see a personal queue across repositories, or **GitHub Project** to open a Project. Desktop remembers the chosen source for this project and account.
+ 
+ The board has an **Open** column, plus **Closed** when the state filter includes closed issues. Columns follow the GitHub state only. A GitHub Project uses its own columns, described below.
+ 
+ ## Find and read an issue
+ 
+ Search by title, `#number` or `owner/repo#number`. **Filters** can narrow the queue by repository, GitHub state, update date, author, label and assignee. Enter **Unassigned** to find unassigned tickets. **Board** and **List** share the filters. Use **Load more issues** to extend the search beyond the loaded pages. **Refresh** reads the current query again.
+ 
+ Select a title to read the description, followed by the comments. Use the arrow buttons to navigate between issues or **Open in GitHub** to view the original. On a wide window, drag the divider or focus it and use the arrow keys to resize the panel. Escape returns to the board or list.
+ 
+ ## See the Keryx work on an issue
+ 
+ Each card, list row and issue panel has a Keryx work row with two slots:
+ 
+ - **Flow.** **Flow · stage** opens the Flow linked to the issue, for example **Flow · In progress** or **Flow · Needs an answer**. Without a Flow, the slot reads **Create Flow**.
+ - **Session.** **Session** or **N sessions** counts the sessions bound to the issue and opens its linked session. Without one, the slot reads **Open in session**, or **Open question** when the Flow waits for your answer.
+ 
+ The list and the issue panel also show the Keryx stage next to the GitHub state.
+ 
+ ## Discuss an issue and prepare a Flow
+ 
+
+--- docs/docs/guides/desktop-issues.md
+@@ 26,61 @@
+ 3. Review the coordinator's plan, dependent tasks and acceptance criteria. When the issue says **Needs an answer**, open the session to read and answer the question. Use the Flow slot to inspect the package, including an existing package created from the same GitHub issue URL in Shell. If several packages match, choose the intended directory.
+ 4. When you accept the criteria, freeze and start that Flow from its checkout. For example, with the numeric ID shown in Flows:
+ 
+ ```bash
+ keryx flow status <id>
+ keryx flow freeze <id>
+ keryx flow start <id>
+ keryx flow next <id>
+ ```
+ 
+ The GitHub state and Keryx stage are shown independently. An open issue can have a finished Flow, and work can continue on a closed issue.
+ 
+ ## Use a GitHub Project
+ 
+ Choose **GitHub Project**, enter the organization or user login and the Project number, then select **Open project**. The columns follow the Project's single-select **Status** field. **No status** holds items with no value. Other sources group the same issues by GitHub state.
+ 
+ Choose a value in the item's **Change Project Status** menu or drag the card to a column to update that item in the selected Project. Keryx reads the current value before writing and reads it back afterwards. If a teammate changed it first, the board shows the observed value. Choose a new destination only if you still want to move it. In a read-only Project, you can open issues and sessions. If the Status field is unavailable, use the list or select a different Project.
+ 
+ ## Recover a session, an interrupted request or a missing board
+ 
+-- **Project repository unavailable.** The default source needs a GitHub.com remote in the project and Issues turned on for that repository. A keryx older than Desktop does not know this source either. If you have not chosen a source yet, Issues shows the reason and **Show issues assigned to me**, which switches to that source and remembers it. For an older keryx, update it or select **Bundled keryx** in **Settings → Desktop**.
++- **Project repository unavailable.** This source needs a GitHub.com remote in the project that names a repository, and Issues turned on for that repository. A keryx older than Desktop does not know this source either. In those cases Issues shows the reason and **Show issues assigned to me**, which switches this project to that source and remembers it. Any other error shows **Retry**. For an older keryx, update it or select **Bundled keryx** in **Settings → Desktop**.
+ - **No access or wrong account.** Select the GitHub account with repository access and verify the checkout's GitHub binding. GitHub can report a missing private issue when access is denied. For a restricted Project, switch Source back to a personal queue.
+ - **Offline or rate limited.** A failed refresh can leave the most recent authorized snapshot visible. Read the error and retry after connectivity returns or the stated GitHub limit resets. An access denial clears private board data.
+ - **Interrupted preparation.** Reopen the issue using the same account and checkout, then open its linked session and Flow. Read the latest turn, pending question and package before resuming preparation. If the session was busy when Keryx created the package, wait for the current turn to finish and choose **Resume preparation** on the issue. Keryx reuses that package and session. If another Shell or Desktop window owns the session, finish or disconnect that writer first.
+ - **Incompatible CLI.** In **Settings → Desktop**, select **Bundled keryx** or a CLI with `keryx issues --help`. Reconnect the session and reopen Issues. A local folder with the right remote is needed for session and Flow actions.
+ 
+ ## Return to the source ticket
+ 
+ Choose **Open source issue** beside a linked session's title or in the Flow detail header. Desktop opens the ticket even if it falls outside the current filters. In an issue session, select the GitHub account that created that session. A shared Flow can resolve its source for any selected account with access to the ticket.
+ 
+ From the project checkout, Shell can resolve either link against GitHub with the selected login. Use an exact session UUID or Flow package directory name.
+ 
+ ```sh
+ keryx issues origin --login LOGIN --request '{"sessionId":"SESSION-UUID"}' --json
+ keryx issues origin --login LOGIN --request '{"flowDir":"FLOW-PACKAGE-DIRECTORY"}' --json
+ ```
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 15,67 @@
+ 
+ ## Состояние этапа 0
+ 
+ Этап 0 реализован в Flow 516 и влит в main через PR #1294. Ревью: раунд по ветке и пять раундов по PR; после первого раунда ни один не нашёл blocker или major. Пакеты раундов — `.metaproject/reviews/2026-11-23-review-flow-*-pull-1294*`, журнал решений — `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md`.
+ 
+ Три отклонения от PRD сделаны сознательно и записаны здесь:
+ 
+ - (a) R12 говорит, что индикатор вкладки Pull requests загорается для запроса ревью на пользователя «или его команду». На этапе 0 сопоставляется только логин пользователя; запросы на команды не сопоставляются, пока не появится членство в командах (планируется вместе с этапом 1).
+ - (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации).
+ - (c) Панель инструментов доски не гарантированно остаётся в одну строку, и меню для второстепенных элементов нет. Вместо этого подписи кнопок скрываются, когда внутренняя ширина панели (без отступов) не больше 1100px — это панель шириной около 1140px; текст состояния вотчера скрывается при внутренней ширине не больше 760px — панель около 800px, а счётчик pull request'ов остаётся голым числом, и поле поиска сужается до 80px; счётчик активных фильтров остаётся видимым. Измерено на разметке панели с реальными стилями и заглушками вместо данных: одна строка без выхода за край при ширине панели 560, 620, 700, 760, 820, 1101, 1180 и 1380px; при 340px — две строки. Когда показана подсказка о скрытых фильтрами запросах (d) («Show N waiting on you», уже 1100px — «N hidden»), панель переходит на вторую строку при ширине 340–646, 810–908 и 1150–1290px, то есть и при панели 560px в окне по умолчанию с открытой панелью PR; ничего не обрезается. В приложении с реальными данными не измерялось.
+ - (d) Решения оператора от 2026-11-23: кнопка на карточке с устаревшим ревью называется «Review again», пока этап 2 не свяжет раунды между собой; индикатор вкладки считает каждый pull request, которому нужен пользователь, а если часть из них скрыта фильтрами, на панели инструментов показывается подсказка с числом скрытых и кнопкой, которая сбрасывает фильтры и поиск.
+ 
+ Решение оператора от 2026-11-23: закрытый или слитый pull request с идущим ревью скрывается при фильтре по умолчанию «Open + Draft».
+ 
+ ## Состояние этапа 1
+ 
+ Этап 1 реализован в Flow 517 (`.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`), ветка `feat/desktop-review-v2-stage1`; до слияния — draft.
+ 
+ - **Pull requests.** Колонки и порядок только по GitHub: группировка «Status» (Draft · Waiting for review · Changes requested · Approved, Merged и Closed — по фильтру состояния) и «My role» (Requested from me · Mine · Others). Быстрые фильтры «Requested from me», «Mine», «CI failed» и переключатель группировки стоят в строке контекста, не в тулбаре, поэтому замеры отклонения (c) остаются в силе. Колонка внимания и колонка «In review» убраны (D6). Строка причины на карточке — только по GitHub.
+ - **Строка работы Keryx** (`apps/desktop/src/review/PrWorkRow.tsx`): три места фиксированной высоты 24px — ревью («Review · <состояние>» из `localReview`, без раунда и отставания; открывает текущую панель ревью), Flow (по `prUrl` или через флаг `flow` привязанной сессии), сессии (число, последняя, меню со всеми и «New session»). Пустое место — подписанное действие. «Fix review comments» не показывается (этап 4).
+-- **Привязка сессии к Subject.** `subject` хранится в `flags.json` сессии и пишется через `_keryx/session_flags` (`src/session/organize.ts`); сессия Issue получает `subject` при привязке в `withIssueBinding`. keryx сохраняет новую сессию только после её первого хода, поэтому Desktop держит привязку в ожидании и повторяет запись после хода. Старый keryx без поддержки `subject`: сессия открывается и работает, а уведомление, что привязка не сохранена, появляется в ней не позже конца первого хода. Запись `flags.json` идёт под блокировкой `flags.json.lock` на сессию: параллельный писатель ждёт до 3 секунд, затем получает ошибку «retry». Сессии Issue, привязанные старым keryx без `subject`, получают его при следующем открытии через Issues, если пользователь не снял привязку сам (снятие хранится отметкой; снятие, сделанное до этой версии, отметки не имеет и может быть перезаписано один раз). Заголовок сессии показывает ссылку на PR или Issue и на Flow.
+-- **Создание из сессии.** `/review` без цели в сессии, привязанной к PR, открывает диалог запуска с этим PR. «Create Flow» открывает привязанную сессию с подготовленным текстом (не отправляет его). Запрос ждёт пакет 15 минут с нажатия и регистрируется, только если текст действительно подставлен в эту сессию (переключение на другую сессию во время открытия — ни текста, ни запроса). Если ждёт ровно один запрос и появился ровно один новый пакет, строка работы PR спрашивает «Link Flow #N?» с кнопками Link и Dismiss: флаг `flow` сессии пишется только по Link; Dismiss ничего не пишет и больше не предлагает этот пакет. Показанный вопрос не истекает. Несколько новых пакетов или несколько ждущих запросов — не предлагается ничего, и все ждущие запросы завершаются; если списка Flow ещё не было — тоже.
+-- **Issues.** По умолчанию колонки по состоянию GitHub (Open · Closed по фильтру), источник по умолчанию — репозиторий проекта (`keryx issues list` с `source: "repository"`, D5; запрос читает до трёх страниц, если на странице одни pull request'ы); сохранённый выбор источника важнее; группировка по статусу GitHub Project не изменилась; фильтр по стадии Flow убран, стадия — ссылка в строке работы (слоты Flow и сессии). Если источник по умолчанию недоступен (нет удалённого репозитория GitHub.com, Issues выключены в репозитории — ответ 410, или keryx старше Desktop не знает источник), Issues показывают причину и кнопку «Show issues assigned to me»; для старого keryx — ещё подсказку обновить keryx или выбрать встроенный CLI. Кнопка есть, только пока источник не выбран пользователем.
++- **Привязка сессии к Subject.** `subject` хранится в `flags.json` сессии и пишется через `_keryx/session_flags` (`src/session/organize.ts`); сессия Issue получает `subject` при привязке в `withIssueBinding`. keryx сохраняет новую сессию только после её первого хода, поэтому Desktop держит привязку в ожидании и повторяет запись после хода. Старый keryx без поддержки `subject`: сессия открывается и работает, а уведомление, что привязка не сохранена, появляется в ней не позже конца первого хода. Запись `flags.json` идёт под блокировкой `flags.json.lock` на сессию: параллельный писатель ждёт до 3 секунд, затем получает ошибку «retry»; сервер ACP ждёт асинхронно и не останавливает другие сессии. Блокировка не создаёт папку сессии: запись в сессию, которую уже убрали в корзину, получает «no session» и папку не возвращает. Сессии Issue, привязанные старым keryx без `subject`, получают его при следующем открытии через Issues, если пользователь не снял привязку сам (снятие хранится отметкой; снятие, сделанное до этой версии, отметки не имеет и может быть перезаписано один раз). После первой привязки эта запись необязательна: если она не удалась, задача всё равно открывается. Заголовок сессии показывает ссылку на PR или Issue и на Flow.
++- **Создание из сессии.** `/review` без цели в сессии, привязанной к PR, открывает диалог запуска с этим PR. «Create Flow» открывает привязанную сессию с подготовленным текстом (не отправляет его). Запрос ждёт пакет 15 минут с нажатия и регистрируется, только если текст действительно подставлен в эту сессию (переключение на другую сессию во время открытия — ни текста, ни запроса). Если ждёт ровно один запрос и появился ровно один новый пакет, строка работы PR спрашивает «Link Flow #N · <название>?» с кнопками Link и Dismiss: флаг `flow` сессии пишется только по Link, вопрос остаётся, пока запись не удалась (причина показывается, Link можно нажать снова, сам после хода запись не повторяется); Dismiss ничего не пишет и больше не предлагает этот пакет. Показанный вопрос не истекает. Несколько новых пакетов или несколько ждущих запросов — не предлагается ничего, и все ждущие запросы завершаются; если списка Flow ещё не было — тоже.
++- **Issues.** По умолчанию колонки по состоянию GitHub (Open · Closed по фильтру), источник по умолчанию — репозиторий проекта (`keryx issues list` с `source: "repository"`, D5; запрос читает до трёх страниц, если на странице одни pull request'ы); сохранённый выбор источника важнее; группировка по статусу GitHub Project не изменилась; фильтр по стадии Flow убран, стадия — ссылка в строке работы (слоты Flow и сессии). Если источник «репозиторий проекта» недоступен (нет удалённого репозитория GitHub.com, удалённый репозиторий не называет годного репозитория, Issues выключены в репозитории — ответ 410, или keryx старше Desktop не знает источник), Issues показывают причину и кнопку «Show issues assigned to me»; для старого keryx — ещё подсказку обновить keryx или выбрать Bundled keryx в настройках. Это не зависит от того, выбран ли источник явно; любая другая ошибка показывается с Retry. Выбор источника хранится для проекта и аккаунта, поэтому кнопка в одном проекте не меняет источник в другом. Заголовочная ссылка на PR, которого нет в загруженном списке (например, его состояние отфильтровано), показывает уведомление и больше не срабатывает сама.
+ 
+ Отклонения и ограничения этапа 1:
+ 
+ - (a) остаётся открытым: членства в командах этап 1 не ввёл, запросы ревью на команды индикатором не сопоставляются.
+ - (b) остаётся: индикатор Pull requests по-прежнему загорается от локального ревью, ждущего пользователя; снимается на этапе 2.
+ - (e) У Issue нет выбора другой или новой сессии: бэкенд привязки задачи (`withIssueBinding`) держит одну сессию на задачу и аккаунт. Требование R5 для Issue в части «с выбором другой или новой» не выполнено.
+ - (f) Flow, созданный вне окна ожидания «Create Flow» (или в другой сессии), к PR не предлагается и не привязывается, пока у него нет `prUrl`. При двух и более ждущих запросах «Create Flow» не предлагается ни один пакет.
+ - (g) `subject` не называет аккаунт GitHub: сессии Issue, привязанные под разными аккаунтами, считаются вместе. У Issue из GitHub Enterprise (URL не github.com) `subject` нет, и строка работы такие сессии не считает.
+-- Не проверялось в приложении с реальными данными: строка работы в узких колонках, положение меню сессий, ширина списка (1000px); ширины из замечаний LY-002 и LY-004 в приложении не измерялись.
++- Не проверялось в приложении с реальными данными: строка работы в узких колонках (в очень узкой колонке место Flow обрезает Dismiss, а не налезает на место сессий), положение меню сессий, ширина списка (1000px); ширины из замечаний LY-002, LY-004 и LY-005 в приложении не измерялись.
++- (h) keryx до этой версии, переписывая `flags.json`, теряет и `subject`, и отметку о снятии привязки; после этого следующее открытие задачи через Issues может снова привязать снятый `subject` (LG-014).
+ 
+ ## Передача следующим этапам
+ 
+ Раздел для агента, который начинает этап 1, 2, 3 или 4. Всё, что ниже названо «сейчас», проверено по коду после слияния этапа 0.
+ 
+ ### Как запускать
+ 
+ - Один этап — один Flow через flow-orchestrator (`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`), ветка от свежего `main`, свой PR. Критерии приёмки замораживаются из строки этапа в таблице «Этапы» и из требований PRD, которые она называет.
+ - Входные документы: [PRD](prd.md) (R1–R12), [спецификация](specification.md), этот план, решения D1–D6 выше. Раздел спецификации «Основания» описывает код на коммите `1b994df18`, то есть до этапа 0; где этап 0 его изменил, верен раздел «Состояние этапа 0» этого плана.
+ - Ревью — review-orchestrator по PR. Составы раундов 3–5 этапа 0 были сокращены решением оператора, и такие пакеты не проходят гейт завершения инструмента; если нужен полный пакет, запускайте полный состав.
+ - Rust-часть Desktop (`apps/desktop/src-tauri`) локально не собирается — проверяется только в CI.
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+
+--- src/acp/server.ts
+@@ 19,59 @@
+ import { redactSensitiveText } from "../security/service";
+ import { ACP_TELEGRAM_SESSION_METHOD, TelegramSessionBindings, parseTelegramSessionRequest, unavailableTelegramSession, type TelegramBindingDependencies } from "./telegram-session";
+ import {
+   agentContextWindow,
+   buildAgentSystemInstruction,
+   generateControlNonce,
+   isReasoningEffortLevel,
+   REASONING_EFFORT_LEVELS,
+   runAgentTurn,
+   type AgentDeps,
+   type AgentFinishReason,
+   type ReasoningEffortLevel,
+ } from "../commands/agent";
+ import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
+ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+ import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
+ import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, renameSession, resolveProjectRoot, titleFromPrompt } from "../session";
+ import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
+ import {
+   readSessionFlags,
+-  setSessionFlags,
++  setSessionFlagsAsync,
+   trashSession,
+   type SessionFlags,
+   type SessionFlagsChange,
+   type TrashOptions,
+ } from "../session/organize";
+ import { sessionDir } from "../session/paths";
+ 
+ /** Titles a session carries before anything has named it. */
+ const UNNAMED_SESSION_TITLES = new Set(["New session", "Untitled session", "Untitled", ""]);
+ import { selfAnsweredLine } from "../lib/terminal-safe";
+ import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
+ import type { AcpFsReader } from "./capability-tools";
+ import {
+   ACP_SHELL_SLASH_COMMANDS,
+   ACP_SLASH_COMMANDS,
+   acpAvailableCommands,
+   acpCommandHelpText,
+   acpCommandInputProblem,
+   parseAcpSlashPrompt,
+   unknownAcpCommandText,
+
+--- src/acp/server.ts
+@@ 2920,2985 @@
+     return { _meta: { keryx: { ...flags, messageCount } } };
+   }
+ 
+   /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */
+   function organiseTarget(params: unknown, method: string): { obj: Record<string, unknown>; sessionId: string; cwd: string } {
+     requireInitialized(method);
+     const obj = requireObjectParams(params, method);
+     const sessionId = requireStringField(obj, "sessionId", method);
+     const rawCwd = obj["cwd"];
+     if (rawCwd !== undefined && rawCwd !== null && typeof rawCwd !== "string") {
+       refuse(invalidParams(`${method}: cwd must be a string, null or omitted`, { received: rawCwd }));
+     }
+     return { obj, sessionId, cwd: typeof rawCwd === "string" && rawCwd.length > 0 ? rawCwd : process.cwd() };
+   }
+ 
+   function refuseStore(method: string, sessionId: string, error: unknown): never {
+     refuse(invalidRequest({ reason: `${method}: ${error instanceof Error ? error.message : String(error)}`, method, sessionId }));
+   }
+ 
+   /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow and a GitHub subject. */
+-  function handleSessionFlags(params: unknown): SessionFlags {
++  async function handleSessionFlags(params: unknown): Promise<SessionFlags> {
+     const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
+     const { obj, sessionId, cwd } = organiseTarget(params, method);
+     const change: SessionFlagsChange = {};
+     for (const key of ["archived", "pinned"] as const) {
+       const value = obj[key];
+       if (value === undefined) continue;
+       if (typeof value !== "boolean") refuse(invalidParams(`${method}: ${key} must be a boolean or omitted`, { received: value }));
+       change[key] = value;
+     }
+     const flow = obj["flow"];
+     if (flow !== undefined) {
+       if (flow !== null && typeof flow !== "string") refuse(invalidParams(`${method}: flow must be a string, null or omitted`, { received: flow }));
+       change.flow = flow;
+     }
+     const subject = obj["subject"];
+     if (subject !== undefined) {
+       if (subject !== null && (typeof subject !== "object" || Array.isArray(subject))) {
+         refuse(invalidParams(`${method}: subject must be an object, null or omitted`, { received: subject }));
+       }
+       // Its fields are checked by the store, which refuses a subject that is not a GitHub PR or issue.
+       change.subject = subject as Exclude<SessionFlagsChange["subject"], undefined>;
+     }
+     try {
+-      return setSessionFlags(cwd, sessionId, change, options.dataDir);
++      // Async: another process's flags lock is waited out without freezing this server's event loop.
++      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);
+     } catch (error) {
+       refuseStore(method, sessionId, error);
+     }
+   }
+ 
+   /**
+    * `_keryx/session_trash` (shell profile): moves a stored session to the
+    * system trash. A held session is released first (no `session_released`
+    * follows: the client asked); a busy or opening one is refused.
+    */
+   async function handleSessionTrash(params: unknown): Promise<{ trashedTo: string }> {
+     const method = KERYX_ACP_EXTENSION_METHODS.sessionTrash;
+     const { sessionId, cwd } = organiseTarget(params, method);
+     refuseIfOpening(method, sessionId);
+     if (registry.get(sessionId) !== undefined) {
+       if (sessionIsBusy(sessionId)) {
+         refuse(
+           invalidRequest({
+             reason: `${method}: session ${sessionId} has a running turn or task; stop it first`,
+             method,
+
+--- src/commands/acp.ts
+@@ 596,627 @@
+ and are reported, as is a server that fails to start.
+ 
+ A gated tool call is asked through session/request_permission — only an
+ explicit allow runs it. Writes and shell execution always stay local; there
+ is no fs/write_text_file or terminal/* call in this release. Nothing but
+ protocol frames is ever written to stdout; every diagnostic goes to stderr.
+ 
+ Profiles (--profile, default editor): everything above is the editor
+ profile. --profile shell is what the keryx desktop app launches: keryx
+ shell's tool roster (web_fetch/web_search, keryx's own MCP servers merged
+ with the client's, background shell tasks, plan tools, spawn_subagent with
+ native children only, ask_user when the client advertises
+ clientCapabilities._meta.keryx.askUser) minus the bus, scheduling and
+ operator-confirm tools; permission modes ask, trust and auto
+ (session/set_mode, /mode, starting from the project's saved default);
+ and plan, usage_update and session_info_update session updates. Sessions
+ stay live: opening or loading one releases none, and turns and shell tasks
+ keep running in the others; past ${MAX_HELD_SESSIONS} held sessions the least recently used
+ idle one is released and the client gets _keryx/session_released. The client
+ tells keryx which held session it is showing with the notification
+-_keryx/session_shown, which counts as use. _keryx/session_flags archives or
+-pins a stored session; _keryx/session_trash moves one to the system trash.
++_keryx/session_shown, which counts as use. _keryx/session_flags archives,
++pins, links a flow package to or binds a GitHub pull request or issue
++(subject) to a stored session; _keryx/session_trash moves one to the system
++trash.
+ initialize reports the profile in _meta.keryx, and _keryx/info answers
+ the version, profile and extensions in either profile. An unknown profile
+ exits with status 2.
+ 
+ Usage:
+   keryx acp [--profile editor|shell] [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
+ `);
+ }
+
+--- src/integrations/issues-board.test.ts
+@@ 1,24 @@
+ import { defaultFilters, groupForRow, mergeRows, visibleRows, type Row } from "../../apps/desktop/src/issues/model";
+ import { expect, test } from "bun:test";
+ import { issueComments, issueDetail, listIssuePage } from "./issues-board";
+-import { authenticatedAccount, IssueGithub, type FetchIssues } from "./issues-github";
++import { authenticatedAccount, IssueGithub, issuesDisabled, type FetchIssues } from "./issues-github";
+ import { issueKey, type IssueRef } from "./issues-contract";
+ 
+ function json(value: unknown, init?: ResponseInit) {
+   return Response.json(value, init);
+ }
+ function row(repo: string, node: string) {
+   return {
+     node_id: node,
+     html_url: `https://github.com/org/${repo}/issues/8`,
+     number: 8,
+     title: "Equal issue numbers",
+     state: "open",
+     user: { login: "owner" },
+     assignees: [],
+     labels: ["bug"],
+     created_at: "2026-01-01",
+     updated_at: "2026-01-02",
+     repository: { node_id: "R_" + repo, name: repo, owner: { login: "org" } },
+   };
+ }
+
+--- src/integrations/issues-board.test.ts
+@@ 241,352 @@
+ });
+ 
+ test("AC13 the repository source needs a project with a GitHub remote", async () => {
+   let requested = 0;
+   const auth = await account(async () => {
+     requested++;
+     return json([]);
+   });
+   await withProject(null, async (cwd) => {
+     await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+       "configuration: This project has no GitHub.com fetch remote.",
+     );
+   });
+   await withProject("https://gitlab.com/org/base.git", async (cwd) => {
+     await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+   });
+   await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration:");
+   expect(requested).toBe(0);
+ });
+ 
+-test("AC13 a remote named `..` is refused before any request", async () => {
++test("AC13 a remote named `..` is refused before any request, as a remote that names no usable repository", async () => {
+   let requested = 0;
+   const auth = await account(async () => {
+     requested++;
+     return json([]);
+   });
+   // The remote parser reads `org/..` from this URL; as a path it would turn /repos/org/../issues into /repos/issues.
+   await withProject("https://github.com/org/...git", async (cwd) => {
+-    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
++    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
++      "configuration: This project's GitHub.com remote names no usable repository.",
++    );
+   });
++  // No project at all stays an invalid request: the caller sent the repository source without one.
++  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration: Invalid Issues request.");
+   expect(requested).toBe(0);
+ });
+ 
+ test("AC13 a viewer page refuses a next link outside /issues; a repository page follows GitHub's links in any case", async () => {
+   const viewerAuth = await account(async () =>
+     json([row("a", "I_1")], { headers: { link: '<https://api.github.com/repositories/42/issues?page=2>; rel="next"' } }));
+   await expect(listIssuePage(viewerAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+   const upperAuth = await account(async () =>
+     json([row("a", "I_1")], { headers: { link: '<https://api.github.com/ISSUES?page=2>; rel="next"' } }));
+   await expect(listIssuePage(upperAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+ 
+   const paths: string[] = [];
+   const auth = await account(async (url) => {
+     paths.push(url.pathname);
+     const n = Number(url.searchParams.get("page") ?? 1);
+     return json([row("base", "I_" + n)], n < 2 ? { headers: { link: '<https://api.github.com/repos/Org/Base/issues?page=2>; rel="next"' } } : {});
+   });
+   await withProject("https://github.com/org/base.git", async (cwd) => {
+     const first = await listIssuePage(auth, { source: "repository" }, cwd);
+     expect(first.nextCursor).not.toBeNull();
+     // The cursor binds the repository without case: the same repository spelled otherwise by its remote accepts it.
+     await withProject("https://github.com/Org/Base.git", async (other) => {
+       const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, other);
+       expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+     });
+   });
+   expect(paths).toHaveLength(2);
+ });
+ 
+ test("AC13 GitHub's 410 for a repository with Issues turned off is a configuration error naming the repository", async () => {
+   const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+   await withProject("https://github.com/fork-owner/base.git", async (cwd) => {
+     const failure = listIssuePage(auth, { source: "repository" }, cwd);
+     await expect(failure).rejects.toThrow("configuration:");
+     await expect(failure).rejects.toThrow("fork-owner/base");
+   });
+ });
+ 
++test("AC13 a viewer source never gets the repository-named 410 text", async () => {
++  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
++  const failure = listIssuePage(auth, { source: "assigned" });
++  await expect(failure).rejects.toThrow(issuesDisabled);
++  await expect(failure).rejects.not.toThrow("Choose another source");
++});
++
++test("AC13 a viewer page made only of pull requests does not page on", async () => {
++  const pages: number[] = [];
++  const auth = await account(async (url) => {
++    const n = Number(url.searchParams.get("page") ?? 1);
++    pages.push(n);
++    return json([{ ...row("a", "P_" + n), pull_request: {} }], { headers: { link: `<https://api.github.com/issues?page=${n + 1}>; rel="next"` } });
++  });
++  const page = await listIssuePage(auth, { source: "assigned" });
++  expect(page.items).toEqual([]);
++  expect(page.nextCursor).not.toBeNull();
++  expect(pages).toEqual([1]);
++});
++
+ test("AC13 a repository page made only of pull requests does not end the load; the search stops after three pages", async () => {
+   const pages: number[] = [];
+   const link = (n: number) => ({ headers: { link: `<https://api.github.com/repositories/42/issues?page=${n}>; rel="next"` } });
+   const pull = (n: number) => ({ ...row("base", "P_" + n), number: 100 + n, pull_request: {} });
+   const auth = await account(async (url) => {
+     const n = Number(url.searchParams.get("page") ?? 1);
+     pages.push(n);
+     return n === 1 ? json([pull(1), pull(2)], link(2)) : n === 2 ? json([row("base", "I_2")], link(3)) : json([row("base", "I_3")]);
+   });
+   await withProject("https://github.com/org/base.git", async (cwd) => {
+     const first = await listIssuePage(auth, { source: "repository" }, cwd);
+     expect(first.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+     expect(pages).toEqual([1, 2]);
+     // The cursor continues after the page that was used, not after the first one.
+     const next = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
+     expect(next.items.map((i) => i.ref.nodeId)).toEqual(["I_3"]);
+     expect(pages).toEqual([1, 2, 3]);
+   });
+ 
+   const endless: number[] = [];
+
+--- src/integrations/issues-board.ts
+@@ 93,142 @@
+   pull_request?: unknown;
+ }
+ 
+ const viewerScopes: readonly string[] = ["assigned", "created", "mentioned", "subscribed"];
+ const pageKeys = ["page", "after", "before", "since_id"];
+ 
+ function validateListRequest(request: ListIssueRequest): void {
+   const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
+   if (
+     !(viewerScopes.includes(source) || source === "repository") ||
+     !["open", "closed", "all"].includes(state) ||
+     !["asc", "desc"].includes(sort) ||
+     !Array.isArray(labels) ||
+     labels.some((l) => typeof l !== "string" || l.length > 100) ||
+     (updatedSince !== undefined &&
+       (typeof updatedSince !== "string" || !Number.isFinite(Date.parse(updatedSince))))
+   )
+     throw new Error(invalidInput);
+ }
+ 
++/** The project's GitHub.com remote parses, but its owner or name (`.`, `..`) cannot name a repository. */
++export const unusableRemote = "configuration: This project's GitHub.com remote names no usable repository.";
++
+ /** owner/name of the project's GitHub repository, resolved the way the PR board resolves its default. */
+ async function projectRepository(cwd: string | undefined): Promise<string> {
++  // No project at all is a caller's bug, not something the person can fix in the project.
+   if (!cwd) throw new Error(invalidInput);
+   const repository = selectRepository(await reviewRepositories(cwd));
+   // The remote parser admits "." and ".." as a name; either would rewrite the request path.
+-  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(invalidInput);
++  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(unusableRemote);
+   return repository;
+ }
+ 
+ function listUrl(request: ListIssueRequest, repository: string | null) {
+   const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
+   const url = repository
+     ? new URL("/repos/" + repository.split("/").map(encodeURIComponent).join("/") + "/issues", API)
+     : new URL("/issues", API);
+   url.search = new URLSearchParams({
+     ...(repository ? {} : { filter: source }),
+     state,
+     direction: sort,
+     sort: "updated",
+     per_page: "40",
+     ...(repository ? {} : { pulls: "false" }),
+   }).toString();
+   if (updatedSince) url.searchParams.set("since", new Date(updatedSince).toISOString());
+   if (labels.length === 1 && !labels[0]!.includes(",")) url.searchParams.set("labels", labels[0]!);
+   return url;
+ }
+
+--- src/lib/file-lock.test.ts
+@@ 1,128 @@
++import { describe, expect, test } from "bun:test";
++import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { withFileLock, withFileLockAsync } from "./file-lock";
++
++function scratch(): string {
++  return mkdtempSync(path.join(tmpdir(), "keryx-file-lock-"));
++}
++
++/** A lock another holder took just now, which a long stale window never breaks. */
++function plantFresh(lock: string): void {
++  writeFileSync(lock, "another-holder");
++}
++
++/** A lock its holder abandoned a minute ago. */
++function plantAbandoned(lock: string): void {
++  writeFileSync(lock, "crashed-holder");
++  const old = new Date(Date.now() - 60_000);
++  utimesSync(lock, old, old);
++}
++
++type Lock = <T>(lockPath: string, fn: () => T, options?: Parameters<typeof withFileLock>[2]) => Promise<T | null>;
++
++const variants: [string, Lock][] = [
++  ["withFileLock", async (lockPath, fn, options) => withFileLock(lockPath, fn, options)],
++  ["withFileLockAsync", (lockPath, fn, options) => withFileLockAsync(lockPath, fn, options)],
++];
++
++for (const [name, lock] of variants) {
++  describe(name, () => {
++    test("runs the section holding the lock file, then removes it", async () => {
++      const root = scratch();
++      try {
++        const file = path.join(root, "nested", "x.lock");
++        expect(await lock(file, () => existsSync(file))).toBe(true);
++        expect(existsSync(file)).toBe(false);
++      } finally {
++        rmSync(root, { recursive: true, force: true });
++      }
++    });
++
++    test("a section that throws still releases the lock", async () => {
++      const root = scratch();
++      try {
++        const file = path.join(root, "x.lock");
++        await expect(lock(file, () => { throw new Error("section failed"); })).rejects.toThrow("section failed");
++        expect(existsSync(file)).toBe(false);
++      } finally {
++        rmSync(root, { recursive: true, force: true });
++      }
++    });
++
++    test("a held lock is waited for until the timeout, then null; the holder's lock is left alone", async () => {
++      const root = scratch();
++      try {
++        const file = path.join(root, "x.lock");
++        plantFresh(file);
++        let ran = false;
++        expect(await lock(file, () => { ran = true; }, { timeoutMs: 20, staleMs: 60_000 })).toBeNull();
++        expect(ran).toBe(false);
++        expect(readFileSync(file, "utf8")).toBe("another-holder");
++      } finally {
++        rmSync(root, { recursive: true, force: true });
++      }
++    });
++
++    test("an abandoned lock is broken and the section runs", async () => {
++      const root = scratch();
++      try {
++        const file = path.join(root, "x.lock");
++        plantAbandoned(file);
++        expect(await lock(file, () => readFileSync(file, "utf8"), { staleMs: 1_000 })).not.toBe("crashed-holder");
++        expect(existsSync(file)).toBe(false);
++      } finally {
++        rmSync(root, { recursive: true, force: true });
++      }
++    });
++
++    test("createDir: false never creates the directory; a missing one throws ENOENT at once instead of timing out", async () => {
++      const root = scratch();
++      try {
++        const gone = path.join(root, "gone");
++        const file = path.join(gone, "x.lock");
++        let ran = false;
++        await expect(lock(file, () => { ran = true; }, { createDir: false, timeoutMs: 200 })).rejects.toMatchObject({ code: "ENOENT" });
++        expect(ran).toBe(false);
++        expect(existsSync(gone)).toBe(false);
++        // An existing directory is used as it is.
++        expect(await lock(path.join(root, "x.lock"), () => "ran", { createDir: false })).toBe("ran");
++      } finally {
++        rmSync(root, { recursive: true, force: true });
++      }
++    });
++  });
++}
++
++describe("withFileLockAsync", () => {
++  test("waits for a held lock without blocking the event loop", async () => {
++    const root = scratch();
++    try {
++      const file = path.join(root, "x.lock");
++      plantFresh(file);
++      // Never stale, a long timeout: only the holder letting go can let this section in.
++      const pending = withFileLockAsync(file, () => "ran", { timeoutMs: 10_000, staleMs: 60_000 });
++      // This line runs only because the wait yielded; a blocking wait would return null after the timeout first.
++      rmSync(file);
++      expect(await pending).toBe("ran");
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
++  test("awaits an async section before releasing", async () => {
++    const root = scratch();
++    try {
++      const file = path.join(root, "x.lock");
++      const seen = await withFileLockAsync(file, async () => {
++        await Promise.resolve();
++        return existsSync(file);
++      });
++      expect(seen).toBe(true);
++      expect(existsSync(file)).toBe(false);
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++});
+
+--- src/lib/file-lock.ts
+@@ 26,103 @@
+  * Total time to wait for a contended lock before giving up.
+  *
+  * Deliberately LONGER than {@link LOCK_STALE_MS}: with the shorter value a
+  * caller gave up before a genuinely crashed holder's lock became breakable, so
+  * every write failed for a window instead of waiting it out.
+  */
+ export const LOCK_TIMEOUT_MS = 15_000;
+ 
+ function sleepSync(ms: number): void {
+   const bunSleep = (globalThis as { Bun?: { sleepSync?: (ms: number) => void } }).Bun?.sleepSync;
+   if (typeof bunSleep === "function") {
+     bunSleep(ms);
+     return;
+   }
+   const until = Date.now() + ms;
+   while (Date.now() < until) {
+     // Busy-wait fallback; the critical section is a few file operations long.
+   }
+ }
+ 
++export interface FileLockOptions {
++  onWaiting?: ((message: string) => void) | undefined;
++  waitingMessage?: string;
++  /** Override {@link LOCK_TIMEOUT_MS} — a caller on an interactive path must not wait 15s. */
++  timeoutMs?: number;
++  /** Override {@link LOCK_STALE_MS} — a short critical section can call its lock abandoned sooner. */
++  staleMs?: number;
++  /**
++   * `false`: the lock's directory must already exist and is never created. A
++   * missing directory throws its ENOENT at once instead of being waited out —
++   * for a lock inside a directory another process may delete (a session moved
++   * to the trash), which taking the lock must not bring back. Default `true`.
++   */
++  createDir?: boolean;
++}
++
+ /**
+- * Run `fn` while holding an exclusive lock at `lockPath`.
+- *
+- * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
+- * killed mid-write must not wedge every future write.
+- *
+- * Returns `null` when the lock could not be taken, which callers surface as a
+- * write failure rather than a throw. `waitingMessage` is emitted once through
+- * `onWaiting` when the wait becomes long enough to look like a hang.
++ * One attempt to take the lock at a time, shared by the synchronous and the
++ * asynchronous waits so both keep the same rules: exclusive create, a nonce,
++ * the deadline checked before the stale branch, and stale takeover.
+  */
+-export function withFileLock<T>(
+-  lockPath: string,
+-  fn: () => T,
+-  options: {
+-    onWaiting?: ((message: string) => void) | undefined;
+-    waitingMessage?: string;
+-    /** Override {@link LOCK_TIMEOUT_MS} — a caller on an interactive path must not wait 15s. */
+-    timeoutMs?: number;
+-    /** Override {@link LOCK_STALE_MS} — a short critical section can call its lock abandoned sooner. */
+-    staleMs?: number;
+-  } = {},
+-): T | null {
+-  try {
+-    mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+-  } catch {
+-    return null;
+-  }
+-
++class LockAttempt {
+   // A nonce identifies THIS holder. Without it, a holder whose critical section
+   // ran past the stale threshold has its lock broken by someone else and then
+   // deletes the new holder's lock in its own `finally` — letting a third caller
+   // in while the second is still inside, which is the lost update the lock
+   // exists to prevent.
+-  const nonce = randomUUID();
+-  const started = Date.now();
+-  const deadline = started + (options.timeoutMs ?? LOCK_TIMEOUT_MS);
+-  const staleMs = options.staleMs ?? LOCK_STALE_MS;
+-  let handle: number | null = null;
+-  let announced = false;
++  private readonly nonce = randomUUID();
++  private readonly started = Date.now();
++  private readonly deadline: number;
++  private readonly staleMs: number;
++  private announced = false;
+ 
+-  while (handle === null) {
++  constructor(private readonly lockPath: string, private readonly options: FileLockOptions) {
++    this.deadline = this.started + (options.timeoutMs ?? LOCK_TIMEOUT_MS);
++    this.staleMs = options.staleMs ?? LOCK_STALE_MS;
++  }
++
++  /** Whether the lock's directory is there (created unless `createDir` is false). False when it cannot be made. */
++  prepare(): boolean {
++    if (this.options.createDir === false) return true;
++    try {
++      mkdirSync(path.dirname(this.lockPath), { recursive: true, mode: 0o700 });
++      return true;
++    } catch {
++      return false;
++    }
++  }
++
++  /** The held lock's handle, `null` to pause and retry, or `"timeout"`. */
++  step(): number | null | "timeout" {
+     // The deadline is checked FIRST, before the stale branch. Checking it only
+     // in the contended branch meant an unremovable stale lock (read-only or
+     // root-owned config dir) spun forever at full CPU instead of degrading to a
+     // reported write failure.
+-    if (Date.now() > deadline) {
+-      return null;
+-    }
++    if (Date.now() > this.deadline) return "timeout";
++    let handle: number | null = null;
+     try {
+
+--- src/lib/file-lock.ts
+@@ 114,206 @@
+-        handle = null;
+-        rmSync(lockPath, { force: true });
+-        throw cause;
++        rmSync(this.lockPath, { force: true });
+       }
+-    } catch {
+-      const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
+-      if (age !== undefined && Date.now() - age > staleMs) {
+-        try {
+-          rmSync(lockPath, { force: true });
+-        } catch {
+-          // Someone else broke it first, or we cannot remove it at all; either
+-          // way sleep and retry until the deadline rather than spinning.
+-        }
+-      }
+-      // A crashed holder costs the next caller the full stale window, and an
+-      // unwritable config dir costs the whole timeout. Silence for that long
+-      // reads as a hang, so say what is happening once.
+-      if (!announced && Date.now() - started > 1_000) {
+-        announced = true;
+-        options.onWaiting?.(options.waitingMessage ?? "waiting for a keryx config lock…");
++      if (this.options.createDir === false && (error as NodeJS.ErrnoException).code === "ENOENT") throw error;
++    }
++    const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;
++    if (age !== undefined && Date.now() - age > this.staleMs) {
++      try {
++        rmSync(this.lockPath, { force: true });
++      } catch {
++        // Someone else broke it first, or we cannot remove it at all; either
++        // way pause and retry until the deadline rather than spinning.
+       }
+-      sleepSync(15);
+     }
++    // A crashed holder costs the next caller the full stale window, and an
++    // unwritable config dir costs the whole timeout. Silence for that long
++    // reads as a hang, so say what is happening once.
++    if (!this.announced && Date.now() - this.started > 1_000) {
++      this.announced = true;
++      this.options.onWaiting?.(this.options.waitingMessage ?? "waiting for a keryx config lock…");
++    }
++    return null;
+   }
+ 
+-  try {
+-    return fn();
+-  } finally {
++  release(handle: number): void {
+     try {
+       closeSync(handle);
+     } catch {
+       // already closed
+     }
+     // Only remove the lock if it is still OURS. If it was broken as stale and
+     // retaken, the file now holds someone else's nonce and must be left alone.
+     try {
+-      if (readFileSync(lockPath, "utf8") === nonce) {
+-        rmSync(lockPath, { force: true });
++      if (readFileSync(this.lockPath, "utf8") === this.nonce) {
++        rmSync(this.lockPath, { force: true });
+       }
+     } catch {
+       // Gone already, or unreadable; a leftover goes stale and is broken above.
+     }
+   }
+ }
++
++/** Pause between attempts on a contended lock. */
++const RETRY_MS = 15;
++
++/**
++ * Run `fn` while holding an exclusive lock at `lockPath`.
++ *
++ * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
++ * killed mid-write must not wedge every future write.
++ *
++ * Returns `null` when the lock could not be taken, which callers surface as a
++ * write failure rather than a throw. `waitingMessage` is emitted once through
++ * `onWaiting` when the wait becomes long enough to look like a hang.
++ *
++ * The wait blocks the thread; a long-lived server with other work on its event
++ * loop uses {@link withFileLockAsync}, which takes the same lock.
++ */
++export function withFileLock<T>(lockPath: string, fn: () => T, options: FileLockOptions = {}): T | null {
++  const attempt = new LockAttempt(lockPath, options);
++  if (!attempt.prepare()) return null;
++  let handle = attempt.step();
++  while (handle === null) {
++    sleepSync(RETRY_MS);
++    handle = attempt.step();
++  }
++  if (handle === "timeout") return null;
++  try {
++    return fn();
++  } finally {
++    attempt.release(handle);
++  }
++}
++
++/**
++ * {@link withFileLock} with a wait that yields to the event loop between
++ * attempts. The lock file, nonce, stale rule and timeout are the same, so a
++ * synchronous holder in another process excludes this one and the reverse.
++ */
++export async function withFileLockAsync<T>(lockPath: string, fn: () => T | Promise<T>, options: FileLockOptions = {}): Promise<T | null> {
++  const attempt = new LockAttempt(lockPath, options);
++  if (!attempt.prepare()) return null;
++  let handle = attempt.step();
++  while (handle === null) {
++    await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
++    handle = attempt.step();
++  }
++  if (handle === "timeout") return null;
++  try {
++    return await fn();
++  } finally {
++    attempt.release(handle);
++  }
++}
+
+--- src/session/issues/issue-session.test.ts
+@@ 1,55 @@
+-import { describe, expect, test } from "bun:test";
+-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { describe, expect, spyOn, test } from "bun:test";
++import { randomUUID } from "node:crypto";
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { IssueDetail, IssueProjectRef, IssueViewer } from "../../integrations/issues-contract";
++import * as organize from "../organize";
+ import { readSessionFlags, setSessionFlags, type SessionSubject } from "../organize";
+ import { sessionDir } from "../paths";
+-import { type BoundIssue, withIssueBinding } from "./issue-session";
++import { type BoundIssue, issueBindingFile, saveBinding, withIssueBinding } from "./issue-session";
+ 
+ const viewer: IssueViewer = { host: "github.com", login: "reader", nodeId: "user-reader" };
+ 
+ function issue(overrides: Partial<IssueDetail["ref"]> = {}): IssueDetail {
+   return {
+     ref: { host: "github.com", nodeId: "I_9", repositoryId: "R_9", owner: "Org", repo: "repo", number: 9, url: "https://github.com/Org/repo/issues/9", ...overrides },
+     title: "Bind me", state: "open", author: "reader", assignees: [], labels: [],
+     createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z", body: "Body",
+   };
+ }
+ 
+ /** The bound session's id; every binding in these tests reserves one, so a missing id fails the test. */
+ async function boundSessionId(record: BoundIssue): Promise<string> {
+   const id = record.launch.sessionId;
+   if (id === undefined) throw new Error("the binding reserved no session id");
+   return id;
+ }
+ 
++/** keryx lists a session only after its first save, and a later open needs to find it. */
++async function listed(root: string, sessionId: string, dataDir: string): Promise<void> {
++  const { persistHistory, createSession } = await import("../index");
++  const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
++  persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
++}
++
+ function workspace(): { root: string; dataDir: string; project: IssueProjectRef } {
+   const root = mkdtempSync(path.join(tmpdir(), "keryx-issue-session-"));
+   return { root, dataDir: path.join(root, "data"), project: { cwd: root, projectId: "p", cloneId: "c", baseBranch: "main" } };
+ }
+ 
+ describe("withIssueBinding: session subject", () => {
+   test("binding a session writes subject.kind = issue beside the private marker; a rebind keeps it", async () => {
+     const { root, dataDir, project } = workspace();
+     try {
+       const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+       const dir = sessionDir(root, sessionId, dataDir);
+       const expected: SessionSubject = { kind: "issue", repo: "Org/repo", number: 9, url: "https://github.com/Org/repo/issues/9", repositoryId: "R_9" };
+       expect(readSessionFlags(dir)).toEqual({ hasIssue: true, subject: expected });
+ 
+       // The bound session reopened through the same binding keeps the subject and the other flags.
+       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+       expect(readSessionFlags(dir).subject).toEqual(expected);
+     } finally {
+       rmSync(root, { recursive: true, force: true });
+     }
+
+--- src/session/issues/issue-session.test.ts
+@@ 78,166 @@
+       const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
+       const dir = sessionDir(root, sessionId, dataDir);
+       const { persistHistory, createSession } = await import("../index");
+       const handle = createSession({ cwd: root, id: sessionId, dataDir, provider: "test", model: "m" });
+       persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+       // What an older keryx left: the binding and a pin, no subject and no unlink marker.
+       writeFileSync(path.join(dir, "flags.json"), JSON.stringify({ pinnedAt: "2026-11-01T00:00:00.000Z" }));
+       expect(readSessionFlags(dir).subject).toBeUndefined();
+       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+       expect(readSessionFlags(dir)).toEqual({ hasIssue: true, pinnedAt: "2026-11-01T00:00:00.000Z",
+         subject: { kind: "issue", repo: "Org/repo", number: 9, url: "https://github.com/Org/repo/issues/9", repositoryId: "R_9" } });
+       // The person unlinks it; the next open leaves it unlinked.
+       setSessionFlags(root, sessionId, { subject: null }, dataDir);
+       await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
+       expect(readSessionFlags(dir).subject).toBeUndefined();
+     } finally {
+       rmSync(root, { recursive: true, force: true });
+     }
+   });
+ 
++  test("a later open reads the flags without the lock and skips the backfill when a subject is stored", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
++      await listed(root, sessionId, dataDir);
++      const backfill = spyOn(organize, "backfillSessionSubject");
++      try {
++        await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++        // Unlinked by the person: settled too, so no backfill either.
++        setSessionFlags(root, sessionId, { subject: null }, dataDir);
++        await withIssueBinding(viewer, project, issue(), dataDir, async () => undefined);
++        expect(backfill).not.toHaveBeenCalled();
++      } finally {
++        backfill.mockRestore();
++      }
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
++  test("a later open whose subject backfill fails still opens the session", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      const sessionId = await withIssueBinding(viewer, project, issue(), dataDir, boundSessionId);
++      await listed(root, sessionId, dataDir);
++      const dir = sessionDir(root, sessionId, dataDir);
++      // flags.json cannot be written (a directory stands in its place), and it holds no subject.
++      rmSync(path.join(dir, "flags.json"), { force: true });
++      mkdirSync(path.join(dir, "flags.json"));
++      let applied = false;
++      await withIssueBinding(viewer, project, issue(), dataDir, async () => { applied = true; });
++      expect(applied).toBe(true);
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
++  test("the first bind fails loudly when the subject cannot be written", async () => {
++    const { root, dataDir, project } = workspace();
++    try {
++      // A binding registered but not yet bound, whose session folder has an unwritable flags.json.
++      const sessionId = randomUUID();
++      const launchId = randomUUID();
++      const file = issueBindingFile(viewer, project, issue().ref, dataDir);
++      mkdirSync(path.dirname(file), { recursive: true });
++      saveBinding(file, {
++        launch: { version: 1, launchId, issue: issue().ref, viewer, project, stage: "registered", sessionId, initialTurn: { key: launchId, state: "unsent" } },
++        body: "Body", updatedAt: "2026-11-02T00:00:00Z",
++      });
++      mkdirSync(path.join(sessionDir(root, sessionId, dataDir), "flags.json"), { recursive: true });
++      let applied = false;
++      await expect(withIssueBinding(viewer, project, issue(), dataDir, async () => { applied = true; })).rejects.toThrow();
++      expect(applied).toBe(false);
++    } finally {
++      rmSync(root, { recursive: true, force: true });
++    }
++  });
++
+   test("an issue outside github.com binds without a subject", async () => {
+     const { root, dataDir, project } = workspace();
+     try {
+       const enterprise = issue({ host: "git.example.com", url: "https://git.example.com/Org/repo/issues/9" });
+       const sessionId = await withIssueBinding({ ...viewer, host: "git.example.com" }, project, enterprise, dataDir, boundSessionId);
+       expect(readSessionFlags(sessionDir(root, sessionId, dataDir))).toEqual({ hasIssue: true });
+     } finally {
+       rmSync(root, { recursive: true, force: true });
+     }
+   });
+ });
+
+--- src/session/organize.test.ts
+@@ 1,56 @@
+ import { describe, expect, test } from "bun:test";
+ import { randomUUID } from "node:crypto";
+-import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { hostname, tmpdir } from "node:os";
+ import path from "node:path";
+ import { createSession, persistHistory, sessionDir } from ".";
+ import { sessionLeasePath } from "./lease";
+-import { backfillSessionSubject, readSessionFlags, setSessionFlags, trashDirectory, trashSession } from "./organize";
++import {
++  type SessionFlags,
++  backfillSessionSubject,
++  readSessionFlags,
++  sessionSubjectSettled,
++  setSessionFlags,
++  setSessionFlagsAsync,
++  trashDirectory,
++  trashSession,
++  updateSessionFlagsAt,
++  updateSessionFlagsAtAsync,
++} from "./organize";
++
++const ORGANIZE = path.join(import.meta.dir, "organize.ts");
++
++type Child = ReturnType<typeof spawnScript>;
++
++/** A keryx-side writer in its own process, as another Desktop window's ACP server or the issue-workspace child is. */
++function spawnScript(script: string) {
++  return Bun.spawn([process.execPath, "-e", script], { stdout: "pipe", stderr: "inherit" });
++}
++
++/** Resolves once `file` exists: the barrier a child writes. Fails instead of waiting forever when the child exits first. */
++async function until(file: string, child: Child): Promise<void> {
++  while (!existsSync(file)) {
++    if (child.exitCode !== null) throw new Error(`the writer exited (${child.exitCode}) before ${path.basename(file)}`);
++    await new Promise((resolve) => setTimeout(resolve, 2));
++  }
++}
+ 
+ function project(): { cwd: string; dataDir: string; home: string } {
+   const root = mkdtempSync(path.join(tmpdir(), "keryx-organize-"));
+   return { cwd: root, dataDir: path.join(root, "data"), home: path.join(root, "home") };
+ }
+ 
+ function stored(cwd: string, dataDir: string): string {
+   const handle = createSession({ cwd, dataDir, provider: "test", model: "m" });
+   persistHistory(handle, [{ role: "user", content: "hi" }], { provider: "test", model: "m" });
+   return handle.summary.id;
+ }
+ 
+ describe("session flags", () => {
+   test("archive and pin are stored beside the summary and survive a later save", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const t1 = new Date("2026-11-17T10:00:00Z");
+     expect(setSessionFlags(cwd, id, { archived: true, pinned: true }, dataDir, () => t1)).toEqual({
+       archivedAt: t1.toISOString(),
+       pinnedAt: t1.toISOString(),
+
+--- src/session/organize.test.ts
+@@ 146,366 @@
+     const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
+     expect(backfillSessionSubject(dir, issue)).toBe(true);
+     expect(readSessionFlags(dir).subject).toEqual(issue);
+     // Present already: left as it is.
+     expect(backfillSessionSubject(dir, { ...issue, number: 8, url: "https://github.com/org/repo/issues/8" })).toBe(false);
+     expect(readSessionFlags(dir).subject).toEqual(issue);
+     // Unlinked by the person: the marker survives other flag changes and blocks the backfill.
+     setSessionFlags(cwd, id, { subject: null }, dataDir);
+     setSessionFlags(cwd, id, { pinned: true }, dataDir);
+     expect(backfillSessionSubject(dir, issue)).toBe(false);
+     expect(readSessionFlags(dir).subject).toBeUndefined();
+     // The marker stays private to the store.
+     expect(readSessionFlags(dir)).toEqual({ pinnedAt: expect.any(String) });
+     // Linking again clears the marker.
+     setSessionFlags(cwd, id, { subject: issue }, dataDir);
+     setSessionFlags(cwd, id, { subject: null }, dataDir);
+     setSessionFlags(cwd, id, { subject: issue }, dataDir);
+     expect(JSON.parse(readFileSync(path.join(dir, "flags.json"), "utf8")).subjectUnlinked).toBeUndefined();
+   });
+ 
+-  test("a flags change waits for another writer's lock and takes over an abandoned one", () => {
++  test("a flags change waits for a writer in another process and lands after its change", async () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const barrier = mkdtempSync(path.join(tmpdir(), "keryx-organize-barrier-"));
++    const held = path.join(barrier, "held");
++    const go = path.join(barrier, "go");
++    // The other writer holds the flags lock across a read-modify-write: it reads, says so, waits for `go`, then writes what it read plus its change.
++    const child = spawnScript(`
++      const { existsSync, writeFileSync } = await import("node:fs");
++      const { withFileLock } = await import(${JSON.stringify(path.join(import.meta.dir, "../lib/file-lock.ts"))});
++      const { readSessionFlags } = await import(${JSON.stringify(ORGANIZE)});
++      const done = withFileLock(${JSON.stringify(path.join(dir, "flags.json.lock"))}, () => {
++        const seen = readSessionFlags(${JSON.stringify(dir)});
++        writeFileSync(${JSON.stringify(held)}, "");
++        while (!existsSync(${JSON.stringify(go)})) Bun.sleepSync(2);
++        writeFileSync(${JSON.stringify(path.join(dir, "flags.json"))}, JSON.stringify({ ...seen, flow: "child-flow" }));
++        return true;
++      }, { createDir: false, timeoutMs: 30_000 });
++      if (done !== true) process.exit(3);`);
++    let change: Promise<SessionFlags>;
++    try {
++      await until(held, child);
++      // The change starts while the lock is held: its first attempt fails before `go` is written.
++      change = setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, undefined, { timeoutMs: 30_000, staleMs: 30_000 });
++    } finally {
++      writeFileSync(go, "");
++    }
++    const flags = await change;
++    expect(await child.exited).toBe(0);
++    // An unlocked writer would have landed before the child's write, which then rolled it back.
++    expect(flags).toEqual({ flow: "child-flow", pinnedAt: expect.any(String) });
++    expect(readSessionFlags(dir)).toEqual(flags);
++  }, 30_000);
++
++  test("a flags change held off past its timeout fails with the retry error and leaves the other writer's lock", async () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const dir = sessionDir(cwd, id, dataDir);
+     const lock = path.join(dir, "flags.json.lock");
+-    // Just taken by another writer: this change waits for it (here until the lock goes stale) before it lands.
+     writeFileSync(lock, "another-writer");
+-    const started = Date.now();
+-    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir).pinnedAt).toBeDefined();
+-    expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
++    const held = { timeoutMs: 20, staleMs: 60_000 };
++    const locked = /the flags of session .+ are locked by another keryx process; retry/;
++    expect(() => setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)).toThrow(locked);
++    await expect(setSessionFlagsAsync(cwd, id, { pinned: true }, dataDir, undefined, held)).rejects.toThrow(locked);
++    expect(readSessionFlags(dir)).toEqual({});
++    expect(readFileSync(lock, "utf8")).toBe("another-writer");
++  });
++
++  test("a flags lock older than the stale window is taken over and the change lands", async () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const lock = path.join(dir, "flags.json.lock");
++    const stale = { timeoutMs: 30_000, staleMs: 1 };
++    writeFileSync(lock, "crashed-writer");
++    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, stale).pinnedAt).toBeDefined();
+     expect(existsSync(lock)).toBe(false);
+-    // Abandoned long ago: broken at once, and the change lands.
+     writeFileSync(lock, "crashed-writer");
+-    const old = new Date(Date.now() - 60_000);
+-    utimesSync(lock, old, old);
+-    const again = Date.now();
+-    expect(setSessionFlags(cwd, id, { flow: "001-x" }, dataDir)).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
+-    expect(Date.now() - again).toBeLessThan(1500);
++    expect(await setSessionFlagsAsync(cwd, id, { flow: "001-x" }, dataDir, undefined, stale)).toMatchObject({ flow: "001-x", pinnedAt: expect.any(String) });
+     expect(existsSync(lock)).toBe(false);
+   });
+ 
++  test("a subject backfill runs under the flags lock", () => {
++    const { cwd, dataDir } = project();
++    const dir = sessionDir(cwd, stored(cwd, dataDir), dataDir);
++    writeFileSync(path.join(dir, "flags.json.lock"), "another-writer");
++    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
++    expect(() => backfillSessionSubject(dir, issue, { timeoutMs: 20, staleMs: 60_000 })).toThrow(/locked by another keryx process; retry/);
++    expect(readSessionFlags(dir).subject).toBeUndefined();
++  });
++
++  test("a backfill of an invalid subject is refused and writes nothing", () => {
++    const { cwd, dataDir } = project();
++    const dir = sessionDir(cwd, stored(cwd, dataDir), dataDir);
++    const mismatched = { kind: "issue", repo: "org/repo", number: 7, url: "https://github.com/org/other/issues/7" };
++    expect(() => backfillSessionSubject(dir, mismatched as never)).toThrow(/not a GitHub subject/);
++    expect(existsSync(path.join(dir, "flags.json"))).toBe(false);
++  });
++
++  test("a flags write to a session removed since it was located is refused and does not bring it back", async () => {
++    const { cwd, dataDir } = project();
++    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
++    // A short timeout: a missing directory must fail as missing, not wait out the lock and say "retry".
++    const quick = { timeoutMs: 200, staleMs: 60_000 };
++    const gone = /^no session .+ in this project$/;
++    // The directory is gone (moved to the trash): no write site may recreate it.
++    const trashed = sessionDir(cwd, stored(cwd, dataDir), dataDir);
++    rmSync(trashed, { recursive: true });
++    expect(() => updateSessionFlagsAt(trashed, { pinned: true }, undefined, quick)).toThrow(gone);
++    await expect(updateSessionFlagsAtAsync(trashed, { pinned: true }, undefined, quick)).rejects.toThrow(gone);
++    expect(() => backfillSessionSubject(trashed, issue, quick)).toThrow(gone);
++    expect(existsSync(trashed)).toBe(false);
++    // The directory is still there but its summary is not (a move half done): refused, and no flags file appears.
++    const half = sessionDir(cwd, stored(cwd, dataDir), dataDir);
++    rmSync(path.join(half, "summary.json"));
++    expect(() => updateSessionFlagsAt(half, { pinned: true }, undefined, quick)).toThrow(gone);
++    await expect(updateSessionFlagsAtAsync(half, { pinned: true }, undefined, quick)).rejects.toThrow(gone);
++    expect(() => backfillSessionSubject(half, issue, quick)).toThrow(gone);
++    expect(existsSync(path.join(half, "flags.json"))).toBe(false);
++  });
++
++  test("sessionSubjectSettled: a stored or unlinked subject is settled, none is not", () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    expect(sessionSubjectSettled(dir)).toBe(false);
++    const issue = { kind: "issue" as const, repo: "org/repo", number: 7, url: "https://github.com/org/repo/issues/7" };
++    setSessionFlags(cwd, id, { subject: issue }, dataDir);
++    expect(sessionSubjectSettled(dir)).toBe(true);
++    setSessionFlags(cwd, id, { subject: null }, dataDir);
++    expect(sessionSubjectSettled(dir)).toBe(true);
++  });
++
++  test("a writer in another process mid read-modify-write excludes this one until it has written", async () => {
++    const { cwd, dataDir } = project();
++    const id = stored(cwd, dataDir);
++    const dir = sessionDir(cwd, id, dataDir);
++    const barrier = mkdtempSync(path.join(tmpdir(), "keryx-organize-barrier-"));
++    const read = path.join(barrier, "read");
++    const go = path.join(barrier, "go");
++    // The other process pauses its own updateSessionFlagsAt between its read and its write: `now` runs there.
++    const child = spawnScript(`
++      const { existsSync, writeFileSync } = await import("node:fs");
++      const { updateSessionFlagsAt } = await import(${JSON.stringify(ORGANIZE)});
++      updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: true }, () => {
++        writeFileSync(${JSON.stringify(read)}, "");
++        while (!existsSync(${JSON.stringify(go)})) Bun.sleepSync(2);
++        return new Date();
++      }, { timeoutMs: 30_000, staleMs: 60_000 });`);
++    try {
++      await until(read, child);
++      // Locked out while the other writer is between its read and its write. Unlocked, this write would land now
++      // and the other writer's stale read would roll it back.
++      expect(() => updateSessionFlagsAt(dir, { flow: "001-x" }, undefined, { timeoutMs: 20, staleMs: 60_000 })).toThrow(/locked by another keryx process; retry/);
++    } finally {
++      writeFileSync(go, "");
++    }
++    expect(await child.exited).toBe(0);
++    expect(readSessionFlags(dir)).toEqual({ pinnedAt: expect.any(String) });
++    // Once it has written, the change lands beside it.
++    expect(updateSessionFlagsAt(dir, { flow: "001-x" })).toEqual({ pinnedAt: expect.any(String), flow: "001-x" });
++  }, 30_000);
++
+   test("two processes changing different flags of one session lose neither change", async () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const dir = sessionDir(cwd, id, dataDir);
+-    const organize = path.join(import.meta.dir, "organize.ts");
+-    const startAt = Date.now() + 1500;
++    const barrier = mkdtempSync(path.join(tmpdir(), "keryx-organize-barrier-"));
++    const go = path.join(barrier, "go");
++    const rounds = 200;
+     // Each writer owns one field and checks, after every write, that the other writer did not roll it back.
++    // Both start from the same barrier file, so their loops overlap from the first round.
+     const writer = (field: "pinned" | "flow") => `
+-      const { updateSessionFlagsAt, readSessionFlags } = await import(${JSON.stringify(organize)});
+-      while (Date.now() < ${startAt}) {}
++      const { existsSync, writeFileSync } = await import("node:fs");
++      const { updateSessionFlagsAt, readSessionFlags } = await import(${JSON.stringify(ORGANIZE)});
++      writeFileSync(${JSON.stringify(path.join(barrier, field))}, "");
++      while (!existsSync(${JSON.stringify(go)})) Bun.sleepSync(1);
+       let lost = 0;
+-      for (let i = 0; i < 150; i++) {
++      for (let i = 0; i < ${rounds}; i++) {
+         ${field === "pinned"
+           ? `const want = i % 2 === 0; updateSessionFlagsAt(${JSON.stringify(dir)}, { pinned: want });
+              if ((readSessionFlags(${JSON.stringify(dir)}).pinnedAt !== undefined) !== want) lost++;`
+           : `const want = "flow-" + i; updateSessionFlagsAt(${JSON.stringify(dir)}, { flow: want });
+              if (readSessionFlags(${JSON.stringify(dir)}).flow !== want) lost++;`}
+       }
+       process.stdout.write(String(lost));`;
+-    const run = (field: "pinned" | "flow") =>
+-      Bun.spawn([process.execPath, "-e", writer(field)], { stdout: "pipe", stderr: "inherit" });
+-    const children = [run("pinned"), run("flow")];
++    const children = [spawnScript(writer("pinned")), spawnScript(writer("flow"))];
++    try {
++      await until(path.join(barrier, "pinned"), children[0]!);
++      await until(path.join(barrier, "flow"), children[1]!);
++    } finally {
++      writeFileSync(go, "");
++    }
+     const lost = await Promise.all(children.map(async (child) => {
+       const out = await new Response(child.stdout).text();
+       expect(await child.exited).toBe(0);
+       return Number(out);
+     }));
+     expect(lost).toEqual([0, 0]);
+-    expect(readSessionFlags(dir)).toEqual({ flow: "flow-149" });
++    expect(readSessionFlags(dir)).toEqual({ flow: `flow-${rounds - 1}` });
+   }, 30_000);
+ 
+   test("an invalid subject in flags.json reads as absent and leaves the other flags", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     const file = path.join(sessionDir(cwd, id, dataDir), "flags.json");
+     writeFileSync(file, JSON.stringify({ pinnedAt: "2026-11-17T10:00:00.000Z", subject: { kind: "pr", repo: "org/repo", number: 3, url: "https://github.com/org/repo/issues/3" } }));
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({ pinnedAt: "2026-11-17T10:00:00.000Z" });
+   });
+ 
+   test("an unreadable flags file reads as none; an unknown session is refused", () => {
+     const { cwd, dataDir } = project();
+     const id = stored(cwd, dataDir);
+     writeFileSync(path.join(sessionDir(cwd, id, dataDir), "flags.json"), "{not json");
+     expect(readSessionFlags(sessionDir(cwd, id, dataDir))).toEqual({});
+     expect(() => setSessionFlags(cwd, "no-such-session", { archived: true }, dataDir)).toThrow(/no session/);
+   });
+ });
+ 
+ describe("trash", () => {
+
+--- src/session/issues/issue-session.ts
+@@ 1,27 @@
+ import { randomUUID } from "node:crypto";
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+ import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+ import { withFileLock } from "../../lib/fs";
+ import { createSession, findSession, sessionDir } from "../index";
+-import { backfillSessionSubject, parseSessionSubject, readSessionFlags } from "../organize";
++import { backfillSessionSubject, parseSessionSubject, readSessionFlags, sessionSubjectSettled } from "../organize";
+ import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
+ 
+ export interface BoundIssue {
+   launch: IssueLaunch;
+   /** The independently fetched description is available to the ACP conversation as untrusted external context. */
+   body: string;
+   updatedAt: string;
+   /** Persisted before dispatch so retries survive title, login and issue URL changes or a client upgrade. */
+   preparationPrompt?: string;
+   flowSourceUrl?: string;
+ }
+ 
+ export function issueBindingFile(viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail["ref"], dataDir?: string): string {
+   const key = issueSessionKey("shell", viewer, project.cloneId, issue);
+   return path.join(keryxDataDir(dataDir), "issue-sessions", issueDigest(key) + ".json");
+ }
+ 
+ export function privateJson<T>(file: string): T | undefined {
+   const read = readConfigFile(file);
+   if (read.ok) return JSON.parse(read.text) as T;
+
+--- src/session/issues/issue-session.ts
+@@ 32,108 @@
+ export function saveBinding(file: string, record: BoundIssue): void {
+   writeOwnerOnlyFileAtomic(file, JSON.stringify(record));
+ }
+ 
+ export function issueContextForSession(dir: string, dataDir?: string): BoundIssue | undefined {
+   const id = privateJson<{ key: string }>(path.join(dir, "issue-link.json"))?.key;
+   if (!id || !/^[0-9a-f]{64}$/.test(id)) return undefined;
+   const binding = privateJson<BoundIssue>(path.join(keryxDataDir(dataDir), "issue-sessions", id + ".json"));
+   return binding?.launch.sessionId === path.basename(dir) && binding.launch.version === 1 ? binding : undefined;
+ }
+ 
+ /**
+  * Records the issue as the session's public subject in `flags.json`, so a
+  * client can tell which issue the session works on (the private record above
+  * stays the authority). Written when the session is bound, and on a later open
+  * when the session has none (bound by a keryx that wrote no subject); a subject
+  * the person unlinked is never written back (the store keeps an unlink marker).
+  * An issue whose URL is not a github.com issue page (GitHub Enterprise) has no
+  * subject keryx can store. The subject names no GitHub account: a client
+  * counting sessions by subject counts those bound under any account.
++ *
++ * The first bind fails loudly when the subject cannot be written. A later open
++ * is best-effort: it reads the flags without the lock and does nothing when a
++ * subject is stored or was unlinked, and a failed backfill (the flags locked by
++ * another process, an unwritable file) leaves the session without a subject
++ * until the next open rather than failing the open itself.
+  */
+-function bindIssueSubject(dir: string, ref: IssueDetail["ref"]): void {
++function bindIssueSubject(dir: string, ref: IssueDetail["ref"], firstBind: boolean): void {
+   const subject = parseSessionSubject({ kind: "issue", repo: `${ref.owner}/${ref.repo}`, number: ref.number, url: ref.url,
+     ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });
+-  if (subject !== undefined) backfillSessionSubject(dir, subject);
++  if (subject === undefined) return;
++  if (firstBind) {
++    backfillSessionSubject(dir, subject);
++    return;
++  }
++  if (sessionSubjectSettled(dir)) return;
++  try {
++    backfillSessionSubject(dir, subject);
++  } catch {
++    // Best-effort on a later open: the subject is a display hint, the private record stays the authority.
++  }
+ }
+ 
+ /** Only called after the remote issue and viewer were verified. The intent reserves the UUID before creating the session. */
+ export async function withIssueBinding<T>(
+   viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail, dataDir: string | undefined,
+   apply: (record: BoundIssue, file: string) => Promise<T>,
+ ): Promise<T> {
+   const file = issueBindingFile(viewer, project, issue.ref, dataDir);
+   ensureKeryxSubdir(["issue-sessions"], keryxDataDir(dataDir));
+   return withFileLock(file + ".lock", async () => {
+     let record = privateJson<BoundIssue>(file);
+     if (!record) {
+       const launchId = randomUUID();
+       record = {
+         launch: { version: 1, launchId, issue: issue.ref, viewer, project, stage: "registered",
+           sessionId: randomUUID(), initialTurn: { key: launchId, state: "unsent" } },
+         body: issue.body, updatedAt: issue.updatedAt,
+       };
+       saveBinding(file, record);
+     }
+     const launch = record.launch;
+     if (launch.version !== 1 || issueKey(launch.issue) !== issueKey(issue.ref) || issueViewerKey(launch.viewer) !== issueViewerKey(viewer)
+         || launch.project.cloneId !== project.cloneId || !launch.sessionId) {
+       throw new Error("Invalid issue-session binding. Inspect the session storage before continuing.");
+     }
+     const root = launch.project.cwd;
+     const dir = sessionDir(root, launch.sessionId, dataDir);
++    const firstBind = launch.stage === "registered";
+     if (launch.stage !== "registered" && (!findSession(root, launch.sessionId, dataDir) || readSessionFlags(dir).archivedAt)) {
+       throw new Error("The linked session is archived or missing. Restore it in Sessions and retry.");
+     }
+     if (launch.stage === "registered") {
+       // Only the new intent can materialize its reserved UUID, including after a crash at creation.
+       if (!findSession(root, launch.sessionId, dataDir)) {
+         createSession({ cwd: root, id: launch.sessionId, title: `${issue.ref.owner}/${issue.ref.repo}#${issue.ref.number} ${issue.title}`,
+           ...(dataDir !== undefined ? { dataDir } : {}) });
+
+--- src/session/organize.ts
+@@ 1,33 @@
+ // How a person organises their sessions: archived, pinned, or moved to the trash.
+ //
+ // The flags live in `<sessionDir>/flags.json`, a file of their own: a live
+ // session rewrites `summary.json` from its in-memory copy on every save, so a
+ // flag kept there would be lost to the next turn of a session open elsewhere.
+ // Every client of the store (the desktop app over ACP, later `keryx shell`)
+ // reads the same file.
+ 
+ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+ import { homedir } from "node:os";
+ import path from "node:path";
+ import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+-import { withFileLock } from "../lib/file-lock";
++import { type FileLockOptions, withFileLock, withFileLockAsync } from "../lib/file-lock";
+ import { sessionLeaseState } from "./lease";
+ import { sessionDir } from "./paths";
+ import { findSession, shortSessionId } from "./store";
+ 
+ export interface SessionFlags {
+   /** Derived from the private link marker, without exposing its issue or owner. */
+   hasIssue?: true;
+   /** ISO time the session was archived; absent when it is not. */
+   archivedAt?: string;
+   /** ISO time the session was pinned; absent when it is not. */
+   pinnedAt?: string;
+   /** The flow package (its directory name) this session works on; absent when none. */
+   flow?: string;
+   /** The GitHub pull request or issue this session works on; absent when none. */
+   subject?: SessionSubject;
+ }
+ 
+ /** A GitHub pull request or issue a session is bound to. `url` is its github.com page and agrees with `kind`, `repo` and `number`. */
+ export interface SessionSubject {
+   kind: "pr" | "issue";
+
+--- src/session/organize.ts
+@@ 160,202 @@
+  * Runs a read-modify-write of flags.json holding `<dir>/flags.json.lock`, so
+  * that writers in other keryx processes (one ACP server per Desktop window, the
+- * issue-workspace child) cannot lose each other's change. Synchronous: callers
+- * are synchronous, and the section is one read and one atomic write.
++ * issue-workspace child) cannot lose each other's change. Synchronous, for
++ * synchronous callers; a server uses {@link withFlagsLockAsync}.
+  */
+-function withFlagsLock<T>(dir: string, apply: () => T): T {
+-  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {
+-    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,
+-    staleMs: FLAGS_LOCK_STALE_MS,
+-  });
+-  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
++function withFlagsLock<T>(dir: string, apply: () => T, timing: FlagsLockTiming): T {
++  let held: { value: T } | null;
++  try {
++    held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));
++  } catch (error) {
++    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);
++    throw error;
++  }
++  if (held === null) throw lockedError(dir);
++  return held.value;
++}
++
++/** {@link withFlagsLock} waiting without blocking the event loop. */
++async function withFlagsLockAsync<T>(dir: string, apply: () => T, timing: FlagsLockTiming): Promise<T> {
++  let held: { value: T } | null;
++  try {
++    held = await withFileLockAsync(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: whileStored(dir, apply)() }), lockOptions(timing));
++  } catch (error) {
++    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);
++    throw error;
++  }
++  if (held === null) throw lockedError(dir);
+   return held.value;
+ }
+ 
++/**
++ * Whether the session's subject needs no backfill: one is stored, or the
++ * person unlinked it. Read without the lock (a writer replaces flags.json
++ * atomically), so a binder can skip taking it on every open.
++ */
++export function sessionSubjectSettled(dir: string): boolean {
++  const { flags, subjectUnlinked } = readStoredFlags(dir);
++  return flags.subject !== undefined || subjectUnlinked;
++}
++
+ /**
+  * Writes `subject` as the session's subject when it has none and the person
+  * has not unlinked one. Returns whether it wrote. For a binder that learns the
+
+--- src/session/organize.ts
+@@ 210,257 @@
+     if (current.flags.subject !== undefined || current.subjectUnlinked) return false;
+     writeFlags(dir, { flags: { ...current.flags, subject: parsed }, subjectUnlinked: false });
+     return true;
+-  });
++  }, timing);
+ }
+ 
+ /**
+  * Applies a change to the flags stored in `dir` and returns them as stored.
+  * For a caller that already holds the session directory, such as a binder
+  * that has just created the session and cannot look it up yet.
+  */
+-export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
+-  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now));
++export function updateSessionFlagsAt(
++  dir: string,
++  change: SessionFlagsChange,
++  now: () => Date = () => new Date(),
++  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
++): SessionFlags {
++  return withFlagsLock(dir, () => applyFlagsChange(dir, change, now), timing);
++}
++
++/** {@link updateSessionFlagsAt} waiting for the lock without blocking the event loop. */
++export function updateSessionFlagsAtAsync(
++  dir: string,
++  change: SessionFlagsChange,
++  now: () => Date = () => new Date(),
++  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
++): Promise<SessionFlags> {
++  return withFlagsLockAsync(dir, () => applyFlagsChange(dir, change, now), timing);
+ }
+ 
+ function applyFlagsChange(dir: string, change: SessionFlagsChange, now: () => Date): SessionFlags {
+   const { flags: current, subjectUnlinked } = readStoredFlags(dir);
+   const stamp = now().toISOString();
+   const next: SessionFlags = { ...current };
+   if (change.archived === true) next.archivedAt ??= stamp;
+   if (change.archived === false) delete next.archivedAt;
+   if (change.pinned === true) next.pinnedAt ??= stamp;
+   if (change.pinned === false) delete next.pinnedAt;
+   if (typeof change.flow === "string") {
+     if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
+     next.flow = change.flow;
+   }
+   if (change.flow === null) delete next.flow;
+   if (change.subject !== undefined && change.subject !== null) {
+     const subject = parseSessionSubject(change.subject);
+     if (subject === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(change.subject).slice(0, 300)}`);
+     next.subject = subject;
+   }
+
+--- src/session/organize.ts
+@@ 262,321 @@
+ }
+ 
+ /** The project root and directory of a stored session, by its exact id. */
+ function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
+   const summary = findSession(cwd, sessionId, dataDir);
+   if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
+   return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+ }
+ 
+ /**
+  * Archives or unarchives, pins or unpins a session, links or unlinks its flow
+  * and subject. A flag already in the asked state keeps its original time.
+  * Returns the flags as stored.
+  */
+ export function setSessionFlags(
+   cwd: string,
+   sessionId: string,
+   change: SessionFlagsChange,
+   dataDir?: string,
+   now: () => Date = () => new Date(),
++  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
+ ): SessionFlags {
+   const { dir } = locate(cwd, sessionId, dataDir);
+-  return updateSessionFlagsAt(dir, change, now);
++  return updateSessionFlagsAt(dir, change, now, timing);
++}
++
++/**
++ * {@link setSessionFlags} for a long-lived server: waiting for another
++ * writer's lock yields to the event loop instead of freezing it.
++ */
++export async function setSessionFlagsAsync(
++  cwd: string,
++  sessionId: string,
++  change: SessionFlagsChange,
++  dataDir?: string,
++  now: () => Date = () => new Date(),
++  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,
++): Promise<SessionFlags> {
++  const { dir } = locate(cwd, sessionId, dataDir);
++  return updateSessionFlagsAtAsync(dir, change, now, timing);
+ }
+ 
+ export interface TrashOptions {
+   dataDir?: string | undefined;
+   platform?: NodeJS.Platform;
+   home?: string;
+   env?: NodeJS.ProcessEnv;
+   now?: () => Date;
+ }
+ 
+ /** The folder deleted files go to, or undefined where keryx knows none. */
+ export function trashDirectory(platform: NodeJS.Platform, home: string, env: NodeJS.ProcessEnv): { files: string; info?: string } | undefined {
+   if (platform === "darwin") return { files: path.join(home, ".Trash") };
+   if (platform === "linux") {
+     const base = path.join(env["XDG_DATA_HOME"] || path.join(home, ".local", "share"), "Trash");
+     return { files: path.join(base, "files"), info: path.join(base, "info") };
+   }
+   return undefined;
+ }
+ 

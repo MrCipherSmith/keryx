@@ -156,6 +156,24 @@ export interface SessionFlags {
   pinnedAt?: string;
   /** The flow package directory this session works on. */
   flow?: string;
+  /** The GitHub pull request or issue this session works on; keryx before subject support never reports it. */
+  subject?: SessionSubject;
+}
+
+/** A GitHub pull request or issue a session is bound to (`flags.json` `subject`); keryx validates it on write and read. */
+export interface SessionSubject {
+  kind: "pr" | "issue";
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  /** Its github.com page. */
+  url: string;
+  repositoryId?: string;
+}
+
+/** Whether two subjects name the same PR or issue: same kind and number, repo compared without case as GitHub does. */
+export function sameSubject(a: SessionSubject | null | undefined, b: SessionSubject | null | undefined): boolean {
+  return !!a && !!b && subjectKey(a) === subjectKey(b);
 }
 
 export interface SessionInfo {
@@ -169,6 +187,38 @@ export interface SessionInfo {
 
 export function sessionFlags(s: SessionInfo): SessionFlags {
   return s._meta?.keryx ?? {};
+}
+
+const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
+const newestBoundFirst = (a: SessionInfo, b: SessionInfo) => unsaved(b) - unsaved(a);
+
+/**
+ * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
+ * `updatedAt`: its binding is still pending) counts as the newest. Lives here, beside `sameSubject`,
+ * so pure models (the issues board, shared with the root tests) reach no platform module.
+ */
+export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
+  return [...boundSessionIndex(sessions)(subject)];
+}
+
+/** The one identity of a Subject: same kind and number, repo without case as GitHub compares it (`sameSubject`). */
+export function subjectKey(subject: SessionSubject): string {
+  return `${subject.kind}/${subject.repo.toLowerCase()}/${subject.number}`;
+}
+
+/** The one rule behind `boundSessions`, for many subjects: the sessions grouped once, each group newest first. */
+export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {
+  const groups = new Map<string, SessionInfo[]>();
+  for (const session of sessions) {
+    const flags = sessionFlags(session);
+    if (flags.archivedAt !== undefined || !flags.subject) continue;
+    const key = subjectKey(flags.subject);
+    const group = groups.get(key);
+    if (group) group.push(session);
+    else groups.set(key, [session]);
+  }
+  for (const group of groups.values()) group.sort(newestBoundFirst);
+  return subject => groups.get(subjectKey(subject)) ?? [];
 }
 
 /** Messages the stored session holds; null when this keryx does not report it. */

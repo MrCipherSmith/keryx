@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+Layout review, slice-02 (read in full, 2539 lines), PR MrCipherSmith/keryx#1300, round 1. No measurements were taken: the app was not running, so there was no browser, Tauri webview or Vite preview. Every claim below comes from reading the CSS and markup, with the geometry worked out by hand from the token values. Under layout-rendering.mdc Rule 1, all findings are therefore `info` and marked unverified. Each one names the probe that would settle it. The repo's work-row tests do not measure layout either: PrWorkRow.dom.test.tsx regex-matches the text of review.css, and IssuesBoard.dom.test.tsx runs under happy-dom without review.css.
+
+Supported widths: the Tauri window has `minWidth: 720` and a default width of 1180 (apps/desktop/src-tauri/tauri.conf.json). No DESIGN.md exists. The window cannot get narrower than 720px, so the 320px floor cannot be reached in this desktop shell.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Static review only. No layout engine was available, so all 4 findings are info and unverified. Most likely real: (LY-001) the Issue work row's 2-column override loses the cascade to `.pr-work-row`, because IssuesBoard.css loads before styles/review.css (main.tsx imports App first), so issue rows probably render 2 slots in 3 columns. (LY-002) Hand arithmetic at the 230px lane basis gives each PR work-row slot about 60px, leaving the session link about 9px of text: 'Open in session' / 'N sessions' shows only an ellipsis, and the review/Flow state words are cut off. The PR itself lists this as not checked. (LY-003) The fixed 24px `overflow: hidden` row clips the global 2px/2px-offset focus ring on the top and bottom. (LY-004) The new non-shrinking title-bar Subject links come before the session title, which shrinks to 0 at narrow widths and can overflow `.titlebar-left` when the repo name is long. RTL: the new CSS uses logical or neutral properties (margin-inline-start, text-align: start, margin-top), and no physical gradient, shadow or transform was added. Locale: apps/desktop/src has no locale catalog, so Rule 3 does not apply.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/issues/IssuesBoard.css",
+      "line": null,
+      "quote": ".issue-work-row { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--sp-1); }",
+      "problem": "The Issue work row is `<div className=\"pr-work-row issue-work-row\">`. Its 2-column override `.issue-work-row` has the same specificity (0,1,0) as `.pr-work-row { grid-template-columns: repeat(3, minmax(0, 1fr)); ... }` in styles/review.css. Same specificity means the rule that comes later wins. main.tsx imports `./App` on line 2, before `./styles/review.css` on line 9. App statically imports IssuesView, which imports IssuesBoard, which imports './IssuesBoard.css'. In Vite dev (style-tag injection in module evaluation order) and in the single-entry build (CSS concatenated in import-graph order), IssuesBoard.css therefore comes before review.css, so the 3-column template should win. The higher-specificity `.issue-table .issue-work-row` sets only min-width and margin-top, so list rows are affected too.",
+      "impact": "Expected (unmeasured): on every issue card, list row and the issue detail panel, the Flow and session slots each take a third of the row, and the last third stays empty. Each slot is about 2/3 of its intended width, so 'Flow · Needs an answer' and 'Open in session' truncate much earlier than designed. The author's comment ('Two slots ... in the PR work row's fixed-height look') shows two equal halves were intended.",
+      "suggested_fix": "Raise the specificity so the override wins whatever the load order: `.pr-work-row.issue-work-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }`. Alternatively, move the rule into styles/review.css after `.pr-work-row`.",
+      "evidence": "Static cascade reading: apps/desktop/src/main.tsx lines 2 and 9; App.tsx `import { IssuesView } from \"./issues/IssuesView\";`; IssuesBoard.tsx `import \"./IssuesBoard.css\";`; styles/review.css `.pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); ... }`. keryx ctx rg found no other selector that sets the issue row's columns. Unverified. To settle it, in the running app or `vite preview` at 1180px, open Issues and run `getComputedStyle(document.querySelector('.issue-work-row')).gridTemplateColumns`. Two tracks means the finding is wrong; three tracks with the last one empty confirms it.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "issue-work-row-columns-cascade"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "aria-label={`More sessions${of}`} title=\"Sessions of this pull request\" disabled={!openSession}\n        onClick={() => setMenu(open => !open)}>More</button>",
+      "problem": "Three equal `minmax(0, 1fr)` slots, plus a non-shrinking text 'More' button inside the session slot, in a board lane at its 230px basis (`.review-lanes .lane { flex: 1 0 230px; }`). Hand arithmetic: lane 230 − lane-body padding 16 − flow-card padding 24 and border 2 = 188px card content. (188 − 2 gaps × 4) / 3 = 60px per slot. 'More' ≈ 25px text + 8 padding + 2 border + 2 margin ≈ 37px, leaving the session link 23px border-box, or about 9px of text after its 6px padding and 1px borders. The review and Flow links get about 46px of text each.",
+      "impact": "Expected (unmeasured), at fs-xs 11px with text-scale 1: 'Open in session', 'Session' and 'N sessions' render as a bare ellipsis. 'Run review' → 'Run re…', 'Review · ready' / 'Review · needs your answer' → 'Review…', 'Flow #517 · In progress' → 'Flow #…'. The state words the row exists to show are never visible; they appear only in the hover title. This is the common case, not a corner. With the default filter (open + draft: 4 lanes), the 1180px default window gives lanes of only about 256px (slot ≈ 69px, session text ≈ 18px). With Merged and Closed drawn, all 6 lanes sit at the 230px basis and the board scrolls. The list-view column (`.review-table th:nth-child(6) { width: 16rem; }`) gives about 75px per slot and has the same session-slot result. A text-scale above 1 makes all of this worse. The PR body lists 'the work row in narrow lanes' as not checked.",
+      "suggested_fix": "Give the session slot room it can keep. Options: make 'More' an icon-only chevron (16px, keeping its aria-label). Or use uneven tracks, e.g. `grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr)`. Or drop the bound-session count to a short form ('2' with an icon) when the slot is narrow. Alternatively, widen `.review-lanes .lane` to a basis where the three default labels fit. Measure 'Open in session', 'Review · needs your answer' and 'Flow #NNN · Needs an answer' at 11px and size the lanes from that.",
+      "evidence": "Values read from styles/flows.css (`.lane-body` padding `2px var(--sp-2) var(--sp-2)`, `.flow-card` padding `10px var(--sp-3)` with 1px border), styles/review.css (`.pr-work-row`, `.pr-work-slot`, `.pr-work-link` padding 0 6px, `.pr-work-more` padding 0 4px and margin-inline-start 2px, `.review-lanes .lane { flex: 1 0 230px; }`, `.review-table th:nth-child(6) { width: 16rem; }`) and tokens.css (`--fs-xs: calc(11px * var(--text-scale))`, `--sp-1: 4px`, `--sp-2: 8px`). Text widths are estimates (about 5.5–6px per glyph at 11px). Unverified. To settle it, in the app at 1180px with the state filter including merged and closed, read `getBoundingClientRect().width` and `scrollWidth` vs `clientWidth` of `.pr-work-slot[data-slot=session] .pr-work-link` on one card. Repeat at 720px and in list view.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "pr-work-row-slot-truncation",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/PrWorkRow.tsx (board card via ReviewTile, list row via ReviewResults table)",
+          "apps/desktop/src/issues/IssueWorkRow.tsx (2 slots, no More button: wider slots, lower risk, but see LY-001)"
+        ],
+        "enumeration_method": "keryx ctx rg 'pr-work-row|issue-work-row' over apps/desktop/src: the only two components that render the row class, and their call sites in ReviewResults.tsx (ReviewTile and table cell) and IssuesBoard.tsx workActions (card, table, detail panel)."
+      }
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "return <div className=\"pr-work-row\" role=\"group\" aria-label={`Keryx work${of}`}>",
+      "problem": "The row is `height: 24px; overflow: hidden` (styles/review.css), and its buttons are also 24px tall. The global focus ring (`:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }` in styles/components.css) is drawn 2–4px outside each button. That puts it outside the row's padding box, where `overflow: hidden` clips it. Only the vertical edges that fall inside the 4px column gaps can show. The outer start edge of the first slot and the outer end edge of the last are clipped too.",
+      "impact": "Expected (unmeasured): keyboard focus on 'Run review', 'Create Flow', 'Open in session' or 'More' shows no top or bottom ring, only thin side marks or nothing. This happens on every PR card, PR list row and Issue work row. That weakens the visible focus indicator (WCAG 2.4.7) on the row this PR adds as the main Keryx entry point.",
+      "suggested_fix": "Draw the ring inside the button for this row: `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`. This matches what `.project-views button:focus-visible` already does in styles.css. Alternatively, remove `overflow: hidden` from the row: the slots already set `min-width: 0` and the link sets `text-overflow: ellipsis`, so the row does not need to clip.",
+      "evidence": "Static. Sources: styles/review.css `.pr-work-row { ... height: 24px; overflow: hidden; ... }` and `.pr-work-link, .pr-work-more { height: 24px; ... }`; styles/components.css `:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }`. Unverified. To settle it, Tab onto a work-row link in the app and take a screenshot. Or check that the ring extends beyond the row by comparing the link's `getBoundingClientRect()` with the row's.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "pr-work-row-focus-ring-clipped"
+    },
+    {
+      "id": "LY-004",
+      "severity": "info",
+      "file": "apps/desktop/src/session/SessionSubjectLinks.tsx",
+      "line": null,
+      "quote": "return <span className=\"session-subject-links\">",
+      "problem": "The Subject and Flow links go into `.titlebar-left` (flex row, `min-width: 0`, no overflow clip) after `.titlebar-title` (`flex: 1; min-width: 0`). They are styled `.session-subject-links { display: inline-flex; flex: none; white-space: nowrap; }`, so they never shrink. All shrinkage goes to the session title and the project switcher. At or below 920px the title bar is `minmax(0, 2fr) minmax(0, 1fr) max-content`, so `.titlebar-left` gets about 2/3 of (window − inset − padding − gaps). At the 720px minimum with the macOS overlay inset (80px), that is about 400px.",
+      "impact": "Expected (unmeasured): at 720–920px the session title shrinks toward 0px while the 'PR owner/repo#N' and 'Flow #N' links stay full width. This repo's own subject, 'PR MrCipherSmith/keryx#1300' + 'Flow #517' at fs-sm, takes about 240px. A longer `owner/repository` name (40+ characters) plus the session controls can exceed the left column. `.titlebar-left` does not clip, so the links would then spill under the right-hand controls.",
+      "suggested_fix": "Let the subject link shrink and truncate instead of the title disappearing: `.session-subject-links { flex: 0 1 auto; min-width: 0; max-width: 45%; }` plus `.session-subject-links .link-btn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }`. Keep `Flow #N` as `flex: none`. Alternatively, drop the repo from the visible label (show 'PR #1300' and keep the full name in the title).",
+      "evidence": "Static. Sources: styles.css `.titlebar` grid and its `@media (max-width: 920px)` override, `.titlebar-left` and `.titlebar-title`; styles/review.css `.session-subject-links`; AppShell.tsx `{p.view === \"session\" && p.titleLinks}` placed between the title and `.titlebar-session-controls`; tauri.conf.json `minWidth: 720`. Unverified. To settle it, open a PR-bound session in the app at 720px and at 920px with a long repo name. Record `.titlebar-title` width and whether `.titlebar-left` `scrollWidth > clientWidth`.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "dedupe_key": "titlebar-subject-links-no-shrink"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Measure in a real engine (Tauri webview or `vite preview` of apps/desktop) at 720px and 1180px: the issue row's computed gridTemplateColumns (LY-001), the session-slot link width and overflow at the 230px lane basis and in list view (LY-002), the focus ring on a work-row link (LY-003), and the title-bar left column with a long PR subject (LY-004). Any of these confirmed would move from info to the layout-rendering.mdc table row it matches."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 4 }
+}
+```
+
+Summary
+- All 4 findings are `info` and unverified. They come from static CSS and markup analysis only; no layout engine was run.
+- LY-001 is the most likely to be a real defect: under the current CSS load order (main.tsx imports App before styles/review.css), the 2-column override for the Issue work row loses to the 3-column `.pr-work-row` rule. A one-selector fix (`.pr-work-row.issue-work-row`) removes any dependence on load order.
+- LY-002 confirms by hand arithmetic what the PR lists as unchecked: at the lane basis, the session slot shows only an ellipsis and the state words are cut off.
+- LY-003: the fixed-height `overflow: hidden` row clips the focus ring.
+- LY-004: the title-bar Subject links do not shrink, so the session title shrinks to 0 at narrow widths.
+- RTL: nothing found. The new CSS uses logical or neutral properties.
+- Locale: not applicable (no catalog).
+
+Routing audit: graph_used: no (not-relevant: a bounded slice whose file list the orchestrator supplied), wiki_used: no (not-relevant: a geometry review of given CSS), ctx_used: yes (keryx ctx rg / ctx read for CSS rules, import order and test references), raw_rg_used: no.

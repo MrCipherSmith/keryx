@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "for": "test",
+  "files": [
+    "apps/desktop/src/ProjectNavigation.dom.test.tsx",
+    "apps/desktop/src/test/app-navigation.fixture.tsx"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/activity/test.mdc",
+      "sha256": "6d9a4b902bbf4b19310710f9090854e8548db4d0fde4c16d204a137d5f8a6cb7",
+      "bytes": 2070,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
+      "bytes": 4676,
+      "reason": "glob:**/*.tsx",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
+      "bytes": 3734,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
+      "bytes": 2701,
+      "reason": "content:apps/desktop/src/test/app-navigation.fixture.tsx",
+      "tier": "must_read",
+      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

@@ -1,0 +1,172 @@
+STATUS: DONE
+
+# review-ui-ux — round 4, wave 1 (slice-01, range d7b0f7058..4cb6c43ef)
+
+## Verdict
+
+The round-3 UX findings this slice touches are addressed in code: the offer names the Flow title in its accessible name, Link keeps the offer in "Linking…" and shows the failure reason, the Issues source is stored per project and account, the offer lost its button box and hover, the machine prefix is stripped, and the Settings label is correct. Focus now lands on a real control after every self-removing control (Flow slot button, PR search field, Issue source select). No blocker or major. One minor: at the board's own widths the offer's text span has no room, so a sighted user does not see which Flow is offered, that Link is running, or why it failed. The busy buttons have no visual style either.
+
+## Context
+
+- Product: Keryx Desktop. Audience: a developer working on GitHub PRs and issues through Keryx sessions.
+- Primary task (inferred from AC9/AC13): confirm or dismiss a Flow link on a PR card. Switch the Issues source when the repository source is unavailable.
+- Surface: app screen (work row, focus notice, Issues notice). The marketing rows of `ui-anti-slop.mdc` do not apply.
+- Mode: code only (no URL or screenshots supplied).
+
+## Scores
+
+- Slop score: 0. The range adds no T1, T2 or T3 tell: plain text, existing tokens, no new radius, shadow or gradient.
+- WCAG 2.2 AA floor (code reading): focus targets pass. Accessible names pass (`Link Flow #N · <title> for #PR`). The `:focus-visible` inset ring is kept. Contrast and target size were not measured (see "Checks not run").
+- Viewports: not run.
+
+## Findings
+
+### [UX-R4-001] At board widths the offer's text has no room, so the question, "Linking…" and "Not linked: …" do not show (minor)
+
+- Criterion: Nielsen #1 (status visibility) and #6. State: loading and error on a secondary view.
+- File: apps/desktop/src/styles/review.css and apps/desktop/src/review/PrWorkRow.tsx
+- Evidence (computed from CSS, not rendered):
+  - `.review-lanes .lane { flex: 1 0 230px }` and `.pr-work-row` (3 × `minmax(0,1fr)`, gap 4px) give a Flow slot of about 60px in a 230px lane. LY-005 computed 74.7px in the 16rem list column.
+  - Link and Dismiss are `.pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px }` plus a 1px border at 11px text, about 80px together.
+  - The `.pr-work-offer` span (`flex: 1 1 auto; min-width: 0`) therefore shrinks to its 8px padding. The question text is visible only when the slot is wider than about 120px, i.e. in lanes wider than about 400px.
+  - The same span carries all three states. Its `title` (the only other visible place) sits on an 8px-wide non-focusable span.
+  - While `linking`, the buttons get only `aria-disabled`. No CSS rule matches `[aria-disabled]` (searched `apps/desktop/src/**/*.css`: no match). `.pr-work-more:hover:not(:disabled)` and `cursor: pointer` still apply, so the buttons look and react as active.
+- Impact: a sighted user sees "Link" and a clipped "Dismiss" in the Flow slot without the Flow number or title, which are the whole decision HL-001 asked the user to make. After pressing Link, nothing visible changes while the write runs. When the write fails ("Not linked: … locked by another keryx process; retry", the path `app-work-row.fixture.tsx` exercises), the slot looks the same as before the press. Screen-reader users get the name and the alert; sighted keyboard and mouse users get neither.
+- Fix:
+  - Carry the state on the controls, which always have room. Label the Link button "Linking…" (and the `.pr-work-more[aria-disabled="true"]` dim/cursor style the `:disabled` rule has) while the write runs. Show a short "Retry" label plus the warn tone on it after a failure.
+  - Give the Link button a `title` with the full question or error. Or, at narrow widths, drop the static span for one truncating "Link #N?" button as LY-005 proposed.
+  - Then measure at a 230px lane and the 16rem list column.
+- class_scope: sites `apps/desktop/src/review/PrWorkRow.tsx` (FlowOffer, the only renderer of `.pr-work-offer`) and `apps/desktop/src/styles/review.css` (`.pr-work-offer`, `.pr-work-more`). Enumeration method: `keryx ctx rg "pr-work-offer|aria-disabled" apps/desktop/src`. FlowOffer is the only component using either in the work row. ContextMeter's aria-disabled is outside this range.
+
+### [UX-R4-002] The new "filtered out" focus notice offers only Dismiss (info, same class as UX-014)
+
+- Criterion: Nielsen #9.
+- File: apps/desktop/src/review/ReviewBoard.tsx
+- Evidence: the notice says ``#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.``. The banner has only "Dismiss notice". The request is cleared (`onFocusHandled`), so widening the state filter afterwards does not open the PR.
+- Impact: the user came from the session header link to see a (typically merged or closed) PR. To get there they must open Filters, add the state and then find the card by hand.
+- Fix: add one action, either "Show all states" (apply the state filter and keep the request armed for that one load) or "Open on GitHub" (the UX-014 fix, which serves both notices). The owner decision "is cleared" stands; this asks only for a way forward.
+
+### [UX-R4-003] Offer failure copy runs the CLI reason into the next sentence (info)
+
+- Criterion: Nielsen #2 / copy.
+- File: apps/desktop/src/review/PrWorkRow.tsx
+- Evidence: the title is ``${name} was not linked: ${offer.error} Press Link to try again.``. The lock error from `src/session/organize.ts` is "the flags of session <id> are locked by another keryx process; retry" with no closing period. The tooltip then reads "…; retry Press Link to try again.", and the visible text also exposes the session directory id.
+- Fix: end the reason with a period when it has none (or put the remedy on its own line). Prefer a short user-facing reason ("another keryx process is busy with this session") over the raw message.
+
+### [UX-R4-004] `role="alert"` is added to an already-mounted span (info, unverified)
+
+- Criterion: WCAG 4.1.3 (status messages).
+- File: apps/desktop/src/review/PrWorkRow.tsx
+- Evidence: the span ``{...(offer.error && { role: "alert" })}`` keeps its position between the "Linking…" and the error render, so React updates the role attribute and the text in place instead of inserting an alert node. Assistive technologies announce an attribute-switched alert inconsistently.
+- Settle by: a VoiceOver/NVDA run on the failure path. A sure fix is a persistent `aria-live="assertive"` (or `role="status"`) region in the slot whose text changes.
+
+## Prior dispositions (round 3, this slice)
+
+- FE-R3-002: fixed. PrWorkRow refocuses the Flow slot's first button when the offer goes and focus fell to body. "Dismiss notice" focuses the PR search field. The Issues fallback focuses the source select after the remount. Tests: PrWorkRow.dom.test "FE-R3-002" ×2, IssuesBoard.dom.test fallback test.
+- UX-009: fixed. The Link/Dismiss accessible names and the title carry "Flow #N · <title>". The visible text carries it too but has no room at board widths (UX-R4-001).
+- UX-010: fixed in behaviour. The offer stays `linking`, and on failure it stays with `error` and Link works again. `linkFlow` now rejects. Visibility of these states at board widths: UX-R4-001.
+- UX-011: fixed. The source key is `account + ".source." + JSON.stringify(cwd)` (UX-011 test asserts the other project is untouched).
+- LY-005: fixed as to overlap. `.pr-work-slot { overflow: hidden }` clips Dismiss instead of covering the Session slot (owner choice). Residual: the question text has 0 visible width, rated here as UX-R4-001. Geometry is not measured.
+- UX-012: fixed. `.pr-work-offer` no longer has `pr-work-link`, so there is no box and the hover rule does not match it.
+- UX-013: fixed for the unavailable branch (`error.replace(/^configuration:\s*/i, "")`). The Retry branch still shows raw reasons, which was outside the finding.
+- UX-014: deferred, still open. The new "filtered out" notice is a second site of the same class (UX-R4-002).
+- UX-015: fixed. The text reads "choose Bundled keryx in Settings → Desktop", matching SettingsView labels `Bundled keryx` and tab `Desktop`. Not verified: that the source choice renders in the Desktop tab. Still plain text, not a button.
+- UX-016: deferred. Unchanged in this range.
+
+## What works (keep)
+
+- `aria-disabled` instead of `disabled` keeps keyboard focus on Link during the write.
+- The offer is plain text, not a fake control.
+- Focus restoration on all three self-removing controls has tests.
+
+## Checks not run
+
+- No render was supplied, so none of these were measured: offer geometry at a 230px lane and the 16rem list column, contrast of `--warn` text on the card surface for `.pr-work-offer.is-attention`, Link/Dismiss target size against 24×24, and screen-reader announcement of the offer error. Screenshots of a PR card in offer, Linking and error states at 1440/768 would close the gap.
+- Reduced motion and zoom: no motion or viewport change in the range.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-ui-ux",
+    "status": "DONE",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "UX-R4-001",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/styles/review.css",
+        "quote": ".pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }",
+        "problem": "Criterion Nielsen #1/#6, State loading+error (secondary view). The offer span is the only visible carrier of the question ('Link Flow #N · <title>?'), the busy state ('Linking …') and the failure ('Not linked: <reason>'). At the board's widths it gets no room: a 230px lane gives a Flow slot of about 60px (LY-005: 74.7px in the 16rem list column), Link and Dismiss (flex: none) need about 80px, so the span shrinks to its 8px padding. Its title is on that 8px non-focusable span. While linking, the buttons carry only aria-disabled, which no CSS rule styles, and the :hover:not(:disabled) rule and cursor:pointer still apply.",
+        "impact": "Sighted users see 'Link' and a clipped 'Dismiss' with no Flow number or title, which is the decision HL-001 asked them to make. Nothing visible changes while Link runs. A failed Link (the lock error the app fixture exercises) looks identical to the untouched offer. Only screen-reader users get the name and the alert.",
+        "suggested_fix": "Carry the state on the controls. Label Link 'Linking…' and style .pr-work-more[aria-disabled=\"true\"] like :disabled while busy. After a failure show a short 'Retry' label in the warn tone with a title holding the reason. Give Link a title with the full question. Or use one truncating 'Link #N?' button at narrow widths. Measure at a 230px lane and the 16rem list column.",
+        "evidence": "review.css: .review-lanes .lane { flex: 1 0 230px }, .pr-work-row grid repeat(3, minmax(0,1fr)) gap 4px, .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px } + 1px border at --fs-xs 11px; no [aria-disabled] rule in apps/desktop/src/**/*.css (keryx ctx rg). PrWorkRow.tsx FlowOffer renders text/title only in the span. Computed, not rendered.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": ["apps/desktop/src/review/PrWorkRow.tsx:FlowOffer", "apps/desktop/src/styles/review.css:.pr-work-offer"],
+          "enumeration_method": "keryx ctx rg \"pr-work-offer|aria-disabled\" apps/desktop/src — FlowOffer is the only renderer of .pr-work-offer and the only aria-disabled control in the work row"
+        },
+        "dedupe_key": "pr-flow-offer-state-invisible-at-board-width"
+      },
+      {
+        "id": "UX-R4-002",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);",
+        "problem": "Criterion Nielsen #9. The new notice for a PR missing from the settled list (typically a merged or closed PR opened from the session header) states a hedged cause and offers only 'Dismiss notice'. The request is cleared, so widening the state filter afterwards does not open the PR. This is the same class as the deferred UX-014 (other-repository notice).",
+        "impact": "To reach the PR the user came for, they must open Filters, add the state and find the card by hand.",
+        "suggested_fix": "Add one forward action: 'Show all states' (apply the state filter and keep the request for that load), or 'Open on GitHub' via the url App already holds, which also closes UX-014.",
+        "evidence": "ReviewBoard.tsx focus effect and banner (only an icon-btn 'Dismiss notice'); owner choice 'is cleared' is kept.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "review-focus-notice-no-remedy"
+      },
+      {
+        "id": "UX-R4-003",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "quote": "const title = offer.error ? `${name} was not linked: ${offer.error} Press Link to try again.`",
+        "problem": "Criterion Nielsen #2/copy. The CLI reason is spliced in raw. The lock error ('the flags of session <id> are locked by another keryx process; retry') has no closing period, so the tooltip reads '…; retry Press Link to try again.', and the visible 'Not linked: …' exposes the session directory id.",
+        "impact": "A run-on, technical message on the one failure the user can act on.",
+        "suggested_fix": "Terminate the reason with a period when it lacks one or split the remedy off. Map the lock error to a short user-facing reason.",
+        "evidence": "src/session/organize.ts lockedError text; app-work-row.fixture.tsx asserts /^Not linked: .*locked by another keryx process/.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "pr-flow-offer-error-copy"
+      },
+      {
+        "id": "UX-R4-004",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "quote": "{...(offer.error && { role: \"alert\" })}",
+        "problem": "Criterion WCAG 4.1.3. The span stays mounted from 'Linking…' to the error, so React switches its role attribute and text in place instead of inserting an alert. Screen readers announce such a switched alert inconsistently. Unverified.",
+        "impact": "A screen-reader user may not hear that Link failed.",
+        "suggested_fix": "Keep a persistent aria-live region in the slot (or render the error in a separately keyed element with role=alert). Settle with a VoiceOver/NVDA run.",
+        "evidence": "Static reading of FlowOffer; no AT run.",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "pr-flow-offer-alert-role-toggle"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-002", "disposition": "fixed", "evidence": "PrWorkRow refocus effect (flowSlot querySelector button), ReviewBoard 'Dismiss notice' → search.current.focus(), IssuesBoard focusSource → sourceSelect.focus(); tests PrWorkRow.dom.test 'FE-R3-002' x2 and IssuesBoard.dom.test fallback asserting activeElement is the select"},
+      {"id": "UX-009", "disposition": "fixed", "evidence": "name = `Flow #${id} · ${title}` in the Link/Dismiss aria-labels and title. The visible text is not visible at board widths: UX-R4-001"},
+      {"id": "UX-010", "disposition": "fixed", "evidence": "usePendingFlowLinks.accept keeps the offer linking, then removes it on success or sets error; linkFlow rejects. Visibility at board widths: UX-R4-001"},
+      {"id": "UX-011", "disposition": "fixed", "evidence": "sourceKey = account + '.source.' + JSON.stringify(cwd); test 'UX-011' asserts another project's source is untouched"},
+      {"id": "LY-005", "disposition": "fixed", "evidence": ".pr-work-slot overflow:hidden. Dismiss clips instead of covering the Session slot (owner choice). The question text keeps ~0 visible width (UX-R4-001). Not measured"},
+      {"id": "UX-012", "disposition": "fixed", "evidence": ".pr-work-offer no longer carries pr-work-link: no box, no hover match"},
+      {"id": "UX-013", "disposition": "fixed", "evidence": "unavailable branch renders error.replace(/^configuration:\\s*/i, '')"},
+      {"id": "UX-014", "disposition": "still_open", "evidence": "deferred by the orchestrator. A second site of the class was added in this range: UX-R4-002"},
+      {"id": "UX-015", "disposition": "fixed", "evidence": "'choose Bundled keryx in Settings → Desktop' matches SettingsView 'Bundled keryx' and tab 'Desktop'. Not verified that the source choice renders in that tab"},
+      {"id": "UX-016", "disposition": "still_open", "evidence": "deferred. Unchanged in this range"}
+    ],
+    "stats": {"files_reviewed": 6, "findings": 4, "blocker": 0, "major": 0, "minor": 1, "info": 3, "slop_score": 0, "render": "not supplied"}
+  }
+}
+```
+
+routing audit: graph_used: no (scope fixed by payload slice), wiki_used: not-relevant (static UX review of a fix range), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no

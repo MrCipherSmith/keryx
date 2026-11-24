@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "files": [
+    "src/session/issues/issue-session.test.ts",
+    "src/session/issues/issue-session.ts",
+    "src/session/organize.test.ts",
+    "src/session/organize.ts"
+  ],
+  "prHead": "d7b0f7058e919a5880319588ad95395b7ff66153",
+  "graphCommit": "d7b0f7058e919a5880319588ad95395b7ff66153",
+  "maxBytes": 8192,
+  "affected": {
+    "depth": 2,
+    "files": [
+      "src/acp/server-harness.test-helpers.ts",
+      "src/acp/server.ts",
+      "src/acp/shell-profile.test-helpers.ts",
+      "src/acp/shell-session-switch.test.ts",
+      "src/commands/acp.ts",
+      "src/commands/interactive-agent-tools.ts",
+      "src/commands/issue-workspace.ts",
+      "src/commands/issues.ts",
+      "src/commands/shell.ts",
+      "src/integrations/issues-board.test.ts",
+      "src/integrations/issues-launch.test.ts",
+      "src/session/issues/issue-origin.ts",
+      "src/session/issues/issue-shell.ts",
+      "src/session/issues/issue-turn.ts",
+      "src/session/issues/issues-launch.ts",
+      "src/session/issues/runtime.ts",
+      "src/tui/tui-shell.ts"
+    ]
+  },
+  "symbols": [],
+  "relatedTests": [
+    "src/acp/shell-session-switch.test.ts",
+    "src/integrations/issues-board.test.ts",
+    "src/integrations/issues-launch.test.ts",
+    "src/session/issues/issue-session.test.ts",
+    "src/session/organize.test.ts"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+}

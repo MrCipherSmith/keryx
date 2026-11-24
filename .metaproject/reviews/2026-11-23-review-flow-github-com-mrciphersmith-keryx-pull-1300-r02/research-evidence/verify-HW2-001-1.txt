@@ -1,0 +1,32 @@
+# keryx review verify-run
+finding: HW2-001
+command: sh -c git grep -n -A14 'export function updateSessionFlagsAt' 88e3faba9a1732f45a4ff7200588832e8b83f121 -- src/session/organize.ts; git grep -n -e updateSessionFlagsAt -e 'setSessionFlags(' 88e3faba9a1732f45a4ff7200588832e8b83f121 -- src ':!*.test.ts'
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-24T05:25:51.595Z
+exit: 0
+
+--- stdout ---
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts:117:export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-118-  const current = readSessionFlags(dir);
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-119-  const stamp = now().toISOString();
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-120-  const next: SessionFlags = { ...current };
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-121-  if (change.archived === true) next.archivedAt ??= stamp;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-122-  if (change.archived === false) delete next.archivedAt;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-123-  if (change.pinned === true) next.pinnedAt ??= stamp;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-124-  if (change.pinned === false) delete next.pinnedAt;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-125-  if (typeof change.flow === "string") {
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-126-    if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-127-    next.flow = change.flow;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-128-  }
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-129-  if (change.flow === null) delete next.flow;
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-130-  if (change.subject !== undefined && change.subject !== null) {
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts-131-    const subject = parseSessionSubject(change.subject);
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/acp/server.ts:2964:      return setSessionFlags(cwd, sessionId, change, options.dataDir);
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/issues/issue-session.ts:7:import { parseSessionSubject, readSessionFlags, updateSessionFlagsAt } from "../organize";
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/issues/issue-session.ts:53:  if (subject !== undefined) updateSessionFlagsAt(dir, { subject });
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/issues/issues-launch.ts:116:      setSessionFlags(bound.launch.project.cwd, bound.launch.sessionId!, { flow: ref.flowDir }, ports.dataDir);
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts:117:export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, now: () => Date = () => new Date()): SessionFlags {
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts:152:export function setSessionFlags(
+88e3faba9a1732f45a4ff7200588832e8b83f121:src/session/organize.ts:160:  return updateSessionFlagsAt(dir, change, now);
+--- stderr ---
+

@@ -1,0 +1,113 @@
+STATUS: DONE_WITH_CONCERNS — I read slice-03 in full and ran 14 new mutants plus 8 repeats of M38 in a scratch worktree at d7b0f7058, which I removed afterwards. I also checked the added tests against the parent production files. Result: 1 major finding (the two flags-lock tests depend on wall-clock time, so the lost-update test is a probabilistic detector) and 1 minor finding (an unpinned validation guard). Every round-2 claim in this slice checks out.
+
+## Scope note
+slice-03.diff contains only four files: src/session/organize.ts, src/session/organize.test.ts, src/session/issues/issue-session.ts and src/session/issues/issue-session.test.ts. The dispatch also mentioned server.ts and issues-board, but they are not in this slice. Wave 1 already mutated issues-board (TP-R3-006). I do not re-file TP-R3-007 (M38, M39, M47).
+
+## Mutation pass
+Setup: a scratch worktree at d7b0f7058 and `bun install --frozen-lockfile`. Baseline on the nearest suites (organize.test, issue-session.test, acp/shell-session-organize.test): 21 pass, 0 fail.
+
+Tool: my own harness, the same as wave 1. It replaces exactly one anchor, runs `bun test` on the three nearest suites, and restores the file after each run. I did not use `keryx review mutate`, because that writes into the reviewed package. Nothing in the reviewed checkout was written except this file.
+
+| mutation | result |
+|---|---|
+| N01 readStoredFlags: drop `subject === undefined &&` from the unlink marker read | GREEN, **equivalent** (writeFlags never stores the marker beside a subject) |
+| N02 writeFlags: drop `flags.subject === undefined` from the marker write | GREEN, **equivalent** (no caller passes subjectUnlinked=true with a subject; N01 and N02 are a redundant pair) |
+| N03 writeFlags never writes the marker | red (3 tests) |
+| N04 backfillSessionSubject: drop the `parseSessionSubject` refusal (`if (parsed === undefined) throw …`) | **GREEN (21/21)** |
+| N05 backfill writes `subjectUnlinked: true` | GREEN, **equivalent** (writeFlags drops the marker when a subject is present) |
+| N06 linking a subject keeps the old marker (`change.subject !== undefined ? false :` dropped) | GREEN, **equivalent** (same reason as N05) |
+| N07 FLAGS_LOCK_STALE_MS 2000 -> 100 | red (lock-wait test) |
+| N08 FLAGS_LOCK_TIMEOUT_MS 3000 -> 1000 | red (lock-wait test) |
+| N09 bindIssueSubject without `if (subject !== undefined)` | red (GHE test) |
+| N10 drop the moved `bindIssueSubject(dir, issue.ref)` call | red (2 tests) |
+| N11 backfill ignores the unlink marker | red (3 tests) |
+| N12 unlink (`subject: null`) records no marker | red (3 tests) |
+| N13 backfill overwrites an existing subject | red (1 test) |
+| N14 subject written only when `launch.stage === "registered"` at the new site | red (2 tests) |
+| M38 x8 (updateSessionFlagsAt without withFlagsLock), only `-t "two processes"` | red 7 of 8, **green 1 of 8** (wave 1: red 2 of 3) |
+
+Cap: I ran all 14 new candidates for the gates this slice added: the marker read and write, the backfill and its guards, the lock constants and the moved binder call. I also ran the 8 M38 repeats to measure how often the two-process test detects the unlocked writer. Nothing was left unreached. I did not re-run M39 or M47, because wave 1 already filed them.
+
+## Red on the parent, per test (round obligation 5)
+Setup: in the scratch worktree, I restored organize.ts and issue-session.ts from 88e3faba9. The parent has no `backfillSessionSubject` export, so I appended a throwing stub of it to let the test file load.
+
+- issue-session "a session bound before subjects existed gets its subject …": red
+- organize "an unlinked subject is not backfilled …": red (reaches the stub)
+- organize "a flags change waits for another writer's lock …": red
+- organize "two processes changing different flags … lose neither change": **red 3 of 7 runs, green 4 of 7** (1 full-file run and 6 `-t` runs)
+- organize "a subject's repo and url agree without case …" and the new `org/..`, `org/.` and `org/re po` fixtures: green on the parent. This is expected. They are coverage for TP-R2-006 and TP-R2-007 on behaviour that already existed, and wave 1's M62, M63, M64 and M65 show they pin it.
+
+## Findings
+
+### [TP-R3-008] major: the flags-lock tests depend on wall-clock time; the lost-update test is a probabilistic detector
+- File: src/session/organize.test.ts, two tests: "a flags change waits for another writer's lock …" and "two processes changing different flags …"
+- Problem (tdd-workflow.mdc Rule 5, and Rule 6 in effect):
+  - The lock-wait test's only evidence that the change waited is two elapsed-time assertions: `expect(Date.now() - started).toBeGreaterThanOrEqual(1500)` and `expect(Date.now() - again).toBeLessThan(1500)`. It spends the real 2 s stale window on every run.
+  - The two-process test synchronises its writers with `while (Date.now() < ${startAt}) {}`, a busy-wait on a wall-clock start 1.5 s ahead. It then depends on the OS interleaving 150 unsynchronised read-modify-writes.
+  - Measured: with the parent's unlocked writer, the two-process test is red in only 3 of 7 runs. With M38 at head, it is red in 7 of 8 runs here and 2 of 3 in wave 1. When a child is slow to start past `startAt`, the writers overlap less and the test passes vacuously.
+  - The regression test named for HW2-001 therefore fails before the fix only some of the time. Only the elapsed-time test pins M38 deterministically.
+- Law 4 (a deliberate choice is read first): commit 80ef58bd5 gives no reason for this design. The repository has siblings that assert elapsed time on locks: src/lib/config-update.test.ts:62 and src/capability/stale-snapshot-writers.test.ts:160. The pattern is precedent, not an exemption, for two reasons. First, Rule 5's severity row rates exactly this case. Second, the seam exists: withFileLock already takes `timeoutMs` and `staleMs`, but organize.ts hard-codes them. That hard-coding is also why the timeout path (M39, TP-R3-007) cannot be tested without a 3 s wait.
+- Fix:
+  - (1) Let a test pass the lock options. For example, an internal `withFlagsLock(dir, apply, opts = FLAGS_LOCK)` with a test-only export, or a module-level override.
+  - (2) Lock-wait test: drop the elapsed-time assertions. Spawn a child that takes the lock, writes a marker, waits for a go-file, writes its own flag and releases. Assert that the parent's change lands after the child's flag, and that neither change is lost. This is ordering on file content, not on time. Use tiny injected `staleMs` and `timeoutMs` values for the abandoned-lock leg and for a timeout case that asserts the "retry" message (this also closes M39).
+  - (3) Two-process test: replace the `Date.now()` barrier with a file barrier: each child writes `ready-<field>` and spins until both exist. Better, drive a deterministic interleaving: inject the critical section so that writer A pauses between its read and its write until writer B has tried. With the lock, B must wait. Without it, B's write is lost on every run.
+- class_scope:
+  - sites: src/session/organize.test.ts, the lock-wait test (`expect(Date.now() - started).toBeGreaterThanOrEqual(1500)` and `expect(Date.now() - again).toBeLessThan(1500)`), and src/session/organize.test.ts, the two-process test (`while (Date.now() < ${startAt}) {}`).
+  - enumeration_method: `keryx ctx rg -n --all "Date\.now\(\)|setTimeout\(|sleepSync|performance\.now"` over the 11 test files changed in 88e3faba9..d7b0f7058 (from `git diff --name-only`). 11 hits:
+    - organize.test.ts, 7 hits: the 3 sites above, their 2 `Date.now()` start reads, the `startAt` computation, and the utimes setup at 151, which is not an assertion.
+    - ReviewBoard.dom.test.tsx, 4 hits: `git diff -U0` shows none of them was added in the range.
+
+### [TP-R3-009] minor: backfillSessionSubject's own subject validation is unpinned (N04)
+- File: src/session/organize.ts (test: organize.test.ts)
+- Problem: `if (parsed === undefined) throw new Error(\`not a GitHub subject: …\`)` survives deletion with all 21 tests green. Every test passes backfillSessionSubject a valid subject. Its one caller (bindIssueSubject) parses the subject first.
+- Impact: the function is exported. A later caller that passes an unparsed subject would get it written to flags.json without validation if the guard were dropped. Readers would then see it as absent and the marker logic would be skipped, and no test would notice. This is a coverage gap only: the code is correct today.
+- Fix: in the backfill test, assert that `backfillSessionSubject(dir, { ...issue, url: "https://github.com/org/other/issues/7" } as never)` throws `/not a GitHub subject/` and leaves flags.json unchanged.
+
+## Notes (not findings)
+- N01, N02, N05 and N06 are equivalent mutants. The marker is guarded at both its read and its write, so dropping either guard alone is unobservable. No fix is needed.
+- issue-session.ts: the comment that the flags lock is taken inside the binding lock, never the reverse, matches the code. Nothing in organize.ts takes the binding lock.
+- I checked the backfill test's fixture against its producer. The "older keryx" flags.json (`{ pinnedAt }` only, no subject and no marker) is exactly what the base writeFlags emitted for a pinned session. The fixture is honest.
+
+## Prior dispositions (slice-03 only, checked against code and mutants)
+- HW2-001: closed. The lock was added. M38, N07 and N08 are red through the lock-wait test. TP-R3-007 and TP-R3-008 record the coverage caveats.
+- LG-012, DG-010: closed. The subject is now backfilled on every open (N10 and N14 red), and an unlink is never written back (N03, N11 and N12 red).
+- PC-003: closed on the code and doc-comment side. The doc now states the backfill and the GitHub Enterprise limit. I leave the PR body to review-pr-contract.
+- TP-R2-006: closed. The fixtures now carry a consistent repo and url, so only REPO_REF can refuse them (wave 1: M62 and M63 red).
+- TP-R2-007: closed. Case-insensitive agreement and unknown-field dropping are now asserted (wave 1: M64 and M65 red).
+- LG-014: open (deferred). writeFlags still writes a fixed key set, so an older keryx still drops `subject`, and now also `subjectUnlinked`.
+
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-03 read in full; 14 new mutants plus 8 repeats of M38 run in a scratch worktree at d7b0f7058, and the added tests checked against the parent production files. One major: the flags-lock tests depend on wall-clock time, and the two-process lost-update test is red on the unlocked parent in only 3 of 7 runs. One minor: backfillSessionSubject's validation is unpinned. Four survivors are equivalent.",
+  "slices": ["slice-03"],
+  "findings": [
+    {"id": "TP-R3-008", "severity": "major", "reviewer": "review-testing-practices", "file": "src/session/organize.test.ts", "quote": "    expect(Date.now() - started).toBeGreaterThanOrEqual(1500);", "problem": "tdd-workflow.mdc Rule 5: the flags-lock tests depend on wall-clock time. The lock-wait test proves the wait only through elapsed-time assertions (>= 1500 ms and < 1500 ms) and spends the real 2 s stale window. The two-process test starts its writers on a busy-wait against Date.now() and relies on OS interleaving. Against the parent's unlocked writer, the two-process test is red in only 3 of 7 runs, so the regression test named for HW2-001 does not reliably fail before the fix. The lock is pinned deterministically only by the time-based assertion. Sibling precedent (config-update.test.ts:62, stale-snapshot-writers.test.ts:160) exists, but withFileLock already takes timeoutMs and staleMs, which organize.ts hard-codes.", "impact": "A probabilistic detector: in about half of runs, a regression that drops the lock from updateSessionFlagsAt passes the test that names lost updates. The lock-wait test adds about 2 s of real time per run and is the reason the timeout path (M39) is untestable.", "suggested_fix": "Let a test pass withFlagsLock's options. Replace the elapsed-time assertions with an ordering check: a child holds the lock, writes its flag after a go-file, and the parent's change lands after it with neither lost. Assert the abandoned-lock and timeout ('retry') paths with tiny injected staleMs and timeoutMs values. In the two-process test, replace the Date.now() barrier with a file barrier, or drive a deterministic interleaving in which writer A pauses between read and write until B has tried.", "evidence": "Parent organize.ts and issue-session.ts restored in scratch, two-process test: red, red, red, green, green, green, green (7 runs). M38 at head with -t 'two processes': 7 of 8 red (wave 1: 2 of 3). Lock-wait test red for M38, N07 and N08. Commit 80ef58bd5 gives no reason for the timing design.", "evidence_kind": "red-test", "confidence": "medium", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-flags-lock-wallclock", "class_scope": {"sites": ["src/session/organize.test.ts: lock-wait test, expect(Date.now() - started).toBeGreaterThanOrEqual(1500) and expect(Date.now() - again).toBeLessThan(1500)", "src/session/organize.test.ts: two-process test, while (Date.now() < ${startAt}) {}"], "enumeration_method": "keryx ctx rg -n --all 'Date\\.now\\(\\)|setTimeout\\(|sleepSync|performance\\.now' over the 11 test files from git diff --name-only 88e3faba9..d7b0f7058: 11 hits; 7 in organize.test.ts (these sites, their start reads, and a utimes setup that is not an assertion); 4 in ReviewBoard.dom.test.tsx, none added in the range (checked with git diff -U0)"}},
+    {"id": "TP-R3-009", "severity": "minor", "reviewer": "review-testing-practices", "file": "src/session/organize.ts", "quote": "  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);", "problem": "backfillSessionSubject's own validation survives deletion (N04) with all 21 nearest tests green. Every test passes it a valid subject, and its one caller parses the subject first.", "impact": "The function is exported. Without the guard, a future caller's unparsed subject would be written to flags.json without validation, and no test would notice. The code is correct today.", "suggested_fix": "In organize.test.ts, assert that backfillSessionSubject(dir, {...issue, url: 'https://github.com/org/other/issues/7'} as never) throws /not a GitHub subject/ and leaves flags.json unchanged.", "evidence": "Mutant N04 GREEN on organize, issue-session and shell-session-organize suites (21/21); N03 and N07–N14 red.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-backfill-validation"}
+  ],
+  "prior_dispositions": [
+    {"id": "HW2-001", "disposition": "closed"},
+    {"id": "LG-012", "disposition": "closed"},
+    {"id": "DG-010", "disposition": "closed"},
+    {"id": "PC-003", "disposition": "closed"},
+    {"id": "TP-R2-006", "disposition": "closed"},
+    {"id": "TP-R2-007", "disposition": "closed"},
+    {"id": "LG-014", "disposition": "open"}
+  ],
+  "mutant_candidates": [
+    {"id": "N04", "file": "src/session/organize.ts", "anchor": "  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);\n  return withFlagsLock(", "replacement": "  return withFlagsLock(", "kind": "behavior"},
+    {"id": "N03", "file": "src/session/organize.ts", "anchor": "...(subjectUnlinked && flags.subject === undefined ? { subjectUnlinked: true } : {})", "replacement": "...({})", "kind": "behavior"},
+    {"id": "N07", "file": "src/session/organize.ts", "anchor": "const FLAGS_LOCK_STALE_MS = 2_000;", "replacement": "const FLAGS_LOCK_STALE_MS = 100;", "kind": "behavior"},
+    {"id": "N08", "file": "src/session/organize.ts", "anchor": "const FLAGS_LOCK_TIMEOUT_MS = 3_000;", "replacement": "const FLAGS_LOCK_TIMEOUT_MS = 1_000;", "kind": "behavior"},
+    {"id": "N09", "file": "src/session/issues/issue-session.ts", "anchor": "  if (subject !== undefined) backfillSessionSubject(dir, subject);", "replacement": "  backfillSessionSubject(dir, subject!);", "kind": "behavior"},
+    {"id": "N10", "file": "src/session/issues/issue-session.ts", "anchor": "    bindIssueSubject(dir, issue.ref);\n    if (launch.flow)", "replacement": "    if (launch.flow)", "kind": "behavior"},
+    {"id": "N11", "file": "src/session/organize.ts", "anchor": "    if (current.flags.subject !== undefined || current.subjectUnlinked) return false;", "replacement": "    if (current.flags.subject !== undefined) return false;", "kind": "behavior"},
+    {"id": "N12", "file": "src/session/organize.ts", "anchor": "  const unlinked = change.subject === null ? true :", "replacement": "  const unlinked = change.subject === null ? false :", "kind": "behavior"},
+    {"id": "N13", "file": "src/session/organize.ts", "anchor": "    if (current.flags.subject !== undefined || current.subjectUnlinked) return false;", "replacement": "    if (current.subjectUnlinked) return false;", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 1, "info": 0}
+}
+```
+
+Routing audit: graph_used: not-relevant (the slice and the payload's layers fixed the four files); wiki_used: not-relevant (the code and tests were the evidence); ctx_used: yes (keryx ctx rg for the clock-use enumeration and the precedent search, keryx ctx run for git log and diff names, keryx ctx read was refused for cat, so I used Read); raw_rg_used: no. The scratch worktree was removed, and `git status` of the reviewed checkout is unchanged apart from this file.

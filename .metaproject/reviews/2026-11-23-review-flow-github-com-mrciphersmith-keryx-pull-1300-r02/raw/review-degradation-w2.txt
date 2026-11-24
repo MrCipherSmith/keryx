@@ -1,0 +1,98 @@
+STATUS: DONE
+
+review-degradation, round 2, wave 2. Slices read in full: slice-03 (useAcpSession.ts, AppShell.tsx, styles/review.css; 450 lines) and slice-05 (app-work-row fixture, implementation-plan.md, src/acp/server.ts, src/commands/issues.ts, src/integrations/issues-board.ts and issues-contract.ts, src/session/organize.ts, src/session/issues/issue-session.ts, and their tests; 1330 lines). Range: b147408a8..88e3faba9, diff mode, read-only. Nothing was run. The test evidence is P/research-evidence/verify-tests-to-run-1.txt (exit 0), which I did not re-run.
+
+No blocker or major. One minor and one info. Neither repeats a wave-1 finding: RG-001 covers the new "repository" default failing on an older CLI, and LG-010/PC-002 cover the plan and PR-body drift on Create Flow.
+
+### [DG-009] The "repository" source counts pull requests toward each 40-item page, so the default Issues board can load few issues or none
+
+- **Severity**: minor
+- **Class**: default-change
+- **Evidence kind**: base-diff
+- **File**: src/integrations/issues-board.ts (listUrl / listIssuePage)
+- **Problem**: On base, every source listed `/issues?filter=<scope>&pulls=false&per_page=40`, and each page could hold up to 40 issues. The new repository source lists `/repos/{owner}/{repo}/issues` with `per_page=40` and no `pulls` parameter. Pull requests are removed only after the fetch (`data.filter((x) => !x.pull_request)`), so each page holds 40 minus the pull requests on it. This source is now the Desktop default (DEFAULT_SOURCE = "repository").
+- **Why it matters**: In a repository where the most recently updated items are mostly pull requests (this repository has about 1300), the first page of the default board shows a few issues, or none. useIssueCollection.load does not continue on its own when a page comes back empty. IssuesBoard then shows "No matching issues on the loaded pages." and a "Load more issues" button, and the user has to click through pages of pull requests. Assigned-to-me on base never had this.
+- **Fix**: For the repository source, keep fetching the next page until the batch reaches N issues or a cap of 3–4 requests. Or have useIssueCollection auto-load the next page when a page returns zero rows and nextCursor is set. Add a test with a page of PRs only that asserts issues still appear.
+
+### [DG-010] Issue sessions bound before this change never get a `subject`, so their card's session slot reads "Open in session"
+
+- **Severity**: info
+- **Class**: behaviour-delta
+- **File**: src/session/issues/issue-session.ts (withIssueBinding)
+- **Problem**: bindIssueSubject runs only on the `registered` stage. An issue whose session was bound on base (stage `session_bound` or later) is reopened by the same binding, but no subject is written. IssueWorkRow counts sessions only through `subject`, so that card shows the empty, dashed "Open in session" while a bound session exists. The action itself is unchanged: open-session reuses the bound session. This is why it is info and not minor. Base showed "Open session" for every issue.
+- **Fix**: On a non-registered reopen, write the subject when flags.json has none and no unlink was ever recorded. For example, store `subjectUnlinked: true` on unlink rather than inferring it from absence. Or name the gap in the known-gaps list.
+
+## Verified clean (traced, no finding)
+
+- server.ts handleSessionFlags `subject`: undefined leaves it, null unlinks, a non-object is refused at the wire, and fields are refused by the store. Read against shell-session-organize.test.ts.
+- organize.ts: on head, setSessionFlags = locate + updateSessionFlagsAt. Base and head have the same archived/pinned/flow semantics (base-diff of the removed and added bodies). writeFlags adds `subject`. readSessionFlags drops an invalid subject and keeps the other flags. The other writer, issues-launch.ts `setSessionFlags(..., { flow })`, reads before it writes, so it keeps the subject.
+- listIssuePage: the only production caller is src/commands/issues.ts, which now passes cwd (re-exported via integrations/issues/service.ts). For the viewer scopes, the URL params and cursorScope arguments match base, so existing cursors stay valid. The repository cursor scope adds the repository. A `/repositories/<id>/issues` next link contributes only page keys, which are re-applied to the `/repos/...` base.
+- IssueListSource widens the type and keeps IssueScope. Consumers platform/issues.ts, issues-github.ts, IssueWork.tsx and IssueMarkdown.tsx are unaffected. issues-projects.ts and issue-source.ts import only graphSummary/issueFields, which are unchanged.
+- withIssueBinding signature unchanged. Its consumers issues-launch, issue-turn, runtime, issue-origin and issue-shell use issueContextForSession or binding helpers, all unchanged.
+- useAcpSession after-turn chain: applyPendingFlow catches every error (line 235–241), so subjects.apply always runs after it. The `subjects` memo is recreated only when cwd changes, and ProjectWindow is keyed by cwd (App.tsx:90), so pending state cannot outlive its PendingSubjects.
+- review.css: no users remain for the removed `.review-lane-attention/review/done` (keryx ctx rg --all). The new lane classes match ReviewResults `'review-lane-' + lane`; draft, closed and others fall back to `.lane-dot`'s default color. The `.review-table .review-progress-caption` rule went with the last table use, and other uses take ReviewDetail.css. No `.review-note` user remains.
+- AppShell `titleLinks` is additive and only in the session view.
+
+## Consumers
+
+The graph listed 40 of 70 consumers, and the cap dropped 30. For my slices I traced: src/acp/shell-profile.test-helpers.ts, server-harness.test-helpers.ts and commands/acp.ts (runAcpServer unchanged); src/cli-registry.ts (issuesCommand signature unchanged); platform/issues.ts, issues-github.ts, IssueWork.tsx and IssueMarkdown.tsx (contract); issue-turn.ts, runtime.ts, issues-launch.ts and issue-origin.ts (issue-session); issues-projects.ts. Of the cap-dropped ones I also checked, by search, src/session/issues/issue-shell.ts, src/integrations/issue-source.ts and src/commands/issue-workspace.ts. Not traced: issue-checkouts.ts, issue-flow-package.ts and the Desktop consumers of acp/types.ts (slice-02's wave). No acceptance-criteria gaps beyond the above for AC8/AC13.
+
+Routing audit: graph_used: payload consumer list (no rebuild); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg/read/run); raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-degradation",
+    "summary": "Round 2 wave 2, slice-03 and slice-05 read in full. One minor: the default repository source includes PRs in its 40-item page, so the default Issues board can load few or no issues and the user must click 'Load more'. One info: sessions bound to an issue before this change get no subject, so their card reads 'Open in session'. Backend session_flags/subject storage, the setSessionFlags refactor, the viewer-scope listing and cursors, the useAcpSession after-turn chain, and the removed CSS rules are verified clean. Graph cap dropped 30 of 70 consumers; for these slices, issue-checkouts.ts and issue-flow-package.ts were not traced.",
+    "slices": ["slice-03", "slice-05"],
+    "findings": [
+      {
+        "id": "DG-009",
+        "severity": "minor",
+        "file": "src/integrations/issues-board.ts",
+        "line": null,
+        "quote": "    ...(repository ? {} : { pulls: \"false\" }),",
+        "problem": "The new 'repository' source (now the Desktop default) lists /repos/{owner}/{repo}/issues with per_page=40 and no pulls parameter, and drops pull requests only after the fetch (data.filter(x => !x.pull_request)). Each page holds 40 minus the PRs on it. On base every source used /issues with pulls=false, so a page could hold up to 40 issues.",
+        "impact": "In a repository whose most recently updated items are mostly PRs, the first load of the default Issues board shows few issues, or none. useIssueCollection.load does not continue on an empty page. IssuesBoard shows 'No matching issues on the loaded pages.' and a 'Load more issues' button, and the user pages through PRs by hand.",
+        "suggested_fix": "For the repository source, keep fetching the next page until the batch reaches N issues or a small request cap. Or auto-load the next page in useIssueCollection when a page returns zero rows and nextCursor is set. Add a test with a page made only of PRs.",
+        "evidence": "base-diff: base listUrl set { filter: source, ..., per_page: '40', pulls: 'false' } on new URL('/issues', API). Head listUrl uses '/repos/'+repository+'/issues' and spreads `...(repository ? {} : { pulls: 'false' })`, and listIssuePage keeps `data.filter((x) => !x.pull_request)`. The AC13 test feeds a PR row into the repository response, so the code expects PRs on the page. consumer-trace: useIssueCollection.ts:59-72 sets cursor and rows with no auto-continue. IssuesBoard.tsx:263 shows 'No matching issues on the loaded pages.' and :292 shows 'Load more issues'. Refute: read both; nothing refills a short page. How many PRs a page holds depends on the data, hence minor.",
+        "confidence": "medium",
+        "reviewer": "review-degradation",
+        "dedupe_key": "issues-repository-source-page-includes-prs",
+        "location_class": "in-diff",
+        "degradation_class": "default-change",
+        "evidence_kind": "base-diff"
+      },
+      {
+        "id": "DG-010",
+        "severity": "info",
+        "file": "src/session/issues/issue-session.ts",
+        "line": null,
+        "quote": "      bindIssueSubject(dir, issue.ref);",
+        "problem": "The issue subject is written only on the 'registered' stage. A session bound to an issue before this change (stage session_bound or later) is reopened by withIssueBinding with no subject written. IssueWorkRow counts bound sessions only through subject, so that card shows the empty 'Open in session' while a bound session exists.",
+        "impact": "The work row misreports existing issue sessions as absent until the person rebinds. Clicking still reuses the bound session through open-session, so no work is lost. Base labelled every issue 'Open session'.",
+        "suggested_fix": "On a non-registered reopen, write the subject when flags.json has none and no unlink was recorded. Record an explicit unlink marker rather than inferring it from absence. Or name the gap in the plan's known gaps.",
+        "evidence": "Read: issue-session.ts. `if (launch.stage === 'registered') { ... bindIssueSubject(dir, issue.ref); launch.stage = 'session_bound'; }`, and there is no other write. The doc comment says a subject is written once on purpose, so that an unlink is respected (law 4). That reason does not cover sessions bound before this change. IssueWorkRow.tsx computes `bound = issueSessions(sessions, issue).length` via boundSessions(subject). Base IssuesBoard.tsx:220-222 showed 'Open session' for every issue.",
+        "confidence": "high",
+        "reviewer": "review-degradation",
+        "dedupe_key": "issue-subject-not-backfilled-for-existing-bindings",
+        "location_class": "in-diff",
+        "publication": "finding",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "consumer-trace"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "DG-004", "disposition": "closed" },
+      { "id": "UX-001", "disposition": "closed" },
+      { "id": "LY-003", "disposition": "closed" },
+      { "id": "PF-002", "disposition": "open" }
+    ],
+    "follow_ups": [
+      "PF-002 (deferred) is still present: subjects.onFlags returns refreshSessions(), and the after-turn chain ends with .finally(() => void refreshSessions()), so session/list is read twice per applied binding."
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+  }
+}
+```

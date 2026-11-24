@@ -1,0 +1,2408 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "apps/desktop/src/issues/IssuesBoard.tsx",
+    "apps/desktop/src/issues/model.test.ts",
+    "apps/desktop/src/issues/model.ts",
+    "apps/desktop/src/issues/useIssueCollection.ts",
+    "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+    "apps/desktop/src/review/PrWorkRow.tsx",
+    "apps/desktop/src/review/ReviewBoard.tsx",
+    "apps/desktop/src/review/ReviewProgress.test.tsx",
+    "apps/desktop/src/review/prWork.ts",
+    "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+    "apps/desktop/src/review/usePendingFlowLinks.ts",
+    "apps/desktop/src/session/useAcpSession.ts",
+    "apps/desktop/src/styles/review.css",
+    "apps/desktop/src/test/app-navigation.fixture.tsx",
+    "apps/desktop/src/test/app-work-row.fixture.tsx",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/desktop-issues.md",
+    "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+    "src/acp/server.ts",
+    "src/commands/acp.ts",
+    "src/integrations/issues-board.test.ts",
+    "src/integrations/issues-board.ts",
+    "src/lib/file-lock.test.ts",
+    "src/lib/file-lock.ts",
+    "src/session/issues/issue-session.test.ts",
+    "src/session/issues/issue-session.ts",
+    "src/session/organize.test.ts",
+    "src/session/organize.ts"
+  ],
+  "files": [
+    {
+      "file": "src/lib/serve-credential.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/serve-credential.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/project-registry.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/project-registry.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/shell-profile.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/acp/server.ts",
+      "path": [
+        "src/acp/shell-profile.test-helpers.ts",
+        "src/acp/server.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/credentials.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/mcp-servers/credentials.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/server-harness.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 13,
+      "via": "src/acp/server.ts",
+      "path": [
+        "src/acp/server-harness.test-helpers.ts",
+        "src/acp/server.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/config-update.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/config-update.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/permission-mode-config.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/permission-mode-config.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/commands/acp.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/acp.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/worktree/ports.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/worktree/ports.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "path": [
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/prWork.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/worktree/promote.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/worktree/promote.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/shell/AppShell.tsx",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "path": [
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/issues/issue-turn.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/session/issues/issue-session.ts",
+      "path": [
+        "src/session/issues/issue-turn.ts",
+        "src/session/issues/issue-session.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueOriginDetail.tsx",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "apps/desktop/src/issues/useIssueCollection.ts",
+      "path": [
+        "apps/desktop/src/issues/IssueOriginDetail.tsx",
+        "apps/desktop/src/issues/useIssueCollection.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/issues/issues-launch.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/session/issues/issue-session.ts",
+      "path": [
+        "src/session/issues/issues-launch.ts",
+        "src/session/issues/issue-session.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueDetail.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/issues/model.ts",
+      "path": [
+        "apps/desktop/src/issues/IssueDetail.tsx",
+        "apps/desktop/src/issues/model.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/session/Approvals.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "path": [
+        "apps/desktop/src/session/Approvals.tsx",
+        "apps/desktop/src/session/useAcpSession.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "path": [
+        "apps/desktop/src/session/SessionInfoPanel.tsx",
+        "apps/desktop/src/session/useAcpSession.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/session/SessionView.tsx",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "path": [
+        "apps/desktop/src/session/SessionView.tsx",
+        "apps/desktop/src/session/useAcpSession.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/issues.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/issues-board.ts",
+      "path": [
+        "src/commands/issues.ts",
+        "src/integrations/issues/service.ts",
+        "src/integrations/issues-board.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/integrations/issues-projects.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/issues-board.ts",
+      "path": [
+        "src/integrations/issues-projects.ts",
+        "src/integrations/issues-board.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/issues/issue-origin.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/integrations/issues-board.ts",
+      "path": [
+        "src/session/issues/issue-origin.ts",
+        "src/integrations/issues/service.ts",
+        "src/integrations/issues-board.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueFilters.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/issues/model.ts",
+      "path": [
+        "apps/desktop/src/issues/IssueFilters.tsx",
+        "apps/desktop/src/issues/model.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/issues/model.ts",
+      "path": [
+        "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "apps/desktop/src/issues/model.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesView.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "path": [
+        "apps/desktop/src/issues/IssuesView.tsx",
+        "apps/desktop/src/issues/IssuesBoard.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/PrWorkRow.tsx",
+      "path": [
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/PrWorkRow.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/issue-workspace.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/integrations/issues-board.ts",
+      "path": [
+        "src/commands/issue-workspace.ts",
+        "src/integrations/issues/service.ts",
+        "src/integrations/issues-board.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/integrations/issue-source.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/integrations/issues-board.ts",
+      "path": [
+        "src/integrations/issue-source.ts",
+        "src/integrations/issues-board.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/issues/issue-shell.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/session/issues/issue-session.ts",
+      "path": [
+        "src/session/issues/issue-shell.ts",
+        "src/session/issues/issue-session.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/main.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/App.tsx",
+      "path": [
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/App.tsx"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "path": [
+        "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+        "apps/desktop/src/session/useAcpSession.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/shell-config.ts",
+      "hop": 2,
+      "fanIn": 94,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/shell-config.ts",
+        "src/lib/config-update.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/routing/model-profile.ts",
+      "hop": 2,
+      "fanIn": 40,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/harness/routing/model-profile.ts",
+        "src/lib/config-update.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/remote/remote.http.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 30,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/remote/remote.http.test-helpers.ts",
+        "src/lib/serve-credential.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 2,
+      "fanIn": 27,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/lib/permission-mode-config.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 2,
+      "fanIn": 24,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "src/lib/permission-mode-config.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/shell-permissions.ts",
+      "hop": 2,
+      "fanIn": 17,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/lib/shell-permissions.ts",
+        "src/lib/config-update.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/session/issues/issue-session.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.ts",
+        "src/session/issues/runtime.ts",
+        "src/session/issues/issue-shell.ts",
+        "src/session/issues/issue-session.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/acp.ts",
+      "path": [
+        "src/cli.ts",
+        "src/cli-registry.ts",
+        "src/commands/acp.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp-servers.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/file-lock.ts",
+      "path": [
+        "src/commands/mcp-servers.ts",
+        "src/mcp-servers/credentials.ts",
+        "src/lib/file-lock.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/App.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/App.tsx (hop 1, from apps/desktop/src/App.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/review/ReviewBoard.tsx (hop 1, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewLaunchTarget} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {FLOW_LINK_WINDOW_MS, PendingFlowLink, SubjectSessionDeps, boundSessions, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks, reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects} of apps/desktop/src/review/prWork.ts (hop 1, from apps/desktop/src/review/prWork.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-switch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {IDLE_CAP_RELEASE_REASON, MAX_HELD_SESSIONS} of src/acp/server.ts (hop 1, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ResolveAcpProviderDeps, parseAcpArgs, rememberAcpModel, resolveAcpProvider, shellGrantRefresh, shellModelSource} of src/commands/acp.ts (hop 1, from src/commands/acp.ts): run it, it is not read"
+    },
+    {
+      "file": "src/integrations/issues-launch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/issues/issue-session.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueBindingFile, issueContextForSession} of src/session/issues/issue-session.ts (hop 1, from src/session/issues/issue-session.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-credential.waiting.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {LOCK_STALE_MS} of src/lib/file-lock.ts (hop 1, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/session/SessionView.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/session/useAcpSession.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {SessionInfoPanel} of apps/desktop/src/session/SessionInfoPanel.tsx (hop 2, from apps/desktop/src/session/useAcpSession.ts): run it, it is not read"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "apps/desktop/src/review/ReviewBoard.tsx",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of apps/desktop/src/shell/AppShell.tsx (hop 2, from apps/desktop/src/review/ReviewBoard.tsx): run it, it is not read"
+    },
+    {
+      "file": "src/acp/delegate-history-replay.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/editor-profile-golden.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/hook-notices.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/prepare-review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-archive.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-models.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/server-remember-model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/session-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-command-views.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-delegate-terminal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-goal-delegate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile-modes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-profile.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-providers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-session-organize.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-subagents.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/shell-tasks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellHarness} of src/acp/shell-profile.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/telegram-session.server.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {harness} of src/acp/server-harness.test-helpers.ts (hop 2, from src/acp/server.ts): run it, it is not read"
+    },
+    {
+      "file": "src/capability/stale-snapshot-writers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/issues.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/integrations/issues-board.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issuesCommand} of src/commands/issues.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-flow.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-auth-secrecy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/projects.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.bridges.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/serve.research-sync.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/integrations/issues-projects.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/integrations/issues-board.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {moveIssueProjectItem, readIssueProject} of src/integrations/issues-projects.ts (hop 2, from src/integrations/issues-board.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/config-update.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {updateConfigFile} of src/lib/config-update.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/permission-mode-config.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/project-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {forgetProject, registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-approvals.route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-credential.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken, revokeServeToken, rotateServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-listener.turns.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-server.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-throttle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/lib/serve-turns.route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {registerProject} of src/lib/project-registry.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.isolation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {clearCredential, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/credentials.table.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {clearCredential, forgetByName, writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/doctor.oauth.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/oauth-integration.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/mcp-servers/session-oauth.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/token-scope.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {issueServeToken} of src/lib/serve-credential.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {writeCredential} of src/mcp-servers/credentials.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {setProjectPermissionMode} of src/lib/permission-mode-config.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/exec.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {allocatePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/no-forbidden-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/ports.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {allocatePorts, releasePorts} of src/worktree/ports.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/promote.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/worktree/remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {promoteWorktree} of src/worktree/promote.ts (hop 2, from src/lib/file-lock.ts): run it, it is not read"
+    },
+    {
+      "file": "src/acp/mcp-servers.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/acp/server.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/acp/server.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/acp.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/acp.ts: run it, it is not read"
+    },
+    {
+      "file": "src/harness/routing/trust.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 57 at hop 2, fan-in 9, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/trust.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 57 at hop 2, fan-in 9, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 57 at hop 2, fan-in 7, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/worktree/prepare.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 57 at hop 2, fan-in 6, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/serve.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 57 at hop 2, fan-in 5, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/hooks/trust.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 57 at hop 2, fan-in 4, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewDetail.tsx",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 57 at hop 2, fan-in 3, reached via apps/desktop/src/review/prWork.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/projects.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 57 at hop 2, fan-in 3, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 57 at hop 2, fan-in 3, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/hub-machine/trial.test-support.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 57 at hop 2, fan-in 3, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/worktree/remove.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 57 at hop 2, fan-in 3, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/verify-native-coverage.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 57 at hop 2, fan-in 2, reached via src/commands/acp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 57 at hop 2, fan-in 2, reached via src/commands/acp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/routing/config-file.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 57 at hop 2, fan-in 2, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 57 at hop 2, fan-in 1, reached via apps/desktop/src/review/prWork.ts. It was NOT reviewed."
+    },
+    {
+      "file": "apps/desktop/src/shell/RoutingDialog.tsx",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "apps/desktop/src/review/prWork.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 57 at hop 2, fan-in 1, reached via apps/desktop/src/review/prWork.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/worktree.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 57 at hop 2, fan-in 1, reached via src/lib/file-lock.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 2,
+      "fanIn": 20,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/mcp-servers/runtime.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CredentialRecord, isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/remote/shell-token.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {constantTimeEqual} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isExpired, readCredential, usesOAuth} from src/mcp-servers/credentials.ts; changed: {clearCredential, forgetByName, writeCredential}"
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-server.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {emitProjectsJson, listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/intake-ports.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/governance/report.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    },
+    {
+      "file": "src/commands/serve-digest.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/worktree/status.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    },
+    {
+      "file": "src/remote/desktop-serve-status.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {readServeCredential} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/worktree/worktree-env.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {readWorktreeEnv} from src/worktree/ports.ts; changed: {allocatePorts, releasePorts}"
+    },
+    {
+      "file": "src/integrations/issue-checkouts.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {listProjects} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/serve.cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/serve.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sanitizeForDisplay} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/commands/serve.recovery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {loadServeCredential, serveCredentialPath, verifyServeToken} from src/lib/serve-credential.ts; changed: {issueServeToken, revokeServeToken, rotateServeToken}"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/acp.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, dash, dashboard, doctor, external, help, hub, init, modules, permissions, printCommandHelp, projects, providers, routing, serve, setup, status, update}"
+    },
+    {
+      "file": "src/lib/config-dir.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/serve-config.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/lib/test-preload.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {projectRegistryPath} from src/lib/project-registry.ts; changed: {forgetProject, registerProject}"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/file-lock.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {getProjectPermissionMode} from src/lib/permission-mode-config.ts; changed: {setProjectPermissionMode}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/desktop-issues.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 30,
+    "changedFilesResolved": 27,
+    "changedFilesUnresolved": 3,
+    "candidates": 130,
+    "retained": 40,
+    "droppedByCap": 17,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 26,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 73,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 2,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 31,
+      "2": 9
+    }
+  },
+  "graph": {
+    "nodes": 4688,
+    "edges": 17856
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "apps/desktop/src/App.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/issues/model.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/issues/model.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/issues/useIssueCollection.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/ReviewProgress.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/prWork.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/styles/review.css",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "not a JS/TS module: every importer is reached by the file edge"
+      },
+      {
+        "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/acp/server.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/commands/acp.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/integrations/issues-board.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/integrations/issues-board.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/lib/file-lock.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/lib/file-lock.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/session/issues/issue-session.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/session/issues/issue-session.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/session/organize.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      },
+      {
+        "file": "src/session/organize.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "no hunks for this file in the diff: the changed names are unknown"
+      }
+    ],
+    "barrels": [
+      "src/integrations/issues/service.ts",
+      "src/session/issues/runtime.ts",
+      "src/worktree/index.ts"
+    ],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "apps/desktop/src/App.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/App.tsx"
+    },
+    {
+      "file": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/session/useAcpSession.ts"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewLaunchTarget"
+      ],
+      "via": "apps/desktop/src/review/prWork.ts"
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "FLOW_LINK_WINDOW_MS",
+        "PendingFlowLink",
+        "SubjectSessionDeps",
+        "boundSessions",
+        "flowPrompt",
+        "flowStage",
+        "openSubjectSession",
+        "prFlows",
+        "prSubject",
+        "prWorkIndex",
+        "resolveFlowLinks",
+        "reviewLaunchTarget",
+        "reviewSlotState",
+        "subjectOpener",
+        "withPendingSubjects"
+      ],
+      "via": "apps/desktop/src/review/prWork.ts"
+    },
+    {
+      "file": "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "SessionInfoPanel"
+      ],
+      "via": "apps/desktop/src/session/useAcpSession.ts"
+    },
+    {
+      "file": "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "apps/desktop/src/review/ReviewBoard.tsx"
+    },
+    {
+      "file": "src/acp/delegate-history-replay.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/editor-profile-golden.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/hook-notices.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/mcp-servers.process.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/prepare-review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/server-archive.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/server-mcp.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/server-models.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/server-remember-model.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/session-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-command-views.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-commands.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-delegate-model.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-delegate-terminal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-goal-delegate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-profile-modes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-profile.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-providers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-session-organize.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-session-switch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "IDLE_CAP_RELEASE_REASON",
+        "MAX_HELD_SESSIONS"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-subagents.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/shell-tasks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellHarness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/acp/telegram-session.server.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "harness"
+      ],
+      "via": "src/acp/server.ts"
+    },
+    {
+      "file": "src/capability/stale-snapshot-writers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "updateConfigFile"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/acp.process.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/acp.ts"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ResolveAcpProviderDeps",
+        "parseAcpArgs",
+        "rememberAcpModel",
+        "resolveAcpProvider",
+        "shellGrantRefresh",
+        "shellModelSource"
+      ],
+      "via": "src/commands/acp.ts"
+    },
+    {
+      "file": "src/commands/issues.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issuesCommand"
+      ],
+      "via": "src/integrations/issues-board.ts"
+    },
+    {
+      "file": "src/commands/mcp-auth-flow.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/mcp-auth-secrecy.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/projects.escape.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/serve.bridges.process.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/serve.process.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/serve.research-sync.process.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "setProjectPermissionMode"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/integrations/issues-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueBindingFile",
+        "issueContextForSession"
+      ],
+      "via": "src/session/issues/issue-session.ts"
+    },
+    {
+      "file": "src/integrations/issues-projects.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "moveIssueProjectItem",
+        "readIssueProject"
+      ],
+      "via": "src/integrations/issues-board.ts"
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/config-update.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "updateConfigFile"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/desktop-serve-bootstrap.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/permission-mode-config.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "setProjectPermissionMode"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/project-registry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "forgetProject",
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-approvals.route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-credential.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken",
+        "revokeServeToken",
+        "rotateServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-credential.waiting.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "LOCK_STALE_MS"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-listener.turns.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-server.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-throttle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/lib/serve-turns.route.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "registerProject"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "clearCredential",
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/credentials.isolation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "clearCredential",
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/credentials.table.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "clearCredential",
+        "forgetByName",
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/doctor.oauth.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/oauth-integration.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/oauth-provider.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/mcp-servers/session-oauth.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/remote/token-scope.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "issueServeToken"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "writeCredential"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "setProjectPermissionMode"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/worktree/exec.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "allocatePorts"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/worktree/no-forbidden-git.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "promoteWorktree"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/worktree/ports.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "allocatePorts",
+        "releasePorts"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/worktree/promote.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "promoteWorktree"
+      ],
+      "via": "src/lib/file-lock.ts"
+    },
+    {
+      "file": "src/worktree/remove.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "promoteWorktree"
+      ],
+      "via": "src/lib/file-lock.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

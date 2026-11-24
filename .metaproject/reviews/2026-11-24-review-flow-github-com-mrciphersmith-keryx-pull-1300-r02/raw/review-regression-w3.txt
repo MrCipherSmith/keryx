@@ -1,0 +1,61 @@
+STATUS: DONE
+
+review-regression, round 4, wave 3. Slice read in full: slice-03 (backend, tests, docs of the round-3 fix range d7b0f7058..4cb6c43ef). No regression found.
+
+What was checked, each against the code at 4cb6c43ef and the base d7b0f7058:
+
+1. Other callers of `withFileLock` (src/lib/file-lock.ts). Importers: src/lib/project-registry.ts, src/lib/permission-mode-config.ts, src/lib/serve-credential.ts, src/lib/config-update.ts, src/worktree/ports.ts, src/worktree/promote.ts, src/mcp-servers/credentials.ts, src/session/organize.ts (enumerated with `keryx ctx rg --all "lib/file-lock|\./file-lock" src apps scripts`). `src/lib/fs.ts` has its own unrelated async `withFileLock` (slate, flow, learning, issue-session binding); it was not touched. The refactor into `LockAttempt.prepare/step/release` keeps, for the default options none of those callers change: mkdir of the parent at 0700 and `null` when it fails; deadline checked before the stale branch; `wx` open plus nonce; nonce-write failure closes, removes and retries; stale removal by mtime; one `onWaiting` after 1 s; 15 ms pause; `null` on timeout; release only when the nonce still matches. The only new throw (`ENOENT` rethrown) is gated on `createDir === false`, which only organize.ts passes. The two remaining differences (a throw from `closeSync`/`rmSync` in the nonce-failure branch now escapes instead of being retried; nothing else) need a lock directory where `open(wx)` succeeds and close/rm then fail, which no caller reaches. `src/lib/config-dir.writers.test.ts` still exempts `lib/file-lock.ts` by name and the file keeps its mkdirSync/writeFileSync shapes, so that guard is unaffected.
+
+2. ACP request handling with `handleSessionFlags` async (src/acp/server.ts). The handler is registered in the same `requests` table as the already-async `handleSessionTrash`; `AcpDispatcher.handleRequest` (src/acp/dispatch.ts:166-172) awaits every handler inside one try/catch, so validation `refuse()` throws that now become rejections reach the same JSON-RPC error mapping as before. No other caller of `handleSessionFlags` exists. Interleaving with other requests while a flags write waits is safe for the files involved: the critical section (`whileStored` + read + `writeFlags`) is synchronous, and `withFileLockAsync` releases after a microtask, before any timer of another waiter. A `_keryx/session_trash` that lands during the wait now makes the write fail as `no session …` (createDir false + `whileStored`), not recreate the folder; that is the intended HL3-002 fix, not a regression.
+
+3. `setSessionFlags` sync callers: `src/session/issues/issues-launch.ts:116` (prepare-flow). It locates the session through `findSession` (summary.json present), so `createDir: false` and `whileStored` do not change its outcome. Timing defaults equal the base constants (3 000 / 2 000 ms).
+
+4. `backfillSessionSubject` / `withIssueBinding` first bind: `createSession` (src/session/store.ts:652-682) writes summary.json immediately, so `whileStored` admits the first bind of a freshly created issue session; later opens now skip or swallow the backfill instead of failing the open.
+
+5. `keryx issues list` errors seen by other clients. Only the `..`/`.` remote case moved, from `configuration: Invalid Issues request.` to `configuration: This project's GitHub.com remote names no usable repository.` Both keep the `configuration:` prefix. The only text consumer is Desktop's `apps/desktop/src/issues/useIssueCollection.ts:27-28`, which this range updated to classify the new text as unavailable. No TUI/CLI code matches either text (`keryx ctx rg --all "Invalid Issues request|names no usable repository|unusableRemote" src apps/desktop/src`). `cwd` missing still throws `invalidInput`. The viewer 410 and viewer page-loop behaviour in issues-board.ts is only covered by new tests in this range; its code was not changed here.
+
+6. `keryx acp` help text (src/commands/acp.ts). Wording only; no test or doc snapshots the old sentence (`keryx ctx rg --all --hidden "pins a stored session|session_flags archives|_keryx/session_trash moves"`), and src/commands/acp.test.ts / acp.process.test.ts make no help-text assertions.
+
+Radius and coverage: the payload layer lists 131 affected files at depth 2 with no `truncated` mark. The graph does not hold the runtime edges this slice depends on: Desktop → ACP over JSON-RPC (`_keryx/session_flags`, `keryx issues list`) and the spawned issue-workspace child that writes flags; those were traced by reading the code, not taken from the set. Docs changes (desktop-issues.md, implementation-plan.md) have an empty radius; they were read and describe the code as it is.
+
+Not verified: I ran no tests (exec_budget_s 0). The recorded run (research-evidence/verify-tests-to-run-1.txt: 68 root tests across 7 files and 1070 Desktop tests, all passing) did not include the suites of the other `withFileLock` callers (config-update, project-registry, serve-credential(.waiting), permission-mode-config, worktree, mcp-servers credentials) or `src/acp` as a whole; the equivalence in point 1 comes from reading the code, not from running them.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-regression",
+    "slices": ["slice-03"],
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "fixed", "note": "server.ts handleSessionFlags awaits setSessionFlagsAsync → withFileLockAsync, which yields between attempts; dispatcher awaits it (dispatch.ts:167)." },
+      { "id": "HL3-002", "disposition": "fixed", "note": "organize.ts lockOptions passes createDir:false and whileStored checks summary.json; a trashed session gets 'no session …' and its folder is not recreated (organize.test.ts 'removed since it was located')." },
+      { "id": "TP-R3-008", "disposition": "fixed", "note": "Lock tests now use file barriers from child processes; no elapsed-time assertions remain." },
+      { "id": "TP-R3-007", "disposition": "fixed", "note": "New test holds the lock past a 20 ms timeout and asserts the retry error for sync and async writes." },
+      { "id": "TP-R3-009", "disposition": "fixed", "note": "New test: backfill of a mismatched subject throws 'not a GitHub subject' and writes no flags.json." },
+      { "id": "TP-R3-006", "disposition": "fixed", "note": "New tests: viewer 410 keeps issuesDisabled text; a viewer page of only pull requests stops after one page." },
+      { "id": "DG3-001", "disposition": "fixed", "note": "Later opens read sessionSubjectSettled without the lock and skip the backfill; test spies backfillSessionSubject." },
+      { "id": "SC3-001", "disposition": "deferred", "note": "Stale takeover logic in file-lock.ts moved into LockAttempt.step unchanged; the async wait does not add an in-process interleaving because stat→rm runs inside one synchronous step. Still deferred as a separate change." },
+      { "id": "HL3-004", "disposition": "deferred", "note": "Flags stale window still 2 s (FLAGS_LOCK_TIMING); unchanged by this range." }
+    ],
+    "stats": {
+      "files_in_slice": 12,
+      "findings": 0,
+      "blast_radius_files_in_layer": 131,
+      "blast_radius_truncated": false,
+      "callers_checked": {
+        "withFileLock(lib/file-lock)": 7,
+        "handleSessionFlags": 1,
+        "setSessionFlags(sync, non-test)": 1,
+        "backfillSessionSubject(non-test)": 1,
+        "issues error text consumers": 1
+      },
+      "tests_run": 0
+    }
+  }
+}
+```
+
+Summary: no regression in slice-03. Other `withFileLock` callers keep the same behaviour, because only `createDir: false` (used by organize.ts alone) changes anything. The async `_keryx/session_flags` goes through the same awaited dispatcher path as `session_trash`. The `issues list` error change affects only the `..` remote, and Desktop is the only client that reads that text; it was updated. The help text has no snapshot. The graph cannot see the JSON-RPC and child-process edges, so I traced them by reading the code. Tests of the other lock callers were not run.
+
+Routing audit: graph_used: yes (payload layers.affected at the PR head) · wiki_used: not-relevant (a narrow regression check of named callers) · ctx_used: yes (keryx ctx read/rg) · raw_rg_used: no (bounded sed/git show reads were marked keryx:raw).

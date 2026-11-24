@@ -1,0 +1,96 @@
+STATUS: DONE
+
+## Frontend Review (round 2, wave 2)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121, including fix commit a34d8961b
+- Scope mode: diff (fallback-first)
+- Slices read in full:
+  - slice-03 (450 lines): session/useAcpSession.ts, shell/AppShell.tsx, styles/review.css
+  - slice-05 (1330 lines): test/app-work-row.fixture.tsx, the implementation plan, src/acp/server.ts, shell-session-organize.test.ts, commands/issues.ts, integrations/issues-board(.test).ts, issues-contract.ts, session/issues/issue-session(.test).ts, session/organize(.test).ts
+- Context read at head (outside the slices, only for these questions): session/subjectBinding.ts, useAcpSession.ts `applyPendingFlow`, the ProjectNavigation.dom.test.tsx runner for the fixture, App.tsx `pendingSubjects` readers, PrWorkRow.tsx `is-attention`.
+- Stack note: Desktop uses React hooks and plain classes, not MobX, so the mobx-store-template checklist does not apply. The backend files in slice-05 (server.ts, organize.ts, issues-board.ts, issue-session.ts) are outside this lens; I read them only for the Desktop contract they serve.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No new findings in this lens. Wave 1 findings are not repeated.
+
+### Prior findings these slices touch
+- **DG-004: closed.** slice-03 deletes the `.review-note` rule from review.css.
+- **UX-001 and LY-003: closed.** review.css adds `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`. The ring is now drawn inside the 24px buttons, so the row's `overflow: hidden` no longer clips it.
+- **UX-002: closed.** review.css adds `.pr-work-link.is-attention`, which uses the `--warn`/`--warn-soft` pair and a `--warn` border. PrWorkRow.tsx:46 sets `is-attention` from `waitsOnViewer`, and PrWorkRow.dom.test.tsx:237 asserts the class. The comment says the slot text names the waiting state, so the cue does not rely on colour alone.
+  - Nuance, not a finding: the hover rule `.pr-work-link:hover:not(:disabled)` has specificity 0,3,0 and the attention rule 0,2,0, so hover replaces the warn tone with the ordinary hover colours. That is ordinary hover feedback.
+- **TP-001: closed.** slice-05 adds `test/app-work-row.fixture.tsx`, which ProjectNavigation.dom.test.tsx:89 runs as an AC9/AC12 test. Each round-1 mutation would now fail it:
+  - M38 (no `flowLinks.expect`) and M40 (callback skips `s.linkFlow`) both fail the assertion that `flagWrites` equals `[{pr12-session, 506-for-twelve}]`.
+  - M39 (`prefillExisting=false`) fails `shownComposer()?.value === flowPrompt(pr(12))` on an already bound session (`pr12-session`).
+  - M42 (`sessions={[]}`) fails `issueSlot(5) === "Session"`.
+  - The two-package case asserts that nothing more is linked and that #13 keeps "Create Flow".
+  - Caveat: I reasoned these mutations from the code and did not run them, because exec_budget is 0.
+- **LY-002: open.** It was claimed unreported, and the CSS is unchanged: `repeat(3, minmax(0, 1fr))`, `.pr-work-more` is still `flex: none` with text, and `.review-lanes .lane` keeps `flex: 1 0 230px`.
+- **LY-004: open.** It was claimed unreported. `.session-subject-links` still has `flex: none` and `white-space: nowrap`.
+- **PF-002: open.** It was claimed deferred. The turn-end chain is still `applyPendingFlow(...).then(() => subjects.apply(...)).finally(() => void refreshSessions())`, while `onFlags` already returns `refreshSessions()`.
+- **LG-004: open.** It was claimed deferred. `PendingSubjects.apply` still has `catch { return; }` for every write failure, and organize.ts `updateSessionFlagsAt` still throws `not a GitHub subject`. The binding is created by `withIssueBinding`, which writes the subject only after `parseSessionSubject` passes, and by Desktop from GitHub URLs, so no input I could find reaches it.
+
+### Checked, no finding
+- **useAcpSession `subjects` memo.**
+  - Its deps are `[cwd, dispatch, refreshSessions]`, and `refreshSessions` is `useCallback([cwd, dispatch])`, so the instance is stable for a window's project.
+  - `write` reads `live.current.client` at call time and rejects without a client.
+  - `sendPrompt` lists `subjects` in its deps.
+  - The two flags writes run one after the other (flow first, then subject), which the comment states.
+  - `applyPendingFlow` catches its own errors, so `.then(subjects.apply)` always runs. `PendingSubjects.apply` never throws.
+- **`pendingSubjects` state.**
+  - It is a `useState` `ReadonlyMap`, replaced through `onChange(new Map(...))` and never mutated in place.
+  - App reads it through `withPendingSubjects(...)` memoised on `[state.sessions, s.pendingSubjects]`, and through `.get(...)`.
+- **The `bindSubject` and `linkFlow` callbacks** are `useCallback`s with complete deps.
+- **AppShell.** `titleLinks` is optional, and it renders only when `view === "session"`, beside the title. No hook or ordering change.
+- **review.css.**
+  - The lane colour classes match the new lane ids.
+  - `.review-table .review-progress-caption` was removed together with `CardReviewProgress`; wave 1 checked that it has no importer.
+  - The quick filters' `aria-pressed` style is scoped to `.review-context`.
+- **The fixture.**
+  - It runs in its own process, as app-navigation does.
+  - It uses `try/finally` with unmount, `clearMocks` and `unregisterDom`.
+  - It locates controls by accessible name and `data-slot`.
+- **The contract types used by Desktop.**
+  - `IssueListSource` adds `"repository"` without narrowing `IssueScope`.
+  - `SessionSubject` has optional `repositoryId`, and the server passes it through to `parseSessionSubject`.
+
+### Not reported (out of lens)
+- Backend validation in server.ts, organize.ts and issues-board.ts: security, logic and highload.
+- Fixed `settle()` sleeps of 40ms in the fixture: testing-practices.
+
+### Routing audit
+- graph_used: no. The payload `layers` block (graph at the PR head) supplied the affected files and related tests for my slice-03 files. Its affected list for useAcpSession, AppShell and review.css matched the readers I checked.
+- wiki_used: not-relevant. The intent of each change is stated in the diff comments and in the implementation-plan section in slice-05.
+- ctx_used: yes (`keryx ctx read`, `keryx ctx rg`). Two short `sed -n` excerpts of known line ranges were marked `keryx:raw`.
+- raw_rg_used: no.
+- Tests: I ran none (read-only, exec_budget 0). P/research-evidence/verify-tests-to-run-1.txt records exit 0, and I did not read it.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "summary": "Round 2, wave 2: slice-03 and slice-05 read in full. No new frontend findings. In useAcpSession, the PendingSubjects memo and pendingSubjects state are stable and immutable, the two flags writes are sequenced, and the callbacks have complete deps. AppShell titleLinks are scoped to the session view. Prior findings these slices touch: DG-004, UX-001, LY-003 and UX-002 are closed in review.css (plus PrWorkRow is-attention). TP-001 is closed: app-work-row.fixture.tsx, run from ProjectNavigation.dom.test.tsx, pins M38, M39, M40 and M42 (by reading the code, not run). LY-002 and LY-004 (CSS unchanged), and PF-002 and LG-004 (deferred, code unchanged), remain open.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "DG-004", "disposition": "closed"},
+      {"id": "UX-001", "disposition": "closed"},
+      {"id": "LY-003", "disposition": "closed"},
+      {"id": "UX-002", "disposition": "closed"},
+      {"id": "TP-001", "disposition": "closed"},
+      {"id": "LY-002", "disposition": "open"},
+      {"id": "LY-004", "disposition": "open"},
+      {"id": "PF-002", "disposition": "open"},
+      {"id": "LG-004", "disposition": "open"}
+    ],
+    "slices": ["slice-03", "slice-05"],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```

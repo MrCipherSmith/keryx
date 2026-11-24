@@ -1,0 +1,167 @@
+STATUS: DONE
+
+## Logic Review (round 2, wave 1, slice-01)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121 (fix commit a34d8961b)
+- Scope mode: explicit-hash-range, diff mode
+- Slice read in full: slice-01 (flow 517 package: acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md, dispatch/T5–T9, flow.json, resolved/T5–T10, T17)
+- Also read for the spec gate and the prior findings: the whole-diff stat, the fix-commit diff of App.tsx, ReviewBoard.tsx, ReviewResults.tsx, ReviewProgress.tsx, PrWorkRow.tsx and usePendingFlowLinks.ts, prWork.ts lines 100–210, model.ts lines 35–148, the base→head diff of implementation-plan.md, and the PR body.
+- Spec compliance gate: ran (frozen AC1–AC19 against the whole diff and the PR body)
+
+### Summary
+The fix round closes the AC4 spec gap (LG-001): `CardReviewProgress` is removed from the tile body and from the list Reason cell, and progress text moves to the review slot's title. It closes LG-003: the focus request carries `repo`, the board ignores a focus for another repository, and App clears the request on `onFocusHandled`. LG-002 is partly closed. The Create Flow window now ends after 15 minutes, but within that window a foreign package still links to an unsent request; the journal records this as an accepted trade-off. I found no unimplemented criterion. AC9's text and the code now differ in two places the AC does not mention (several pending requests, 15-minute window), and the owner has not amended the AC (LG-007). The fix also added one minor regression (LG-008). The PR body and the implementation plan were not updated after the fix round (LG-010).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 4  |  info: 0
+
+### Spec gate (AC1–AC19)
+- AC4: now met. `laneReason` (model.ts) reads GitHub fields only. ReviewResults.tsx has no `localReview` read left, and Keryx progress appears only in PrWorkRow's review-slot title (`reviewProgressText`).
+- AC9: met for one pending request. The code's attribution rule is narrower than the AC text: see LG-007 (minor, not blocker).
+- AC17: met. The base→head diff adds no element under `.flows-toolbar`; the only toolbar CSS lines in the diff are unchanged context. T13 was skipped with a recorded reason.
+- AC19: met. implementation-plan.md "Состояние этапа 1" records that deviation (a) stays open.
+- AC1–3, AC5–8, AC10–16, AC18: not re-derived in code this round. The round 1 logic pass found no gap in them, the fix touched none of their logic except AC7 (the subjectOpener reuse, which keeps "pressing again opens the same session"), and the package test run passes (1034 pass, 0 fail). `acConfirmed` in flow.json is `{}`: no criterion is confirmed yet.
+
+### Spec Gaps (blocker)
+None found.
+
+### Logic Bugs
+- [LG-007] minor — AC9's text no longer matches what `resolveFlowLinks` does (several pending requests, 15-minute window)
+- [LG-008] minor — "Create Flow" pressed while an "Open in session" is in flight registers a pending flow link on a session whose composer has no flow prompt
+- [LG-009] minor — a header focus for a repository the board does not show does nothing on click and opens the panel later, when that repository is selected
+
+### Async & Concurrency
+LG-008 (above).
+
+### Error Handling / Null Safety / Type Contracts / Edge Cases
+None found in this slice.
+
+### PR description
+- [LG-010] minor (pr-process) — the PR body and the implementation plan were not updated after fix round T17
+
+---
+
+### [LG-007] AC9's text no longer matches the Create Flow linking rule
+- **Severity**: minor
+- **File**: apps/desktop/src/review/prWork.ts (`resolveFlowLinks`)
+- **Problem**: Frozen AC9 says "the first new flow package that appears while that request is pending is linked to the session … when several new packages appear, none is linked". After T17, `resolveFlowLinks` links only when exactly one request is live (`const only = live.length === 1 ? live[0] : undefined`), and a request expires after `FLOW_LINK_WINDOW_MS` (15 min). Two cases the AC does not exclude now link nothing. (1) "Create Flow" on PR A, then on PR B, then A's package appears: no link, and both requests end. (2) The prompt is sent and the package appears more than 15 minutes after the press: no link.
+- **Why it matters**: The AC is checksum-frozen and will be confirmed with `keryx flow ac confirm`. Literal AC9 would require linking the first package to request A even while B is pending, which is the HL-001 blocker the fix removed. The narrower rule is correct, but neither the AC, the plan's State × event matrix ("first new package linked to that session"), nor implementation-plan.md "Создание из сессии" states it. A confirmer reading AC9 against the code finds a mismatch that nobody has accepted. Not a blocker: the AC's own scenario (one request, one package) is implemented and tested, and the deviation comes from fixing a blocker, not from missing work.
+- **Fix**: Have the owner amend AC9 through `keryx flow ac update` ("…linked when it is the one new package and this is the one pending request, within 15 minutes of the press; otherwise none is linked"). Or record the narrowing as an accepted deviation next to AC9 before confirming it. Update the plan matrix row and implementation-plan.md to match.
+
+### [LG-008] Create Flow during an in-flight open registers a pending link without the flow prompt
+- **Severity**: minor
+- **File**: apps/desktop/src/App.tsx (`createPrFlow`)
+- **Problem**: `subjectOpener` (added in T17 for HL-002) returns the in-flight open's promise to any repeat call for the same Subject, "whatever its target or prompt". `createPrFlow` awaits that promise and then calls `flowLinks.expect(id, known)` unconditionally. Trigger: press "Open in session" on PR #10, then press "Create Flow" on the same card before `session/new` answers. The session opens with the PR URL in the composer, not the flow prompt (the journal says so), yet a 15-minute pending flow link is registered for it. If any package appears in that window (another session, the CLI, the Issues board "prepare-flow"), and it is the one new package and the one pending request, `linkFlow` persists it as the session's `flow` flag. PR #10's card and the session header then show an unrelated Flow. The user never asked this session for a Flow.
+- **Why it matters**: The fix round added this path. It is the LG-002/HL-001 class of wrong persisted link, reached through a new trigger. It is narrow: a double press within the open latency, plus a foreign package within 15 minutes.
+- **Fix**: Register the pending link only when the flow prompt was applied. For example, have `subjectOpener` report whether it reused an in-flight open, and skip `expect` in that case, or apply the flow prompt after the reused open resolves and then call `expect`. Add a prWork or App test: an in-flight open, then createPrFlow, then one new package links nothing.
+
+### [LG-009] A header focus for another repository fires later, unrequested
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewBoard.tsx (focus effect)
+- **Problem**: After T17 the effect returns early while `snapshot.repo` differs from `focus.repo`, and App clears `reviewFocus` only through `onFocusHandled`. Trigger: a session is bound to owner/a#5 while the board shows owner/b. Clicking the header link switches to Pull requests and nothing opens, with no message. The request stays in App state. When the user later selects owner/a for any reason, the #5 panel opens. The journal accepts this ("a header focus for another repo stays armed until that repo is shown") but gives no reason. The round 1 fix proposal ("have the board select that repository") was not taken.
+- **Why it matters**: The click gives no feedback, and the panel opens at an unrelated later moment. That is the shape of LG-003's repro B, now limited to a PR the user once asked for. Low impact.
+- **Fix**: Have the board select `focus.repo` when it is among `snapshot.repositories` (then open the panel). Otherwise drop the request with a short notice ("owner/a is not on this board").
+
+### [LG-010] The PR body and the implementation plan were not updated after fix round T17
+- **Severity**: minor (location_class: pr-process)
+- **File**: PR #1300 body; docs/requirements/keryx-desktop-review-v2/implementation-plan.md ("Состояние этапа 1")
+- **Problem**: The body at head 88e3faba9 is the round 1 text, and parts of it no longer match the code:
+  - "The single new flow package that appears while that request is pending gets linked" leaves out the one-pending-request condition and the 15-minute window.
+  - "The session header links back to the PR" is not true for a PR of a repository the board is not showing (LG-009).
+  - "Still to do: a review-orchestrator round on this PR" is stale: round 1 ran.
+  - The verification counts still say "1016 pass", while the journal and the test run say 1034.
+  - The journal T17 entry says its behaviour changes are "listed for the owner": the Create Flow window, progress moved to the slot title with "Transcript updated" removed from the card, the armed cross-repo focus, new PR sessions linking a Flow found through a bound session, the launch dialog preselecting the newest of several Flows, and the repeat-press reuse. The body lists none of them.
+  - implementation-plan.md "Создание из сессии" has the same staleness as the first bullet.
+- **Why it matters**: The owner decides the merge from the body, and the "Known gaps and choices for the owner" list is incomplete after T17.
+- **Fix**: Update the PR body: add the T17 behaviour changes under "UI choices taken without an owner decision", correct the counts, and replace "Still to do". Update implementation-plan.md "Создание из сессии" to match.
+
+### Prior findings (this lens)
+- LG-001 (AC4 blocker): **closed**. `<CardReviewProgress>` is gone from the tile body and the list Reason cell (ReviewResults.tsx). Progress now appears only in PrWorkRow's review-slot `title` via `reviewProgressText`. `laneReason` is GitHub-only. The remaining `localReview` reads in model.ts are `needsViewerAttention` (stage 0 tab indicator, AC14, unchanged) and `reviewNote` (work-row title only).
+- LG-002 (unbounded Create Flow window): **partial**. The window now ends (`expiresAt`, 15 min), several pending requests link nothing, and a linked package is claimed. The round 1 repro still works inside the window: press, leave the prompt unsent, and a foreign package created within 15 minutes is linked. The journal records this as an accepted trade-off. No provenance check was added. LG-008 is a new trigger into the same residual.
+- LG-003 (focus drops repo, replay on remount): **closed**. The focus carries `repo` and is compared without case to `snapshot.repo`. App clears it on `onFocusHandled`, and the nonce counter is never reused, so a remount cannot replay a handled request and no other repository's PR opens. The remaining behaviour is LG-009.
+- LG-004 (refused subject write stays pending): **open**. Deferred; still info. `PendingSubjects.apply` is unchanged by T17.
+- LG-005 (T10 resolved path, flow `pr.url` null): **open**. Still info. resolved/T10.test.json still names `apps/desktop/src/ProjectNavigation.dom.test.tsx`, and flow.json still has `"pr": {"url": null}`.
+- LG-006 (description.md promises "another or new" session for Issues): **open**. Still info. description.md is unchanged. implementation-plan.md now records the gap as (e), and the PR body discloses it.
+
+### Not verified
+- No test was run (read-only). I did not re-derive AC1–3, AC5–8, AC10–16 or AC18 in code this round (see Spec gate).
+- I did not check whether `snapshot.repositories` would allow selecting `focus.repo` automatically (LG-009 fix shape).
+
+Routing audit: graph_used: no (not-relevant: the files to read were named by the payload and the fix commit); wiki_used: no (not-relevant: requirements came from the frozen ACs and the flow package); ctx_used: yes (`keryx ctx rg`, `keryx ctx run`); raw_rg_used: no. Raw `git diff`/`jq`/`awk` reads of the review package and fix diff carried `keryx:raw` markers.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 2, slice-01 plus the Stage 1 spec gate. Fix commit a34d8961b closes LG-001 (AC4) and LG-003 and partly closes LG-002 (15-min window; a foreign package within the window still links). No unimplemented acceptance criterion. Four minor findings: AC9 text vs the narrowed linking rule, a fix-round regression where Create Flow during an in-flight open registers a link without the flow prompt, a cross-repo header focus that fires later, and a PR body/implementation plan not updated after T17.",
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 0 },
+  "findings": [
+    {
+      "id": "LG-007",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "quote": "  const only = live.length === 1 ? live[0] : undefined;",
+      "problem": "Frozen AC9 says the first new flow package that appears while the request is pending is linked; when several packages appear, none is. After T17, resolveFlowLinks links only when exactly one request is live, and a request expires after FLOW_LINK_WINDOW_MS (15 min). Two pending requests, or a package that appears after 15 minutes, link nothing. Neither the AC, the plan's State x event matrix nor implementation-plan.md 'Создание из сессии' states this.",
+      "impact": "The narrowing is correct (literal AC9 would reintroduce the HL-001 blocker), but the frozen AC and the code disagree, and nobody has accepted the difference before `keryx flow ac confirm AC9`. Not a blocker: the AC's single-request scenario is implemented and tested.",
+      "suggested_fix": "Have the owner amend AC9 via `keryx flow ac update` (link only when it is the one new package and the one pending request, within 15 minutes of the press), or record the narrowing as an accepted deviation before confirming. Update the plan matrix and implementation-plan.md to match.",
+      "evidence": "prWork.ts resolveFlowLinks: `const live = pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId))`, `const only = live.length === 1 ? live[0] : undefined`, returns `pending: []` with no link otherwise; FLOW_LINK_WINDOW_MS = 15 * 60_000. acceptance-criteria.md AC9 text; plan.md matrix row 'Create Flow pending for a session'.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "dedupe_key": "ac9-flow-link-rule-vs-text"
+    },
+    {
+      "id": "LG-008",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/App.tsx",
+      "quote": "    const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true);\n    if (id) flowLinks.expect(id, known);",
+      "problem": "subjectOpener (added in T17 for HL-002) returns the in-flight open's promise for a repeat call on the same Subject, whatever its prompt. createPrFlow still calls flowLinks.expect(id, known) afterwards. Pressing 'Open in session' and then 'Create Flow' before session/new answers registers a 15-minute pending flow link on a session whose composer holds only the PR URL, not the flow prompt.",
+      "impact": "If one foreign package appears within 15 minutes (another session, the CLI, Issues prepare-flow) and no other request is pending, linkFlow persists it as that session's `flow` flag. The PR card and the session header then show an unrelated Flow the user never asked this session to create. Introduced by the fix round. Narrow trigger: a double press within the open latency, plus a foreign package in the window.",
+      "suggested_fix": "Call expect only when the flow prompt was applied. For example, have subjectOpener report a reused in-flight open and skip expect then, or apply the flow prompt after the reused open resolves and then expect. Add a test: an in-flight open, then createPrFlow, then one new package links nothing.",
+      "evidence": "prWork.ts subjectOpener: `const running = inFlight.get(key); if (running) return running;` (doc: 'whatever its target or prompt'). App.tsx createPrFlow lines 411-415. Journal T17: 'a repeat press during an open reuses it (flow prompt not applied to that session)'.",
+      "confidence": "medium",
+      "location_class": "in-diff",
+      "dedupe_key": "create-flow-expect-after-reused-open"
+    },
+    {
+      "id": "LG-009",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "quote": "    if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()\n      || !snapshot.cards.some(c => c.number === focus.number)) return;",
+      "problem": "A header-link focus for a repository the board is not showing returns early and is never cleared, since App clears only on onFocusHandled. The click switches to Pull requests and nothing opens, with no message. When the user later selects that repository for any reason, the PR panel opens unrequested.",
+      "impact": "No feedback at click time, and a panel opens at an unrelated later moment. This is the shape of LG-003's repro B, now limited to a PR the user once asked for. Low impact. The journal accepts it without a stated reason.",
+      "suggested_fix": "Select focus.repo on the board when it is among snapshot.repositories, then open the panel. Otherwise drop the request (call onFocusHandled) with a short notice that the repository is not on this board.",
+      "evidence": "ReviewBoard.tsx focus effect (fix commit a34d8961b); App.tsx reviewFocusHandled clears only on a matching nonce; journal T17 'a header focus for another repo stays armed until that repo is shown'.",
+      "confidence": "high",
+      "location_class": "in-diff",
+      "dedupe_key": "header-focus-cross-repo-armed"
+    },
+    {
+      "id": "LG-010",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "quote": "«Create Flow» открывает привязанную сессию с подготовленным текстом; первый новый пакет Flow, появившийся, пока запрос ждёт, привязывается к сессии.",
+      "problem": "The PR body at head 88e3faba9 is the round 1 text. It says the single new package that appears while the request is pending gets linked (no one-pending-request condition, no 15-min window). It says the session header links back to the PR, which does nothing for another repository (LG-009). It still says 'Still to do: a review-orchestrator round', and it still reports '1016 pass' (now 1034). It lists none of the T17 behaviour changes that the journal says are 'listed for the owner': the Create Flow window, progress moved to the slot title with 'Transcript updated' removed, the armed cross-repo focus, new sessions linking a Flow via a bound session, the launch dialog preselecting the newest Flow, and repeat-press reuse. implementation-plan.md 'Состояние этапа 1' has the same staleness.",
+      "impact": "The owner decides the merge from the body; its 'Known gaps and choices for the owner' list is incomplete, and two statements claim more than the code does.",
+      "suggested_fix": "Update the PR body: add the T17 behaviour changes under the owner-choices list, correct the counts, replace 'Still to do'. Update implementation-plan.md 'Создание из сессии' to match the narrowed rule.",
+      "evidence": "pr-context.md (body at head 88e3faba9); journal.md section 'T17 fix round 1'; git diff base..head of implementation-plan.md (T17 commit a34d8961b does not touch it); research-evidence/verify-tests-to-run-1.txt '1034 pass'.",
+      "confidence": "high",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-body-stale-after-t17"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "LG-001", "disposition": "closed" },
+    { "id": "LG-002", "disposition": "partial" },
+    { "id": "LG-003", "disposition": "closed" },
+    { "id": "LG-004", "disposition": "open" },
+    { "id": "LG-005", "disposition": "open" },
+    { "id": "LG-006", "disposition": "open" }
+  ]
+}
+```

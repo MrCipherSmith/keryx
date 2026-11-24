@@ -1,0 +1,78 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, round 4, wave 1 — slice-01 (fix range d7b0f7058..4cb6c43ef, code commit 055115a20). Slice read in full; `apps/desktop/src/styles/review.css` (lines 1-42) and `apps/desktop/src/review/PrWorkRow.tsx` read at head; `apps/desktop/src/issues/IssueWorkRow.tsx` read because it shares `.pr-work-slot`.
+
+No measurement was possible: exec_budget_s is 0 and allowed_tools is read-only, so no real-engine probe could run. Per the lens, every layout claim below is therefore `info`, unverified, with the command that would settle it. If measured, the remaining LY-005 condition matches the `layout-rendering.mdc` row "Element renders at 0px while its label shows" at a supported width (default `major`).
+
+## Judgement on the round-3 fix (`overflow: hidden` on `.pr-work-slot`, Link/Dismiss `flex: none`)
+
+- Containment: fixed. The Flow slot now clips its own overflow, so Link/Dismiss no longer paint over, or take clicks from, the Session slot (grid tracks `minmax(0,1fr)` with a 4px gap; the clip also clips hit-testing). That half of LY-005 is closed.
+- Presentation: not fixed. `.pr-work-more` was already `flex: none` before this range (review.css line 32 is unchanged), so the only shrinkable item in the offer is the `.pr-work-offer` span. Static arithmetic (same token values as LY-005): the span's floor is its 8px padding; Link ~29px + 2px margin; Dismiss ~47px + 2px margin; total ~88px. Slot width: (lane − 50px) / 3, which gives ~60px at the 230px lane floor and ~74.7px in the 16rem list column. So:
+
+```
+host                        slot     offer text box   Link visible   Dismiss visible
+board lane 230px (floor)    ~60px    0px (8px pad)    29/29px        ~19/47px  ("Dism", no ellipsis)
+list column 16rem           ~74.7px  0px (8px pad)    29/29px        ~33/47px
+board lane >= ~314px        >= 88px  > 0px            full           full
+```
+
+  The text becomes visible only once the slot is wider than ~88px, i.e. a lane of at least ~314px. The default Status grouping draws 4 lanes, so that needs about 1290px of board content. At the 720px Tauri minimum and a typical 1180px window, every lane sits at or near the 230px floor. The question, the Flow number and title, "Linking …" and the new error text "Not linked: …" (role=alert) are all drawn in a 0px box; sighted users see them only through the `title` tooltip.
+- Is a clipped Dismiss acceptable? As a containment measure, yes: better than the round-3 overlap. As the offer's resting state, no. The owner chose a confirm for HL-001 so that the user identifies the package before linking. At default widths the user gets a bare "Link", a cut-off "Dism" with no question beside it, and a visible Dismiss target about 19px wide, under the 24px WCAG 2.5.8 minimum. Also unverified: the slot is now a scroll container (`overflow: hidden`), so Tab focus on the clipped Dismiss should make the engine scroll the slot by ~28px. That would shift Link partly out of view, and the shift stays until the offer goes away.
+
+## `.flows-toolbar` / AC17
+
+Unchanged. `git diff --stat d7b0f7058..4cb6c43ef -- apps/desktop/src/styles` lists only `review.css` (5+/3−). No `.flows-toolbar` rule was touched; `.flows-toolbar` is defined only in `apps/desktop/src/styles/flows.css:4` (`keryx ctx rg "pr-work|flows-toolbar|..." apps/desktop/src/styles`).
+
+## Verified clean
+
+- UX-012: `FlowOffer` renders `<span className={"pr-work-offer" ...}>` with no `pr-work-link` class (PrWorkRow.tsx FlowOffer). So `.pr-work-link:hover:not(:disabled)` and the bordered/dashed `.pr-work-link` box no longer match it, and the new `.pr-work-offer` rule sets no border, background or hover. Source: review.css lines 29-40 at head.
+- `.pr-work-slot { overflow: hidden }` also applies to Issue work rows (IssueWorkRow.tsx: one `.pr-work-link` per slot, `flex: 1 1 auto; min-width: 0`). Nothing there overflows, and the focus ring is drawn inside (`outline-offset: -2px`), so the clip costs nothing. The PR Session slot ("Session" + "More", ~35px flex:none) fits a 60px slot. Enumeration: `keryx ctx rg "PrWorkRow|pr-work-row" apps/desktop/src`, render sites ReviewResults.tsx:66 (board tile) and :117 (list `<td>`), plus IssueWorkRow.tsx:19.
+- The offer span's `line-height: 24px` fits the fixed 24px slot and row (AC5 height is unchanged).
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Round-3 fix contains the Flow offer inside its slot (no overlap or click capture on the Session slot; LY-005 half closed) and removes the false button box (UX-012 closed); .flows-toolbar is untouched. But the offer text, including the new error text, still gets a 0px box at the 230px lane floor and in the 16rem list column, and Dismiss is clipped to ~19px; unmeasured (exec budget 0), so info.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "LY-R4-001",
+      "severity": "info",
+      "reviewer": "review-layout",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }",
+      "problem": "LY-005 remainder, unverified. In the offer state the Flow slot holds the `.pr-work-offer` span (the only shrinkable item; its floor is 8px of padding) and two `flex: none` `.pr-work-more` buttons, Link (~29px+2px) and Dismiss (~47px+2px), about 88px in all. The slot is ~60px at the 230px lane floor and ~74.7px in the 16rem list column. The span's text box is 0px wide, and the new `overflow: hidden` on `.pr-work-slot` cuts Dismiss to about 19px (lane) or 33px (list), with no ellipsis. Text appears only when the slot passes ~88px, i.e. a lane of at least ~314px (~1290px of board for the default 4 Status lanes). Probably also: the slot is now a scroll container, so Tab focus on the clipped Dismiss scrolls it by ~28px and pushes Link partly out of view until the offer goes away.",
+      "impact": "After Create Flow, at the widths the app opens at (Tauri minWidth 720, typical 1180 window, 4 lanes at the 230px floor), the confirmation chosen for HL-001 shows as 'Link' and a cut-off 'Dism' with no question, no Flow number or title. The same applies to 'Linking …' and the round-3 error text 'Not linked: …' (role=alert), so a failed Link is announced to screen readers but invisible to sighted users except through the title tooltip. The visible Dismiss target is ~19x24px, under the 24px minimum. Clipping is an acceptable containment (it fixed the overlap and the misdirected click into Session) but not an acceptable resting state for the offer.",
+      "suggested_fix": "Make the offer fit about 60px instead of clipping it. Drop the static span and make Link the truncating flex item labelled with the question ('Link #<id> · <title>?', `flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis`, keeping `title` and the aria-label). Make Dismiss an icon-only `flex: none` button about 20-24px wide with its aria-label and title. Show the error on that same Link label ('Retry link #<id>' with the reason in `title`). Keep `overflow: hidden` on the slot as a backstop. Then measure with getBoundingClientRect on [data-slot=flow], its children and elementFromPoint at each button centre, at 720px and 1180px windows, in board (Status and My role grouping) and list view, and after Tab-focusing Dismiss (slot.scrollLeft).",
+      "evidence": "Static cascade arithmetic only; no engine run (exec_budget_s 0, read-only). review.css at head: line 28 `.pr-work-slot { display: flex; min-width: 0; height: 24px; overflow: hidden; }`, line 32 `.pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; ... }` (unchanged in this range, so `flex: none` on Link/Dismiss is not new), line 39 the quoted rule, line 8 `.review-lanes .lane { flex: 1 0 230px; }`, line 27 the 3-track grid with a 4px gap. Slot width = (lane − 16px lane-body padding − 24px card padding − 2px border − 8px gaps)/3. The list figure and the button widths (SF Pro 11px) are as in LY-005. PrWorkRow.tsx FlowOffer: `text` = `Not linked: …` / `Linking …` / `Link Flow #id · title?` in the span; role=alert on error. Settle with the probe in suggested_fix.",
+      "confidence": "medium",
+      "dedupe_key": "layout:pr-work-row:flow-offer-overflow",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (board tile, ReviewResults.tsx:66)",
+          "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (list <td>, ReviewResults.tsx:117)"
+        ],
+        "enumeration_method": "keryx ctx rg \"PrWorkRow|pr-work-row\" apps/desktop/src: PrWorkRow is rendered only from ReviewResults.tsx (board tile and list row); `.pr-work-offer` exists only in PrWorkRow.tsx and review.css; IssueWorkRow (the only other .pr-work-slot user) renders no offer."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "LY-005", "disposition": "partial" },
+    { "id": "UX-012", "disposition": "closed" },
+    { "id": "UX-009", "disposition": "closed" }
+  ],
+  "follow_ups": [
+    "Measure LY-R4-001 in a real engine (Desktop real-CSS tier or a WebKit probe): Flow slot, offer span, Link/Dismiss rects and elementFromPoint at a 720px and a 1180px window, in board and list view, plus slot.scrollLeft after Tab-focusing Dismiss. If the span is 0px at those widths, the layout-rendering.mdc row 'Element renders at 0px while its label shows' rates it major."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Prior-disposition notes:
+- LY-005 partial: the overlap and click capture into the Session slot are fixed by the slot clip. The question and Flow name still get a 0px box at supported widths, and Dismiss is now clipped instead (LY-R4-001).
+- UX-012 closed: the offer span no longer carries `pr-work-link`, so it has no button box and no hover.
+- UX-009 closed for this lens's slice: the Flow title is now in the visible text and in the aria-label of Link and Dismiss (`Flow #id · title`). Whether that visible text can be seen at narrow widths is LY-R4-001.
+
+Routing audit: graph_used: no (not-relevant: render sites enumerated with keryx ctx rg, two files read at head); wiki_used: no (not-relevant: a CSS sizing check); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no. One raw `git diff` of review.css (marked keryx:raw, 8 lines) to quote it verbatim.

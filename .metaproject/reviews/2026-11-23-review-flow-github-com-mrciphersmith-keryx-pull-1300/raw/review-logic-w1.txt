@@ -1,0 +1,183 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Parent ref: `main`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a` (head `6a2a3031f740833e60b82856a9a266b5ffab5e10`)
+- Scope mode: `explicit-hash-range`, diff mode
+- Slice: slice-01 (flow package 517) read in full; product code read at head for the Stage 1 gate
+- Spec compliance gate: ran (AC1–AC19 from `.metaproject/flows/517-…/acceptance-criteria.md` plus the PR body, against the whole diff)
+
+### Summary
+The flow package is consistent with itself: the plan, tasks, dispatches, journal and flow.json agree, and the journal holds the AC14 mutation record and the T13 skip reason. Against the whole diff, 18 of 19 criteria are implemented. AC4 is not: the card body and the list row's Reason cell still render the Keryx review state through `CardReviewProgress`, outside the work row. Two logic defects remain in the new linking code: a pending "Create Flow" link has no end, so an unrelated Flow created later is persisted onto the PR's session; and the session header's link back to a PR does not carry the repository, so it can open a PR with the same number in another repository.
+
+### Stats
+- blocker: 1  |  major: 2  |  minor: 0  |  info: 3
+
+### Spec Gaps (blocker)
+[F-001] AC4 not met: Keryx review state is rendered outside the work row (on the card body and in the list's Reason cell).
+
+### Logic Bugs
+[F-002] A pending "Create Flow" link never expires, so the next unrelated Flow package is linked to the PR's session.
+[F-003] The session header's "back to PR" focus carries only the PR number: it can open the same-numbered PR in another repository, and it fires again when the board remounts.
+
+### Async & Concurrency
+None detected beyond F-002.
+
+### Error Handling
+[F-004] (info) `PendingSubjects.apply` reads every write error as "not stored yet".
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+[F-005] (info) Flow package bookkeeping: wrong path in resolved/T10.test.json, and `pr.url` is null in flow.json.
+[F-006] (info) The flow description.md promises "another or a new" session for Issues too; not implemented (disclosed in the PR body and journal).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Stage 1 gate: AC4 is not implemented. CardReviewProgress still renders Keryx review state on the PR card body and in the list Reason cell, outside the work row. The other 18 criteria are addressed in the diff. Two logic majors in the new linking code: (1) a pending Create Flow link never expires and persists the next unrelated Flow onto the PR session; (2) the header link back to a PR focuses by number only, so it can open another repository's PR, and it replays on board remount. slice-01 (flow package) is internally consistent; only bookkeeping info notes.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "blocker",
+      "file": "apps/desktop/src/review/ReviewResults.tsx",
+      "line": null,
+      "quote": "      <span className=\"review-reason\">{laneReason(card)}</span>\n      <CardReviewProgress badge={card.localReview} />",
+      "problem": "AC4 requires \"Keryx review state appears only in the work row\". The PR card body (inside the `review-card` button) and the list row's Reason cell both still render `CardReviewProgress` from `card.localReview`. It renders the run state and progress: \"Review completed\", \"Failed · Progress unavailable\", \"Reviewing an earlier revision\", \"Wave N\", a percentage bar, and \"Transcript updated …\". The T7 dispatch kept it for T8 to replace, and the T8 dispatch said it \"may move into or under the row\". It was neither moved nor removed.",
+      "impact": "Spec gap on a frozen acceptance criterion (spec AC4/R1). Keryx state is still mixed into the GitHub part of the card and into the list's GitHub Reason column, which is the separation stage 1 exists to make. The card also changes height when a review starts or finishes.",
+      "suggested_fix": "Remove `<CardReviewProgress badge={card.localReview} />` from the tile body and from the list Reason `<td>`. If progress must stay visible, render it inside `PrWorkRow`'s review slot (the 24px row: text or title only, no extra block), or in the review panel. Add a DOM test that a card with `localReview.runState = \"running\"` has no Keryx text outside `.pr-work-row`.",
+      "evidence": "ReviewResults.tsx tile: `<span className=\"review-reason\">{laneReason(card)}</span>` followed by `<CardReviewProgress badge={card.localReview} />`. List: `<td title={reason}><span>{reason}</span>\\n          <CardReviewProgress badge={c.localReview} /></td>`. ReviewProgress.tsx `CardReviewProgress` returns `<ReviewProgress state={state} progress={badge?.progress} showState />` and `<TranscriptUpdate …/>` for any `runState`/`active` badge, and \"Reviewing an earlier revision\" for `other-revision`. Repro: a card whose localReview has runState \"completed\" shows \"100% · Review completed\" in the card body, above and outside the work row.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "ac4-keryx-state-outside-work-row",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/ReviewResults.tsx: ReviewTile body `<CardReviewProgress badge={card.localReview} />`",
+          "apps/desktop/src/review/ReviewResults.tsx: list Reason cell `<CardReviewProgress badge={c.localReview} />`"
+        ],
+        "enumeration_method": "`keryx ctx rg -n CardReviewProgress apps/desktop/src --all`: one definition (ReviewProgress.tsx) and exactly two render sites, both in ReviewResults.tsx and both outside PrWorkRow. The other localReview readers on the card path are reviewSlotState and reviewNote, and both sit only in PrWorkRow.tsx."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "line": null,
+      "quote": "      if (step.action === \"link\") linkRef.current(entry.sessionId, step.dir);\n      return step.action === \"wait\";",
+      "problem": "A pending \"Create Flow\" entry ends only when a new package appears (link or several), or when the session already has a flow. `resolveFlowLink` returns \"wait\" for as long as no new dir exists, and nothing bounds the window: no time limit, no end-of-turn check, no check against the session that created the package. The plan's trade-off says \"A Flow created outside the pending window is not linked automatically\", but the code has no window end.",
+      "impact": "Silent wrong link that is persisted. Repro: click \"Create Flow\" on PR #10. The bound session opens with the prompt prefilled and unsent. Do not send it, or send it and the agent stops before creating a package. Then create any Flow elsewhere in the project, from another session, the Flows tab or the CLI. On the next flows refresh, that package is the single fresh dir, and `linkFlow` writes it as the PR #10 session's `flow` flag in flags.json. PR #10's card then shows \"Flow #<unrelated> · <stage>\" (prFlows unions the bound sessions' flow dirs), and so does the session header. A later real flow for PR #10 is then never linked, because `sessionFlow` is set.",
+      "suggested_fix": "Bound the window. For example, clear the entry when the session's next turn ends and a refresh shows no fresh dir, and give it a TTL. Better, link only a package whose provenance names the session or the PR, such as a flow.json `source` or a session id written by the flow CLI. Clear pending entries when the session is archived or trashed. Add a hook test: an expect() with no new package, then a later unrelated package, links nothing.",
+      "evidence": "usePendingFlowLinks.ts effect: `kept = pending.filter(... return step.action === \"wait\")`. Nothing else removes an entry, except `expect` replacing it for the same session. prWork.ts resolveFlowLink: `if (!fresh.length) return { action: \"wait\" };`. App.tsx createPrFlow: `const known = flowLinks.known(); const id = await openPrSession(card, \"latest\", subject, flowPrompt(card.url), true); if (id) flowLinks.expect(id, known);`. The prompt is only prefilled, never sent, so no package is guaranteed to follow.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "pending-flow-link-unbounded",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/usePendingFlowLinks.ts: pending filter effect (only exit paths are link/clear)",
+          "apps/desktop/src/review/prWork.ts: resolveFlowLink `if (!fresh.length) return { action: \"wait\" };`"
+        ],
+        "enumeration_method": "Read every writer of the `pending` state in usePendingFlowLinks.ts (the effect's setPending(kept) and expect's setPending). `keryx ctx rg usePendingFlowLinks|resolveFlowLink apps/desktop/src` shows one consumer (App.tsx createPrFlow). The older pendingFlow/applyPendingFlow in useAcpSession.ts links an explicit dir, not 'the next new package', so it is not in this class."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "major",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "          setReviewFocus(old => ({ number: subject.number, nonce: (old?.nonce ?? 0) + 1 }));",
+      "problem": "The session header's link back to a PR-bound session's Subject switches to Pull requests and sets `reviewFocus = {number, nonce}`. It drops `subject.repo`. ReviewBoard opens the panel for any snapshot card with that number, whatever repository the board shows. Separately, the consumed-nonce guard is a ref (`focused`) inside RepositoryBoard. RepositoryBoard is keyed by `[cwd, repo]` (and ReviewBoard by viewer), and the focus prop is never cleared, so a remount after a repository switch replays the old focus.",
+      "impact": "Silent wrong result on a named input. Repro A: a project whose board offers several repositories (the `snapshot.repositories` select). A session is bound to owner/a#5 while the board shows owner/b. Clicking the header link opens owner/b#5's panel, a different PR. Repro B: after one header click for #5, switching the board's repository remounts RepositoryBoard with `focused.current = null`. If the new repository has a #5, its panel opens unrequested.",
+      "suggested_fix": "Carry the repository in the focus (`{repo, number, nonce}`). Have the board select that repository, or ignore the focus when `snapshot.repo` differs (case-insensitive). Let ReviewBoard report consumption (`onFocusHandled`), and have App clear `reviewFocus` to null so a remount cannot replay it. Add a DOM test with two repositories that share a PR number.",
+      "evidence": "App.tsx onOpenSubject: `go(\"review\"); setReviewFocus(old => ({ number: subject.number, nonce: (old?.nonce ?? 0) + 1 }));`. Nothing sets it back to null. ReviewBoard.tsx: `const focused = useRef<number | null>(null); useEffect(() => { if (!focus || focused.current === focus.nonce || !snapshot?.cards.some(c => c.number === focus.number)) return; focused.current = focus.nonce; setSelected({ number: focus.number }); }, [focus, snapshot]);`. RepositoryBoard is rendered with `key={JSON.stringify([props.cwd, repo])}`. The journal (T8 item 10) covers only 'a PR outside the loaded scope', not another repository.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "review-focus-number-only",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/App.tsx: onOpenSubject → setReviewFocus({ number, nonce })",
+          "apps/desktop/src/review/ReviewBoard.tsx: focus effect matching `c.number === focus.number` with a per-mount `focused` ref"
+        ],
+        "enumeration_method": "`keryx ctx rg reviewFocus|focus=` in App.tsx and the `focus` prop reads in ReviewBoard.tsx: one producer and one consumer. The Issue branch of onOpenSubject goes through openIssueOrigin({sessionId}), which resolves through the session's own binding, so it is not in this class."
+      }
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "apps/desktop/src/session/subjectBinding.ts",
+      "line": null,
+      "quote": "      return; // not stored yet: tried again after its turn",
+      "problem": "`PendingSubjects.apply` treats every failure of `_keryx/session_flags` as 'session not stored yet'. That includes keryx refusing the subject itself: the store throws \"not a GitHub subject\", and server.ts passes it to refuseStore. A refused binding then stays pending for the window's lifetime. The card shows the session as bound, and no notice appears.",
+      "impact": "No input reaching it is shown. Desktop builds the subject from GitHub's own `html_url` and `snapshot.repo`, which pass `parseSessionSubject` for github.com. It would matter for a GitHub Enterprise PR, if the board ever lists one.",
+      "suggested_fix": "Distinguish 'no session <id>' from an invalid-params refusal. On the latter, drop the pending binding and show the same not-saved notice.",
+      "evidence": "subjectBinding.ts apply(): `try { flags = (await this.deps.write(sessionId, subject)) ?? {}; } catch { return; }`. organize.ts updateSessionFlagsAt throws `not a GitHub subject` for a subject that fails parseSessionSubject.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "question"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json",
+      "line": null,
+      "quote": "    \"apps/desktop/src/ProjectNavigation.dom.test.tsx\",",
+      "problem": "The resolved context for T10 names `apps/desktop/src/ProjectNavigation.dom.test.tsx`. The scenario test lives at `apps/desktop/src/shell/ProjectNavigation.dom.test.tsx`. Also, flow.json records `\"pr\": { \"url\": null }` although draft PR #1300 is open, so the flow's FlowCard has no prUrl.",
+      "impact": "Bookkeeping only. A later resolver or reader of the package gets a nonexistent path, and flow 517 does not link to its PR until `keryx flow implemented --pr` runs.",
+      "suggested_fix": "Record the PR URL on the flow through the flow CLI. The resolved file is generated, so fixing the T10 file list at its source is optional.",
+      "evidence": "slice-01: resolved/T10.test.json files[0], and flow.json `\"pr\": {\"url\": null}`. The diff stat lists `apps/desktop/src/shell/ProjectNavigation.dom.test.tsx`.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/description.md",
+      "line": null,
+      "quote": "+- \"Open in session\" binds the session to the PR or Issue (Subject), reopens the latest bound session,\n+  offers another or a new one, and the session header shows the Subject with a link back.",
+      "problem": "The flow's expected outcome promises 'another or a new' session for Issues as well. IssueWorkRow has a single session link with no menu, because the issue binding keeps one session per issue and viewer.",
+      "impact": "None on the frozen criteria: AC7 covers PRs only and AC12 asks only for a session slot. The PR body ('An Issue has no \"another or new session\" choice') and the T9 journal entry disclose the gap, so the PR description does not over-promise.",
+      "suggested_fix": "Optional: note the gap in description.md, or carry it into the stage 2–4 hand-off.",
+      "evidence": "apps/desktop/src/issues/IssueWorkRow.tsx renders one session button (`onAction(\"open-session\")`). Journal T9: \"no session menu on issues … a known gap of stage 1, not done\".",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": { "blocker": 1, "major": 2, "minor": 0, "info": 3 },
+  "inputs_unreadable": []
+}
+```
+
+### Stage 1 gate: criterion by criterion
+- AC1 met: `reviewLane` reads only GitHub fields (model.ts), and the attention and "In review" lanes are gone from LANES.
+- AC2 met: `newestFirst` by `updatedAt`, a stable sort, with no bypass in `filterReviews`.
+- AC3 met: STATUS_LANES and ROLE_LANES, quick filters in `filterReviews`, `drawnLanes`, and controls in `.review-context`.
+- AC4 NOT met (F-001).
+- AC5 met: PrWorkRow has three fixed slots, `height: 24px` in review.css, no round number or behind count, and labelled empty actions.
+- AC6 met: text on every PR card, list and Issue card control. "Fix review comments" is absent.
+- AC7 met: `openSubjectSession` (latest, new, or named), `boundSessions` puts unsaved sessions first, and the composer is filled without sending.
+- AC8 met: organize.ts parse and validate, server.ts accepts `subject`, `bindIssueSubject`, and the PendingSubjects notice. A base keryx ignores the key (verified in base server.ts handleSessionFlags), so the notice path is real.
+- AC9 met as written (first or several), but see F-002 for the unbounded window.
+- AC10 met: `reviewLaunchTarget(draftReview.target, shownSubject)`.
+- AC11 met: `groupForRow` and `issueGroups`, with the stage filter removed.
+- AC12 met: IssueWorkRow has a Flow slot and a session slot through `issueSessions`/`subject`.
+- AC13 met: `source: "repository"` reads /repos/{o}/{r}/issues, filters out `pull_request`, adds the repository to the cursor scope, makes DEFAULT_SOURCE "repository", and a stored preference wins.
+- AC14 met: the journal T12 records the mutation, and the attention lines are untouched.
+- AC15 met: not touched by the diff.
+- AC16 met: test present (ProjectNavigation.dom.test.tsx). Not run by me; the evidence file reports 1016 pass.
+- AC17 met: toolbar untouched, and T13 was skipped with its reason recorded.
+- AC18: per the evidence file, not re-run.
+- AC19 met: implementation-plan.md says "(a) остаётся открытым" (stays open).
+
+Routing audit: graph_used: no (not-relevant: the change set was fixed by the slice and the diff stat; callers were found with ctx rg). wiki_used: no (not-relevant: the requirements came from the frozen ACs and the flow package). ctx_used: yes (`keryx ctx rg` and `keryx ctx diff`). raw_rg_used: no. One raw `git show` of base `src/acp/server.ts` was redirected to a scratch file (not into context), to verify how the old keryx handles `subject`.

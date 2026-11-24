@@ -1,0 +1,65 @@
+STATUS: DONE
+
+review-security-code, round 4, wave 3. Range d7b0f7058..4cb6c43ef, slice-03 (docs + backend + tests) read in full (1628 lines). No new findings.
+
+## Focus questions
+
+1. Test-only timing injection reachable from production callers? No.
+   - `timing: FlagsLockTiming` is a trailing defaulted parameter on setSessionFlags, setSessionFlagsAsync, updateSessionFlagsAt, updateSessionFlagsAtAsync and backfillSessionSubject (default FLAGS_LOCK_TIMING {3000, 2000}, Readonly).
+   - Enumeration: `keryx ctx rg --all "setSessionFlags(Async)?\(|updateSessionFlagsAt(Async)?\(|backfillSessionSubject\(|withFileLockAsync\(|createDir:" src -g '!*.test.ts'` -> 13 matches in 4 files. Production callers: src/acp/server.ts:2965 `setSessionFlagsAsync(cwd, sessionId, change, options.dataDir)` (no `now`, no timing); src/session/issues/issue-session.ts:64,69 `backfillSessionSubject(dir, subject)`; src/session/issues/issues-launch.ts:116 `setSessionFlags(..., { flow }, ports.dataDir)`. None forwards a timing value, and handleSessionFlags builds `change` only from archived/pinned/flow/subject, so an ACP client cannot shorten staleMs (which would let it break another writer's lock) or the timeout.
+   - `createDir` on FileLockOptions is set only by organize.ts lockOptions (`createDir: false`); every other withFileLock caller keeps the default (mkdir 0o700).
+2. Lock file perms/ownership. Unchanged: the lock is still created `openSync(lockPath, "wx", 0o600)` with a per-attempt randomUUID nonce, shared by the sync and async waits (LockAttempt). With createDir false no directory is created at all, so no new directory with default mode appears; the session directory is the store's own. Release still removes only a lock holding this attempt's nonce. Tests: lock files and barrier files live under fresh mkdtempSync dirs in tmpdir (0700); child scripts embed paths only through JSON.stringify, so no path text is evaluated as code. Barrier dirs and organize `project()` roots are not removed after the test (hygiene, not security; the latter predates the range).
+3. Error texts sent over ACP (refuseStore -> invalidRequest reason = error.message). New texts: lockedError `the flags of session <id> are locked by another keryx process; retry` and goneError `no session <id> in this project` — both name only the session id the client sent and locate() validated. A raw ENOENT is rethrown only when the session directory still exists after the failure (a race in which it was recreated); that text and other fs errors (e.g. EISDIR from writeOwnerOnlyFileAtomic) carry the absolute session path, as before this range, to the same-user local client that owns that data dir — not a disclosure across a trust boundary, so no finding. issues-board `unusableRemote` is a constant naming no repository.
+
+## Other checks (verified clean, with sites)
+- Trashed-session resurrection (HL3-002) is closed on all three write sites: withFlagsLock and withFlagsLockAsync both pass lockOptions (createDir false) and run `whileStored` (summary.json present) inside the lock; backfillSessionSubject goes through withFlagsLock. organize.test.ts "a flags write to a session removed since it was located..." covers sync, async and backfill for a removed dir and a dir without summary.json (read, not run).
+- Async wait: withFileLockAsync awaits setTimeout(15) between attempts; the flags section `apply` is synchronous, so the lock is never held across an await in this caller and a same-process synchronous waiter (issues-launch) cannot deadlock against it.
+- Nonce write failure in LockAttempt.step closes and removes the half-made lock, then retries; no stale-lock wedge.
+- sessionSubjectSettled reads without the lock (atomic replace) and only skips the backfill; the backfill re-checks under the lock. The best-effort catch in bindIssueSubject applies only when firstBind is false; the first bind still throws.
+- PR-body quantified claims checked against the enumeration: "the ACP server waits for it without blocking other sessions" (server.ts:2965 is the only ACP flags write and uses the async variant); "a write to a session already moved to the trash is refused and does not bring it back" (all lock entries go through lockOptions/whileStored). Both hold.
+
+## Prior dispositions (findings this slice touches)
+- HL3-001 closed: server.ts handleSessionFlags is async and awaits setSessionFlagsAsync -> withFileLockAsync.
+- HL3-002 closed: createDir:false + whileStored on every flags-lock entry (see above).
+- DG3-001 closed: issue-session.ts bindIssueSubject(dir, ref, firstBind) skips settled sessions and swallows a later-open backfill failure; first bind stays fatal.
+- TP-R3-009 closed (by reading): organize.test.ts "a backfill of an invalid subject is refused and writes nothing".
+- TP-R3-006 closed (by reading): issues-board.test.ts adds the viewer 410 and viewer pull-request-only page cases.
+- TP-R3-007 / TP-R3-008 closed (by reading): timing injected; timeout path asserts the retry error; two-process tests use file barriers instead of Date.now(); a child holds the lock across read-modify-write. Red-on-parent not executed by me (exec_budget_s 0).
+- SC3-001 still-open (deferred, pre-existing): the refactor moved the stale branch into LockAttempt.step unchanged — stat then rmSync with no re-check, so the two-holder race remains; the PR body lists it as a separate change.
+- HL3-004 still-open (deferred): FLAGS_LOCK_TIMING staleMs stays 2_000, age-only.
+
+## Routing audit
+graph_used: not-relevant (payload layers carried the affected set; the enumeration of callers used keryx ctx rg). wiki_used: not-relevant. ctx_used: yes. raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-security-code",
+    "slices": ["slice-03"],
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "closed", "evidence": "src/acp/server.ts handleSessionFlags is async: `return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);`; withFileLockAsync yields via setTimeout between attempts" },
+      { "id": "HL3-002", "disposition": "closed", "evidence": "src/session/organize.ts lockOptions returns createDir:false and withFlagsLock/withFlagsLockAsync wrap apply in whileStored (summary.json check); backfillSessionSubject uses withFlagsLock" },
+      { "id": "DG3-001", "disposition": "closed", "evidence": "src/session/issues/issue-session.ts bindIssueSubject(dir, ref, firstBind): later opens return on sessionSubjectSettled and catch backfill errors; first bind still throws" },
+      { "id": "TP-R3-009", "disposition": "closed", "evidence": "organize.test.ts 'a backfill of an invalid subject is refused and writes nothing' (read, not run)" },
+      { "id": "TP-R3-006", "disposition": "closed", "evidence": "issues-board.test.ts 'a viewer source never gets the repository-named 410 text' and 'a viewer page made only of pull requests does not page on' (read, not run)" },
+      { "id": "TP-R3-007", "disposition": "closed", "evidence": "organize.test.ts 'held off past its timeout fails with the retry error' (sync+async) and 'a subject backfill runs under the flags lock' (read, not run)" },
+      { "id": "TP-R3-008", "disposition": "closed", "evidence": "organize.test.ts elapsed-time asserts removed; file barriers (until/go) and a child holding the lock across read-modify-write (read, not run)" },
+      { "id": "SC3-001", "disposition": "still-open", "evidence": "src/lib/file-lock.ts LockAttempt.step keeps statSync(...).mtimeMs then rmSync with no re-check; deferred in PR body as a separate change" },
+      { "id": "HL3-004", "disposition": "still-open", "evidence": "src/session/organize.ts FLAGS_LOCK_TIMING = { timeoutMs: 3_000, staleMs: 2_000 }, age-only stale rule; deferred" }
+    ],
+    "stats": {
+      "files_reviewed": 12,
+      "findings": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+      "enumeration": [
+        "keryx ctx rg --all \"setSessionFlags(Async)?\\(|updateSessionFlagsAt(Async)?\\(|backfillSessionSubject\\(|withFileLockAsync\\(|createDir:\" src -g '!*.test.ts' -> 13 matches, 4 files",
+        "keryx ctx rg \"FlagsLockTiming|FLAGS_LOCK_TIM|function lockOptions|function whileStored|function goneError|function isMissing|function lockedError|createDir\" src/session/organize.ts"
+      ],
+      "not_verified": "No tests run (exec_budget_s 0): red-on-parent for the added tests and the test-only dispositions rest on reading. Absolute paths in raw fs error texts over ACP predate the range and go to the same-user local client."
+    }
+  }
+}
+```
+
+Summary: slice-03 adds no security defect. The injected lock timing is a defaulted trailing parameter no production caller or ACP parameter can set; lock files keep `wx`/0600 plus a nonce and the flags lock no longer creates directories; the new ACP error texts name only the client's session id. HL3-001/HL3-002/DG3-001 and the TP-R3 test gaps are closed by reading; SC3-001 and HL3-004 stay deferred.

@@ -1,0 +1,118 @@
+STATUS: DONE
+
+## Frontend Review — round 4, wave 1 (slice-01)
+
+### Scope
+- Branch: feat/desktop-review-v2-stage1, head 4cb6c43ef
+- Range: d7b0f7058..4cb6c43ef (code commit 055115a20), diff mode
+- slice-01 read in full; surrounding head code read for IssuesBoard.tsx (VerifiedBoard, Collection), ReviewBoard.tsx (focus effect, loading/stale, search ref), PrWorkRow.tsx, usePendingFlowLinks.ts, useIssueCollection.ts (repositoryUnavailable), useAcpSession.ts (linkFlow), App.tsx (flowOffers wiring), review.css. The slice's backend/docs hunks (file-lock.ts, organize.ts, issue-session.ts, cli-reference.md) are outside this lens (Scope Boundaries) and were not reviewed for findings.
+- No MobX in the touched code (React hooks only), so Part B rows did not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 2
+
+### Prior findings checked
+- FE-R3-001 closed. The card-absent branch now refuses with a notice, marks the nonce handled and calls onFocusHandled once the list is settled (`if (loading || stale) return;` waits only on a load in flight or a cached fallback, which is what the round-3 fix asked). `loading` and `stale` were added to the effect deps. No pagination in the review snapshot, so "not in the current list" cannot be a later page.
+- FE-R3-002 closed. All three sites now move focus: FlowOffer Link/Dismiss arm `refocusFlow` and an effect on `[offer]` focuses the slot's replacement button when focus fell to <body>; Link/Dismiss use aria-disabled (not disabled) during the write so focus is kept; "Dismiss notice" focuses the search input (always rendered in the toolbar); "Show issues assigned to me" sets `focusSource` and VerifiedBoard's effect on `[source]` focuses the select, which is rendered in Collection's header on every remount, and the ref is attached before the parent effect runs.
+- AR-007 closed: classification moved to useIssueCollection.repositoryUnavailable beside isAccessError, matching the three specific CLI texts (all present in src/integrations), and the old-keryx text only on the first page; any other error keeps Retry.
+- DG-R3-002 closed: issueSessions deleted, no remaining references in apps/desktop/src.
+- UX-009 closed: the title is in the visible text and in both buttons' accessible names.
+- UX-010 closed for the state flow (linking keeps the offer, a rejection restores it with its error, retry works because offersRef re-syncs from `offers` each render; linkFlow now rejects instead of swallowing). Visibility of the error text at the narrowest lane depends on LY-005 below.
+- UX-011 closed: the source is stored per account and project (`sourceKey` includes cwd).
+- UX-012 closed: the offer has its own class with no button box and no hover rule.
+- UX-013 closed: the `configuration:` prefix is stripped in the unavailable branch (the only one that branch can receive).
+- UX-015 closed: "choose Bundled keryx in Settings → Desktop" matches SettingsView's labels ("Bundled keryx", tab "Desktop").
+- LY-005 partial: `.pr-work-slot { overflow: hidden }` stops Dismiss from overlapping the Session slot, but Link and Dismiss stay `flex: none`. By the round-3 arithmetic (60px slot in a 230px lane, ~80px of buttons) the question span still collapses to its padding and Dismiss is now clipped instead of overlapping; the new "Not linked: <reason>" text is then not visible either (it is announced via role=alert and kept in the title). Not measured in an engine; layout lens owns the re-check.
+- UX-014 open (owner deferred; banner unchanged in this range).
+
+### Findings
+
+### [FE-R4-001] Flow-slot refocus flag stays armed after a failed Link
+- Severity: info
+- File: apps/desktop/src/review/PrWorkRow.tsx
+- Rule: code-style-patterns (effect correctness / focus management); canonical rubric, law 1
+- Problem: Link sets `refocusFlow.current = true`; it is cleared only when the offer disappears. When the write fails the offer stays (with its error), so the flag stays armed. If the offer is later removed by something other than the user (the session gets a Flow from another path, the flags dispatch from elsewhere), the effect calls `focus()` on the slot's button whenever activeElement is <body>, which it also is after a mouse click on any non-focusable area. focus() scrolls the element into view.
+- Why it matters: a rare, unasked focus move and scroll of the board long after the failed press. No concrete trigger observed; reaching it needs a failed Link plus an external Flow link for the same session. Hence info.
+- Fix: clear the flag when the offer settles with an error (e.g. in the effect: `if (offer?.error) refocusFlow.current = false;`), or arm it only for Dismiss and for Link's success path.
+
+### [FE-R4-002] A successful Link whose flags dispatch is skipped shows "Create Flow" again
+- Severity: info
+- File: apps/desktop/src/session/useAcpSession.ts
+- Rule: canonical rubric, law 1
+- Problem: linkFlow dispatches the returned flags only `if (l.client === client)`. When the connection is replaced while the request is in flight but the request still resolves, accept() settles the offer to null, the slot falls back to "Create Flow" (and PrWorkRow moves focus to it) although the flag was written. It stays so until the sessions list is reloaded.
+- Why it matters: pressing the focused "Create Flow" then would start a second Flow. Whether a request can resolve after its client is replaced was not checked; that, or a refreshSessions on reconnect, would settle it.
+- Fix: on a skipped dispatch, trigger a sessions refresh (or keep the offer in `linking` until the session list carries the flow).
+
+### Clean Areas
+- Effects and dependency arrays in the touched hooks (ReviewBoard focus effect deps now complete; IssuesBoard source focus effect; PrWorkRow offer effect).
+- Keys and lists: unchanged.
+- Accessibility of the new states: aria-disabled keeps focus during the write; role=alert on the error text; accessible names carry the Flow title.
+- Async state in usePendingFlowLinks: double-press guard via offersRef; settle matches on sessionId+dir so a replaced offer is not clobbered.
+- TypeScript: no any, no non-null assertions added.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-frontend",
+    "round": 4,
+    "wave": 1,
+    "status": "DONE",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "FE-R4-001",
+        "severity": "info",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "quote": "  useEffect(() => {\n    if (offer || !refocusFlow.current) return;\n    refocusFlow.current = false;",
+        "problem": "Link arms refocusFlow; it is cleared only when the offer disappears. After a failed Link the offer stays with its error, so the flag stays armed, and a later removal of the offer by another path (the session gets a Flow elsewhere) focuses the slot's button whenever activeElement is <body>, which a mouse click on any non-focusable area also produces. focus() scrolls it into view.",
+        "impact": "A rare unasked focus move and scroll long after the failed press. Needs a failed Link plus an external Flow link for the same session; no concrete trigger observed.",
+        "suggested_fix": "Disarm the flag when the offer settles with an error (in the effect: if (offer?.error) refocusFlow.current = false), or arm it only for Dismiss and Link's success.",
+        "evidence": "PrWorkRow.tsx refocus effect and FlowOffer onAct; usePendingFlowLinks.ts accept() keeps the offer with error on rejection.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "pr-flow-offer-refocus-flag-armed-after-error"
+      },
+      {
+        "id": "FE-R4-002",
+        "severity": "info",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "quote": "    if (l.client === client) dispatch({ t: \"flags\", sessionId, flags: flags ?? {} });",
+        "problem": "When the client is replaced while the flags request is in flight but the request still resolves, the dispatch is skipped, accept() settles the offer to null, and the Flow slot shows 'Create Flow' (and receives focus) although the flow flag was written.",
+        "impact": "Until the sessions list reloads, pressing the focused 'Create Flow' would start a second Flow. Not settled whether a request can resolve after its client is replaced, or whether reconnect refreshes sessions.",
+        "suggested_fix": "On a skipped dispatch, refresh the sessions list, or keep the offer linking until the session carries the flow.",
+        "evidence": "useAcpSession.ts linkFlow; usePendingFlowLinks.ts accept() settle(null) after await; PrWorkRow refocus effect.",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "pr-flow-link-dispatch-skipped-on-client-change"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed", "note": "card-absent branch refuses with notice once neither loading nor stale; deps include loading, stale"},
+      {"id": "FE-R3-002", "disposition": "closed", "note": "all three sites move focus: flow slot button, search input, source select"},
+      {"id": "AR-007", "disposition": "closed", "note": "repositoryUnavailable in useIssueCollection matches specific CLI texts; old-keryx text first page only; other errors keep Retry"},
+      {"id": "DG-R3-002", "disposition": "closed", "note": "issueSessions deleted, no references remain"},
+      {"id": "UX-009", "disposition": "closed", "note": "title in visible text and accessible names"},
+      {"id": "UX-010", "disposition": "closed", "note": "linking/error states and retry work; error text visibility at the narrowest lane tied to LY-005"},
+      {"id": "UX-011", "disposition": "closed", "note": "source key includes cwd"},
+      {"id": "UX-012", "disposition": "closed", "note": "own class, no box, no hover"},
+      {"id": "UX-013", "disposition": "closed", "note": "configuration: prefix stripped in the unavailable branch"},
+      {"id": "UX-015", "disposition": "closed", "note": "matches 'Bundled keryx' and the 'Desktop' tab"},
+      {"id": "LY-005", "disposition": "partial", "note": "slot now clips (no overlap into Session), but Link/Dismiss stay flex:none; by the round-3 arithmetic the question/error text still collapses and Dismiss is clipped at a 230px lane; not engine-measured"},
+      {"id": "UX-014", "disposition": "open", "note": "owner deferred; unchanged in this range"}
+    ],
+    "stats": {
+      "files_reviewed": 8,
+      "slices_read_in_full": 1,
+      "findings": {"blocker": 0, "major": 0, "minor": 0, "info": 2},
+      "prior_checked": 12
+    }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: fix range of known files, no new exports with outside callers; linkFlow callers enumerated with keryx ctx rg); wiki_used: no (not-relevant: intent stated in code comments and prior findings); ctx_used: yes (keryx ctx rg); raw_rg_used: no. Raw `git diff` of the fix range was read with a keryx:raw marker because the exact hunks were needed.

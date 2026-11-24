@@ -1,8 +1,9 @@
 import { defaultFilters, groupForRow, mergeRows, visibleRows, type Row } from "../../apps/desktop/src/issues/model";
 import { expect, test } from "bun:test";
 import { issueComments, issueDetail, listIssuePage } from "./issues-board";
-import { authenticatedAccount, IssueGithub, type FetchIssues } from "./issues-github";
-import { issueKey, type IssueRef } from "./issues-contract";
+import { authenticatedAccount, IssueGithub, issuesDisabled, type FetchIssues } from "./issues-github";
+import { issueKey, repositoryUnavailable, type IssueRef } from "./issues-contract";
+import { selectRepository } from "../review/board-github";
 
 function json(value: unknown, init?: ResponseInit) {
   return Response.json(value, init);
@@ -147,14 +148,222 @@ test("AC5 GitHub state, Project Status and Keryx stage stay independent on refre
   const refreshed = mergeRows([openDone, closedActive], [
     { ...closedActive, issue: { ...closedActive.issue, work: {stage: "needs_answer", reason: "Choose the execution branch"} } },
   ]);
-  expect(groupForRow(openDone, false)).toBe("done");
+  // Without a Project the board groups by GitHub state; the Keryx stage never picks the lane (R3).
+  expect(groupForRow(openDone, false)).toBe("open");
   expect(groupForRow(openDone, true)).toBe("in-progress");
-  expect(groupForRow(closedActive, false)).toBe("active");
+  expect(groupForRow(closedActive, false)).toBe("closed");
   expect(visibleRows(refreshed, defaultFilters)).toEqual([openDone]);
   const shown = visibleRows(refreshed, { ...defaultFilters, state: "all" }).find(r => issueKey(r.issue.ref) === selected)!;
-  expect(groupForRow(shown, false)).toBe("needs_answer");
+  expect(groupForRow(shown, false)).toBe("closed");
+  expect(shown.issue.work?.stage).toBe("needs_answer");
   expect(shown.issue.work?.reason).toBe("Choose the execution branch");
   expect(shown.issue.state).toBe("closed");
+});
+
+async function withProject<T>(remote: string | null, use: (cwd: string) => Promise<T>): Promise<T> {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const { fixtureGitEnv, isolateGitDiscovery } = await import("../review/test-git-fixture");
+  const cwd = await mkdtemp(join(tmpdir(), "issues-repository-"));
+  const restore = isolateGitDiscovery();
+  try {
+    const env = fixtureGitEnv();
+    execFileSync("git", ["init", "--quiet"], { cwd, env });
+    if (remote) execFileSync("git", ["remote", "add", "origin", remote], { cwd, env });
+    return await use(cwd);
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+}
+function repoRow(repo: string, node: string, number: number) {
+  const { repository: _omitted, ...rest } = row(repo, node);
+  return { ...rest, number, html_url: `https://github.com/org/${repo}/issues/${number}` };
+}
+
+test("AC13 the repository source lists the project's GitHub repository and excludes pull requests", async () => {
+  const requests: URL[] = [];
+  const auth = await account(async (url, options) => {
+    if (url.pathname === "/graphql") {
+      const ids: string[] = JSON.parse(String(options.body)).variables.ids;
+      return json({ data: { nodes: ids.map((id) => ({ id, repository: { id: "R_base", name: "base", owner: { login: "org" } } })) } });
+    }
+    requests.push(url);
+    return json([repoRow("base", "I_1", 1), { ...repoRow("base", "P_2", 2), pull_request: {} }, repoRow("base", "I_3", 3)]);
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const page = await listIssuePage(auth, { source: "repository", state: "all", sort: "asc", labels: ["bug"], updatedSince: "2026-01-01" }, cwd);
+    expect(page.items.map((i) => [i.ref.owner, i.ref.repo, i.ref.number, i.ref.repositoryId])).toEqual([
+      ["org", "base", 1, "R_base"],
+      ["org", "base", 3, "R_base"],
+    ]);
+    expect(page.nextCursor).toBeNull();
+  });
+  expect(requests).toHaveLength(1);
+  const url = requests[0]!;
+  expect(url.pathname).toBe("/repos/org/base/issues");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    state: "all",
+    direction: "asc",
+    sort: "updated",
+    per_page: "40",
+    since: "2026-01-01T00:00:00.000Z",
+    labels: "bug",
+  });
+});
+
+test("AC13 a repository cursor follows GitHub's repository links and cannot be replayed for another repository", async () => {
+  const paths: string[] = [];
+  const auth = await account(async (url) => {
+    paths.push(url.pathname + url.search);
+    const n = Number(url.searchParams.get("page") ?? 1);
+    return json(
+      [row("base", "I_" + n)],
+      n < 2 ? { headers: { link: `<https://api.github.com/repositories/42/issues?state=open&page=2>; rel="next"` } } : {},
+    );
+  });
+  const cursor = await withProject("git@github.com:org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
+    expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    expect(second.nextCursor).toBeNull();
+    return first.nextCursor;
+  });
+  expect(paths[1]).toStartWith("/repos/org/base/issues?");
+  expect(new URLSearchParams(paths[1]!.split("?")[1]).get("page")).toBe("2");
+  await withProject("https://github.com/org/other.git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository", cursor }, cwd)).rejects.toThrow("Refresh");
+  });
+  await expect(listIssuePage(auth, { source: "assigned", cursor })).rejects.toThrow("Refresh");
+  expect(paths).toHaveLength(2);
+});
+
+test("AC13 the repository source needs a project with a GitHub remote", async () => {
+  let requested = 0;
+  const auth = await account(async () => {
+    requested++;
+    return json([]);
+  });
+  await withProject(null, async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+      "configuration: This project has no GitHub.com fetch remote.",
+    );
+  });
+  await withProject("https://gitlab.com/org/base.git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+  });
+  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration:");
+  expect(requested).toBe(0);
+});
+
+test("AC13 a remote named `..` is refused before any request, as a remote that names no usable repository", async () => {
+  let requested = 0;
+  const auth = await account(async () => {
+    requested++;
+    return json([]);
+  });
+  // The remote parser reads `org/..` from this URL; as a path it would turn /repos/org/../issues into /repos/issues.
+  await withProject("https://github.com/org/...git", async (cwd) => {
+    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+      "configuration: This project's GitHub.com remote names no usable repository.",
+    );
+  });
+  // No project at all stays an invalid request: the caller sent the repository source without one.
+  await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration: Invalid Issues request.");
+  expect(requested).toBe(0);
+});
+
+test("AC13 a viewer page refuses a next link outside /issues; a repository page follows GitHub's links in any case", async () => {
+  const viewerAuth = await account(async () =>
+    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/repositories/42/issues?page=2>; rel="next"' } }));
+  await expect(listIssuePage(viewerAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+  const upperAuth = await account(async () =>
+    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/ISSUES?page=2>; rel="next"' } }));
+  await expect(listIssuePage(upperAuth, { source: "assigned" })).rejects.toThrow("configuration:");
+
+  const paths: string[] = [];
+  const auth = await account(async (url) => {
+    paths.push(url.pathname);
+    const n = Number(url.searchParams.get("page") ?? 1);
+    return json([row("base", "I_" + n)], n < 2 ? { headers: { link: '<https://api.github.com/repos/Org/Base/issues?page=2>; rel="next"' } } : {});
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.nextCursor).not.toBeNull();
+    // The cursor binds the repository without case: the same repository spelled otherwise by its remote accepts it.
+    await withProject("https://github.com/Org/Base.git", async (other) => {
+      const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, other);
+      expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    });
+  });
+  expect(paths).toHaveLength(2);
+});
+
+test("AC13 GitHub's 410 for a repository with Issues turned off is a configuration error naming the repository", async () => {
+  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  await withProject("https://github.com/fork-owner/base.git", async (cwd) => {
+    const failure = listIssuePage(auth, { source: "repository" }, cwd);
+    await expect(failure).rejects.toThrow("configuration:");
+    await expect(failure).rejects.toThrow("fork-owner/base");
+  });
+});
+
+test("AC13 a viewer source never gets the repository-named 410 text", async () => {
+  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  const failure = listIssuePage(auth, { source: "assigned" });
+  await expect(failure).rejects.toThrow(issuesDisabled);
+  await expect(failure).rejects.not.toThrow("Choose another source");
+});
+
+test("AC13 a viewer page made only of pull requests does not page on", async () => {
+  const pages: number[] = [];
+  const auth = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    pages.push(n);
+    return json([{ ...row("a", "P_" + n), pull_request: {} }], { headers: { link: `<https://api.github.com/issues?page=${n + 1}>; rel="next"` } });
+  });
+  const page = await listIssuePage(auth, { source: "assigned" });
+  expect(page.items).toEqual([]);
+  expect(page.nextCursor).not.toBeNull();
+  expect(pages).toEqual([1]);
+});
+
+test("AC13 a repository page made only of pull requests does not end the load; the search stops after three pages", async () => {
+  const pages: number[] = [];
+  const link = (n: number) => ({ headers: { link: `<https://api.github.com/repositories/42/issues?page=${n}>; rel="next"` } });
+  const pull = (n: number) => ({ ...row("base", "P_" + n), number: 100 + n, pull_request: {} });
+  const auth = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    pages.push(n);
+    return n === 1 ? json([pull(1), pull(2)], link(2)) : n === 2 ? json([row("base", "I_2")], link(3)) : json([row("base", "I_3")]);
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const first = await listIssuePage(auth, { source: "repository" }, cwd);
+    expect(first.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
+    expect(pages).toEqual([1, 2]);
+    // The cursor continues after the page that was used, not after the first one.
+    const next = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
+    expect(next.items.map((i) => i.ref.nodeId)).toEqual(["I_3"]);
+    expect(pages).toEqual([1, 2, 3]);
+  });
+
+  const endless: number[] = [];
+  const onlyPulls = await account(async (url) => {
+    const n = Number(url.searchParams.get("page") ?? 1);
+    endless.push(n);
+    return json([pull(n)], link(n + 1));
+  });
+  await withProject("https://github.com/org/base.git", async (cwd) => {
+    const page = await listIssuePage(onlyPulls, { source: "repository" }, cwd);
+    expect(page.items).toEqual([]);
+    expect(endless).toEqual([1, 2, 3]);
+    const resumed = await listIssuePage(onlyPulls, { source: "repository", cursor: page.nextCursor }, cwd);
+    expect(resumed.items).toEqual([]);
+    expect(endless).toEqual([1, 2, 3, 4, 5, 6]);
+  });
 });
 
 test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
@@ -194,5 +403,66 @@ test("AC3 source links reopen a private session or legacy Flow only after the se
     await expect(readIssueOrigin(root, auth, {sessionId,flowDir}, profile)).rejects.toThrow("Invalid Issues request");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** The reason a failed listing gives, which `keryx issues list` passes to Desktop unchanged. */
+async function reasonOf(listing: Promise<unknown>): Promise<string> {
+  try {
+    await listing;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("the listing did not fail");
+}
+
+test("contract: every reason the repository source cannot be read in this project is one Desktop classifies as unavailable", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const empty = await account(async () => json([]));
+  const disabled = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
+  const reasons: string[] = [];
+  // A folder that is not a Git checkout: `git remote -v` fails in reviewRepositories.
+  const plain = await mkdtemp(join(tmpdir(), "issues-not-git-"));
+  try {
+    reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, plain)));
+  } finally {
+    await rm(plain, { recursive: true, force: true });
+  }
+  // A Git project with no fetch remote at all: selectRepository has nothing to choose.
+  await withProject(null, async (cwd) => reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, cwd))));
+  reasons.push(await reasonOf(Promise.resolve().then(() => selectRepository([]))));
+  // A GitHub.com remote whose name is `..`.
+  await withProject("https://github.com/org/...git", async (cwd) => reasons.push(await reasonOf(listIssuePage(empty, { source: "repository" }, cwd))));
+  // GitHub's 410: Issues turned off for the repository.
+  await withProject("https://github.com/fork-owner/base.git", async (cwd) => reasons.push(await reasonOf(listIssuePage(disabled, { source: "repository" }, cwd))));
+  // Each case reached its own producer: the reasons differ (the two no-remote cases share selectRepository's).
+  expect(new Set(reasons).size).toBe(4);
+  expect(reasons[1]).toBe(reasons[2]!);
+  for (const reason of reasons) {
+    expect(reason).toStartWith("configuration:");
+    expect([reason, repositoryUnavailable(reason, true), repositoryUnavailable(reason, false)]).toEqual([reason, "unavailable", "unavailable"]);
+  }
+});
+
+test("contract: an unknown source is an older keryx on the first page only; a stale cursor or a lost connection keeps Retry", async () => {
+  // A keryx that predates the repository source refuses it like any source it does not know.
+  const older = await reasonOf(listIssuePage(await account(async () => json([])), { source: "repository-v2" as never }));
+  expect(repositoryUnavailable(older, true)).toBe("older");
+  expect(repositoryUnavailable(older, false)).toBeNull();
+
+  const paged = await account(async (url) =>
+    json([row("a", "I_" + (url.searchParams.get("page") ?? 1))], { headers: { link: '<https://api.github.com/issues?page=2>; rel="next"' } }));
+  const first = await listIssuePage(paged, { source: "assigned", sort: "asc" });
+  const stale = await reasonOf(listIssuePage(paged, { source: "assigned", sort: "desc", cursor: first.nextCursor }));
+  expect(stale).toStartWith("configuration:");
+  const unreachable = await account(async () => {
+    throw new TypeError("offline");
+  });
+  const offline = await withProject("https://github.com/org/base.git", (cwd) => reasonOf(listIssuePage(unreachable, { source: "repository" }, cwd)));
+  expect(offline).toStartWith("offline:");
+  for (const reason of [stale, offline]) {
+    expect([reason, repositoryUnavailable(reason, true), repositoryUnavailable(reason, false)]).toEqual([reason, null, null]);
   }
 });

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "files": [
+    "apps/desktop/src/session/useAcpSession.ts",
+    "apps/desktop/src/shell/AppShell.tsx",
+    "apps/desktop/src/styles/review.css"
+  ],
+  "prHead": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "graphCommit": "88e3faba9a1732f45a4ff7200588832e8b83f121",
+  "maxBytes": 8192,
+  "affected": {
+    "depth": 2,
+    "files": [
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/App.tsx",
+      "apps/desktop/src/main.tsx",
+      "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "apps/desktop/src/session/Approvals.tsx",
+      "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "apps/desktop/src/session/SessionInfoPanel.tsx",
+      "apps/desktop/src/session/SessionView.tsx",
+      "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "apps/desktop/src/test/issue-question-resume.fixture.tsx"
+    ]
+  },
+  "symbols": [],
+  "relatedTests": [
+    "apps/desktop/src/App.dom.test.tsx",
+    "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+    "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [],
+  "unavailable": []
+}

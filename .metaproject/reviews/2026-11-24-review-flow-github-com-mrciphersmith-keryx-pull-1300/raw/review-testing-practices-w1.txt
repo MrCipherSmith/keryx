@@ -1,0 +1,183 @@
+STATUS: DONE_WITH_CONCERNS — slice-02 read in full; 66 mutants run in a scratch worktree at d7b0f7058 (removed afterwards); 13 non-equivalent survivors, filed as 7 minor findings. Every TP-R2 claim checks out: each round-2 mutant is now red.
+
+## Mutation pass
+
+Scratch worktree at d7b0f7058, `bun install --frozen-lockfile` at the root and at apps/desktop. Baselines were green: Desktop nearest suites 145 pass / 0 fail (prWork, usePendingFlowLinks, PrWorkRow, ReviewBoard, IssuesBoard, ProjectNavigation, the last running both App fixtures); root nearest suites 35 pass / 0 fail (organize, issue-session, issues-board, commands/issues, shell-session-organize). The tool was my own harness (exact one-anchor replacement, `bun test --bail <nearest suite>`, file restored after each run), not `keryx review mutate`, because that writes into the reviewed package. Every survivor was then re-run against the full set of nearest suites on its side. The reviewed checkout was not written, apart from this file.
+
+| mutation | result |
+|---|---|
+| M01 usePendingFlowLinks `accept`: drop `offersRef.current = offersRef.current.filter(item => item !== offer)` (double-press guard) | **GREEN (all 6 Desktop suites)** |
+| M02 `accept`: drop `linkRef.current(...)` | red |
+| M03 `accept`: drop `if (!offer) return;` | red |
+| M04 `dismiss`: drop `setOffered(...)` | red |
+| M05 `dismiss`: drop the synchronous `offersRef.current = …filter` | **GREEN (all 6)** |
+| M06 `offers`: drop the `!flowOf(offer.sessionId)` filter | red |
+| M07 drop `claimed.current.add(dir)` | red |
+| M08 a new offer for a session no longer replaces that session's older offer (`[...old, ...pass.links]`) | **GREEN (all 6)** |
+| R2-05 resolveFlowLinks `live.some` -> `live.every` | red (TP-R2-003 test) |
+| M10 subjectOpener coalesced press reports `filled: true` (`return running`) | red |
+| M11 fillShown: drop `if (!deps.isShown(id)) return false` | red |
+| M12 existing session fills without `prefillExisting` | red |
+| M13 existing session fills ignoring isShown | red |
+| M14 App `if (opened?.filled)` -> `if (opened)` | red (app-work-row fixture) |
+| M15 App `isShown: () => true` | red |
+| M16 useAcpSession `isShown` always true | red |
+| M17 App flowOffers mapped to `[]` | red |
+| R2-17 fresh subjectOpener per call | red |
+| R2-22 reviewFocusHandled never clears | red |
+| R2-23 header focus nonce constant 1 | red |
+| R2-25 onFocusHandled not passed to ReviewBoard | red |
+| R2-26 openPrSession Flow lookup ignores bound sessions | red |
+| M19 PrWorkRow `waitsOnViewer` without `card.state === "open"` | red |
+| M20 PrWorkRow offer shown even when the PR has a Flow (`flow ? undefined :` dropped) | **GREEN (all 6)** |
+| M22 ReviewBoard focus: drop `selectRepo(listed)` | red |
+| M23 refused focus: drop `onFocusHandled?.(focus.nonce)` | red |
+| M24 refused focus: drop `focused.current = focus.nonce` | **GREEN (all 6)** |
+| M25 drop `focused.current === focus.nonce ||` (TP-R2-003 R2-21) | red |
+| M26 successful focus: drop `setFocusNotice("")` | **GREEN (all 6)**, presentation |
+| M27 flowOffer lookup ignores the bound sessions (`flowOffers[0]`) | red |
+| M28 badgesEqual compares `lastActivityAt` again | red |
+| M29 ReviewProgress `progressParts`: drop `showState &&` | **GREEN (all 6)** |
+| M30 reviewProgressText: drop the awaiting-answer-without-progress null (TP-R2-004 R2-33) | red |
+| M31 state label shown for `running` (TP-R2-004 R2-34) | red |
+| M32 IssuesBoard fallback without `!choice.chosen` | red |
+| M33 fallback without `source === "repository"` | GREEN, **equivalent** (an unchosen source is always DEFAULT_SOURCE = "repository") |
+| M34 IssuesBoard `unavailable` on any error, not only `configuration:` | **GREEN (all 6)** |
+| M35 update hint shown for every configuration error | red |
+| M36 fallback switches the source without saving it | red |
+| M38 organize `updateSessionFlagsAt` without `withFlagsLock` | red (lock-wait test); concurrency test alone: red 2 of 3 runs |
+| M39 drop the `held === null` "locked by another keryx process; retry" error | **GREEN (5 root suites)** |
+| M40 backfill without the `subject !== undefined` guard | red |
+| M41 backfill without the `subjectUnlinked` guard | red |
+| M44 unlink (`subject: null`) does not set the marker | red |
+| M46 unrelated flag change drops the marker | red |
+| M47 `backfillSessionSubject` without the flags lock | **GREEN (5 root suites)** |
+| M48 subject written only on first bind (pre-fix placement) | red |
+| M49 issue binder writes through updateSessionFlagsAt (overwrites an unlink) | red |
+| M50 issues-github: drop the 410 mapping | red |
+| M51 issuePage: 410 rename for every source, not only `repository` | **GREEN (5 root suites)** |
+| M52 page cap 3 -> 4 | red |
+| M53 loop continues when the page holds issues | red |
+| M54 the extra-page loop also runs for viewer sources (`repository &&` dropped) | **GREEN (5 root suites)** |
+| M55 turnPage no longer clears earlier page keys | **GREEN (5 root suites)**, likely near-equivalent |
+| M56 repository next-link path compared with case | red |
+| M57 drop the viewer-source branch of samePage | red |
+| M58 projectRepository: drop the `.`/`..` refusal | red |
+| M59 cursor scope keeps the repository's case | red |
+| M60 drop `if (!following) break;` | green in issues-board.test, red in commands/issues.test |
+| M61 issuesCommand drops `cwd` | red |
+| M62 REPO_REF without the `(?!\.\.?$)` lookahead | red |
+| M63 parseSessionSubject without REPO_REF | red |
+| M64 repo/url compared with case | red |
+| M65 unknown subject fields kept | red |
+| M66 server wire check without `Array.isArray` | red |
+| M67 boundSessions sorted oldest first | red |
+
+Cap: 66 mutants, covering every gate the fix range added that the dispatch named, plus R2-05/R2-17/R2-21/R2-22/R2-23/R2-25/R2-26/R2-33/R2-34 and S02/S03/S09/S17/S21/S42/S44/S46/S47/S60 from round 2. Every listed candidate ran. Not mutated: copy and CSS (review.css `.pr-work-offer`) and the IssueWorkRow count text, which the AC12 test already exercises.
+
+## Findings
+
+### [TP-R3-001] minor: the hook's synchronous guards and offer replacement are unpinned (M01, M05, M08)
+- File: apps/desktop/src/review/usePendingFlowLinks.ts (tests: usePendingFlowLinks.dom.test.tsx)
+- Problem: three gates added in this range survive with all 6 Desktop suites green. (a) `accept` clears offersRef at once "so a second press before the next render cannot write the link twice". The test presses accept twice, but in separate `act`s, so a re-render happens between them. (b) `dismiss` clears offersRef synchronously. No test calls dismiss and then accept before a render. (c) A new offer for a session replaces that session's older offer. No fixture gives one session two offers (Create Flow again after an offer was left unanswered).
+- Impact: (a) and (b) are the double-click races the comment names: a double Link writes `flow` twice, and Dismiss then Link in one frame writes a dismissed package. With (c) undone, the row keeps showing the stale first package (flowOffer takes the first match). Nothing would catch a regression.
+- Fix: in one `act`, call `accept("s1")` twice and assert `links` has length 1. In one `act`, call `dismiss("s1"); accept("s1")` and assert no link. Then: expect s1, package 101 offered, no action, expect s1 again, package 102 appears; assert `offers()` equals `["s1 102-…"]`.
+
+### [TP-R3-002] minor: the PrWorkRow gate that hides an offer when the PR already has a Flow is unpinned (M20)
+- File: apps/desktop/src/review/PrWorkRow.tsx (test: PrWorkRow.dom.test.tsx)
+- Problem: `const offer = flow ? undefined : work.flowOffer?.(sessions);`. Deleting the `flow ?` guard leaves all 6 suites green. The offer test renders no Flow, so nothing separates "offer" from "Flow link".
+- Impact: if the offered package (or another Flow) carries the PR's `prUrl`, the row would show "Link Flow #N?" in place of the PR's Flow link. No test would catch that.
+- Fix: in the offer test, add a render with `flows: [flow("531", { prUrl: pr.url })]` and the same offer. Assert that the Flow slot reads `Flow #531 · In progress` and that there is no "Link Flow" button.
+
+### [TP-R3-003] minor: the Issues fallback's `configuration:` filter is unpinned (M34)
+- File: apps/desktop/src/issues/IssuesBoard.tsx (test: IssuesBoard.dom.test.tsx)
+- Problem: `const unavailable = fallback && /(?:^|\b)configuration:/i.test(error) ? fallback : undefined;`. Replacing the regex with "any error" is green. Each AC13 fixture on the default source fails with a configuration error, and the one that keeps Retry gets it from a chosen source, not from a non-configuration error.
+- Impact: a regression would hide Retry on the default source for transient failures (rate limit, offline, `unavailable:`) and offer a source switch the person does not need. No test would notice.
+- Fix: add a case with no stored source whose request rejects `new Error("rate-limit: GitHub request limit reached.")`. Assert Retry is present and "Show issues assigned to me" is absent.
+
+### [TP-R3-004] minor: the focus-refusal bookkeeping in ReviewBoard is unpinned (M24, M26)
+- File: apps/desktop/src/review/ReviewBoard.tsx (test: PrWorkRow.dom.test.tsx, LG-009 case)
+- Problem: on refusal, `focused.current = focus.nonce;` survives deletion. The LG-009 test's onFocusHandled clears the focus, so the effect never re-runs with the same nonce. On success, `setFocusNotice("")` survives deletion (presentation). No test refuses one focus and then opens another.
+- Impact: undoing either is invisible to the suite. Without the first, a board whose owner does not clear focus re-raises a dismissed notice on every refresh. Without the second, a stale "not in a repository this board shows" notice stays above the panel that did open.
+- Fix: with `focusHost(load, [], false)`, refuse `elsewhere/project`, Dismiss the notice, Refresh, and assert no `.review-focus-notice`. In the LG-009 test, after the refusal, set a new nonce for `org/repo#101` and assert that the panel opens and the notice is gone.
+
+### [TP-R3-005] minor: the `showState` gate of the shared progressParts is unpinned (M29)
+- File: apps/desktop/src/review/ReviewProgress.tsx
+- Problem: the AR-style refactor moved the rule into `progressParts(state, progress, showState)`. `state: showState && ![...]` survives deletion with all 6 suites green. Every asserted caller passes showState true (reviewProgressText) or uses a running, queued or completed state.
+- Impact: a regression would add "Partial · " or "Failed · " to every `<ReviewProgress>` rendered without showState. Nothing would catch it.
+- Fix: render `<ReviewProgress state="partial" />` with no showState and assert the caption has no "Partial"; render it with showState and assert it does.
+
+### [TP-R3-006] minor: issues-board pagination gates that separate the repository source from viewer sources are unpinned (M54, M51, M55)
+- File: src/integrations/issues-board.ts (test: issues-board.test.ts)
+- Problem: the gates `for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++)` (M54: drop `repository &&`) and `if (repository && error instanceof Error && error.message === issuesDisabled)` (M51: drop `repository &&`) both survive across the 5 root suites. No viewer-source fixture returns an empty page with a next link, or a 410. M55 (turnPage no longer deletes earlier page keys) also survives. It is likely near-equivalent, because `set` overwrites the same keys.
+- Impact: a regression could make viewer queues read up to 3 pages per request, or show "Issues turned off for null". The suite would not notice. The cost is low; the gates were added in this round.
+- Fix: a viewer-source (`assigned`) page answering `[]` with a next link must make exactly one request. A viewer 410 must not mention "turned off for".
+
+### [TP-R3-007] minor: the flags lock's timeout error and the backfill's use of the lock are unpinned (M39, M47); outside slice-02, run as the dispatch asked
+- File: src/session/organize.ts (test: organize.test.ts, slice-03)
+- Problem: `if (held === null) throw new Error(\`the flags of session ... are locked by another keryx process; retry\`)` survives deletion, and the code then fails with a TypeError on `held.value`. No test holds the lock past FLAGS_LOCK_TIMEOUT_MS; the wait test lets it go stale at 2 s. `backfillSessionSubject` running without `withFlagsLock` also survives: the two-process test drives only updateSessionFlagsAt. Also, the two-process test caught the unlocked updateSessionFlagsAt (M38) in only 2 of 3 runs. M38 is pinned deterministically only by the wall-clock lock-wait test.
+- Impact: the "retry" message the ACP client shows, and the backfill's lost-update protection (an issue-workspace child against a Desktop flag write), could regress silently.
+- Fix: inject the lock options (or a clock) and make the lock unbreakable within the test, then assert the "retry" message. Add a two-writer test where one process backfills while the other pins.
+
+## Notes (not findings)
+- organize.test.ts (slice-03): the lock-wait test asserts on real elapsed time (`toBeGreaterThanOrEqual(1500)` / `toBeLessThan(1500)`) and spends about 2 s of wall clock. The two-process test starts on a busy-wait against `Date.now()`. tdd-workflow.mdc Rule 5 rates a time-based assertion `major`. This belongs to the slice-03 lane; I raise it here only so it is not lost.
+- M33 is an equivalent mutant: no fix needed.
+- Slice-02 itself fixes TP-R2-001: both App fixtures wait on states (composer value, flag writes, Flows board contents, aria-current). The negative asserts (two packages, coalesced press) each follow a positive artifact (`packagesAppear` waits for the Flows board to list the dirs). The #16 switch case waits for the binding write and one animation frame before asserting the draft.
+
+## Prior dispositions (checked against code and mutants)
+- Test-claim verifications: TP-R2-001 closed (settle gone, waitFor everywhere). TP-R2-002 closed (R2-17/22/23/25/26 red). TP-R2-003 closed (R2-21=M25 red, R2-05 red). TP-R2-004 closed (M30, M31 red). TP-R2-005 closed (slot text asserted per tick, #202 APPROVED and in Mine, both groupings). TP-R2-006 closed (M58, M62, M63 red). TP-R2-007 closed (M64, M65, M66 red). TP-R2-008 closed (M61 red). TP-R2-009 closed (M56, M57, M59 red). LG-015 closed (M67 red). HL-001/LG-008 closed (M10, M14 red; the offer replaces the silent link). LG-011 closed (M11, M13, M15, M16 red). LG-009 closed (M22, M23 red). RG-001 and UX-008 closed (M32, M35, M36 red). LG-013 closed (M50 red). DG-009 closed (M52, M53 red). DG-006/UX-007 closed (M19 red). LG-012/DG-010 closed (M40, M41, M44, M46, M48, M49 red). HW2-001 closed (lock added; M38 red), with the coverage caveats in TP-R3-007.
+- Read but not mutated: AR-003 and PF-004 closed (boundSessions delegates to boundSessionIndex; sameSubject goes through subjectKey). PF-003 closed (IssueWorkRow gets `bound` from one index; the AC12 test counts reads). PF-005 closed (memoised `subscribe`). DG-007 closed (the decision is pinned by the badgesEqual test, M28 red). DG-008 closed (the behaviour is documented in plan (f)). PC-001, PC-003, PC-004 closed (docs and plan in slice-02 updated). LG-010 and PC-002 partial: the plan text was updated, but I could not see the PR body from this slice.
+- Deferred and still open: AR-004, AR-005, AR-006, HL-003, HW2-002, LG-014, LG-016, PF-006, UX-006.
+
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-02 read in full; 66 mutants run in a scratch worktree at d7b0f7058. Every round-2 TP mutant is now red. 13 non-equivalent survivors are filed as 7 minor coverage findings; no defects.",
+  "slices": ["slice-02"],
+  "findings": [
+    {"id": "TP-R3-001", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "quote": "    offersRef.current = offersRef.current.filter(item => item !== offer);", "problem": "Three gates added in the fix round survive deletion with all 6 Desktop suites green: accept's synchronous offersRef clear (M01, the double-press guard its comment names), dismiss's synchronous offersRef clear (M05), and the replacement of a session's older offer by its new one (M08, mutated to [...old, ...pass.links]). The test presses accept twice only across separate act() calls. No test dismisses then accepts before a render, and none gives one session two offers.", "impact": "Undoing any of these is invisible to the suite: a double Link writing the flow flag twice, a Dismiss+Link in one frame linking a dismissed package, or a stale first offer shown after a second Create Flow.", "suggested_fix": "In usePendingFlowLinks.dom.test.tsx: call accept('s1') twice inside one act and assert links has length 1. Call dismiss('s1'); accept('s1') inside one act and assert no link. Expect s1, offer 101, expect s1 again, package 102 appears, and assert offers() equals ['s1 102-...'].", "evidence": "Mutants M01, M05, M08: GREEN on prWork, usePendingFlowLinks, PrWorkRow, ReviewBoard, IssuesBoard and ProjectNavigation (App fixtures) suites; M02/M03/M04/M06/M07 red.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-flowlink-hook-guards"},
+    {"id": "TP-R3-002", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/review/PrWorkRow.tsx", "quote": "  const offer = flow ? undefined : work.flowOffer?.(sessions);", "problem": "Deleting the `flow ?` guard (M20) leaves all 6 Desktop suites green: the offer test renders no Flow, so no fixture separates showing an offer from showing the PR's Flow link.", "impact": "If an offered package (or any Flow) carries the PR's prUrl, a regression would show 'Link Flow #N?' in place of the PR's Flow, and nothing would catch it.", "suggested_fix": "In PrWorkRow.dom.test.tsx, render the same offer with flows: [flow('531', { prUrl: pr.url })]. Assert the Flow slot reads 'Flow #531 · In progress' and that there is no 'Link Flow' button.", "evidence": "Mutant M20 GREEN on all 6 Desktop suites.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-offer-vs-flow"},
+    {"id": "TP-R3-003", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/issues/IssuesBoard.tsx", "quote": "  const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;", "problem": "Replacing the configuration: filter with 'any error' (M34) is green. Every default-source fixture fails with a configuration error, and Retry is kept only through a chosen source, never through a non-configuration error.", "impact": "A regression would hide Retry on the default source for rate-limit, offline or unavailable errors and offer a source switch instead. The suite would not notice.", "suggested_fix": "Add an IssuesBoard test with no stored source whose list rejects 'rate-limit: GitHub request limit reached.'. Assert Retry is present and 'Show issues assigned to me' is absent.", "evidence": "Mutant M34 GREEN on all 6 Desktop suites; M32/M35/M36 red; M33 equivalent.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-issues-fallback-filter"},
+    {"id": "TP-R3-004", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/review/ReviewBoard.tsx", "quote": "      focused.current = focus.nonce;\n      setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows", "problem": "Two focus-refusal steps survive deletion: marking the refused nonce handled (M24; the LG-009 test's onFocusHandled clears focus, so the effect never re-runs with that nonce) and clearing the notice on a later successful focus (M26, presentation). No test refuses one focus and then opens another.", "impact": "Undoing either is invisible: a board whose owner does not clear focus would re-raise a dismissed notice on each refresh, or a stale notice would sit above the panel that did open.", "suggested_fix": "With focusHost(load, [], false): refuse elsewhere/project, Dismiss the notice, Refresh, and assert no .review-focus-notice. In the LG-009 test, after the refusal, set a new nonce for org/repo#101 and assert the panel opens and the notice is gone.", "evidence": "Mutants M24 and M26 GREEN on all 6 Desktop suites; M22/M23/M25 red.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-focus-refusal"},
+    {"id": "TP-R3-005", "severity": "minor", "reviewer": "review-testing-practices", "file": "apps/desktop/src/review/ReviewProgress.tsx", "quote": "    state: showState && ![\"running\", \"queued\", \"completed\"].includes(state) ? RUN_STATE_LABEL[state] : \"\",", "problem": "The refactor into progressParts made one rule for ReviewProgress and reviewProgressText. Dropping `showState &&` (M29) is green: no test renders ReviewProgress without showState in a state that has a label.", "impact": "A regression would add the run-state label ('Partial · ', 'Failed · ') to every ReviewProgress rendered without showState. Nothing would catch it.", "suggested_fix": "Render <ReviewProgress state=\"partial\" /> and assert the caption has no 'Partial'; render it with showState and assert it does.", "evidence": "Mutant M29 GREEN on all 6 Desktop suites; M30/M31 red.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-progress-showstate"},
+    {"id": "TP-R3-006", "severity": "minor", "reviewer": "review-testing-practices", "file": "src/integrations/issues-board.ts", "quote": "  for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++) {", "problem": "The gates that keep the new extra-page loop and the 410 rename to the repository source survive deletion: M54 (drop `repository &&` in the loop) and M51 (drop `repository &&` in issuePage's 410 branch). No viewer-source fixture returns an empty page with a next link, or a 410. M55 (turnPage not clearing earlier page keys) also survives; it is likely near-equivalent.", "impact": "A regression could make viewer queues read up to 3 pages per request, or report 'Issues turned off for null'. The suite would not notice.", "suggested_fix": "issues-board.test.ts: an 'assigned' page answering [] with a next link makes exactly one request. An 'assigned' 410 does not mention 'turned off for'.", "evidence": "Mutants M54, M51, M55 GREEN on organize, issue-session, issues-board, commands/issues and shell-session-organize suites; M50/M52/M53/M56-M60 red.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-repository-only-gates"},
+    {"id": "TP-R3-007", "severity": "minor", "reviewer": "review-testing-practices", "file": "src/session/organize.ts", "quote": "  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);", "problem": "Outside slice-02, run because the dispatch asked to mutate the flags lock. The lock-timeout error survives deletion (M39): no test holds the lock past the 3 s timeout, because the wait test lets it go stale at 2 s. backfillSessionSubject without withFlagsLock (M47) also survives: the two-process test drives only updateSessionFlagsAt. That test caught the unlocked updateSessionFlagsAt (M38) in only 2 of 3 runs; M38 is pinned deterministically only by the wall-clock lock-wait test.", "impact": "The 'retry' error ACP clients show, and the backfill's protection against lost updates (issue-workspace child against a Desktop flag write), could regress with the suite green.", "suggested_fix": "Inject lock timing (or a clock) so a test can hold the lock past the timeout and assert the retry message. Add a two-writer case where one process backfills the subject while the other pins.", "evidence": "Mutants M39 and M47 GREEN on the 5 root suites; M38 with -t 'two processes': red, green, red over 3 runs; M38/M40/M41/M44/M46/M48/M49 red on the nearest suites.", "evidence_kind": "red-test", "confidence": "high", "location_class": "in-diff", "degradation_class": "blind-test", "dedupe_key": "tp-r3-flags-lock-coverage"}
+  ],
+  "prior_dispositions": [
+    {"id": "HL-001", "disposition": "closed"}, {"id": "HW2-001", "disposition": "closed"}, {"id": "RG-001", "disposition": "closed"},
+    {"id": "TP-R2-001", "disposition": "closed"}, {"id": "AR-003", "disposition": "closed"}, {"id": "DG-006", "disposition": "closed"},
+    {"id": "DG-007", "disposition": "closed"}, {"id": "DG-008", "disposition": "closed"}, {"id": "DG-009", "disposition": "closed"},
+    {"id": "LG-007", "disposition": "closed"}, {"id": "LG-008", "disposition": "closed"}, {"id": "LG-009", "disposition": "closed"},
+    {"id": "LG-010", "disposition": "partial"}, {"id": "LG-011", "disposition": "closed"}, {"id": "LG-012", "disposition": "closed"},
+    {"id": "LG-013", "disposition": "closed"}, {"id": "LG-015", "disposition": "closed"}, {"id": "PF-003", "disposition": "closed"},
+    {"id": "PC-001", "disposition": "closed"}, {"id": "PC-002", "disposition": "partial"}, {"id": "PC-003", "disposition": "closed"},
+    {"id": "PC-004", "disposition": "closed"}, {"id": "TP-R2-002", "disposition": "closed"}, {"id": "TP-R2-003", "disposition": "closed"},
+    {"id": "TP-R2-004", "disposition": "closed"}, {"id": "TP-R2-005", "disposition": "closed"}, {"id": "TP-R2-006", "disposition": "closed"},
+    {"id": "TP-R2-007", "disposition": "closed"}, {"id": "TP-R2-008", "disposition": "closed"}, {"id": "TP-R2-009", "disposition": "closed"},
+    {"id": "UX-008", "disposition": "closed"}, {"id": "AR-004", "disposition": "open"}, {"id": "AR-005", "disposition": "open"},
+    {"id": "AR-006", "disposition": "open"}, {"id": "DG-010", "disposition": "closed"}, {"id": "HL-003", "disposition": "open"},
+    {"id": "HW2-002", "disposition": "open"}, {"id": "LG-014", "disposition": "open"}, {"id": "LG-016", "disposition": "open"},
+    {"id": "PF-004", "disposition": "closed"}, {"id": "PF-005", "disposition": "closed"}, {"id": "PF-006", "disposition": "open"},
+    {"id": "UX-006", "disposition": "open"}, {"id": "UX-007", "disposition": "closed"}
+  ],
+  "mutant_candidates": [
+    {"id": "M01", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "    offersRef.current = offersRef.current.filter(item => item !== offer);", "replacement": "", "kind": "behavior"},
+    {"id": "M05", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "    offersRef.current = offersRef.current.filter(item => item.sessionId !== sessionId);", "replacement": "", "kind": "behavior"},
+    {"id": "M08", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "[...old.filter(offer => !pass.links.some(next => next.sessionId === offer.sessionId)), ...pass.links]", "replacement": "[...old, ...pass.links]", "kind": "behavior"},
+    {"id": "M20", "file": "apps/desktop/src/review/PrWorkRow.tsx", "anchor": "const offer = flow ? undefined : work.flowOffer?.(sessions);", "replacement": "const offer = work.flowOffer?.(sessions);", "kind": "behavior"},
+    {"id": "M24", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "      focused.current = focus.nonce;\n      setFocusNotice(`", "replacement": "      setFocusNotice(`", "kind": "behavior"},
+    {"id": "M26", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "    setFocusNotice(\"\");\n    setSelected({ number: focus.number });", "replacement": "    setSelected({ number: focus.number });", "kind": "presentation"},
+    {"id": "M29", "file": "apps/desktop/src/review/ReviewProgress.tsx", "anchor": "state: showState && ![\"running\", \"queued\", \"completed\"].includes(state)", "replacement": "state: ![\"running\", \"queued\", \"completed\"].includes(state)", "kind": "behavior"},
+    {"id": "M34", "file": "apps/desktop/src/issues/IssuesBoard.tsx", "anchor": "const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;", "replacement": "const unavailable = fallback && error ? fallback : undefined;", "kind": "behavior"},
+    {"id": "M39", "file": "src/session/organize.ts", "anchor": "  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);\n  return held.value;", "replacement": "  return held!.value;", "kind": "behavior"},
+    {"id": "M47", "file": "src/session/organize.ts", "anchor": "  return withFlagsLock(dir, () => {\n    const current = readStoredFlags(dir);", "replacement": "  return ((_d: string, f: () => boolean) => f())(dir, () => {\n    const current = readStoredFlags(dir);", "kind": "behavior"},
+    {"id": "M51", "file": "src/integrations/issues-board.ts", "anchor": "    if (repository && error instanceof Error && error.message === issuesDisabled)", "replacement": "    if (error instanceof Error && error.message === issuesDisabled)", "kind": "behavior"},
+    {"id": "M54", "file": "src/integrations/issues-board.ts", "anchor": "for (let fetched = 1; repository && !issues.length", "replacement": "for (let fetched = 1; !issues.length", "kind": "behavior"},
+    {"id": "M55", "file": "src/integrations/issues-board.ts", "anchor": "  for (const key of pageKeys) url.searchParams.delete(key);\n", "replacement": "", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 7, "info": 0}
+}
+```
+
+Routing audit: graph_used: not-relevant (the scope was fixed by the slice and the diff range); wiki_used: not-relevant (the code and tests were the evidence); ctx_used: yes (keryx ctx rg/read/run; raw git diff and small sed reads marked keryx:raw to anchor the mutants); raw_rg_used: no.

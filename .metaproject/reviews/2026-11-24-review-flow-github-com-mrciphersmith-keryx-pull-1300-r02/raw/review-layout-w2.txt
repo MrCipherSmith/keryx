@@ -1,0 +1,39 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, round 4, wave 2: slice-02 (fix range d7b0f7058..4cb6c43ef). I read the whole slice (2153 lines). I also read `PrWorkRow.tsx` FlowOffer at head, which the slice hunks skip at lines 75-96, and the `.pr-work-*` rules in `apps/desktop/src/styles/review.css`.
+
+Nothing could be measured. exec_budget_s is 0 and the tools are read-only, so no real-engine probe could run. Any layout claim here is `info` and unverified.
+
+## What slice-02 changes in rendered layout
+
+- `review.css`: `.pr-work-slot` gains `overflow: hidden`. This is the only stylesheet change in the range. LY-R4-001 (wave 1) covers it, so it is not filed again. `.flows-toolbar` is untouched (AC17 holds).
+- FlowOffer text is longer. It now reads `Link Flow #<id> · <title>?`, `Linking Flow #<id> · <title>…` or `Not linked: <reason>`, where it used to read `Link Flow #<id>?`. The DOM is unchanged: a span plus two `flex: none` `.pr-work-more` buttons. At the 230px lane floor and in the 16rem list column, the span's text box is still 0px wide (LY-R4-001 arithmetic: slot ~60px or ~74.7px against ~88px of fixed content). The longer text therefore changes nothing on screen at those widths. It only adds what is lost to the clip and to the `title` tooltip. Same defect, same finding.
+- New test `review.css: the offer text truncates and is not a button, its buttons do not shrink, and the slot clips` (PrWorkRow.dom.test.tsx). It regex-matches declaration strings in the stylesheet: `overflow: hidden`, `text-overflow: ellipsis`, `min-width: 0`, `flex: none`. It cannot fail on the geometry LY-R4-001 describes. It stays green while the span renders at 0px with no ellipsis visible, because an ellipsis needs a content box wider than 0. This is the lens's "the stub loads no CSS" red flag in stylesheet form. It is evidence for LY-R4-001, not a separate layout defect. Whether the test should be relabelled or replaced is review-testing-practices' call, so I do not file it here.
+- Focus return (FE-R3-002) works in layout terms. Once the offer is gone, the Flow slot holds one `flex: 1 1 auto; min-width: 0` button that cannot overflow, so the slot cannot keep a scroll offset (the clamp is to 0). The focused replacement button is fully visible. The residual "Tab onto the clipped Dismiss scrolls the slot" condition applies only while the offer is shown. That includes the new error state, which keeps the offer up. It is already part of LY-R4-001.
+- IssuesBoard unavailable notice, ReviewBoard focus notice and the app fixtures: wording and behaviour only. The notice DOM (`.issues-notice` with `<p>` and a `.btn-sm`) and the `.inline-banner` are unchanged, and no sizing class or rule changed. Nothing to measure.
+
+## Verified clean (static)
+
+- UX-012: the test asserts that `.pr-work-offer` does not carry `pr-work-link`, and that the stylesheet has no `.pr-work-link.pr-work-offer` rule. FlowOffer at head renders `className={"pr-work-offer" + ...}`. The false button box and hover are gone.
+- The offer keeps the fixed 24px row (AC5): the span is single-line, `white-space: nowrap; line-height: 24px`, inside a `height: 24px` slot.
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "slice-02 adds no new layout defect. Its only stylesheet change (.pr-work-slot overflow: hidden) and the longer offer text both belong to wave-1 LY-R4-001: the offer span is still 0px wide at the 230px lane floor and in the 16rem list column. The new review.css test checks declaration strings and cannot catch that geometry. Nothing measured (exec budget 0).",
+  "slices": ["slice-02"],
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "LY-005", "disposition": "partial", "note": "Overlap into the Session slot is fixed by the slot clip. The offer text box is still 0px at supported widths and Dismiss is clipped; tracked as LY-R4-001 (wave 1). The new review.css test checks declarations only and does not pin the geometry." },
+    { "id": "UX-012", "disposition": "closed", "note": "The offer span has no pr-work-link class, and the stylesheet has no .pr-work-link.pr-work-offer rule; both are asserted in PrWorkRow.dom.test.tsx." },
+    { "id": "UX-009", "disposition": "closed", "note": "Title is in the visible text and in the Link/Dismiss aria-labels. Whether that text is visible at narrow widths is LY-R4-001." }
+  ],
+  "follow_ups": [
+    "Settle LY-R4-001 with a real-engine probe (Desktop real-CSS tier or a WebKit probe): getBoundingClientRect of [data-slot=flow], .pr-work-offer and both buttons, plus elementFromPoint at each button centre, at 720px and 1180px windows, in board and list view, in the offer, linking and error states, and slot.scrollLeft after Tab-focusing Dismiss. A test of this kind should replace or back the declaration-string review.css test."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice was given; one component and one stylesheet read at head). wiki_used: no (not-relevant: CSS sizing check). ctx_used: yes (`keryx ctx read` PrWorkRow.tsx, `keryx ctx rg` over review.css). raw_rg_used: no.

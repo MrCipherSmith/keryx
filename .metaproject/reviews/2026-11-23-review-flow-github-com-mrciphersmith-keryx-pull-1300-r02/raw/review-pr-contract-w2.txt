@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 2, wave 2, slice-02 (read in full, 2458 lines: App.tsx, acp/types.ts, issues/*, review/PrWorkRow, ReviewBoard, ReviewFilters, ReviewLaunchDialog, ReviewProgress, ReviewResults, model.ts, prWork.ts, reviewFilterStorage.ts, usePendingFlowLinks.ts, session/SessionSubjectLinks.tsx, session/subjectBinding.ts). The PR body has no checkbox list; each claim about the board, work row, sessions and Issues was worked as one row. The backend half of the Subject claims (src/session/organize.ts, src/session/issues/issue-session.ts, src/acp/server.ts) was read with `git diff b147408a8..88e3faba9` because the slice's Issue-session claim depends on it. Wave-1 findings PC-001 (stale user docs) and PC-002 (body predates a34d8961b: Create Flow linking, T17 owner choices, test counts) are not repeated.
+
+## Claim rows
+
+| Claim (quoted) | What slice-02 shows | Result |
+|---|---|---|
+| "\"Status\" (default): Draft · Waiting for review · Changes requested · Approved. Merged and Closed appear only when the state filter includes them." | model.ts `STATUS_LANES = { draft, waiting, changes, approved, merged, closed }`; `drawnLanes`: `merged: includes(f.state, "merged")`, `closed: includes(f.state, "closed")`; ReviewBoard `useState<Grouping>("status")` | holds |
+| "\"My role\": Requested from me · Mine · Others." | `ROLE_LANES = { requested: "Requested from me", mine: "Mine", others: "Others" }` | holds |
+| "Quick filters \"Requested from me\", \"Mine\" and \"CI failed\" sit in the context row, not the toolbar." | `QUICK_FILTERS`; rendered inside `<div className="review-context">` as `review-quick-filters` | holds |
+| "Lanes the filters rule out are not drawn." | ReviewResults `drawn = ... possible.has(lane) \|\| lanes.has(lane)` | holds (a lane that still holds a shown card is drawn; stated in the code comment) |
+| "Cards are sorted by `updatedAt`, newest first." | `newestFirst` used for board and list | holds |
+| "The attention lane and the \"In review\" lane are gone, and the card's reason line is built from GitHub data only." | `attention`/`review` lanes removed; `laneReason` has no `localReview` branch | holds |
+| "Review: `Review · <state>`, from `localReview`, with no round number and no behind count. It opens the current review panel." | `reviewSlotState(card.localReview)`; `onClick={() => onReview(card)}` → `openReview` sets `reviewIntent` | holds |
+| "Flow: `Flow #id · stage`. A Flow counts if its `prUrl` matches or if it is linked to a session bound to the PR." | `prFlowIndex`: `byUrl` plus `sessionFlags(session).flow` of bound sessions | holds for the work row and panel (launch dialog uses URL only, documented in code; session flow comes in as `defaultFlow`) |
+| "Session: the count of bound sessions. It opens the newest; a menu lists all of them plus \"New session\"." | `sessionText = sessions.length > 1 ? \`${n} sessions\` : sessions.length ? "Session" : "Open in session"`; `sessionItems` | holds (one session reads "Session", not a count — wording only, not filed) |
+| "An empty slot shows a labelled action instead: \"Run review\", \"Create Flow\" or \"Open in session\"." | PrWorkRow texts | holds |
+| "\"Fix review comments\" is not included" | absent from slice | holds |
+| "A new `subject` field in the session's `flags.json`, written through `_keryx/session_flags`, records `{kind, repo, number, url}`." | acp/types.ts `SessionSubject` also has `repositoryId?`; organize.ts `writeFlags` stores it | holds (shape also carries optional `repositoryId`; omission only, not filed) |
+| "Issue sessions get it when `withIssueBinding` binds them." | issue-session.ts `bindIssueSubject` — only at the first bind, only for github.com URLs; IssueWorkRow counts sessions by `subject` only | narrower than stated (PC-003) |
+| "\"Open in session\" on a PR reopens the newest bound session, or creates one, binds it and prefills the composer with the PR URL without sending." | App.tsx `openPrFromBoard` → `openPrSession(card, target, subject, card.url)`; `openSubjectSession` binds and `fill`s, never sends | holds (Flow linking of the new session is in PC-002) |
+| "On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved." | subjectBinding.ts `if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED)` | holds |
+| "The session header links back to the PR or Issue and to its Flow." | `SessionSubjectLinks` in `titleLinks`; PR → review view with focus nonce, Issue → `openIssueOrigin` | holds |
+| "`/review` with no target in a PR-bound session preselects that PR." | `initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)}` | holds |
+| "The started run shows on the card without a refresh." | `publishSessionReview(cwd, key, result)` in `onApply` (unchanged context line) | not contradicted |
+| "\"Create Flow\" opens the bound session with a flow prompt." | `createPrFlow` → `openPrSession(card, "latest", subject, flowPrompt(card.url), true)` | holds (linking rule: PC-002) |
+| "Default grouping is by GitHub state: Open, plus Closed when the filter includes closed issues." | model.ts `issueGroups`: `[{ id: "open" }, ...(state === "open" ? [] : [{ id: "closed" }])]` | holds |
+| "The default source is the project repository ... and a stored choice wins." | `DEFAULT_SOURCE = "repository"`; `value && Object.hasOwn(SOURCES, value) ? value : DEFAULT_SOURCE` | holds |
+| "The Flow stage filter is removed; the stage now shows in the card's work row." | `stage` removed from `Filters`, `visibleRows`, `IssueFilters`; IssueWorkRow `Flow · ${STAGES[stage]}` | holds |
+| Owner list: "a disabled \"Run review\" on a merged or closed PR" / "the session menu button reads \"More\"" / "an unsaved new session shows as \"not saved yet\"" / "\"Create Flow\" replaces the composer draft" / "Issue card buttons became work-row links" | `disabled={!canReview}`; `>More</button>`; `"New session (not saved yet)"`; `prefillExisting = true`; IssueWorkRow | all hold |
+| Owner list: "An Issue has no \"another or new session\" choice." | IssueWorkRow has no menu | holds |
+
+## Findings
+
+### [PC-003] "Issue sessions get it when withIssueBinding binds them" — existing and non-github.com issue sessions never get a subject, so the new Issue work row shows them as unbound
+- Severity: minor
+- File: apps/desktop/src/issues/IssueWorkRow.tsx (claim in the PR body, "What changes" → Sessions bound to a Subject)
+- Problem: The body says "Issue sessions get it when `withIssueBinding` binds them." The head writes the subject only once, at the first bind, and only for github.com issues: src/session/issues/issue-session.ts "Written once, when the session is bound: a subject the person later unlinks is not written back. An issue whose URL is not a github.com issue page (GitHub Enterprise) has no subject keryx can store." (`parseSessionSubject` requires `^https:\/\/github\.com\/...`). The new Issue work row counts sessions by `subject` only: IssueWorkRow.tsx `const bound = issueSessions(sessions, issue).length;` → `: stage === "needs_answer" ? "Open question" : "Open in session"`. So an issue session bound before this version (it has `hasIssue`, no `subject`), or one on a GitHub Enterprise host, reads "Open in session" with the empty-slot style although a bound session exists; the button still reaches that session through the backend binding.
+- Why it matters: the owner reads the body as "every issue session is now visible on its card". After upgrade, all issue sessions created earlier show as unbound, and Enterprise issues never show a session; neither limit is in "Known gaps and choices for the owner".
+- Fix: state both limits in the body (and in "Known gaps"), or backfill `subject` for existing issue bindings (e.g. when `issueContextForSession` reads one) and have the row fall back to `hasIssue`.
+
+## Not verified
+- Whether the PR review board reaches GitHub Enterprise PRs. If it does, `updateSessionFlagsAt` throws on a non-github.com PR subject, so `PendingSubjects.apply` treats it as "not stored yet" and no `SUBJECT_NOT_SAVED` notice appears, which would also narrow the "older keryx" claim. Settle with the board's host handling (src/review/board-github.ts). That is a logic-lens question and is not filed here.
+- Running the app: no claim was checked by eye.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "summary": "Slice-02 read in full; 24 PR-body claims about the PR board, work row, Subject sessions and Issues checked against it (and the backend subject code via git diff). All hold except one: 'Issue sessions get it when withIssueBinding binds them' is narrower at head — the subject is written only at the first bind and only for github.com issues, so issue sessions bound earlier or on GitHub Enterprise show as unbound in the new Issue work row. Wave-1 PC-001/PC-002 not repeated.",
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "PC-003",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "line": null,
+        "quote": "  const bound = issueSessions(sessions, issue).length;",
+        "problem": "PR body: 'Issue sessions get it when `withIssueBinding` binds them.' At head the subject is written once, at the first bind, and only for github.com issues (src/session/issues/issue-session.ts: 'Written once, when the session is bound ... An issue whose URL is not a github.com issue page (GitHub Enterprise) has no subject keryx can store.'). The new Issue work row counts sessions by `subject` only, so an issue session bound before this version, or on a GitHub Enterprise host, shows 'Open in session' in the empty style although a bound session exists.",
+        "impact": "The owner reads the body as every issue session now showing on its card; after upgrade all earlier issue sessions and all Enterprise issue sessions show as unbound, and neither limit is listed under 'Known gaps and choices for the owner'.",
+        "suggested_fix": "State both limits in the body's Sessions bullet and in Known gaps, or backfill `subject` for existing issue bindings and let the row fall back to `hasIssue`.",
+        "evidence": "IssueWorkRow.tsx `const sessionText = bound > 1 ? `${bound} sessions` : bound ? \"Session\" : stage === \"needs_answer\" ? \"Open question\" : \"Open in session\";`; model.ts `issueSessions` → `boundSessions(sessions, issueSubject(issue))`; issue-session.ts `bindIssueSubject(dir, issue.ref);` inside the first-bind block next to `writeOwnerOnlyFileAtomic(path.join(dir, \"issue-link.json\"), ...)`; organize.ts `const SUBJECT_URL = /^https:\\/\\/github\\.com\\/...`.",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:issue-subject-only-new-github-com-bindings"
+      }
+    ],
+    "prior_dispositions": [],
+    "stats": {
+      "files_reviewed": 22,
+      "claim_rows": 24,
+      "findings": 1,
+      "by_severity": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+    }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims checked against a supplied slice and three named backend files); wiki_used: no (not-relevant: the contract is the PR body); ctx_used: yes (keryx ctx rg; one raw git diff of three backend files with a keryx:raw reason); raw_rg_used: no.

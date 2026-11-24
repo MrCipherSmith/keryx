@@ -1,0 +1,136 @@
+STATUS: DONE — review-regression, round 4 wave 1, slice-01 read in full (310 lines). No regression at major or above found in the round-3 fix range d7b0f7058..4cb6c43ef (code commit 055115a20).
+
+## What was checked (scope B: what existing behaviour the fixes could break)
+
+1. Shared `src/lib/file-lock.ts` refactor (withFileLock split into LockAttempt + withFileLock/withFileLockAsync, new `createDir` option).
+   Callers enumerated with `keryx ctx rg --all 'from "(../)*(lib/)?file-lock"|from "./file-lock"' src`:
+   src/lib/project-registry.ts, src/mcp-servers/credentials.ts, src/lib/serve-credential.ts, src/worktree/ports.ts,
+   src/worktree/promote.ts, src/lib/config-update.ts, src/lib/permission-mode-config.ts (all `withFileLock`, default options),
+   src/session/organize.ts (the only `createDir: false` / async user), src/lib/serve-credential.waiting.test.ts (LOCK_STALE_MS only).
+   (The many other `withFileLock` hits — slate, flow/service, learning/store, external-slate — import the different
+   primitive in `src/lib/fs.ts` and are untouched.)
+   Default-option behaviour compared line by line against base:
+   - mkdir of the lock directory (mode 0o700) still runs first when `createDir` is absent; a mkdir failure still returns null.
+   - deadline is still checked before every attempt, including the first; timeout still returns null.
+   - exclusive create + nonce write; a nonce write failure still closes and removes the half-made lock and retries.
+   - every open failure (EEXIST, EACCES, ENOENT …) still falls through to the stale check, the one-time onWaiting
+     announcement after 1 s, and a 15 ms sleepSync — the ENOENT rethrow is gated on `createDir === false` only.
+   - release still removes the lock only when it holds this holder's nonce; fn's throw still propagates after release.
+   - the inline options type became the exported `FileLockOptions` with the same four fields plus optional `createDir`,
+     so no caller's argument stops type-checking.
+   Result: no default-option caller changes behaviour on any reachable path.
+   Below-threshold observation (not filed; law 1, no reproducible trigger): on base, a closeSync/rmSync failure in the
+   nonce-write-failed branch was swallowed by the outer catch and the loop retried; on head it escapes `step()` and
+   withFileLock throws instead of returning null. Reaching it needs a write failure right after an exclusive create
+   succeeded AND the close or unlink of that same file then failing — no input in this codebase reaches that.
+
+2. `handleSessionFlags` becoming async in `src/acp/server.ts`.
+   Its only caller is the request table entry `[KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params) => handleSessionFlags(params)`
+   (server.ts:3307), in the same table as the already-async `handleSessionNew` / `handleSessionLoad` / `handleSessionPrompt`,
+   so the dispatcher already awaits promises and maps rejections; `refuseStore`'s throw becomes a rejection with the same error.
+   Uncontended, `withFileLockAsync` takes the lock synchronously and only awaits microtasks, so no other request can
+   interleave where it could not before; under contention it now yields instead of freezing the event loop (the HL3-001 fix).
+   A concurrent `_keryx/session_trash` during that wait now lands before the flags write; the write then sees ENOENT
+   (createDir false) or a missing summary.json and refuses with "no session … in this project" — the intended outcome.
+   The sync `setSessionFlags` keeps its signature (new trailing optional `timing`) for its other production caller,
+   src/session/issues/issues-launch.ts:116; that caller first locates the session through findSession, so the new
+   `whileStored` summary.json check is no stricter than what it already required.
+
+3. Issues source storage key (`apps/desktop/src/issues/IssuesBoard.tsx`).
+   New key `keryx.issues.<viewer>.source.<JSON cwd>`; the read is `stored(sourceKey) ?? stored(account + ".source")`, so a
+   choice an existing user stored per account under the earlier Desktop is still honoured in every project until they
+   choose in that project; the old key is never deleted or overwritten. `keryx ctx rg --all '\.source"|keryx\.issues\.'
+   apps/desktop/src` finds no other reader of the per-account key. Behaviour shift for an explicitly chosen "repository"
+   source (the fallback button now shows for it too) is the recorded owner choice, not a regression.
+
+4. Other removals/renames in the range, checked for outside callers:
+   - `issueSessions` (issues/model.ts): no caller left in apps/ or src/ (`keryx ctx rg --all "issueSessions\b" apps src`).
+   - `FLAGS_LOCK_TIMEOUT_MS` / `FLAGS_LOCK_STALE_MS` were module-private; no reference remains.
+   - `useAcpSession.linkFlow` now rejects instead of queuing a pending flow; its only caller is App's usePendingFlowLinks
+     (App.tsx:414). The other pending-flow path (useAcpSession.ts:776-777, `pendingFlow.current.set` + applyPendingFlow) is unchanged.
+   - `invalidInput` → `unusableRemote` for a "."/".." remote in src/integrations/issues-board.ts: only the PR-new repository
+     source reaches it; no pre-existing consumer matched that text.
+   - The ReviewBoard focus effect, `.pr-work-offer` CSS and FlowOffer props are all PR-introduced (focus producer
+     App.tsx:655, added in 21030edf0/a34d8961b on this branch); no pre-existing behaviour depends on them.
+
+## Radius and coverage
+The payload's layers `affected` set (depth 2, `truncated: []`) was used as the candidate list; nothing was dropped by a cap.
+The radius is a code graph: it does not see the cross-process edge that matters most here — another keryx process holding
+the same `flags.json.lock` or config lock with the sync primitive. That edge was checked by reading LockAttempt (same file,
+same nonce rule, same stale rule for both waits), not by the graph.
+Not verified by me (read-only, exec budget 0): no test run. Evidence in the package: research-evidence/verify-tests-to-run-1.txt
+(68 root tests in 7 files + 1070 Desktop, 0 fail). The other withFileLock consumers' suites (reported 173 pass by the lane B
+worker) are NOT recorded in the package.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-regression",
+    "round": 4,
+    "slices": [
+      "slice-01"
+    ],
+    "findings": [],
+    "prior_dispositions": [
+      {
+        "id": "FE-R3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "DG-R3-002",
+        "disposition": "closed"
+      },
+      {
+        "id": "HL3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "HL3-002",
+        "disposition": "closed"
+      },
+      {
+        "id": "UX-011",
+        "disposition": "closed"
+      },
+      {
+        "id": "DG3-001",
+        "disposition": "closed"
+      },
+      {
+        "id": "PC-008",
+        "disposition": "closed"
+      },
+      {
+        "id": "SC3-001",
+        "disposition": "open"
+      },
+      {
+        "id": "HL3-004",
+        "disposition": "open"
+      }
+    ],
+    "stats": {
+      "files_reviewed": 8,
+      "findings": 0,
+      "blocker": 0,
+      "major": 0,
+      "minor": 0,
+      "info": 0,
+      "file_lock_callers_checked": 8,
+      "radius_truncated": false
+    },
+    "status": "DONE"
+  }
+}
+```
+
+Disposition notes: FE-R3-001 — card-absent branch now notices and calls onFocusHandled once not loading/stale (ReviewBoard.tsx:509-515).
+DG-R3-002 — issueSessions removed, no caller. HL3-001 — ACP handler uses setSessionFlagsAsync/withFileLockAsync. HL3-002 — createDir:false,
+ENOENT mapped to "no session". UX-011 — source stored per project and account. DG3-001 — later opens read flags without the lock and skip when
+settled; failure is swallowed. PC-008 — cli-reference and acp help name `subject`. SC3-001 and HL3-004 — deferred; the stale-takeover rule
+in file-lock.ts is unchanged by the refactor (same stat-then-rm), so they remain open as recorded.
+Other prior findings attached to files in this slice (UX-009, UX-012, UX-013, UX-015, LY-005, TP-R3-*, AR-007, PC-005, FE-R3-002,
+TP-R3-008/007/009) are outside the regression lens and were not dispositioned here.
+
+Routing audit: graph_used: payload layers (affected set from the PR-head graph); wiki_used: not-relevant (regression check over code paths);
+ctx_used: yes (keryx ctx rg for every search); raw_rg_used: no. Raw git diff/sed reads were used with keryx:raw markers for exact hunks.

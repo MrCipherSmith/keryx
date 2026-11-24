@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 4, wave 3, slice-03 (fix range d7b0f7058..4cb6c43ef, code commit 055115a20). I read slice-03.diff in full (1627 lines): desktop-issues.md, implementation-plan.md, src/acp/server.ts, src/commands/acp.ts, issues-board.ts and its test, file-lock.ts and its new test, issue-session.ts and its test, organize.ts and its test. I also read the head files at the consumer sites listed below, and base file-lock.ts (d7b0f7058) beside head. "Worse than base" is measured against d7b0f7058. I did not file DG-R4-001..005 again.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-degradation",
+    "slices": [
+      "slice-03"
+    ],
+    "summary": "No backend behaviour is worse than on d7b0f7058 in slice-03. I filed one minor debt: obligation 7, the same rule implemented twice. organize.ts now has two copies of the flags-lock error mapping (withFlagsLock and withFlagsLockAsync), and two copies of the 'subject settled' predicate (sessionSubjectSettled, and the in-lock guard of backfillSessionSubject). I filed one info blind-test: no test fails if server.ts goes back to the synchronous setSessionFlags, which is the one line that closes HL3-001. The new tests close TP-R3-006..009 by reading, and the backend half of AR-007 is closed (a dot-name remote now has its own reason).",
+    "findings": [
+      {
+        "id": "DG-R4-006",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "src/session/organize.ts",
+        "quote": "    if (isMissing(error) && !existsSync(dir)) throw goneError(dir);",
+        "problem": "Round obligation 7 (one rule, one implementation). Base had one withFlagsLock. Head has withFlagsLock and withFlagsLockAsync with the same body except the await: the same catch that maps ENOENT on a missing dir to goneError, and the same `if (held === null) throw lockedError(dir)`. Second site of the same shape: sessionSubjectSettled returns `flags.subject !== undefined || subjectUnlinked`, and backfillSessionSubject repeats that predicate inside the lock (`if (current.flags.subject !== undefined || current.subjectUnlinked) return false;`). The two copies agree today. file-lock.ts already shows the pattern that avoids this: LockAttempt is shared by the sync and the async wait.",
+        "impact": "A later change to the refusal mapping, such as a new error kind or a reworded 'retry', or to what counts as a settled subject, has to be made twice. A change made to one copy only lets the ACP server path and the CLI path disagree, or makes the unlocked pre-check skip a backfill that the in-lock check would allow.",
+        "suggested_fix": "Extract `settleFlagsLock<T>(dir, run: () => {value:T}|null): T` (or a `mapFlagsLockError(dir, error)` plus `unwrapHeld(dir, held)`) that both wrappers call. Have backfillSessionSubject's in-lock guard call a `subjectSettled(stored)` predicate that sessionSubjectSettled also uses.",
+        "evidence": "base-diff: base organize.ts (d7b0f7058) has one withFlagsLock, whose only refusal is `if (held === null) throw new Error(...retry)`. In head, slice-03 hunk @@ 160,202 @@ adds withFlagsLock and withFlagsLockAsync with identical try/catch and null checks, and sessionSubjectSettled. Hunk @@ 210,257 @@ keeps the in-lock guard `current.flags.subject !== undefined || current.subjectUnlinked`. Enumeration: `keryx ctx rg -n --all \"sessionSubjectSettled|setSessionFlagsAsync|updateSessionFlagsAtAsync|withFileLockAsync\" src apps/desktop/src` finds the sync/async pairs only in organize.ts and file-lock.ts, and file-lock.ts shares LockAttempt. Refute: the comments give no reason for the copies ('{@link withFlagsLock} waiting without blocking the event loop'), and the sibling file-lock.ts in the same commit factors its shared part out, so the copies are not a stated choice.",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "publication": "finding",
+        "degradation_class": "debt",
+        "evidence_kind": "base-diff",
+        "dedupe_key": "flags-lock-sync-async-duplicated-rules"
+      },
+      {
+        "id": "DG-R4-007",
+        "severity": "info",
+        "reviewer": "review-degradation",
+        "file": "src/acp/server.ts",
+        "quote": "      return await setSessionFlagsAsync(cwd, sessionId, change, options.dataDir);",
+        "problem": "HL3-001's fix depends on this one call site. The tests pin withFileLockAsync ('waits for a held lock without blocking the event loop') and setSessionFlagsAsync (organize.test.ts). No test drives `_keryx/session_flags` through the server while another process holds flags.json.lock. Reverting this line to `return setSessionFlags(...)` gives the same replies for every request in shell-session-organize.test.ts and shell-profile.test.ts. Under contention it would freeze the server's event loop again for up to the 3 s timeout, and the suite would stay green. Round obligation 5 (red on the parent) does not hold for the HL3-001 fix at the server layer.",
+        "impact": "Nothing is worse today: the server awaits the async variant. The fix is unpinned at the only site where a user sees its effect, so a later refactor could undo it silently.",
+        "suggested_fix": "In shell-session-organize.test.ts, plant a fresh `<sessionDir>/flags.json.lock`, send `_keryx/session_flags`, and before releasing the lock assert that another request (for example `_keryx/info` or `session/list`) is answered. Then remove the lock and assert the flags reply arrives.",
+        "evidence": "consumer-trace: server.ts handleSessionFlags (slice-03 @@ 2920,2985 @@) is the only production caller of setSessionFlagsAsync (`keryx ctx rg -n --all \"setSessionFlagsAsync\" src apps/desktop/src`: server.ts, organize.ts, organize.test.ts). `keryx ctx rg -n --all \"flags\\.json\\.lock|locked by another|session_flags|sessionFlags\" src/acp --glob '*.test.ts'` finds no lock in the ACP tests, only the method names in shell-session-organize.test.ts:2,13 and shell-profile.test.ts:463. Unrun: the revert was traced by reading, not executed.",
+        "confidence": "high",
+        "location_class": "in-diff",
+        "publication": "finding",
+        "degradation_class": "blind-test",
+        "evidence_kind": "consumer-trace",
+        "dedupe_key": "server-async-flags-wiring-unpinned"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "closed" },
+      { "id": "HL3-002", "disposition": "closed" },
+      { "id": "DG3-001", "disposition": "closed" },
+      { "id": "PC-008", "disposition": "closed" },
+      { "id": "AR-007", "disposition": "closed" },
+      { "id": "TP-R3-006", "disposition": "closed" },
+      { "id": "TP-R3-007", "disposition": "closed" },
+      { "id": "TP-R3-008", "disposition": "closed" },
+      { "id": "TP-R3-009", "disposition": "closed" },
+      { "id": "HL3-004", "disposition": "open" },
+      { "id": "SC3-001", "disposition": "open" }
+    ],
+    "stats": {
+      "blocker": 0,
+      "major": 0,
+      "minor": 1,
+      "info": 1
+    }
+  }
+}
+```
+
+## Prior dispositions, with reasons (slice-03 view)
+
+- HL3-001 closed: server.ts handleSessionFlags is async and awaits setSessionFlagsAsync -> withFlagsLockAsync -> withFileLockAsync (setTimeout between attempts). The server-level pin is missing (DG-R4-007, info).
+- HL3-002 closed: lockOptions passes createDir:false. LockAttempt.step rethrows ENOENT, which withFlagsLock(Async) maps to goneError when the dir is gone. whileStored refuses a dir without summary.json. Test 'a flags write to a session removed since it was located…' covers the sync, async and backfill paths for both the gone-dir and half-moved cases, and asserts that nothing is recreated.
+- DG3-001 closed: bindIssueSubject(firstBind=false) checks sessionSubjectSettled without the lock and returns early. Pinned by 'a later open reads the flags without the lock and skips the backfill' (spyOn on the organize namespace; whether Bun's namespace spy sees issue-session's import binding was not run by me, and the evidence file shows the suite green).
+- PC-008 closed (sibling site in slice-03): the src/commands/acp.ts help text now says session_flags 'links a flow package to or binds a GitHub pull request or issue (subject)'.
+- AR-007 closed (backend half): projectRepository throws unusableRemote ('…names no usable repository') for a '.'/'..' part instead of invalidInput, so Desktop's repositoryUnavailable classifies it as 'unavailable' rather than 'older'. A missing cwd stays invalidInput, which the new assertion in the '..' test pins. The missing non-Git reason is DG-R4-001 (wave 1). desktop-issues.md ('This source needs a GitHub.com remote in the project…') describes the fallback that DG-R4-001 shows is missing for a non-Git folder, so it is one more site of DG-R4-001, not a new finding.
+- TP-R3-006 closed: 'AC13 a viewer page made only of pull requests does not page on' asserts pages [1], so it is red for M54. 'AC13 a viewer source never gets the repository-named 410 text' asserts that the error contains issuesDisabled and not 'Choose another source', so it is red for M51 (issues-board.ts:187 `repository &&`).
+- TP-R3-007 closed: the timeout test injects {timeoutMs:20, staleMs:60000} and asserts the 'locked by another keryx process; retry' text for the sync and async paths (red for M39, because a null held would throw a TypeError that does not match). 'a subject backfill runs under the flags lock' plants a lock and expects the throw (red for M47).
+- TP-R3-008 closed: the wall-clock assertions are gone, and the timing is injected through FlagsLockTiming. The two-process test uses a file barrier. 'a writer in another process mid read-modify-write excludes this one' pins M38 deterministically: an unlocked updateSessionFlagsAt would not throw while the child sits between its read and its write. 'a flags change waits for a writer in another process and lands after its change' makes the first async attempt synchronously, before `go`, so an unlocked writer would be rolled back by the child.
+- TP-R3-009 closed: 'a backfill of an invalid subject is refused and writes nothing' (red for N04).
+- HL3-004, SC3-001 open: deferred in round 3. The stale rule in LockAttempt.step and the FLAGS_LOCK_TIMING values are unchanged in behaviour.
+
+## Verified clean (no finding)
+
+- withFileLock refactor into LockAttempt: I read base file-lock.ts:60-145 (d7b0f7058) beside head :80-185. In base, a nonce-write failure was rethrown into the outer catch, which went on to stat and retry. In head, the catch closes and removes the lock, then falls through to the same stat-and-retry. The order is the same: deadline first, wx open, stale removal, a one-time onWaiting after 1 s, sleep 15, and release by nonce. Default-option consumers (search-derived in wave 1: worktree/ports.ts, worktree/promote.ts, lib/permission-mode-config.ts, lib/config-update.ts, lib/serve-credential.ts, lib/project-registry.ts, mcp-servers/credentials.ts) keep base behaviour. The layers.affected list (depth 2, 120+ files, no truncation) reaches them through these modules.
+- withFileLockAsync: its only production caller is organize.ts:181. It shares LockAttempt, so a sync holder in another process excludes an async waiter and the reverse ('a flags change waits for a writer in another process…').
+- setSessionFlags / updateSessionFlagsAt / backfillSessionSubject trailing `timing` parameter: it defaults to FLAGS_LOCK_TIMING, so existing callers are unchanged (issues-launch.ts:116, issue-session.ts via bindIssueSubject, organize tests).
+- bindIssueSubject(firstBind): firstBind = launch.stage === 'registered', read before the stage changes. A first bind that fails throws before saveBinding, so the record stays 'registered' on disk and the next open is again a first bind ('the first bind fails loudly…'). A later open swallows backfill errors only. The archived/missing check still throws first.
+- unusableRemote / listIssuePage: the consumers are commands/issues.ts (it passes the message through) and Desktop useIssueCollection.ts:27 (its regex names 'names no usable repository'). For a viewer source the 410 stays issuesDisabled, which repositoryUnavailable would match, but IssuesBoard calls it only when source === 'repository' (wave 2).
+- Docs: desktop-issues.md ('this project and account'; 'Any other error shows Retry') and implementation-plan.md (the async server wait, 'no session' for a trashed session, a best-effort later bind, Link kept on failure with no retry after a turn, deviation (h) naming LG-014) match the head code I read in organize.ts, issue-session.ts, server.ts, and the Desktop sites traced in waves 1 and 2. The one exception is the non-Git case of DG-R4-001.
+- Test evidence: research-evidence/verify-tests-to-run-1.txt shows root 68/0 and Desktop 1070/0 at head. I ran nothing (read-only, exec_budget_s 0). Red-on-parent (obligation 5) was judged by reading, not run.
+
+## Notes
+
+- Consumers were enumerated with `keryx ctx rg` (search-derived) over src and apps/desktop/src. I read the payload's layers.affected list (graph at head 4cb6c43ef, depth 2, not truncated). I did not query `keryx gdgraph affected` separately. No cap dropped consumers.
+- Acceptance criteria: AC1–AC19 from the payload. The PR body was used for the description comparison.
+- routing audit: graph_used: partial (payload layers.affected read; no separate gdgraph query), wiki_used: not-relevant (fix-range degradation check against base), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

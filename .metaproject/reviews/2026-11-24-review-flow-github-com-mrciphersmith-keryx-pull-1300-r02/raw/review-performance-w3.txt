@@ -1,0 +1,64 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1300, branch `feat/desktop-review-v2-stage1`, round 4 delta range d7b0f7058..4cb6c43ef, diff mode. Slice read in full: slice-03 (docs/docs/guides/desktop-issues.md, implementation-plan.md, src/acp/server.ts, src/commands/acp.ts, src/integrations/issues-board.ts + test, src/lib/file-lock.ts + test, src/session/issues/issue-session.ts + test, src/session/organize.ts + test).
+- Head code read directly for organize.ts:95-214 (readStoredFlags, FLAGS_LOCK_TIMING, lockOptions, whileStored, withFlagsLock/Async, sessionSubjectSettled, backfillSessionSubject), file-lock.ts:94-117 (LockAttempt.step), issue-session.ts:105-124.
+- Caller enumeration: `keryx ctx rg -n "withIssueBinding\(|setSessionFlags\(|updateSessionFlagsAt\(|backfillSessionSubject\(|setSessionFlagsAsync\(|withFileLockAsync\(" src --glob '!*.test.ts'` -> production flags writers: src/acp/server.ts:2965 (async), src/session/issues/issues-launch.ts:99,116 and issue-session.ts:64,69 (sync). `keryx ctx rg "issues-launch" src --all` -> imported only by src/commands/issues.ts:89 and src/commands/issue-workspace.ts:5, i.e. short-lived CLI processes, not the long-lived ACP server.
+- gdgraph: unavailable (`keryx gdgraph affected` reports index-incomplete, never built). Tests not run (exec_budget_s 0).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Prior dispositions (findings this slice touches)
+- HL3-001 closed: the only long-lived caller, server.ts handleSessionFlags, now awaits setSessionFlagsAsync -> withFileLockAsync, which yields via `await new Promise((resolve) => setTimeout(resolve, RETRY_MS))` between attempts; Bun.sleepSync is reached only from withFileLock, whose production callers are the CLI commands above.
+- HL3-002 closed: lockOptions sets `createDir: false`; LockAttempt.prepare skips mkdirSync and step rethrows ENOENT, mapped to goneError when the dir is missing; whileStored refuses when summary.json is absent.
+- DG3-001 closed: a later open calls sessionSubjectSettled (one lock-free read of flags.json) and takes the lock only when no subject is stored and none was unlinked; the steady-state reopen does no flags write and no lock.
+- HL3-004 open (deferred, unchanged): stale rule is still mtime age > FLAGS_LOCK_TIMING.staleMs = 2_000 with no holder refresh; the refactor into LockAttempt kept it.
+- SC3-001 open (deferred, unchanged): LockAttempt.step still stats then rmSync's on age, the same check-then-remove window.
+- TP-R3-006 closed (by code reading): new tests "a viewer source never gets the repository-named 410 text" and "a viewer page made only of pull requests does not page on" assert the two `repository &&` gates. Red-on-parent not run.
+- TP-R3-007 closed (by code reading): "a flags change held off past its timeout fails with the retry error" holds a fresh lock with timeoutMs 20 for both sync and async paths. Not run.
+- TP-R3-008 closed (by code reading): elapsed-time assertions removed; lock-wait and two-process tests use file barriers (held/go/read) and injected FlagsLockTiming. Not run.
+- TP-R3-009 closed (by code reading): "a backfill of an invalid subject is refused and writes nothing" calls backfillSessionSubject with a mismatched subject. Not run.
+
+### Findings
+None.
+
+### Regressions the fixes introduced
+None found under this lens.
+
+### Clean Areas (verified, with sites)
+- Synchronous blocking on the server event loop: server.ts:2965 is the only ACP-server flags writer and is async; each async attempt does openSync/statSync only (file-lock.ts:96-117), at most ~200 attempts over the 3 s timeout (RETRY_MS 15).
+- Polling: withFileLockAsync polls a file lock every 15 ms; no event exists for an advisory lock file held by another process, and it is bounded by timeoutMs.
+- Per-open I/O in withIssueBinding (issue-session.ts:113-116): a reopen reads flags.json twice (readSessionFlags for archivedAt, then sessionSubjectSettled). Once per user-initiated issue open, a file of a few hundred bytes: below the info threshold, not filed.
+- Redundant API calls: issues-board viewer pages made only of pull requests no longer page on (test pins pages == [1]); the repository source is capped at three pages.
+- Memory: no new unbounded collections; LockAttempt is per call and released in finally.
+- Startup cost / bundle imports: no new top-level imports beyond file-lock's named exports into organize.ts.
+- N+1, indexes, pagination, React re-renders: not relevant to this slice (no DB, no UI code).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-performance",
+    "slices": ["slice-03"],
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "HL3-001", "disposition": "closed", "evidence": "src/acp/server.ts handleSessionFlags awaits setSessionFlagsAsync; withFileLockAsync yields via setTimeout(RETRY_MS) between attempts; sync withFileLock callers are only CLI processes (issues-launch.ts via src/commands/issues.ts, issue-workspace.ts)."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "organize.ts lockOptions createDir:false; LockAttempt.prepare skips mkdir, step rethrows ENOENT mapped to goneError; whileStored checks summary.json."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "issue-session.ts bindIssueSubject: later open returns after lock-free sessionSubjectSettled when a subject is stored or unlinked; lock taken only for a real backfill."},
+      {"id": "HL3-004", "disposition": "open", "evidence": "Deferred; staleMs 2_000 age-only takeover unchanged by the LockAttempt refactor."},
+      {"id": "SC3-001", "disposition": "open", "evidence": "Deferred; stat-then-rmSync stale takeover window unchanged in LockAttempt.step."},
+      {"id": "TP-R3-006", "disposition": "closed", "evidence": "issues-board.test.ts adds 'a viewer source never gets the repository-named 410 text' and 'a viewer page made only of pull requests does not page on'; not run (exec_budget_s 0)."},
+      {"id": "TP-R3-007", "disposition": "closed", "evidence": "organize.test.ts 'held off past its timeout fails with the retry error' (timeoutMs 20, sync and async); not run."},
+      {"id": "TP-R3-008", "disposition": "closed", "evidence": "organize.test.ts: elapsed-time assertions removed, barrier files plus injected FlagsLockTiming; not run."},
+      {"id": "TP-R3-009", "disposition": "closed", "evidence": "organize.test.ts 'a backfill of an invalid subject is refused and writes nothing'; not run."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0, "files_reviewed": 12, "tests_run": 0},
+    "notes": "gdgraph unavailable (index never built); wiki not consulted (not needed for perf); ctx rg used for caller enumeration; raw rg not used. Test dispositions rest on code reading, not on a red-on-parent run."
+  }
+}
+```
+
+Routing audit: graph_used: attempted, unavailable (index-incomplete) | wiki_used: not-relevant | ctx_used: yes (keryx ctx rg) | raw_rg_used: no

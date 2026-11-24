@@ -1,0 +1,119 @@
+STATUS: DONE
+
+# Style Review Report — review-style, round 4, wave 1
+
+## Summary
+The round-3 fix range (d7b0f7058..4cb6c43ef, code commit 055115a20) is readable and follows the surrounding naming. No readability threshold is crossed. Three info-level naming observations; no minor or major finding.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (explicit-hash-range, diff mode)
+- Slice read in full: slice-01 (310 lines; IssuesBoard.tsx, issues/model.ts, PrWorkRow.tsx, ReviewBoard.tsx, review.css, cli-reference.md, file-lock.ts, issue-session.ts, organize.ts)
+- Context read beyond the slice: head text of PrWorkRow.tsx (whole file), ReviewBoard.tsx focus effect (478-530), organize.ts 205-300, and the full range diff of file-lock.ts, organize.ts, issue-session.ts (`git diff d7b0f7058..4cb6c43ef`)
+
+## Stats
+- major: 0
+- minor: 0
+- info: 3
+
+## Minor & Info
+
+### [ST-R4-001] info — `handle` holds the "timeout" sentinel (src/lib/file-lock.ts)
+`LockAttempt.step()` returns `number | null | "timeout"`, and both `withFileLock` and `withFileLockAsync` keep the result in `let handle = attempt.step();`, then test `if (handle === "timeout") return null;`. A variable called a file handle that can be the string "timeout" asks the reader to track three meanings. Fix (optional): name it for the attempt result (`taken`), or have `step()` return `{ handle } | "retry" | "timeout"`.
+
+### [ST-R4-002] info — boolean refs named as imperatives (IssuesBoard.tsx, PrWorkRow.tsx)
+`const focusSource = useRef(false);` and `const refocusFlow = useRef(false);` are flags that a focus is owed, named like actions. `focusSource.current = false` sits next to `sourceSelect.current?.focus()`, where it reads as a call target. Most boolean refs in apps/desktop/src name a state (`refreshPending`, `catalogPending`, `inFlight`, `openingLink`), though a few do not (`archiveSelection`, `again`), so the convention is mixed and this stays info. Fix (optional): `sourceFocusPending`, `flowRefocusPending`.
+
+### [ST-R4-003] info — pre-existing: `age` holds an mtime, not an age (src/lib/file-lock.ts)
+`const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;` then `Date.now() - age > this.staleMs`. The value is a timestamp; the age is the difference. Pre-existing since 05a9a8e36 (2026-08-01); this range only re-indents it into `LockAttempt.step` and adds `this.`, so it is not made worse (diff mode: out of scope). Disposition (round obligation 4): recommend renaming to `mtime` the next time the line is touched; small and in the same contract, not a reason to hold this change.
+
+## Verified clean (style lens)
+- File length: no threshold crossed. ReviewBoard.tsx 638→646 (already over 500 at base), organize.ts 281→365, file-lock.ts 147→206, IssuesBoard.tsx 322→331, PrWorkRow.tsx 99→112, issue-session.ts 107→124 (`git show <rev>:<file> | wc -l`).
+- Ternary chain `const text = offer.error ? … : offer.linking ? … : …` (PrWorkRow.tsx FlowOffer): the same file's `sessionText` uses the same three-way label shape, so it is the file's convention (law 4), not reported. `const unlinked = change.subject === null ? true : …` in organize.ts is pre-existing (base line 192), moved into `applyFlagsChange`.
+- Boolean conditions: none over 3 clauses on `+` lines (ReviewBoard focus effect, file-lock `createDir === false && … === "ENOENT"`, PrWorkRow refocus effect).
+- Nesting and branch counts: `LockAttempt.step`, the ReviewBoard focus `useEffect`, `bindIssueSubject` stay within depth 3 and about 10 decision branches; the focus effect gained one branch.
+- New exports have consumers: `FlagsLockTiming`/`FLAGS_LOCK_TIMING` (organize.ts defaults, organize.test.ts), `sessionSubjectSettled` (issue-session.ts:67), `withFileLockAsync` and `FileLockOptions` (organize.ts:13), enumerated with `keryx ctx rg --all "FLAGS_LOCK_TIMING|FlagsLockTiming|withFileLockAsync|sessionSubjectSettled|FileLockOptions" src apps` (30 matches, 5 files). Public exports carry JSDoc.
+- Console usage: none added in the range.
+- `I`-prefixed interfaces: none (`FileLockOptions`, `FlagsLockTiming`).
+- Out of lane and left to their owners: withFlagsLock/withFlagsLockAsync and withFileLock/withFileLockAsync carry near-identical bodies (duplication, review-clean-code; 2 copies, under its threshold); `prepare()`'s JSDoc says "Whether the lock's directory is there" while the `createDir: false` branch returns true without checking (comment accuracy, review-clean-code); `bindIssueSubject(dir, ref, firstBind)` boolean flag parameter (review-clean-code).
+
+## Prior dispositions (round 3, sites in slice-01, judged against head code)
+- FE-R3-001 closed — ReviewBoard.tsx focus effect: a settled snapshot (`!loading && !stale`) without the PR now sets `focused.current`, shows "#N is not in the current list of …" and calls `onFocusHandled`; only a loading or stale snapshot waits.
+- FE-R3-002 closed — PrWorkRow `refocusFlow` + effect focuses the Flow slot's button when the offer goes; IssuesBoard `focusSource` effect focuses the source select after the remount; ReviewBoard "Dismiss notice" calls `search.current?.focus()` (ReviewBoard.tsx:610).
+- DG-R3-002 closed — `issueSessions` deleted from issues/model.ts; model.test.ts:65-66 now pins `boundSessionIndex(sessions)(issueSubject(issue))`, the helper IssuesBoard.tsx:155 uses.
+- UX-009 closed — offer name is `Flow #<id> · <title>`, in the visible text and both buttons' aria-labels.
+- UX-012 closed — the offer span no longer has `pr-work-link`; `.pr-work-offer` has no border and no hover rule.
+- PC-008 closed — cli-reference.md lists `subject?`, its shape, `subject: null`, the answer `{hasIssue?, archivedAt?, pinnedAt?, flow?, subject?}` and the lock refusal ending in "retry".
+- HL3-001 closed — organize.ts adds `withFlagsLockAsync`/`setSessionFlagsAsync` on `withFileLockAsync`; src/acp/server.ts:2965 calls `setSessionFlagsAsync`.
+- HL3-002 closed — `lockOptions` passes `createDir: false`, and `whileStored` refuses inside the lock when summary.json is gone; ENOENT on a missing dir becomes "no session …".
+- DG3-001 closed — `bindIssueSubject(dir, ref, firstBind)`: a later open skips when `sessionSubjectSettled` and swallows a failed backfill; only the first bind throws.
+- Not judged by this lens (sites outside slice-01 or owned by another lens): LY-005 (layout; note that `.pr-work-slot` now has `overflow: hidden` and the offer buttons keep `flex: none`, so the layout lens should confirm Dismiss stays visible in a 60px slot), UX-010, UX-011, UX-013, UX-015, AR-007, TP-R3-001..009, PC-005..007; deferred: HL3-003, HL3-004, LG-R3-003, SC3-001, UX-014, UX-016.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-style",
+    "round": 4,
+    "status": "DONE",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "ST-R4-001",
+        "severity": "info",
+        "reviewer": "review-style",
+        "file": "src/lib/file-lock.ts",
+        "quote": "  let handle = attempt.step();\n  while (handle === null) {",
+        "problem": "LockAttempt.step() returns number | null | \"timeout\", and withFileLock and withFileLockAsync both store it in a variable named `handle`, then test `handle === \"timeout\"`. A name for a file descriptor carries a string sentinel.",
+        "impact": "The reader tracks three meanings of `handle` (descriptor, retry, timeout) across the loop and the guard; no wrong behaviour.",
+        "suggested_fix": "Optional: name the variable for the attempt result (`taken`), or return a discriminated value from step() such as { handle } | \"retry\" | \"timeout\".",
+        "evidence": "file-lock.ts withFileLock and withFileLockAsync at head (range diff d7b0f7058..4cb6c43ef).",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "file-lock-handle-holds-timeout-sentinel"
+      },
+      {
+        "id": "ST-R4-002",
+        "severity": "info",
+        "reviewer": "review-style",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "quote": "  const focusSource = useRef(false);",
+        "problem": "Two new boolean refs that record a pending focus are named as imperatives: `focusSource` (IssuesBoard.tsx) and `refocusFlow` (PrWorkRow.tsx). `focusSource.current = false` sits beside `sourceSelect.current?.focus()` and reads as an action.",
+        "impact": "Readability only. Most boolean refs in apps/desktop/src name a state (refreshPending, catalogPending, inFlight, openingLink) but some do not (archiveSelection, again), so the convention is mixed.",
+        "suggested_fix": "Optional: sourceFocusPending and flowRefocusPending.",
+        "evidence": "keryx ctx rg -n \"useRef\\(false\\)\" apps/desktop/src (42 matches, 23 files); sites IssuesBoard.tsx:70, PrWorkRow.tsx:51.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "imperative-boolean-ref-names"
+      },
+      {
+        "id": "ST-R4-003",
+        "severity": "info",
+        "reviewer": "review-style",
+        "file": "src/lib/file-lock.ts",
+        "quote": "    const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;",
+        "problem": "Pre-existing (05a9a8e36): `age` holds the lock file's mtime timestamp, and the age is computed as `Date.now() - age`. This range only moved the line into LockAttempt.step and added `this.`; not made worse.",
+        "impact": "A reader of `Date.now() - age > this.staleMs` must notice that `age` is a timestamp. No wrong behaviour.",
+        "suggested_fix": "Pre-existing-defect disposition: rename to `mtime` the next time the line is touched; not a reason to hold this change.",
+        "evidence": "git show d7b0f7058:src/lib/file-lock.ts line 109 holds the same name; git log -S 'const age = statSync' names 05a9a8e36.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "file-lock-age-is-mtime"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed", "evidence": "ReviewBoard.tsx focus effect: settled snapshot without the PR sets focused.current, shows a notice and calls onFocusHandled; only loading || stale returns early."},
+      {"id": "FE-R3-002", "disposition": "closed", "evidence": "PrWorkRow refocusFlow effect focuses the Flow slot button; IssuesBoard focusSource effect focuses the source select; ReviewBoard.tsx:610 Dismiss notice focuses search."},
+      {"id": "DG-R3-002", "disposition": "closed", "evidence": "issueSessions deleted from issues/model.ts; model.test.ts:65-66 pins boundSessionIndex(sessions)(issueSubject(issue)), used by IssuesBoard.tsx:155."},
+      {"id": "UX-009", "disposition": "closed", "evidence": "FlowOffer name = `Flow #<id> · <title>`, in text and both aria-labels."},
+      {"id": "UX-012", "disposition": "closed", "evidence": "Offer span class is pr-work-offer only; review.css gives it no border and no hover rule."},
+      {"id": "PC-008", "disposition": "closed", "evidence": "cli-reference.md session_flags line lists subject?, its shape, subject: null, the answer fields incl. hasIssue and subject, and the lock refusal ending in retry."},
+      {"id": "HL3-001", "disposition": "closed", "evidence": "organize.ts withFlagsLockAsync/setSessionFlagsAsync over withFileLockAsync; src/acp/server.ts:2965 calls setSessionFlagsAsync."},
+      {"id": "HL3-002", "disposition": "closed", "evidence": "organize.ts lockOptions passes createDir: false; whileStored refuses inside the lock when summary.json is gone; missing-dir ENOENT maps to goneError."},
+      {"id": "DG3-001", "disposition": "closed", "evidence": "issue-session.ts bindIssueSubject(dir, ref, firstBind): later opens skip when sessionSubjectSettled and swallow a failed backfill."}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 3, "files_reviewed": 9, "prior_disposed": 9}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant — slice and payload supplied the scope and affected set); wiki_used: no (not-relevant — naming/readability lens); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no. Raw git show/diff used with keryx:raw markers to quote head and base text verbatim.

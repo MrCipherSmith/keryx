@@ -1,0 +1,33 @@
+STATUS: DONE
+
+Scope B (blast radius) for slice-02. Question answered: does slice-02 break existing behaviour at any site in the computed set? I found no regression at `major` or above, so I am filing no findings.
+
+What I checked, from the dependency paths to slice-02's changed files:
+
+- apps/desktop/src/review/model.ts (this slice removes `stateFilterShowsDone`, `attentionReason` and `secondaryNote`; replaces LANES attention/review/open/done with status and role lanes; changes the `reviewLane` and `laneReason` signatures and content). In the set, ReviewRuns.tsx is the only file that imports review/model, and it uses only `DECISION_LABEL`, which is unchanged. A full `keryx ctx rg` over apps/desktop/src found no remaining consumer of `stateFilterShowsDone`, `secondaryNote`, `showDone`, the old `review-lane-(attention|review|open|done)` classes or the old lane keys. ReviewResults and model.test are both changed files.
+- apps/desktop/src/review/ReviewResults.tsx (the `onOpenSession` and `showDone` props are removed, and the `work`, `grouping`, `filters` and `viewer` props are now required). FlowDetail.tsx and FlowsBoard.tsx are in the set through ReviewResults.tsx and IssuesBoard.tsx, but neither imports anything from review/ or issues/. The graph edge is textual or CSS, not an import, so no prop contract reaches them.
+- apps/desktop/src/issues/model.ts (removes the `stage` filter; `groupForRow` now groups by GitHub state; `SOURCES` gains `repository`, which `DEFAULT_SOURCE` now selects). IssueDetail.tsx imports only `issueName` and `STAGES`, both unchanged. IssueDetail renders `actions` as an opaque ReactNode inside `.issue-detail-actions`, so the move from `workActions(selected, true)` to `<IssueWorkRow/>` plus `card-actions` keeps that contract. IssueOriginDetail.tsx imports only `isAccessError` from useIssueCollection, which is unchanged. `readPreferences` now ignores a stored `stage` instead of applying it, which is deliberate and commented. The `IssueScope` to `IssueListSource` widening is additive, because `IssueListSource = IssueScope | "repository"`.
+- apps/desktop/src/acp/types.ts (adds the optional `SessionFlags.subject` and the new `sameSubject` and `boundSessions`). The field is optional and only added, so reducer.ts, Composer, Transcript, SessionSidebar, sessionGroups, startup and the other hop-1 importers are not affected. The reducer's `flags` action replaces `_meta.keryx` with whatever keryx returns. That would drop a subject only if the server omitted it from a pin or archive reply. src/session/organize.ts (changed, read at head) stores `subject` beside archivedAt, pinnedAt and flow and returns it on every flags write, so pin and archive keep a binding.
+- apps/desktop/src/session/useAcpSession.ts (the end-of-turn chain is now `applyPendingFlow(...).then(() => subjects.apply(...)).finally(refresh)`). `applyPendingFlow` catches its own errors and `PendingSubjects.apply` never throws on a write failure, so the existing flow link and the post-turn `refreshSessions` still run as before. Approvals, SessionInfoPanel and SessionView consume the hook's return value, which only gains fields: `linkFlow`, `bindSubject` and `pendingSubjects`.
+- apps/desktop/src/App.tsx (ReviewBoard no longer gets `onOpenSession`; it gets `onOpenSubjectSession` and `onCreateFlow`). The PR panel's `onOpenSession` is now `openPanelSession(card)`, which prefers the subject path and falls back to `onOpenSession`. FlowsBoard's `onOpenSession` and `workOn` paths are unchanged. "Open in session" now reuses the newest bound session instead of always creating one. That is the stated stage-1 behaviour, not a regression.
+- apps/desktop/src/review/reviewFilterStorage.ts (quick filters are stored inside the same `version: 1` record). Old records have no quick keys and read as before. An older Desktop that reads a new record ignores the unknown keys.
+
+Coverage and limits:
+- The cap dropped files: 23 of 97 candidates were not checked (blast_radius_max_files=40), and this round does not cover them. I reviewed only the dependents reachable from slice-02's files, not the whole set of 40.
+- The radius is unresolved for 19 changed files that are absent from the code graph: flow-package JSON and markdown, CSS and docs. Their blast radius is unknown, not empty.
+- The graph cannot see the runtime edges this slice depends on: Desktop to keryx over ACP (`_keryx/session_flags` with `subject`) and through the issues command (`source: "repository"`). Version skew between a new Desktop and an older keryx goes along those edges, which the set does not carry. The code handles one direction: PendingSubjects shows SUBJECT_NOT_SAVED when the reply has no subject. I made no claim about the other direction (an older keryx refusing the "repository" source), because it would be a cross-version claim with no pinned evidence, which is `info` and below this scope's floor.
+- Test evidence for this round: verify-tests-to-run-1.txt shows 1016 pass and 0 fail over the 34 listed files. I did not run anything; my budget allowed no test runs.
+
+Routing audit: graph_used: yes (the blast-radius brief, computed from the graph); wiki_used: not-relevant (narrow regression check over import edges); ctx_used: yes (keryx ctx rg and keryx ctx read); raw_rg_used: no.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-02: no regression at major or above. Consumers in the set of the changed review/model.ts, issues/model.ts, acp/types.ts, ReviewResults.tsx, useAcpSession.ts and App.tsx were checked; no remaining importer of the removed exports (stateFilterShowsDone, secondaryNote, old LANES keys, showDone, onOpenSession on ReviewResults) exists, SessionFlags.subject is additive, and server-side organize.ts preserves subject on every flags write, so the reducer's flags replace keeps bindings. The cap dropped 23 of 97 candidates (not checked); 19 changed non-code files have an unresolved radius; the ACP and issues-command runtime edges (version skew) are outside the graph.",
+  "findings": [],
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}

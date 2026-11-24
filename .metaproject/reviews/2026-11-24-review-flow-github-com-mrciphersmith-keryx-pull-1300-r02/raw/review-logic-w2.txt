@@ -1,0 +1,108 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), explicit-hash-range, round 4 wave 2
+- Slice: slice-02, read in full (2153 lines). At head I also read FlowOffer in PrWorkRow.tsx, the source-focus effect in IssuesBoard.tsx (VerifiedBoard), useIssueCollection.load, useAcpSession applyPendingFlow and linkFlow, and AcpClient's rejection path (RpcError is an Error). Backend reason texts were checked against `repositoryUnavailable`.
+- Spec compliance gate: ran against the frozen AC9, AC12 and AC13. No gap. AC9: Link is still the only writer of the `flow` flag. A failed Link now keeps the offer, and Dismiss still writes nothing. AC13: the default stays `repository`, and a stored preference wins (the per-project key first, then the per-account key that main writes).
+
+### Summary
+The Desktop half of fix round 3 is logically sound.
+
+**Link flow (usePendingFlowLinks).** `accept` marks the offer `linking` in the ref and in state together, so a second press, or a press during the write, sends nothing. It settles by matching (sessionId, dir), so an offer dismissed or replaced while the write runs cannot come back.
+
+**linkFlow.** It now rejects instead of queueing a retry after the turn. `accept` catches the rejection, so there is no unhandled rejection. The flags dispatch matches applyPendingFlow's.
+
+**Issues fallback.** `repositoryUnavailable` matches the three backend texts exactly: board-github.ts:45, issues-board.ts:114 and :188. It treats "Invalid Issues request" as an older keryx only on a first page (`!snapshot`). A snapshot is null only before page one, after a filter change (the load effect resets it) or after an access invalidation, so a later-page malformed cursor keeps Retry.
+
+**Source focus and storage.** The select ref attaches in the child commit, before VerifiedBoard's `[source]` effect runs, so focus lands on the new select. Reading the per-account key as a fallback is a migration of the key main writes.
+
+**Flow slot refocus.** PrWorkRow moves focus only when focus fell to `<body>` and the offer is gone.
+
+No blocker, major, minor or info finding.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. Checked:
+- Dismiss, or a replacing offer, during an in-flight Link: settle finds no item, so nothing is resurrected.
+- A Link whose client changed mid-request: no dispatch, and the offer is removed.
+- Two accepts in one act: the ref is marked synchronously, so only one write is sent.
+
+### Error Handling
+None detected. linkFlow throws "keryx is not connected." without a client. RpcError and transport errors are Error instances, and errMessage formats them.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. The `link` type is now `void | Promise<void>`, and App passes the Promise through unchanged.
+
+### Edge Cases
+None detected beyond those already deferred.
+- After a failed Link, `refocusFlow` stays armed until the offer goes. It acts only when focus is on `<body>`, so it does no harm.
+- The legacy per-account source key is never removed. This is intended: it is a migration from main.
+
+### Prior dispositions notes (findings this slice touches)
+- FE-R3-001 closed: PrWorkRow.dom tests cover refusal on a settled list, the wait during a running load, and no reopen after a refresh.
+- FE-R3-002 closed: Link and Dismiss move focus to the Flow slot's button, notice Dismiss to the search field, and the fallback to the source select.
+- AR-007 closed on the Desktop side: the classifier lives beside isAccessError in useIssueCollection.ts. It matches the named reasons only, and the old-keryx text only on a first page.
+- DG-R3-002 closed: issueSessions removed, and the model test now pins boundSessionIndex.
+- UX-009 closed: the title is in the visible text and in the Link and Dismiss accessible names.
+- UX-010 closed: the offer stays `linking` and then shows `error`, and Link can be pressed again.
+- UX-011 closed: the source is stored under account + ".source." + JSON(cwd).
+- UX-012 closed: the `.pr-work-offer` span no longer carries pr-work-link.
+- UX-013 closed: the prefix is stripped in the unavailable branch.
+- UX-015 closed: the hint now reads "Bundled keryx in Settings → Desktop".
+- TP-R3-001..005: closed. Each now has a test that would observe the named mutant: TP-R3-001 the double Link, Dismiss then Link, and the replacement offer; TP-R3-002 the PR Flow beating an offer; TP-R3-003 a non-configuration error keeping Retry; TP-R3-004 refusal followed by a refresh or a new focus; TP-R3-005 ReviewProgress without showState. This lens re-ran no mutation (exec budget 0).
+- LY-005 partial: unchanged from wave 1. The slot clips, but no real-engine measurement was made; the layout lens owns it.
+- PC-006 partial, outside this lens and noted only: the PR body now splits the deferred list by package and adds HL-003, LG-014 and LG-016. The round-2 journal line ("Deferred info: PF-006/HW2-002 ... UX-003..006") is unchanged, although PC-006 asked for the same correction in journal.md. The review-pr-contract lens owns it.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "slices": ["slice-02"],
+    "summary": "Desktop half of fix round 3 (slice-02) is logically sound. Link keeps the offer as linking/error and is guarded against double writes, and linkFlow rejects instead of queueing. The Issues fallback classifier matches the backend reason texts exactly and gates the old-keryx hint on a first page. The per-project source key reads the per-account key main writes as its fallback. Focus restoration is correct. No findings.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "AR-007", "disposition": "closed"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-010", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "UX-013", "disposition": "closed"},
+      {"id": "UX-015", "disposition": "closed"},
+      {"id": "TP-R3-001", "disposition": "closed"},
+      {"id": "TP-R3-002", "disposition": "closed"},
+      {"id": "TP-R3-003", "disposition": "closed"},
+      {"id": "TP-R3-004", "disposition": "closed"},
+      {"id": "TP-R3-005", "disposition": "closed"},
+      {"id": "LY-005", "disposition": "partial"},
+      {"id": "PC-006", "disposition": "partial"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Routing audit:
+- graph_used: no. Not relevant: linkFlow's callers were enumerated with ctx rg (one caller, App.tsx).
+- wiki_used: no. Not relevant: the intent is stated in the code comments and the journal.
+- ctx_used: yes. I used keryx ctx rg; sed and git show carried a keryx:raw marker, for exact function bodies.
+- raw_rg_used: no.
+
+Test evidence: research-evidence/verify-tests-to-run-1.txt. This lens ran no tests or mutants (exec_budget_s 0).

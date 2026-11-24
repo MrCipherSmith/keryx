@@ -1,0 +1,84 @@
+STATUS: DONE
+
+## Frontend Review (round 2, wave 3)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121, including fix commit a34d8961b
+- Scope mode: diff (supplied slice)
+- Slice read in full: slice-04 (2432 lines). It covers these test files:
+  - acp/types.test.ts
+  - issues/IssuesBoard.dom.test.tsx and issues/model.test.ts
+  - review/PrWorkRow.dom.test.tsx, ReviewBoard.dom.test.tsx, ReviewLaunchDialog.dom.test.tsx, model.test.ts and prWork.test.ts
+  - review/usePendingFlowLinks.dom.test.tsx
+  - session/SessionSubjectLinks.dom.test.tsx
+  - shell/ProjectNavigation.dom.test.tsx
+  - test/app-navigation.fixture.tsx
+- Context read at head, only to settle questions about queries: the ReviewResults.tsx list columns and tile markup, and the IssuesBoard.tsx and IssueWorkRow.tsx card controls.
+- Lens applied to test code: React act and cleanup, leaked timers and listeners, queries that would pass on a wrong render, keys, and accessibility queries. Desktop has no MobX stores, so mobx-store-template does not apply.
+- Known findings from waves 1 and 2 are not repeated. They include:
+  - TP-R2-001: the 40 ms `settle`.
+  - TP-R2-002 and TP-R2-003: the test-local focus Host and the R2-21 ref guard.
+  - TP-R2-004: the reviewProgressText branches.
+  - TP-R2-005: the AC2 DOM test has no positive badge artifact.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No new findings in this lens.
+
+### Checked, no finding
+- **act and cleanup.**
+  - Every DOM file creates one root in `beforeAll` and unmounts it inside `act` in `afterAll`, then calls `unregisterDom()`.
+  - IssuesBoard.dom, ReviewLaunchDialog.dom and usePendingFlowLinks.dom render `null` in `beforeEach`, so each test starts from a fresh tree and a fresh hook.
+  - PrWorkRow.dom and ReviewBoard.dom remount through a new `key` on every render. The CSS-only tests render nothing.
+  - All state changes run inside `act`: clicks, select `change` events, `publishSessionReview` and the hook's `expect`.
+  - The App fixture unmounts inside `act`, then calls `clearMocks` and `unregisterDom` in `finally`.
+- **Timers and listeners.**
+  - The new AC2 ReviewBoard test replaces only the 6000 ms `setTimeout` and restores it in `finally`, the same pattern as the existing badge-tick test.
+  - usePendingFlowLinks.dom injects its clock as `() => clock.now` and needs no real timers.
+  - `publishSessionReview` is a listener bus that stores nothing; testing-practices w2 verified this. The board that subscribed is unmounted by the next keyed render.
+  - No new sleep was added beyond the `settle` already reported.
+- **Queries that could pass on a wrong render.**
+  - Negative assertions in these tests are paired with a positive anchor:
+    - AC4: `bodies` has length 4 and `reasons` has length 4.
+    - Visible text: `containers.length` is 2 or 3, `controls.length > 1` or `> 5`, and exact labels are checked.
+    - The reason-line test maps `.flow-id` to its reason and compares exact values.
+    - "a card with an active review…" also asserts "No matching pull requests".
+  - The AC4 list check reads `row.children[3]`. At head, the header order is Pull request, Author, State, Reason, Checks, Keryx work, Actions (ReviewResults.tsx), so index 3 is the Reason cell. The tile's `.review-card` button is a sibling of `PrWorkRow`, not its parent, so the body check cannot see work-row text.
+  - The Issue visible-text selector is scoped to `.issue-work-row` and `.card-actions`. The only other controls on the card and row are `.flow-card-main` and `.review-list-link`, and both render text. Nothing unlabelled escapes the check.
+  - The session menu sequence closes the menu after the item click and reopens it. If it did not close, the second `more` click would close it and `.at(-1)!` would throw, so the sequence fails loudly.
+- **Keys and accessibility queries.**
+  - Controls are found by accessible name (`aria-label`, or visible text through the `button()` helper), by `role="menu"`/`menuitem`, `aria-haspopup`, `aria-pressed`, `role="dialog"`, and `data-slot`. CSS classes are used only where a test asserts styling.
+  - Work-row labels contain their visible text ("Review · ready" inside "Review · ready for #101"), which satisfies label-in-name.
+  - Repeated cards in one render have distinct numbers and URLs, so key collisions would surface as missing rows.
+- **TypeScript in tests.**
+  - The `!` non-null assertions follow a length or presence check, or fail loudly through a TypeError.
+  - Casts are limited to fixture builders (`as SessionInfo`, and `as unknown as` for `act` and the rules stub). This pattern already exists in the files.
+
+### Not reported
+- PrWorkRow.dom's focus test passes `initial: null` on the second Host render. `useState` ignores it, and the focus is already null because the test Host clears it itself. TP-R2-002 and TP-R2-003 already cover this mechanism.
+- Fixed delays, mutation gaps and positive-artifact gaps belong to testing-practices and were reported in waves 1 and 2.
+
+### Routing audit
+- graph_used: no. Not relevant: the slice and its file list were supplied, and the payload `layers` block lists the related tests.
+- wiki_used: not-relevant.
+- ctx_used: yes (`keryx ctx rg` for the ReviewResults columns and tile markup, and for the Issue card controls).
+- raw_rg_used: no.
+- Tests: none run (read-only, exec_budget 0).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "summary": "Round 2, wave 3: slice-04 (Desktop DOM tests and App fixtures) read in full. No new frontend findings. Roots are unmounted in act, per-test isolation uses render(null) or keyed remounts, the replaced setTimeout is restored in finally, and the published-review bus stores no state. Negative DOM assertions are paired with positive anchors. The AC4 Reason column index matches the header at head, and controls are found by accessible name, role and data-slot. Known findings from waves 1 and 2 are not repeated.",
+    "findings": [],
+    "slices": ["slice-04"],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```

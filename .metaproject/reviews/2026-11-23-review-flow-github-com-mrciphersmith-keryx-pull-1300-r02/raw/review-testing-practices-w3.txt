@@ -1,0 +1,217 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices: round 2, wave 3 (slice-05, backend), PR #1300 at 88e3faba9
+
+I read slice-05.diff in full (1331 lines). It covers app-work-row.fixture, implementation-plan, server.ts, shell-session-organize.test, commands/issues.ts, issues-board(.test), issues-contract, issue-session(.test), and organize(.test). Findings from waves 1 and 2 (TP-R2-001..005) are not repeated here, including the 40 ms `settle` in app-work-row.fixture.tsx. The fix commit a34d8961b changed no file under root `src/`, and the payload has no prior finding on these backend files. So every gate below comes from the original feature commits (5b7b8be56 subject, 39ef59875 repository source).
+
+## Mutation pass
+
+Scratch worktree at 88e3faba9 (`bun install --frozen-lockfile`). Baseline on the four named suites (`src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues src/integrations/issues-board.test.ts`): 25 pass / 0 fail. Each mutant was a single-anchor replace (anchor count checked to be 1), run on those four suites, then restored. As in waves 1 and 2, I used a local runner, not `keryx review mutate`, because the brief allows writes only to P/raw. The scratch tree had 0 changes before removal and has been removed.
+
+| id | mutation | result |
+|---|---|---|
+| S01 | organize parseSessionSubject: drop the `kind` check | GREEN 25/0. Equivalent: the URL_KIND agreement check refuses any other kind. |
+| S02 | drop `REPO_REF.test(repo)` | **GREEN 25/0** |
+| S03 | REPO_REF: drop the `(?!\.\.?$)` lookahead (refusal of `.`/`..` as a name) | **GREEN 25/0** |
+| S04 | drop `number < 1` | GREEN. Equivalent: SUBJECT_URL `[1-9]…` plus the number agreement check. |
+| S05 | drop `Number.isSafeInteger` | GREEN. Equivalent: same reason, at most 10 URL digits. |
+| S06 | drop the URL kind agreement check | RED 3 fail |
+| S07 | drop the URL repo agreement check | RED 1 |
+| S08 | drop the URL number agreement check | RED 1 |
+| S09 | repo agreement case-sensitive | **GREEN 25/0** |
+| S10 | drop the repositoryId check | RED 1 |
+| S11 | repositoryId: drop NODE_ID | RED 1 |
+| S12 | SUBJECT_URL `https?` | RED 1 |
+| S13 | readSessionFlags: raw subject without parse | RED 1 |
+| S14 | updateSessionFlagsAt: no parse on write | RED 2 |
+| S15 | drop `subject === null` unlink | RED 3 |
+| S16 | writeFlags drops subject | RED 4 |
+| S17 | parse returns `{...raw, …}` (extra fields kept) | **GREEN 25/0** |
+| S20 | server: drop the wire type check | RED 1 |
+| S21 | server: drop `Array.isArray` | **GREEN 25/0**. The store still refuses, but with invalidRequest instead of invalidParams. |
+| S22 | server: never forward `subject` | RED 1 |
+| S30 | issue-session: drop `bindIssueSubject` | RED 1 |
+| S31 | bindIssueSubject: drop the repositoryId spread | RED 1 |
+| S32 | bindIssueSubject on every open (writes an unlinked subject back) | RED 1 |
+| S33 | bindIssueSubject unconditional (`subject ?? null`) | GREEN. Equivalent: a new session has no subject to delete. |
+| S40 | validateListRequest: refuse `repository` | RED 3 |
+| S41 | projectRepository: drop `!cwd` refusal | RED 1 |
+| S42 | projectRepository: drop the `.`/`..` refusal | **GREEN 25/0** |
+| S43 | cursor scope without the repository | RED 1 |
+| S44 | cursor scope repository case-sensitive | **GREEN 25/0** |
+| S45 | samePage: drop the `/repositories/{id}/issues` allowance | RED 1 |
+| S46 | samePage: repository path compare case-sensitive | **GREEN 25/0** |
+| S47 | samePage: drop the viewer-source branch (viewer pages accept `/repositories/N/issues` and any case) | **GREEN 25/0** |
+| S48 | listUrl: always send `filter` | RED 1 |
+| S49 | listUrl: always send `pulls=false` | RED 1 |
+| S50 | listUrl: drop `encodeURIComponent` | GREEN 25/0. Not reported: I did not check whether the remote parser admits a character that encoding would change. |
+| S51 | `selectRepository` replaced by `[0] ?? ""` (missing-remote error gone) | RED 1 |
+| S52 | pageLink called with `repository = false` | RED 1 |
+| S60 | commands/issues.ts: `listIssuePage(…)` without `cwd` | **GREEN 25/0** |
+
+Cap: 38 mutants run, 23 red and 15 green. Of the green ones, 4 are equivalent (S01, S04, S05, S33) and 1 (S50) is not reported. Every gate the brief named was reached: subject validation, null unlink, issue binding write, repository URL and cursor scope, the `.`/`..` refusal, and the missing-remote error. None was left unreached.
+
+Reachability probe. I ran a throwaway test in the scratch tree and deleted it before removal. Results:
+- `parseSessionSubject` refuses `{repo: "org/..", url: "https://github.com/org/../pull/1"}` and `{repo: "org/re po", url: "https://github.com/org/re po/pull/1"}`. SUBJECT_URL matches both URLs, so only REPO_REF separates them.
+- `reviewRepositories` on a repo with remote `https://github.com/org/...git` returns `["org/.."]`.
+- `new URL("/repos/org/../issues", API).pathname` is `/repos/issues`.
+
+## Findings
+
+### [TP-R2-006] The `.`/`..` and charset gates on repository names have no fixture that reaches them
+- Severity: minor. Gates the diff added survive deletion, and the fixture that names the case is refused by a neighbouring clause.
+- Files: src/session/organize.ts (REPO_REF) and src/integrations/issues-board.ts (projectRepository).
+- Problem:
+  - S42, the `.`/`..` refusal in projectRepository, survives. No test builds a remote whose name is `..`. The probe shows `https://github.com/org/...git` yields `org/..`, and that the request path then collapses to `/repos/issues`.
+  - In organize.test.ts, the "invalid subject" fixture `{ ...good, repo: "../x/y", url: "https://github.com/../x/y/pull/1" }` is refused by SUBJECT_URL's two-segment shape, not by REPO_REF.
+  - `{ repo: "org/re po" }` keeps the url `…/org/repo/pull/1`, so the repo/url agreement check refuses it.
+  - As a result, S02 (no REPO_REF) and S03 (no `.`/`..` lookahead) are both green.
+- Fix:
+  - In issues-board.test.ts, add `withProject("https://github.com/org/...git", …)` and assert that `listIssuePage(auth, { source: "repository" }, cwd)` rejects and that `requested === 0`.
+  - In organize.test.ts, add to `bad` the consistent pairs `{ repo: "org/..", url: "https://github.com/org/../pull/1" }` and `{ repo: "org/re po", url: "https://github.com/org/re po/pull/1" }`.
+
+### [TP-R2-007] Subject normalisation (case-insensitive agreement, stripped fields, wire refusal of arrays) is unpinned
+- Severity: minor.
+- File: src/session/organize.ts parseSessionSubject; src/acp/server.ts handleSessionFlags.
+- Problem:
+  - S09 is green. Every fixture spells repo and url in the same case, although the doc comment promises a case-insensitive compare.
+  - S17 is green. No test sends an extra field and asserts it is not stored, although `_keryx/session_flags` forwards the raw object to the store.
+  - S21 is green. Only a string subject is tested at the wire; an array falls through to the store's refusal, with a different error code.
+- Fix:
+  - Accept `{ repo: "org/repo", url: "https://github.com/Org/Repo/pull/1" }`.
+  - Assert that `setSessionFlags(…, { subject: { ...good, extra: "x" } }).subject` has no `extra` key.
+  - Assert -32602 for `subject: []` in shell-session-organize.test.ts.
+
+### [TP-R2-008] The CLI never passes `cwd` in any test; the repository source is tested only below `keryx issues list`
+- Severity: minor.
+- File: src/commands/issues.ts.
+- Problem: S60, which drops `cwd` from `listIssuePage(account, request, cwd)`, is green. No test drives `issuesCommand`: `keryx ctx rg -l "commands/issues|issuesCommand" src --glob '*.test.ts'` finds no files. Without `cwd`, every `source: "repository"` request from Desktop, which is the new default source, fails with `configuration:`. AC13's verify command runs only issues-board.test.ts, so it cannot see this.
+- Fix: add an `issuesCommand(["list", …], cwd)` test with a stubbed account inside a `withProject` repo and assert the `/repos/{owner}/{repo}/issues` request, or move the cwd plumbing into a function the existing test calls.
+
+### [TP-R2-009] Pagination path gates for the two sources are not separated by any fixture
+- Severity: minor.
+- File: src/integrations/issues-board.ts samePage and cursorScope.
+- Problem:
+  - S47 is green. Deleting the viewer-source branch lets an `/issues` cursor accept a `/repositories/N/issues` next link and any case, and no test sends such a link for a viewer source.
+  - S46 is green: the case-insensitive repository path compare.
+  - S44 is green: the lower-cased repository in the cursor scope. No cursor is replayed across a remote that differs only in case.
+- Fix:
+  - Add a viewer-source page whose `link` points at `/repositories/42/issues?page=2` and assert that it throws.
+  - Add a repository page whose next link is `/repos/Org/Base/issues?page=2` and assert that it is followed.
+  - Replay a cursor from `org/base` under remote `https://github.com/Org/Base.git` and assert that it is accepted.
+
+Severity counts: 0 blocker, 0 major, 4 minor, 0 info.
+
+Routing audit:
+- graph_used: no. Not relevant: the slice and its files were given.
+- wiki_used: no. Not relevant.
+- ctx_used: yes. keryx ctx rg found the CLI test search, board-github selectRepository/reviewRepositories, and the payload prior findings.
+- raw_rg_used: no. Raw command output was limited to the test runner, the one-line `git log -S` and `git show --stat`, each marked keryx:raw.
+
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-05 backend gates mutated: 38 run on the four named root suites (baseline 25/0), 23 red and 15 green, of which 4 are equivalent (S01, S04, S05, S33) and 1 is unreported (S50). The subject parse, null unlink, store write, wire forwarding, issue binding write and no-write-back, cursor repository scope, /repositories/ID next-link allowance, missing-remote error and filter/pulls params are pinned. Unpinned: the '.'/'..' refusal in projectRepository (S42; reachable: remote https://github.com/org/...git yields org/.., and the request collapses to /repos/issues), REPO_REF and its '.'/'..' lookahead (S02/S03; the fixtures that name them are refused by other clauses), subject normalisation (S09/S17/S21), the CLI cwd plumbing (S60, no issuesCommand test), and pagination path gates (S44/S46/S47).",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "TP-R2-006",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "src/integrations/issues-board.ts",
+      "line": null,
+      "quote": "  if (repository.split(\"/\").some((part) => /^\\.+$/.test(part))) throw new Error(invalidInput);",
+      "problem": "The '.'/'..' refusal in projectRepository (S42), REPO_REF in parseSessionSubject (S02) and REPO_REF's '.'/'..' lookahead (S03) each survive deletion with all 25 tests green. No test builds a '..' remote. The organize.test 'bad' fixtures that name these cases ('../x/y' with a three-segment URL; 'org/re po' with the url still '…/org/repo/…') are refused by SUBJECT_URL's shape or by the repo/url agreement check, not by REPO_REF.",
+      "impact": "Coverage gap only, and the code is correct today. Both inputs are reachable: reviewRepositories returns ['org/..'] for remote https://github.com/org/...git, and new URL('/repos/org/../issues', API) resolves to /repos/issues. parseSessionSubject accepts {repo:'org/..', url:'https://github.com/org/../pull/1'} once S03 is applied. A later edit that removes these gates stays green.",
+      "suggested_fix": "issues-board.test.ts: withProject('https://github.com/org/...git') then expect listIssuePage(auth,{source:'repository'},cwd) rejects and requested === 0. organize.test.ts: add {…good, repo:'org/..', url:'https://github.com/org/../pull/1'} and {…good, repo:'org/re po', url:'https://github.com/org/re po/pull/1'} to `bad`.",
+      "evidence": "Scratch worktree at 88e3faba9, bun test of the four named suites: S42 GREEN 25/0, S02 GREEN 25/0, S03 GREEN 25/0. Neighbours are RED: S07 (repo agreement), S12 (https), S41 (!cwd), S51 (missing remote). The probe in the scratch tree printed reviewRepositories → ['org/..'] for 'https://github.com/org/...git' and pathname '/repos/issues'. The unmutated parseSessionSubject refused both consistent pairs, while SUBJECT_URL matches both URLs.",
+      "confidence": "high",
+      "dedupe_key": "testing:repo-name-dot-and-charset-gates-unpinned"
+    },
+    {
+      "id": "TP-R2-007",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "src/session/organize.ts",
+      "line": null,
+      "quote": "  return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };",
+      "problem": "Subject normalisation is unpinned. S09 (case-sensitive repo/url compare) is green: every fixture uses one case. S17 (keep unknown fields from the raw object) is green: no test sends an extra field. S21 (server drops the Array.isArray wire check) is green: only a string subject is tested at the wire.",
+      "impact": "Coverage gap only. A later edit could store client-supplied extra fields in flags.json, refuse a subject whose URL case differs from its repo, or answer an array subject with a different error code, and no test would fail.",
+      "suggested_fix": "organize.test.ts: accept {repo:'org/repo', url:'https://github.com/Org/Repo/pull/1'}; assert setSessionFlags(…,{subject:{…good, extra:'x'}}).subject has no 'extra'. shell-session-organize.test.ts: expect subject: [] → error.code -32602.",
+      "evidence": "S09, S17 and S21 are each GREEN 25/0 on the four named suites. S06, S07, S08, S10, S11, S12, S13 and S14 are RED, so the agreement and refusal clauses themselves are pinned.",
+      "confidence": "high",
+      "dedupe_key": "testing:subject-normalisation-unpinned"
+    },
+    {
+      "id": "TP-R2-008",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "src/commands/issues.ts",
+      "line": null,
+      "quote": "      const page = await listIssuePage(account, request as unknown as ListIssueRequest, cwd);",
+      "problem": "No test drives issuesCommand, so the new cwd plumbing for the repository source is unpinned: S60 (drop cwd) is green. AC13's verify command runs only issues-board.test.ts, which calls listIssuePage directly.",
+      "impact": "Coverage gap only. With cwd dropped, every 'source: repository' request through `keryx issues list`, Desktop's new default, fails with 'configuration:', and every test stays green.",
+      "suggested_fix": "Add an issuesCommand(['list', …], cwd) test inside a withProject repo with a stubbed account that asserts the /repos/{owner}/{repo}/issues request. Or route the CLI through a function the existing suite already calls.",
+      "evidence": "S60 GREEN 25/0. `keryx ctx rg -l \"commands/issues|runIssues|issuesCommand\" src --glob '*.test.ts'` returns 0 files.",
+      "confidence": "high",
+      "dedupe_key": "testing:issues-cli-cwd-unpinned"
+    },
+    {
+      "id": "TP-R2-009",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "src/integrations/issues-board.ts",
+      "line": null,
+      "quote": "  if (!repository) return next.pathname === base.pathname;",
+      "problem": "The pagination path gates are not separated by fixtures. S47 (drop the viewer-source branch, so viewer cursors accept /repositories/N/issues and any case) is green. S46 (case-sensitive repository path compare) is green. S44 (repository not lower-cased in the cursor scope) is green.",
+      "impact": "Coverage gap only. A later edit could let a viewer-scope page follow a repository next link, or refuse a GitHub next link that differs only in case, with no test failing.",
+      "suggested_fix": "A viewer-source page whose link is '<https://api.github.com/repositories/42/issues?page=2>; rel=\"next\"' must throw. A repository page whose next link is /repos/Org/Base/issues?page=2 is followed. A cursor from org/base replayed under remote https://github.com/Org/Base.git is accepted.",
+      "evidence": "S44, S46 and S47 are each GREEN 25/0. S43 (no repository in the scope), S45 (no /repositories/ID allowance) and S52 (repository=false) are RED.",
+      "confidence": "high",
+      "dedupe_key": "testing:issue-pagination-path-gates-unpinned"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "S01", "file": "src/session/organize.ts", "anchor": "  if (kind !== \"pr\" && kind !== \"issue\") return undefined;\n", "replacement": "", "kind": "behavior" },
+    { "id": "S02", "file": "src/session/organize.ts", "anchor": "if (typeof repo !== \"string\" || !REPO_REF.test(repo)) return undefined;", "replacement": "if (typeof repo !== \"string\") return undefined;", "kind": "behavior" },
+    { "id": "S03", "file": "src/session/organize.ts", "anchor": "(?!\\.\\.?$)", "replacement": "", "kind": "behavior" },
+    { "id": "S04", "file": "src/session/organize.ts", "anchor": " || number < 1) return undefined;", "replacement": ") return undefined;", "kind": "behavior" },
+    { "id": "S05", "file": "src/session/organize.ts", "anchor": "!Number.isSafeInteger(number) || ", "replacement": "", "kind": "behavior" },
+    { "id": "S06", "file": "src/session/organize.ts", "anchor": "URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || ", "replacement": "", "kind": "behavior" },
+    { "id": "S07", "file": "src/session/organize.ts", "anchor": "urlRepo.toLowerCase() !== repo.toLowerCase() || ", "replacement": "", "kind": "behavior" },
+    { "id": "S08", "file": "src/session/organize.ts", "anchor": " || Number(urlNumber) !== number) return undefined;", "replacement": ") return undefined;", "kind": "behavior" },
+    { "id": "S09", "file": "src/session/organize.ts", "anchor": "urlRepo.toLowerCase() !== repo.toLowerCase()", "replacement": "urlRepo !== repo", "kind": "behavior" },
+    { "id": "S10", "file": "src/session/organize.ts", "anchor": "  if (repositoryId !== undefined && (typeof repositoryId !== \"string\" || !NODE_ID.test(repositoryId))) return undefined;\n", "replacement": "", "kind": "behavior" },
+    { "id": "S11", "file": "src/session/organize.ts", "anchor": "(typeof repositoryId !== \"string\" || !NODE_ID.test(repositoryId))", "replacement": "typeof repositoryId !== \"string\"", "kind": "behavior" },
+    { "id": "S12", "file": "src/session/organize.ts", "anchor": "const SUBJECT_URL = /^https:", "replacement": "const SUBJECT_URL = /^https?:", "kind": "behavior" },
+    { "id": "S13", "file": "src/session/organize.ts", "anchor": "const subject = parseSessionSubject(raw[\"subject\"]);", "replacement": "const subject = raw[\"subject\"] as SessionSubject | undefined;", "kind": "behavior" },
+    { "id": "S14", "file": "src/session/organize.ts", "anchor": "    const subject = parseSessionSubject(change.subject);\n", "replacement": "    const subject = change.subject as SessionSubject | undefined;\n", "kind": "behavior" },
+    { "id": "S15", "file": "src/session/organize.ts", "anchor": "  if (change.subject === null) delete next.subject;\n", "replacement": "", "kind": "behavior" },
+    { "id": "S16", "file": "src/session/organize.ts", "anchor": "flow: flags.flow, subject: flags.subject };", "replacement": "flow: flags.flow };", "kind": "behavior" },
+    { "id": "S17", "file": "src/session/organize.ts", "anchor": "return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };", "replacement": "return { ...raw, kind, repo, number, url } as SessionSubject;", "kind": "behavior" },
+    { "id": "S20", "file": "src/acp/server.ts", "anchor": "if (subject !== null && (typeof subject !== \"object\" || Array.isArray(subject))) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "S21", "file": "src/acp/server.ts", "anchor": "(typeof subject !== \"object\" || Array.isArray(subject))", "replacement": "typeof subject !== \"object\"", "kind": "behavior" },
+    { "id": "S22", "file": "src/acp/server.ts", "anchor": "      change.subject = subject as Exclude<SessionFlagsChange[\"subject\"], undefined>;\n", "replacement": "", "kind": "behavior" },
+    { "id": "S30", "file": "src/session/issues/issue-session.ts", "anchor": "      bindIssueSubject(dir, issue.ref);\n", "replacement": "", "kind": "behavior" },
+    { "id": "S31", "file": "src/session/issues/issue-session.ts", "anchor": "    ...(ref.repositoryId ? { repositoryId: ref.repositoryId } : {}) });", "replacement": "    });", "kind": "behavior" },
+    { "id": "S32", "file": "src/session/issues/issue-session.ts", "anchor": "    if (!existsSync(dir)) throw new Error(\"The linked session is missing.", "replacement": "    bindIssueSubject(dir, issue.ref);\n    if (!existsSync(dir)) throw new Error(\"The linked session is missing.", "kind": "behavior" },
+    { "id": "S33", "file": "src/session/issues/issue-session.ts", "anchor": "  if (subject !== undefined) updateSessionFlagsAt(dir, { subject });", "replacement": "  updateSessionFlagsAt(dir, { subject: subject ?? null });", "kind": "behavior" },
+    { "id": "S40", "file": "src/integrations/issues-board.ts", "anchor": "!(viewerScopes.includes(source) || source === \"repository\")", "replacement": "!viewerScopes.includes(source)", "kind": "behavior" },
+    { "id": "S41", "file": "src/integrations/issues-board.ts", "anchor": "  if (!cwd) throw new Error(invalidInput);\n", "replacement": "", "kind": "behavior" },
+    { "id": "S42", "file": "src/integrations/issues-board.ts", "anchor": "  if (repository.split(\"/\").some((part) => /^\\.+$/.test(part))) throw new Error(invalidInput);\n", "replacement": "", "kind": "behavior" },
+    { "id": "S43", "file": "src/integrations/issues-board.ts", "anchor": "cursorScope(viewer, \"issues\", base.search, labels, repository.toLowerCase())", "replacement": "cursorScope(viewer, \"issues\", base.search, labels)", "kind": "behavior" },
+    { "id": "S44", "file": "src/integrations/issues-board.ts", "anchor": "labels, repository.toLowerCase())", "replacement": "labels, repository)", "kind": "behavior" },
+    { "id": "S45", "file": "src/integrations/issues-board.ts", "anchor": " ||\n    /^\\/repositories\\/\\d+\\/issues$/.test(next.pathname)", "replacement": "", "kind": "behavior" },
+    { "id": "S46", "file": "src/integrations/issues-board.ts", "anchor": "next.pathname.toLowerCase() === base.pathname.toLowerCase()", "replacement": "next.pathname === base.pathname", "kind": "behavior" },
+    { "id": "S47", "file": "src/integrations/issues-board.ts", "anchor": "  if (!repository) return next.pathname === base.pathname;\n", "replacement": "", "kind": "behavior" },
+    { "id": "S48", "file": "src/integrations/issues-board.ts", "anchor": "...(repository ? {} : { filter: source }),", "replacement": "filter: source,", "kind": "behavior" },
+    { "id": "S49", "file": "src/integrations/issues-board.ts", "anchor": "...(repository ? {} : { pulls: \"false\" }),", "replacement": "pulls: \"false\",", "kind": "behavior" },
+    { "id": "S50", "file": "src/integrations/issues-board.ts", "anchor": "repository.split(\"/\").map(encodeURIComponent).join(\"/\")", "replacement": "repository", "kind": "behavior" },
+    { "id": "S51", "file": "src/integrations/issues-board.ts", "anchor": "selectRepository(await reviewRepositories(cwd))", "replacement": "((await reviewRepositories(cwd))[0] ?? \"\")", "kind": "behavior" },
+    { "id": "S52", "file": "src/integrations/issues-board.ts", "anchor": "pageLink(link, base, repository !== null)", "replacement": "pageLink(link, base, false)", "kind": "behavior" },
+    { "id": "S60", "file": "src/commands/issues.ts", "anchor": "listIssuePage(account, request as unknown as ListIssueRequest, cwd)", "replacement": "listIssuePage(account, request as unknown as ListIssueRequest)", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 0 }
+}
+```

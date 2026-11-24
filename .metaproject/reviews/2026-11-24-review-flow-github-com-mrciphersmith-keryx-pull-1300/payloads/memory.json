@@ -1,0 +1,205 @@
+{
+  "query": "desktop review board pull requests issues session flags subject",
+  "results": [
+    {
+      "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+      "title": "gdctx-flag-allowlist-no-bundle-expansion",
+      "type": "known-mistake",
+      "claimType": "known-mistake",
+      "status": "accepted",
+      "score": 1.535,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set.",
+      "scope": "module:ctx, ripgrep, flag-parsing, entity:buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS",
+      "version": "0.1.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "flow 320 (W7 gdgraph/gdctx correctness)",
+        "link": "docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3)"
+      },
+      "author": "unknown",
+      "confirmedBy": "Reproduced this session via `keryx ctx rg -il \"todo\" src`",
+      "caveat": null
+    },
+    {
+      "path": "known-mistakes/review-ingest-discards-verdicts.md",
+      "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+      "type": "known-mistake",
+      "claimType": "known-mistake",
+      "status": "accepted",
+      "score": 1.508,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.",
+      "scope": "module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate",
+      "version": "0.3.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "manual",
+        "link": "https://github.com/MrCipherSmith/keryx/pull/499"
+      },
+      "author": "MrCipherSmith",
+      "confirmedBy": "flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded",
+      "caveat": "Version 0.2.0 of this entry asserted the opposite — that `review ingest`"
+    },
+    {
+      "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+      "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+      "type": "known-mistake",
+      "claimType": "known-mistake",
+      "status": "accepted",
+      "score": 1.48,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.",
+      "scope": "module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime",
+      "version": "0.1.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "flow 320 (W7 gdgraph/gdctx correctness)",
+        "link": "docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md"
+      },
+      "author": "unknown",
+      "confirmedBy": "Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing",
+      "caveat": null
+    },
+    {
+      "path": "constraints/stale-installed-keryx-binary.md",
+      "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+      "type": "constraint",
+      "claimType": "constraint",
+      "status": "accepted",
+      "score": 1.449,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.",
+      "scope": "module:review, memory, entity:managed-review-package",
+      "version": "0.1.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "fix-round review of PR #220 (flow 133)",
+        "link": "https://github.com/MrCipherSmith/keryx/pull/220"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+      "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+      "type": "lesson",
+      "claimType": "lesson",
+      "status": "accepted",
+      "score": 1.449,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.",
+      "scope": "module:core, entity:project-registry",
+      "version": "0.5.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133)",
+        "link": "https://github.com/MrCipherSmith/keryx/pull/215"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "lessons/theme-switch-repaint.md",
+      "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+      "type": "lesson",
+      "claimType": "lesson",
+      "status": "accepted",
+      "score": 1.427,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.",
+      "scope": "module:src/tui, entity:shell-chrome.ts",
+      "version": "0.2.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "manual",
+        "link": "unknown"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "lessons/allowlist-not-a-boundary.md",
+      "title": "A shell allowlist matched against the raw command string is not a security boundary",
+      "type": "lesson",
+      "claimType": "lesson",
+      "status": "accepted",
+      "score": 1.378,
+      "reason": "matched 1/9 terms; status accepted; confidence high",
+      "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.",
+      "scope": "module:src/lib, src/commands, src/tui, entity:shell-permissions, command-risk, approval gate",
+      "version": "1.0.0",
+      "confidence": "high",
+      "provenance": {
+        "source": "flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/`",
+        "link": "docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+      "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+      "type": "task-note",
+      "claimType": "task-note",
+      "status": "accepted",
+      "score": 1.373,
+      "reason": "matched 2/9 terms; status accepted; confidence medium",
+      "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit.",
+      "scope": "unknown",
+      "version": "0.1.0",
+      "confidence": "medium",
+      "provenance": {
+        "source": "sac-proposal",
+        "link": "./.metaproject/workspaces/workspace-55936fb9858144ec/session-evidence/6728c7b5-7e93-43a6-9ab4-ea0e9720eaf2.wrap-up.md (sha256 7f281c7cb8399293e9c361fcb0a4f19815108e08a6dfda27db1acdbd29e7f52b)"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "task-notes/sac-proposal-7854a304859a4170.md",
+      "title": "SAC: найди все не завершенные flow",
+      "type": "task-note",
+      "claimType": "task-note",
+      "status": "accepted",
+      "score": 1.258,
+      "reason": "matched 1/9 terms; status accepted; confidence medium",
+      "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные.",
+      "scope": "unknown",
+      "version": "0.1.0",
+      "confidence": "medium",
+      "provenance": {
+        "source": "sac-proposal",
+        "link": "./.metaproject/workspaces/workspace-86f1eb7d089b4f1a/session-evidence/b4beb664-6284-457d-bb68-0aaa4a24a760.wrap-up.md (sha256 f64aaf83fbce0bcca89d87b2317bb3278d0fc7a0ec72c6dd11b731ebf4dcef58)"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    },
+    {
+      "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+      "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+      "type": "task-note",
+      "claimType": "task-note",
+      "status": "accepted",
+      "score": 1.258,
+      "reason": "matched 1/9 terms; status accepted; confidence medium",
+      "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task.",
+      "scope": "unknown",
+      "version": "0.1.0",
+      "confidence": "medium",
+      "provenance": {
+        "source": "sac-proposal",
+        "link": "./.metaproject/workspaces/workspace-5c74a3f7b3c7414b/session-evidence/4f3b7eb5-a514-476e-8732-6087df8710d6.wrap-up.md (sha256 a12235fc2638f84f9fc1305cc5fff51a0563003ee785b92a1c81a02c961927a3)"
+      },
+      "author": "unknown",
+      "confirmedBy": "unknown",
+      "caveat": null
+    }
+  ]
+}

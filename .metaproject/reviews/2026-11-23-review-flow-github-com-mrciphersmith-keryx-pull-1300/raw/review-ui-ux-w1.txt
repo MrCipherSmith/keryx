@@ -1,0 +1,127 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Code-mode only: no URL or screenshots were supplied, so nothing was rendered. Every visual claim below is computed from the CSS and markup at head 6a2a3031f, not measured on a render. Surface: Keryx Desktop app screens (Pull requests board and list, Issues board, list and panel, session title bar). Audience: a developer working in their own repository. Primary task on the PR board: find the PRs that need me and start Keryx work on them (review, Flow, session). There is no DESIGN.md (none at the repo root or in apps/desktop). Result: 0 blocker, 0 major, 2 minor, 3 info. Main issues: (1) the global 2px/offset-2px focus ring on the new work-row buttons is mostly clipped by the row's own `overflow: hidden` at 24px height; (2) the review slot gives the states that need the user ('needs your answer', 'publication pending') the same look as passive states. That matters because the diff removed the board's other cues for those states (the attention lane, the 'Action required' badge and the 'Awaiting your answer' reason line), while the tab indicator still counts them. What works: every card and list-row action now has visible text whose accessible name starts with that text (WCAG 2.5.3). The quick filters are real toggle buttons with aria-pressed. 'Group by' is a visible label wrapping its select. The work row is a labelled group, and its menu has a named trigger with aria-haspopup and aria-expanded. Empty slots read as actions (dashed, muted) instead of disappearing. Slop score: 1 (T3 ×1: the generic 'More' label on the session-menu trigger, an owner choice listed in the PR), band 0–3. No T1 or T2 tells on the changed surface. Checks not run (no render): keyboard Tab-through of the work row and the session menu, so the focus-ring clipping is computed, not observed; computed contrast of the muted dashed empty slot (--fg-muted on transparent, at --fs-xs 11px); grayscale read of the quick-filter pressed state; how the session menu is placed; reduced-motion emulation. Screenshots of the PR board at 1440 and 768, with one card in each review state, plus a keyboard pass, would close these. Handed to review-layout, not filed here: at the 230px minimum lane width each slot is about 64px, and at 11px text the labels 'Review · needs your answer', 'Flow #517 · In progress' and 'Open in session' would truncate. The PR names this ('work row in narrow lanes' not checked).",
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }",
+      "problem": "Criterion: WCAG 2.4.7 Focus Visible / 2.4.11 Focus Not Obscured. The work-row buttons (`.pr-work-link`, `.pr-work-more`) rely on the global `:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }` (styles/components.css). Each button is exactly 24px tall inside a 24px row with `overflow: hidden`, so the ring, drawn 2–4px outside the button box, is clipped on top and bottom. On the outer left of the first slot and the outer right of the 'More' button it is also clipped, because those edges coincide with the row's edges. The only part left visible is the 2px vertical slivers inside the 4px (--sp-1) gaps between slots.",
+      "impact": "A keyboard user tabbing the PR board, PR list, Issues board, Issues list or Issue panel gets almost no visible cue for which of 'Run review', 'Create Flow', 'Open in session' or 'More' is focused. The work row is the board's entry point for Keryx work.",
+      "suggested_fix": "Keep the row's `overflow: hidden`, which PrWorkRow.dom.test.tsx asserts and which guarantees the fixed height. Draw the ring inside the buttons instead: `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`. Alternatively, use an inset `box-shadow: inset 0 0 0 2px var(--focus)` with `outline: none` only on those two selectors.",
+      "evidence": "Computed from declared values, not rendered. review.css: `.pr-work-row` height 24px plus overflow hidden; `.pr-work-slot` height 24px; `.pr-work-link, .pr-work-more { height: 24px; ...}`. components.css line 11: `:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; ... }`. tokens.css: `--sp-1: 4px`. The work-row selectors define no other focus rule (searched with `keryx ctx rg --all \"focus-visible|outline\" apps/desktop/src/styles`). Rated minor rather than major because slivers stay visible and the task is still keyboard-reachable. Confirm with a Tab pass on a render.",
+      "confidence": "medium",
+      "dedupe_key": "pr-work-row-focus-clipped",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/PrWorkRow.tsx (PR board cards and list rows, via ReviewResults.tsx)",
+          "apps/desktop/src/issues/IssueWorkRow.tsx (Issue cards, Issue list rows and the Issue panel, via IssuesBoard.tsx workActions; class `pr-work-row issue-work-row`)"
+        ],
+        "enumeration_method": "`keryx ctx rg \"pr-work\" apps/desktop/src --glob '*.css'` finds the rules only in styles/review.css, imported globally in main.tsx. The two components that render `pr-work-row` are the TSX users of the class in the diff: PrWorkRow.tsx and IssueWorkRow.tsx."
+      }
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "<button type=\"button\" className={\"pr-work-link\" + (state ? \"\" : \" is-empty\")} title={reviewTitle} aria-label={reviewText + of}",
+      "problem": "Criterion: Nielsen #1 (visibility of system status), hierarchy. The review slot has two looks: filled or empty. 'Review · needs your answer' and 'Review · publication pending' (keryx is waiting on the user) look the same as 'Review · running', 'Review · ready' or 'Review · stopped': --fs-xs, --accent-text on --bg-sunken. The same diff removed every other board cue for those states: the 'attention' lane, the 'Action required' badge in ReviewTags, and the 'Awaiting your answer' / 'Choose whether to publish on GitHub' reason lines. Meanwhile `needsViewerAttention` still counts `awaitingAnswer` and `publicationPending`, so the Pull requests tab still shows its attention indicator.",
+      "impact": "The tab says something needs the user, but on the board the card that needs them is ordered only by updatedAt in a GitHub-status lane. Its only signal is an 11px chip styled like every other review state, and it may be truncated (see the review-layout handoff in the summary). The user has to scan every card's work row to find the blocked review.",
+      "suggested_fix": "Keep the state in the work row, as AC4 requires, but give its tone the states that wait on the user. For example, add `data-state` (or a `needs-you` class) on the review slot when `awaitingAnswer || publicationPending`, styled with the existing `--warn` / `--warn-soft` pair the removed `.review-publication-pending` badge used, plus an alert icon or leading text so the cue does not rely on color alone. A 'Needs my answer' quick filter would also give these PRs one-click reach.",
+      "evidence": "Diff: ReviewResults.tsx removes `{card.state === \"open\" && card.localReview?.publicationPending && <span className=\"badge review-publication-pending\">Action required</span>}` and the `review-live-state` reason. model.ts removes the `attention` lane and the local-review branches of `laneReason`, but keeps `needsViewerAttention` (it still returns true for `awaitingAnswer` and `publicationPending`), which drives `attentionPrs` and the tab indicator in ReviewBoard.tsx. review.css gives `.pr-work-link` one filled style and `.is-empty` one empty style, with no state variants. AC4 and D6 fix where the state appears (the work row), not how it is styled. The owner-choice list covers the state words only.",
+      "confidence": "high",
+      "dedupe_key": "review-slot-attention-states-undifferentiated"
+    },
+    {
+      "id": "UX-003",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "line": null,
+      "quote": "const flowText = stage === \"none\" ? \"Create Flow\" : `Flow · ${STAGES[stage]}`;",
+      "problem": "Criterion: Nielsen #4 (consistency). The two work rows, presented as 'in the look … of the PR work row', word the Flow slot differently. The PR card says 'Flow #517 · In progress' and uses the Flows board vocabulary through `flowStage` / `STATUS_LABEL`. The Issue card says 'Flow · In progress' with no id and uses the issues `STAGES` vocabulary ('Preparing', 'Needs an answer', 'Done').",
+      "impact": "The same Flow can carry different names and stage words on the two boards. The Issue slot also cannot be matched to the 'Flow #id' link the session title bar shows.",
+      "suggested_fix": "If `IssueSummary.work` carries (or can carry) the flow id, render `Flow #<id> · <stage>` on the Issue slot. Otherwise record the difference as deliberate in the flow journal.",
+      "evidence": "PrWorkRow.tsx: ``const flowText = flow ? `Flow #${flow.id} · ${flowStage(flow)}` : \"Create Flow\";``. IssueWorkRow.tsx as quoted. SessionSubjectLinks.tsx renders `Flow #{flow.id}`. I did not check whether the issue contract can supply an id, so this is filed as info.",
+      "confidence": "medium",
+      "publication": "question"
+    },
+    {
+      "id": "UX-004",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "line": null,
+      "quote": "<td>{r.issue.state}</td><td>{STAGES[r.issue.work?.stage ?? \"none\"]}{r.issue.work?.reason && <small>{r.issue.work.reason}</small>}</td>",
+      "problem": "Criterion: Nielsen #8 (minimalism) and #4 (consistency). In the Issues list, the Keryx stage now shows twice per row: in the 'Keryx stage' column and in the new work row's Flow slot ('Flow · <stage>'), which sits under the 'Actions' header. The PR list instead gives the work row its own 'Keryx work' column.",
+      "impact": "Duplicate stage text in a dense table, and the two lists use different structures for the same work row.",
+      "suggested_fix": "Either drop the 'Keryx stage' column now that the work row carries the stage, or give the Issues list a 'Keryx work' column as the PR list has, and keep 'Actions' for Resume preparation and the Project Status menu.",
+      "evidence": "IssuesBoard.tsx: the list header still has `<th>Keryx stage</th>`, and `workActions(r)` (now IssueWorkRow plus the remaining actions) renders in the `Actions` cell. ReviewResults.tsx adds `<th>Keryx work</th>` as a separate column.",
+      "confidence": "high"
+    },
+    {
+      "id": "UX-005",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "const reviewTitle = state === \"outdated\" ? reviewNote(card) ?? reviewText : canReview ? reviewText : \"Only an open pull request can be reviewed\";",
+      "problem": "Criterion: Nielsen #9/#10 (explain why an action is unavailable). On a merged or closed PR without a local review, 'Run review' is a disabled button. The reason is only in its `title`. A disabled button is not focusable, so keyboard and screen-reader users never get the reason, and pointer users get it only on hover. The disabled 'Run review' itself is an owner choice listed in the PR, so this note concerns only how the reason is delivered.",
+      "impact": "Users of the Merged and Closed lanes see a dimmed 'Run review' (opacity 0.55) with no accessible explanation.",
+      "suggested_fix": "Show the reason as text when the PR is not open: an empty slot reading 'Closed — no review', or `aria-disabled=\"true\"` with the reason in `aria-describedby`, keeping the button focusable. Or hide the review slot's action on Merged and Closed cards, since none can be taken.",
+      "evidence": "PrWorkRow.tsx: `const canReview = !!state || card.state === \"open\";` and `disabled={!canReview}`. The only explanation is in `title`. review.css: `.pr-work-link:disabled { cursor: default; opacity: 0.55; }`. Not observed on a render, so filed as info.",
+      "confidence": "medium",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 3 },
+  "follow_ups": [
+    "review-layout: check the work-row slot truncation at the 230px minimum lane width (about 64px per slot, 11px text; computed, not measured) and in the 16rem 'Keryx work' list column. The PR lists this as unchecked."
+  ]
+}
+```
+
+## Summary
+
+- **Verdict:** DONE. No blocker or major findings.
+- **Context:** Keryx Desktop app screens: the Pull requests board and list, the Issues board, list and panel, and the session title bar. The primary task is to find the PRs that need me and start Keryx work on them.
+- **Mode:** code only. No URL or screenshots were supplied, so nothing was rendered.
+
+**Scores**
+- Slop score is 1, in the 0–3 band. It comes from one T3 tell: the generic "More" label on the session-menu trigger, which the PR lists as an owner choice.
+- WCAG 2.2 AA floor: no failure is proven. One focus-visibility concern (UX-001) is computed from the CSS, not observed.
+- Viewports: not checked.
+
+**Top 3 changes**
+1. Draw the work-row focus ring inside the buttons (`outline-offset: -2px`). Right now the row's `overflow: hidden` clips it to slivers (UX-001).
+2. Give the review slot a warning tone and icon for "needs your answer" and "publication pending", the two states the tab indicator still counts (UX-002).
+3. Use the same Flow slot wording and list structure on Issues and PRs (UX-003, UX-004).
+
+**What works (keep)**
+- Every card and list-row action now has visible text, and each accessible name starts with that text.
+- The quick filters are real `aria-pressed` toggles.
+- "Group by" is a visible label wrapping its select.
+- The work row is a named group, and its menu trigger is labelled.
+- Empty slots show as dashed, muted actions instead of disappearing.
+
+**Checks not run**
+- A Tab pass over the work row and the session menu.
+- Computed contrast of the muted dashed empty slot at 11px.
+- A grayscale read of the pressed quick filters.
+- Where the session menu lands.
+- Reduced-motion emulation.
+- Any check at 1440, 768 or 390 px.
+
+**Handoff:** slot-label truncation in narrow lanes goes to review-layout (see `follow_ups`).

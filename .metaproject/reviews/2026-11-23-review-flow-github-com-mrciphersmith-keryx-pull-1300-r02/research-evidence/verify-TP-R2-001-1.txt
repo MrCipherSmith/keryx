@@ -1,0 +1,12 @@
+# keryx review verify-run
+finding: TP-R2-001
+command: git grep -n setTimeout(resolve, 40) 88e3faba9a1732f45a4ff7200588832e8b83f121 -- apps/desktop/src/test
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-24T05:25:51.242Z
+exit: 0
+
+--- stdout ---
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/test/app-navigation.fixture.tsx:287:  const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/test/app-work-row.fixture.tsx:88:const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+--- stderr ---
+

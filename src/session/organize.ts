@@ -10,6 +10,7 @@ import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from
 import { homedir } from "node:os";
 import path from "node:path";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { type FileLockOptions, withFileLock, withFileLockAsync } from "../lib/file-lock";
 import { sessionLeaseState } from "./lease";
 import { sessionDir } from "./paths";
 import { findSession, shortSessionId } from "./store";
@@ -23,6 +24,19 @@ export interface SessionFlags {
   pinnedAt?: string;
   /** The flow package (its directory name) this session works on; absent when none. */
   flow?: string;
+  /** The GitHub pull request or issue this session works on; absent when none. */
+  subject?: SessionSubject;
+}
+
+/** A GitHub pull request or issue a session is bound to. `url` is its github.com page and agrees with `kind`, `repo` and `number`. */
+export interface SessionSubject {
+  kind: "pr" | "issue";
+  /** `owner/name`, as GitHub spells it. */
+  repo: string;
+  number: number;
+  url: string;
+  /** GitHub's node id of the repository, when the binder knows it. */
+  repositoryId?: string;
 }
 
 export interface SessionFlagsChange {
@@ -30,10 +44,18 @@ export interface SessionFlagsChange {
   pinned?: boolean;
   /** A flow package directory name to link, or null to unlink. */
   flow?: string | null;
+  /** A subject to bind, or null to unbind. Refused unless it passes `parseSessionSubject`. */
+  subject?: SessionSubject | null;
 }
 
 /** A flow package directory name as keryx writes them (`<id>-<date>-<slug>`): no path, no shell metacharacters. */
 export const FLOW_REF = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/;
+
+/** GitHub's owner (login) and repository-name charsets; `.` and `..` are not names. */
+const REPO_REF = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/(?!\.\.?$)([A-Za-z0-9._-]{1,100})$/;
+const SUBJECT_URL = /^https:\/\/github\.com\/([^/?#]+\/[^/?#]+)\/(pull|issues)\/([1-9][0-9]{0,9})$/;
+const NODE_ID = /^[A-Za-z0-9_=-]{1,200}$/;
+const URL_KIND = { pull: "pr", issues: "issue" } as const;
 
 const FLAGS_FILE = "flags.json";
 
@@ -41,48 +63,225 @@ function isIso(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
-/** The flags of the session stored in `dir`; an absent or unreadable file reads as none. */
-export function readSessionFlags(dir: string): SessionFlags {
+/**
+ * A subject from untrusted JSON, or undefined when it is not one: kind `pr` or
+ * `issue`, `owner/name` repo, positive integer number, and a
+ * `https://github.com/<repo>/pull|issues/<number>` url that agrees with all
+ * three (the repo compared without case, as GitHub does).
+ */
+export function parseSessionSubject(value: unknown): SessionSubject | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const { kind, repo, number, url, repositoryId } = raw;
+  if (kind !== "pr" && kind !== "issue") return undefined;
+  if (typeof repo !== "string" || !REPO_REF.test(repo)) return undefined;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) return undefined;
+  if (typeof url !== "string") return undefined;
+  const match = SUBJECT_URL.exec(url);
+  if (match === null) return undefined;
+  const [, urlRepo = "", urlKind = "", urlNumber = ""] = match;
+  if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || urlRepo.toLowerCase() !== repo.toLowerCase() || Number(urlNumber) !== number) return undefined;
+  if (repositoryId !== undefined && (typeof repositoryId !== "string" || !NODE_ID.test(repositoryId))) return undefined;
+  return { kind, repo, number, url, ...(repositoryId !== undefined ? { repositoryId } : {}) };
+}
+
+/**
+ * flags.json as stored: the public flags, plus whether the person unlinked the
+ * subject (`subjectUnlinked`), which only the store reads. The marker lets a
+ * binder backfill a missing subject without writing back one the person removed.
+ */
+interface StoredFlags {
+  flags: SessionFlags;
+  subjectUnlinked: boolean;
+}
+
+function readStoredFlags(dir: string): StoredFlags {
   const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
   const read = readConfigFile(path.join(dir, FLAGS_FILE));
-  if (!read.ok) return origin;
+  if (!read.ok) return { flags: origin, subjectUnlinked: false };
   try {
     const raw = JSON.parse(read.text) as Record<string, unknown>;
-    return {
+    const subject = parseSessionSubject(raw["subject"]);
+    const flags: SessionFlags = {
       ...origin,
       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
+      ...(subject !== undefined ? { subject } : {}),
     };
+    return { flags, subjectUnlinked: subject === undefined && raw["subjectUnlinked"] === true };
   } catch {
-    return origin;
+    return { flags: origin, subjectUnlinked: false };
   }
 }
 
-function writeFlags(dir: string, flags: SessionFlags): void {
-  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify({ archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow }, null, 2)}\n`);
+/** The flags of the session stored in `dir`; an absent or unreadable file reads as none, an invalid subject as absent. */
+export function readSessionFlags(dir: string): SessionFlags {
+  return readStoredFlags(dir).flags;
 }
 
-/** The project root and directory of a stored session, by its exact id. */
-function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
-  const summary = findSession(cwd, sessionId, dataDir);
-  if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
-  return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+function writeFlags(dir: string, { flags, subjectUnlinked }: StoredFlags): void {
+  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject,
+    ...(subjectUnlinked && flags.subject === undefined ? { subjectUnlinked: true } : {}) };
+  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(stored, null, 2)}\n`);
+}
+
+/** How long a flags writer waits for another, and when a lock is taken as abandoned. */
+export interface FlagsLockTiming {
+  timeoutMs: number;
+  staleMs: number;
+}
+
+/** The production timing: the critical section is one small file. Tests pass their own. */
+export const FLAGS_LOCK_TIMING: Readonly<FlagsLockTiming> = { timeoutMs: 3_000, staleMs: 2_000 };
+
+/** Injection points of a flags write; production callers pass none. */
+export interface FlagsWriteOptions {
+  /** The clock that stamps archivedAt and pinnedAt. */
+  now?: (() => Date) | undefined;
+  /** {@link FLAGS_LOCK_TIMING} by default. */
+  timing?: FlagsLockTiming | undefined;
+}
+
+const lockedError = (dir: string) => new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);
+const goneError = (dir: string) => new Error(`no session ${path.basename(dir)} in this project`);
+
+function lockOptions(timing: FlagsLockTiming): FileLockOptions {
+  // The session directory is never created by taking its lock: a session moved
+  // to the trash since it was located must stay gone, not come back as a stub.
+  return { timeoutMs: timing.timeoutMs, staleMs: timing.staleMs, createDir: false };
+}
+
+/** Runs `apply` only while the session is still stored: its directory and summary.json are there. */
+function whileStored<T>(dir: string, apply: () => T): T {
+  if (!existsSync(path.join(dir, "summary.json"))) throw goneError(dir);
+  return apply();
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
 /**
- * Archives or unarchives, pins or unpins a session. A flag already in the
- * asked state keeps its original time. Returns the flags as stored.
+ * How a failure to take the flags lock is reported, one rule for the
+ * synchronous and the asynchronous wait: the session directory gone is
+ * "no session"; anything else is rethrown as it is.
  */
-export function setSessionFlags(
-  cwd: string,
-  sessionId: string,
-  change: SessionFlagsChange,
-  dataDir?: string,
-  now: () => Date = () => new Date(),
-): SessionFlags {
-  const { dir } = locate(cwd, sessionId, dataDir);
-  const current = readSessionFlags(dir);
+function flagsLockFailure(dir: string, error: unknown): never {
+  if (isMissing(error) && !existsSync(dir)) throw goneError(dir);
+  throw error;
+}
+
+/** The section's value, or "retry" when the lock was not taken in time. */
+function heldValue<T>(dir: string, held: { value: T } | null): T {
+  if (held === null) throw lockedError(dir);
+  return held.value;
+}
+
+const flagsLockPath = (dir: string): string => path.join(dir, `${FLAGS_FILE}.lock`);
+
+/**
+ * Runs a read-modify-write of flags.json holding `<dir>/flags.json.lock`, so
+ * that writers in other keryx processes (one ACP server per Desktop window, the
+ * issue-workspace child) cannot lose each other's change. Synchronous, for
+ * synchronous callers; a server uses {@link withFlagsLockAsync}.
+ */
+function withFlagsLock<T>(dir: string, apply: () => T, timing: FlagsLockTiming): T {
+  let held: { value: T } | null;
+  try {
+    held = withFileLock(flagsLockPath(dir), () => ({ value: whileStored(dir, apply) }), lockOptions(timing));
+  } catch (error) {
+    flagsLockFailure(dir, error);
+  }
+  return heldValue(dir, held);
+}
+
+/** Per session directory: settles when the last asynchronous flags write this process queued for it has settled. */
+const flagsQueues = new Map<string, Promise<void>>();
+
+/**
+ * Runs `write` after every asynchronous flags write queued before it for the
+ * same session directory. Each write otherwise waits for another process's
+ * lock on its own retry timer, and the first timer to fire after the release
+ * wins, which can store an earlier change (pin) over a later one (unpin).
+ */
+function inArrivalOrder<T>(dir: string, write: () => Promise<T>): Promise<T> {
+  const key = path.resolve(dir);
+  const result = (flagsQueues.get(key) ?? Promise.resolve()).then(write);
+  const settled = result.then(() => undefined, () => undefined);
+  flagsQueues.set(key, settled);
+  void settled.then(() => {
+    if (flagsQueues.get(key) === settled) flagsQueues.delete(key);
+  });
+  return result;
+}
+
+/**
+ * {@link withFlagsLock} waiting without blocking the event loop, and after
+ * this process's earlier asynchronous writes to the same session.
+ */
+function withFlagsLockAsync<T>(dir: string, apply: () => T, timing: FlagsLockTiming): Promise<T> {
+  return inArrivalOrder(dir, async () => {
+    let held: { value: T } | null;
+    try {
+      held = await withFileLockAsync(flagsLockPath(dir), () => ({ value: whileStored(dir, apply) }), lockOptions(timing));
+    } catch (error) {
+      flagsLockFailure(dir, error);
+    }
+    return heldValue(dir, held);
+  });
+}
+
+/** The one rule for "no backfill needed", used without the lock and again inside it. */
+function subjectSettled({ flags, subjectUnlinked }: StoredFlags): boolean {
+  return flags.subject !== undefined || subjectUnlinked;
+}
+
+/**
+ * Whether the session's subject needs no backfill: one is stored, or the
+ * person unlinked it. Read without the lock (a writer replaces flags.json
+ * atomically), so a binder can skip taking it on every open.
+ */
+export function sessionSubjectSettled(dir: string): boolean {
+  return subjectSettled(readStoredFlags(dir));
+}
+
+/**
+ * Writes `subject` as the session's subject when it has none and the person
+ * has not unlinked one. Returns whether it wrote. For a binder that learns the
+ * subject after the session was bound (a binding made before subjects existed).
+ */
+export function backfillSessionSubject(dir: string, subject: SessionSubject, options: Pick<FlagsWriteOptions, "timing"> = {}): boolean {
+  const parsed = parseSessionSubject(subject);
+  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);
+  return withFlagsLock(dir, () => {
+    const current = readStoredFlags(dir);
+    if (subjectSettled(current)) return false;
+    writeFlags(dir, { flags: { ...current.flags, subject: parsed }, subjectUnlinked: false });
+    return true;
+  }, options.timing ?? FLAGS_LOCK_TIMING);
+}
+
+/**
+ * Applies a change to the flags stored in `dir` and returns them as stored.
+ * For a caller that already holds the session directory, such as a binder
+ * that has just created the session and cannot look it up yet.
+ */
+export function updateSessionFlagsAt(dir: string, change: SessionFlagsChange, options: FlagsWriteOptions = {}): SessionFlags {
+  return withFlagsLock(dir, () => applyFlagsChange(dir, change, options.now ?? (() => new Date())), options.timing ?? FLAGS_LOCK_TIMING);
+}
+
+/**
+ * {@link updateSessionFlagsAt} waiting for the lock without blocking the event
+ * loop. This process's asynchronous writes to one session apply in the order
+ * they were called.
+ */
+export function updateSessionFlagsAtAsync(dir: string, change: SessionFlagsChange, options: FlagsWriteOptions = {}): Promise<SessionFlags> {
+  return withFlagsLockAsync(dir, () => applyFlagsChange(dir, change, options.now ?? (() => new Date())), options.timing ?? FLAGS_LOCK_TIMING);
+}
+
+function applyFlagsChange(dir: string, change: SessionFlagsChange, now: () => Date): SessionFlags {
+  const { flags: current, subjectUnlinked } = readStoredFlags(dir);
   const stamp = now().toISOString();
   const next: SessionFlags = { ...current };
   if (change.archived === true) next.archivedAt ??= stamp;
@@ -94,8 +293,54 @@ export function setSessionFlags(
     next.flow = change.flow;
   }
   if (change.flow === null) delete next.flow;
-  writeFlags(dir, next);
+  if (change.subject !== undefined && change.subject !== null) {
+    const subject = parseSessionSubject(change.subject);
+    if (subject === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(change.subject).slice(0, 300)}`);
+    next.subject = subject;
+  }
+  if (change.subject === null) delete next.subject;
+  const unlinked = change.subject === null ? true : change.subject !== undefined ? false : subjectUnlinked;
+  writeFlags(dir, { flags: next, subjectUnlinked: unlinked });
   return next;
+}
+
+/** The project root and directory of a stored session, by its exact id. */
+function locate(cwd: string, sessionId: string, dataDir?: string): { projectPath: string; dir: string } {
+  const summary = findSession(cwd, sessionId, dataDir);
+  if (summary === undefined || summary.id !== sessionId) throw new Error(`no session ${sessionId} in this project`);
+  return { projectPath: summary.projectPath, dir: sessionDir(summary.projectPath, sessionId, dataDir) };
+}
+
+/**
+ * Archives or unarchives, pins or unpins a session, links or unlinks its flow
+ * and subject. A flag already in the asked state keeps its original time.
+ * Returns the flags as stored.
+ */
+export function setSessionFlags(
+  cwd: string,
+  sessionId: string,
+  change: SessionFlagsChange,
+  dataDir?: string,
+  options: FlagsWriteOptions = {},
+): SessionFlags {
+  const { dir } = locate(cwd, sessionId, dataDir);
+  return updateSessionFlagsAt(dir, change, options);
+}
+
+/**
+ * {@link setSessionFlags} for a long-lived server: waiting for another
+ * writer's lock yields to the event loop instead of freezing it, and two
+ * changes to one session apply in the order they were called.
+ */
+export async function setSessionFlagsAsync(
+  cwd: string,
+  sessionId: string,
+  change: SessionFlagsChange,
+  dataDir?: string,
+  options: FlagsWriteOptions = {},
+): Promise<SessionFlags> {
+  const { dir } = locate(cwd, sessionId, dataDir);
+  return updateSessionFlagsAtAsync(dir, change, options);
 }
 
 export interface TrashOptions {

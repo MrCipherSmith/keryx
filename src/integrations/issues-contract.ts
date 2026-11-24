@@ -18,6 +18,46 @@ export interface IssueViewer {
 
 export type IssueScope = "assigned" | "created" | "mentioned" | "subscribed";
 
+/** What `keryx issues list` reads: a viewer scope, or the GitHub repository of the project's cwd. */
+export type IssueListSource = IssueScope | "repository";
+
+/**
+ * The reasons `keryx issues list` gives when the project repository source cannot be read in this
+ * project (as opposed to a transient failure). One fragment per producer; tests on the producing side
+ * assert each real message still contains its fragment, so a reworded message fails there, not silently
+ * in Desktop.
+ */
+export const REPOSITORY_UNAVAILABLE_REASONS = [
+  // src/review/board-github.ts reviewRepositories: the folder is not a Git checkout (or git failed).
+  "Open a Git project with a GitHub.com remote",
+  // src/review/board-github.ts selectRepository: a Git project with no github.com fetch remote.
+  "has no GitHub.com fetch remote",
+  // src/integrations/issues-board.ts: a remote whose owner or name is "." or "..".
+  "names no usable repository",
+  // src/integrations/issues-board.ts: GitHub answered 410 for the repository's issues.
+  "has Issues turned off for",
+] as const;
+
+/** A keryx older than the "repository" source refuses it with this reason on the first page. */
+export const OLDER_KERYX_REASON = "Invalid Issues request";
+
+/**
+ * Why the project repository source cannot be read here: "unavailable" for one of
+ * REPOSITORY_UNAVAILABLE_REASONS, "older" for a keryx that does not know the source (first page only).
+ * Null for any other error, which keeps Retry: a stale cursor or a lost connection is no reason to
+ * switch sources.
+ */
+export function repositoryUnavailable(reason: string, firstPage: boolean): "unavailable" | "older" | null {
+  if (REPOSITORY_UNAVAILABLE_REASONS.some((fragment) => reason.includes(fragment))) return "unavailable";
+  if (firstPage && reason.includes(OLDER_KERYX_REASON)) return "older";
+  return null;
+}
+
+/** The CLI prefixes its reasons with a category ("configuration: …"); people see the reason alone. */
+export function displayReason(reason: string): string {
+  return reason.replace(/^(?:[a-z][a-z_-]*):\s*/i, "");
+}
+
 export interface IssueLocalStage {
   stage: "none" | "preparing" | "active" | "needs_answer" | "done";
   reason?: string;

@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "517",
+  "dispatch_id": "517-T9",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "Issues board GitHub grouping, repository default, work row",
+    "description": "Plan slice 5 (R3, D5). apps/desktop/src/issues/model.ts: groupForRow without a GitHub Project groups by GitHub state (open, closed); the Closed lane is drawn only when filters.state is closed or all; GitHub Project grouping is unchanged. Remove the Flow stage filter (Filters.stage, IssueFilters control, readPreferences key, active-filter chips); stored preferences with a stage key are ignored. SOURCES gains repository: \"Project repository\" (use IssueListSource from src/integrations/issues-contract.ts, committed in T6; the backend lists /repos/{owner}/{repo}/issues of the project repo for source \"repository\"); default source becomes repository when nothing is stored; a stored source preference wins; the other sources stay selectable. Work row on each issue card and list row (reuse the look of apps/desktop/src/review/PrWorkRow.tsx from T8 where sensible, same fixed height) with two slots: Flow (issue.work stage != none: link \"Flow · <stage label>\" -> open-flow action; none: \"Create Flow\" -> prepare-flow; keep Resume preparation) and session (sessions whose sessionFlags(s).subject is kind issue with this repo+number via sameSubject, non-archived; \"Session\"/\"<n> sessions\" opens via the existing open-session action (it reuses the bound session); none: \"Open in session\"). The board needs the project sessions: pass state.sessions from App.tsx through IssuesView to IssuesBoard as a prop (default empty). Every action keeps visible text (T8 already made card buttons textual; keep that). Tests: model tests for grouping by state and hidden Closed lane, stage filter gone; IssuesBoard DOM tests: issues without Flow spread over Open/Closed, Flow stage shown as a link not a column, default source repository, stored preference wins, work row slots and labels, session slot counts sessions with matching subject. Run cd apps/desktop && bunx tsc --noEmit && bun test src (full suite; the App fixture in src/test is shared).",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); \"Fix review comments\" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]",
+    "AC11: Issues board default grouping is by GitHub state (Open · Closed, Closed drawn only when the state filter includes closed issues); GitHub Project grouping is unchanged; the Flow stage filter is gone; issues without a Flow are spread over the GitHub columns (R3, spec AC12) [verify: exec `cd apps/desktop && bun test src/issues`]",
+    "AC12: Each Issue card has a work row with a Flow slot (link with stage, or \"Create Flow\") and a session slot (bound sessions found through `subject`, or \"Open in session\") [verify: exec `cd apps/desktop && bun test src/issues`]",
+    "AC13: The default Issues source is the project repository: `keryx issues list` with `source: \"repository\"` lists `/repos/{owner}/{repo}/issues` of the repository resolved from the project cwd and excludes pull requests; \"Assigned to me\" and the other sources stay selectable and a stored source preference wins (D5) [verify: exec `bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues`]"
+  ],
+  "context_refs": [
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T9.implement.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "apps/desktop/src/issues/model.ts",
+    "apps/desktop/src/issues/IssuesBoard.tsx",
+    "apps/desktop/src/issues/IssueFilters.tsx",
+    "apps/desktop/src/issues/IssuesView.tsx",
+    "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+    "apps/desktop/src/issues/IssuesBoard.css",
+    "apps/desktop/src/App.tsx",
+    "apps/desktop/src/review/PrWorkRow.tsx",
+    "apps/desktop/src/acp/types.ts",
+    "src/integrations/issues-contract.ts"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T9.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1. Before the first write run `cd /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1 && pwd && git branch --show-current`; run every git command as `git -C /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "Other workers edit other files of this checkout at the same time: touch only files in your task's area, never revert or reformat files you did not change.",
+    "No Rust changes (apps/desktop/src-tauri): no local toolchain."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-11-23T20:20:06.181Z",
+    "created_by": "flow-orchestrator"
+  }
+}

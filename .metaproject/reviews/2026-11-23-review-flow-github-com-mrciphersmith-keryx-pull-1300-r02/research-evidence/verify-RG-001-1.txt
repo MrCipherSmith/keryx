@@ -1,0 +1,29 @@
+# keryx review verify-run
+finding: RG-001
+command: sh -c git show b147408a8748cdbd8506b371adb5957947e4477a:src/integrations/issues-board.ts | sed -n 94,106p; echo ---; git grep -n DEFAULT_SOURCE 88e3faba9a1732f45a4ff7200588832e8b83f121 -- apps/desktop/src/issues
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-24T05:25:51.041Z
+exit: 0
+
+--- stdout ---
+function listUrl(request: ListIssueRequest) {
+  const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
+  if (
+    !["assigned", "created", "mentioned", "subscribed"].includes(source) ||
+    !["open", "closed", "all"].includes(state) ||
+    !["asc", "desc"].includes(sort) ||
+    !Array.isArray(labels) ||
+    labels.some((l) => typeof l !== "string" || l.length > 100) ||
+    (updatedSince !== undefined &&
+      (typeof updatedSince !== "string" || !Number.isFinite(Date.parse(updatedSince))))
+  )
+    throw new Error(invalidInput);
+  const url = new URL("/issues", API);
+---
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/issues/IssuesBoard.tsx:10:import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, readPreferences, SOURCES, STAGES, visibleRows,
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/issues/IssuesBoard.tsx:64:    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/issues/model.test.ts:4:import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSessions, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/issues/model.test.ts:42:    expect(DEFAULT_SOURCE).toBe("repository");
+88e3faba9a1732f45a4ff7200588832e8b83f121:apps/desktop/src/issues/model.ts:15:export const DEFAULT_SOURCE: IssueSource = "repository";
+--- stderr ---
+

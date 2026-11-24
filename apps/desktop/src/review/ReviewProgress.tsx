@@ -63,15 +63,31 @@ function runProgress(state: DeskRunState, progress?: Roster) {
   return { percent: null, label: "Progress unavailable" };
 }
 
+/** What a progress caption says, in order: wave, percent, the run state when it is not implied, then the label. */
+interface ProgressParts { wave: string; percent: string; state: string; label: string; value: number | null }
+
+/** The one rule for a progress caption, shared by `ReviewProgress` and `reviewProgressText`. */
+function progressParts(state: DeskRunState, progress: Roster | undefined, showState: boolean): ProgressParts {
+  const { percent, label } = runProgress(state, progress);
+  return {
+    wave: progress?.wave != null ? `Wave ${progress.wave}` : "",
+    percent: percent != null ? `${percent}%` : "",
+    state: showState && !["running", "queued", "completed"].includes(state) ? RUN_STATE_LABEL[state] : "",
+    label,
+    value: percent,
+  };
+}
+
 export function ReviewProgress({ progress, state, showState }: {
   progress?: Roster; state: DeskRunState; showState?: boolean;
 }) {
-  const { percent, label } = runProgress(state, progress);
+  const parts = progressParts(state, progress, !!showState);
+  const { value: percent, label } = parts;
   return <span className="review-progress">
     <span className="review-progress-caption">
-      {progress?.wave != null && <span className="review-wave">Wave {progress.wave}</span>}
-      {percent != null && <strong>{percent}%</strong>}
-      <span>{showState && !["running", "queued", "completed"].includes(state) && RUN_STATE_LABEL[state] + " · "}{label}</span>
+      {parts.wave && <span className="review-wave">{parts.wave}</span>}
+      {parts.percent && <strong>{parts.percent}</strong>}
+      <span>{parts.state && parts.state + " · "}{label}</span>
     </span>
     {percent != null && <span role="progressbar" aria-label="Review progress" aria-valuetext={`${percent}% · ${label}`}
       aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="review-progress-track">
@@ -80,12 +96,16 @@ export function ReviewProgress({ progress, state, showState }: {
   </span>;
 }
 
-export function CardReviewProgress({ badge }: { badge: ReviewCard["localReview"] }) {
-  if (badge?.runState === "other-revision") return <span className="review-progress-caption">Reviewing an earlier revision</span>;
+/**
+ * A card's local review progress as one line ("Wave 2 · 27% · 1 of 4 assignments completed"), for the title
+ * of the work row's review slot: AC4 keeps Keryx review state out of the card body, and the row's fixed
+ * height leaves no room for a progress block. The same parts as the `ReviewProgress` caption, with the state
+ * shown. Null when the card has no run to report on.
+ */
+export function reviewProgressText(badge: ReviewCard["localReview"]): string | null {
+  if (badge?.runState === "other-revision") return "Reviewing an earlier revision";
   const state = badge?.runState ?? (badge?.active ? "running" : undefined);
-  if (!state) return null;
-  return <>
-    {(!badge?.awaitingAnswer || badge.progress) && <ReviewProgress state={state} progress={badge?.progress} showState />}
-    {state === "running" && !badge?.awaitingAnswer && <TranscriptUpdate at={badge?.lastActivityAt} />}
-  </>;
+  if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;
+  const { wave, percent, state: shown, label } = progressParts(state, badge?.progress, true);
+  return [wave, percent, shown, label].filter(Boolean).join(" · ");
 }

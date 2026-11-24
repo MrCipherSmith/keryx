@@ -1,0 +1,238 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices: round 2, wave 1 (slice-01), PR #1300 at 88e3faba9
+
+## Prior findings (fix commit a34d8961b)
+
+| id | claim | check run | disposition |
+|---|---|---|---|
+| TP-001 | fixed | M38, M39, M40 and M42 are each RED on `src/shell/ProjectNavigation.dom.test.tsx` (3 pass / 1 fail), on the new AC9/AC12 App fixture `src/test/app-work-row.fixture.tsx` | closed |
+| TP-002 | fixed | M23 RED: 577 pass / 1 fail ("a newer bind for the same session decides…") | closed |
+| TP-003 | fixed | M19 RED: 164 pass / 1 fail ("a subject keryx already stored wins…") | closed |
+| TP-004 | unreported | slice-01 still has `resolved/T10.test.json` naming `"apps/desktop/src/ProjectNavigation.dom.test.tsx"`. The file is at `src/shell/`. | open |
+| TP-005 | unreported | The journal T17 entry now records M19/M23/M38/M39/M40/M42 as red. AC1/AC2/AC3/AC16 mutation evidence is still not recorded, and `evidenceRefs` is `[]` for every task in flow.json (slice-01). | open |
+
+## Mutation pass
+
+Scratch worktree at 88e3faba9 (`bun install --frozen-lockfile` at the root and in apps/desktop). Baseline `bun test src` was 1034 pass / 0 fail. Each mutant was applied with a single-anchor text replace (anchor count checked to be 1), run on its nearest suite, then restored. Every survivor was re-run on the full Desktop `bun test src`. The scratch worktree was removed afterwards. I used a local runner instead of `keryx review mutate` because that command writes into the package's research-evidence/, and this brief allowed writes only to P/raw.
+
+| id | mutation | suite | result |
+|---|---|---|---|
+| M19 | withPendingSubjects: drop `|| sessionFlags(s).subject` | src/review | RED 1 fail |
+| M23 | PendingSubjects.apply: drop superseded-bind guard | src/review src/session src/shell | RED 1 fail |
+| M38 | App createPrFlow: drop `flowLinks.expect` | ProjectNavigation | RED 1 fail |
+| M39 | App createPrFlow: prefillExisting `true`→`false` | ProjectNavigation | RED 1 fail |
+| M40 | App usePendingFlowLinks callback skips `s.linkFlow` | ProjectNavigation | RED 1 fail |
+| M42 | App IssuesView `sessions={[]}` | ProjectNavigation | RED 1 fail |
+| R2-01 | resolveFlowLinks: drop the expiry filter | src/review | RED 2 fail |
+| R2-02 | expiry `>` → `>=` | src/review | RED 1 fail |
+| R2-03 | drop `!sessionFlow(...)` | src/review | RED 2 fail |
+| R2-04 | drop the `claimed` filter | src/review | RED 2 fail (GREEN on the App fixture alone) |
+| R2-05 | early return `live.some` → `live.every` | full src | **GREEN 1034/0** |
+| R2-06 | drop the single-request gate (`only = live[0]`) | src/review | RED 2 fail |
+| R2-07 | drop `fresh.length === 1` | src/review; App fixture | RED 2 fail; RED on App fixture |
+| R2-08 | final return keeps `pending: live` | src/review | RED 5 fail |
+| R2-09 | hook: drop `claimed.current.add(dir)` | src/review | RED 1 fail (GREEN on the App fixture alone) |
+| R2-10 | hook effect: `now` → 0 | src/review | RED 1 fail |
+| R2-11 | hook expect: `expiresAt = +Infinity` | src/review | RED 1 fail |
+| R2-12 | hook known(): ignore `loaded` | src/review | RED 1 fail |
+| R2-13 | hook: drop `useMemo` api identity | src/review | RED 1 fail |
+| R2-14 | hook: drop `listed.current = …` refresh | src/review + ProjectNavigation | RED 2 fail |
+| R2-15 | subjectOpener: drop `if (running) return running` | src/review | RED 1 fail |
+| R2-16 | subjectOpener: drop `.finally(delete)` | src/review + ProjectNavigation | RED 1 fail (AC16 App) |
+| R2-17 | App: a fresh `subjectOpener()` per call (in-flight dedupe defeated) | full src | **GREEN 1034/0** |
+| R2-18 | ReviewBoard: drop `onFocusHandled?.(focus.nonce)` | src/review | RED 1 fail |
+| R2-19 | ReviewBoard: drop the focus repo check | src/review | RED 1 fail |
+| R2-20 | ReviewBoard: repo compare case-sensitive | src/review | RED 1 fail |
+| R2-21 | ReviewBoard: drop `focused.current === focus.nonce ||` | full src | **GREEN 1034/0** |
+| R2-22 | App reviewFocusHandled never clears (`void nonce`) | full src | **GREEN 1034/0** |
+| R2-23 | App header focus nonce constant `1` | full src | **GREEN 1034/0** |
+| R2-24 | App header focus `repo: ""` | src/shell | RED 1 fail (AC16 App) |
+| R2-25 | App: `onFocusHandled` not passed to ReviewBoard | full src | **GREEN 1034/0** |
+| R2-26 | App openPrSession: Flow lookup ignores bound sessions (`prFlows(card, flows, [])`) | full src | **GREEN 1034/0** |
+| R2-27 | prFlowIndex: drop `found.add(flow)` (bound-session Flows) | src/review | RED 3 fail |
+| R2-28 | prUrlKey: case-sensitive | src/review | RED 1 fail |
+| R2-29 | prFlowIndex: `byDir` last-wins instead of first-wins | full src | GREEN 1034/0. Likely equivalent: Flow dirs are directory names, so they are unique in one list. Not reported. |
+| R2-30 | ReviewBoard panelFlow ignores bound sessions | src/review | RED 1 fail |
+| R2-31 | warn tone: drop `publicationPending` | src/review | RED 1 fail |
+| R2-32 | warn tone class never applied | src/review | RED 1 fail |
+| R2-33 | reviewProgressText: drop the `awaitingAnswer && !progress` null | full src | **GREEN 1034/0** |
+| R2-34 | reviewProgressText: always append the run-state label | full src | **GREEN 1034/0** (presentation) |
+| R2-35 | reviewProgressText: drop the other-revision line | src/review | RED 1 fail |
+| R2-36 | boundSessionIndex: keep archived sessions | src/review src/issues | RED 2 fail |
+| R2-37 | boundSessionIndex: no newest-first sort | src/review src/issues | RED 2 fail |
+| R2-38 | subjectKey: case-sensitive repo | src/review src/issues | RED 2 fail |
+
+Summary: 45 mutants were run (the 6 prior ones plus 39 on fix-round gates). 35 are red and 10 survive the full suite; one survivor (R2-29) is likely equivalent. Not reached: the other 39 round-1 candidates in the round-1 mutants.json. The brief did not ask for them and the code they target was not edited by a34d8961b. The main session can run them from that spec.
+
+Red on parent: I restored the 11 production files a34d8961b changed (a34d8961b~1) and kept the new tests. `bun test src` then gave 1003 pass / 13 fail. Every new test in PrWorkRow.dom, ReviewBoard.dom (2 edited), usePendingFlowLinks.dom (4 new) and IssuesBoard.dom (css) fails, and prWork.test.ts fails to load (new exports). The new App AC9/AC12 test passes on the parent, which is expected. TP-001 was missing coverage of behaviour that already existed, and that test is shown red by M38/M39/M40/M42.
+
+## Findings
+
+### [TP-R2-001] App fixtures synchronise on a fixed 40 ms delay
+- Severity: major, from tdd-workflow.mdc Review severities: "Sleep or fixed delay for async work (Rule 6) | always | major".
+- File: apps/desktop/src/test/app-work-row.fixture.tsx (added by a34d8961b). Sibling: apps/desktop/src/test/app-navigation.fixture.tsx, added in this PR by 21030edf0 (not on base b147408a8).
+- Problem: `settle()` waits a fixed 40 ms inside act. It is the only thing that orders the asserts after `session/new`, the flow-list refresh on `focus` and the `_keryx/session_flags` write. `packagesAppear` uses two settles. Afterwards the asserts check `flagWrites`, the composer value, and the negatives "Nothing more is linked" and `slot(13, "flow") === "Create Flow"`.
+- Why it matters: on a loaded CI runner the refresh can land after 80 ms. The positive asserts then fail at random. The negative asserts after `packagesAppear("507-a", "508-b")` pass whether or not the refreshed list was ever seen. Locally R2-07 is red on this fixture, so the path does run here, but nothing in the fixture proves that it ran.
+- Fix: replace `settle` with a `waitFor(predicate, deadline)` like the composer-ready loop already in the file. Wait for `flagWrites.some(w => w.flow)` or for the slot text. For the "two link none" case, first wait for a positive artifact that the new list arrived, for example a `flows_list` call count after the focus event or the Flows tab showing 507/508, and only then assert that nothing was written.
+
+### [TP-R2-002] App-level wiring added by the fix round is unpinned
+- Severity: minor (a gate the diff added survives with the suite green).
+- File: apps/desktop/src/App.tsx
+- Problem: five App sites the fix round added for HL-002, DG-002/FE-001/LG-003 and AR-001 each survive the full Desktop suite (1034/0):
+  - R2-17: a fresh `subjectOpener()` per call. The in-flight dedupe is gone at App level, and only the prWork unit test pins it.
+  - R2-22: `reviewFocusHandled` never clears the focus.
+  - R2-23: the header focus nonce is constant, so after the first use a second header click on the same board never opens the panel, because `focused.current` already equals 1.
+  - R2-25: `onFocusHandled` is not passed to ReviewBoard.
+  - R2-26: `openPrSession` ignores the Flow found through a bound session (the accepted behaviour change "new PR sessions also link a Flow found via a bound session").
+  The focus fix is tested only through a test-local Host in PrWorkRow.dom.test.tsx that does its own clearing, so the App's copy of that logic is not exercised.
+- Fix: in app-work-row.fixture.tsx (or app-navigation.fixture.tsx), click the session header's PR link twice and assert the panel opens both times. Then switch the board repository and back, and assert no replay. Press "Open in session" twice before `session/new` answers and assert one `session/new`. Give a bound session a Flow, then press "New session" and assert a `workOnFlow` with that dir.
+
+### [TP-R2-003] Two board/link gates have no separating fixture
+- Severity: minor.
+- File: apps/desktop/src/review/ReviewBoard.tsx (and prWork.ts resolveFlowLinks).
+- Problem:
+  - R2-21: deleting the per-nonce ref guard is green, because the only focus test clears the focus through `onFocusHandled`. No fixture refreshes a snapshot after the panel closes while the same focus is still set, which is the case the guard exists for when no owner clears.
+  - R2-05: `live.some` → `live.every` is green, because every multi-request fixture gives both entries the same `knownDirs`. The separating input is reachable: s1 takes known() before package B appears, s2 takes it after, then both expect.
+- Fix: add a ReviewBoard test with a fixed `focus` and no `onFocusHandled` that closes the panel, triggers a refresh and asserts the panel stays closed. Add a resolveFlowLinks case `[entry("s1", ["1-a"]), entry("s2", ["1-a", "2-b"])]` with dirs `["1-a", "2-b"]` that asserts `{ pending: [], links: [] }`.
+
+### [TP-R2-004] reviewProgressText's two suppression branches are unpinned
+- Severity: minor (presentation: the review slot's title).
+- File: apps/desktop/src/review/ReviewProgress.tsx
+- Problem:
+  - R2-33: dropping `(badge?.awaitingAnswer && !badge.progress)` is green.
+  - R2-34: always appending `RUN_STATE_LABEL[state]` is green.
+  The AC4 and warn-tone tests assert only `toContain` on titles, or the class. No test pins the exact title for an awaiting-answer card without progress, or for a running card.
+- Fix: assert the exact `title` for a running card with progress ("Review · running — Wave 2 · …", with no "Running" label) and for an awaiting-answer card without progress (no progress suffix).
+
+Severity counts: 0 blocker, 1 major, 3 minor, 0 info.
+
+Routing audit: graph_used: no (not-relevant: the fix-commit file list came from git, and the sites were enumerated with keryx ctx rg); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/run); raw_rg_used: no. The raw git diff/show/blame calls were marked keryx:raw because exact hunks were needed to build anchors.
+
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "TP-001, TP-002 and TP-003 are closed: M19, M23, M38, M39, M40 and M42 are all red. TP-004 and TP-005 are still open. Mutation pass over the fix-round gates: 45 run, 35 red, 10 green on the full suite (1 likely equivalent). New findings: the App fixtures wait on a fixed 40 ms delay (major); App-level focus and opener wiring is unpinned; two board/link gates and the review-slot title branches have no separating fixture.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "TP-R2-001",
+      "severity": "major",
+      "reviewer": "review-testing-practices",
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "line": null,
+      "quote": "const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });",
+      "problem": "The App fixtures order their asserts after session/new, the flow-list refresh on window focus and the _keryx/session_flags write with a fixed 40 ms delay (settle, twice in packagesAppear), not by waiting on a state. tdd-workflow.mdc Rule 6.",
+      "impact": "On a loaded CI runner the refresh can land after the delay. The positive asserts (flagWrites, composer value, the 'Flow #506' slot) then fail at random. The negative asserts after packagesAppear('507-a','508-b') ('Nothing more is linked', slot(13) 'Create Flow') pass without proving the refreshed list was seen. R2-07 is red on this fixture locally, so the path ran here, but nothing in the fixture proves it.",
+      "suggested_fix": "Replace settle with waitFor(predicate, deadline), the same shape as the composer-ready loop in the file. Wait for flagWrites.some(w => w.flow) or for the slot text. For the 'two link none' case, first wait for a positive artifact that the new list arrived (a flows_list call count after the focus event, or 507/508 visible on the Flows tab), then assert that nothing was written. Do the same in app-navigation.fixture.tsx.",
+      "evidence": "app-work-row.fixture.tsx (added in a34d8961b) defines settle as a fixed 40 ms setTimeout and uses it at every async step. app-navigation.fixture.tsx has the same definition, added in this PR by 21030edf0, which is not an ancestor of base b147408a8 (git merge-base --is-ancestor exit 1). The rule table in tdd-workflow.mdc rates 'Sleep or fixed delay for async work' as major, always. No reason for the delay is given in either file. The composer-ready loop in both files polls a state with a deadline, so it is not part of this finding.",
+      "confidence": "high",
+      "dedupe_key": "testing:app-fixtures-fixed-delay-settle",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/test/app-work-row.fixture.tsx: const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });",
+          "apps/desktop/src/test/app-navigation.fixture.tsx: const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });"
+        ],
+        "enumeration_method": "keryx ctx rg --all --json 'setTimeout\\(resolve, [0-9]+\\)' apps/desktop/src: the two 40 ms settle definitions are the fixed-delay waits added by this PR. The two 10 ms hits in the same fixtures are poll loops with a deadline on composer readiness (a wait on state). ReviewBoard.dom.test.tsx:633 and Composer.dom.test.tsx:351 are outside the changed gates of this round. The blame of the app-navigation settle line is 21030edf0, which is not on base."
+      }
+    },
+    {
+      "id": "TP-R2-002",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": "const openSubject = useMemo(() => subjectOpener(), []);",
+      "problem": "The App-level halves of the fix-round gates are unpinned. Each of these survives the full Desktop suite (1034 pass / 0 fail): R2-17 (a fresh subjectOpener per call, so the in-flight dedupe is gone), R2-22 (reviewFocusHandled never clears), R2-23 (header focus nonce constant 1), R2-25 (onFocusHandled not passed to ReviewBoard), R2-26 (openPrSession's Flow lookup ignores bound sessions).",
+      "impact": "The code is correct today. The HL-002, DG-002/FE-001/LG-003 and AR-001 fixes are pinned only at unit and component level, the focus fix through a test-local Host that does its own clearing. A later edit to App.tsx that re-opens those defects stays green. Under R2-23, for example, a second header click never opens the panel.",
+      "suggested_fix": "In app-work-row.fixture.tsx (or app-navigation.fixture.tsx): click the session header's PR link twice and assert the panel opens both times; switch the board repository and back and assert no replay; press 'Open in session' twice before session/new answers and assert one session/new; give a bound session a Flow and press 'New session', then assert workOnFlow with that dir. Then re-run R2-17, R2-22, R2-23, R2-25 and R2-26.",
+      "evidence": "Scratch worktree at 88e3faba9, full Desktop bun test src: R2-17 GREEN 1034/0, R2-22 GREEN 1034/0, R2-23 GREEN 1034/0, R2-25 GREEN 1034/0, R2-26 GREEN 1034/0. Over the same area, R2-24 (focus repo '') is RED on the AC16 App test, and R2-18/R2-19/R2-20 are RED on the PrWorkRow.dom focus test, so the board half is pinned.",
+      "confidence": "high",
+      "dedupe_key": "testing:fix-round-app-wiring-unpinned"
+    },
+    {
+      "id": "TP-R2-003",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()",
+      "problem": "Two gates added in a34d8961b have no fixture that separates them. R2-21 (delete `focused.current === focus.nonce ||`) is green because the only focus test clears focus via onFocusHandled. R2-05 (resolveFlowLinks `if (!live.some(entry => freshFor(entry).length))` → `live.every`) is green because every multi-request fixture gives both entries the same knownDirs.",
+      "impact": "Coverage gap only. Both separating inputs are reachable: a board whose owner does not clear focus gets a snapshot refresh after the panel closes; s1 takes known() before package B appears, s2 after, then both expect.",
+      "suggested_fix": "ReviewBoard test with a fixed focus and no onFocusHandled: open, close, refresh, assert the panel stays closed. prWork test: resolveFlowLinks([entry('s1',['1-a']), entry('s2',['1-a','2-b'])], ['1-a','2-b'], noFlow, new Set(), 0) equals { pending: [], links: [] }.",
+      "evidence": "R2-21 GREEN 1034/0 and R2-05 GREEN 1034/0 on full bun test src. Neighbouring gates in the same expressions are red: R2-19, R2-20, R2-06, R2-07 and R2-08.",
+      "confidence": "high",
+      "dedupe_key": "testing:focus-ref-guard-and-flowlink-some-unpinned"
+    },
+    {
+      "id": "TP-R2-004",
+      "severity": "minor",
+      "reviewer": "review-testing-practices",
+      "file": "apps/desktop/src/review/ReviewProgress.tsx",
+      "line": null,
+      "quote": "if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;",
+      "problem": "The two suppression branches of the new reviewProgressText (the LG-001 fix moved progress into the slot title) are unpinned. R2-33 (drop the awaitingAnswer-without-progress null) and R2-34 (always append RUN_STATE_LABEL) are green.",
+      "impact": "Presentation only: the review slot's title could gain a duplicate 'Running' label or a progress line for a review that waits on an answer, and no test would notice.",
+      "suggested_fix": "Assert the exact title of the review slot for a running card with progress (no 'Running' label) and for an awaiting-answer card without progress (no progress suffix), in PrWorkRow.dom.test.tsx.",
+      "evidence": "R2-33 GREEN 1034/0 and R2-34 GREEN 1034/0 on full bun test src. The AC4 and warn-tone tests use toContain on titles or check the class only. R2-35 (drop the other-revision line) is RED.",
+      "confidence": "high",
+      "dedupe_key": "testing:review-progress-text-branches-unpinned"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "TP-001", "disposition": "closed" },
+    { "id": "TP-002", "disposition": "closed" },
+    { "id": "TP-003", "disposition": "closed" },
+    { "id": "TP-004", "disposition": "open" },
+    { "id": "TP-005", "disposition": "open" }
+  ],
+  "mutant_candidates": [
+    { "id": "M19", "file": "apps/desktop/src/review/prWork.ts", "anchor": "if (!subject || sessionFlags(s).subject) return s;", "replacement": "if (!subject) return s;", "kind": "behavior" },
+    { "id": "M23", "file": "apps/desktop/src/session/subjectBinding.ts", "anchor": "    if (this.pending.get(sessionId) !== subject) return;\n", "replacement": "", "kind": "behavior" },
+    { "id": "M38", "file": "apps/desktop/src/App.tsx", "anchor": "if (id) flowLinks.expect(id, known);", "replacement": "void known;", "kind": "behavior" },
+    { "id": "M39", "file": "apps/desktop/src/App.tsx", "anchor": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), true)", "replacement": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), false)", "kind": "behavior" },
+    { "id": "M40", "file": "apps/desktop/src/App.tsx", "anchor": "(id, dir) => void s.linkFlow(id, dir)", "replacement": "(id, dir) => void [id, dir]", "kind": "behavior" },
+    { "id": "M42", "file": "apps/desktop/src/App.tsx", "anchor": "          sessions={state.sessions}\n", "replacement": "          sessions={[]}\n", "kind": "behavior" },
+    { "id": "R2-01", "file": "apps/desktop/src/review/prWork.ts", "anchor": "pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId))", "replacement": "pending.filter(entry => !sessionFlow(entry.sessionId))", "kind": "behavior" },
+    { "id": "R2-02", "file": "apps/desktop/src/review/prWork.ts", "anchor": "entry.expiresAt > now &&", "replacement": "entry.expiresAt >= now &&", "kind": "behavior" },
+    { "id": "R2-03", "file": "apps/desktop/src/review/prWork.ts", "anchor": "entry.expiresAt > now && !sessionFlow(entry.sessionId)", "replacement": "entry.expiresAt > now", "kind": "behavior" },
+    { "id": "R2-04", "file": "apps/desktop/src/review/prWork.ts", "anchor": "[...new Set(dirs)].filter(dir => !claimed.has(dir))", "replacement": "[...new Set(dirs)]", "kind": "behavior" },
+    { "id": "R2-05", "file": "apps/desktop/src/review/prWork.ts", "anchor": "if (!live.some(entry => freshFor(entry).length))", "replacement": "if (!live.every(entry => freshFor(entry).length))", "kind": "behavior" },
+    { "id": "R2-06", "file": "apps/desktop/src/review/prWork.ts", "anchor": "const only = live.length === 1 ? live[0] : undefined;", "replacement": "const only = live[0];", "kind": "behavior" },
+    { "id": "R2-07", "file": "apps/desktop/src/review/prWork.ts", "anchor": "only && fresh.length === 1 && fresh[0]", "replacement": "only && fresh[0]", "kind": "behavior" },
+    { "id": "R2-08", "file": "apps/desktop/src/review/prWork.ts", "anchor": "  return { pending: [], links: only &&", "replacement": "  return { pending: live, links: only &&", "kind": "behavior" },
+    { "id": "R2-09", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "      claimed.current.add(dir);\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-10", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "claimed.current, nowRef.current())", "replacement": "claimed.current, 0)", "kind": "behavior" },
+    { "id": "R2-11", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "const expiresAt = nowRef.current() + FLOW_LINK_WINDOW_MS;", "replacement": "const expiresAt = Number.POSITIVE_INFINITY;", "kind": "behavior" },
+    { "id": "R2-12", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "listed.current.loaded ? new Set(listed.current.flows.map(flow => flow.dir)) : null", "replacement": "new Set(listed.current.flows.map(flow => flow.dir))", "kind": "behavior" },
+    { "id": "R2-13", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "return useMemo(() => ({ known, expect }), [known, expect]);", "replacement": "return { known, expect };", "kind": "behavior" },
+    { "id": "R2-14", "file": "apps/desktop/src/review/usePendingFlowLinks.ts", "anchor": "  listed.current = { flows, loaded };\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-15", "file": "apps/desktop/src/review/prWork.ts", "anchor": "    if (running) return running;\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-16", "file": "apps/desktop/src/review/prWork.ts", "anchor": "openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key))", "replacement": "openSubjectSession(deps, subject, target, prompt, prefillExisting)", "kind": "behavior" },
+    { "id": "R2-17", "file": "apps/desktop/src/App.tsx", "anchor": "const openSubject = useMemo(() => subjectOpener(), []);", "replacement": "const openSubject: ReturnType<typeof subjectOpener> = (...args) => subjectOpener()(...args);", "kind": "behavior" },
+    { "id": "R2-18", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "    onFocusHandled?.(focus.nonce);\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-19", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "!snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()", "replacement": "!snapshot", "kind": "behavior" },
+    { "id": "R2-20", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()", "replacement": "snapshot.repo !== focus.repo", "kind": "behavior" },
+    { "id": "R2-21", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "focused.current === focus.nonce ||", "replacement": "", "kind": "behavior" },
+    { "id": "R2-22", "file": "apps/desktop/src/App.tsx", "anchor": "setReviewFocus(old => old?.nonce === nonce ? null : old)", "replacement": "void nonce", "kind": "behavior" },
+    { "id": "R2-23", "file": "apps/desktop/src/App.tsx", "anchor": "setReviewFocus({ repo: subject.repo, number: subject.number, nonce: ++focusNonce.current });", "replacement": "setReviewFocus({ repo: subject.repo, number: subject.number, nonce: 1 });", "kind": "behavior" },
+    { "id": "R2-24", "file": "apps/desktop/src/App.tsx", "anchor": "setReviewFocus({ repo: subject.repo,", "replacement": "setReviewFocus({ repo: \"\",", "kind": "behavior" },
+    { "id": "R2-25", "file": "apps/desktop/src/App.tsx", "anchor": "sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}", "replacement": "sessions={subjectSessions} focus={reviewFocus}", "kind": "behavior" },
+    { "id": "R2-26", "file": "apps/desktop/src/App.tsx", "anchor": "prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0]", "replacement": "prFlows(card, flowCards.current, [])[0]", "kind": "behavior" },
+    { "id": "R2-27", "file": "apps/desktop/src/review/prWork.ts", "anchor": "      if (flow) found.add(flow);\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-28", "file": "apps/desktop/src/review/prWork.ts", "anchor": "const prUrlKey = (url: string) => url.replace(/\\/$/, \"\").toLowerCase();", "replacement": "const prUrlKey = (url: string) => url.replace(/\\/$/, \"\");", "kind": "behavior" },
+    { "id": "R2-29", "file": "apps/desktop/src/review/prWork.ts", "anchor": "if (!byDir.has(flow.dir)) byDir.set(flow.dir, flow);", "replacement": "byDir.set(flow.dir, flow);", "kind": "behavior" },
+    { "id": "R2-30", "file": "apps/desktop/src/review/ReviewBoard.tsx", "anchor": "index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0]", "replacement": "index.flows(item, [])[0]", "kind": "behavior" },
+    { "id": "R2-31", "file": "apps/desktop/src/review/PrWorkRow.tsx", "anchor": "card.localReview?.awaitingAnswer || card.localReview?.publicationPending", "replacement": "card.localReview?.awaitingAnswer", "kind": "behavior" },
+    { "id": "R2-32", "file": "apps/desktop/src/review/PrWorkRow.tsx", "anchor": "(waitsOnViewer ? \" is-attention\" : \"\")", "replacement": "\"\"", "kind": "presentation" },
+    { "id": "R2-33", "file": "apps/desktop/src/review/ReviewProgress.tsx", "anchor": "if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;", "replacement": "if (!state) return null;", "kind": "presentation" },
+    { "id": "R2-34", "file": "apps/desktop/src/review/ReviewProgress.tsx", "anchor": "[\"running\", \"queued\", \"completed\"].includes(state) ? \"\" : RUN_STATE_LABEL[state]", "replacement": "RUN_STATE_LABEL[state]", "kind": "presentation" },
+    { "id": "R2-35", "file": "apps/desktop/src/review/ReviewProgress.tsx", "anchor": "if (badge?.runState === \"other-revision\") return \"Reviewing an earlier revision\";", "replacement": "", "kind": "presentation" },
+    { "id": "R2-36", "file": "apps/desktop/src/acp/types.ts", "anchor": "    if (flags.archivedAt !== undefined || !flags.subject) continue;\n", "replacement": "    if (!flags.subject) continue;\n", "kind": "behavior" },
+    { "id": "R2-37", "file": "apps/desktop/src/acp/types.ts", "anchor": "  for (const group of groups.values()) group.sort(newestBoundFirst);\n", "replacement": "", "kind": "behavior" },
+    { "id": "R2-38", "file": "apps/desktop/src/acp/types.ts", "anchor": "return `${subject.kind}/${subject.repo.toLowerCase()}/${subject.number}`;", "replacement": "return `${subject.kind}/${subject.repo}/${subject.number}`;", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 0 }
+}
+```

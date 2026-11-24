@@ -1,0 +1,63 @@
+STATUS: DONE
+
+## Performance Review (round 3, wave 2, fix range)
+
+### Scope
+- Branch `feat/desktop-review-v2-stage1`, range 88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058, mode explicit-hash-range (diff mode).
+- slice-02 read in full (2103 lines): IssuesBoard.dom.test.tsx, PrWorkRow.dom.test.tsx, ReviewBoard.dom.test.tsx, prWork.test.ts, usePendingFlowLinks.dom.test.tsx, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx, app-work-row.fixture.tsx, docs/docs/cli-reference.md, docs/docs/guides/desktop-issues.md, implementation-plan.md, src/acp/shell-session-organize.test.ts, src/commands/issues.test.ts, src/commands/issues.ts, src/integrations/issues-board.test.ts, src/integrations/issues-board.ts, src/integrations/issues-github.ts.
+- PF-R3-001 (sync flags lock on the ACP thread) was filed in wave 1 and is not re-filed.
+- Test evidence: verify-tests-to-run-2.txt is green (desktop 1051 pass; file-lock/searchable-sources 6 pass). verify-tests-to-run-1.txt exits 1 on one test outside this slice ("every source file can be found by a text search", 5004 ms, a timeout), which passes in run 2.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None new.
+
+### Cost checks on slice-02 production code (no finding)
+- **issues-board.ts listIssuePage loop**: at most `REPOSITORY_PAGES = 3` serial REST reads per request, only for `source: "repository"` and only while every page so far held only pull requests. Each read needs the previous page's Link header, so the pages cannot run in parallel. The GraphQL `nodes(ids)` hydration runs once, after the loop, on the final page only. The worst case is 3 REST calls + 1 GraphQL per load or "Load more", triggered by the user. The new test ("a repository page made only of pull requests ... stops after three pages") pins the bound at 3 per request (`endless` = [1,2,3] then [4,5,6]).
+- **turnPage**: `pageKeys.includes` runs per query parameter of a short continuation string. Negligible.
+- **issuePage / failure()**: the 410 mapping is one status check per response. No added cost.
+- **commands/issues.ts**: the injectable `connect` parameter has no runtime cost. `issue-workspace` stays a lazy import.
+
+### Test and fixture code (not a hot path)
+- app-work-row.fixture.tsx and app-navigation.fixture.tsx replace fixed 40 ms `settle()` sleeps with `waitFor` polling (10 ms tick, 2 s deadline). This is test-only code, it waits less in the common case, and it is less flaky. The fixtures do more steps now, and `packagesAppear` goes through Flows and back, but they still run inside the `execFileSync` 8 s timeout. Run 2 passes the desktop suite in 11 s in total.
+- The IssuesBoard AC12 test counts `_meta` getter reads per session: 5 sessions are read, each fewer times than the 12 rows. It is a regression guard for PF-003 (one index, not one scan per row).
+
+### Clean Areas
+- CLI/TUI hot paths: nothing per keystroke or per frame in slice-02's production code. Command startup is unchanged.
+- N+1 / indexes: n/a (no DB). The GitHub calls are bounded, see above.
+- React re-renders: no component code in slice-02. The ReviewBoard test asserts that `badgesEqual` ignores `lastActivityAt` (DG-007 guard).
+- Memory, bundle imports, sync blocking, pagination, redundant calls: nothing new in slice-02.
+
+### Prior dispositions (performance-relevant, touched by slice-02)
+- PF-003 closed: the AC12 test in IssuesBoard.dom.test.tsx proves the board reads bound sessions from one index, not once per row.
+- PF-006 open (deferred): the per-page `nodes(ids)` hydration for the repository source is unchanged in issues-board.ts. The new loop does not multiply it, because the hydration runs after the loop on one page.
+- HW2-002 open (deferred): the hydration is the same as in PF-006. The pull-request-only-page half is mitigated by the 3-page loop. A repository made mostly of pull requests can still return an empty page with a next cursor, which the test shows on purpose.
+- DG-007 closed (also confirmed in wave 1): there is now a test for it in ReviewBoard.dom.test.tsx.
+- Not disposed by this lens (testing, logic, UX, docs or contract concerns, owned by their lenses): TP-R2-006, TP-R2-008, TP-R2-009, DG-009, LG-013, UX-008, LG-009, LG-011, LG-015, HL-001, TP-R2-001, TP-R2-003, TP-R2-005, PC-001, LG-010.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-performance",
+    "slices": ["slice-02"],
+    "summary": "Round-3 fix range, slice-02 (tests, fixtures, docs, issues backend): no performance regression and no new finding. The repository-source loop is bounded at 3 serial REST pages per user-triggered request and hydrates one page. The fixtures replace fixed sleeps with bounded polling. PF-003 now has a regression test. PF-006/HW2-002 stay deferred and unchanged.",
+    "findings": [],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+    "prior_dispositions": [
+      { "id": "PF-003", "disposition": "closed" },
+      { "id": "PF-006", "disposition": "open" },
+      { "id": "HW2-002", "disposition": "open" },
+      { "id": "DG-007", "disposition": "closed" }
+    ],
+    "follow_ups": [
+      "PF-006/HW2-002 remain deferred: the repository source could build the repository identity from projectRepository instead of a GraphQL nodes(ids) call per page.",
+      "Prior findings in slice-02 not disposed by this lens (owned by testing/logic/UX/contract lenses): TP-R2-001, TP-R2-003, TP-R2-005, TP-R2-006, TP-R2-008, TP-R2-009, DG-009, LG-009, LG-010, LG-011, LG-013, LG-015, HL-001, PC-001, UX-008."
+    ]
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: a bounded slice review whose payload supplies the diff), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx read/rg on the slice and evidence), raw_rg_used: no. The metaproject index was read. Not verified: no timings were run (exec_budget_s 0). The costs are reasoned from the code and the test call counts.

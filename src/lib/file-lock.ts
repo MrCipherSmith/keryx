@@ -43,92 +43,102 @@ function sleepSync(ms: number): void {
   }
 }
 
-/**
- * Run `fn` while holding an exclusive lock at `lockPath`.
- *
- * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
- * killed mid-write must not wedge every future write.
- *
- * Returns `null` when the lock could not be taken, which callers surface as a
- * write failure rather than a throw. `waitingMessage` is emitted once through
- * `onWaiting` when the wait becomes long enough to look like a hang.
- */
-export function withFileLock<T>(
-  lockPath: string,
-  fn: () => T,
-  options: {
-    onWaiting?: ((message: string) => void) | undefined;
-    waitingMessage?: string;
-    /** Override {@link LOCK_TIMEOUT_MS} — a caller on an interactive path must not wait 15s. */
-    timeoutMs?: number;
-    /** Override {@link LOCK_STALE_MS} — a short critical section can call its lock abandoned sooner. */
-    staleMs?: number;
-  } = {},
-): T | null {
-  try {
-    mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-  } catch {
-    return null;
-  }
+export interface FileLockOptions {
+  onWaiting?: ((message: string) => void) | undefined;
+  waitingMessage?: string;
+  /** Override {@link LOCK_TIMEOUT_MS} — a caller on an interactive path must not wait 15s. */
+  timeoutMs?: number;
+  /** Override {@link LOCK_STALE_MS} — a short critical section can call its lock abandoned sooner. */
+  staleMs?: number;
+  /**
+   * `false`: the lock's directory must already exist and is never created. A
+   * missing directory throws its ENOENT at once instead of being waited out —
+   * for a lock inside a directory another process may delete (a session moved
+   * to the trash), which taking the lock must not bring back. Default `true`.
+   */
+  createDir?: boolean;
+}
 
+/**
+ * One attempt to take the lock at a time, shared by the synchronous and the
+ * asynchronous waits so both keep the same rules: exclusive create, a nonce,
+ * the deadline checked before the stale branch, and stale takeover.
+ */
+class LockAttempt {
   // A nonce identifies THIS holder. Without it, a holder whose critical section
   // ran past the stale threshold has its lock broken by someone else and then
   // deletes the new holder's lock in its own `finally` — letting a third caller
   // in while the second is still inside, which is the lost update the lock
   // exists to prevent.
-  const nonce = randomUUID();
-  const started = Date.now();
-  const deadline = started + (options.timeoutMs ?? LOCK_TIMEOUT_MS);
-  const staleMs = options.staleMs ?? LOCK_STALE_MS;
-  let handle: number | null = null;
-  let announced = false;
+  private readonly nonce = randomUUID();
+  private readonly started = Date.now();
+  private readonly deadline: number;
+  private readonly staleMs: number;
+  private announced = false;
 
-  while (handle === null) {
+  constructor(private readonly lockPath: string, private readonly options: FileLockOptions) {
+    this.deadline = this.started + (options.timeoutMs ?? LOCK_TIMEOUT_MS);
+    this.staleMs = options.staleMs ?? LOCK_STALE_MS;
+  }
+
+  /**
+   * Creates the lock's directory unless `createDir` is false; false when it
+   * cannot be made. With `createDir: false` it does not look: a missing
+   * directory surfaces as ENOENT from the first {@link step}.
+   */
+  prepare(): boolean {
+    if (this.options.createDir === false) return true;
+    try {
+      mkdirSync(path.dirname(this.lockPath), { recursive: true, mode: 0o700 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The held lock's handle, `null` to pause and retry, or `"timeout"`. */
+  step(): number | null | "timeout" {
     // The deadline is checked FIRST, before the stale branch. Checking it only
     // in the contended branch meant an unremovable stale lock (read-only or
     // root-owned config dir) spun forever at full CPU instead of degrading to a
     // reported write failure.
-    if (Date.now() > deadline) {
-      return null;
-    }
+    if (Date.now() > this.deadline) return "timeout";
+    let handle: number | null = null;
     try {
-      handle = openSync(lockPath, "wx", 0o600);
-      try {
-        writeFileSync(handle, nonce, { encoding: "utf8" });
-      } catch (cause) {
-        // The open succeeded but the nonce did not land. Leaving `handle` set
-        // would run the critical section holding a lock whose contents can never
-        // match, so the finally would decline to remove it and every other
-        // caller would wait out the stale window. Drop it and retry cleanly.
+      handle = openSync(this.lockPath, "wx", 0o600);
+      writeFileSync(handle, this.nonce, { encoding: "utf8" });
+      return handle;
+    } catch (error) {
+      if (handle !== null) {
+        // The open succeeded but the nonce did not land. Holding it would run the
+        // critical section holding a lock whose contents can never match, so the
+        // release would decline to remove it and every other caller would wait
+        // out the stale window. Drop it and retry cleanly.
         closeSync(handle);
-        handle = null;
-        rmSync(lockPath, { force: true });
-        throw cause;
+        rmSync(this.lockPath, { force: true });
       }
-    } catch {
-      const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
-      if (age !== undefined && Date.now() - age > staleMs) {
-        try {
-          rmSync(lockPath, { force: true });
-        } catch {
-          // Someone else broke it first, or we cannot remove it at all; either
-          // way sleep and retry until the deadline rather than spinning.
-        }
-      }
-      // A crashed holder costs the next caller the full stale window, and an
-      // unwritable config dir costs the whole timeout. Silence for that long
-      // reads as a hang, so say what is happening once.
-      if (!announced && Date.now() - started > 1_000) {
-        announced = true;
-        options.onWaiting?.(options.waitingMessage ?? "waiting for a keryx config lock…");
-      }
-      sleepSync(15);
+      if (this.options.createDir === false && (error as NodeJS.ErrnoException).code === "ENOENT") throw error;
     }
+    const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;
+    if (age !== undefined && Date.now() - age > this.staleMs) {
+      try {
+        rmSync(this.lockPath, { force: true });
+      } catch {
+        // Someone else broke it first, or we cannot remove it at all; either
+        // way pause and retry until the deadline rather than spinning.
+      }
+    }
+    // A crashed holder costs the next caller the full stale window, and an
+    // unwritable config dir costs the whole timeout. Silence for that long
+    // reads as a hang, so say what is happening once.
+    if (!this.announced && Date.now() - this.started > 1_000) {
+      this.announced = true;
+      this.options.onWaiting?.(this.options.waitingMessage ?? "waiting for a keryx config lock…");
+    }
+    return null;
   }
 
-  try {
-    return fn();
-  } finally {
+  release(handle: number): void {
     try {
       closeSync(handle);
     } catch {
@@ -137,11 +147,68 @@ export function withFileLock<T>(
     // Only remove the lock if it is still OURS. If it was broken as stale and
     // retaken, the file now holds someone else's nonce and must be left alone.
     try {
-      if (readFileSync(lockPath, "utf8") === nonce) {
-        rmSync(lockPath, { force: true });
+      if (readFileSync(this.lockPath, "utf8") === this.nonce) {
+        rmSync(this.lockPath, { force: true });
       }
     } catch {
       // Gone already, or unreadable; a leftover goes stale and is broken above.
     }
+  }
+}
+
+/** Pause between attempts on a contended lock. */
+export const LOCK_RETRY_MS = 15;
+
+/**
+ * Run `fn` while holding an exclusive lock at `lockPath`.
+ *
+ * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
+ * killed mid-write must not wedge every future write.
+ *
+ * Returns `null` when the lock could not be taken in time (or, by default, its
+ * directory could not be created), which callers surface as a write failure
+ * rather than a throw. With `createDir: false` a missing directory is not
+ * waited out: its ENOENT is thrown at once. `waitingMessage` is emitted once
+ * through `onWaiting` when the wait becomes long enough to look like a hang.
+ *
+ * The wait blocks the thread; a long-lived server with other work on its event
+ * loop uses {@link withFileLockAsync}, which takes the same lock.
+ */
+export function withFileLock<T>(lockPath: string, fn: () => T, options: FileLockOptions = {}): T | null {
+  const attempt = new LockAttempt(lockPath, options);
+  if (!attempt.prepare()) return null;
+  let handle = attempt.step();
+  while (handle === null) {
+    sleepSync(LOCK_RETRY_MS);
+    handle = attempt.step();
+  }
+  if (handle === "timeout") return null;
+  try {
+    return fn();
+  } finally {
+    attempt.release(handle);
+  }
+}
+
+/**
+ * {@link withFileLock} with a wait that yields to the event loop between
+ * attempts. The lock file, nonce, stale rule and timeout are the same, so a
+ * synchronous holder in another process excludes this one and the reverse.
+ * Resolves `null` when the lock could not be taken, and rejects with ENOENT
+ * for a missing directory under `createDir: false`, as withFileLock throws it.
+ */
+export async function withFileLockAsync<T>(lockPath: string, fn: () => T | Promise<T>, options: FileLockOptions = {}): Promise<T | null> {
+  const attempt = new LockAttempt(lockPath, options);
+  if (!attempt.prepare()) return null;
+  let handle = attempt.step();
+  while (handle === null) {
+    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+    handle = attempt.step();
+  }
+  if (handle === "timeout") return null;
+  try {
+    return await fn();
+  } finally {
+    attempt.release(handle);
   }
 }

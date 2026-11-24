@@ -1,0 +1,155 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 4, wave 2. I read slice-02 (fix range d7b0f7058..4cb6c43ef) in full. For this wave I looked at the test-quality questions wave 1 left open: whether fixtures are realistic against their producers, the review.css test, waits in the App fixtures, and whether the App fixtures (run through ProjectNavigation.dom.test.tsx) pin the UX-010 refused-Link path and the PC-004 first-turn path. I did not re-run wave 1's 50 mutants or re-file TP-R4-001..005.
+
+## Mutation pass (executed)
+
+All runs were in a scratch git worktree at 4cb6c43ef, under the session scratchpad, with `bun install --frozen-lockfile`. The worktree was removed afterwards. Each mutant was one exact-string replacement, run against the nearest suite, then restored. I did not use `keryx review mutate`, because it writes to research-evidence/, and this dispatch allows writes only to P/raw/.
+
+Baselines:
+- `bun test src/shell/ProjectNavigation.dom.test.tsx` (the 3 App fixtures, each in its own process): 4 pass / 0 fail.
+- PrWorkRow + IssuesBoard + usePendingFlowLinks DOM suites: 65 pass / 0 fail.
+- Sanity check: an `assert.fail` placed late in app-work-row.fixture.tsx (line 195) does fail the run, so the fixture's late assertions are reached.
+
+| id | mutation | suite | result |
+|---|---|---|---|
+| A01 | App.tsx flowOffers drops `...(offer.linking && { linking: true })` | App fixtures | **4/4 green** (3 runs) |
+| A02 | App.tsx flowOffers drops `...(offer.error && { error: offer.error })` | App fixtures | 1 fail ("#13 says the link failed") |
+| A03 | App.tsx link callback swallows the rejection (`void linkFlow(...).catch(() => {})`) | App fixtures | 1 fail |
+| A04 | useAcpSession.linkFlow catches the request error and returns | App fixtures | 1 fail |
+| A05 | useAcpSession.linkFlow drops the `flags` dispatch | App fixtures | 1 fail ("#12 shows the linked Flow") |
+| A06 | PendingSubjects: a refused write raises SUBJECT_NOT_SAVED at once (PC-004 reverted) | App fixtures | 1 fail ("No notice before keryx has saved the session") |
+| A07 | useAcpSession: no subject retry after the turn (`.then(() => subjects.apply(...))` dropped) | App fixtures | 1 fail |
+| A08 | PendingSubjects: the refused write raises the notice 40 ms later (setTimeout) | App fixtures | **4/4 green** (3 runs) |
+| I01 | IssuesBoard reads only the legacy per-account source key | IssuesBoard | 1 fail |
+| I02 | IssuesBoard ignores the legacy key | IssuesBoard | 3 fail |
+| I03 | change() saves to the per-account key | IssuesBoard | 3 fail |
+| I04 | sourceKey without the project cwd | IssuesBoard | 4 fail |
+| I05 | fallback notice keeps the `configuration:` prefix | IssuesBoard | 2 fail |
+| C01 | review.css `.pr-work-offer` drops `overflow: hidden` | PrWorkRow | **26/26 green** |
+| C02 | review.css `.pr-work-offer` drops `white-space: nowrap` | PrWorkRow | **26/26 green** |
+| C03 | review.css adds a later `.review-board .pr-work-slot { overflow: visible }` and `.review-board .pr-work-offer { flex: none }` | PrWorkRow | **26/26 green** |
+| C04 | review.css `.pr-work-offer { flex: 1 1 auto` -> `flex: none` | PrWorkRow | **26/26 green** (3 runs) |
+
+Probe P01 (a test-side change, not a mutant): in app-work-row.fixture.tsx, the refused Link is answered the way src/acp/server.ts answers it. That is a JSON-RPC error `{code: -32600, message: "Invalid request", data: {reason: "_keryx/session_flags: <reason>", ...}}` emitted on acp://message, where the fixture instead throws from acp_send. Result: the slot reads `Not linked: Invalid request`. The fixture's `/^Not linked: .*locked by another keryx process/` fails.
+
+Totals: 17 mutants and 1 probe. 11 mutants were red and 6 survived (A01, A08, C01-C04). The survivors were repeat-checked: A01, A08 and C04 were green in each of 3 runs. Not reached (3 candidates): linkFlow's `if (!client) throw new Error("keryx is not connected.")`, linkFlow's `if (l.client === client)` guard, and the `void` wrapper in App's linkFlowOffer.
+
+Answers to the dispatch questions:
+- UX-010 refused-Link path. The App fixture pins it: A02, A03 and A04 are red. However, it pins a refusal shape keryx never sends (TP-R4-007), and with the real shape the visible reason is lost (TP-R4-008). The linking state never occurs in the App fixture (TP-R4-009).
+- PC-004 first-turn path. The App fixture pins the order "no notice before the turn, a retry and the notice after it" against an immediate notice (A06) and against a missing retry (A07). The "no notice before the turn" half rests on a fixed 20 ms delay, and a notice raised 40 ms after the refusal passes (A08, TP-R4-006). The fixture's older-keryx refusal (`code -32602, "session X not found"`) is not keryx's shape either, but PendingSubjects.apply swallows every rejection, so the branch taken does not depend on the shape. Not a finding.
+- Error texts in IssuesBoard.dom.test.tsx. The texts the tests feed match the producers verbatim: board-github.ts:45 ("This project has no GitHub.com fetch remote."), issues-board.ts:114 unusableRemote and :188 (Issues turned off), and issues-github.ts:8 invalidInput, :33 rate-limit and :120 the stale cursor. The made-up "configuration: This project has no remote." is a deliberate negative case for the classifier. I did not trace how the CLI's stderr is shaped through the Rust invoke_review (review.rs:109 trims stderr).
+- Waits. The App fixtures' waitFor polls a state with a deadline. The one fixed delay added in the range is at app-navigation.fixture.tsx (TP-R4-006).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-testing-practices",
+    "slices": ["slice-02"],
+    "summary": "17 mutants on the slice-02 product code and the App fixture paths (11 red, 6 green), plus 1 probe. The App fixtures pin UX-010's failure display and PC-004's retry-after-turn. The 'no notice before the turn' check rests on a fixed 20 ms delay and lets a delayed notice through. The refused-Link fixture models a transport failure, not keryx's JSON-RPC answer, and with the real answer the offer reads 'Not linked: Invalid request'. App's linking mapping is unpinned. The review.css test pins 4 declarations and misses the ones its title claims.",
+    "findings": [
+      {
+        "id": "TP-R4-006",
+        "reviewer": "review-testing-practices",
+        "severity": "major",
+        "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "line": null,
+        "quote": "  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });\n  assert.ok(!/did not save the pull request binding/.test(host.textContent ?? \"\"), \"No notice before keryx has saved the session\");",
+        "problem": "tdd-workflow.mdc Rule 6: the PC-004 check 'no notice before keryx has saved the session' waits a fixed 20 ms after the first flags request is sent, then asserts the notice is absent. The wait is on time, not on a state: waitFor only checks that the request went out, not that its refusal was handled. A notice raised on the refusal any time after 20 ms passes the check, and the later waitFor for the notice is then satisfied by that wrong notice. Neither the code comment nor commit 055115a20 gives a reason for the delay.",
+        "impact": "Mutant A08 (PendingSubjects raises SUBJECT_NOT_SAVED 40 ms after the refused write) stays green in 3 of 3 runs, so the PC-004 behaviour 'the older-keryx notice waits for the first turn' is pinned only against a regression that raises the notice within the same 20 ms. The check is also timing-dependent on a loaded CI host, where the refusal reply can take longer than 20 ms to be handled.",
+        "suggested_fix": "Wait on the state, not on time. Have the mock record when it has emitted the refusal for the session (e.g. `refused.add(sessionId)` before the emit) and waitFor that, then flush once with React.act. Make the negative check order-proof as well: after the turn, assert that the notice text appears exactly once (count the transcript notices), and record (e.g. with a MutationObserver) that it first appeared after `prompted.length === 1`.",
+        "evidence": "Scratch worktree at 4cb6c43ef. A08 (`return; // not stored yet` -> `setTimeout(() => this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED), 40); return;` in subjectBinding.ts): ProjectNavigation.dom.test.tsx 4 pass / 0 fail, 3 runs. A06 (the same notice raised synchronously) is red on exactly this assertion, and A07 (no retry after the turn) is red. Rule: .metaproject/rules/core/tdd-workflow.mdc, Review severities: 'Sleep or fixed delay for async work (Rule 6) | always | major'.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "app-nav-pc004-fixed-delay-negative-check",
+        "class_scope": {
+          "sites": ["apps/desktop/src/test/app-navigation.fixture.tsx (PC-004 block: setTimeout(resolve, 20) before 'No notice before keryx has saved the session')"],
+          "enumeration_method": "git diff -U0 d7b0f7058..4cb6c43ef -- 'apps/desktop/src/**/*.test.*' 'apps/desktop/src/test/*' | grep -E '^\\+.*(setTimeout|sleep|Date\\.now|requestAnimationFrame)': exactly 1 added line, this one. The existing waitFor helpers poll a predicate with a deadline and are not fixed delays."
+        }
+      },
+      {
+        "id": "TP-R4-007",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "line": null,
+        "quote": "        if (change.flow && refuseFlowLink) {\n          const reason = refuseFlowLink;\n          refuseFlowLink = undefined;\n          throw new Error(reason);\n        }",
+        "problem": "The fixture's shape contradicts its producer. It names the scenario 'keryx refuses the next flow link with this reason (a held flags lock)', but it refuses by throwing from the mocked acp_send IPC. To the AcpClient that is a transport write failure (client.ts write() rejects), and the request rejects with an Error whose message is the internal reason. keryx refuses in another way: handleSessionFlags -> refuseStore answers with a JSON-RPC error `invalidRequest({ reason: `${method}: ${message}`, method, sessionId })`, i.e. code -32600, message 'Invalid request', and the reason only in `data.reason` (src/acp/server.ts refuseStore, src/acp/jsonrpc.ts invalidRequest). The fixture therefore covers 'acp_send failed with this text', which keryx never produces, and leaves the real refusal untested.",
+        "impact": "The App-level UX-010 test asserts `/^Not linked: .*locked by another keryx process/`. That holds only for the made-up shape. With the real one the user sees 'Not linked: Invalid request' (probe P01), and the suite stays green. The next author reads the test as coverage of the lock refusal.",
+        "suggested_fix": "Answer the refusal the way the server does: `await emit(\"acp://message\", JSON.stringify({ jsonrpc: \"2.0\", id, error: { code: -32600, message: \"Invalid request\", data: { reason: `_keryx/session_flags: ${reason}`, method, sessionId } } })); return;`. Keep the assertion on the reason text, which then fails until TP-R4-008 is fixed.",
+        "evidence": "Probe P01 in the scratch worktree: with the JSON-RPC-shaped refusal and the waitFor loosened to /^Not linked:/, slot(13, 'flow') is 'Not linked: Invalid request'. Producer: src/acp/server.ts:2935-2936 refuseStore, :2963-2968 handleSessionFlags catch; src/acp/jsonrpc.ts:125-127 invalidRequest. The client path: apps/desktop/src/acp/client.ts:84 (RpcError(code, message, data)), :48-50 (a send failure rejects with the thrown value).",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "app-work-row-refusal-shape-not-keryx"
+      },
+      {
+        "id": "TP-R4-008",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/session/useAcpSession.ts",
+        "line": null,
+        "quote": "    const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow: flowDir });",
+        "problem": "This is the defect the TP-R4-007 coverage gap hides, filed separately as the lens requires. linkFlow passes keryx's RpcError on unchanged, and usePendingFlowLinks shows `errMessage(cause)`, which is RpcError.message. keryx answers every store refusal of _keryx/session_flags (the flags lock held past 3 s, a session trashed since it was listed, a write error) as 'Invalid request', with the actual reason in error.data.reason. The sibling in the same file already reads it: useAcpSession.ts:70-73 takes `(e.data as { reason?: unknown })?.reason` for a leased session.",
+        "impact": "Trigger: press Link on a 'Link Flow #N?' offer while another keryx process holds the session's flags lock (the case UX-010 named), or after the session was trashed. Outcome: the offer reads 'Not linked: Invalid request' instead of '... locked by another keryx process; retry'. The person is not told that retrying will help. Link stays available, so nothing is lost.",
+        "suggested_fix": "In linkFlow, or in one shared helper used by every session_flags caller, rethrow an RpcError with a string `data.reason` as `new Error(reason.replace(/^_keryx\\/session_flags:\\s*/, \"\"))`. Then make the fixture refusal JSON-RPC shaped (TP-R4-007), so the App test pins the real path.",
+        "evidence": "Probe P01: 'Not linked: Invalid request'. apps/desktop/src/review/usePendingFlowLinks.ts accept: `settle({ sessionId, dir, error: errMessage(cause) })`; apps/desktop/src/lib/format.ts:43-45 errMessage returns e.message; src/acp/server.ts:2935-2936; apps/desktop/src/session/useAcpSession.ts:70-73 (sibling that reads data.reason).",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "linkflow-refusal-reason-in-rpc-data-dropped"
+      },
+      {
+        "id": "TP-R4-009",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/App.tsx",
+        "line": null,
+        "quote": "    return flow ? [{ sessionId: offer.sessionId, flow, ...(offer.linking && { linking: true }), ...(offer.error && { error: offer.error }) }] : [];",
+        "problem": "A gate added in this range survives deletion. With App's mapping of `linking` dropped (A01), the App fixtures stay green: the mocked _keryx/session_flags answers the flow link at once, so the App never renders an offer in its linking state. The PrWorkRow test renders a hand-built `linking: true` offer and never goes through App's mapping, and the hook test checks only the hook's state. The `error` arm beside it is pinned (A02 red).",
+        "impact": "If App stopped passing `linking` through, the row would keep Link and Dismiss active and drop the 'Linking Flow #N…' text while the write runs. That is the 'waits' half of UX-010, and the suite would not notice.",
+        "suggested_fix": "In app-work-row.fixture.tsx, hold the flow-link flags reply the way holdNewSessions holds session/new. Press Link, waitFor the slot to read `Linking ${offerName(...)}…`, and assert Link's aria-disabled is 'true'. Then release and assert the linked Flow.",
+        "evidence": "A01 (`...(offer.linking && { linking: true }), ` removed): ProjectNavigation.dom.test.tsx 4 pass / 0 fail in 3 runs. A02 (the error arm removed) fails 'Timed out waiting for: #13 says the link failed'.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "app-offer-linking-mapping-unpinned"
+      },
+      {
+        "id": "TP-R4-010",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "line": null,
+        "quote": "test(\"review.css: the offer text truncates and is not a button, its buttons do not shrink, and the slot clips\", () => {",
+        "problem": "The test name claims behaviour that its assertions do not pin. It matches 4 declaration strings in the first rule for each selector: overflow:hidden on .pr-work-slot, text-overflow:ellipsis and min-width:0 on .pr-work-offer, and flex:none on .pr-work-more. 'The offer text truncates' also depends on .pr-work-offer's overflow:hidden, white-space:nowrap and flex:1 1 auto, and none of these is asserted. Because the test reads only the first rule per selector, a later rule that overrides one of them is not seen. The behaviour the LY-005 fix is about is geometry (the offer fits a 60 px / ~75 px slot), and this test cannot observe it.",
+        "impact": "C01 (no overflow:hidden on the offer), C02 (no nowrap), C04 (offer `flex: none`) and C03 (a later override putting overflow back to visible and the offer back to flex:none) all keep the suite green. Under C04 the long 'Link Flow #N · <title>?' text no longer shrinks, so the clipped slot hides Link and Dismiss, which is the LY-005 outcome. The PR body already says the widths are not measured. This test reads as if they were pinned.",
+        "suggested_fix": "Assert the full set of declarations the claim rests on: overflow:hidden, white-space:nowrap and a shrinkable flex on .pr-work-offer. Better, inject review.css into the happy-dom document, render the offer inside `.review-board`, and assert getComputedStyle on the rendered span and slot, so later overrides count. Leave the geometry claim to a real-engine measurement (LY-005's settle step) and rename the test to what it checks.",
+        "evidence": "C01, C02, C03, C04: PrWorkRow.dom.test.tsx 26 pass / 0 fail each (C04 in 3 runs). The current rule at review.css:39: `.pr-work-offer { flex: 1 1 auto; min-width: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; color: var(--fg); }`.",
+        "evidence_kind": "probe",
+        "confidence": "high",
+        "dedupe_key": "review-css-test-declarations-not-truncation"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "UX-010", "disposition": "partial", "evidence": "The offer stays and shows a failure at App level (A02/A03/A04 red; wave 1 D17-D21 red). With keryx's real refusal (probe P01) the reason shown is 'Invalid request', not why it failed (TP-R4-008). The linking state is not exercised at App level (TP-R4-009)."},
+      {"id": "UX-011", "disposition": "closed", "evidence": "I01-I04 red: the per-project key, the legacy read and the save target are each pinned by the UX-011 tests."},
+      {"id": "UX-013", "disposition": "closed", "evidence": "I05 red (2 tests): the stripped prefix is pinned."},
+      {"id": "UX-015", "disposition": "closed", "evidence": "The test asserts 'choose Bundled keryx in Settings → Desktop'."},
+      {"id": "UX-009", "disposition": "closed", "evidence": "Offer text and Link's accessible name carry the title ('Link Flow #530 · Work 530?', 'Link Flow #530 · Work 530 for #101'), asserted in PrWorkRow.dom.test.tsx and the App fixture."},
+      {"id": "UX-012", "disposition": "closed", "evidence": "The test asserts that the offer span lacks pr-work-link; the CSS test asserts that no `.pr-work-link.pr-work-offer` rule exists."},
+      {"id": "LY-005", "disposition": "unverified", "evidence": "The CSS clips the slot, but no geometry was measured. The CSS test does not pin the offer's shrink and truncation declarations (C01-C04 green, TP-R4-010)."},
+      {"id": "DG-R3-002", "disposition": "closed", "evidence": "issueSessions removed from model.ts; model.test.ts now pins boundSessionIndex(sessions)(issueSubject(issue))."},
+      {"id": "AR-007", "disposition": "closed", "evidence": "IssuesBoard tests feed the producers' exact texts (board-github.ts:45, issues-board.ts:114/:188, issues-github.ts:8/:33/:120). Wave 1 D25/D26 red."},
+      {"id": "FE-R3-002", "disposition": "closed", "evidence": "Wave 1 D06-D09/D14/D15 red. TP-R4-001/003 cover the unpinned guards; not re-filed."}
+    ],
+    "stats": {"blocker": 0, "major": 1, "minor": 4, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant; slice-02 named the files, and producers were found with keryx ctx rg). wiki_used: no (not-relevant; this lens is about test discipline). ctx_used: yes (keryx ctx rg). raw_rg_used: no. I used raw sed/git diff/git log with keryx:raw markers for short verbatim windows and one added-line filter.
+
+Not run or not verified:
+- How the CLI's stderr reaches IssuesBoard through review.rs invoke_review.
+- The 3 unreached candidates listed above.
+- Geometry of the work row in a real engine.
+- The full Desktop suite. Only the nearest suites ran.

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Dialog } from "../components/ui";
-import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters } from "./model";
+import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, QUICK_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters, type QuickFilter } from "./model";
 import type { ReviewCard } from "./types";
 
 const DIMENSIONS: Record<Dimension, string> = {
@@ -24,6 +24,7 @@ export function filterSummary(f: Filters): string[] {
     result.push(DIMENSIONS[dim] + " · " + (val.map((v) => labels[v] ?? v).join(", ") || "All"));
   }
   if (f.updatedWithin) result.push(`Updated · Last ${f.updatedWithin} days`);
+  for (const quick of Object.keys(QUICK_FILTERS) as QuickFilter[]) if (f[quick]) result.push(QUICK_FILTERS[quick]);
   return result;
 }
 

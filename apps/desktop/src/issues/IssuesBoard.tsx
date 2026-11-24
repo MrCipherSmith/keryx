@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+import { displayReason, issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+import { boundSessionIndex, type SessionInfo } from "../acp/types";
 import { Icon } from "../components/Icon";
 import { errMessage, relativeTime } from "../lib/format";
 import { requestIssues } from "../platform/issues";
 import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
 import { IssueFilters } from "./IssueFilters";
-import { defaultFilters, groupForRow, issueName, readPreferences, SOURCES, STAGES, visibleRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
-import { isAccessError, useIssueCollection } from "./useIssueCollection";
+import { IssueWorkRow } from "./IssueWorkRow";
+import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, readPreferences, SOURCES, STAGES, visibleRows,
+  type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
+import { isAccessError, repositoryUnavailable, useIssueCollection } from "./useIssueCollection";
 import "./IssuesBoard.css";
 
 interface Props extends WorkProps {
   cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
+  /** The project's sessions; the work row counts those bound to an issue through their `subject`. */
+  sessions?: readonly SessionInfo[];
 }
-type Source = keyof typeof SOURCES;
+type Source = IssueSource;
+const NO_SESSIONS: readonly SessionInfo[] = [];
 
 function stored(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -52,11 +58,22 @@ function AccountBoard(props: Props) {
 
 function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: IssueViewer; verifyAgain: () => void}) {
   const account = "keryx.issues." + issueViewerKey(viewer);
+  // The source is the project's and the account's: switching it in one project leaves the others alone.
+  // A source stored per account by an earlier Desktop is read as this project's until one is chosen here.
+  const sourceKey = account + ".source." + JSON.stringify(props.cwd);
   const [denied, setDenied] = useState("");
   const [source, setSource] = useState<Source>(() => {
-    const value = stored(account + ".source");
-    return value && Object.hasOwn(SOURCES, value) ? value as Source : "assigned";
+    const value = stored(sourceKey) ?? stored(account + ".source");
+    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
   });
+  const sourceSelect = useRef<HTMLSelectElement>(null);
+  const focusSource = useRef(false);
+  // The board remounts on a source change; the fallback button that asked for it is gone, so focus the select.
+  useEffect(() => {
+    if (!focusSource.current) return;
+    focusSource.current = false;
+    sourceSelect.current?.focus();
+  }, [source]);
   const [target, setTarget] = useState<ProjectSource | null>(() => {
     try {
       const value = JSON.parse(stored(account + ".project") ?? "null");
@@ -65,9 +82,12 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
   });
   const [owner, setOwner] = useState(target?.owner ?? "");
   const [number, setNumber] = useState(target?.number.toString() ?? "");
-  const change = (next: Source) => { setDenied(""); setSource(next); save(account + ".source", next); };
+  const change = (next: Source) => { setDenied(""); setSource(next); save(sourceKey, next); };
+  // The repository source can fail where no choice of the person's is at fault: no GitHub.com remote,
+  // Issues turned off (a fork), or a keryx too old to know it. Offer the source that works anywhere.
+  const fallback = source === "repository" ? () => { focusSource.current = true; change("assigned"); } : undefined;
   const sourceControls = <div className="issue-sources">
-    <label>Source <select aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
+    <label>Source <select ref={sourceSelect} aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
       {Object.entries(SOURCES).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
     </select></label>
     {source === "project" && <form onSubmit={e => {
@@ -103,15 +123,18 @@ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: Issue
       <button className="btn btn-sm" onClick={props.onSettings}>GitHub accounts</button>
     </div></section>;
   return <Collection key={key} {...props} source={source} target={target} prefsKey={key} viewer={viewer}
-    sourceControls={sourceControls} clear={clear} remember={remember} />;
+    sourceControls={sourceControls} clear={clear} remember={remember} fallback={fallback} />;
 }
 
 interface CollectionProps extends Props {
   prefsKey: string; source: Source; target: ProjectSource | null; sourceControls: React.ReactNode;
   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
+  /** Switches from the repository source to "Assigned to me"; absent for the other sources. */
+  fallback?: (() => void) | undefined;
 }
 
-function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues }: CollectionProps) {
+function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
+  sessions = NO_SESSIONS, fallback }: CollectionProps) {
   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
   const { filters, list } = prefs;
   const [filterDialog, setFilterDialog] = useState(false);
@@ -129,6 +152,8 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
   const activeWork = useRef(false);
   const { snapshot, busy, error, load, invalidate, setSnapshot } = useIssueCollection(cwd, login, source, target, filters, viewer, clear, request);
   const rows = useMemo(() => visibleRows(snapshot?.rows ?? [], filters), [snapshot, filters]);
+  const boundTo = useMemo(() => boundSessionIndex(sessions), [sessions]);
+  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;
   const selectedKey = selection && issueKey(selection.issue.ref);
   const selectedIndex = rows.findIndex(row => issueKey(row.issue.ref) === selectedKey);
   // Refresh starts again at page one. Keep a selected later-page issue open and
@@ -211,27 +236,23 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     } finally { activeMove.current = false; if (alive.current) setMoving(null); }
   }
 
-  function workActions(row: Row, full = false) {
+  /** The issue's work row and actions, each with visible text on the card, the list row and the panel alike. */
+  function workActions(row: Row) {
     const issue = row.issue;
-    const stage = issue.work?.stage ?? "none";
     const pending = working !== null;
-    const flowLabel = stage === "none" ? "Create Flow" : "Open Flow";
-    return <div className="card-actions issue-actions">
-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={"Open issue session for " + issueName(issue)}
-        title={stage === "needs_answer" ? "Open question in Sessions" : "Open session"} disabled={pending} onClick={() => void act("open-session", issue.ref)}>
-        <Icon name="chat" size={15} />{full && (stage === "needs_answer" ? "Open question" : "Open session")}</button>
-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
-        disabled={pending} onClick={() => void act(stage === "none" ? "prepare-flow" : "open-flow", issue.ref)}>
-        <Icon name="branch" size={15} />{full && flowLabel}</button>
-      {issue.work?.canResumePreparation && <button className={full ? "btn btn-sm" : "icon-btn"}
-        aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
-        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={15} />{full && "Resume preparation"}</button>}
-      {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
-    </div>;
+    const more = issue.work?.canResumePreparation || project;
+    return <>
+      <IssueWorkRow issue={issue} bound={boundTo(issueSubject(issue)).length} pending={pending} onAction={action => void act(action, issue.ref)} />
+      {more && <div className="card-actions issue-actions">
+        {issue.work?.canResumePreparation && <button className="btn btn-sm"
+          aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
+          onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
+        {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
+      </div>}
+    </>;
   }
 
-  const groups = project ? [...project.options.map(o => ({ id: o.id, label: o.name })), { id: "unassigned", label: "No status" }]
-    : Object.entries(STAGES).map(([id, label]) => ({ id, label }));
+  const groups = issueGroups(project, filters.state);
   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
   const dragItem = useRef<Row | null>(null);
@@ -250,9 +271,14 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
         {project && <span>{project.title}</span>}{snapshot && <span>Read {snapshot.readAt.toLocaleTimeString()}</span>}
         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
       </div>}
-      {error && <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
+      {error && (unavailable && fallback ? <div className="issues-notice" role="alert">
+        <p>{displayReason(error)}</p>
+        <p>This project's repository issues are not available here.
+          {unavailable === "older" && " If this keryx is older than Desktop, update keryx or choose Bundled keryx in Settings → Desktop."}</p>
+        <button className="btn btn-sm" onClick={fallback}>Show issues assigned to me</button>
+      </div> : <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
         <button className="btn btn-sm" onClick={() => void load()}>Retry</button>
-      </div>}
+      </div>)}
       {notice && <p className="issues-notice" role="status">{notice}</p>}
       {busy && <p className="issues-notice" role="status">Loading issues…</p>}
       {project && (!project.canWrite || !project.fieldId) && <p className="issues-notice">{project.fieldId ? "Read-only access to this Project." : "Project Status field unavailable."}</p>}
@@ -279,7 +305,6 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
               <span className="flow-id">{issueName(r.issue)}</span><span className="flow-title">{r.issue.title}</span>
               <span className="flow-meta">
                 <span className="badge">{r.issue.state}</span>
-                {project && <span>{STAGES[r.issue.work?.stage ?? "none"]}</span>}
                 <span>{r.issue.assignees.join(", ") || "Unassigned"}</span>
               </span>
               {r.issue.labels.length > 0 && <span className="issue-labels" title={r.issue.labels.join(", ")}>{r.issue.labels.join(" · ")}</span>}
@@ -290,7 +315,7 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
       {snapshot?.nextCursor && <button className="btn issue-more" disabled={busy} onClick={() => void load(true)}>Load more issues</button>}
     </section>
     {selected && snapshot && <IssueDetail key={JSON.stringify([issueKey(selected.issue.ref), detailRead])} cwd={cwd} login={login} viewer={snapshot.viewer} row={selected.issue}
-      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected, true)}
+      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected)}
       onPrevious={selectedIndex > 0 ? () => setSelection(rows[selectedIndex - 1]!) : undefined}
       onNext={selectedIndex < rows.length - 1 ? () => setSelection(rows[selectedIndex + 1]!) : undefined} />}
     {filterDialog && <IssueFilters filters={filters} project={project} apply={f => { setFilters(f); setFilterDialog(false); }} close={() => setFilterDialog(false)} />}

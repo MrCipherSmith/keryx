@@ -1,0 +1,111 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Parent ref: `main`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a` (head `88e3faba9a1732f45a4ff7200588832e8b83f121`)
+- Scope mode: `diff`, round 2, wave 4, slice-04 (Desktop tests and fixtures), read in full (2432 lines)
+- Spec compliance gate: ran. I checked each frozen AC whose verify command is a Desktop test against the tests in slice-04. app-work-row.fixture.tsx is in slice-05 and was not reviewed here.
+
+### Summary
+Slice-04's tests exercise and assert what the Desktop-verified ACs claim: AC1 to AC7, AC10 to AC13 (Desktop half) and AC16, plus the Desktop half of AC8. Every assertion I traced checks the claimed behaviour, not a proxy. I checked several for vacuity, for example the "session already has a Flow" guard in usePendingFlowLinks.dom.test. A clause only blocks merge when nothing implements it, and nothing here is unimplemented. One AC clause has no test: AC7's "newest" bound session. One model test states an invariant that its own sibling DOM test contradicts. I did not repeat TP-R2-001 (fixed 40 ms settle) or TP-R2-005 (the AC2 test does not assert that the badge reached the card).
+
+### AC coverage (slice-04)
+- AC1: covered. model.test iterates all 8 LOCAL_STATES for 8 card variants × 2 groupings, and asserts that the lane keys contain neither "attention" nor "review".
+- AC2: lane, index, visibility and newest-first order are asserted in "a local review starting, progressing and finishing…". The gap in that test is TP-R2-005 (already reported).
+- AC3: covered. Status lanes, Merged/Closed only under the state filter, My role lanes, the three quick filters, the no-bypass rule (model test and DOM "active review and a non-matching author shows nothing"), and lanes not drawn. See LG-014 (info).
+- AC4: covered. model.test checks laneReason for every local state. DOM tests check the card body and the list Reason cell in board and list.
+- AC5: covered. Three slots in order, the same element shape with zero and with three links, fixed height in review.css, the slot opens the review panel, "Flow #<id> · <stage>" opens the Flow, the empty labels are shown, and no round or behind text appears.
+- AC6: covered for PR card, PR list row and Issue card/row. "Fix review comments" is absent.
+- AC7: covered except "newest". See LG-013.
+- AC8 (Desktop half): covered. The "not saved" notice is asserted in prWork.test and in app-navigation.fixture.
+- AC10: covered. ReviewLaunchDialog preselect, PrWorkRow "without a refresh" (loads === 1), and app-navigation.fixture (#13 Apply, then "Review · running").
+- AC11, AC12, AC13 (Desktop half): covered by IssuesBoard.dom.test and issues/model.test.
+- AC16: covered as one App-level scenario in app-navigation.fixture. The session is created and bound to #13 (subject asserted), Open in session again reuses it (`loaded`), /review preselects #13, Apply starts the run, and the card shows "Review · running".
+- AC9 (App half): its test is app-work-row.fixture.tsx, which is in slice-05 and not reviewed here. The resolver/hook half is covered by prWork.test and usePendingFlowLinks.dom.test.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+[LG-013] minor: AC7 "opens the same session (newest non-archived bound session)" has no test with two bound sessions that asserts which one "latest" opens.
+- File: apps/desktop/src/review/prWork.ts
+- Problem: openSubjectSession resolves "latest" to `bound[0]`. I listed every test call that reaches the "latest" path:
+  - prWork.test.ts: Open in session, Create Flow, keryx-answers-without-subject, subjectOpener and stores-the-subject. Each has at most one session bound to that subject. In the "New session" test, s2 exists, but s1 is then opened by id.
+  - PrWorkRow.dom.test.tsx: "2 sessions for #101" only checks that the stub received the target "latest".
+  - app-navigation.fixture.tsx: "2 sessions for #12" runs with two sessions bound to #12. It asserts only that the titlebar contains "PR org/project#12", which both sessions satisfy, and it does not check `loaded` there.
+  boundSessions ordering is tested on its own, but the step that picks one of its results is not. Changing `bound[0]` to `bound.at(-1)` would, by reading, pass the whole suite. I did not run it.
+- Impact: The AC clause is unverified, and a regression that reopens the oldest bound session would ship green.
+- Fix: In app-navigation.fixture, after the "2 sessions for #12" press, assert `loaded.at(-1)` equals the id of the newest #12 session (the menu-created one, since the stored updatedAt grows with stored.size). Or add a prWork.test case with two bound sessions that have distinct updatedAt, and assert that "latest" returns the newer one.
+
+[LG-014] info: The model invariant "every card the filters keep lands in a drawn lane" is false for a card that the DOM suite itself builds.
+- File: apps/desktop/src/review/model.test.ts
+- Problem: drawnLanes("role", {mine: true}) returns ["mine"]. A card authored by the viewer that also lists the viewer as a reviewer lands in "requested". The DOM test "a shown card is never dropped because its lane was ruled out by the filters" asserts exactly that. The model property test passes only because its card set has no such card. The board stays correct through `possible.has(lane) || lanes.has(lane)` in ReviewResults (W2-04 shows this is pinned). No change is asked. The model test title and the drawnLanes doc ("lanes … that can hold a card") overstate the guarantee. The fallback, not drawnLanes, is what keeps AC3's "no shown card vanishes" true.
+
+### Async & Concurrency
+None detected beyond TP-R2-001.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 (Desktop tests and fixtures) asserts what the Desktop-verified ACs claim: AC1-AC7, AC10-AC13 (Desktop half), AC16 and the Desktop half of AC8. No blocker or major. One minor: AC7's 'newest bound session' clause has no test with two bound sessions that asserts which one 'latest' opens. One info: the model property test for drawnLanes omits the author-is-reviewer card that the DOM suite shows lands outside drawnLanes; the board fallback covers it. AC9's App half is in slice-05 and was not reviewed here.",
+  "findings": [
+    {
+      "id": "LG-013",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "  const existing = target === \"latest\" ? bound[0]?.sessionId : target === \"new\" ? undefined : bound.find(s => s.sessionId === target)?.sessionId;",
+      "problem": "AC7 requires that pressing 'Open in session' again opens the newest non-archived bound session. No test has two sessions bound to the same subject and asserts which one 'latest' opens. In prWork.test.ts every 'latest' call has at most one session bound to that subject. PrWorkRow.dom.test.tsx only checks that the stub received target 'latest'. app-navigation.fixture.tsx presses '2 sessions for #12' with two bound sessions, but asserts only that the titlebar contains 'PR org/project#12', which both satisfy. boundSessions ordering is tested on its own; the bound[0] pick is not.",
+      "impact": "Trigger: a change that resolves 'latest' to another member of bound, for example bound.at(-1). Outcome: by reading, the suite stays green while Open in session reopens the oldest bound session, against the AC7 text. I did not run this mutation.",
+      "suggested_fix": "In app-navigation.fixture.tsx, after `namedButton(\"2 sessions for #12\").click()`, assert `loaded.at(-1)` equals the id of the newest #12 session (the menu-created one, since the stored updatedAt grows with stored.size). Or add a prWork.test case with two bound sessions that have distinct updatedAt and assert that openSubjectSession(..., \"latest\", ...) returns the newer id.",
+      "evidence": "slice-04: prWork.test.ts tests 'Open in session…', 'the session menu's New session…' (s1 opened by id after s2 exists), 'Create Flow opens the bound session…', 'a repeat Open in session…' (the final 'latest' has only s1 bound to #101); PrWorkRow.dom.test.tsx `expect(calls.sessions).toEqual([[101, \"latest\", …]])`; app-navigation.fixture.tsx `await React.act(() => namedButton(\"2 sessions for #12\").click()); … assert.ok(host.querySelector(\".titlebar\")?.textContent?.includes(\"PR org/project#12\"), \"Another session is shown first\");`. Enumerated with keryx ctx rg '\"latest\"|sessions for|loaded' over apps/desktop/src tests and fixtures.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "dedupe_key": "ac7-latest-bound-session-untested",
+      "class_scope": {
+        "sites": ["apps/desktop/src/review/prWork.ts"],
+        "enumeration_method": "keryx ctx rg '\"latest\"|sessions for|loaded' over apps/desktop/src *.test.ts* and *fixture*. These are every call that reaches the 'latest' branch: 11 in prWork.test.ts, 2 in PrWorkRow.dom.test.tsx, 2 presses in app-navigation.fixture.tsx. None has two bound sessions together with an assertion on which session is opened."
+      }
+    },
+    {
+      "id": "LG-014",
+      "severity": "info",
+      "file": "apps/desktop/src/review/model.test.ts",
+      "line": null,
+      "quote": "test(\"every card the filters keep lands in a drawn lane\", () => {",
+      "problem": "The property test claims every kept card lands in drawnLanes. drawnLanes('role', {mine: true}) returns ['mine'], but a card authored by the viewer that also lists the viewer as a reviewer lands in 'requested'. ReviewBoard.dom.test's 'a shown card is never dropped because its lane was ruled out by the filters' builds exactly that card. The property test passes only because its card set lacks it. The board stays correct through ReviewResults' `possible.has(lane) || lanes.has(lane)` fallback, which is what actually upholds AC3's 'no shown card vanishes'.",
+      "impact": "No wrong output; no change asked. The test title and the drawnLanes doc overstate the guarantee. A reader trusting them could drop the fallback, though W2-04 shows the DOM test would catch that.",
+      "suggested_fix": "Optional: add the author-is-reviewer card to the property test and state the exception, or reword the test title to 'lands in a drawn lane or the board's fallback'.",
+      "evidence": "model.ts drawnLanes: `requested: !f.mine && otherAuthor && …`; ReviewResults.tsx: `const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => possible.has(lane) || lanes.has(lane));`; slice-04 ReviewBoard.dom.test: `const both: ReviewCard = { ...pr, author: \"ann\", reviewers: [\"ann\"] }; … await click(button(\"Mine\")); expect(laneNumbers(\"Requested from me\")).toEqual([\"#101\"]);`.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "dedupe_key": "drawnlanes-property-test-omits-author-reviewer"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice and the files it names were given, and call sites were found with ctx rg). wiki_used: no (not-relevant: ACs were in the payload). ctx_used: yes (keryx ctx rg and keryx ctx read). raw_rg_used: no. Raw `sed`/`python3` reads with keryx:raw markers were used only to extract payload JSON and small exact code regions.

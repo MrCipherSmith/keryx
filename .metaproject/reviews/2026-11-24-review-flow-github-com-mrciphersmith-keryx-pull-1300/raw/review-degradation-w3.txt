@@ -1,0 +1,50 @@
+STATUS: DONE
+
+review-degradation, round 3, wave 3. Range 88e3faba9..d7b0f7058. slice-03 read in full (569 lines). It holds organize.ts, organize.test.ts, issue-session.ts and issue-session.test.ts. src/acp/server.ts has no change in this range (`git diff --stat 88e3faba9..d7b0f7058 -- src/` lists no server.ts). Its one flags writer, handleSessionFlags, was traced as a consumer.
+
+No new degradation of major or higher. One info suspicion (DG3-001).
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-03"],
+  "summary": "Fix round 2, slice-03 read in full. Changed exports: updateSessionFlagsAt (now locked, and it can throw a new 'locked by another keryx process; retry' error), readSessionFlags (same output; the unlink marker stays inside the store) and backfillSessionSubject (new). Graph layer: payload layers.affected (depth 2, nothing truncated) lists server.ts, issue-workspace.ts, issues-launch.ts, issue-shell.ts, issue-turn.ts and others. I enumerated the callers with `keryx ctx rg --all` over src, without tests (search-derived). Every non-test writer of flags.json goes through withFlagsLock: server.ts:2964 handleSessionFlags → setSessionFlags → updateSessionFlagsAt; issues-launch.ts:116 prepare-flow → setSessionFlags; issue-session.ts:56 bindIssueSubject → backfillSessionSubject. There are two readers: server.ts:2914 listMeta, and issue-session.ts:84 (archive check). Both get the same SessionFlags shape as on base. The marker is never in the public object, and the organize test asserts this. Verified clean: (1) Lock order. The flags lock is taken only inside the issue binding lock (bindIssueSubject, and prepare-flow's setSessionFlags inside the withIssueBinding apply). No path takes the flags lock and then the binding lock, so the two cannot deadlock. (2) lib/file-lock withFileLock with timeoutMs 3000 > staleMs 2000 keeps the 'timeout longer than stale' invariant the helper documents. The nonce check stops a broken holder from deleting a new holder's lock. (3) Unlink marker. Only an explicit subject:null sets it. Setting a subject clears it, and a change without a subject keeps it. writeFlags writes it only while the subject is absent. No Desktop or src code sends subject:null except a person's unlink (`keryx ctx rg 'subject: null'`: none outside tests). (4) withIssueBinding. bindIssueSubject moved from the registered branch to after the existsSync check. It now runs on open-session and prepare-flow only. The read-only `workspace` action returns before withIssueBinding (issues-launch.ts:91), so reads still write nothing. Base wrote the subject unconditionally at first bind. Head backfills, and on a fresh session the result is the same. (5) Desktop consumer of the new lock error: PendingSubjects.apply (subjectBinding.ts) catches any write failure and retries after the next turn, so a lock timeout does not lose the pending binding. (6) Blind-test pass. The issue-session backfill test fails if the subject is still written only in the registered branch (second open: subject undefined), and if the marker is ignored (last assertion). The two-process organize test checks after every write that the other writer kept its field, and the final {flow:'flow-149'} pins the merge. The lock-wait test's lower bound of at least 1500 ms proves it waited. The REPO_REF cases (org/.., org/., a space) agree on repo and url, so only REPO_REF (organize.ts:55, negative lookahead) can refuse them. Test evidence: verify-tests-to-run-1 has 2722 pass and 1 fail. The fail is searchable-sources 'binary list', unrelated, and green in run 2. Not re-filed (owned elsewhere): HL3-001 (the sync lock blocks the ACP event loop), HL3-002 (mkdirSync recreates a trashed session dir) and PF-R3-001. Pre-existing or deferred, not re-filed: LG-014. The new marker widens it slightly: a pre-change keryx that rewrites flags.json drops subjectUnlinked as well as subject, and takes no flags lock, so HW2-001's fix serialises same-version writers only. The PR body records the related owner choice ('backfill can re-link once a session unlinked before this version'). No acceptance criteria beyond the PR context; AC8 was checked against the code above.",
+  "findings": [
+    {
+      "id": "DG3-001",
+      "severity": "info",
+      "reviewer": "review-degradation",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "src/session/issues/issue-session.ts",
+      "quote": "    // On first bind, and for a session an older keryx bound without a subject. The flags lock is\n    // taken inside the binding lock, never the reverse, so the two cannot deadlock.\n    bindIssueSubject(dir, issue.ref);",
+      "problem": "On base, reopening an already bound issue session (stage session_bound or later, action open-session) did no flags.json I/O: bindIssueSubject ran only in the registered branch. On head it runs on every open-session and prepare-flow. backfillSessionSubject takes the flags lock and throws when it cannot: 'the flags of session X are locked by another keryx process; retry' after 3 s, or a write error. Nothing in withIssueBinding catches it, so the whole open fails before saveBinding and apply. The subject is a public decoration; the private binding record stays the authority (bindIssueSubject's own doc). An open that worked on base without touching flags can now be refused because of them. If true: major. The person cannot open the issue's bound session from the Issues board while the flags lock cannot be taken or flags.json cannot be written, for example an unremovable leftover flags.json.lock, a read-only session dir or no free inodes. The same open succeeds on base.",
+      "impact": "It applies only when the flags lock or file is unusable for more than 3 s. The trigger is environmental, which is why this is a question and not a finding. prepare-flow already wrote flags on base (issues-launch.ts:116), so its failure condition is unchanged. Only open-session on a reused binding changed.",
+      "suggested_fix": "Check: on head and on base, bind an issue session, then `chmod 0500` its session dir (or create a flags.json.lock the process cannot remove), then run `keryx issue-workspace open-session` for that issue. Base opens. If head refuses, make the backfill best-effort outside the registered branch: catch and ignore the error, or skip it when the session already has a subject, and keep it fatal only on first bind as on base.",
+      "evidence": "base-diff. Base 88e3faba9 issue-session.ts called bindIssueSubject(dir, issue.ref) inside `if (launch.stage === \"registered\") { ... }`. Head calls it after `if (!existsSync(dir)) throw ...`, unconditionally. organize.ts withFlagsLock: `if (held === null) throw new Error(...)`. backfillSessionSubject calls withFlagsLock before it reads current, so the lock is taken even when a subject already exists. Refute attempt: read issues-launch.ts:91-122. The workspace action returns before withIssueBinding, so read-only loads are unaffected. prepare-flow already called setSessionFlags on base (line 116), so it has no delta. withIssueBinding has no try/catch around bindIssueSubject. The commit 80ef58bd5 text and the PR body record the backfill but give no reason it must be fatal. Not run (read-only, exec_budget 0).",
+      "confidence": "medium",
+      "dedupe_key": "issue-reopen-fails-on-flags-backfill",
+      "location_class": "diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "HW2-001", "disposition": "closed" },
+    { "id": "DG-010", "disposition": "closed" },
+    { "id": "LG-012", "disposition": "closed" },
+    { "id": "TP-R2-007", "disposition": "closed" },
+    { "id": "LG-014", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Prior dispositions, with reasons:
+- HW2-001 closed. All three non-test flags.json writers (handleSessionFlags, prepare-flow setSessionFlags, bindIssueSubject) now run their read-modify-write under `<dir>/flags.json.lock` through withFlagsLock. The two-process test pins it. Residual issues are filed separately (HL3-001 event-loop block, HL3-002 dir recreate). A pre-change keryx writer still takes no lock; that is a version skew under the deferred LG-014.
+- DG-010 closed. withIssueBinding backfills the subject on a reopen when it is absent and no unlink marker is stored. The issue-session test covers the legacy flags.json case and the case where an unlink wins.
+- LG-012 closed. The subject is backfilled for sessions bound before this version. The other half, sessions under another account being counted, is recorded as a known gap in the PR body and in bindIssueSubject's doc.
+- TP-R2-007 closed. There are tests for the case-insensitive repo/url match, for dropping unknown fields, and for the array subject at the wire (-32602).
+- LG-014 open (deferred). The marker makes it slightly wider, as noted in the summary.
+
+Routing audit: graph_used: yes (payload layers.affected from the PR-head graph). wiki_used: not-relevant (a narrow backend lock and backfill). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no.

@@ -4,23 +4,25 @@ import {
   type IssueComment,
   type IssueDetail,
   type IssuePage,
+  type IssueListSource,
   type IssueRef,
-  type IssueScope,
   type IssueSummary,
 } from "./issues-contract";
+import { reviewRepositories, selectRepository } from "../review/board-github";
 import {
   API,
   connectIssueAccount,
   cursorScope,
   denied,
   invalidInput,
+  issuesDisabled,
   readCursor,
   scopedCursor,
   type IssueAccount,
 } from "./issues-github";
 
 export interface ListIssueRequest {
-  source: IssueScope;
+  source: IssueListSource;
   state?: "open" | "closed" | "all";
   sort?: "asc" | "desc";
   updatedSince?: string;
@@ -91,10 +93,13 @@ interface RestIssue {
   pull_request?: unknown;
 }
 
-function listUrl(request: ListIssueRequest) {
+const viewerScopes: readonly string[] = ["assigned", "created", "mentioned", "subscribed"];
+const pageKeys = ["page", "after", "before", "since_id"];
+
+function validateListRequest(request: ListIssueRequest): void {
   const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
   if (
-    !["assigned", "created", "mentioned", "subscribed"].includes(source) ||
+    !(viewerScopes.includes(source) || source === "repository") ||
     !["open", "closed", "all"].includes(state) ||
     !["asc", "desc"].includes(sort) ||
     !Array.isArray(labels) ||
@@ -103,48 +108,115 @@ function listUrl(request: ListIssueRequest) {
       (typeof updatedSince !== "string" || !Number.isFinite(Date.parse(updatedSince))))
   )
     throw new Error(invalidInput);
-  const url = new URL("/issues", API);
+}
+
+/** The project's GitHub.com remote parses, but its owner or name (`.`, `..`) cannot name a repository. */
+export const unusableRemote = "configuration: This project's GitHub.com remote names no usable repository.";
+
+/** owner/name of the project's GitHub repository, resolved the way the PR board resolves its default. */
+async function projectRepository(cwd: string | undefined): Promise<string> {
+  // No project at all is a caller's bug, not something the person can fix in the project.
+  if (!cwd) throw new Error(invalidInput);
+  const repository = selectRepository(await reviewRepositories(cwd));
+  // The remote parser admits "." and ".." as a name; either would rewrite the request path.
+  if (repository.split("/").some((part) => /^\.+$/.test(part))) throw new Error(unusableRemote);
+  return repository;
+}
+
+function listUrl(request: ListIssueRequest, repository: string | null) {
+  const { source, state = "open", sort = "desc", labels = [], updatedSince } = request;
+  const url = repository
+    ? new URL("/repos/" + repository.split("/").map(encodeURIComponent).join("/") + "/issues", API)
+    : new URL("/issues", API);
   url.search = new URLSearchParams({
-    filter: source,
+    ...(repository ? {} : { filter: source }),
     state,
     direction: sort,
     sort: "updated",
     per_page: "40",
-    pulls: "false",
+    ...(repository ? {} : { pulls: "false" }),
   }).toString();
   if (updatedSince) url.searchParams.set("since", new Date(updatedSince).toISOString());
   if (labels.length === 1 && !labels[0]!.includes(",")) url.searchParams.set("labels", labels[0]!);
   return url;
 }
 
-function pageLink(link: string, base: URL): string | null {
+/** GitHub answers /repos/{owner}/{repo}/issues with next links under /repositories/{id}/issues. */
+function samePage(next: URL, base: URL, repository: boolean): boolean {
+  if (!repository) return next.pathname === base.pathname;
+  return (
+    next.pathname.toLowerCase() === base.pathname.toLowerCase() ||
+    /^\/repositories\/\d+\/issues$/.test(next.pathname)
+  );
+}
+
+function pageLink(link: string, base: URL, repository: boolean): string | null {
   const next = /<([^>]+)>;\s*rel="next"/.exec(link)?.[1];
   if (!next) return null;
   const url = new URL(next, base);
-  if (url.origin !== API || url.pathname !== base.pathname || url.username || url.password)
+  if (url.origin !== API || !samePage(url, base, repository) || url.username || url.password)
     throw new Error(invalidInput);
   const params = new URLSearchParams();
-  for (const key of ["page", "after", "before", "since_id"])
-    if (url.searchParams.has(key)) params.set(key, url.searchParams.get(key)!);
+  for (const key of pageKeys) if (url.searchParams.has(key)) params.set(key, url.searchParams.get(key)!);
   if (!params.size) throw new Error("unavailable: Invalid GitHub pagination link. Refresh and retry.");
   return params.toString();
 }
 
+/** The most pages one "repository" request reads while its pages hold only pull requests. */
+const REPOSITORY_PAGES = 3;
+
+/** Points `url` at the page a validated continuation names, replacing any earlier page position. */
+function turnPage(url: URL, continuation: string): void {
+  for (const key of pageKeys) url.searchParams.delete(key);
+  for (const [key, value] of new URLSearchParams(continuation)) {
+    if (!pageKeys.includes(key)) throw new Error(invalidInput);
+    url.searchParams.set(key, value);
+  }
+}
+
+/** One REST page, pull requests dropped. GitHub's 410 on a repository names it: Issues are turned off there. */
+async function issuePage(
+  api: IssueAccount["api"],
+  url: URL,
+  repository: string | null,
+): Promise<{ issues: RestIssue[]; link: string }> {
+  let page: { data: RestIssue[]; link: string };
+  try {
+    page = await api.rest<RestIssue[]>(url);
+  } catch (error) {
+    if (repository && error instanceof Error && error.message === issuesDisabled)
+      throw new Error(`configuration: GitHub has Issues turned off for ${repository}. Choose another source, such as Assigned to me.`, { cause: error });
+    throw error;
+  }
+  if (!Array.isArray(page.data)) throw new Error("unavailable: Invalid GitHub issue page.");
+  return { issues: page.data.filter((x) => !x.pull_request), link: page.link };
+}
+
+/** `cwd` locates the project whose GitHub repository the "repository" source lists. */
 export async function listIssuePage(
   { viewer, api }: IssueAccount,
   request: ListIssueRequest,
+  cwd?: string,
 ): Promise<IssuePage<IssueSummary>> {
-  const base = listUrl(request);
-  const scope = cursorScope(viewer, "issues", base.search, [...(request.labels ?? [])].sort());
+  validateListRequest(request);
+  const repository = request.source === "repository" ? await projectRepository(cwd) : null;
+  const base = listUrl(request, repository);
+  const labels = [...(request.labels ?? [])].sort();
+  // The repository joins the scope so a cursor cannot be replayed against another project's repository.
+  const scope = repository
+    ? cursorScope(viewer, "issues", base.search, labels, repository.toLowerCase())
+    : cursorScope(viewer, "issues", base.search, labels);
   const next = readCursor(scope, request.cursor);
-  if (next)
-    for (const [key, value] of new URLSearchParams(next)) {
-      if (!["page", "after", "before", "since_id"].includes(key)) throw new Error(invalidInput);
-      base.searchParams.set(key, value);
-    }
-  const { data, link } = await api.rest<RestIssue[]>(base);
-  if (!Array.isArray(data)) throw new Error("unavailable: Invalid GitHub issue page.");
-  const issues = data.filter((x) => !x.pull_request);
+  if (next) turnPage(base, next);
+  let { issues, link } = await issuePage(api, base, repository);
+  // A repository's listing holds pull requests too, dropped after the fetch. A page made only of
+  // them would show an empty board, so look a few pages further within this one request.
+  for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++) {
+    const following = pageLink(link, base, true);
+    if (!following) break;
+    turnPage(base, following);
+    ({ issues, link } = await issuePage(api, base, repository));
+  }
   // REST may omit the embedded repository. Hydrate missing identities in one bounded batch.
   const missing = issues.filter((x) => !x.repository?.node_id);
   const repositories = new Map<string, Repository>();
@@ -198,7 +270,7 @@ export async function listIssuePage(
   return {
     viewer,
     items: [...result.values()],
-    nextCursor: scopedCursor(scope, pageLink(link, base)),
+    nextCursor: scopedCursor(scope, pageLink(link, base, repository !== null)),
     incomplete,
   };
 }

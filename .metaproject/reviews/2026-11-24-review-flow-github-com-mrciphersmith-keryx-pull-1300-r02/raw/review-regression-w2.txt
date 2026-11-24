@@ -1,0 +1,112 @@
+STATUS: DONE_WITH_CONCERNS — review-regression, round 4 wave 2, slice-02 read in full (2153 lines). One major regression in the round-3 fix range d7b0f7058..4cb6c43ef (code commit 055115a20): the narrowed Issues fallback classifier drops the "not a Git project" reason that the base routed to "Show issues assigned to me".
+
+## What was checked (scope B: existing behaviour the Desktop fixes could break)
+
+1. Issues repository-source fallback (`repositoryUnavailable` in apps/desktop/src/issues/useIssueCollection.ts, used by IssuesBoard Collection).
+   Base d7b0f7058 IssuesBoard.tsx:147 offered the fallback for ANY `configuration:` error on the default source. Head matches only
+   three message texts. Enumerated every `configuration:` reason the repository source can produce on its first page
+   (`keryx ctx rg --all "fetch remote|turned off|usable repository|no remote|Invalid Issues request" src`, then read
+   src/integrations/issues-board.ts projectRepository/issuePage and src/review/board-github.ts reviewRepositories/selectRepository):
+   - "This project has no GitHub.com fetch remote." (board-github.ts:45) — matched.
+   - "GitHub has Issues turned off for <repo>. ..." (issues-board.ts:188) — matched.
+   - "This project's GitHub.com remote names no usable repository." (issues-board.ts:114) — matched.
+   - "Invalid Issues request." (issues-github.ts:8, older keryx, first page) — matched as "older".
+   - "Open a Git project with a GitHub.com remote." (board-github.ts:67, `git remote -v` fails: folder not a Git checkout, git missing)
+     — NOT matched. Filed as RG-R4-001.
+   - "Choose a GitHub repository connected to this project." (board-github.ts:48) — unreachable from projectRepository (no `requested`).
+2. Issues source storage for existing users: new per-project key `account + ".source." + JSON(cwd)` read before the legacy per-account
+   key; legacy key never written or removed; `clear()` only removes `.filters.` keys as before. No regression (same as wave 1).
+3. `useAcpSession.linkFlow` now rejects instead of queuing in `pendingFlow`. Only caller: App.tsx:414 via usePendingFlowLinks
+   (`keryx ctx rg "linkFlow\b|applyPendingFlow|pendingFlow\.current" apps/desktop/src`). `accept` awaits and catches it, and App's
+   `linkFlowOffer` voids a promise that never rejects, so no unhandled rejection. `workOnFlow` and the turn-end retry path
+   (useAcpSession.ts:414) still use pendingFlow/applyPendingFlow unchanged. A Link pressed before keryx stores a brand-new session
+   now shows "Not linked: ..." instead of linking silently after the turn — the journal records this as an accepted owner choice
+   ("a failed Link is not retried after the turn"), so not filed. The success dispatch `{t:"flags", sessionId, flags}` is the same
+   action applyPendingFlow dispatched.
+4. ReviewBoard focus effect (`loading`, `stale` added to deps; card-absent branch now refuses). Only producer of `focus` is App
+   (header subject link); the wait on `loading || stale` keeps the round-2 behaviour for an in-flight or cached load. No other consumer.
+5. PrWorkRow refocus effect and FlowOffer `onAct`: focus moves only when activeElement is body/null, so it cannot steal focus from
+   another control; the effect is a no-op on every other `offer` identity change. Dismiss notice focuses the board search field.
+6. review.css `.pr-work-slot { overflow: hidden }`: applies to all three slots; the session slot's menu is portalled
+   (createPortal in PrWorkRow), so the clip does not hide it. Not measured in a real engine.
+7. Test fixtures (app-navigation, app-work-row): the older-keryx mock now refuses flags for unsaved sessions; test-only.
+
+## Radius and coverage
+Candidate list: payload layers `affected` (depth 2, `truncated: []`), nothing dropped by a cap. The finding's path is a runtime edge
+the code graph does not carry (Desktop → Tauri issues_request → spawned `keryx issues list` → error text → Desktop regex); it was traced
+by reading source, not taken from the computed set. Not run (read-only, exec budget 0). research-evidence/verify-tests-to-run-1.txt
+records 1070 Desktop pass; no test covers the "Open a Git project" text (the new test feeds a made-up "This project has no remote.").
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-regression",
+    "round": 4,
+    "slices": ["slice-02"],
+    "summary": "One major regression: commit 055115a20's repositoryUnavailable (useIssueCollection.ts) no longer recognises 'configuration: Open a Git project with a GitHub.com remote.', so a non-Git project on the default repository source loses the 'Show issues assigned to me' fallback the base offered and is left with a Retry that always fails. linkFlow, focus, source-key and refocus changes break no existing caller.",
+    "findings": [
+      {
+        "id": "RG-R4-001",
+        "reviewer": "review-regression",
+        "severity": "major",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "quote": "  const unavailable = fallback && error ? repositoryUnavailable(error, !snapshot) : null;",
+        "problem": "Commit 055115a20 replaced the base test `/(?:^|\\b)configuration:/i.test(error)` with `repositoryUnavailable` (apps/desktop/src/issues/useIssueCollection.ts), which recognises only 'has no GitHub.com fetch remote', 'has Issues turned off for', 'names no usable repository' and a first-page 'Invalid Issues request'. The repository source has a fourth unavailable reason: src/review/board-github.ts reviewRepositories (reached from issues-board.ts projectRepository) throws 'configuration: Open a Git project with a GitHub.com remote.' when `git remote -v` fails, i.e. the project folder is not a Git checkout or git is not available. That text matches none of the patterns, so repositoryUnavailable returns null and Collection renders the generic notice with Retry.",
+        "impact": "Trigger: open the Issues tab in a Desktop project folder that is not a Git checkout (IssuesView needs only a global GitHub account, not a project remote), with no source stored for it, so the D5 default 'repository' is sent. Base d7b0f7058: the configuration: error showed 'This project's repository issues are not available here' and 'Show issues assigned to me'. Head: the error with 'Retry', which re-sends the same request and fails the same way; the only way out is to find the Source select. docs/docs/guides/desktop-issues.md:46 (updated in this range) promises the fallback when the project lacks a GitHub.com remote.",
+        "suggested_fix": "Add the reason to repositoryUnavailable, e.g. `/has no GitHub\\.com fetch remote|Open a Git project with a GitHub\\.com remote|has Issues turned off for|names no usable repository/i`, or better give every repository-source failure one CLI prefix (AR-007's suggestion) and match that. Add 'configuration: Open a Git project with a GitHub.com remote.' to the IssuesBoard test that lists the fallback reasons, and replace the invented 'configuration: This project has no remote.' in the keep-Retry test with a real non-repository reason such as 'configuration: Refresh before loading the next page.'.",
+        "evidence": "Base: `git grep d7b0f7058 -- apps/desktop/src/issues/IssuesBoard.tsx` line 147 `const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;` with line 78 fallback for the unchosen repository source. Head: useIssueCollection.ts repositoryUnavailable regex (slice-02 hunk @@ 1,51 @@). src/review/board-github.ts:61-69 reviewRepositories catch → 'configuration: Open a Git project with a GitHub.com remote.' (blame ac6a50116, predates the PR). src/integrations/issues-board.ts:117-124 projectRepository calls selectRepository(await reviewRepositories(cwd)). apps/desktop/src/platform/issues.ts passes the CLI error through unchanged. apps/desktop/src/issues/IssuesView.tsx renders IssuesBoard whenever any GitHub account is listed. `keryx ctx rg 'Open a Git project' apps/desktop/src` finds no Desktop match. Read, not executed.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "issues-fallback-misses-not-git-project",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/issues/IssuesBoard.tsx Collection: unavailable = repositoryUnavailable(error, !snapshot)",
+            "apps/desktop/src/issues/useIssueCollection.ts repositoryUnavailable (the classifier missing the reason)"
+          ],
+          "enumeration_method": "Every first-page error the repository source can raise, from src/integrations/issues-board.ts projectRepository/listIssuePage/issuePage and src/review/board-github.ts reviewRepositories/selectRepository (keryx ctx rg --all over src for the reason texts), checked against the repositoryUnavailable regex: one configuration reason ('Open a Git project with a GitHub.com remote.') is unmatched; selectRepository's 'Choose a GitHub repository' is unreachable without `requested`. repositoryUnavailable has one caller (IssuesBoard Collection)."
+        }
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "FE-R3-001", "disposition": "closed" },
+      { "id": "FE-R3-002", "disposition": "closed" },
+      { "id": "AR-007", "disposition": "closed" },
+      { "id": "TP-R3-003", "disposition": "closed" },
+      { "id": "UX-011", "disposition": "closed" },
+      { "id": "UX-013", "disposition": "closed" },
+      { "id": "UX-015", "disposition": "closed" },
+      { "id": "DG-R3-002", "disposition": "closed" },
+      { "id": "UX-009", "disposition": "closed" },
+      { "id": "UX-010", "disposition": "closed" },
+      { "id": "UX-012", "disposition": "closed" },
+      { "id": "LY-005", "disposition": "closed" },
+      { "id": "TP-R3-001", "disposition": "closed" },
+      { "id": "TP-R3-002", "disposition": "closed" },
+      { "id": "TP-R3-004", "disposition": "closed" },
+      { "id": "TP-R3-005", "disposition": "closed" },
+      { "id": "HL3-003", "disposition": "open" },
+      { "id": "LG-R3-003", "disposition": "open" },
+      { "id": "UX-014", "disposition": "open" },
+      { "id": "UX-016", "disposition": "open" }
+    ],
+    "stats": {
+      "files_reviewed": 19,
+      "findings": 1,
+      "blocker": 0,
+      "major": 1,
+      "minor": 0,
+      "info": 0,
+      "radius_truncated": false
+    }
+  }
+}
+```
+
+Disposition notes: AR-007 closed as reported (over-broad configuration: match narrowed, classifier moved beside isAccessError, later-page
+'Invalid Issues request' keeps Retry); the narrowing itself introduced RG-R4-001. LY-005 closed by the slot clip, not measured in an
+engine. HL3-003, LG-R3-003, UX-014, UX-016 deferred info and unchanged in this range (rAF fill gap, dismiss ending the wait, notice
+without GitHub link, offer only on the work row).
+
+Routing audit: graph_used: payload layers (affected set, PR-head graph); wiki_used: not-relevant (regression over code paths);
+ctx_used: yes (keryx ctx rg/read for every search); raw_rg_used: no. Two short `git log`/`git grep` reads used keryx:raw markers.

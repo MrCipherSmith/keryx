@@ -1,0 +1,81 @@
+STATUS: DONE
+
+## Security Review (round 4, wave 2, slice-02)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: d7b0f7058..4cb6c43ef (round-3 fix range), diff mode
+- Slice: slice-02 (Desktop code and tests, plus flow.json/journal.md bookkeeping), read in full (2154 lines)
+- Rules read: `.metaproject/rules/activity/review.mdc`, review-security-code SKILL.md, orchestrator Severity (canonical) and Round obligations
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Verified clean (sites named)
+
+1. Rendering of CLI/GitHub-provided text. Every new sink is a React text child or attribute, which React escapes:
+   - `apps/desktop/src/review/PrWorkRow.tsx` FlowOffer: `text` (`Not linked: ${offer.error}`, `Link ${name}?` with `offer.flow.title`) is a span child; `title` and the `aria-label`s are attributes.
+   - `apps/desktop/src/issues/IssuesBoard.tsx` unavailable notice: `{error.replace(/^configuration:\s*/i, "")}` is a `<p>` child.
+   - `apps/desktop/src/review/ReviewBoard.tsx` focus notice: `{focusNotice}` span child (unchanged sink; only the Dismiss handler changed).
+   - Enumeration: `keryx ctx rg -n "applyPendingFlow|SESSION_FLAGS|dangerouslySetInnerHTML|innerHTML"` over `apps/desktop/src/session/useAcpSession.ts apps/desktop/src/review apps/desktop/src/issues apps/desktop/src/App.tsx`: the only raw-HTML sinks are IssueMarkdown.tsx, ReviewReportMarkdown.tsx and DiscussionMarkdown.tsx, none touched by this range.
+   - Regexes added (`repositoryUnavailable` in useIssueCollection.ts, the prefix strip in IssuesBoard.tsx) are alternations of literals / anchored prefixes: no catastrophic backtracking. A matched substring only changes which recovery button is shown (user-clicked); no privilege or data effect.
+
+2. localStorage keys and values (`apps/desktop/src/issues/IssuesBoard.tsx`):
+   - New key `account + ".source." + JSON.stringify(props.cwd)`; the value written is a `Source` enum, and the read (new key, then legacy `account + ".source"`) is gated by `Object.hasOwn(SOURCES, value)` before use. A tampered value falls back to `DEFAULT_SOURCE`. No secret or token is stored; the key adds the local project path, which never leaves the local WebView storage.
+   - `clear()` (access denied) still removes `account + ".filters."*` (the keys that can hold private repository names) and `account + ".project"`; the source keys hold no repository name, so leaving them is consistent with the stated reason.
+   - Enumeration: `keryx ctx rg -n --all "issueSessions|repositoryUnavailable|\.source\b" apps/desktop/src`: the source key is read/written only at IssuesBoard.tsx:63, :66 and through `change()` (:85).
+
+3. ACP request built by `linkFlow` (`apps/desktop/src/session/useAcpSession.ts`):
+   - Sends `SESSION_FLAGS` with `{ sessionId, cwd, flow: flowDir }`, the same parameter shape as the pre-existing `applyPendingFlow` (useAcpSession.ts:236). `sessionId` comes from the pending Create Flow request (a session the user opened), `flowDir` from a `flows_list` package dir; the hook (usePendingFlowLinks.ts) passes them unchanged. No new field, no string building; server-side flow validation is unchanged by this slice. The error shown on failure is `errMessage(cause)`, rendered as escaped text in the work row.
+   - The double-press guard (`offer.linking` check plus synchronous `offersRef` update) prevents duplicate writes; not a security property, noted only because it bounds request volume from one control.
+
+4. Tests and fixtures (IssuesBoard.dom.test.tsx, PrWorkRow.dom.test.tsx, usePendingFlowLinks.dom.test.tsx, app-*.fixture.tsx, ReviewProgress.test.tsx, model.test.ts): fixture logins/ids only, no credentials or tokens.
+
+5. flow.json / journal.md: bookkeeping text; no secrets or personal data.
+
+### Clean categories
+Injection (XSS/command/SSTI/eval): none added. Auth/authz/IDOR: no new endpoint; the ACP call reuses an existing method with existing params. Secrets/crypto/CSRF/path traversal/open redirect: not present in the slice. React-specific (dangerouslySetInnerHTML, eval, sensitive localStorage, postMessage): none added.
+
+### Prior dispositions
+No security finding is attached to slice-02 (SC3-001 is in `src/lib/file-lock.ts`, outside this slice, and stays deferred). For the non-security prior findings whose fixes I read in this slice, the code check:
+- AR-007: closed. The classifier moved to `useIssueCollection.ts` `repositoryUnavailable`, matches the three named reasons only, and treats "Invalid Issues request" as an older keryx only on the first page; other errors keep Retry.
+- DG-R3-002: closed. `issueSessions` has no remaining definition or caller in apps/desktop/src; model.test.ts now pins `boundSessionIndex`.
+- UX-013: closed. The `configuration:` prefix is stripped in the unavailable notice.
+- UX-015: closed. Hint reads "Bundled keryx in Settings → Desktop".
+- UX-011: closed. Source stored per project and account; legacy per-account key only read.
+Other attached findings (FE-R3-001, FE-R3-002, TP-R3-*, UX-009/010/012, LY-005, etc.) are left to their owning lenses; not judged here.
+
+### Routing audit
+graph_used: not-relevant (payload layers supplied the affected set; no export with outside callers changed in a security-relevant way). wiki_used: not-relevant. ctx_used: yes (`keryx ctx rg` twice). raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-security-code",
+    "slices": ["slice-02"],
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "AR-007", "disposition": "closed", "evidence": "apps/desktop/src/issues/useIssueCollection.ts repositoryUnavailable matches only the three named reasons; 'older' only when firstPage; IssuesBoard.tsx:156 uses it" },
+      { "id": "DG-R3-002", "disposition": "closed", "evidence": "keryx ctx rg --all 'issueSessions' apps/desktop/src: no matches; model.test.ts uses boundSessionIndex" },
+      { "id": "UX-013", "disposition": "closed", "evidence": "IssuesBoard.tsx notice renders error.replace(/^configuration:\\s*/i, '')" },
+      { "id": "UX-015", "disposition": "closed", "evidence": "IssuesBoard.tsx hint text 'choose Bundled keryx in Settings → Desktop'" },
+      { "id": "UX-011", "disposition": "closed", "evidence": "IssuesBoard.tsx:63 sourceKey = account + '.source.' + JSON.stringify(cwd); legacy key read-only at :66" }
+    ],
+    "stats": {
+      "files_reviewed": 19,
+      "findings": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+      "enumeration": [
+        "keryx ctx rg -n 'applyPendingFlow|SESSION_FLAGS|dangerouslySetInnerHTML|innerHTML' apps/desktop/src/session/useAcpSession.ts apps/desktop/src/review apps/desktop/src/issues apps/desktop/src/App.tsx",
+        "keryx ctx rg -n --all 'issueSessions|repositoryUnavailable|\\.source\\b' apps/desktop/src"
+      ],
+      "not_verified": "No tests run (exec_budget_s 0); server-side validation of the session_flags flow value not re-read (outside slice-02, unchanged here)."
+    }
+  }
+}
+```
+
+Summary: slice-02 of the round-3 fix range adds no security defect. New CLI/GitHub text (offer error, Flow title, Issues error) renders as escaped React text; the per-project source key stores only an allowlisted enum; `linkFlow` sends the same `session_flags` parameters as the existing path.

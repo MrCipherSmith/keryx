@@ -1,0 +1,83 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 4, wave 3, slice-03 (read in full, 1627 lines). Range d7b0f7058..4cb6c43ef. PR body from payload review_context.pr.body. Commit 055115a20 message read with git log -1. Wave-1 PC-009 and PC-010 are not re-filed.
+
+Concern for the orchestrator (package, not PR): the dispatch says slice-03 covers docs/docs/cli-reference.md, but slice-03.diff has no hunk for it. `git diff --stat d7b0f7058..4cb6c43ef -- docs src` lists cli-reference.md (13 +-). I read that hunk with `keryx ctx run -- git diff`. Wave 1 already filed it as PC-008 (closed) and PC-009. No other wave-3 reviewer got it from the slice.
+
+## Prior dispositions (findings slice-03 touches)
+
+- TP-R3-006 closed. issues-board.test.ts adds "AC13 a viewer source never gets the repository-named 410 text" (`rejects.toThrow(issuesDisabled)`, `rejects.not.toThrow("Choose another source")`) and "AC13 a viewer page made only of pull requests does not page on" (`expect(pages).toEqual([1])`). These are the two fixtures the finding asked for.
+- TP-R3-007 closed. FlagsLockTiming can be injected (`setSessionFlags(..., timing)`), and "a flags change held off past its timeout fails with the retry error" asserts `/…locked by another keryx process; retry/` for both the sync and async paths. "a subject backfill runs under the flags lock" puts a fresh lock in place and expects backfillSessionSubject to throw the retry error. That pins M47 with a planted lock rather than the two-writer case the finding suggested.
+- TP-R3-008 closed. The elapsed-time assertions (`>= 1500`, `< 1500`) and the `Date.now()` start barrier are gone. The tests now use file barriers (`until(held, child)`, `go` files) and injected timing. This matches the body ("The flags-lock tests no longer depend on elapsed time") and the commit ("the lock tests use file barriers instead of elapsed time").
+- TP-R3-009 closed. "a backfill of an invalid subject is refused and writes nothing" asserts `/not a GitHub subject/` and that flags.json does not exist.
+- DG3-001 closed. issue-session.ts `bindIssueSubject(dir, ref, firstBind)`: the first bind lets the error through, and a later open skips the write when `sessionSubjectSettled` holds and swallows a failed backfill. Tests: "a later open whose subject backfill fails still opens the session" and "the first bind fails loudly…". This matches the body ("after the first bind a failed backfill no longer stops the issue from opening") and implementation-plan.md ("После первой привязки эта запись необязательна").
+- HL3-001 closed. server.ts handleSessionFlags is `async` and calls `await setSessionFlagsAsync`. withFileLockAsync pauses with `setTimeout(RETRY_MS)`.
+- HL3-002 closed. `lockOptions` passes `createDir: false`. `LockAttempt.prepare` skips mkdir, `step` rethrows ENOENT, and `whileStored` requires summary.json. Both cases throw `no session … in this project`, which matches implementation-plan.md ("получает «no session» и папку не возвращает"). The test "a flags write to a session removed since it was located is refused and does not bring it back" covers the moved directory and the half-done move.
+- PC-008 closed (wave 1; the cli-reference hunk was re-read here and agrees).
+- HL3-004 open (deferred). FLAGS_LOCK_TIMING is still `{ timeoutMs: 3_000, staleMs: 2_000 }`, and the body's Known gaps lists it.
+- SC3-001 open (deferred). LockAttempt.step keeps the age-only stale takeover. The body calls it a race "which predates this PR": `git diff main...d7b0f7058 -- src/lib/file-lock.ts` is empty and main has the file (18f169be5), so the claim holds.
+
+## Checklist form (PR body, docs and commit claims vs slice-03)
+
+The body has no checkboxes. Each claim that touches the backend is one row.
+
+| Claim (quoted) | What the diff/code shows | Verdict |
+|---|---|---|
+| Body: "under a per-session `flags.json.lock` (the ACP server waits for it without blocking other sessions" | server.ts `return await setSessionFlagsAsync(...)`; file-lock.ts withFileLockAsync `await new Promise((resolve) => setTimeout(resolve, RETRY_MS))` | agrees |
+| Body: "a write to a session already moved to the trash is refused and does not bring it back" | organize.ts lockOptions `createDir: false`; whileStored → goneError; withFlagsLock maps ENOENT + missing dir to goneError | agrees |
+| Body: "after the first bind a failed backfill no longer stops the issue from opening" | issue-session.ts `firstBind = launch.stage === "registered"`; try/catch around a later backfill | agrees |
+| Body: "a remote that names no usable repository" among the unavailable reasons | issues-board.ts `unusableRemote = "configuration: This project's GitHub.com remote names no usable repository."`, thrown for `.`/`..` parts; useIssueCollection.ts:27 matches "names no usable repository" | agrees |
+| Body Known gaps: SC3-001 "predates this PR" | stale branch is unchanged in logic (removed and re-added lines in the hunk); main...d7b0f7058 has no change to file-lock.ts | agrees |
+| Body Verification: "The flags-lock tests no longer depend on elapsed time." | organize.test.ts and file-lock.test.ts: barriers plus injected timeoutMs/staleMs; no Date.now() deltas are asserted | agrees |
+| Body Verification: root suites incl. `src/lib/file-lock` "94 pass" | evidence: 68/0 over 7 root files (file-lock.test.ts included, src/commands/acp not run) | PC-010 class, not re-filed |
+| Body Choices: "A flags write waits up to 3 s for the lock, then fails with "retry"." | FLAGS_LOCK_TIMING staleMs 2_000 < timeoutMs 3_000 | PC-009, not re-filed |
+| Body: "No Rust changes. User docs: docs/docs/guides/desktop-issues.md, docs/docs/cli-reference.md" | both are in the range; no src-tauri file | agrees |
+| Commit: "flags-lock timing is injectable" | `timing: FlagsLockTiming = FLAGS_LOCK_TIMING` on updateSessionFlagsAt(Async), setSessionFlags(Async), backfillSessionSubject | agrees |
+| Commit: "withFileLock gains createDir:false so a flags write never recreates a trashed session" | FileLockOptions.createDir; prepare/step | agrees |
+| Commit: "withFileLockAsync lets the ACP server wait without blocking" | as above | agrees |
+| Commit: "the issue subject backfill is best-effort after the first bind" | bindIssueSubject | agrees |
+| Commit: "a remote naming no usable repository gets its own reason" | unusableRemote; no project at all stays `invalidInput` (test asserts "configuration: Invalid Issues request.") | agrees |
+| Commit: "Docs: ACP _keryx/session_flags subject and lock refusal, Issues guide, implementation plan" | cli-reference.md, desktop-issues.md and implementation-plan.md are changed; acp.ts help also names flow and subject | agrees |
+| desktop-issues.md: "Desktop remembers the chosen source for this project and account." | Desktop sourceKey includes cwd (wave 2, UX-011) | agrees |
+| desktop-issues.md: "This source needs a GitHub.com remote in the project that names a repository, and Issues turned on … In those cases Issues shows the reason and **Show issues assigned to me** … Any other error shows **Retry**." | unusableRemote plus the three-reason regex; other errors fall to Retry | agrees |
+| implementation-plan.md: "сервер ACP ждёт асинхронно и не останавливает другие сессии. Блокировка не создаёт папку сессии…" | as above | agrees |
+| implementation-plan.md Issues: "удалённый репозиторий не называет годного репозитория … Это не зависит от того, выбран ли источник явно; любая другая ошибка показывается с Retry. Выбор источника хранится для проекта и аккаунта" | as above | agrees |
+| implementation-plan.md (h): older keryx drops subject and the unlink marker (LG-014) | matches the body Known gaps | agrees |
+| acp.ts help: "_keryx/session_flags archives, pins, links a flow package to or binds a GitHub pull request or issue (subject)" | handleSessionFlags accepts archived, pinned, flow and subject | agrees |
+
+Documentation outside the diff: `keryx ctx rg "Invalid Issues request|no usable repository|flags.json.lock|withFileLockAsync|createDir" docs README.md apps/desktop/src` finds no document outside the range that still describes the old `..`-remote reason or the old lock behaviour. Only the Desktop code and tests, and implementation-plan.md (in the diff), match.
+
+## Findings
+
+None new.
+
+Out of lane (not filed): the withFileLock JSDoc still says it "Returns `null` when the lock could not be taken … rather than a throw", but with `createDir: false` a missing directory now throws ENOENT. The option's own doc states that throw. This is a code comment in the diff, so it belongs to review-jev-comments.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "slices": ["slice-03"],
+    "summary": "Round-4 wave-3 contract check of the keryx backend fixes in 055115a20 (flags lock: async wait, createDir:false, injectable timing; issue subject backfill best-effort after the first bind; unusableRemote reason) and the docs (desktop-issues.md, implementation-plan.md, cli-reference.md, acp.ts help) against the PR body and the commit message. Every backend claim agrees with the code and has a named test. TP-R3-006..009, DG3-001, HL3-001, HL3-002 and PC-008 are closed; HL3-004 and SC3-001 stay deferred, and both are listed in Known gaps. No new findings. Concern: slice-03.diff has no cli-reference.md hunk, although that file is in the range; I read it with git diff.",
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "TP-R3-006", "disposition": "closed"},
+      {"id": "TP-R3-007", "disposition": "closed"},
+      {"id": "TP-R3-008", "disposition": "closed"},
+      {"id": "TP-R3-009", "disposition": "closed"},
+      {"id": "DG3-001", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "HL3-004", "disposition": "open"},
+      {"id": "SC3-001", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+  }
+}
+```
+
+Not verified: whether the new backend tests fail with each fix reverted (testing lane; the journal gives counts only, PC-010); the 94/0 root count and `bun test src/acp` 455/0 (no run log; the evidence covers 7 root files, 68/0); root tsc.
+
+Routing audit: graph_used: no (not-relevant: contract lane; doc consumers of the changed strings checked by ctx rg). wiki_used: no (not-relevant: claims checked against the PR body, commit message, docs and code). ctx_used: yes (ctx run git diff --stat / git diff cli-reference / git log main, ctx rg over docs/README/apps, ctx read of organize.ts and the test evidence). raw_rg_used: no. One raw `git log -1 --format=%B` of the commit message, marked keryx:raw.

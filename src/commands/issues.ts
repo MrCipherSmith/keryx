@@ -19,7 +19,8 @@ import {
 const usage =
   "keryx issues <viewer|origin|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
 
-export async function issuesCommand(args: string[], cwd = process.cwd()): Promise<void> {
+/** `connect` authenticates the selected GitHub account; tests pass a stand-in that never reads a token. */
+export async function issuesCommand(args: string[], cwd = process.cwd(), connect = connectIssueAccount): Promise<void> {
   const [action, ...flags] = args;
   if (!action || action === "help" || action === "--help" || action === "-h") {
     console.log(usage);
@@ -41,7 +42,7 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
     throw new Error(usage);
   }
   if (!request || Array.isArray(request) || typeof request !== "object") throw new Error(usage);
-  const account = await connectIssueAccount(cwd, values.login);
+  const account = await connect(cwd, values.login);
   let result;
   switch (action) {
     case "viewer":
@@ -52,7 +53,7 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
       if (result.issue) await attachStages(cwd, account.viewer, [result.issue]);
       break;
     case "list": {
-      const page = await listIssuePage(account, request as unknown as ListIssueRequest);
+      const page = await listIssuePage(account, request as unknown as ListIssueRequest, cwd);
       await attachStages(cwd, page.viewer, page.items);
       result = page;
       break;

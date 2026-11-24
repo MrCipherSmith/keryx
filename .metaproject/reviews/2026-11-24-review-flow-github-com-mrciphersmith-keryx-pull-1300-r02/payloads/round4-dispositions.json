@@ -1,0 +1,98 @@
+[
+ {
+  "id": "review-degradation-w1:DG-R4-001",
+  "status": "finding",
+  "finding": "RG-R4-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w1.txt",
+  "reason": "duplicate of RG-R4-001, folded at ingest"
+ },
+ {
+  "id": "review-clean-code-w2:CC4-005",
+  "status": "finding",
+  "finding": "AR-R4-003",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w2.txt",
+  "reason": "duplicate of AR-R4-003, folded at ingest"
+ },
+ {
+  "id": "review-clean-code-w3:CC4-006",
+  "status": "finding",
+  "finding": "CC4-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+  "reason": "duplicate of CC4-002, folded at ingest"
+ },
+ {
+  "id": "review-clean-code-w3:CC4-008",
+  "status": "finding",
+  "finding": "CC4-003",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+  "reason": "duplicate of CC4-003, folded at ingest"
+ },
+ {
+  "id": "review-clean-code-w3:CC4-009",
+  "status": "finding",
+  "finding": "DG-R4-006",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-clean-code-w3.txt",
+  "reason": "duplicate of DG-R4-006, folded at ingest"
+ },
+ {
+  "id": "review-frontend-w3:FE-R4-003",
+  "status": "finding",
+  "finding": "DG-R4-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-frontend-w3.txt",
+  "reason": "duplicate of DG-R4-002, folded at ingest"
+ },
+ {
+  "id": "review-highload-w3:HL4-002",
+  "status": "finding",
+  "finding": "DG-R4-002",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-highload-w3.txt",
+  "reason": "duplicate of DG-R4-002, folded at ingest"
+ },
+ {
+  "id": "review-logic-w1:LG-R4-001",
+  "status": "finding",
+  "finding": "HL4-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-logic-w1.txt",
+  "reason": "duplicate of HL4-001, folded at ingest"
+ },
+ {
+  "id": "review-layout-w1:LY-R4-001",
+  "status": "finding",
+  "finding": "UX-R4-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w1.txt",
+  "reason": "duplicate of UX-R4-001, folded at ingest"
+ },
+ {
+  "id": "review-degradation-w2:DG-R4-004",
+  "status": "finding",
+  "finding": "PC-010",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w2.txt",
+  "reason": "duplicate of PC-010, folded at ingest"
+ },
+ {
+  "id": "review-degradation-w2:DG-R4-005",
+  "status": "finding",
+  "finding": "TP-R4-001",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-degradation-w2.txt",
+  "reason": "duplicate of TP-R4-001, folded at ingest"
+ },
+ {
+  "id": "review-testing-practices-w3:TP-R4-012",
+  "status": "finding",
+  "finding": "DG-R4-007",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-testing-practices-w3.txt",
+  "reason": "duplicate of DG-R4-007, folded at ingest"
+ },
+ {
+  "id": "review-layout-w1:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w1.txt",
+  "reason": "a real-engine measurement needs the running Desktop app at 720/1180px, not available in this round; the fix round changed the offer so Link carries the truncating state text and Dismiss is a 24px icon; the measurement stays a named gap in the PR body"
+ },
+ {
+  "id": "review-layout-w2:fu1",
+  "status": "out-of-scope",
+  "evidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/raw/review-layout-w2.txt",
+  "reason": "a real-engine measurement needs the running Desktop app at 720/1180px, not available in this round; the fix round changed the offer so Link carries the truncating state text and Dismiss is a 24px icon; the measurement stays a named gap in the PR body"
+ }
+]

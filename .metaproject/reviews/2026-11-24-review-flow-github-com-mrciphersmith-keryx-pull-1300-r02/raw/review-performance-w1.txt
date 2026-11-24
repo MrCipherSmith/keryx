@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage1`, round 4, range d7b0f7058..4cb6c43ef (code commit 055115a20), mode explicit-hash-range, slice-01 read in full (9 files). Surrounding head code read: `src/lib/file-lock.ts` (LockAttempt, withFileLock, withFileLockAsync), `src/session/organize.ts` (withFlagsLock/withFlagsLockAsync, setSessionFlagsAsync, sessionSubjectSettled), `src/acp/server.ts` handleSessionFlags and its dispatch entry, `src/session/issues/issue-session.ts` bindIssueSubject/withIssueBinding, `ReviewBoard.tsx` focus effect.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### Prior dispositions (slice-01)
+- HL3-001 (merged with PF-R3-001), flags-lock sync wait blocks the ACP server: **fixed**. `handleSessionFlags` is now `async` and awaits `setSessionFlagsAsync` → `updateSessionFlagsAtAsync` → `withFlagsLockAsync` → `withFileLockAsync`, which yields with `await new Promise(r => setTimeout(r, RETRY_MS))` between attempts; the dispatch entry `[KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params) => handleSessionFlags(params)` returns the promise. Class check (`keryx ctx rg 'setSessionFlags\b|updateSessionFlagsAt\b|setSessionFlagsAsync|withIssueBinding\(' src --glob '!*.test.ts'`, 11 matches, complete): the only remaining synchronous flags writers are `issues-launch.ts:116` (`setSessionFlags`, predates this range, blame 670f35385) and `withIssueBinding → bindIssueSubject → backfillSessionSubject`; both are reached only from `src/commands/issues.ts` and `src/commands/issue-workspace.ts`, the short-lived CLI child the original finding said may keep the sync form. Each async attempt still does a few sync syscalls (openSync/statSync) per 15 ms tick: sub-millisecond, not a stall.
+- HL3-002, lock mkdir recreates a trashed session: **fixed** (read, not executed). `lockOptions` passes `createDir: false`, `LockAttempt.prepare` skips mkdir, an ENOENT on the O_EXCL open throws at once (no wait-out), and `whileStored` refuses when `summary.json` is gone. Adds one `existsSync` per flags write: negligible.
+- DG3-001, issue reopen fails on flags backfill: **fixed**; also a perf improvement on the per-open path: a later open first calls `sessionSubjectSettled` (lock-free read of the atomically replaced flags.json) and skips the lock entirely when the subject is stored or unlinked, so the common reopen no longer takes the flags lock.
+- HL3-004, age-only 2 s stale threshold: **deferred, unchanged** (`FLAGS_LOCK_TIMING = { timeoutMs: 3_000, staleMs: 2_000 }`; no PID check added). Acknowledged as deferred; nothing in this range makes it worse.
+
+### Clean Areas
+- CLI/TUI hot paths: the async lock polls a cross-process file lock (no event source exists), bounded by the 3 s deadline; announcement once. Not a polling defect.
+- React re-renders: `IssuesBoard` adds one ref and a `useEffect([source])` that does nothing unless a flag ref is set; `FlowOffer` builds three short strings per render; `ReviewBoard` focus branch is one `cards.some` inside the focus effect, gated by the focus nonce. No hot-path cost.
+- `model.ts`: `issueSessions` removed; no new computation.
+- CSS: `.pr-work-offer` text-overflow rules; no layout-thrash pattern.
+- Memory leaks: the async wait's timers are awaited, not left recurring; no listeners added.
+- N+1 / indexes / pagination / bundle imports / redundant API calls: none in the slice.
+- Docs (`cli-reference.md`): not code.
+
+### Layers
+- graph: payload `layers.affected` used as a lead; dispatch site and callers confirmed with `keryx ctx rg`. wiki: not-relevant. ctx: used (`keryx ctx rg`, `keryx ctx read`). raw: one `git show 055115a20` with a keryx:raw marker for the line-level diff; no raw rg/grep.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-performance",
+    "round": 4,
+    "status": "DONE",
+    "slices": ["slice-01"],
+    "findings": [],
+    "prior_dispositions": [
+      {
+        "id": "HL3-001",
+        "merged_ids": ["PF-R3-001"],
+        "dedupe_key": "flags-lock-sync-wait-blocks-acp-server",
+        "disposition": "fixed",
+        "evidence": "src/acp/server.ts handleSessionFlags is async and awaits setSessionFlagsAsync; organize.ts withFlagsLockAsync -> lib/file-lock.ts withFileLockAsync yields via setTimeout(RETRY_MS) between attempts. Remaining sync flags writers (issues-launch.ts:116 setSessionFlags, issue-session.ts bindIssueSubject -> backfillSessionSubject) are reached only from src/commands/issues.ts and src/commands/issue-workspace.ts (short-lived CLI child), the scope the finding allowed to stay synchronous. Enumeration: keryx ctx rg 'setSessionFlags\\b|updateSessionFlagsAt\\b|setSessionFlagsAsync|withIssueBinding\\(' src --glob '!*.test.ts' (11 matches, complete)."
+      },
+      {
+        "id": "HL3-002",
+        "dedupe_key": "flags-lock-mkdir-recreates-trashed-session",
+        "disposition": "fixed",
+        "evidence": "organize.ts lockOptions sets createDir:false; file-lock.ts LockAttempt.prepare skips mkdir and step() rethrows ENOENT immediately; whileStored refuses when summary.json is missing. Read, not executed."
+      },
+      {
+        "id": "DG3-001",
+        "dedupe_key": "issue-reopen-fails-on-flags-backfill",
+        "disposition": "fixed",
+        "evidence": "issue-session.ts bindIssueSubject: firstBind writes loudly; a later open returns on sessionSubjectSettled (lock-free read) and swallows a failed backfill. Also removes the per-open lock acquisition in the common case."
+      },
+      {
+        "id": "HL3-004",
+        "dedupe_key": "flags-lock-age-only-stale-2s",
+        "disposition": "deferred",
+        "evidence": "FLAGS_LOCK_TIMING still { timeoutMs: 3_000, staleMs: 2_000 } with age-only stale takeover; deferral acknowledged, not worsened by this range."
+      }
+    ],
+    "stats": {
+      "files_reviewed": 9,
+      "findings": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+      "prior_dispositions": 4
+    }
+  }
+}
+```
+
+Summary: round-3 fix range is clean for performance. HL3-001/PF-R3-001 is fixed (ACP server now waits for the flags lock asynchronously; the remaining sync waiters run only in the short-lived issues CLI child). HL3-002 and DG3-001 confirmed fixed by reading; HL3-004 stays deferred. No new findings.

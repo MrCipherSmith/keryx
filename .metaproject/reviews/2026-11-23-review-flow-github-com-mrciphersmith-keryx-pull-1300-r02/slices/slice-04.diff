@@ -1,0 +1,2432 @@
+--- apps/desktop/src/acp/types.test.ts
+@@ 1,23 @@
++import { describe, expect, test } from "bun:test";
++import { sameSubject, sessionFlags, type SessionSubject } from "./types";
++
++const pr: SessionSubject = { kind: "pr", repo: "Org/Repo", number: 5, url: "https://github.com/Org/Repo/pull/5" };
++
++describe("sameSubject", () => {
++  test("matches kind, number and repo without case; the url and repositoryId do not matter", () => {
++    expect(sameSubject(pr, { ...pr, repo: "org/repo", url: "https://github.com/org/repo/pull/5", repositoryId: "R_1" })).toBe(true);
++  });
++
++  test("a different kind, number or repo is another subject; a missing one matches nothing", () => {
++    expect(sameSubject(pr, { ...pr, kind: "issue", url: "https://github.com/Org/Repo/issues/5" })).toBe(false);
++    expect(sameSubject(pr, { ...pr, number: 6 })).toBe(false);
++    expect(sameSubject(pr, { ...pr, repo: "Org/Other" })).toBe(false);
++    expect(sameSubject(pr, undefined)).toBe(false);
++    expect(sameSubject(null, null)).toBe(false);
++  });
++
++  test("session/list reports the subject in _meta.keryx", () => {
++    expect(sessionFlags({ sessionId: "s", cwd: "/p", _meta: { keryx: { subject: pr } } }).subject).toEqual(pr);
++    expect(sessionFlags({ sessionId: "s", cwd: "/p" }).subject).toBeUndefined();
++  });
++});
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 1,91 @@
+ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
+ import type { Root } from "react-dom/client";
+ import type { IssueSummary } from "../../../../src/integrations/issues-contract";
++import type { SessionInfo } from "../acp/types";
+ import type { IssuesAction, requestIssues } from "../platform/issues";
+ import { registerDom, unregisterDom } from "../test/dom";
+ 
+ let createElement: typeof import("react").createElement;
+ let act: (fn: () => void | Promise<void>) => Promise<void>;
+ let Board: typeof import("./IssuesBoard").IssuesBoard;
+ let root: Root;
+ let host: HTMLElement;
+ const viewer = { login: "fixture", nodeId: "U_a", host: "github.com" };
+ const issue: IssueSummary = {
+   ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
+   title: "Report the failing upload", state: "open", author: "sam", assignees: ["lee"], labels: ["sync"],
+   createdAt: "2026-11-01", updatedAt: "2026-11-02", work: {stage: "done"},
+ };
+ 
+ beforeAll(async () => {
+   registerDom();
+   const react = await import("react");
+   act = react.act as typeof act;
+   createElement = react.createElement;
+   Board = (await import("./IssuesBoard")).IssuesBoard;
+   host = document.createElement("div"); document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ beforeEach(async () => { await act(() => root.render(null)); localStorage.clear(); });
+ afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
+ 
+ type Read = (login: string, action: IssuesAction, args: object) => Promise<unknown>;
+-function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}) {
++function render(read: Read, login = viewer.login, onWork: (action: string) => void = () => {}, sessions?: SessionInfo[]) {
+   const request: typeof requestIssues = async <T,>(_cwd: string, account: string, action: IssuesAction, args: object) => (action === "viewer" ? { viewer: { ...viewer, login: account, nodeId: account === viewer.login ? viewer.nodeId : "U_b" } } : await read(account, action, args)) as T;
+   return act(async () => { root.render(createElement(Board, { cwd: "/fixture", login, request,
+-    onSettings: () => {}, onWork: async action => onWork(action) })); });
++    onSettings: () => {}, onWork: async action => onWork(action), ...(sessions ? { sessions } : {}) })); });
+ }
++const account = "keryx.issues." + JSON.stringify([viewer.host, viewer.nodeId]);
++const lanes = () => [...host.querySelectorAll(".issue-lanes .lane")].map(lane => lane.getAttribute("aria-label"));
+ function button(label: string) {
+   const result = [...host.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
+   if (!result) throw new Error("Missing button: " + label);
+   return result;
+ }
+ const click = (el: HTMLElement) => act(async () => { el.click(); });
+ const page = (items: unknown[], nextCursor: string | null = null) => ({viewer, items, nextCursor, incomplete: false});
+ 
+ test("board and list open one detail panel; comments load on demand and Flow state stays independent", async () => {
+   const calls: IssuesAction[] = [];
+   const work: string[] = [];
+   await render(async (_login, action) => {
+     calls.push(action);
+     if (action === "list") return page([issue]);
+     if (action === "detail") return {viewer, issue: {...issue, body: "See #42 and [README](docs/README.md)."}};
+     if (action === "comments") return page([{id:"comment",author:"demo",body:"More context",createdAt:issue.createdAt,url:issue.ref.url}]);
+     throw new Error("Unexpected " + action);
+   }, viewer.login, a => work.push(a));
+   expect(calls).toEqual(["list"]);
+-  expect(host.querySelector('[aria-label="Done"] .flow-card')?.textContent).toContain("open");
++  expect(host.querySelector('[aria-label="Open"] .flow-card')?.textContent).toContain("open");
+   await click(button("List"));
+   expect(calls).toEqual(["list"]);
+   const trigger = host.querySelector<HTMLButtonElement>("tbody button.review-list-link")!;
+   await click(trigger);
+   const detail = host.querySelector("aside")!;
+   expect(calls).toEqual(["list", "detail", "comments"]);
+   const content = detail.textContent ?? "";
+   expect(content.includes("See") && content.indexOf("See") < content.indexOf("More context")).toBe(true);
+   expect(detail.querySelector('a[href="https://github.com/org/sample/issues/42"]')).not.toBeNull();
+   expect(detail.querySelector('a[href="https://github.com/org/sample/blob/HEAD/docs/README.md"]')).not.toBeNull();
+-  await click(button("Open Flow for org/sample#3"));
++  await click(button("Flow · Done for org/sample#3"));
+   expect(work).toEqual(["open-flow"]);
+   await click(button("Close issue"));
+   expect(host.querySelector("aside")).toBeNull();
+ });
+ 
+ test("late pages of a former account cannot repopulate its private rows; access loss clears detail", async () => {
+   let release: (data: unknown) => void = () => {};
+   await render(async () => new Promise(resolve => { release = resolve; }));
+   const newViewer = { ...viewer, login: "other", nodeId: "U_b" };
+   let revoked = false;
+   await render(async (_login, action) => {
+     if (revoked) throw new Error("access: Source unavailable");
+     if (action === "detail") return {viewer:newViewer, issue:{...issue,body:"Sensitive discussion"}};
+     return { ...page(action === "list" ? [issue] : []), viewer: newViewer };
+   }, newViewer.login);
+   await act(async () => { release(page([{...issue, title:"Previous private issue"}])); });
+   expect(host.textContent).not.toContain("Previous private issue");
+   await click(host.querySelector<HTMLButtonElement>(".flow-card-main")!);
+   expect(host.textContent).toContain("Sensitive discussion");
+   revoked = true;
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 120,201 @@
+   expect(markup.querySelector("button, script, iframe, img")).toBeNull();
+ });
+ 
+ test("AC2 refreshing page one leaves a selected later-page issue open and revalidates its detail", async () => {
+   const later = { ...issue, title: "Later page", ref: { ...issue.ref, nodeId: "I_b", number: 4, url: issue.ref.url.replace("/3","/4") } };
+   let details = 0;
+   await render(async (_login, action, args) => {
+     if (action === "list") return "cursor" in args && args.cursor ? page([later]) : page([issue], "more");
+     if (action === "detail") { details++; return { viewer, issue: {...later, body: "Still accessible"} }; }
+     return page([]);
+   });
+   await click(button("Load more issues"));
+   const laterCard = [...host.querySelectorAll<HTMLButtonElement>(".flow-card-main")].find(b => b.textContent?.includes("Later page"))!;
+   await click(laterCard);
+   await click(button("Refresh"));
+   expect(host.querySelector("aside h2")?.textContent).toBe("Later page");
+   expect(details).toBeGreaterThan(1);
+ });
+ 
+ test("AC14 keyboard Project Status control uses observed value and surfaces a conflicting move", async () => {
+-  const acc = 'keryx.issues.' + JSON.stringify([viewer.host, viewer.nodeId]);
+-  localStorage.setItem(acc + ".source", "project");
+-  localStorage.setItem(acc + ".project", JSON.stringify({owner: "demo", number: 18}));
++  localStorage.setItem(account + ".source", "project");
++  localStorage.setItem(account + ".project", JSON.stringify({owner: "demo", number: 18}));
+   let moves = 0;
+   await render(async (_login, action, args) => {
+     if (action === "project") return { ...page([{ issue, itemId: "item", optionId: "todo" }]),
+       project: {id:"p",number:18,owner:"demo",title:"Issues test project",fieldId:"status",canWrite:true,
+         options: [{id:"todo",name:"Todo"},{id:"done",name:"Done"},{id:"review",name:"Review"}]} };
+     if (action === "move") {
+       moves++;
+       expect(args).toMatchObject({projectId:"p",itemId:"item",issueNodeId:issue.ref.nodeId,expectedOptionId:"todo",optionId:"done"});
+       return {viewer,itemId:"item",optionId:"review",outcome:"conflict"};
+     }
+     throw new Error("Unexpected " + action);
+   });
+   const select = host.querySelector<HTMLSelectElement>(".issue-move")!;
+   await act(async () => { select.value = "done"; select.dispatchEvent(new Event("change", { bubbles:true })); });
+   expect(moves).toBe(1);
+   expect(host.querySelector('[aria-label="Review"] .flow-card')?.textContent).toContain(issue.title);
+   expect(host.textContent).toContain("Another update changed this item to Review");
+ });
+ 
+ test("AC11 busy session leaves its Flow openable and its unsent preparation retryable from board, list, and detail", async () => {
+   let bound = false;
+   let accepted = false;
+   let requests = 0;
+   const read = async (_login: string, action: IssuesAction) => {
+     const row = { ...issue, work: { stage: bound ? "preparing" : "none", canResumePreparation: bound && !accepted } };
+     if (action === "list") return page([row]);
+     if (action === "detail") return { viewer, issue: { ...row, body: "The linked issue." } };
+     return page([]);
+   };
+   await render(read, viewer.login, action => {
+     expect(action).toBe("prepare-flow");
+     requests++;
+     if (!bound) { bound = true; throw new Error("The conversation is busy."); }
+     accepted = true;
+   });
+   await click(button("Create Flow for org/sample#3"));
+   expect(host.textContent).toContain("The conversation is busy.");
+   const retrySelector = 'button[aria-label="Resume preparation for org/sample#3"]';
+   expect(host.querySelector(".flow-card " + retrySelector)).not.toBeNull();
+-  expect(button("Open Flow for org/sample#3")).not.toBeUndefined();
++  expect(button("Flow · Preparing for org/sample#3")).not.toBeUndefined();
+   await click(button("List"));
+   expect(host.querySelector("tbody " + retrySelector)).not.toBeNull();
+   await click(host.querySelector<HTMLButtonElement>("tbody .review-list-link")!);
+   await click(host.querySelector<HTMLButtonElement>("aside " + retrySelector)!);
+   expect(requests).toBe(2);
+   expect(host.querySelector(retrySelector)).toBeNull();
+ });
+ 
+ test("AC11 source issue can resume the same package and removes the action after admission", async () => {
+   const { IssueOriginDetail } = await import("./IssueOriginDetail");
+   const origin = { flowDir: "007-existing-issue" };
+   let accepted = false;
+   const request: typeof requestIssues = async <T,>(_cwd: string, _account: string, action: IssuesAction) =>
+     (action === "origin" ? { viewer, issue: { ...issue, body: "Linked issue",
+       work: { stage:"preparing", canResumePreparation: !accepted } } } : page([])) as T;
+   const operations: unknown[][] = [];
+   await act(async () => { root.render(createElement(IssueOriginDetail, {
+     cwd: "/fixture", login: viewer.login, origin, request, close: () => {},
+     onWork: async (...args) => { operations.push(args); accepted = true; },
+   })); });
+
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 292,433 @@
+       const trigger = Array.from(host.querySelectorAll<HTMLButtonElement>(selector)).find(el => el.textContent?.includes(other.title))!;
+       trigger.focus();
+       await click(trigger);
+       const dialog = host.querySelector<HTMLElement>('aside[role="dialog"][aria-modal="true"]')!;
+       expect(dialog?.textContent).toContain(other.title);
+       expect(host.querySelector<HTMLElement>(".issues-main")?.hidden).toBe(true);
+       expect(dialog.contains(document.activeElement)).toBe(true);
+       await act(async () => {
+         document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true, cancelable:true}));
+       });
+       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+       expect(host.querySelector("aside")).toBeNull();
+       expect(host.querySelector<HTMLElement>(".issues-main")?.hidden).toBe(false);
+       expect(document.activeElement === trigger).toBe(true);
+     }
+   } finally {
+     if (original) Object.defineProperty(proto, "clientWidth", original);
+     else Reflect.deleteProperty(proto, "clientWidth");
+   }
+ });
++
++test("every action on an Issue card and list row has visible text", async () => {
++  await render(async (_login, action) => {
++    if (action === "list") return page([issue, {...issue, ref: {...issue.ref, nodeId: "I_b", number: 4, url: "https://github.com/org/sample/issues/4"},
++      work: {stage: "none", canResumePreparation: true}}]);
++    throw new Error("Unexpected " + action);
++  });
++  for (const mode of ["Board", "List"]) {
++    await click(button(mode));
++    const containers = [...host.querySelectorAll(mode === "Board" ? ".issue-lanes .flow-card" : ".issue-table tbody tr")];
++    expect(containers.length).toBe(2);
++    for (const container of containers) {
++      const controls = [...container.querySelectorAll(".issue-work-row button, .card-actions button, .card-actions a")];
++      expect(controls.length).toBeGreaterThan(1);
++      for (const control of controls) expect(control.textContent?.trim()).not.toBe("");
++    }
++  }
++  expect(button("Open in session for org/sample#3").textContent).toBe("Open in session");
++  expect(button("Flow · Done for org/sample#3").textContent).toBe("Flow · Done");
++  expect(button("Create Flow for org/sample#4").textContent).toBe("Create Flow");
++  expect(button("Resume preparation for org/sample#4").textContent).toBe("Resume preparation");
++});
++
++const other = (number: number, patch: Partial<IssueSummary> = {}): IssueSummary => ({ ...issue, ...patch,
++  ref: { ...issue.ref, nodeId: "I_" + number, number, url: "https://github.com/org/sample/issues/" + number } });
++
++test("AC13 the project repository is the default source; the other sources stay selectable", async () => {
++  const sources: unknown[] = [];
++  await render(async (_login, action, args) => {
++    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
++    throw new Error("Unexpected " + action);
++  });
++  expect(sources).toEqual(["repository"]);
++  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!;
++  expect(select.value).toBe("repository");
++  expect([...select.options].map(o => o.textContent)).toEqual(["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]);
++  await act(async () => { select.value = "assigned"; select.dispatchEvent(new Event("change", { bubbles: true })); });
++  expect(sources).toEqual(["repository", "assigned"]);
++  expect(localStorage.getItem(account + ".source")).toBe("assigned");
++});
++
++test("AC13 a stored source preference wins over the project repository default", async () => {
++  localStorage.setItem(account + ".source", "assigned");
++  const sources: unknown[] = [];
++  await render(async (_login, action, args) => {
++    if (action === "list") { sources.push((args as { source: string }).source); return page([issue]); }
++    throw new Error("Unexpected " + action);
++  });
++  expect(sources).toEqual(["assigned"]);
++  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
++});
++
++test("AC11 issues without a Flow spread over Open and Closed; Closed appears only when the state filter includes it", async () => {
++  const rows = [other(5, { work: { stage: "none" } }), other(6, { state: "closed", work: { stage: "none" } }), other(7, { work: { stage: "active" } })];
++  const read: Read = async (_login, action, args) => {
++    if (action !== "list") throw new Error("Unexpected " + action);
++    const { state } = args as { state: string };
++    return page(rows.filter(r => state === "all" || r.state === state));
++  };
++  await render(read);
++  expect(lanes()).toEqual(["Open"]);
++  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
++  // The Flow stage is a link on the card, never a column.
++  expect(host.querySelector('[aria-label="Open"] [data-slot="flow"] button')?.textContent).toBe("Create Flow");
++  expect(button("Flow · In progress for org/sample#7").closest('[aria-label="Open"]')).not.toBeNull();
++
++  await act(() => root.render(null));
++  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { state: "all" }, list: false }));
++  await render(read);
++  expect(lanes()).toEqual(["Open", "Closed"]);
++  expect(host.querySelector('[aria-label="Closed"] .flow-card')?.textContent).toContain("org/sample#6");
++  expect(host.querySelectorAll('[aria-label="Open"] .flow-card')).toHaveLength(2);
++});
++
++test("AC11 the Flow stage filter is gone and a stored stage preference is ignored", async () => {
++  localStorage.setItem(account + ".filters." + JSON.stringify(["repository", null]), JSON.stringify({ filters: { stage: "done", label: "sync" }, list: false }));
++  await render(async (_login, action) => {
++    if (action === "list") return page([other(5, { work: { stage: "none" } })]);
++    throw new Error("Unexpected " + action);
++  });
++  expect(host.textContent).toContain("org/sample#5");
++  expect(host.querySelector('button[aria-label="Remove stage filter"]')).toBeNull();
++  expect(host.querySelector('button[aria-label="Remove label filter"]')).not.toBeNull();
++  await click(button("Filters (1)"));
++  expect(host.textContent).not.toContain("Keryx stage");
++  expect(host.textContent).not.toContain("All stages");
++});
++
++test("AC12 the work row has a Flow slot and a session slot counted from sessions bound through subject", async () => {
++  const subject = (number: number, kind = "issue", repo = "Org/Sample") => ({ kind, repo, number, url: "https://github.com/org/sample/issues/" + number });
++  const session = (id: string, keryx: Record<string, unknown>): SessionInfo =>
++    ({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id, _meta: { keryx } }) as SessionInfo;
++  const sessions = [
++    session("1", { subject: subject(5) }), session("2", { subject: subject(5) }),
++    session("3", { subject: subject(5), archivedAt: "2026-11-04" }), session("4", { subject: subject(5, "pr") }),
++    session("5", { subject: subject(6) }), session("6", { flow: "001-unrelated" }),
++  ];
++  const work: string[] = [];
++  await render(async (_login, action) => {
++    if (action === "list") return page([other(5, { work: { stage: "needs_answer" } }), other(6, { work: { stage: "none" } }), other(7)]);
++    throw new Error("Unexpected " + action);
++  }, viewer.login, a => work.push(a), sessions);
++  const row = (n: number) => [...host.querySelectorAll<HTMLElement>(".issue-work-row")].find(r => r.getAttribute("aria-label") === "Keryx work for org/sample#" + n)!;
++  const slots = (n: number) => [...row(n).querySelectorAll("[data-slot] button")].map(b => [b.closest("[data-slot]")!.getAttribute("data-slot"), b.textContent]);
++  expect(slots(5)).toEqual([["flow", "Flow · Needs an answer"], ["session", "2 sessions"]]);
++  expect(slots(6)).toEqual([["flow", "Create Flow"], ["session", "Session"]]);
++  expect(slots(7)).toEqual([["flow", "Flow · Done"], ["session", "Open in session"]]);
++  await click(button("2 sessions for org/sample#5"));
++  await click(button("Create Flow for org/sample#6"));
++  await click(button("Flow · Done for org/sample#7"));
++  await click(button("Open in session for org/sample#7"));
++  expect(work).toEqual(["open-session", "prepare-flow", "open-flow", "open-session"]);
++  await click(button("List"));
++  expect(host.querySelectorAll(".issue-table tbody .issue-work-row")).toHaveLength(3);
++});
++
++test("the Issue work row's two columns beat the PR row's three whatever order the stylesheets load in", () => {
++  const css = readFileSync(new URL("./IssuesBoard.css", import.meta.url), "utf8");
++  // Same specificity as `.pr-work-row` (styles/review.css, loaded later) would lose; both classes win.
++  expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
++  expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
++});
+
+--- apps/desktop/src/issues/model.test.ts
+@@ 1,67 @@
++import { describe, expect, test } from "bun:test";
++import type { IssueSummary } from "../../../../src/integrations/issues-contract";
++import type { SessionInfo } from "../acp/types";
++import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSessions, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
++
++const issue: IssueSummary = {
++  ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
++  title: "Report the failing upload", state: "open", author: "sam", assignees: [], labels: [],
++  createdAt: "2026-11-01", updatedAt: "2026-11-02",
++};
++const closed: IssueSummary = { ...issue, state: "closed", ref: { ...issue.ref, nodeId: "I_b", number: 4, url: "https://github.com/org/sample/issues/4" } };
++const project: ProjectBoard = { id: "p", owner: "org", number: 1, title: "Board", fieldId: "f", canWrite: true, options: [{ id: "todo", name: "Todo" }] };
++
++describe("issue grouping", () => {
++  test("without a GitHub Project, issues group by GitHub state whatever their Flow stage", () => {
++    expect(groupForRow({ issue: { ...issue, work: { stage: "done" } } }, false)).toBe("open");
++    expect(groupForRow({ issue: closed }, false)).toBe("closed");
++    expect(groupForRow({ issue }, false)).toBe("open");
++  });
++
++  test("the Closed lane is drawn only when the state filter includes closed issues", () => {
++    expect(issueGroups(undefined, "open")).toEqual([{ id: "open", label: "Open" }]);
++    expect(issueGroups(undefined, "closed")).toEqual([{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]);
++    expect(issueGroups(undefined, "all")).toEqual([{ id: "open", label: "Open" }, { id: "closed", label: "Closed" }]);
++  });
++
++  test("a GitHub Project keeps grouping by its Status field", () => {
++    expect(issueGroups(project, "open")).toEqual([{ id: "todo", label: "Todo" }, { id: "unassigned", label: "No status" }]);
++    expect(groupForRow({ issue: closed, optionId: "todo" }, true)).toBe("todo");
++    expect(groupForRow({ issue }, true)).toBe("unassigned");
++  });
++});
++
++describe("issue filters and sources", () => {
++  test("the Flow stage filter is gone", () => {
++    expect(Object.keys(defaultFilters)).not.toContain("stage");
++    const rows: Row[] = [{ issue: { ...issue, work: { stage: "done" } } }, { issue: { ...closed, work: { stage: "none" } } }];
++    expect(visibleRows(rows, { ...defaultFilters, state: "all" })).toHaveLength(2);
++  });
++
++  test("the project repository is the default source and the viewer scopes stay selectable", () => {
++    expect(DEFAULT_SOURCE).toBe("repository");
++    expect(SOURCES.repository).toBe("Project repository");
++    expect(Object.keys(SOURCES)).toEqual(["repository", "assigned", "created", "mentioned", "subscribed", "project"]);
++  });
++});
++
++describe("issue sessions", () => {
++  const session = (id: string, subject: unknown, extra: Record<string, unknown> = {}): SessionInfo =>
++    ({ sessionId: id, cwd: "/p", updatedAt: "2026-11-0" + id, _meta: { keryx: { subject, ...extra } } }) as SessionInfo;
++
++  test("the subject of an issue names its repository and number", () => {
++    expect(issueSubject(issue)).toEqual({ kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url, repositoryId: "R_a" });
++  });
++
++  test("bound sessions match kind, repository without case and number, and skip archived ones", () => {
++    const sessions = [
++      session("1", { kind: "issue", repo: "Org/Sample", number: 3, url: issue.ref.url }),
++      session("2", { kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url }),
++      session("3", { kind: "pr", repo: "org/sample", number: 3, url: "https://github.com/org/sample/pull/3" }),
++      session("4", { kind: "issue", repo: "org/sample", number: 4, url: closed.ref.url }),
++      session("5", { kind: "issue", repo: "org/sample", number: 3, url: issue.ref.url }, { archivedAt: "2026-11-05" }),
++    ];
++    expect(issueSessions(sessions, issue).map(s => s.sessionId)).toEqual(["2", "1"]);
++    expect(issueSessions([], issue)).toEqual([]);
++  });
++});
+
+--- apps/desktop/src/review/PrWorkRow.dom.test.tsx
+@@ 1,287 @@
++import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import type { Root } from "react-dom/client";
++import type { SessionInfo, SessionSubject } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++import type { fetchReviewBoard } from "../platform/review";
++import type { reviewRules } from "../platform/reviewRules";
++import type { ReviewWatcherSnapshot } from "../platform/reviewWatcher";
++import { registerDom, unregisterDom } from "../test/dom";
++import type { SubjectSessionTarget } from "./prWork";
++import type { ReviewBoardSnapshot, ReviewCard } from "./types";
++
++let root: Root;
++let host: HTMLElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let createElement: typeof import("react").createElement;
++let useState: typeof import("react").useState;
++let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
++let publishSessionReview: typeof import("../platform/reviewRuns").publishSessionReview;
++let renderKey = 0;
++
++beforeAll(async () => {
++  registerDom();
++  const React = await import("react");
++  act = React.act as unknown as typeof act;
++  createElement = React.createElement;
++  useState = React.useState;
++  ({ ReviewBoard } = await import("./ReviewBoard"));
++  ({ publishSessionReview } = await import("../platform/reviewRuns"));
++  host = document.createElement("div");
++  document.body.append(host);
++  root = (await import("react-dom/client")).createRoot(host);
++});
++beforeEach(() => { localStorage.clear(); });
++afterAll(async () => {
++  await act(() => root.unmount());
++  await unregisterDom();
++});
++
++const pr: ReviewCard = {
++  number: 101, title: "Update from colleague", state: "open", draft: false, url: "https://github.com/org/repo/pull/101",
++  author: "lee", assignees: [], reviewers: [], ci: "passed", decision: "REVIEW_REQUIRED",
++  updatedAt: "2026-11-10T01:00:00Z", headSha: "b", baseSha: "a",
++};
++const subject: SessionSubject = { kind: "pr", repo: "org/repo", number: 101, url: pr.url };
++const board = (cards: ReviewCard[]): ReviewBoardSnapshot =>
++  ({ version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "repo1", viewer: "ann", fetchedAt: pr.updatedAt, cards, warnings: [] });
++const flow = (id: string, extra: Partial<FlowCard> = {}): FlowCard => ({
++  id, dir: id + "-work", idValid: true, commandRef: null, title: "Work " + id, status: "in-progress", previousStatus: null,
++  blocked: false, owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0,
++  updatedAt: null, completionExceptions: false, error: null, ...extra,
++});
++const session = (id: string, title: string, flags: Record<string, unknown>, updatedAt: string): SessionInfo =>
++  ({ sessionId: id, cwd: "/project", title, updatedAt, _meta: { keryx: flags } });
++const watcherOff: ReviewWatcherSnapshot = { version: 1, state: "disabled", installed: false, intervalMinutes: 5,
++  lastAttemptAt: null, lastSuccessAt: null, lastError: null, events: [] };
++const rules: typeof reviewRules = async () => ({ version: 1, rules: [], subscriptions: [] }) as unknown as Awaited<ReturnType<typeof reviewRules>>;
++
++interface Calls { flows: string[]; created: number[]; sessions: Array<[number, SubjectSessionTarget, SessionSubject]> }
++function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: SessionInfo[]; calls?: Calls } = {}) {
++  const calls = extra.calls ?? { flows: [], created: [], sessions: [] };
++  const load: typeof fetchReviewBoard = async () => board(cards);
++  return act(async () => {
++    root.render(createElement(ReviewBoard, {
++      key: ++renderKey, cwd: "/project", flows: extra.flows ?? [], sessions: extra.sessions ?? [], load,
++      listRepositories: async () => [], watcherCommand: async () => watcherOff, rulesCommand: rules,
++      onOpenFlow: dir => calls.flows.push(dir),
++      onCreateFlow: card => calls.created.push(card.number),
++      onOpenSubjectSession: (card, target, value) => calls.sessions.push([card.number, target, value]),
++    }));
++  });
++}
++const click = (el: Element) => act(async () => { (el as HTMLElement).click(); });
++const rows = () => [...document.body.querySelectorAll<HTMLElement>(".pr-work-row")];
++const button = (label: string) => {
++  const el = [...document.body.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
++  if (!el) throw new Error("Missing button " + label);
++  return el;
++};
++/** The row's element tree without text or state classes: what must not change between empty and filled slots. */
++function shape(el: Element): string {
++  const slot = el.getAttribute("data-slot");
++  return `${el.tagName}${slot ? `[${slot}]` : ""}(${[...el.children].map(shape).join(",")})`;
++}
++const linked = {
++  flows: [flow("517", { prUrl: pr.url })],
++  sessions: [session("s1", "First", { subject }, "2026-11-20T00:00:00Z"), session("s2", "Second", { subject }, "2026-11-21T00:00:00Z")],
++};
++const reviewed: ReviewCard = { ...pr, localReview: { active: false, ready: true, runState: "completed" } };
++
++test("the work row has three slots in order, the same elements with no link and with three, in board and list", async () => {
++  await render([pr, { ...reviewed, number: 102, url: pr.url.replace("101", "102") }], {
++    flows: [flow("517", { prUrl: pr.url.replace("101", "102") })],
++    sessions: [session("s1", "First", { subject: { ...subject, number: 102, url: pr.url.replace("101", "102") } }, "2026-11-20T00:00:00Z")],
++  });
++  for (const mode of ["Board", "List"]) {
++    await click(button(mode));
++    const byNumber = new Map(rows().map(row => [row.getAttribute("aria-label"), row]));
++    const empty = byNumber.get("Keryx work for #101")!;
++    const full = byNumber.get("Keryx work for #102")!;
++    expect([...empty.children].map(slot => slot.getAttribute("data-slot"))).toEqual(["review", "flow", "session"]);
++    expect(shape(empty)).toBe(shape(full));
++    expect([...empty.querySelectorAll(".pr-work-link")].map(b => b.textContent)).toEqual(["Run review", "Create Flow", "Open in session"]);
++    expect([...full.querySelectorAll(".pr-work-link")].map(b => b.textContent)).toEqual(["Review · ready", "Flow #517 · In progress", "Session"]);
++    for (const row of [empty, full]) expect(row.textContent).not.toMatch(/round|behind|отста/i);
++  }
++});
++
++test("the work row has a fixed height in review.css, not a minimum, and its text truncates", () => {
++  const css = readFileSync(new URL("../styles/review.css", import.meta.url), "utf8");
++  const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
++  const row = rule(".pr-work-row");
++  expect(row).toMatch(/(^|;)\s*height:\s*\d+px/);
++  expect(row).not.toContain("min-height");
++  expect(row).toContain("overflow: hidden");
++  expect(rule(".pr-work-slot")).toMatch(/(^|;)\s*height:\s*\d+px/);
++  expect(rule(".pr-work-link")).toContain("text-overflow: ellipsis");
++});
++
++test("the slots open the review panel, the Flow, the newest bound session and the session menu", async () => {
++  const calls: Calls = { flows: [], created: [], sessions: [] };
++  await render([reviewed], { ...linked, calls });
++  await click(button("Review · ready for #101"));
++  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
++  await click(button("Close details"));
++  await click(button("Flow #517 · In progress for #101"));
++  expect(calls.flows).toEqual(["517-work"]);
++  await click(button("2 sessions for #101"));
++  expect(calls.sessions).toEqual([[101, "latest", { ...subject, repositoryId: "repo1" }]]);
++  const more = button("More sessions for #101");
++  expect(more.getAttribute("aria-haspopup")).toBe("menu");
++  await click(more);
++  const items = [...document.body.querySelectorAll('[role="menu"] [role="menuitem"]')];
++  expect(items.map(item => item.textContent)).toEqual(["Second", "First", "New session"]);
++  await click(items[1]!);
++  await click(more);
++  await click([...document.body.querySelectorAll('[role="menu"] [role="menuitem"]')].at(-1)!);
++  expect(calls.sessions.slice(1).map(([, target]) => target)).toEqual(["s1", "new"]);
++});
++
++test("empty slots offer Run review, Create Flow and Open in session", async () => {
++  const calls: Calls = { flows: [], created: [], sessions: [] };
++  await render([pr], { calls });
++  await click(button("Create Flow for #101"));
++  expect(calls.created).toEqual([101]);
++  await click(button("Open in session for #101"));
++  expect(calls.sessions.map(([n, target]) => [n, target])).toEqual([[101, "latest"]]);
++  await click(button("Run review for #101"));
++  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
++});
++
++test("a Flow linked to a session bound to the PR is the card's Flow", async () => {
++  await render([pr], { flows: [flow("520")], sessions: [session("s1", "Work", { subject, flow: "520-work" }, "2026-11-20T00:00:00Z")] });
++  expect(rows()[0]!.querySelector('[data-slot="flow"] .pr-work-link')?.textContent).toBe("Flow #520 · In progress");
++  // An archived session no longer links its Flow or counts as the PR's session.
++  await render([pr], { flows: [flow("520")], sessions: [session("s1", "Work", { subject, flow: "520-work", archivedAt: "2026-11-21T00:00:00Z" }, "2026-11-20T00:00:00Z")] });
++  expect([...rows()[0]!.querySelectorAll(".pr-work-link")].map(b => b.textContent)).toEqual(["Run review", "Create Flow", "Open in session"]);
++});
++
++test("every action on a PR card and list row has visible text, and Fix review comments is not offered", async () => {
++  await render([pr, { ...reviewed, number: 102 }, { ...pr, number: 103, draft: true }], linked);
++  for (const mode of ["Board", "List"]) {
++    await click(button(mode));
++    const containers = [...document.body.querySelectorAll(mode === "Board" ? ".review-lanes .flow-card" : ".review-table tbody tr")];
++    expect(containers.length).toBe(3);
++    for (const container of containers) {
++      const controls = [...container.querySelectorAll("button, a")];
++      expect(controls.length).toBeGreaterThan(5);
++      for (const control of controls) expect(control.textContent?.trim()).not.toBe("");
++      expect(container.textContent).toContain("Open on GitHub");
++      expect(container.textContent).toContain("Subscribe");
++    }
++    expect(document.body.textContent).not.toContain("Fix review comments");
++  }
++});
++
++test("a review started from a session shows on the card's review slot without a refresh", async () => {
++  let loads = 0;
++  await act(async () => {
++    root.render(createElement(ReviewBoard, {
++      key: ++renderKey, cwd: "/project", flows: [], sessions: [], onOpenFlow: () => {},
++      load: async () => { loads++; return board([pr]); }, listRepositories: async () => [],
++      watcherCommand: async () => watcherOff, rulesCommand: rules,
++    }));
++  });
++  expect(rows()[0]!.querySelector('[data-slot="review"] .pr-work-link')?.textContent).toBe("Run review");
++  await act(async () => {
++    publishSessionReview("/project", { repo: "org/repo", repositoryId: "repo1", viewer: "ann", number: 101 }, {
++      version: 1, startedRunId: "run-1", runs: [{
++        id: "run-1", headSha: pr.headSha, baseSha: pr.baseSha, source: "manual", state: "running", phase: "Review",
++        createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, reason: "", result: null,
++      }],
++    });
++  });
++  expect(rows()[0]!.querySelector('[data-slot="review"] .pr-work-link')?.textContent).toBe("Review · running");
++  expect(loads).toBe(1);
++});
++
++test("AC4 Keryx review state shows only in the work row: the card body and the list Reason cell hold none of it", async () => {
++  const running: ReviewCard = { ...pr, localReview: { active: true, ready: false, runState: "running", lastActivityAt: pr.updatedAt,
++    progress: { wave: 2, planned: 4, finished: 1, completed: 1 } } };
++  const done: ReviewCard = { ...reviewed, number: 102, url: pr.url.replace("101", "102") };
++  const earlier: ReviewCard = { ...pr, number: 103, url: pr.url.replace("101", "103"), localReview: { active: true, ready: false, runState: "other-revision" } };
++  const failed: ReviewCard = { ...pr, number: 104, url: pr.url.replace("101", "104"), localReview: { active: false, ready: false, runState: "failed" } };
++  await render([running, done, earlier, failed]);
++  const keryx = /Wave|\d+%|assignments|Review completed|earlier revision|Transcript|Progress unavailable|Failed/;
++  const bodies = [...document.body.querySelectorAll(".review-card")];
++  expect(bodies).toHaveLength(4);
++  for (const body of bodies) {
++    expect(body.textContent).not.toMatch(keryx);
++    expect(body.querySelector('[role="progressbar"], .review-progress-caption')).toBeNull();
++  }
++  // The progress moved into the review slot, which keeps the row's fixed height: it is the slot's title only.
++  const slot = (n: number) => document.body.querySelector(`[aria-label="Keryx work for #${n}"] [data-slot="review"] .pr-work-link`)!;
++  expect(slot(101).getAttribute("title")).toContain("Wave 2");
++  expect(slot(101).getAttribute("title")).toContain("1 of 4 assignments completed");
++  expect(slot(103).getAttribute("title")).toContain("Reviewing an earlier revision");
++  expect(slot(101).textContent).toBe("Review · running");
++  await click(button("List"));
++  const reasons = [...document.body.querySelectorAll(".review-table tbody tr")].map(row => row.children[3]!);
++  expect(reasons).toHaveLength(4);
++  for (const reason of reasons) {
++    expect(reason.textContent).not.toMatch(keryx);
++    expect(reason.querySelector('[role="progressbar"], .review-progress-caption')).toBeNull();
++  }
++});
++
++test("a review that waits on the viewer gets the warn tone in its slot; other states do not", async () => {
++  const answer: ReviewCard = { ...pr, localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } };
++  const publish: ReviewCard = { ...reviewed, number: 102, url: pr.url.replace("101", "102"), localReview: { active: false, ready: true, runState: "completed", publicationPending: true } };
++  const ready: ReviewCard = { ...reviewed, number: 103, url: pr.url.replace("101", "103") };
++  const running: ReviewCard = { ...pr, number: 104, url: pr.url.replace("101", "104"), localReview: { active: true, ready: false, runState: "running" } };
++  await render([answer, publish, ready, running]);
++  const slot = (n: number) => document.body.querySelector(`[aria-label="Keryx work for #${n}"] [data-slot="review"] .pr-work-link`)!;
++  expect(slot(101).textContent).toBe("Review · needs your answer");
++  expect(slot(102).textContent).toBe("Review · publication pending");
++  expect(slot(101).classList.contains("is-attention")).toBe(true);
++  expect(slot(102).classList.contains("is-attention")).toBe(true);
++  expect(slot(103).classList.contains("is-attention")).toBe(false);
++  expect(slot(104).classList.contains("is-attention")).toBe(false);
++  for (const n of [101, 102, 103, 104]) expect(rows().find(row => row.getAttribute("aria-label") === `Keryx work for #${n}`)!.children).toHaveLength(3);
++});
++
++test("review.css: the work row's focus ring is drawn inside its buttons, the warn tone exists, and the unused review note rule is gone", () => {
++  const css = readFileSync(new URL("../styles/review.css", import.meta.url), "utf8");
++  const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*:()]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
++  expect(rule(".pr-work-link:focus-visible, .pr-work-more:focus-visible")).toMatch(/outline-offset:\s*-2px/);
++  expect(rule(".pr-work-row")).toContain("overflow: hidden");
++  expect(rule(".pr-work-link.is-attention")).toContain("var(--warn)");
++  expect(css).not.toMatch(/\.review-note\b/);
++});
++
++test("the PR panel names the same Flow as the work row, a Flow linked to a bound session included", async () => {
++  await render([pr], { flows: [flow("520")], sessions: [session("s1", "Work", { subject, flow: "520-work" }, "2026-11-20T00:00:00Z")] });
++  expect(rows()[0]!.querySelector('[data-slot="flow"] .pr-work-link')?.textContent).toBe("Flow #520 · In progress");
++  await click(document.body.querySelector<HTMLElement>(".review-card")!);
++  expect(document.body.querySelector(".review-detail-panel .review-associated-flow")?.textContent).toContain("Flow #520");
++});
++
++test("the session header's PR focus opens the panel only on the board of its repository, and a remount does not replay it", async () => {
++  let handled: number[] = [];
++  const load: typeof fetchReviewBoard = async () => board([pr]);
++  type Focus = { repo: string; number: number; nonce: number } | null;
++  let setFocus!: (focus: Focus) => void;
++  function Host({ boardKey, initial }: { boardKey: number; initial: Focus }) {
++    const [focus, set] = useState<Focus>(initial);
++    setFocus = set;
++    return createElement(ReviewBoard, {
++      key: boardKey, cwd: "/project", flows: [], sessions: [], load, listRepositories: async () => [],
++      watcherCommand: async () => watcherOff, rulesCommand: rules, onOpenFlow: () => {}, focus,
++      onFocusHandled: (nonce: number) => { handled.push(nonce); set(old => old?.nonce === nonce ? null : old); },
++    });
++  }
++  const panel = () => document.body.querySelector(".review-detail-panel");
++  await act(async () => { root.render(createElement(Host, { key: ++renderKey, boardKey: 1, initial: { repo: "other/repo", number: 101, nonce: 1 } })); });
++  expect(panel()).toBeNull();
++  expect(handled).toEqual([]);
++  await act(async () => setFocus({ repo: "Org/Repo", number: 101, nonce: 2 }));
++  expect(panel()).not.toBeNull();
++  expect(handled).toEqual([2]);
++  await click(button("Close details"));
++  handled = [];
++  // The board remounts (a repository or account switch): the handled request is gone and nothing reopens.
++  await act(async () => { root.render(createElement(Host, { key: renderKey, boardKey: 2, initial: null })); });
++  expect(panel()).toBeNull();
++  expect(handled).toEqual([]);
++});
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 219,324 @@
+   for (const opener of ["PR watcher · Off", "Review rules"]) {
+     let finish!: (value: ReviewBoardSnapshot) => void;
+     let calls = 0;
+     await render(async () => {
+       if (++calls === 1) return snapshot([pr]);
+       return new Promise((resolve) => { finish = resolve; });
+     }, "/project", ++renderKey, async () => [], undefined, undefined, async () => watcherOff,
+     async () => ({ version: 1, rules: [], activity: [], subscriptions: [] }) as unknown as ReviewRuleSnapshot);
+     await click(button("Refresh pull requests"));
+     await click(button(opener));
+     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+     expect(dialog.parentElement?.parentElement).toBe(document.body);
+     await act(async () => { dialog.querySelector<HTMLElement>("button")!.focus(); });
+     expect(dialog.contains(document.activeElement)).toBe(true);
+     await act(async () => { finish({ ...snapshot([]), viewer: "new-account-" + opener.length }); });
+     expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+     expect(document.activeElement?.getAttribute("aria-label")).toBe("Search pull requests");
+   }
+ });
+ 
+-test("historical states are requested lazily and a merged pull request appears in Done", async () => {
++test("historical states are requested lazily and a merged pull request appears in Merged", async () => {
+   const scopes: string[] = [];
+   const merged: ReviewCard = { ...pr, number: 301, state: "merged", title: "Merged colleague PR" };
+   await render(async (_cwd, state) => {
+     scopes.push(state);
+     return snapshot(state === "open" ? [pr] : [pr, merged]);
+   });
+   await click(button("Filters"));
+   await click(option("PR state", "Open"));
+   await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(scopes).toEqual(["open", "merged"]);
+   expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+-  expect(document.body.querySelector('section[aria-label="Done"]')!.textContent).toContain("Merged colleague PR");
++  expect(document.body.querySelector('section[aria-label="Merged"]')!.textContent).toContain("Merged colleague PR");
+   expect(document.body.textContent).not.toContain(pr.title);
+ });
+ 
+ test("the period filters the GitHub request and is saved for the repository", async () => {
+   const cutoffs: (string | undefined)[] = [];
+   await render(async (_cwd, _state, _repo, _signal, _viewer, since) => {
+     cutoffs.push(since);
+     return snapshot([pr]);
+   });
+   await click(button("Filters"));
+   const period = document.body.querySelector<HTMLSelectElement>('[aria-label="PR updated within"]')!;
+   await act(async () => {
+     period.value = "7";
+     period.dispatchEvent(new Event("change", { bubbles: true }));
+   });
+   const expected = Date.now() - 7 * 86_400_000;
+   await click(button("Apply filters"));
+   expect(cutoffs[0]).toBeUndefined();
+   expect(Math.abs(Date.parse(cutoffs.at(-1)!) - expected) < 5_000).toBe(true);
+   expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).updatedWithin).toBe(7);
+   expect(document.body.textContent).toContain("Updated · Last 7 days");
+ });
+ 
+-test("a board refresh started before a local launch preserves the live lane after the drawer closes", async () => {
++test("a board refresh started before a local launch keeps the live progress and the GitHub lane after the drawer closes", async () => {
+   let finish!: (s: ReviewBoardSnapshot) => void;
+   let calls = 0;
+   const load: typeof fetchReviewBoard = async () => ++calls === 1 ? snapshot([pr]) : new Promise(resolve => { finish = resolve; });
+   const loadDetail: typeof fetchReviewDetail = async () => ({ version: 1, repositoryId: "repo1", viewer: "ann",
+     number: pr.number, headSha: pr.headSha, fetchedAt: pr.updatedAt, threads: [], reviews: [], comments: [], checks: [], warnings: [] });
+   let finishLaunch!: () => void;
+   const runCommand: typeof reviewRun = async (_cwd, _key, action) => {
+     if (action.kind !== "status") await new Promise<void>(resolve => { finishLaunch = resolve; });
+     return { version: 1, runs: action.kind === "status" ? [] : [{
+     id: "1", state: "running", phase: "Reading", reviewerProgress: { wave: 3, planned: 4, finished: 2, completed: 2, sessions: [] }, baseSha: pr.baseSha, headSha: pr.headSha, source: "manual", reason: "",
+     createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, result: null,
+   }] }; };
+   await render(load, "/project", ++renderKey, undefined, loadDetail, runCommand);
+   await click(button("Refresh pull requests"));
+   await click(document.body.querySelector<HTMLButtonElement>(".review-card")!);
+   await click(button("Start review"));
+   await click(button("Close details"));
+   await act(async () => finishLaunch());
+   await act(async () => finish(snapshot([pr])));
+-  const tile = document.body.querySelector('section[aria-label="In review"] .review-card')!;
+-  expect(tile.textContent).toContain(pr.title);
+-  expect(tile.textContent).toContain("Wave 3");
+-  expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
++  const tile = document.body.querySelector('section[aria-label="Waiting for review"] .flow-card')!;
++  expect(tile.querySelector(".review-card")?.textContent).toContain(pr.title);
++  // AC4: the live progress is the work row's review slot (its title), not the card body.
++  const reviewSlot = () => document.body.querySelector('[data-slot="review"] .pr-work-link');
++  expect(reviewSlot()?.getAttribute("title")).toContain("Wave 3");
++  expect(reviewSlot()?.getAttribute("title")).toContain("50%");
+   await click(button("List"));
+-  expect(document.body.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
++  expect(reviewSlot()?.getAttribute("title")).toContain("2 of 4 assignments completed");
+ });
+ 
+ test("Review controls the schedule for the base repository and displays persisted PR activity", async () => {
+   let state = watcherOff;
+   const actions: ReviewWatcherAction[] = [];
+   const watcher: typeof reviewWatcher = async (cwd, target, action) => {
+     expect(cwd).toBe("/project");
+     if (!target) return watcherOff;
+     expect(target).toEqual({ repo: "org/repo", repositoryId: "repo1", viewer: "ann" });
+     actions.push(action);
+     if (action.kind === "enable") state = { ...state, state: "enabled", installed: true, intervalMinutes: action.intervalMinutes };
+     if (action.kind === "pause") return { ...state, state: "paused", installed: false, events: [], historyAvailable: false };
+     if (action.kind === "resume") state = { ...state, state: "enabled", installed: true, lastSuccessAt: null, lastError: null };
+     return state;
+   };
+   let reads = 0;
+   await render(async () => {
+     reads++;
+     return snapshot([{ ...pr, title: `Snapshot ${reads}` }]);
+   }, "/project", ++renderKey, undefined, undefined, undefined, watcher);
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 609,655 @@
+   expect(document.body.textContent).toContain("Card revision 3");
+ });
+ 
+ test("a missing author has a named filter and consistent reason in board and list", async () => {
+   await render(async () => snapshot([pr, {...pr, author:"", number:1002, title:"From a deleted account"}]));
+   await click(button("Filters"));
+   await click(option("Author","Unknown author"));
+   await click(button("Apply filters"));
+   expect(document.body.textContent).toContain("Author · Unknown author");
+   expect(document.body.querySelectorAll(".review-card")).toHaveLength(1);
+   expect(document.body.querySelector(".review-card")!.textContent).toContain("Unknown author");
+   await click(button("List"));
+   expect(document.body.querySelector("tbody")!.textContent).toContain("Unknown author");
+ });
+ 
+ test("marking a new addressed reply locally clears its board and list reason", async () => {
+   const card = { ...pr, reviewers: [], decision: null, addressedReplyIds: ["reply-addr-test"] };
+   const data = { version: 1 as const, viewer:"ann", repositoryId:"repo1", number:card.number,
+     fetchedAt:pr.updatedAt, headSha:pr.headSha, comments:[{id:"reply-addr-test",author:"bob",own:false,body:"@ann ready",url:"",createdAt:pr.updatedAt}], reviews:[],threads:[],checks:[],warnings:[] };
+   await render(async () => snapshot([card]), "/project", ++renderKey, undefined, async () => data, async () => ({version:1,runs:[]}));
+-  expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
++  const reason = () => document.body.querySelector('section[aria-label="Waiting for review"] .review-reason')!.textContent;
++  expect(reason()).toBe("New reply to you");
+   await click(document.body.querySelector<HTMLElement>(".review-card")!);
+   await click(button("Mark 1 as read"));
+   await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
+   await click(button("Close details"));
+-  expect(document.body.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
++  expect(reason()).toBe("No review requested");
+   await click(button("List"));
+   expect(document.body.querySelector("tbody")!.textContent).not.toContain("New reply to you");
+ });
+ 
+ test("an offline return from merged history restores only the earlier open query for this viewer", async () => {
+   let offline = false;
+   await render(async (_cwd, scope) => {
+     if (offline) throw new Error("unavailable: network");
+     return snapshot(scope === "open" ? [pr] : [{ ...pr, number: 203, state:"merged", title:"Old merged history" }]);
+   });
+   await click(button("Filters"));
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state","Merged"));
+   await click(button("Apply filters"));
+   expect(document.body.textContent).toContain("Old merged history");
+   offline = true;
+   await click(button("Clear filters"));
+   expect(document.body.textContent).toContain("Last available snapshot");
+   expect(document.body.textContent).toContain(pr.title);
+   expect(document.body.textContent).not.toContain("Old merged history");
+ });
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 701,837 @@
+   const cards = [live(101), live(102), { ...pr, number: 103 }];
+   let polls = 0;
+   try {
+     await act(async () => { root.render(createElement(ReviewBoard, {
+       key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+       watcherCommand: watcherDisabled,
+       loadBadges: async (_cwd, key, subjects) => {
+         polls++;
+         expect(key).toEqual({ repo:"org/repo", viewer:"ann", repositoryId:"repo1" });
+         if (polls > 1) throw Error("access: Repository access revoked.");
+         expect(subjects.map(c => c.number)).toEqual([101,102]);
+         return {version:1, ...key, cards:[
+           {...subjects[0]!,localReview:{active:false,ready:true}},
+           {...subjects[1]!,localReview:{active:true,ready:false,progress:{wave:2,planned:5,finished:3,completed:3}}},
+         ]};
+       },
+     })); });
+     expect(typeof tick).toBe("function");
+     await act(async () => { await tick!(); });
+     expect(polls).toBe(1);
+-    expect(document.body.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
+-    expect(document.body.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
+-    expect(document.body.textContent).toContain("3 of 5");
++    // Finishing (#101) and progressing (#102) local reviews leave both cards in their GitHub lane.
++    expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#101");
++    expect(document.body.querySelector('[aria-label="Waiting for review"]')!.textContent).toContain("#102");
++    // AC4: #102's progress is its work row's review slot title, not card text.
++    expect(document.body.querySelector('[aria-label="Keryx work for #102"] [data-slot="review"] .pr-work-link')?.getAttribute("title")).toContain("3 of 5");
+     await act(async () => { await tick!(); });
+     expect(document.body.textContent).toContain("Repository access revoked");
+     expect(document.body.textContent).not.toContain(pr.title);
+   } finally { clock.setTimeout = schedule; }
+ });
+ 
+ test("board and list expose GitHub state and pending requests separately and run the clicked revision", async () => {
+   const other = { ...pr, number: 105, decision: "CHANGES_REQUESTED" as const, headSha: "other-head" };
+   const starts: number[] = [];
+   const run: typeof reviewRun = async (_cwd, target, action) => {
+     if (action.kind === "start") {
+       expect(target.viewer).toBe("ann");
+       expect(target.repositoryId).toBe("repo1");
+       expect(action.headSha).toBe(other.headSha);
+       starts.push(target.number);
+     }
+     return { version: 1, runs: [] };
+   };
+   await render(async () => snapshot([pr, other]), "/project", ++renderKey, undefined, async (_cwd, _repo, number) => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number, headSha: other.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   }), run);
+   for (const mode of ["Board", "List"]) {
+     await click(button(mode));
+     const tags = [...document.body.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
+     expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
+     await click(button("Run review for #105"));
+     expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+     expect(starts).toHaveLength(mode === "Board" ? 1 : 2);
+     await click(button("Close details"));
+   }
+   expect(starts).toEqual([105, 105]);
+ });
+ 
+-test("an outdated review shows its short SHA and a Review again action that starts a review in board and list", async () => {
++test("an outdated review's work-row link starts a new review in board and list", async () => {
+   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+   for (const mode of ["Board", "List"]) {
+     const calls: string[] = [];
+     await render(async () => snapshot([outdated]), "/project", ++renderKey,
+       undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+     await click(button(mode));
+-    expect(document.body.textContent).toContain("Outdated review · abcdef0");
+-    await click(button("Review again for #101"));
++    await click(button("Review · outdated for #101"));
+     expect(calls).toContain("start");
+   }
+ });
+ 
+-test("an outdated review shows as a secondary line under the attention reason in board and list", async () => {
+-  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+-  await render(async () => snapshot([stale]));
+-  for (const mode of ["Board", "List"]) {
+-    await click(button(mode));
+-    expect(document.body.textContent).toContain("Review requested");
+-    expect(document.body.querySelector(".review-note")?.textContent).toBe("Outdated review · abcdef0");
+-  }
+-});
+-
+-test("a merged card with an outdated review shows its state as the reason and the outdated text as the note, in board and list", async () => {
+-  const merged: ReviewCard = { ...pr, number: 301, state: "merged", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" } } };
+-  await render(async (_cwd, state) => snapshot(state === "open" ? [] : [merged]));
++test("the reason line shows GitHub data only, whatever the local review, in board and list", async () => {
++  const outdated = { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } };
++  const cards: ReviewCard[] = [
++    { ...pr, number: 101, localReview: outdated },
++    { ...pr, number: 102, reviewers: [], decision: null, localReview: outdated },
++    { ...pr, number: 103, localReview: { active: true, ready: false, runState: "queued" } },
++    { ...pr, number: 104, reviewers: [], decision: "APPROVED", localReview: { active: false, ready: true, runState: "completed", publicationPending: true } },
++    { ...pr, number: 105, state: "merged", localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } },
++  ];
++  await render(async () => snapshot(cards));
+   await click(button("Filters"));
+-  await click(option("PR state", "Open"));
+-  await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
++  const expected = ["Review requested", "No review requested", "Review requested", "Approved", "Merged"];
+   for (const mode of ["Board", "List"]) {
+     await click(button(mode));
+-    expect(document.body.querySelector(".review-reason, .review-table td[title] > span:first-child")?.textContent).toBe("Merged");
+-    const notes = document.body.querySelectorAll(".review-note");
+-    expect(notes).toHaveLength(1);
+-    expect(notes[0]!.textContent).toBe("Outdated review · abcdef0");
+-  }
+-});
+-
+-test("an open card with no attention reason shows the outdated text once, as the reason, with no note, in board and list", async () => {
+-  const quiet = { ...pr, reviewers: [], decision: null, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+-  await render(async () => snapshot([quiet]));
+-  for (const mode of ["Board", "List"]) {
+-    await click(button(mode));
+-    expect(document.body.querySelector(".review-note")).toBeNull();
+-    expect(document.body.textContent!.split("Outdated review · abcdef0")).toHaveLength(2);
+-    expect(document.body.querySelector(mode === "Board" ? ".review-reason" : ".review-table td[title] > span:first-child")?.textContent).toBe("Outdated review · abcdef0");
++    const reasons = mode === "Board"
++      ? [...document.body.querySelectorAll(".review-card")].map(card => [card.querySelector(".flow-id")!.textContent, card.querySelector(".review-reason")!.textContent])
++      : [...document.body.querySelectorAll("tbody tr")].map(row => [row.querySelector(".flow-id")!.textContent, row.querySelector("td[title] > span")!.textContent]);
++    expect(Object.fromEntries(reasons)).toEqual(Object.fromEntries(cards.map((card, i) => ["#" + card.number, expected[i]])));
++    for (const text of ["Outdated review", "Keryx review", "Awaiting your answer", "Choose whether to publish", "Action required"]) {
++      expect(document.body.querySelector(".review-lanes, .review-table")!.textContent).not.toContain(text);
++    }
++    expect(document.body.querySelector(".review-note, .review-live-state")).toBeNull();
+   }
+ });
+ 
+ test("a badge whose only change is the outdated review counts as changed", () => {
+   const base = { active: false, ready: false };
+   const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
+   expect(badgesEqual(a, base)).toBe(false);
+   expect(badgesEqual(base, a)).toBe(false);
+ });
+ 
+ test("opening a running review from its badge action only reads the run", async () => {
+   const calls: string[] = [];
+   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
+     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+-  await click(button("View review for #101"));
++  await click(button("Review · running for #101"));
+   expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+   expect(calls).toEqual(["status"]);
+ });
+ 
+ test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
+   let viewer = "ann", repositoryId = "repo1";
+   const scopes: string[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, state) => {
+     scopes.push(state);
+     return { ...snapshot([pr, { ...pr, state: "merged", number: 303 }, { ...pr, number: 304, state: "merged", author: "bob" }]), viewer, repositoryId };
+   };
+   await render(load);
+   await click(button("Filters"));
+   await click(option("Author", "lee"));
+   await click(option("PR state", "Open"));
+   await click(option("PR state", "Draft"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(scopes).toEqual(["open", "merged"]);
+ 
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 905,947 @@
+ test("a merged PR awaiting a Keryx answer stays actionable when the merged state is selected, from either view", async () => {
+   const pending = { ...pr, state: "merged" as const,
+     localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
+   const actions: string[] = [];
+   const command: typeof reviewRun = async (_cwd, _key, action) => {
+     actions.push(action.kind);
+     return { version: 1, runs: [{
+       id: "test-run", headSha: pr.headSha, baseSha: pr.baseSha, source: "manual", state: "running", phase: "Review",
+       createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, reason: "", result: null,
+       pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true },
+     }] };
+   };
+   const detail: typeof fetchReviewDetail = async () => ({
+     version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number, headSha: pr.headSha,
+     fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+   });
+   saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, state: ["merged"] });
+   for (const mode of ["Board", "List"]) {
+     await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
+     await click(button(mode));
+-    if (mode === "Board") expect(document.body.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
+-    else expect(document.body.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+-    await click(button("Answer question for #" + pr.number));
++    if (mode === "Board") expect(document.body.querySelector('[aria-label="Merged"]')?.textContent).toContain("#" + pr.number);
++    else expect(document.body.querySelector("tbody")?.textContent).toContain("#" + pr.number);
++    await click(button("Review · needs your answer for #" + pr.number));
+     expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+   }
+   expect(actions).not.toContain("start");
+ });
+ 
+ test("Review tab signal follows unfiltered open requests to the viewer and background watcher refreshes without extra reads", async () => {
+   const key = ++renderKey;
+   const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const notify = (value: import("./ReviewBoard").ReviewTabIndicator) => seen.push(value);
+   const neutral: ReviewCard = { ...pr, reviewers: [], decision: "REVIEW_REQUIRED" };
+   const mine: ReviewCard = { ...pr, reviewers: ["Ann"] };
+   let cards = [neutral];
+   let reads = 0;
+   let failure = "";
+   const load: typeof fetchReviewBoard = async () => {
+     reads++;
+     if (failure) throw Error(failure);
+     return snapshot(cards);
+   };
+   let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 1471,1656 @@
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBeNull();
+   offline = true;
+   await click(filtersButton());
+   await click(option("PR state", "Merged")); await click(option("PR state", "Open"));
+   await click(button("Apply filters"));
+   expect(document.body.textContent).toContain("Last available snapshot");
+   await click(filtersButton());
+   await click(option("PR state", "Open")); await click(option("PR state", "Closed"));
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBeNull();
+ });
+ 
+ test("visible cards keep snapshot order when a later card has an active review", async () => {
+   const cards = [pr, { ...pr, number: 102, localReview: { active: true, ready: false } }, { ...pr, number: 103 }];
+   await render(async () => snapshot(cards));
+   await click(button("List"));
+   expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101", "#102", "#103"]);
+ });
+ 
+-test("the Done lane is drawn only when the state filter can yield closed or merged pull requests", async () => {
++test("the Merged and Closed lanes are drawn only when the state filter can yield them, and decision filters hide their lanes", async () => {
+   const lanes = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+-  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }];
++  const cards = [pr, { ...pr, number: 301, state: "merged" as const }, { ...pr, number: 302, state: "closed" as const }, { ...pr, number: 303, decision: "APPROVED" as const }];
+   const key = reviewFilterKey("/project", "repo1", "ann");
+   await render(async () => snapshot(cards));
+-  expect(lanes()).toEqual(["Needs attention", "In review", "Open"]);
++  expect(lanes()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["closed"] });
+   await render(async () => snapshot(cards));
+-  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  expect(lanes()).toEqual(["Closed"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: [] });
+   await render(async () => snapshot(cards));
+-  expect(lanes()).toEqual(["Needs attention", "In review", "Open", "Done"]);
++  expect(lanes()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved", "Merged", "Closed"]);
+   saveReviewFilters(key, { ...EMPTY_FILTERS, state: ["merged", "draft"] });
+   await render(async () => snapshot(cards));
+-  expect(lanes()).toContain("Done");
++  expect(lanes()).toEqual(["Draft", "Merged"]);
++  saveReviewFilters(key, { ...EMPTY_FILTERS, decision: ["APPROVED"] });
++  await render(async () => snapshot(cards));
++  expect(lanes()).toEqual(["Draft", "Approved"]);
+ });
+ 
+ test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
+   let merged = 102;
+   const mine: ReviewCard = { ...pr, reviewers: ["ann"] };
+   const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+   const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged"
+     ? [{ ...mine, number: merged, state: "merged" }]
+     : [mine]);
+   await act(async () => root.render(createElement(ReviewBoard, {
+     key: ++renderKey, cwd: "/history-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+     onIndicatorChange: indicator => indicators.push(indicator),
+   })));
+   expect(indicators.at(-1)).toBe("attention");
+   await click(button("Filters"));
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBe("attention");
+   merged = mine.number;
+   await click(button("Refresh pull requests"));
+   expect(indicators.at(-1)).toBeNull();
+ });
++
++async function chooseGrouping(label: string) {
++  const select = document.body.querySelector<HTMLSelectElement>(".review-context .review-grouping select")!;
++  const value = Array.from(select.options).find(option => option.textContent === label)!.value;
++  await act(async () => {
++    select.value = value;
++    select.dispatchEvent(new Event("change", { bubbles: true }));
++  });
++}
++const laneNames = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
++const laneNumbers = (lane: string) =>
++  Array.from(document.body.querySelectorAll(`section[aria-label="${lane}"] .review-card .flow-id`), id => id.textContent);
++
++test("a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first", async () => {
++  const clock: Window = window;
++  const schedule = clock.setTimeout;
++  let tick: (() => unknown) | undefined;
++  clock.setTimeout = (fn, ms, ...args) => {
++    if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
++    tick = () => fn(...args); return -78;
++  };
++  const cards: ReviewCard[] = [
++    { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
++    { ...pr, number: 202, updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
++    { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
++    { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
++  ];
++  const badges = [
++    { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
++    { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
++    { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
++  ];
++  let polls = 0;
++  try {
++    await act(async () => { root.render(createElement(ReviewBoard, {
++      key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
++      loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
++    })); });
++    const layout = () => ({ waiting: laneNumbers("Waiting for review"), approved: laneNumbers("Approved"),
++      shown: document.body.querySelectorAll(".review-card").length });
++    const before = layout();
++    expect(before).toEqual({ waiting: ["#203", "#202", "#201"], approved: ["#204"], shown: 4 });
++    for (let step = 0; step < badges.length; step++) {
++      await act(async () => { await tick!(); });
++      expect({ step, layout: layout() }).toEqual({ step, layout: before });
++    }
++    expect(polls).toBe(3);
++    await click(button("List"));
++    expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
++  } finally { clock.setTimeout = schedule; }
++});
++
++test("grouping by my role, quick filters in the context row, and an active review never bypasses them", async () => {
++  const requested: ReviewCard = { ...pr, number: 401, author: "bob", reviewers: ["ann"], updatedAt: "2026-11-10T04:00:00Z" };
++  const mine: ReviewCard = { ...pr, number: 402, author: "ann", reviewers: [], updatedAt: "2026-11-10T03:00:00Z" };
++  const failing: ReviewCard = { ...pr, number: 403, author: "bob", ci: "failed", updatedAt: "2026-11-10T02:00:00Z" };
++  const reviewing: ReviewCard = { ...pr, number: 404, author: "zed", updatedAt: "2026-11-10T01:00:00Z",
++    localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } };
++  await render(async () => snapshot([requested, mine, failing, reviewing]));
++  const toolbar = document.body.querySelector(".flows-toolbar")!;
++  expect(toolbar.querySelector(".review-quick-filters, .review-grouping")).toBeNull();
++  expect(document.body.querySelector(".review-context .review-quick-filters")).not.toBeNull();
++  expect(laneNames()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved"]);
++
++  await chooseGrouping("My role");
++  expect(laneNames()).toEqual(["Requested from me", "Mine", "Others"]);
++  expect(laneNumbers("Requested from me")).toEqual(["#401"]);
++  expect(laneNumbers("Mine")).toEqual(["#402"]);
++  expect(laneNumbers("Others")).toEqual(["#403", "#404"]);
++
++  const shown = () => Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent);
++  await click(button("Requested from me"));
++  expect(button("Requested from me").getAttribute("aria-pressed")).toBe("true");
++  expect(shown()).toEqual(["#401"]);
++  expect(laneNames()).toEqual(["Requested from me"]);
++  expect(document.body.querySelector(".review-active-filters")?.textContent).toContain("Requested from me");
++  await click(button("Requested from me"));
++  await click(button("Mine"));
++  expect(shown()).toEqual(["#402"]);
++  expect(laneNames()).toEqual(["Mine"]);
++  await click(button("Mine"));
++  await click(button("CI failed"));
++  expect(shown()).toEqual(["#403"]);
++  expect(button("Filters (1)").disabled).toBe(false);
++  expect(readReviewFilters(reviewFilterKey("/project", "repo1", "ann")).ciFailed).toBe(true);
++  await click(button("Clear filters"));
++  expect(button("CI failed").getAttribute("aria-pressed")).toBe("false");
++  expect(shown()).toHaveLength(4);
++
++  // The awaiting review on #404 does not keep it on the board when the author filter excludes it.
++  await click(button("Filters"));
++  await click(option("Author", "bob"));
++  await click(button("Apply filters"));
++  expect(shown()).toEqual(["#401", "#403"]);
++  expect(laneNames()).toEqual(["Requested from me", "Others"]);
++
++  // The grouping is kept for this project, repository and account.
++  await render(async () => snapshot([requested, mine, failing, reviewing]));
++  expect(laneNames()).toEqual(["Requested from me", "Others"]);
++  expect(document.body.querySelector<HTMLSelectElement>(".review-grouping select")!.value).toBe("role");
++});
++
++test("a card with an active review and a non-matching author shows nothing", async () => {
++  const active: ReviewCard = { ...pr, author: "zed", localReview: { active: true, ready: false, runState: "running" } };
++  saveReviewFilters(reviewFilterKey("/project", "repo1", "ann"), { ...EMPTY_FILTERS, author: ["lee"] });
++  await render(async () => snapshot([active]));
++  expect(document.body.querySelectorAll(".review-card")).toHaveLength(0);
++  expect(document.body.textContent).toContain("No matching pull requests");
++});
++
++test("saved quick filters are restored and malformed ones reset the saved filters", () => {
++  const key = reviewFilterKey("/project", "R", "ann");
++  localStorage.setItem(key, JSON.stringify({ version: 1, filters: { mine: true, ciFailed: false } }));
++  expect(readReviewFilters(key)).toEqual({ ...EMPTY_FILTERS, mine: true });
++  localStorage.setItem(key, JSON.stringify({ version: 1, filters: { requestedFromMe: "yes" } }));
++  expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
++});
++
++test("a shown card is never dropped because its lane was ruled out by the filters", async () => {
++  // GitHub does not request a review from the author, but a card that has both still stays on the board.
++  const both: ReviewCard = { ...pr, author: "ann", reviewers: ["ann"] };
++  await render(async () => snapshot([both]));
++  await chooseGrouping("My role");
++  await click(button("Mine"));
++  expect(laneNumbers("Requested from me")).toEqual(["#101"]);
++});
+
+--- apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx
+@@ 1,27 @@
+ import { afterAll, beforeEach, beforeAll, expect, test } from "bun:test";
+ import type { Root } from "react-dom/client";
+ import { registerDom, unregisterDom } from "../test/dom";
+ import type { FlowCard } from "../platform/commands";
+ import type { ReviewBoardSnapshot } from "./types";
+ import type { ReviewLaunchDialogProps } from "./ReviewLaunchDialog";
++import { reviewLaunchTarget } from "./prWork";
+ 
+ let root: Root;
+ let render: (props: ReviewLaunchDialogProps) => Promise<void>;
+ let act: (work: () => void | Promise<void>) => Promise<void>;
+ beforeAll(async () => {
+   registerDom();
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   const { ReviewLaunchDialog } = await import("./ReviewLaunchDialog");
+   const host = document.body.appendChild(document.createElement("div"));
+   root = (await import("react-dom/client")).createRoot(host);
+   render = props => act(async () => { root.render(React.createElement(ReviewLaunchDialog, props)); });
+ });
+ beforeEach(async () => { await act(async () => root.render(null)); });
+ afterAll(async () => { await act(async () => root.unmount()); await unregisterDom(); });
+ 
+ function deferred<T>() {
+   let resolve!: (value: T) => void;
+   const promise = new Promise<T>(done => { resolve = done; });
+   return { resolve, promise };
+
+--- apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx
+@@ 163,195 @@
+   expect(calls[0]?.slice(0, 2)).toEqual([{ repo: board.repo, repositoryId: "REPO_ID", viewer: "owner", number: 99 }, { baseSha: "aaa", headSha: "new-head" }]);
+ });
+ 
+ test("denied lookup exposes no previous PR, and a failed launch can be retried", async () => {
+   let denied = false, attempts = 0, closed = 0;
+   await render({ ...defaults, loadTargets: async () => {
+     if (denied) throw Error("access: Repository unavailable");
+     return { snapshot: board, selectedNumber: 14 };
+   }, onApply: async () => { attempts++; throw Error("Provider offline"); }, onClose: () => { closed++; } });
+   await click(btn("Apply"));
+   expect(document.querySelector("[role=alert]")?.textContent).toBe("Provider offline");
+   expect(btn("Apply").disabled).toBe(false);
+   expect(closed).toBe(0);
+   denied = true;
+   await act(async () => { document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+   expect(document.body.textContent).toContain("Repository unavailable");
+   expect(document.body.textContent).not.toContain("Improve cache");
+   expect(btn("Apply").disabled).toBe(true);
+   expect(attempts).toBe(1);
+ });
++
++test("/review without a target in a PR-bound session opens with that PR preselected", async () => {
++  const hints: Array<string | undefined> = [];
++  const url = board.cards[0]!.url;
++  const initialTarget = reviewLaunchTarget(undefined, { kind: "pr", repo: "example/repo", number: 14, url });
++  await render({ ...defaults, initialTarget, loadTargets: async hint => {
++    hints.push(hint);
++    return { snapshot: { ...board, cards: [...board.cards, { ...board.cards[0]!, number: 15, url: url.replace("14", "15") }] }, ...(hint === url ? { selectedNumber: 14 } : {}) };
++  } });
++  expect(hints).toEqual([url]);
++  expect(document.querySelector<HTMLInputElement>("input.text-input")?.value).toBe(url);
++  expect(select("Pull request").value).toBe("14");
++});
+
+--- apps/desktop/src/review/model.test.ts
+@@ 1,195 @@
+ import { expect, test } from "bun:test";
+ import type { ReviewCard } from "./types";
+-import { EMPTY_FILTERS, filterReviews, laneReason, reviewLane, reviewNote, stateQuery } from "./model";
++import type { LocalBadge } from "../../../../src/review/board-badges";
++import {
++  EMPTY_FILTERS, ROLE_LANES, STATUS_LANES, drawnLanes, filterReviews, laneReason, newestFirst, reviewLane, reviewNote, stateQuery,
++  type Filters,
++} from "./model";
+ 
+ const quiet = (c: ReviewCard): ReviewCard => ({ ...c, decision: null, reviewers: [] });
+ const pr: ReviewCard = {
+   number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
+   author: "ann", assignees: ["lee"], reviewers: ["example/team"], decision: "CHANGES_REQUESTED", ci: "passed",
+   updatedAt: "2026-10-01T00:00:00Z", headSha: "head", baseSha: "base",
+ };
+ 
+ test("combines independent roles with AND, selected values with OR and searches titles and numbers", () => {
+   const filters = { ...EMPTY_FILTERS, author: ["me", "ann"], assignee: ["lee"], reviewer: ["example/team"], decision: ["CHANGES_REQUESTED"], ci: ["passed"] };
+   expect(filterReviews([pr], filters, "#42")).toEqual([pr]);
+   expect(filterReviews([pr], filters, "PROJECT")).toEqual([pr]);
+   expect(filterReviews([pr], { ...filters, assignee: ["ann"] }, "")).toEqual([]);
+   expect(filterReviews([pr], { ...filters, reviewer: ["lee"] }, "")).toEqual([]);
+ });
+ 
+ test("empty role filters match genuinely empty assignments/requests, unknown CI is separate from no checks", () => {
+   const missing: ReviewCard = { ...pr, assignees: [], reviewers: [], decision: null, ci: "unknown" };
+   const empty = { ...EMPTY_FILTERS, assignee: [":none"], reviewer: [":none"] };
+   expect(filterReviews([pr, missing], empty, "")).toEqual([missing]);
+   expect(filterReviews([missing], { ...empty, ci: ["none"] }, "")).toEqual([]);
+   expect(filterReviews([{ ...missing, assigneesComplete: false }], empty, "")).toEqual([]);
+   expect(filterReviews([{ ...missing, reviewersComplete: false }], empty, "")).toEqual([]);
+ });
+ 
+ test("mixed PR-state selections load full history, then select exact states", () => {
+   const mixed = { ...EMPTY_FILTERS, state: ["merged", "draft"] };
+   expect(stateQuery(mixed.state)).toBe("all");
+   expect(stateQuery(EMPTY_FILTERS.state)).toBe("open");
+   expect(stateQuery(["closed"])).toBe("closed");
+   const draft = { ...pr, draft: true };
+   expect(filterReviews([pr, draft], mixed, "")).toEqual([draft]);
+ });
+ 
+-test("closed wins over requests, and a failing check requests attention independently of GitHub review decision", () => {
+-  expect(reviewLane({ ...pr, state: "merged" })).toBe("done");
+-  expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "failed" })).toBe("attention");
+-  expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "none" })).toBe("open");
++// Every local review state the board can carry (spec AC1).
++const LOCAL_STATES: Record<string, LocalBadge | undefined> = {
++  none: undefined,
++  queued: { active: true, ready: false, runState: "queued" },
++  running: { active: true, ready: false, runState: "running", progress: { wave: 2, planned: 4, finished: 1, completed: 1 } },
++  "awaiting answer": { active: true, ready: false, runState: "running", awaitingAnswer: true },
++  ready: { active: false, ready: true, runState: "completed" },
++  partial: { active: false, ready: true, runState: "partial" },
++  "publication pending": { active: false, ready: true, runState: "completed", publicationPending: true },
++  outdated: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" } },
++};
++
++test("the lane of a pull request never depends on its local review, in either grouping", () => {
++  const variants: ReviewCard[] = [
++    pr, quiet(pr), { ...pr, decision: "APPROVED" }, { ...pr, draft: true }, { ...pr, state: "merged" }, { ...pr, state: "closed" },
++    { ...quiet(pr), reviewers: ["ann"], author: "bob" }, { ...quiet(pr), author: "bob" },
++  ];
++  for (const card of variants) {
++    for (const grouping of ["status", "role"] as const) {
++      const expected = reviewLane(card, grouping, "ann");
++      for (const [name, localReview] of Object.entries(LOCAL_STATES)) {
++        const withLocal = localReview ? { ...card, localReview } : card;
++        expect({ name, lane: reviewLane(withLocal, grouping, "ann") }).toEqual({ name, lane: expected });
++      }
++    }
++  }
++  const lanes = Object.keys({ ...STATUS_LANES, ...ROLE_LANES });
++  expect(lanes).not.toContain("attention");
++  expect(lanes).not.toContain("review");
++});
++
++test("the status grouping reads GitHub state and decision only", () => {
++  expect(reviewLane({ ...pr, draft: true }, "status")).toBe("draft");
++  expect(reviewLane({ ...pr, draft: true, state: "merged" }, "status")).toBe("merged");
++  expect(reviewLane({ ...pr, state: "closed" }, "status")).toBe("closed");
++  expect(reviewLane(pr, "status")).toBe("changes");
++  expect(reviewLane({ ...pr, decision: "APPROVED" }, "status")).toBe("approved");
++  expect(reviewLane({ ...pr, decision: "REVIEW_REQUIRED" }, "status")).toBe("waiting");
++  expect(reviewLane({ ...pr, decision: null, ci: "failed" }, "status")).toBe("waiting");
++  expect(reviewLane(pr)).toBe("changes");
++});
++
++test("the role grouping sorts requests to the viewer's login, the viewer's own pull requests and the rest", () => {
++  expect(reviewLane({ ...pr, author: "bob", reviewers: ["ANN"] }, "role", "ann")).toBe("requested");
++  // Team requests are not matched to the viewer, as in the tab signal.
++  expect(reviewLane({ ...pr, author: "bob", reviewers: ["example/team"] }, "role", "ann")).toBe("others");
++  expect(reviewLane({ ...pr, author: "Ann" }, "role", "ann")).toBe("mine");
++  expect(reviewLane({ ...pr, author: "bob" }, "role", "ann")).toBe("others");
++  expect(reviewLane({ ...pr, author: "" }, "role", "")).toBe("others");
++});
++
++test("lanes that cannot hold a card under the current filters are not drawn", () => {
++  expect(drawnLanes("status", EMPTY_FILTERS, "ann")).toEqual(["draft", "waiting", "changes", "approved"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, state: [] }, "ann")).toEqual(["draft", "waiting", "changes", "approved", "merged", "closed"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, state: ["closed"] }, "ann")).toEqual(["closed"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, state: ["merged", "draft"] }, "ann")).toEqual(["draft", "merged"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, state: ["open"] }, "ann")).toEqual(["waiting", "changes", "approved"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, decision: ["APPROVED"] }, "ann")).toEqual(["draft", "approved"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, decision: [":none"] }, "ann")).toEqual(["draft", "waiting"]);
++  expect(drawnLanes("status", { ...EMPTY_FILTERS, decision: ["REVIEW_REQUIRED", "CHANGES_REQUESTED"] }, "ann")).toEqual(["draft", "waiting", "changes"]);
++  expect(drawnLanes("role", EMPTY_FILTERS, "ann")).toEqual(["requested", "mine", "others"]);
++  expect(drawnLanes("role", { ...EMPTY_FILTERS, requestedFromMe: true }, "ann")).toEqual(["requested"]);
++  expect(drawnLanes("role", { ...EMPTY_FILTERS, mine: true }, "ann")).toEqual(["mine"]);
++  expect(drawnLanes("role", { ...EMPTY_FILTERS, author: ["bob"] }, "ann")).toEqual(["requested", "others"]);
++  expect(drawnLanes("role", { ...EMPTY_FILTERS, author: ["ANN"] }, "ann")).toEqual(["mine"]);
++  expect(drawnLanes("role", { ...EMPTY_FILTERS, reviewer: [":none"] }, "ann")).toEqual(["mine", "others"]);
+ });
+ 
+-test("a branch rule requiring approval does not imply a request to a reviewer", () => {
+-  const required = { ...pr, decision: "REVIEW_REQUIRED" as const, reviewers: [] };
+-  expect(reviewLane(required)).toBe("open");
+-  expect(reviewLane({ ...required, reviewers: ["org/team"] })).toBe("attention");
++test("every card the filters keep lands in a drawn lane", () => {
++  const cards: ReviewCard[] = [
++    pr, quiet(pr), { ...pr, draft: true }, { ...pr, decision: "APPROVED" }, { ...pr, state: "merged" }, { ...pr, state: "closed" },
++    { ...pr, author: "bob", reviewers: ["ann"] }, { ...pr, author: "bob" }, { ...pr, decision: "REVIEW_REQUIRED", ci: "failed" },
++  ];
++  const filterSets: Filters[] = [
++    EMPTY_FILTERS, { ...EMPTY_FILTERS, state: [] }, { ...EMPTY_FILTERS, state: ["closed", "draft"] },
++    { ...EMPTY_FILTERS, decision: ["APPROVED", ":none"] }, { ...EMPTY_FILTERS, requestedFromMe: true },
++    { ...EMPTY_FILTERS, mine: true, state: [] }, { ...EMPTY_FILTERS, author: ["bob"], reviewer: [":none"] },
++  ];
++  for (const filters of filterSets) {
++    for (const grouping of ["status", "role"] as const) {
++      const drawn = drawnLanes(grouping, filters, "ann");
++      for (const card of filterReviews(cards, filters, "", "ann")) expect(drawn).toContain(reviewLane(card, grouping, "ann"));
++    }
++  }
+ });
+ 
+-test("active Keryx runs precede GitHub attention and available results bring an open PR back to attention", () => {
+-  const card = { ...pr, decision: null, reviewers: [], ci: "passed" as const };
+-  expect(reviewLane({ ...card, localReview: { active: true, ready: true } })).toBe("review");
+-  expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
+-  const merged = { ...card, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
+-  expect(reviewLane(merged)).toBe("attention");
+-  expect(filterReviews([merged], { ...EMPTY_FILTERS, state: [] }, "")).toEqual([merged]);
+-  expect(filterReviews([merged], EMPTY_FILTERS, "#999")).toEqual([]);
++test("quick filters narrow to requests to the viewer, the viewer's own pull requests and failed checks", () => {
++  const requested = { ...pr, number: 1, author: "bob", reviewers: ["Ann"] };
++  const mine = { ...pr, number: 2, author: "ANN", reviewers: [] };
++  const failing = { ...pr, number: 3, author: "bob", ci: "failed" as const };
++  const cards = [requested, mine, failing];
++  expect(filterReviews(cards, { ...EMPTY_FILTERS, requestedFromMe: true }, "", "ann")).toEqual([requested]);
++  expect(filterReviews(cards, { ...EMPTY_FILTERS, mine: true }, "", "ann")).toEqual([mine]);
++  expect(filterReviews(cards, { ...EMPTY_FILTERS, ciFailed: true }, "", "ann")).toEqual([failing]);
++  expect(filterReviews(cards, { ...EMPTY_FILTERS, mine: true, ciFailed: true }, "", "ann")).toEqual([]);
++  // Without a known viewer nothing is the viewer's: an unknown author does not count as "mine".
++  expect(filterReviews([{ ...mine, author: "" }], { ...EMPTY_FILTERS, mine: true }, "")).toEqual([]);
+ });
+ 
+-test("an active local review does not bypass any selected filter", () => {
++test("an active local review does not bypass any selected filter or the search", () => {
+   const active = { ...pr, localReview: { active: true, ready: false } };
++  const awaiting = { ...pr, state: "merged" as const, localReview: { active: true, ready: false, awaitingAnswer: true as const } };
+   expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["someone else"] }, "")).toEqual([]);
+   expect(filterReviews([active], { ...EMPTY_FILTERS, state: ["merged"] }, "")).toEqual([]);
+   expect(filterReviews([active], { ...EMPTY_FILTERS, ci: ["failed"] }, "")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, ciFailed: true }, "", "ann")).toEqual([]);
++  expect(filterReviews([active], { ...EMPTY_FILTERS, requestedFromMe: true }, "", "ann")).toEqual([]);
++  expect(filterReviews([awaiting], EMPTY_FILTERS, "")).toEqual([]);
++  expect(filterReviews([awaiting], { ...EMPTY_FILTERS, state: [] }, "#999")).toEqual([]);
+   expect(filterReviews([active], { ...EMPTY_FILTERS, author: ["ann"] }, "")).toEqual([active]);
+ });
+ 
+-test("an outdated review names the reviewed commit and ranks below live Keryx states, closed PRs and attention reasons", () => {
+-  const outdated = (state: "completed" | "partial" | "budget") =>
+-    ({ ...quiet(pr), localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+-  expect(laneReason(outdated("completed"))).toBe("Outdated review · abcdef0");
+-  expect(laneReason(outdated("partial"))).toBe("Outdated partial review · abcdef0");
+-  expect(laneReason(outdated("budget"))).toBe("Outdated partial review · abcdef0");
+-  expect(laneReason({ ...outdated("completed"), state: "merged" })).toBe("Merged");
+-  const awaiting = { ...outdated("completed"), localReview: { ...outdated("completed").localReview, awaitingAnswer: true as const } };
+-  expect(laneReason(awaiting)).toBe("Awaiting your answer");
+-  expect(laneReason({ ...outdated("completed"), localReview: { ...outdated("completed").localReview, active: true, runState: "queued" as const } })).toBe("Keryx review queued");
+-  // A neutral open card: no decision, no reviewers, CI passed.
+-  const neutral = quiet(pr);
+-  expect(reviewLane(neutral)).toBe("open");
+-  expect(reviewLane({ ...neutral, localReview: outdated("completed").localReview })).toBe("open");
+-  expect(laneReason({ ...neutral, localReview: outdated("completed").localReview })).toBe("Outdated review · abcdef0");
++test("cards are ordered by GitHub update time, newest first, keeping the given order for ties", () => {
++  const a = { ...pr, number: 1, updatedAt: "2026-10-01T00:00:00Z" };
++  const b = { ...pr, number: 2, updatedAt: "2026-10-03T00:00:00Z" };
++  const c = { ...pr, number: 3, updatedAt: "2026-10-01T00:00:00Z", localReview: { active: true, ready: false } };
++  const d = { ...pr, number: 4, updatedAt: "2026-10-02T00:00:00.500+00:00" };
++  const input = [a, b, c, d];
++  expect(newestFirst(input).map(card => card.number)).toEqual([2, 4, 1, 3]);
++  expect(input.map(card => card.number)).toEqual([1, 2, 3, 4]);
+ });
+ 
+-test("an outdated review stays visible as a note when another reason leads the lane", () => {
+-  const stale = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
+-  expect(reviewLane(stale)).toBe("attention");
+-  expect(laneReason(stale)).toBe("Changes requested");
+-  expect(reviewNote(stale)).toBe("Outdated review · abcdef0");
+-  expect(reviewNote({ ...stale, headSha: "abcdef0123456" })).toBe("Review predates base update · abcdef0");
+-  expect(reviewNote(pr)).toBeNull();
++test("the reason line is derived from GitHub data only, for every local review state", () => {
++  const cases: [ReviewCard, string][] = [
++    [{ ...pr, state: "merged" }, "Merged"],
++    [{ ...pr, state: "closed" }, "Closed"],
++    [pr, "Changes requested"],
++    [{ ...pr, decision: null }, "Review requested"],
++    [{ ...quiet(pr), ci: "failed" }, "Checks failed"],
++    [{ ...quiet(pr), addressedReplyIds: ["r1"] }, "New reply to you"],
++    [{ ...quiet(pr), decision: "APPROVED" }, "Approved"],
++    [{ ...quiet(pr), decision: "REVIEW_REQUIRED" }, "Review required"],
++    [{ ...quiet(pr), draft: true }, "Draft pull request"],
++    [{ ...quiet(pr), reviewersComplete: false }, "Review requests incomplete"],
++    [quiet(pr), "No review requested"],
++  ];
++  for (const [card, reason] of cases) {
++    for (const localReview of Object.values(LOCAL_STATES)) {
++      expect(laneReason(localReview ? { ...card, localReview } : card)).toBe(reason);
++    }
++  }
+ });
+ 
+-test("a review of the current head under an older base says the base moved, not that the head is outdated", () => {
+-  const baseMoved = (state: "completed" | "partial" | "budget") =>
+-    ({ ...quiet(pr), headSha: "abcdef0123456", localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
+-  expect(laneReason(baseMoved("completed"))).toBe("Review predates base update · abcdef0");
+-  expect(laneReason(baseMoved("partial"))).toBe("Partial review predates base update · abcdef0");
+-  expect(laneReason(baseMoved("budget"))).toBe("Partial review predates base update · abcdef0");
+-  expect(laneReason({ ...baseMoved("completed"), headSha: "fedcba9876543" })).toBe("Outdated review · abcdef0");
++test("the outdated-review text stays available for the work row and names the reviewed commit", () => {
++  const stale = (state: "completed" | "partial" | "budget", headSha = "head") =>
++    ({ ...pr, headSha, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state } } });
++  expect(reviewNote(stale("completed"))).toBe("Outdated review · abcdef0");
++  expect(reviewNote(stale("partial"))).toBe("Outdated partial review · abcdef0");
++  expect(reviewNote(stale("budget"))).toBe("Outdated partial review · abcdef0");
++  // Same head, different range: only the base moved, so the reviewed head is not "outdated".
++  expect(reviewNote(stale("completed", "abcdef0123456"))).toBe("Review predates base update · abcdef0");
++  expect(reviewNote(stale("partial", "abcdef0123456"))).toBe("Partial review predates base update · abcdef0");
++  expect(reviewNote(pr)).toBeNull();
+ });
+
+--- apps/desktop/src/review/prWork.test.ts
+@@ 1,271 @@
++import { expect, test } from "bun:test";
++import type { SessionInfo, SessionSubject } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++import {
++  boundSessions, FLOW_LINK_WINDOW_MS, flowPrompt, flowStage, openSubjectSession, prFlows, prSubject, prWorkIndex, resolveFlowLinks,
++  reviewLaunchTarget, reviewSlotState, subjectOpener, withPendingSubjects, type PendingFlowLink, type SubjectSessionDeps,
++} from "./prWork";
++import { PendingSubjects, SUBJECT_NOT_SAVED } from "../session/subjectBinding";
++
++const url = "https://github.com/org/repo/pull/101";
++const subject: SessionSubject = { kind: "pr", repo: "org/repo", number: 101, url };
++const session = (id: string, flags: Record<string, unknown> = {}, updatedAt: string | null = "2026-11-20T10:00:00Z"): SessionInfo =>
++  ({ sessionId: id, cwd: "/project", title: "Session " + id, updatedAt, _meta: { keryx: flags } });
++const flow = (id: string, extra: Partial<FlowCard> = {}): FlowCard => ({
++  id, dir: id + "-work", idValid: true, commandRef: null, title: "Work " + id, status: "in-progress", previousStatus: null,
++  blocked: false, owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0,
++  updatedAt: null, completionExceptions: false, error: null, ...extra,
++});
++
++test("the PR subject names the board's repository and the card", () => {
++  expect(prSubject({ number: 101, url }, "org/repo", "R1")).toEqual({ ...subject, repositoryId: "R1" });
++  expect(prSubject({ number: 101, url }, "org/repo")).toEqual(subject);
++});
++
++test("bound sessions: same PR only, never archived, newest first, an unsaved one first", () => {
++  const sessions = [
++    session("old", { subject }, "2026-11-01T00:00:00Z"),
++    session("archived", { subject, archivedAt: "2026-11-21T00:00:00Z" }, "2026-11-22T00:00:00Z"),
++    session("other", { subject: { ...subject, number: 102, url: url.replace("101", "102") } }),
++    session("issue", { subject: { ...subject, kind: "issue", url: "https://github.com/org/repo/issues/101" } }),
++    session("new", { subject }, "2026-11-20T00:00:00Z"),
++    session("Case", { subject: { ...subject, repo: "Org/Repo" } }, "2026-11-19T00:00:00Z"),
++    session("unsaved", { subject }, null),
++  ];
++  expect(boundSessions(sessions, subject).map(s => s.sessionId)).toEqual(["unsaved", "new", "Case", "old"]);
++});
++
++test("pending subjects show as bound sessions until keryx stores them", () => {
++  const pending = new Map([["fresh", subject], ["stored", subject]]);
++  const merged = withPendingSubjects([session("stored"), session("plain")], pending);
++  expect(merged.map(s => s.sessionId)).toEqual(["fresh", "stored", "plain"]);
++  expect(boundSessions(merged, subject).map(s => s.sessionId)).toEqual(["fresh", "stored"]);
++  expect(withPendingSubjects([session("plain")], new Map())).toHaveLength(1);
++});
++
++test("a subject keryx already stored wins over a pending binding for the same session", () => {
++  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
++  const merged = withPendingSubjects([session("stored", { subject: other })], new Map([["stored", subject]]));
++  expect(merged[0]?._meta?.keryx?.subject).toEqual(other);
++  expect(boundSessions(merged, subject)).toEqual([]);
++  expect(boundSessions(merged, other).map(s => s.sessionId)).toEqual(["stored"]);
++});
++
++test("the PR's Flows are those naming its URL and those linked to a session bound to it", () => {
++  const flows = [flow("1", { prUrl: url + "/" }), flow("2"), flow("3"), flow("4", { prUrl: "https://github.com/org/repo/pull/7" })];
++  const bound = [session("a", { subject, flow: "2-work" })];
++  expect(prFlows({ url }, flows, bound).map(f => f.id).sort()).toEqual(["1", "2"]);
++  expect(prFlows({ url }, flows, []).map(f => f.id)).toEqual(["1"]);
++  // Both sides are compared without a trailing slash and without case.
++  expect(prFlows({ url: url.toUpperCase() + "/" }, flows, []).map(f => f.id)).toEqual(["1"]);
++  expect(flowStage(flow("1"))).toBe("In progress");
++  expect(flowStage(flow("1", { blocked: true }))).toBe("Blocked");
++  expect(flowStage(flow("1", { status: "custom" }))).toBe("custom");
++});
++
++test("the review slot names the local review state only: no round number and no behind count", () => {
++  expect(reviewSlotState(undefined)).toBeNull();
++  expect(reviewSlotState({ active: false, ready: false })).toBeNull();
++  const cases: Array<[Parameters<typeof reviewSlotState>[0], string]> = [
++    [{ active: true, ready: false, runState: "queued" }, "queued"],
++    [{ active: true, ready: false, runState: "running" }, "running"],
++    [{ active: true, ready: false, runState: "running", awaitingAnswer: true }, "needs your answer"],
++    [{ active: false, ready: true, runState: "completed" }, "ready"],
++    [{ active: false, ready: false, runState: "partial" }, "partial"],
++    [{ active: false, ready: true, runState: "completed", publicationPending: true }, "publication pending"],
++    [{ active: false, ready: false, runState: "failed" }, "failed"],
++    [{ active: false, ready: false, runState: "cancelled" }, "stopped"],
++    [{ active: false, ready: false, outdated: { headSha: "abc", state: "completed" } }, "outdated"],
++    [{ active: true, ready: false, runState: "other-revision" }, "outdated"],
++  ];
++  for (const [badge, state] of cases) {
++    const text = reviewSlotState(badge);
++    expect(text).toBe(state);
++    expect(text).not.toMatch(/round|behind|\d/i);
++  }
++});
++
++test("/review without a target in a PR-bound session preselects that PR; a typed target or an issue session wins", () => {
++  expect(reviewLaunchTarget(undefined, subject)).toBe(url);
++  expect(reviewLaunchTarget("  ", subject)).toBe(url);
++  expect(reviewLaunchTarget("#7", subject)).toBe("#7");
++  expect(reviewLaunchTarget(undefined, { ...subject, kind: "issue" })).toBeUndefined();
++  expect(reviewLaunchTarget(undefined, undefined)).toBeUndefined();
++});
++
++test("the board's index answers what boundSessions and prFlows answer", () => {
++  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
++  const sessions = [
++    session("old", { subject, flow: "2-work" }, "2026-11-01T00:00:00Z"), session("archived", { subject, archivedAt: "2026-11-21T00:00:00Z" }),
++    session("other", { subject: other }), session("Case", { subject: { ...subject, repo: "Org/Repo" } }, "2026-11-19T00:00:00Z"),
++    session("unsaved", { subject }, null), session("plain"),
++  ];
++  const flows = [flow("1", { prUrl: url + "/" }), flow("2"), flow("3", { prUrl: other.url })];
++  const index = prWorkIndex(flows, sessions);
++  for (const value of [subject, other, { ...subject, number: 999 }]) {
++    expect(index.sessions(value)).toEqual(boundSessions(sessions, value));
++    const card = { url: value.url };
++    expect(index.flows(card, index.sessions(value))).toEqual(prFlows(card, flows, boundSessions(sessions, value)));
++  }
++});
++
++const entry = (sessionId: string, known: string[], expiresAt = FLOW_LINK_WINDOW_MS): PendingFlowLink =>
++  ({ sessionId, knownDirs: new Set(known), expiresAt });
++const noFlow = () => undefined;
++
++test("Create Flow links the one new package to the one pending request, none when several appear or the session already has a Flow", () => {
++  const pending = [entry("s", ["1-a", "2-b"])];
++  expect(resolveFlowLinks(pending, ["1-a", "2-b"], noFlow, new Set(), 0)).toEqual({ pending, links: [] });
++  expect(resolveFlowLinks(pending, ["1-a", "2-b", "3-c"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [{ sessionId: "s", dir: "3-c" }] });
++  expect(resolveFlowLinks(pending, ["1-a", "3-c", "4-d"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [] });
++  expect(resolveFlowLinks(pending, ["1-a", "3-c"], () => "2-b", new Set(), 0)).toEqual({ pending: [], links: [] });
++  expect(flowPrompt(url)).toBe(`Create a Keryx flow for ${url} with flow-orchestrator.`);
++});
++
++test("two pending Create Flow requests and one new package: none is linked and both requests end", () => {
++  const pending = [entry("s1", ["1-a"]), entry("s2", ["1-a"])];
++  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 0)).toEqual({ pending, links: [] });
++  expect(resolveFlowLinks(pending, ["1-a", "2-new"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [] });
++});
++
++test("a package that appears after the request's window is not linked: the request has expired", () => {
++  const pending = [entry("s1", ["1-a"], 1_000)];
++  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 999)).toEqual({ pending, links: [] });
++  expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 1_000)).toEqual({ pending: [], links: [] });
++  expect(resolveFlowLinks(pending, ["1-a", "2-foreign"], noFlow, new Set(), 1_001)).toEqual({ pending: [], links: [] });
++});
++
++test("a package already linked to one request is never linked to another", () => {
++  const pending = [entry("s2", ["1-a"])];
++  expect(resolveFlowLinks(pending, ["1-a", "2-claimed"], noFlow, new Set(["2-claimed"]), 0)).toEqual({ pending, links: [] });
++  expect(resolveFlowLinks(pending, ["1-a", "2-claimed", "3-own"], noFlow, new Set(["2-claimed"]), 0))
++    .toEqual({ pending: [], links: [{ sessionId: "s2", dir: "3-own" }] });
++});
++
++/** An app stand-in: new sessions are shown, bound through PendingSubjects, and the composer is only filled. */
++function fakeApp(reply: (subject: SessionSubject) => Record<string, unknown> | "not-stored" = s => ({ subject: s })) {
++  const stored: SessionInfo[] = [];
++  const events: string[] = [];
++  const notices: string[] = [];
++  let pending: ReadonlyMap<string, SessionSubject> = new Map();
++  let next = 0;
++  const subjects = new PendingSubjects({
++    write: async (sessionId, value) => {
++      const answer = reply(value);
++      if (answer === "not-stored") throw new Error("unknown session");
++      events.push("flags " + sessionId);
++      return answer;
++    },
++    onFlags: (sessionId, flags) => {
++      const index = stored.findIndex(s => s.sessionId === sessionId);
++      const entry = { ...session(sessionId), _meta: { keryx: flags } };
++      if (index < 0) stored.push(entry); else stored[index] = entry;
++    },
++    onNotice: (sessionId, text) => notices.push(sessionId + ": " + text),
++    onChange: value => { pending = value; },
++  });
++  const deps: SubjectSessionDeps = {
++    sessions: () => withPendingSubjects(stored, pending),
++    loadSession: async id => { events.push("load " + id); },
++    newSession: async () => { const id = "s" + ++next; events.push("new " + id); return id; },
++    bind: (id, value) => void subjects.bind(id, value),
++    fill: text => events.push("fill " + text),
++  };
++  return { deps, events, notices, subjects, stored };
++}
++
++test("Open in session: a new bound session with the PR URL in the composer, not sent; again opens the same session", async () => {
++  const app = fakeApp(() => "not-stored");
++  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  // Prefilled only: the deps have no way to send, and the composer got the URL.
++  expect(app.events).toEqual(["new s1", "fill " + url]);
++  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  expect(app.events.slice(2)).toEqual(["load s1"]);
++});
++
++test("the session menu's New session creates another bound session; a listed session opens by id", async () => {
++  const app = fakeApp();
++  await openSubjectSession(app.deps, subject, "latest", url);
++  await Promise.resolve();
++  expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId)).toEqual(["s1"]);
++  expect(await openSubjectSession(app.deps, subject, "new", url)).toBe("s2");
++  await Promise.resolve();
++  expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId).sort()).toEqual(["s1", "s2"]);
++  expect(await openSubjectSession(app.deps, subject, "s1", url)).toBe("s1");
++  expect(app.events.at(-1)).toBe("load s1");
++});
++
++test("Create Flow opens the bound session and prefills the flow prompt even when the session exists", async () => {
++  const app = fakeApp(() => "not-stored");
++  await openSubjectSession(app.deps, subject, "latest", url);
++  expect(await openSubjectSession(app.deps, subject, "latest", flowPrompt(url), true)).toBe("s1");
++  expect(app.events.slice(-2)).toEqual(["load s1", "fill " + flowPrompt(url)]);
++});
++
++test("a keryx that answers without subject still opens the session and says the binding was not saved", async () => {
++  let stored = false;
++  const app = fakeApp(() => stored ? { archivedAt: undefined } : "not-stored");
++  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  expect(app.events).toEqual(["new s1", "fill " + url]);
++  expect(app.notices).toEqual([]);
++  expect(app.subjects.get("s1")).toEqual(subject);
++  // After the first turn keryx has stored the session and answers, but without the subject.
++  stored = true;
++  await app.subjects.apply("s1");
++  expect(app.notices).toEqual(["s1: " + SUBJECT_NOT_SAVED]);
++  expect(app.subjects.get("s1")).toBeUndefined();
++  await app.subjects.apply("s1");
++  expect(app.notices).toHaveLength(1);
++});
++
++test("a repeat Open in session for a Subject while one is opening gets the same pending open: one new session", async () => {
++  const app = fakeApp(() => "not-stored");
++  const release: Array<(id: string | null) => void> = [];
++  let created = 0;
++  const deps: SubjectSessionDeps = { ...app.deps, newSession: () => { created++; return new Promise(resolve => { release.push(resolve); }); } };
++  const open = subjectOpener();
++  const first = open(deps, subject, "latest", url);
++  const again = open(deps, { ...subject, repo: "Org/Repo" }, "latest", url);
++  const otherPr = open(deps, { ...subject, number: 102, url: url.replace("101", "102") }, "latest", url);
++  expect(again).toBe(first);
++  expect(otherPr).not.toBe(first);
++  expect(created).toBe(2);
++  release[0]!("s1");
++  expect(await first).toBe("s1");
++  release[1]!("s2");
++  await otherPr;
++  // Settled: the next press opens again (here the bound session, no new one).
++  expect(await open(deps, subject, "latest", url)).toBe("s1");
++  expect(created).toBe(2);
++});
++
++test("a newer bind for the same session decides: the answer to the superseded write is dropped", async () => {
++  const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
++  const writes: Array<(flags: { subject: SessionSubject }) => void> = [];
++  const answered: SessionSubject[] = [];
++  const subjects = new PendingSubjects({
++    write: () => new Promise(resolve => { writes.push(resolve); }),
++    onFlags: (_id, flags) => { if (flags.subject) answered.push(flags.subject); },
++    onNotice: () => {},
++    onChange: () => {},
++  });
++  const first = subjects.bind("s1", subject);
++  const second = subjects.bind("s1", other);
++  writes[0]!({ subject });
++  await first;
++  expect(answered).toEqual([]);
++  expect(subjects.get("s1")).toEqual(other);
++  writes[1]!({ subject: other });
++  await second;
++  expect(answered).toEqual([other]);
++  expect(subjects.get("s1")).toBeUndefined();
++});
++
++test("a keryx that stores the subject answers it and no notice is shown", async () => {
++  const app = fakeApp();
++  await openSubjectSession(app.deps, subject, "latest", url);
++  await Promise.resolve();
++  expect(app.notices).toEqual([]);
++  expect(app.stored[0]?._meta?.keryx?.subject).toEqual(subject);
++  expect(app.subjects.get("s1")).toBeUndefined();
++});
+
+--- apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx
+@@ 1,118 @@
++import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
++import type { Root } from "react-dom/client";
++import type { SessionInfo } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++import { registerDom, unregisterDom } from "../test/dom";
++
++let root: Root;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let createElement: typeof import("react").createElement;
++let usePendingFlowLinks: typeof import("./usePendingFlowLinks").usePendingFlowLinks;
++let FLOW_LINK_WINDOW_MS: number;
++
++beforeAll(async () => {
++  registerDom();
++  const React = await import("react");
++  act = React.act as unknown as typeof act;
++  createElement = React.createElement;
++  ({ usePendingFlowLinks } = await import("./usePendingFlowLinks"));
++  ({ FLOW_LINK_WINDOW_MS } = await import("./prWork"));
++  root = (await import("react-dom/client")).createRoot(document.body.appendChild(document.createElement("div")));
++});
++afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
++
++const flow = (dir: string): FlowCard => ({
++  id: dir.slice(0, 3), dir, idValid: true, commandRef: null, title: dir, status: "initializing", previousStatus: null, blocked: false,
++  owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0, updatedAt: null,
++  completionExceptions: false, error: null,
++});
++
++type Api = ReturnType<typeof usePendingFlowLinks>;
++function harness() {
++  const links: string[] = [];
++  const apis: Api[] = [];
++  const clock = { now: 0 };
++  function Probe({ flows, loaded, sessions }: { flows: FlowCard[]; loaded: boolean; sessions: SessionInfo[] }) {
++    apis.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => links.push(`${id} ${dir}`), () => clock.now));
++    return null;
++  }
++  const render = (flows: FlowCard[], loaded = true, sessions: SessionInfo[] = []) =>
++    act(async () => { root.render(createElement(Probe, { flows, loaded, sessions })); });
++  return { links, clock, apis, render, api: () => apis.at(-1)! };
++}
++// Each test starts from a fresh hook: the previous test's Probe is unmounted first.
++beforeEach(async () => { await act(async () => root.render(null)); });
++
++test("the first new flow package after Create Flow is linked to the session, once", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  const known = h.api().known();
++  await act(async () => h.api().expect("s1", known));
++  await h.render([flow("100-old")]);
++  expect(h.links).toEqual([]);
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.links).toEqual(["s1 101-new"]);
++  await h.render([flow("100-old"), flow("101-new"), flow("102-later")]);
++  expect(h.links).toEqual(["s1 101-new"]);
++});
++
++test("several new packages link none, and nothing is linked before the first flow list or to a session with a Flow", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await h.render([flow("100-old"), flow("101-a"), flow("102-b")]);
++  await h.render([flow("100-old"), flow("101-a"), flow("102-b"), flow("103-c")]);
++  expect(h.links).toEqual([]);
++
++  await h.render([], false);
++  await act(async () => h.api().expect("s2", h.api().known()));
++  await h.render([flow("100-old")]);
++  expect(h.links).toEqual([]);
++
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s3", h.api().known()));
++  const linked: SessionInfo = { sessionId: "s3", cwd: "/p", _meta: { keryx: { flow: "099-earlier" } } };
++  await h.render([flow("100-old"), flow("104-d")], true, [linked]);
++  expect(h.links).toEqual([]);
++});
++
++test("two pending Create Flow requests and one new package: none is linked, and a later package is not linked either", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await act(async () => h.api().expect("s2", h.api().known()));
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.links).toEqual([]);
++  await h.render([flow("100-old"), flow("101-new"), flow("102-later")]);
++  expect(h.links).toEqual([]);
++});
++
++test("a request expires: a package from elsewhere after its window is not linked", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  h.clock.now = FLOW_LINK_WINDOW_MS + 1;
++  await h.render([flow("100-old"), flow("101-foreign")]);
++  expect(h.links).toEqual([]);
++});
++
++test("a package linked to one request is not linked to a request recorded before it appeared", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  // s2 took its known packages before s1's package appeared, and records the request after it was linked.
++  const before = h.api().known();
++  await h.render([flow("100-old"), flow("101-s1")]);
++  expect(h.links).toEqual(["s1 101-s1"]);
++  await act(async () => h.api().expect("s2", before));
++  await h.render([flow("100-old"), flow("101-s1")]);
++  expect(h.links).toEqual(["s1 101-s1"]);
++});
++
++test("the hook's api keeps its identity across renders, so callbacks built on it can be memoised", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await h.render([flow("100-old"), flow("101-new")]);
++  await h.render([flow("100-old"), flow("101-new")], true, []);
++  expect(new Set(h.apis).size).toBe(1);
++});
+
+--- apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx
+@@ 1,41 @@
++import { afterAll, beforeAll, expect, test } from "bun:test";
++import type { Root } from "react-dom/client";
++import type { SessionSubject } from "../acp/types";
++import { registerDom, unregisterDom } from "../test/dom";
++
++let root: Root;
++let host: HTMLElement;
++let act: (fn: () => void | Promise<void>) => Promise<void>;
++let createElement: typeof import("react").createElement;
++let SessionSubjectLinks: typeof import("./SessionSubjectLinks").SessionSubjectLinks;
++
++beforeAll(async () => {
++  registerDom();
++  const React = await import("react");
++  act = React.act as unknown as typeof act;
++  createElement = React.createElement;
++  ({ SessionSubjectLinks } = await import("./SessionSubjectLinks"));
++  host = document.body.appendChild(document.createElement("div"));
++  root = (await import("react-dom/client")).createRoot(host);
++});
++afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
++
++const pr: SessionSubject = { kind: "pr", repo: "org/repo", number: 101, url: "https://github.com/org/repo/pull/101" };
++
++test("the session header links its Subject and Flow back to their cards", async () => {
++  const opened: string[] = [];
++  const render = (subject?: SessionSubject, flow?: { id: string; dir: string; title: string }) => act(async () => {
++    root.render(createElement(SessionSubjectLinks, { subject, flow,
++      onOpenSubject: value => opened.push(`${value.kind} ${value.number}`), onOpenFlow: dir => opened.push("flow " + dir) }));
++  });
++  await render();
++  expect(host.textContent).toBe("");
++  await render(pr, { id: "517", dir: "517-work", title: "Work" });
++  const buttons = [...host.querySelectorAll("button")];
++  expect(buttons.map(b => b.textContent)).toEqual(["PR org/repo#101", "Flow #517"]);
++  for (const b of buttons) await act(async () => b.click());
++  await render({ ...pr, kind: "issue", url: "https://github.com/org/repo/issues/101" });
++  expect(host.textContent).toBe("Issue org/repo#101");
++  await act(async () => host.querySelector("button")!.click());
++  expect(opened).toEqual(["pr 101", "flow 517-work", "issue 101"]);
++});
+
+--- apps/desktop/src/shell/ProjectNavigation.dom.test.tsx
+@@ 63,96 @@
+   for (const section of ["Metaproject", "Issues", "Pull requests", "Flows"]) {
+     expect(globalButtons.some(b => b.getAttribute("aria-label") === section || b.textContent?.trim().startsWith(section))).toBe(false);
+   }
+   for (const section of ["Metaproject", "Issues", "Pull requests", "Flows", "Sessions"]) {
+     const target = Array.from(project().querySelectorAll("button")).find((b) => b.textContent?.startsWith(section))!;
+     await click(target);
+     expect(target.getAttribute("aria-current")).toBe("page");
+     expect(global.querySelector('[aria-label="alpha"]')!.classList.contains("is-active")).toBe(true);
+   }
+   await click(button(global, "Settings"));
+   expect(project()).toBeNull();
+   expect(button(global, "Settings").getAttribute("aria-current")).toBe("page");
+   await click(global.querySelector<HTMLButtonElement>('[aria-label="alpha"]')!);
+   expect(button(project(), "Sessions").getAttribute("aria-current")).toBe("page");
+   await click(global.querySelector<HTMLButtonElement>('[aria-label="beta"]')!);
+   expect(project().getAttribute("aria-label")).toBe("Project views for beta");
+   expect(global.querySelector('[aria-label="beta"]')!.getAttribute("aria-current")).toBe("true");
+ });
+ 
+ 
+-test("App preserves tab state and starts a background review from the originating session", () => {
++test("App preserves tab state and starts a background review from the originating session; AC16 a PR without Flow and review opens one bound session whose /review run shows on the card", () => {
+   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
+   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+ });
+ 
++test("AC9 Create Flow in the App: the bound session gets the flow prompt, the one new package is linked and shown on the card, two link none; AC12 an Issue card counts its bound session", () => {
++  const fixture = fileURLToPath(new URL("../test/app-work-row.fixture.tsx", import.meta.url));
++  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
++});
++
+ test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
+   const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
+   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+ });
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 1,129 @@
+ import assert from "node:assert/strict";
+ import { registerDom, unregisterDom } from "./dom";
+ 
+ // This fixture runs in its own process: the production backend caches its first host connection.
+ registerDom();
+ const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
+ const { emit } = await import("@tauri-apps/api/event");
+ const cwd = "/dev/project-navigation";
+ let offline = false;
+ const reads: string[] = [];
+ const starts: unknown[] = [];
+ const replies: unknown[] = [];
+ let refuseReply = true;
+ const calls: string[] = [];
++const loaded: string[] = [];
+ const runId = "e968ba9b-c8a3-438f-a5c8-93625e427905";
+ const prUrl = "https://github.com/org/project/pull/12";
++// AC16: a second open PR with no Flow (no Flow names its URL) and no local review.
++const bareRunId = "0f3c2a51-7d4e-4b8a-9c61-2e5f0a7b9d13";
++const barePrUrl = "https://github.com/org/project/pull/13";
++const bareStarts: unknown[] = [];
+ const question = (id: string, reviewer: string, text: string) => ({
+   id, reviewer, question: text, options: [], allowFreeform: true,
+ });
+ let questions = [
+   question("question-logic", "review-logic", "Which revision should I inspect?"),
+   question("question-contract", "review-pr-contract", "Where is the backend contract?"),
+ ];
+ const run = {
+   id: runId, source: "manual", state: "running", phase: "Dispatching reviewers", reason: "",
+   baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
+   startedAt: "2026-11-20T00:00:01Z", finishedAt: null, result: null, coordinatorActivity: [{ kind: "status", text: "Wave 1 started" }],
+ };
++const bareRun = { ...run, id: bareRunId, baseSha: "d".repeat(40), headSha: "c".repeat(40), coordinatorActivity: [] };
+ let account: string | null = null;
+ let accountConfigured = false;
+ let connectedNewAccount = false;
+ let accountListReads = 0;
+ let accountListGate: Promise<void> | undefined;
+ let accountListError: string | undefined;
++/** false: an older keryx that answers `_keryx/session_flags` without `subject`. */
++let storesSubject = false;
++let newSessions = 0;
++const stored = new Map<string, { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } }>();
+ mockWindows("project-navigation");
+ mockIPC(async (cmd, args) => {
+   switch (cmd) {
+     case "window_initial_cwd": return cwd;
+     case "settings_get": return { recentProjects: [] };
+     case "projects_state": return [];
+     case "flows_list": return [{ id: "505", idValid: true, dir: "505-review", title: "Review flow", prUrl }];
+     case "pr_info": return { url: prUrl, number: 12 };
+     case "acp_start": return { keryxPath: "/fixture/keryx" };
+     case "version_check": return { ok: true };
+     case "github_login": connectedNewAccount = true; return null;
+     case "github_accounts": {
+       const request = args as {action: string; cwd?: string; login?: string};
+       if (request.action === "list") {
+         accountListReads++;
+         await accountListGate;
+         if (accountListError) throw accountListError;
+         return { accounts: [
+           { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
+           ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
+         ] };
+       }
+       assert.equal(request.cwd, cwd);
+       if (request.action === "bind") {
+         account = request.login ?? null;
+         accountConfigured = true;
+       }
+       return { eligible: true, configured: accountConfigured, login: account };
+     }
+     case "acp_send": {
+-      const { method, id } = JSON.parse(String((args as {message:string}).message));
++      const { method, id, params } = JSON.parse(String((args as {message:string}).message));
+       calls.push(method);
+-      const result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+-        : method === "session/new" ? { sessionId: "nav-session" } : { sessions: [] };
++      if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
++      let result: unknown;
++      if (method === "_keryx/session_flags") {
++        const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
++        const flags = storesSubject && subject ? { subject } : {};
++        if (storesSubject) stored.set(sessionId, { sessionId, cwd, title: "PR session " + sessionId, updatedAt: new Date(Date.now() + stored.size).toISOString(), _meta: { keryx: flags } });
++        result = flags;
++      } else {
++        result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
++          : method === "session/new" ? { sessionId: newSessions++ ? "nav-session-" + newSessions : "nav-session" }
++          : method === "session/list" ? { sessions: [...stored.values()].reverse() } : { sessions: [] };
++      }
+       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
+       return;
+     }
+     case "review_board":
++      // The PR panel's detail read (the session header link opens it).
++      if ((args as { number?: number }).number === 12) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: 12,
++        headSha: run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
+       reads.push(String((args as {cwd:string}).cwd));
+       if (offline) throw new Error("unavailable: connection lost");
+       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
+-        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" }] };
++        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
++          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" }] };
+     case "review_run": {
+       const { action, target } = args as { action: { kind: string; activityId?: string }; target: { number: number } };
++      if (target.number === 13) {
++        if (action.kind === "start") {
++          bareStarts.push(action);
++          return { version: 1, runs: [bareRun], startedRunId: bareRunId };
++        }
++        return { version: 1, runs: bareStarts.length && action.activityId === bareRunId ? [bareRun] : [] };
++      }
+       assert.equal(target.number, 12);
+       if (action.kind === "start") {
+         starts.push(action);
+         return { version: 1, runs: [run], startedRunId: runId };
+       }
+       if (action.kind === "answer") {
+         replies.push(action);
+         if (refuseReply) {
+           refuseReply = false;
+           throw new Error("unavailable: Review reply could not be sent.");
+         }
+         questions = questions.filter(q => q.id !== (action as { questionId?: string }).questionId);
+       }
+       return { version: 1, runs: starts.length && (action.activityId === runId || action.kind === "answer")
+         ? [{ ...run, pendingQuestions: questions }] : [] };
+     }
+     case "review_watcher": return { version: 1, state:"disabled", events:[] };
+     default: return null;
+   }
+ }, { shouldMockEvents:true });
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 194,238 @@
+   accountListError = undefined;
+   await React.act(() => refreshAccounts.click());
+   await React.act(() => namedButton("Connect account").click());
+   assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));
+   await React.act(() => namedButton("Close Settings").click());
+   await chooseAccount("me");
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @me");
+   assert.ok(host.querySelector('.titlebar-right button[aria-label="Activity"]'));
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "Keep this unsent draft");
+     composer.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   // Review warms once for the active gh account and once after onboarding binds it.
+   const accountReads = [cwd, cwd];
+   assert.deepEqual(reads, accountReads);
+   const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
+   assert.equal(reviewDot(), "attention", "Review requests reach the navigation on Sessions");
+   await go("Pull requests");
+   assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
+   assert.ok(host.textContent?.includes("Navigation proof"));
+-  const browserLink = () => host.querySelector<HTMLAnchorElement>('a[aria-label="Open PR #12 in browser"]');
++  const browserLink = () => host.querySelector<HTMLAnchorElement>('a[aria-label="Open on GitHub: PR #12"]');
+   assert.equal(browserLink()?.href, prUrl);
+   await React.act(() => namedButton("List").click());
+   assert.equal(browserLink()?.href, prUrl);
+-  assert.ok(namedButton("Open PR #12 in Sessions"));
++  assert.ok(namedButton("Open in session for #12"));
+   await React.act(() => namedButton("Board").click());
+   assert.ok(composer.closest("[hidden]"));
+   await React.act(() => namedButton("Settings").click());
+   assert.equal(host.querySelector('main .project-views'), null);
+   await React.act(() => namedButton("Close Settings").click());
+   assert.equal(host.querySelector('main nav button[aria-current="page"] .review-tab-dot')?.getAttribute("data-indicator"), "attention");
+   await go("Flows");
+   assert.equal(reviewDot(), "attention", "Flows keeps the project notice");
+   offline = true;
+   await go("Pull requests");
+   assert.deepEqual(reads, accountReads);
+   assert.ok(host.textContent?.includes("Navigation proof"));
+   const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh pull requests"]');
+   assert.ok(refresh && !refresh.disabled);
+   await React.act(() => refresh.click());
+   assert.ok(host.textContent?.includes("Last available snapshot"));
+   assert.ok(host.textContent?.includes("Navigation proof"));
+   assert.deepEqual(reads, [...accountReads, cwd]);
+   await go("Sessions");
+   const current = host.querySelector<HTMLTextAreaElement>("textarea");
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 262,408 @@
+   assert.ok(contractReply);
+   await React.act(() => contractReply.click());
+   assert.equal(current.placeholder, "Reply to review-pr-contract");
+   const note = "Read the pinned contract in the backend checkout.";
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, note);
+     current.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => send.click());
+   assert.equal(current.value, note, "A failed send keeps the draft for the same review question");
+   assert.match(host.textContent ?? "", /Review reply could not be sent/);
+   await React.act(() => send.click());
+   const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
+   assert.deepEqual(replies, [reply, reply]);
+   assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
+   assert.ok([...host.querySelectorAll(".session-review-activity .turn-user")].some(row => row.textContent?.includes(note)));
+   assert.equal(current.placeholder, "Reply to review-logic");
+   assert.equal(current.value, "");
+   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
+   await go("Pull requests");
+-  assert.match(host.textContent ?? "", /Keryx review in progress/);
++  // The review started from the session is the card's review link, without a manual refresh.
++  assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
++
++  // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
++  const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
++  const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
++  const opened = () => calls.filter(method => method === "session/new").length;
++  const firstOpen = opened();
++  await React.act(() => namedButton("Open in session for #12").click());
++  await settle();
++  assert.equal(opened(), firstOpen + 1);
++  assert.equal(shownComposer()?.value, prUrl, "The composer holds the PR URL");
++  assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
++  assert.match(host.textContent ?? "", /did not save the pull request binding/);
++  // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
++  storesSubject = true;
++  await go("Pull requests");
++  await React.act(() => namedButton("Open in session for #12").click());
++  await settle();
++  assert.equal(opened(), firstOpen + 2);
++  assert.equal(stored.size, 1);
++  assert.equal(shownComposer()?.value, prUrl);
++  await go("Pull requests");
++  await React.act(() => namedButton("Session for #12").click());
++  await settle();
++  assert.equal(opened(), firstOpen + 2, "Open in session again reuses the bound session");
++  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"));
++  // /review without a target in the PR-bound session preselects the PR.
++  const draft = shownComposer()!;
++  await React.act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "/review");
++    draft.dispatchEvent(new Event("input", { bubbles:true }));
++  });
++  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
++  await settle();
++  const launch = host.querySelector('[role="dialog"]');
++  assert.ok(launch && launch.textContent?.includes("Run review"));
++  assert.equal(launch.querySelector<HTMLInputElement>("input.text-input")?.value, prUrl);
++  assert.equal(launch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "12");
++  await React.act(() => [...launch.querySelectorAll("button")].find(button => button.textContent === "Cancel")!.click());
++  // The menu's New session creates another session bound to the same PR.
++  await go("Pull requests");
++  await React.act(() => namedButton("More sessions for #12").click());
++  const menuNew = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "New session");
++  assert.ok(menuNew);
++  await React.act(() => menuNew.click());
++  await settle();
++  assert.equal(opened(), firstOpen + 3);
++  assert.equal(stored.size, 2);
++  assert.ok([...stored.values()].every(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12));
++  // The session header links back to the PR's card and opens its panel.
++  await React.act(() => namedButton("PR org/project#12").click());
++  await settle();
++  assert.ok(host.querySelector('main nav button[aria-current="page"]')?.textContent?.startsWith("Pull requests"));
++  assert.ok(host.querySelector(".review-detail-panel"), "The PR panel is open");
++
++  // AC16: PR without Flow and review -> Open in session -> /review -> review link on the card.
++  await go("Pull requests");
++  const bareSlot = (slot: string) => host.querySelector(`[aria-label="Keryx work for #13"] [data-slot="${slot}"] button`)?.textContent;
++  assert.equal(bareSlot("review"), "Run review", "#13 has no local review");
++  assert.equal(bareSlot("flow"), "Create Flow", "#13 has no Flow");
++  assert.equal(bareSlot("session"), "Open in session", "#13 has no bound session");
++  const beforeBare = opened();
++  await React.act(() => namedButton("Open in session for #13").click());
++  await settle();
++  assert.equal(opened(), beforeBare + 1, "Open in session creates one session");
++  const bareSessions = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13);
++  assert.equal(bareSessions.length, 1, "The new session is bound to #13");
++  const bareSession = bareSessions[0]!.sessionId; // length checked above
++  assert.deepEqual(bareSessions[0]!._meta.keryx.subject, { kind: "pr", repo: "org/project", number: 13, url: barePrUrl, repositoryId: "RID" });
++  assert.equal(shownComposer()?.value, barePrUrl, "The composer holds the PR URL");
++  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
++  // Pressing it again, from another session, opens the same session: no second session/new.
++  await go("Pull requests");
++  await React.act(() => namedButton("2 sessions for #12").click());
++  await settle();
++  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"), "Another session is shown first");
++  await go("Pull requests");
++  assert.equal(bareSlot("session"), "Session");
++  const loadsBefore = loaded.length;
++  await React.act(() => namedButton("Session for #13").click());
++  await settle();
++  assert.equal(opened(), beforeBare + 1, "The second press reuses the bound session");
++  assert.equal(stored.size, 3);
++  assert.deepEqual(loaded.slice(loadsBefore), [bareSession], "The bound session is shown again");
++  assert.equal(shownComposer()?.value, barePrUrl, "Its unsent draft is still there");
++  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
++  // /review without a target preselects the bound PR.
++  const bareDraft = shownComposer()!;
++  await React.act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(bareDraft, "/review");
++    bareDraft.dispatchEvent(new Event("input", { bubbles:true }));
++  });
++  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
++  await settle();
++  const bareLaunch = host.querySelector('[role="dialog"]');
++  assert.ok(bareLaunch && bareLaunch.textContent?.includes("Run review"));
++  assert.equal(bareLaunch.querySelector<HTMLInputElement>("input.text-input")?.value, barePrUrl);
++  assert.equal(bareLaunch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "13");
++  const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
++  assert.ok(bareApply && !bareApply.disabled);
++  await React.act(() => bareApply.click());
++  await settle();
++  assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
++    options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
++  assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
++  // The started run is the card's review link, without a manual refresh.
++  await go("Pull requests");
++  assert.equal(bareSlot("review"), "Review · running");
++  assert.equal(bareSlot("flow"), "Create Flow");
++  assert.equal(bareSlot("session"), "Session");
++  assert.ok(!calls.includes("session/prompt"), "Neither the PR URL nor /review is sent as a prompt");
+   await go("Sessions");
+   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
+   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
+   assert.ok(projectSettings);
+   await React.act(() => projectSettings.click());
+   await chooseAccount("second");
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
+   await React.act(() => namedButton("GitHub · @second").click());
+   await React.act(() => namedButton("Disconnect from project").click());
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
+ } finally {
+   await React.act(() => root.unmount());
+   clearMocks();
+   await unregisterDom();
+ }

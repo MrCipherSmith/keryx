@@ -474,9 +474,18 @@ is what the keryx desktop app launches, and is open to any ACP client:
   `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
   hold is ignored), so the switch counts as use for the least-recently-used
   choice. The request `_keryx/session_flags {sessionId, cwd?, archived?,
-  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package
-  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and
-  answers `{archivedAt?, pinnedAt?, flow?}`; `session/list` reports set flags
+  pinned?, flow?, subject?}` archives/unarchives, pins/unpins, links to a flow
+  package (`flow: null` unlinks) or binds to a GitHub pull request or issue
+  (`subject: {kind: "pr"|"issue", repo: "owner/name", number, url,
+  repositoryId?}`, where `url` is the github.com page that agrees with the
+  other fields; `subject: null` unbinds) a stored session (kept in its
+  `flags.json`), and answers `{hasIssue?, archivedAt?, pinnedAt?, flow?,
+  subject?}`. A subject that is not a github.com pull request or issue is
+  refused. The change is written under a per-session lock. A writer waits for
+  the lock; a lock older than 2 seconds counts as abandoned and is taken over;
+  when the lock still cannot be taken within 3 seconds, the request is refused
+  with a message ending in "retry". A session that was moved to the trash is
+  refused with "no session …" and is not recreated. `session/list` reports set flags
   as `_meta.keryx`, together with `messageCount` (the messages the session
   holds; 0 for a session nobody has written in). The request `_keryx/session_trash {sessionId,
   cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the
@@ -5175,9 +5184,10 @@ Use `viewer` with an empty request object to verify the account identity. List, 
 
 ```bash
 keryx issues list --login LOGIN --request '{"source":"assigned","state":"open"}' --json
+keryx issues list --login LOGIN --request '{"source":"repository","state":"open"}' --json
 ```
 
-Use `assigned`, `created`, `mentioned` or `subscribed` for the source. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
+Use `assigned`, `created`, `mentioned` or `subscribed` for the source. The `repository` source lists the issues of the project's GitHub repository instead, resolved from the current directory's GitHub.com fetch remotes with the origin repository first. Pull requests are left out. If a page holds only pull requests, Keryx reads up to three pages in one request. The request fails with a `configuration:` error when the directory has no GitHub.com remote or GitHub has Issues turned off for the repository. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
 
 Use `origin` to resolve an existing Flow or session’s issue as the selected viewer. Use `workspace` to inspect an issue’s local checkout, session and Flow. `open-session` and `prepare-flow` resume or create the linked work in the matching checkout. A failed access check means the selected account or its permissions need attention. Reconnect the account and refresh. If the Desktop reports an incompatible CLI, choose the bundled Keryx CLI in Settings.
 

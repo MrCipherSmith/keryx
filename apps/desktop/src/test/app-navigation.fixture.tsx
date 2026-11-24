@@ -12,8 +12,13 @@ const starts: unknown[] = [];
 const replies: unknown[] = [];
 let refuseReply = true;
 const calls: string[] = [];
+const loaded: string[] = [];
 const runId = "e968ba9b-c8a3-438f-a5c8-93625e427905";
 const prUrl = "https://github.com/org/project/pull/12";
+// AC16: a second open PR with no Flow (no Flow names its URL) and no local review.
+const bareRunId = "0f3c2a51-7d4e-4b8a-9c61-2e5f0a7b9d13";
+const barePrUrl = "https://github.com/org/project/pull/13";
+const bareStarts: unknown[] = [];
 const question = (id: string, reviewer: string, text: string) => ({
   id, reviewer, question: text, options: [], allowFreeform: true,
 });
@@ -26,12 +31,23 @@ const run = {
   baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
   startedAt: "2026-11-20T00:00:01Z", finishedAt: null, result: null, coordinatorActivity: [{ kind: "status", text: "Wave 1 started" }],
 };
+const bareRun = { ...run, id: bareRunId, baseSha: "d".repeat(40), headSha: "c".repeat(40), coordinatorActivity: [] };
 let account: string | null = null;
 let accountConfigured = false;
 let connectedNewAccount = false;
 let accountListReads = 0;
 let accountListGate: Promise<void> | undefined;
 let accountListError: string | undefined;
+/** false: an older keryx that answers `_keryx/session_flags` without `subject`. */
+let storesSubject = false;
+/** Sessions the older keryx has saved: it saves a new session at its first turn and refuses flags before that. */
+const saved = new Set<string>();
+/** The session ids `session/prompt` was sent for. */
+const prompted: string[] = [];
+/** The session ids whose flags write the older keryx has refused (the refusal sent to the app). */
+const refusedFlags: string[] = [];
+let newSessions = 0;
+const stored = new Map<string, { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } }>();
 mockWindows("project-navigation");
 mockIPC(async (cmd, args) => {
   switch (cmd) {
@@ -62,20 +78,51 @@ mockIPC(async (cmd, args) => {
       return { eligible: true, configured: accountConfigured, login: account };
     }
     case "acp_send": {
-      const { method, id } = JSON.parse(String((args as {message:string}).message));
+      const { method, id, params } = JSON.parse(String((args as {message:string}).message));
       calls.push(method);
-      const result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
-        : method === "session/new" ? { sessionId: "nav-session" } : { sessions: [] };
+      if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
+      let result: unknown;
+      if (method === "session/prompt") {
+        const { sessionId } = params as { sessionId: string };
+        prompted.push(sessionId);
+        saved.add(sessionId);
+        result = { stopReason: "end_turn" };
+      } else if (method === "_keryx/session_flags") {
+        const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
+        if (!storesSubject && !saved.has(sessionId)) {
+          await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32602, message: `session ${sessionId} not found` } }));
+          refusedFlags.push(sessionId);
+          return;
+        }
+        const flags = storesSubject && subject ? { subject } : {};
+        if (storesSubject) stored.set(sessionId, { sessionId, cwd, title: "PR session " + sessionId, updatedAt: new Date(Date.now() + stored.size).toISOString(), _meta: { keryx: flags } });
+        result = flags;
+      } else {
+        result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+          : method === "session/new" ? { sessionId: newSessions++ ? "nav-session-" + newSessions : "nav-session" }
+          : method === "session/list" ? { sessions: [...stored.values()].reverse() } : { sessions: [] };
+      }
       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
       return;
     }
     case "review_board":
+      // The PR panel's detail read (the session header link opens it).
+      if ((args as { number?: number }).number === 12) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: 12,
+        headSha: run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
       reads.push(String((args as {cwd:string}).cwd));
       if (offline) throw new Error("unavailable: connection lost");
       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
-        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" }] };
+        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
+          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" }] };
     case "review_run": {
       const { action, target } = args as { action: { kind: string; activityId?: string }; target: { number: number } };
+      if (target.number === 13) {
+        if (action.kind === "start") {
+          bareStarts.push(action);
+          return { version: 1, runs: [bareRun], startedRunId: bareRunId };
+        }
+        return { version: 1, runs: bareStarts.length && action.activityId === bareRunId ? [bareRun] : [] };
+      }
       assert.equal(target.number, 12);
       if (action.kind === "start") {
         starts.push(action);
@@ -109,8 +156,38 @@ async function go(label: string) {
   assert.ok(button, "Missing project view " + label);
   await React.act(() => button.click());
 }
+/**
+ * The app's short timers (up to 2 s) started while `trackTimers` is on and not yet run or cleared: a state a
+ * check can wait on, so a late reaction (a notice raised some milliseconds after a refusal) has run before it.
+ */
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+let tracked: Set<unknown> | null = null;
+globalThis.setTimeout = ((handler: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) => {
+  const into = tracked && (ms ?? 0) <= 2000 ? tracked : null;
+  const id = realSetTimeout((...callArgs: unknown[]) => { into?.delete(id); handler(...callArgs); }, ms, ...args);
+  into?.add(id);
+  return id;
+}) as unknown as typeof setTimeout;
+globalThis.clearTimeout = ((id?: Parameters<typeof clearTimeout>[0]) => { tracked?.delete(id); realClearTimeout(id); }) as typeof clearTimeout;
+function trackTimers() {
+  const set = new Set<unknown>();
+  tracked = set;
+  return { settled: () => set.size === 0, stop: () => { tracked = null; } };
+}
+/** Polls until `ok` holds, flushing React between polls; fails with `what` after `ms`. */
+async function waitFor(what: string, ok: () => boolean, ms = 2000) {
+  const deadline = Date.now() + ms;
+  while (!ok()) {
+    if (Date.now() > deadline) assert.fail(`Timed out waiting for: ${what} (title: ${host.querySelector(".titlebar")?.textContent}, last calls: ${calls.slice(-6).join(", ")})`);
+    await React.act(async () => { await new Promise(resolve => realSetTimeout(resolve, 10)); });
+  }
+}
+function findButton(label: string) {
+  return [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+}
 function namedButton(label: string) {
-  const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+  const button = findButton(label);
   assert.ok(button, "Missing button " + label);
   return button;
 }
@@ -180,11 +257,11 @@ try {
   await go("Pull requests");
   assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
   assert.ok(host.textContent?.includes("Navigation proof"));
-  const browserLink = () => host.querySelector<HTMLAnchorElement>('a[aria-label="Open PR #12 in browser"]');
+  const browserLink = () => host.querySelector<HTMLAnchorElement>('a[aria-label="Open on GitHub: PR #12"]');
   assert.equal(browserLink()?.href, prUrl);
   await React.act(() => namedButton("List").click());
   assert.equal(browserLink()?.href, prUrl);
-  assert.ok(namedButton("Open PR #12 in Sessions"));
+  assert.ok(namedButton("Open in session for #12"));
   await React.act(() => namedButton("Board").click());
   assert.ok(composer.closest("[hidden]"));
   await React.act(() => namedButton("Settings").click());
@@ -248,13 +325,162 @@ try {
   assert.equal(current.value, "");
   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
   await go("Pull requests");
-  assert.match(host.textContent ?? "", /Keryx review in progress/);
+  // The review started from the session is the card's review link, without a manual refresh.
+  assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
+
+  // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
+  const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
+  const opened = () => calls.filter(method => method === "session/new").length;
+  const firstOpen = opened();
+  const timers = trackTimers();
+  await React.act(() => namedButton("Open in session for #12").click());
+  await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
+  assert.equal(opened(), firstOpen + 1);
+  assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
+  // keryx has not saved the new session yet: it refuses the binding, which waits for the first turn without a notice.
+  const flagWrites = () => calls.filter(method => method === "_keryx/session_flags").length;
+  // TP-R4-006: every notice element added from here on, with the turns sent when it appeared.
+  const notSaved = /did not save the pull request binding/;
+  const notices: number[] = [];
+  const watcher = new MutationObserver(records => {
+    for (const record of records) for (const node of record.addedNodes) {
+      if (node instanceof Element && node.matches(".notice") && notSaved.test(node.textContent ?? "")) notices.push(prompted.length);
+    }
+  });
+  watcher.observe(host, { childList: true, subtree: true });
+  // Wait on states, not on time: keryx refused the binding, and every short timer the app started since the
+  // press has run, so a notice raised some time after the refusal is there before the check.
+  await waitFor("keryx refused the first binding attempt and the app's timers ran", () => refusedFlags.length > 0 && timers.settled(), 4000);
+  timers.stop();
+  await React.act(async () => {});
+  assert.ok(!notSaved.test(host.textContent ?? ""), "No notice before keryx has saved the session");
+  const refusedWrites = flagWrites();
+  // The first turn saves the session; the binding is tried again after it and keryx answers without subject.
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+  await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
+  assert.equal(prompted.length, 1, "One turn was sent");
+  assert.ok(flagWrites() > refusedWrites, "The binding was tried again after the turn");
+  const olderTurns = [...prompted];
+  // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
+  storesSubject = true;
+  await go("Pull requests");
+  await React.act(() => namedButton("Open in session for #12").click());
+  await waitFor("keryx stores the bound session", () => stored.size === 1 && shownComposer()?.value === prUrl);
+  watcher.disconnect();
+  assert.deepEqual(notices, [1], "The older keryx's notice appeared once, after the first turn");
+  assert.equal(opened(), firstOpen + 2);
+  await go("Pull requests");
+  await waitFor("#12 counts its bound session", () => !!findButton("Session for #12"));
+  await React.act(() => namedButton("Session for #12").click());
+  await waitFor("the session header names PR #12", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
+  assert.equal(opened(), firstOpen + 2, "Open in session again reuses the bound session");
+  // /review without a target in the PR-bound session preselects the PR.
+  const draft = shownComposer()!;
+  await React.act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "/review");
+    draft.dispatchEvent(new Event("input", { bubbles:true }));
+  });
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+  await waitFor("the launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+  const launch = host.querySelector('[role="dialog"]');
+  assert.ok(launch && launch.textContent?.includes("Run review"));
+  assert.equal(launch.querySelector<HTMLInputElement>("input.text-input")?.value, prUrl);
+  assert.equal(launch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "12");
+  await React.act(() => [...launch.querySelectorAll("button")].find(button => button.textContent === "Cancel")!.click());
+  // The menu's New session creates another session bound to the same PR.
+  await go("Pull requests");
+  await React.act(() => namedButton("More sessions for #12").click());
+  const menuNew = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "New session");
+  assert.ok(menuNew);
+  await React.act(() => menuNew.click());
+  await waitFor("keryx stores the second bound session", () => stored.size === 2);
+  assert.equal(opened(), firstOpen + 3);
+  assert.ok([...stored.values()].every(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12));
+  // The session header links back to the PR's card and opens its panel, each time it is pressed.
+  const panel = () => host.querySelector(".review-detail-panel");
+  await waitFor("the header links the new session's PR", () => !!findButton("PR org/project#12"));
+  await React.act(() => namedButton("PR org/project#12").click());
+  await waitFor("the PR panel opens", () => !!panel());
+  assert.ok(host.querySelector('main nav button[aria-current="page"]')?.textContent?.startsWith("Pull requests"));
+  await React.act(() => namedButton("Close details").click());
+  assert.equal(panel(), null);
+  await go("Sessions");
+  await React.act(() => namedButton("PR org/project#12").click());
+  await waitFor("the PR panel opens again from a second header press", () => !!panel());
+  await React.act(() => namedButton("Close details").click());
+
+  // AC16: PR without Flow and review -> Open in session -> /review -> review link on the card.
+  await go("Pull requests");
+  const bareSlot = (slot: string) => host.querySelector(`[aria-label="Keryx work for #13"] [data-slot="${slot}"] button`)?.textContent;
+  assert.equal(bareSlot("review"), "Run review", "#13 has no local review");
+  assert.equal(bareSlot("flow"), "Create Flow", "#13 has no Flow");
+  assert.equal(bareSlot("session"), "Open in session", "#13 has no bound session");
+  const beforeBare = opened();
+  await React.act(() => namedButton("Open in session for #13").click());
+  await waitFor("keryx stores #13's bound session", () => [...stored.values()].some(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13));
+  await waitFor("the composer holds #13's URL", () => shownComposer()?.value === barePrUrl);
+  assert.equal(opened(), beforeBare + 1, "Open in session creates one session");
+  const bareSessions = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13);
+  assert.equal(bareSessions.length, 1, "The new session is bound to #13");
+  const bareSession = bareSessions[0]!.sessionId; // length checked above
+  assert.deepEqual(bareSessions[0]!._meta.keryx.subject, { kind: "pr", repo: "org/project", number: 13, url: barePrUrl, repositoryId: "RID" });
+  assert.equal(shownComposer()?.value, barePrUrl, "The composer holds the PR URL");
+  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
+  // Pressing it again, from another session, opens the same session: no second session/new.
+  await go("Pull requests");
+  // "latest" opens the newest of #12's two bound sessions: the one the menu created.
+  const newest12 = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!.sessionId; // two are stored, asserted above
+  await React.act(() => namedButton("2 sessions for #12").click());
+  await waitFor("the newest #12 session is shown", () => loaded.at(-1) === newest12
+    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
+  await go("Pull requests");
+  assert.equal(bareSlot("session"), "Session");
+  const loadsBefore = loaded.length;
+  await React.act(() => namedButton("Session for #13").click());
+  await waitFor("#13's bound session is shown again", () => loaded.length > loadsBefore
+    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13") === true);
+  assert.equal(opened(), beforeBare + 1, "The second press reuses the bound session");
+  assert.equal(stored.size, 3);
+  assert.deepEqual(loaded.slice(loadsBefore), [bareSession], "The bound session is shown again");
+  assert.equal(shownComposer()?.value, barePrUrl, "Its unsent draft is still there");
+  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
+  // /review without a target preselects the bound PR.
+  const bareDraft = shownComposer()!;
+  await React.act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(bareDraft, "/review");
+    bareDraft.dispatchEvent(new Event("input", { bubbles:true }));
+  });
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+  await waitFor("the launch dialog for #13", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+  const bareLaunch = host.querySelector('[role="dialog"]');
+  assert.ok(bareLaunch && bareLaunch.textContent?.includes("Run review"));
+  assert.equal(bareLaunch.querySelector<HTMLInputElement>("input.text-input")?.value, barePrUrl);
+  assert.equal(bareLaunch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "13");
+  const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
+  assert.ok(bareApply && !bareApply.disabled);
+  await React.act(() => bareApply.click());
+  await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
+  assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
+    options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
+  assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
+  // The started run is the card's review link, without a manual refresh.
+  await go("Pull requests");
+  await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
+  assert.equal(bareSlot("flow"), "Create Flow");
+  assert.equal(bareSlot("session"), "Session");
+  assert.deepEqual(prompted, olderTurns, "Neither the PR URL nor /review is sent as a prompt");
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
   assert.ok(projectSettings);
   await React.act(() => projectSettings.click());
   await chooseAccount("second");
+  // The account switch remounts the board: the header request handled earlier is gone and does not reopen the panel.
+  await go("Pull requests");
+  await waitFor("the board of the second account", () => host.textContent?.includes("Signed in as second") === true);
+  assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
+  await go("Sessions");
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());

@@ -614,7 +614,9 @@ keep running in the others; past ${MAX_HELD_SESSIONS} held sessions the least re
 idle one is released and the client gets _keryx/session_released. The client
 tells keryx which held session it is showing with the notification
 _keryx/session_shown, which counts as use. _keryx/session_flags archives or
-pins a stored session; _keryx/session_trash moves one to the system trash.
+pins a stored session, links it to a flow package, or binds it to a GitHub
+pull request or issue (subject); _keryx/session_trash moves one to the system
+trash.
 initialize reports the profile in _meta.keryx, and _keryx/info answers
 the version, profile and extensions in either profile. An unknown profile
 exits with status 2.

@@ -1,0 +1,2539 @@
+--- apps/desktop/src/App.tsx
+@@ 14,58 @@
+ import { applyTheme, setPrefs, MOD } from "./lib/prefs";
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+ import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
+ import { SettingsView } from "./shell/SettingsView";
+ import { Welcome } from "./shell/Welcome";
+ import { UpdateBanner } from "./shell/UpdateBanner";
+ import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+ import { RoutingDialog } from "./shell/RoutingDialog";
+ import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
+ import { SessionReviewActivity } from "./review/SessionReviewActivity";
+ import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
+ import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
+ import { modelChoices, providerOf } from "./session/Composer";
+ import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
+ import { IssuesView } from "./issues/IssuesView";
+ import { useIssueWork } from "./issues/IssueWork";
+ import { FlowsBoard } from "./flows/FlowsBoard";
+ import type { LinkedSession } from "./flows/FlowDetail";
+-import { sessionFlags } from "./acp/types";
++import { sessionFlags, type SessionSubject } from "./acp/types";
++import { flowPrompt, openSubjectSession, reviewLaunchTarget, withPendingSubjects, type SubjectSessionTarget } from "./review/prWork";
++import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
++import type { ReviewCard } from "./review/types";
++import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
+ import type { FlowCard } from "./platform/commands";
+ import { laneOf, workPrompt } from "./flows/model";
+ import { useFlows } from "./flows/useFlows";
+ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
+ import type { ComposerHandle } from "./session/Composer";
+ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
+ import { SessionView } from "./session/SessionView";
+ import { modelOption, useAcpSession } from "./session/useAcpSession";
+ import { ProjectMenu } from "./project/ProjectMenu";
+ import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+ import { TelegramServeSettings } from "./project/TelegramServeSettings";
+ import { TelegramBotSettings } from "./project/TelegramBotSettings";
+ import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
+ import { PROJECT_COMMANDS } from "./project/projectCommands";
+ import { useProjectRunner } from "./project/useProjectRunner";
+ import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
+ import { supportsProviders } from "./acp/providers";
+ import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
+ import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
+ 
+
+--- apps/desktop/src/App.tsx
+@@ 362,432 @@
+         .map((x) => ({ id: x.sessionId, title: x.title?.trim() || "Untitled session", updatedAt: x.updatedAt ?? null })),
+     [state.sessions],
+   );
+ 
+   /** Work on a flow: a new session linked to it gets the work prompt; a linked one is just shown. */
+   const workOn = useCallback(
+     async (card: FlowCard, target: "new" | string) => {
+       setView("session");
+       const id = await s.workOnFlow(card.dir, target);
+       if (id && target === "new") fillComposer(workPrompt(card));
+     },
+     [s, fillComposer],
+   );
+ 
+   const openSessionWith = useCallback(async (reference: string, flow?: FlowCard) => {
+     const id = flow ? await s.workOnFlow(flow.dir, "new") : await s.newSession();
+     if (id) fillComposer(reference);
+     return id;
+   }, [s, fillComposer]);
+ 
++  /** The sessions the cards see: the stored list plus Subject bindings keryx has not stored yet. */
++  const subjectSessions = useMemo(() => withPendingSubjects(state.sessions, s.pendingSubjects), [state.sessions, s.pendingSubjects]);
++  const subjectSessionsRef = useRef(subjectSessions);
++  subjectSessionsRef.current = subjectSessions;
++  const flowForPr = useCallback((url: string) => flows.cards.find(flow =>
++    flow.prUrl?.replace(/\/$/, "").toLowerCase() === url.replace(/\/$/, "").toLowerCase()), [flows.cards]);
++
++  /** Open the PR's bound session (newest, named or new); a new one is bound to the PR and gets `prompt`, never sent. */
++  const openPrSession = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject, prompt: string, prefillExisting = false) => {
++    setView("session");
++    const flow = flowForPr(card.url);
++    return openSubjectSession({
++      sessions: () => subjectSessionsRef.current,
++      loadSession: s.loadSession,
++      // A Flow that already names this PR is linked to the new session, as before.
++      newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
++      bind: (id, value) => void s.bindSubject(id, value),
++      fill: fillComposer,
++    }, subject, target, prompt, prefillExisting);
++  }, [s, fillComposer, flowForPr]);
++
++  /** "Create Flow": the PR's session with a flow prompt; the one package that then appears is linked to it. */
++  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void s.linkFlow(id, dir));
++  const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
++    const known = flowLinks.known();
++    const id = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
++    if (id) flowLinks.expect(id, known);
++  }, [flowLinks, openPrSession]);
++
++  const [reviewFocus, setReviewFocus] = useState<{ number: number; nonce: number } | null>(null);
++
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => {
+       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+       const k = e.key.toLowerCase();
+       // While any dialog or overlay is up (an approval above all) the shortcuts stand down;
+       // only the palette itself may be toggled closed again.
+       if (overlayOpen()) {
+         if (k === "k" && paletteOpen.current) {
+           e.preventDefault();
+           setPalette(null);
+         }
+         return;
+       }
+       if (k === "k") {
+         e.preventDefault();
+         setPalette("");
+       } else if (k === "1") {
+         e.preventDefault();
+         go("session");
+       } else if (k === "2") {
+
+--- apps/desktop/src/App.tsx
+@@ 560,719 @@
+   }, [cwd]);
+   const openReviewWorkspace = useCallback(async (key: DeskRunKey, run: DeskRun) => {
+     const prior = readSessionReviewLinks(cwd).find(link => link.id === run.id && link.key.repositoryId === key.repositoryId &&
+       link.key.viewer.toLowerCase() === key.viewer.toLowerCase() && state.sessions.some(session =>
+         session.sessionId === link.sessionId && !sessionFlags(session).archivedAt));
+     const id = prior ? prior.sessionId : await s.newSession();
+     if (!id) throw new Error("Could not create the review session.");
+     if (prior) await s.loadSession(id);
+     else setReviewLinks(rememberSessionReview(cwd, {
+       id: run.id, sessionId: id, key, revision: { baseSha: run.baseSha, headSha: run.headSha },
+       prompt: `Review https://github.com/${key.repo}/pull/${key.number}`,
+     }));
+     setView("session");
+   }, [cwd, s, state.sessions]);
+   const draftReview = s.reviewDraftRequest;
+   const [routingSession, setRoutingSession] = useState<string | null>(null);
+   useEffect(() => {
+     if (routingSession !== null && (routingSession !== state.sessionId || view !== "session")) setRoutingSession(null);
+   }, [routingSession, state.sessionId, view]);
+   const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
++  const shownSubject = (sessionFlow && sessionFlags(sessionFlow).subject) ?? (state.sessionId ? s.pendingSubjects.get(state.sessionId) : undefined);
++  const shownFlowDir = sessionFlow && sessionFlags(sessionFlow).flow;
++  const shownFlow = shownFlowDir ? flows.cards.find(card => card.dir === shownFlowDir) : undefined;
+   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
+   const viewer = reviewViewer ?? currentNotice?.viewer;
+   const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
+     (!viewer || viewer.toLowerCase() === link.key.viewer.toLowerCase())), [reviewLinks, state.sessionId, viewer]);
+   const sessionTitle = reviewSessionTitle(state.title?.trim(), sessionReviews.at(-1)) || "New session";
+   // The title bar names the project and the view; the page below keeps only its own toolbar.
+   const title =
+     view === "session" ? (
+       <span className="truncate">{sessionTitle}</span>
+     ) : (
+       <span className="truncate">
+         {view === "settings" ? "Settings" : `${basename(cwd)} · ${PROJECT_VIEWS.find(item => item.id === view)?.label}`}
+       </span>
+     );
+ 
+   useEffect(() => { void setWindowTitle(`${sessionTitle} — ${basename(cwd)}`); }, [sessionTitle, cwd]);
+   const loadReviewTargets = useCallback((hint?: string, signal?: AbortSignal) => {
+     if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
+     return loadSessionReviewTargets(cwd, reviewViewer, hint, signal);
+   }, [cwd, reviewViewer, reviewDisconnected]);
+   const sessionModel = modelOption(state.configOptions);
+   const reviewModels = useMemo(() => modelChoices(sessionModel).flatMap(option => {
+     const provider = providerOf(option);
+     const model = provider ? option.value.slice(provider.length + 1) : "";
+     return provider && model ? [{ provider, model, label: option.name }] : [];
+   }), [sessionModel]);
+   const currentReviewModel = reviewModels.find(choice => `${choice.provider}/${choice.model}` === sessionModel?.currentValue);
+ 
+   return (
+     <AppShell
+       cwd={cwd}
+       recents={recents}
+       view={view}
+       onView={go}
+       onProjectSettings={openProjectSettings}
+       title={title}
++      titleLinks={<SessionSubjectLinks subject={shownSubject} flow={shownFlow}
++        onOpenSubject={subject => {
++          if (subject.kind === "issue") {
++            if (state.sessionId) openIssueOrigin({ sessionId: state.sessionId });
++            return;
++          }
++          go("review");
++          setReviewFocus(old => ({ number: subject.number, nonce: (old?.nonce ?? 0) + 1 }));
++        }}
++        onOpenFlow={dir => { setLinkedFlow(dir); setView("flows"); }} />}
+       onOpenSourceIssue={sessionFlow && sessionFlags(sessionFlow).hasIssue
+         ? () => openIssueOrigin({sessionId: sessionFlow.sessionId}) : undefined}
+       hasSession={state.sessionId !== null}
+       status={status}
+       flowsActive={flowsActive}
+       reviewIndicator={currentNotice?.indicator}
+       projects={projects}
+       activity={activity}
+       live={live}
+       onRemoveProject={removeProject}
+       onOpenFolder={() => void openFolder()}
+       onSwitchProject={switchProject}
+       onNewWindow={(p) => void windowOpenProject(p)}
+       onCloseProject={onCloseProject}
+       onPalette={() => setPalette("")}
+       actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
+     >
+       {/* The session view stays mounted so the transcript and draft survive view switches. */}
+       <div className="view" hidden={view !== "session"}>
+         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
+           reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
+           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
+             onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
+             onContinuation={linkReviewContinuation} /> : undefined}
+           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
+       </div>
+       {workView === "flows" ? (
+         <div className="view" hidden={view !== "flows"}>
+           <FlowsBoard onOpenIssue={dir => openIssueOrigin({flowDir:dir})} initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
+         </div>
+       ) : null}
+       {issueWork.chooser}
+       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
++          sessions={state.sessions}
+           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+       </div>}
+       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+       <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
+         if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+         setView("session");
+       }} />
+       <div className="view" hidden={view !== "review"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="pr">
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenSession={(card) => void openSessionWith(card.url, flows.cards.find(flow =>
+-              flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()))} onOpenFlow={(dir) => {
++          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
++            sessions={subjectSessions} focus={reviewFocus}
++            onOpenSubjectSession={(card, target, subject) => void openPrSession(card, target, subject, card.url)}
++            onCreateFlow={(card, subject) => void createPrFlow(card, subject)} onOpenFlow={(dir) => {
+             setLinkedFlow(dir);
+             setView("flows");
+           }} />
+         )}
+       </div>
+       {view === "settings" ? (
+         <div className="view">
+           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
+         </div>
+       ) : null}
+ 
+       {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+         !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <RoutingDialog key={routingSession} sessionId={routingSession} models={reviewModels} rpc={s.rpc}
+           onClose={() => setRoutingSession(null)} />}
+ 
+       {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
+-          initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
++          initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)} models={reviewModels} loadTargets={loadReviewTargets}
+           onApply={async (key, revision, options) => {
+             const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
+             const id = result.startedRunId;
+             if (!id || !result.runs.some(run => run.id === id)) throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
+             setReviewLinks(rememberSessionReview(cwd, { id, sessionId: draftReview.sessionId, key, revision,
+               ...(draftReview.prompt && { prompt: draftReview.prompt }) }));
+             publishSessionReview(cwd, key, result);
+           }}
+           onClose={() => s.dismissReviewDraftRequest(draftReview.nonce)} />}
+ 
+       {projectSettings || offerGitHub ? (
+         <ProjectGitHubSettings cwd={cwd} account={githubAccount} accountError={githubAccountError} onRetryAccount={() => void refreshGitHubAccount()}
+           onboarding={!projectSettings}
+           onSaved={(account) => {
+             accountRevision.current += 1;
+             setGitHubAccount(account);
+             setGitHubAccountError("");
+             setProjectSettings(false);
+           }}
+           onClose={() => {
+
+--- apps/desktop/src/acp/types.ts
+@@ 139,225 @@
+ 
+ export interface ConfigSelectOption { value: string; name: string; description?: string | null }
+ export interface ConfigSelectGroup { group: string; name: string; options: ConfigSelectOption[] }
+ export interface ConfigOption {
+   id: string;
+   name: string;
+   description?: string | null;
+   category?: string | null;
+   type: "select" | string;
+   currentValue: string;
+   options: Array<ConfigSelectOption | ConfigSelectGroup>;
+ }
+ 
+ /** How the person organised a stored session (`_keryx/session_flags`); ISO times, absent when unset. */
+ export interface SessionFlags {
+   hasIssue?: true;
+   archivedAt?: string;
+   pinnedAt?: string;
+   /** The flow package directory this session works on. */
+   flow?: string;
++  /** The GitHub pull request or issue this session works on; keryx before subject support never reports it. */
++  subject?: SessionSubject;
++}
++
++/** A GitHub pull request or issue a session is bound to (`flags.json` `subject`); keryx validates it on write and read. */
++export interface SessionSubject {
++  kind: "pr" | "issue";
++  /** `owner/name`. */
++  repo: string;
++  number: number;
++  /** Its github.com page. */
++  url: string;
++  repositoryId?: string;
++}
++
++/** Whether two subjects name the same PR or issue: same kind and number, repo compared without case as GitHub does. */
++export function sameSubject(a: SessionSubject | null | undefined, b: SessionSubject | null | undefined): boolean {
++  if (!a || !b) return false;
++  return a.kind === b.kind && a.number === b.number && a.repo.toLowerCase() === b.repo.toLowerCase();
+ }
+ 
+ export interface SessionInfo {
+   sessionId: string;
+   cwd: string;
+   title?: string | null;
+   updatedAt?: string | null;
+   /** keryx's shell profile reports the flags here, and (0.4.38+) how many messages the session holds. */
+   _meta?: { keryx?: SessionFlags & { messageCount?: number } } | null;
+ }
+ 
+ export function sessionFlags(s: SessionInfo): SessionFlags {
+   return s._meta?.keryx ?? {};
+ }
+ 
++const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
++
++/**
++ * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
++ * `updatedAt`: its binding is still pending) counts as the newest. Lives here, beside `sameSubject`,
++ * so pure models (the issues board, shared with the root tests) reach no platform module.
++ */
++export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
++  return sessions
++    .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
++    .sort((a, b) => unsaved(b) - unsaved(a));
++}
++
+ /** Messages the stored session holds; null when this keryx does not report it. */
+ export function messageCount(s: SessionInfo): number | null {
+   const n = s._meta?.keryx?.messageCount;
+   return typeof n === "number" ? n : null;
+ }
+ 
+ export type SessionUpdate =
+   | { sessionUpdate: "user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk"; content: ContentBlock; messageId?: string | null }
+   | ({ sessionUpdate: "tool_call" } & ToolCallFields)
+   | ({ sessionUpdate: "tool_call_update" } & ToolCallFields)
+   | { sessionUpdate: "plan"; entries: PlanEntry[] }
+   | { sessionUpdate: "available_commands_update"; availableCommands: AvailableCommand[] }
+   | { sessionUpdate: "current_mode_update"; currentModeId: string }
+   | { sessionUpdate: "config_option_update"; configOptions: ConfigOption[] }
+   | { sessionUpdate: "session_info_update"; title?: string | null; updatedAt?: string | null }
+   | { sessionUpdate: "usage_update"; used: number; size: number; cost?: { amount: number; currency: string } | null }
+   | { sessionUpdate: string; [k: string]: unknown };
+ 
+ export interface PermissionOption {
+   optionId: string;
+
+--- apps/desktop/src/issues/IssueFilters.tsx
+@@ 1,33 @@
+ import { useState } from "react";
+ import { Dialog } from "../components/ui";
+-import { defaultFilters, STAGES, type Filters, type ProjectBoard } from "./model";
++import { defaultFilters, type Filters, type ProjectBoard } from "./model";
+ 
+ export function IssueFilters({ filters, project, apply, close }: {
+   filters: Filters; project?: ProjectBoard; apply: (filters: Filters) => void; close: () => void;
+ }) {
+   const [draft, setDraft] = useState(filters);
+   const field = (key: keyof Filters, value: string) => setDraft(prev => ({ ...prev, [key]: value }));
+   return <Dialog title="Filter issues" icon="list" onClose={close} width={540} footer={<>
+     <button className="btn" onClick={() => setDraft({ ...defaultFilters, text: draft.text })}>Reset filters</button>
+     <button className="btn" onClick={close}>Cancel</button>
+     <button className="btn btn-primary" onClick={() => apply(draft)}>Apply filters</button>
+   </>}>
+     <div className="issue-filter-grid">
+       <label>GitHub state<select value={draft.state} onChange={e => field("state", e.target.value)}>
+         <option value="all">All states</option><option value="open">Open</option><option value="closed">Closed</option>
+       </select></label>
+       <label>Updated since<input type="date" value={draft.since} onChange={e => field("since", e.target.value)} /></label>
+       <label>Sort by update<select value={draft.sort} onChange={e => field("sort", e.target.value)}>
+         <option value="desc">Newest first</option><option value="asc">Oldest first</option>
+       </select></label>
+-      <label>Keryx stage<select value={draft.stage} onChange={e => field("stage", e.target.value)}>
+-        <option value="">All stages</option>{Object.entries(STAGES).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+-      </select></label>
+       {([["repository", "Repository", "owner/repo"], ["author", "Author", "GitHub login"], ["assignee", "Assignee", "Login or Unassigned"],
+         ["label", "Label", "Label name"]] as const).map(([key, title, hint]) => <label key={key}>{title}
+           <input value={draft[key]} placeholder={hint} onChange={e => field(key, e.target.value)} /></label>)}
+       {project && <label>Project Status<select value={draft.status} onChange={e => field("status", e.target.value)}>
+         <option value="">All statuses</option><option value="unassigned">No status</option>
+         {project.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+       </select></label>}
+     </div>
+     <p className="review-filter-hint">Use commas for multiple repositories, authors, assignees or labels.</p>
+   </Dialog>;
+ }
+
+--- apps/desktop/src/issues/IssueWorkRow.tsx
+@@ 1,32 @@
++import type { IssueSummary } from "../../../../src/integrations/issues-contract";
++import type { SessionInfo } from "../acp/types";
++import type { WorkAction } from "./IssueWork";
++import { issueName, issueSessions, STAGES } from "./model";
++
++/**
++ * The Keryx work row of an Issue card or list row: a Flow slot and a session slot, in the look and fixed
++ * height of the PR work row. A slot holds a link to the issue's work, or its labelled action when there is none.
++ */
++export function IssueWorkRow({ issue, sessions, pending, onAction }: {
++  issue: IssueSummary; sessions: readonly SessionInfo[]; pending: boolean; onAction: (action: WorkAction) => void;
++}) {
++  const stage = issue.work?.stage ?? "none";
++  const bound = issueSessions(sessions, issue).length;
++  const flowText = stage === "none" ? "Create Flow" : `Flow · ${STAGES[stage]}`;
++  const sessionText = bound > 1 ? `${bound} sessions` : bound ? "Session"
++    : stage === "needs_answer" ? "Open question" : "Open in session";
++  const of = " for " + issueName(issue);
++  return <div className="pr-work-row issue-work-row" role="group" aria-label={"Keryx work" + of}>
++    <span className="pr-work-slot" data-slot="flow">
++      <button type="button" className={"pr-work-link" + (stage === "none" ? " is-empty" : "")} title={flowText}
++        aria-label={flowText + of} disabled={pending}
++        onClick={() => onAction(stage === "none" ? "prepare-flow" : "open-flow")}>{flowText}</button>
++    </span>
++    <span className="pr-work-slot" data-slot="session">
++      {/* open-session reuses the session bound to the issue, so one link serves both counts. */}
++      <button type="button" className={"pr-work-link" + (bound ? "" : " is-empty")}
++        title={stage === "needs_answer" && !bound ? "Open question in Sessions" : sessionText}
++        aria-label={sessionText + of} disabled={pending} onClick={() => onAction("open-session")}>{sessionText}</button>
++    </span>
++  </div>;
++}
+
+--- apps/desktop/src/issues/IssuesBoard.css
+@@ 1,34 @@
+ .issue-workspace { display: flex; height: 100%; min-height: 0; min-width: 0; position: relative; }
+ .issues-main { flex: 1; min-width: 0; }
+ .issues-main[hidden] { display: none; }
+ .issues-main .flows-toolbar, .issue-sources, .issue-sources form, .issue-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+ .issue-sources label { display: flex; align-items: center; gap: var(--sp-1); color: var(--fg-muted); font-size: var(--fs-sm); }
+ .issue-sources form input { width: 8em; min-width: 0; }
+ .issue-sources input[type=number] { width: 6em; }
+ .issue-lanes .lane { flex: 1 0 min(238px, 88%); }
+ .issue-labels { color: var(--fg-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .issue-actions { flex-wrap: wrap; }
+ .issue-move { max-width: 12em; min-height: 26px; }
++/* Two slots (Flow, session) in the PR work row's fixed-height look (styles/review.css). */
++.issue-work-row { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--sp-1); }
++.issue-table .issue-work-row { min-width: 220px; margin-top: 0; }
+ .issues-notice { margin: var(--sp-3) var(--sp-5); color: var(--fg-muted); }
+ .issues-notice button { margin-left: var(--sp-2); }
+ .issue-more { align-self: flex-start; margin: var(--sp-2) var(--sp-5); }
+ .issue-table { min-width: 760px; }
+ .issue-table th:first-child { width: 35%; }
+ .issue-table td small { display: block; }
+ .issue-detail { flex: none; min-width: 360px; max-width: calc(100% - 280px); }
+ .issue-detail[role=dialog] { flex: 1; max-width: 100%; min-width: 0; }
+ .issue-detail .sheet-head { flex-shrink: 0; }
+ .issue-detail .sheet-head h2 { margin: var(--sp-2) 0; font-size: var(--fs-lg); overflow-wrap: anywhere; }
+ .issue-detail .spacer { flex: 1; }
+ .issue-resize { touch-action: none; width: 12px; left: -6px; }
+ .issue-resize:focus-visible { background: var(--accent-soft); }
+ .issue-detail-scroll { overflow: auto; min-height: 0; padding: var(--sp-4) var(--sp-5); }
+ .issue-detail-scroll section { border-top: 1px solid var(--border); margin-top: var(--sp-3); padding-top: var(--sp-2); }
+ .issue-properties { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--sp-1) var(--sp-3); margin: 0; }
+ .issue-properties dt { color: var(--fg-muted); }
+ .issue-properties dd { margin: 0; overflow-wrap: anywhere; }
+ .issue-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+ .issue-filter-grid label { display: grid; gap: var(--sp-1); }
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 1,41 @@
+ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
++import type { SessionInfo } from "../acp/types";
+ import { Icon } from "../components/Icon";
+ import { errMessage, relativeTime } from "../lib/format";
+ import { requestIssues } from "../platform/issues";
+ import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
+ import { IssueFilters } from "./IssueFilters";
+-import { defaultFilters, groupForRow, issueName, readPreferences, SOURCES, STAGES, visibleRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
++import { IssueWorkRow } from "./IssueWorkRow";
++import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, readPreferences, SOURCES, STAGES, visibleRows,
++  type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
+ import { isAccessError, useIssueCollection } from "./useIssueCollection";
+ import "./IssuesBoard.css";
+ 
+ interface Props extends WorkProps {
+   cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
++  /** The project's sessions; the work row counts those bound to an issue through their `subject`. */
++  sessions?: readonly SessionInfo[];
+ }
+-type Source = keyof typeof SOURCES;
++type Source = IssueSource;
++const NO_SESSIONS: readonly SessionInfo[] = [];
+ 
+ function stored(key: string): string | null {
+   try { return localStorage.getItem(key); } catch { return null; }
+ }
+ function save(key: string, value: string | null) {
+   try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* Storage unavailable. */ }
+ }
+ 
+ export function IssuesBoard(props: Props) {
+   return <AccountBoard key={JSON.stringify([props.cwd, props.login])} {...props} />;
+ }
+ 
+ function AccountBoard(props: Props) {
+   const {login, cwd, request = requestIssues} = props;
+   const [viewer, setViewer] = useState<IssueViewer | null>(null);
+   const [error, setError] = useState("");
+   const [attempt, setAttempt] = useState(0);
+   useEffect(() => {
+     if (!login) return;
+     let active = true;
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 44,84 @@
+       if (verified.login.toLowerCase() !== login.toLowerCase()) throw new Error("access: GitHub account changed.");
+       if (active) setViewer(verified);
+     }).catch(e => { if (active) { setViewer(null); setError(errMessage(e)); } });
+     return () => { active = false; };
+   }, [login, cwd, request, attempt]);
+   if (!viewer) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1></header>
+     <div className="issues-notice" role={error ? "alert" : "status"}>
+       <p>{error || (login ? "Loading GitHub account…" : "Select a GitHub account to load issues.")}</p>
+       {error && <button className="btn" onClick={() => setAttempt(n => n + 1)}>Retry</button>}
+       {(!login || error) && <button className="btn" onClick={props.onSettings}>GitHub accounts</button>}
+     </div></section>;
+   return <VerifiedBoard key={issueViewerKey(viewer)} {...props} viewer={viewer}
+     verifyAgain={() => { setViewer(null); setAttempt(n => n + 1); }} />;
+ }
+ 
+ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: IssueViewer; verifyAgain: () => void}) {
+   const account = "keryx.issues." + issueViewerKey(viewer);
+   const [denied, setDenied] = useState("");
+   const [source, setSource] = useState<Source>(() => {
+     const value = stored(account + ".source");
+-    return value && Object.hasOwn(SOURCES, value) ? value as Source : "assigned";
++    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
+   });
+   const [target, setTarget] = useState<ProjectSource | null>(() => {
+     try {
+       const value = JSON.parse(stored(account + ".project") ?? "null");
+       return value && typeof value.owner === "string" && Number.isSafeInteger(value.number) && value.number > 0 ? value : null;
+     } catch { return null; }
+   });
+   const [owner, setOwner] = useState(target?.owner ?? "");
+   const [number, setNumber] = useState(target?.number.toString() ?? "");
+   const change = (next: Source) => { setDenied(""); setSource(next); save(account + ".source", next); };
+   const sourceControls = <div className="issue-sources">
+     <label>Source <select aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
+       {Object.entries(SOURCES).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+     </select></label>
+     {source === "project" && <form onSubmit={e => {
+       e.preventDefault();
+       if (!owner.trim() || !Number.isSafeInteger(+number) || +number <= 0) return;
+       const next = { owner: owner.trim(), number: +number };
+       setDenied(""); setTarget(next);
+     }}>
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 100,141 @@
+     save(account + ".project", null);
+     setOwner(""); setNumber(""); setTarget(null); setDenied(reason);
+   }, [account, onAccessDenied]);
+   const remember = useCallback((project: ProjectBoard) => {
+     save(account + ".project", JSON.stringify({ owner: project.owner, number: project.number }));
+   }, [account]);
+   if (denied) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1>{sourceControls}</header>
+     <div role="alert" className="issues-notice">{denied}
+       <button className="btn btn-sm" onClick={verifyAgain}>Retry</button>
+       <button className="btn btn-sm" onClick={props.onSettings}>GitHub accounts</button>
+     </div></section>;
+   return <Collection key={key} {...props} source={source} target={target} prefsKey={key} viewer={viewer}
+     sourceControls={sourceControls} clear={clear} remember={remember} />;
+ }
+ 
+ interface CollectionProps extends Props {
+   prefsKey: string; source: Source; target: ProjectSource | null; sourceControls: React.ReactNode;
+   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
+ }
+ 
+-function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues }: CollectionProps) {
++function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
++  sessions = NO_SESSIONS }: CollectionProps) {
+   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
+   const { filters, list } = prefs;
+   const [filterDialog, setFilterDialog] = useState(false);
+   const [selection, setSelection] = useState<Row | null>(null);
+   const [detailRead, setDetailRead] = useState(0);
+   const [moving, setMoving] = useState<string | null>(null);
+   const [working, setWorking] = useState<string | null>(null);
+   const [notice, setNotice] = useState("");
+   const [mobile, setMobile] = useState(false);
+   const board = useRef<HTMLDivElement>(null);
+   const title = useRef<HTMLHeadingElement>(null);
+   const returnFocus = useRef<HTMLElement | null>(null);
+   const alive = useRef(true);
+   const activeMove = useRef(false);
+   const activeWork = useRef(false);
+   const { snapshot, busy, error, load, invalidate, setSnapshot } = useIssueCollection(cwd, login, source, target, filters, viewer, clear, request);
+   const rows = useMemo(() => visibleRows(snapshot?.rows ?? [], filters), [snapshot, filters]);
+   const selectedKey = selection && issueKey(selection.issue.ref);
+   const selectedIndex = rows.findIndex(row => issueKey(row.issue.ref) === selectedKey);
+   // Refresh starts again at page one. Keep a selected later-page issue open and
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 201,257 @@
+         projectId: project.id, fieldId: project.fieldId, itemId: row.itemId, issueNodeId: row.issue.ref.nodeId,
+         expectedOptionId: row.optionId ?? null, optionId: destination,
+       });
+       if (!alive.current) return;
+       if (issueViewerKey(result.viewer) !== issueViewerKey(snapshot.viewer) || result.itemId !== row.itemId) {
+         accessLost("access: Project or viewer changed. Refresh the board."); return;
+       }
+       const option = project.options.find(value => value.id === result.optionId)?.name ?? "No status";
+       setNotice(result.outcome === "conflict" ? "Another update changed this item to " + option + "." : "Project Status: " + option);
+       setSnapshot(current => current && current.project?.id === project.id ? {
+         ...current, rows: current.rows.map(r => r.itemId === result.itemId ? { ...r, optionId: result.optionId } : r),
+       } : current);
+     } catch (cause) {
+       if (!alive.current) return;
+       const message = errMessage(cause);
+       if (isAccessError(message)) accessLost(message);
+       else { setNotice(message); void load(); }
+     } finally { activeMove.current = false; if (alive.current) setMoving(null); }
+   }
+ 
+-  function workActions(row: Row, full = false) {
++  /** The issue's work row and actions, each with visible text on the card, the list row and the panel alike. */
++  function workActions(row: Row) {
+     const issue = row.issue;
+-    const stage = issue.work?.stage ?? "none";
+     const pending = working !== null;
+-    const flowLabel = stage === "none" ? "Create Flow" : "Open Flow";
+-    return <div className="card-actions issue-actions">
+-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={"Open issue session for " + issueName(issue)}
+-        title={stage === "needs_answer" ? "Open question in Sessions" : "Open session"} disabled={pending} onClick={() => void act("open-session", issue.ref)}>
+-        <Icon name="chat" size={15} />{full && (stage === "needs_answer" ? "Open question" : "Open session")}</button>
+-      <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
+-        disabled={pending} onClick={() => void act(stage === "none" ? "prepare-flow" : "open-flow", issue.ref)}>
+-        <Icon name="branch" size={15} />{full && flowLabel}</button>
+-      {issue.work?.canResumePreparation && <button className={full ? "btn btn-sm" : "icon-btn"}
+-        aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
+-        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={15} />{full && "Resume preparation"}</button>}
+-      {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
+-    </div>;
++    const more = issue.work?.canResumePreparation || project;
++    return <>
++      <IssueWorkRow issue={issue} sessions={sessions} pending={pending} onAction={action => void act(action, issue.ref)} />
++      {more && <div className="card-actions issue-actions">
++        {issue.work?.canResumePreparation && <button className="btn btn-sm"
++          aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
++          onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
++        {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
++      </div>}
++    </>;
+   }
+ 
+-  const groups = project ? [...project.options.map(o => ({ id: o.id, label: o.name })), { id: "unassigned", label: "No status" }]
+-    : Object.entries(STAGES).map(([id, label]) => ({ id, label }));
++  const groups = issueGroups(project, filters.state);
+   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
+   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
+   const dragItem = useRef<Row | null>(null);
+   return <div className="issue-workspace" ref={board}>
+     <section className="flows issues-main" hidden={mobile && !!selected}>
+       <header className="flows-toolbar">
+         <div className="flows-heading"><h1 tabIndex={-1} ref={title}>Issues</h1>{snapshot && <span className="count-label">{snapshot.rows.length} loaded</span>}</div>
+         {sourceControls}
+         <input type="search" aria-label="Search issues" placeholder="Search by title or #number" value={filters.text} onChange={e => setFilters({ ...filters, text: e.target.value })} />
+         <button className="btn btn-sm" onClick={() => setFilterDialog(true)}><Icon name="list" size={14} />Filters{activeFilters.length > 0 && " (" + activeFilters.length + ")"}</button>
+         <div className="segmented" aria-label="Issue layout">{[false, true].map(asList => <button key={String(asList)} aria-pressed={list === asList}
+           onClick={() => setPrefs(p => ({ ...p, list: asList }))}><Icon name={asList ? "list" : "board"} size={14} />{asList ? "List" : "Board"}</button>)}</div>
+         <button className="btn btn-sm" disabled={busy} onClick={() => { setDetailRead(n => n + 1); void load(); }}><Icon name="refresh" size={14} />Refresh</button>
+       </header>
+       {!isAccessError(error) && <div className="review-context"><strong>{snapshot?.viewer.host ?? "GitHub"} · {login}</strong>
+         {project && <span>{project.title}</span>}{snapshot && <span>Read {snapshot.readAt.toLocaleTimeString()}</span>}
+         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
+       </div>}
+       {error && <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
+         <button className="btn btn-sm" onClick={() => void load()}>Retry</button>
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 265,308 @@
+         <th>Issue</th><th>GitHub state</th><th>Keryx stage</th>{project && <th>Project Status</th>}<th>Assignees</th><th>Updated</th><th>Actions</th>
+       </tr></thead><tbody>{rows.map(r => <tr key={issueKey(r.issue.ref)}>
+         <td><button className="review-list-link" onClick={e => show(r, e.currentTarget)}>{issueName(r.issue)} {r.issue.title}</button></td>
+         <td>{r.issue.state}</td><td>{STAGES[r.issue.work?.stage ?? "none"]}{r.issue.work?.reason && <small>{r.issue.work.reason}</small>}</td>
+         {project && <td>{project.options.find(o => o.id === r.optionId)?.name ?? "No status"}</td>}
+         <td>{r.issue.assignees.join(", ") || "Unassigned"}</td><td>{relativeTime(r.issue.updatedAt)}</td><td>{workActions(r)}</td></tr>)}</tbody></table></div>
+       : <div className="board issue-lanes">{groups.map(group => {
+         const cards = rows.filter(r => groupForRow(r, !!project) === group.id);
+         return <section className="lane" key={group.id} aria-label={group.label}
+           onDragOver={e => { if (dragItem.current && project?.canWrite && project.fieldId) e.preventDefault(); }}
+           onDrop={e => { e.preventDefault(); const row = dragItem.current; dragItem.current = null; if (row) void move(row, group.id === "unassigned" ? null : group.id); }}>
+           <header className="lane-head"><h2>{group.label}</h2><span className="lane-count">{cards.length}</span></header>
+           <div className="lane-body">{cards.map(r => <article key={issueKey(r.issue.ref)} className="flow-card"
+             draggable={!!project?.canWrite && !!project.fieldId && !moving} onDragStart={e => {
+               dragItem.current = r; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", r.itemId ?? "");
+             }} onDragEnd={() => { dragItem.current = null; }}>
+             <button className="flow-card-main" onClick={e => show(r, e.currentTarget)}>
+               <span className="flow-id">{issueName(r.issue)}</span><span className="flow-title">{r.issue.title}</span>
+               <span className="flow-meta">
+                 <span className="badge">{r.issue.state}</span>
+-                {project && <span>{STAGES[r.issue.work?.stage ?? "none"]}</span>}
+                 <span>{r.issue.assignees.join(", ") || "Unassigned"}</span>
+               </span>
+               {r.issue.labels.length > 0 && <span className="issue-labels" title={r.issue.labels.join(", ")}>{r.issue.labels.join(" · ")}</span>}
+               {r.issue.work?.reason && <span className="issue-labels">{r.issue.work.reason}</span>}
+             </button>{workActions(r)}</article>)}
+           </div></section>;
+       })}</div>)}
+       {snapshot?.nextCursor && <button className="btn issue-more" disabled={busy} onClick={() => void load(true)}>Load more issues</button>}
+     </section>
+     {selected && snapshot && <IssueDetail key={JSON.stringify([issueKey(selected.issue.ref), detailRead])} cwd={cwd} login={login} viewer={snapshot.viewer} row={selected.issue}
+-      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected, true)}
++      request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected)}
+       onPrevious={selectedIndex > 0 ? () => setSelection(rows[selectedIndex - 1]!) : undefined}
+       onNext={selectedIndex < rows.length - 1 ? () => setSelection(rows[selectedIndex + 1]!) : undefined} />}
+     {filterDialog && <IssueFilters filters={filters} project={project} apply={f => { setFilters(f); setFilterDialog(false); }} close={() => setFilterDialog(false)} />}
+   </div>;
+ }
+ 
+ function StatusMenu({ row, project, pending, onMove }: { row: Row; project: ProjectBoard; pending: boolean; onMove: (v: string | null) => void }) {
+   return <select className="issue-move" value={row.optionId ?? ""} disabled={pending || !project.canWrite || !project.fieldId}
+     aria-label={"Change Project Status for " + issueName(row.issue)} title={project.canWrite ? "Change Project Status" : "Read-only Project"}
+     onChange={e => onMove(e.target.value || null)}>
+     <option value="">No status</option>{project.options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+   </select>;
+ }
+
+--- apps/desktop/src/issues/IssuesView.tsx
+@@ 1,54 @@
+ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+ import type { IssueRef } from "../../../../src/integrations/issues-contract";
++import type { SessionInfo } from "../acp/types";
+ import { errMessage } from "../lib/format";
+ import { listGitHubAccounts, type GitHubAccount } from "../platform/githubAccounts";
+ import { IssueOriginDetail, type IssueOriginRequest } from "./IssueOriginDetail";
+ import { IssuesBoard } from "./IssuesBoard";
+ import type { WorkAction } from "./IssueWork";
+ 
+-export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, origin, onCloseOrigin}: {
++export function IssuesView({cwd, preferred, onWork, onViewerChange, onSettings, origin, onCloseOrigin, sessions}: {
+   origin?: IssueOriginRequest | null; onCloseOrigin?: () => void;
++  /** The project's sessions, for the issue work row's session slot. */
++  sessions?: readonly SessionInfo[];
+   cwd: string; preferred?: string; onSettings: () => void;
+   onViewerChange: (login?: string) => void;
+   onWork: (login: string, action: WorkAction, issue: IssueRef, flowDir?: string) => Promise<void>;
+ }) {
+   const [accounts, setAccounts] = useState<GitHubAccount[]>([]);
+   const [chosen, choose] = useState("");
+   const [attempt, refresh] = useState(0);
+   const [error, setError] = useState("");
+   const [loaded, setLoaded] = useState(false);
+   useEffect(() => {
+     let alive = true;
+     setLoaded(false);
+     setError("");
+     void listGitHubAccounts().then(({accounts}) => {
+       if (alive) setAccounts(accounts.filter(account => account.state !== "error"));
+     }).catch(reason => {
+       if (alive) { setAccounts([]); setError(errMessage(reason)); }
+     }).finally(() => { if (alive) setLoaded(true); });
+     return () => {alive = false;};
+   }, [attempt, preferred]);
+   const login = accounts.find(a => a.login === chosen)?.login
+     ?? accounts.find(a => a.login === preferred)?.login ?? accounts.find(a => a.active)?.login ?? accounts[0]?.login;
+   const invalidateWork = useCallback(() => onViewerChange(login), [login, onViewerChange]);
+   useLayoutEffect(() => {
+     onViewerChange(loaded ? login : "");
+     return () => onViewerChange();
+   }, [cwd, login, loaded, onViewerChange]);
+   return <div className="issues-view">
+     {loaded && login && <><label className="issues-account">GitHub account <select value={login} onChange={event => choose(event.target.value)}>
+       {accounts.map(account => <option key={account.login}>{account.login}</option>)}
+     </select></label>
+       {origin && onCloseOrigin
+         ? <IssueOriginDetail key={JSON.stringify([cwd,login,origin])} cwd={cwd} login={login} origin={origin} close={onCloseOrigin} onAccessDenied={invalidateWork}
+             onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />
+-        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings} onAccessDenied={invalidateWork}
++        : <IssuesBoard key={JSON.stringify([cwd,login])} cwd={cwd} login={login} onSettings={onSettings} onAccessDenied={invalidateWork} {...(sessions ? {sessions} : {})}
+         onWork={(action, issue, flowDir) => onWork(login, action, issue, flowDir)} />}</>}
+     {!loaded && <p role="status">Loading GitHub accounts…</p>}
+     {loaded && !login && <div role="status"><p>{error || "Connect a GitHub account to view issues."}</p>
+       <button className="btn" onClick={onSettings}>GitHub settings</button> <button className="btn" onClick={() => refresh(n => n+1)}>Retry</button></div>}
+   </div>;
+ }
+
+--- apps/desktop/src/issues/model.ts
+@@ 1,115 @@
+-import { issueKey, type IssueLocalStage, type IssueScope, type IssueSummary } from "../../../../src/integrations/issues-contract";
++import { issueKey, type IssueListSource, type IssueLocalStage, type IssueSummary } from "../../../../src/integrations/issues-contract";
++import { boundSessions, type SessionInfo, type SessionSubject } from "../acp/types";
+ 
+ export const STAGES: Record<IssueLocalStage["stage"], string> = {
+   none: "No Flow", preparing: "Preparing", active: "In progress", needs_answer: "Needs an answer", done: "Done",
+ };
+ 
+-export const SOURCES: Record<IssueScope | "project", string> = {
+-  assigned: "Assigned to me", created: "Created by me", mentioned: "Mentioned", subscribed: "Subscribed", project: "GitHub Project",
++/** Where the board reads issues from; the project repository comes first and is the default (D5). */
++export const SOURCES: Record<IssueListSource | "project", string> = {
++  repository: "Project repository", assigned: "Assigned to me", created: "Created by me", mentioned: "Mentioned", subscribed: "Subscribed", project: "GitHub Project",
+ };
+ 
++export type IssueSource = keyof typeof SOURCES;
++/** The source shown when no preference is stored for the account. */
++export const DEFAULT_SOURCE: IssueSource = "repository";
++
+ export type ProjectSource = { owner: string; number: number };
+ export interface ProjectBoard {
+   id: string;
+   owner: string;
+   number: number;
+   title: string;
+   fieldId: string | null;
+   canWrite: boolean;
+   options: { id: string; name: string }[];
+ }
+ export interface Row {
+   issue: IssueSummary;
+   itemId?: string;
+   optionId?: string | null;
+ }
+ export interface Filters {
+   text: string;
+   state: "open" | "closed" | "all";
+   since: string;
+   sort: "asc" | "desc";
+   repository: string;
+   label: string;
+   author: string;
+   assignee: string;
+-  stage: string;
+   status: string;
+ }
+ 
+ export const defaultFilters: Filters = {
+-  text: "", state: "open", since: "", sort: "desc", repository: "", label: "", author: "", assignee: "", stage: "", status: "",
++  text: "", state: "open", since: "", sort: "desc", repository: "", label: "", author: "", assignee: "", status: "",
+ };
+ 
+ export function repoName(issue: IssueSummary): string { return issue.ref.owner + "/" + issue.ref.repo; }
+ export function issueName(issue: IssueSummary): string { return repoName(issue) + "#" + issue.ref.number; }
+ 
+-/** Each board groups by its owner's state; the issue's open/closed status remains an independent filter. */
++/** A GitHub Project groups by its Status field; any other source groups by the issue's GitHub state. */
+ export function groupForRow(row: Row, project: boolean): string {
+-  return project ? row.optionId ?? "unassigned" : row.issue.work?.stage ?? "none";
++  return project ? row.optionId ?? "unassigned" : row.issue.state;
++}
++
++/** The board's lanes: the Project's Status options, or Open and, when the state filter includes closed issues, Closed. */
++export function issueGroups(project: ProjectBoard | undefined, state: Filters["state"]): { id: string; label: string }[] {
++  if (project) return [...project.options.map(o => ({ id: o.id, label: o.name })), { id: "unassigned", label: "No status" }];
++  return [{ id: "open", label: "Open" }, ...(state === "open" ? [] : [{ id: "closed", label: "Closed" }])];
++}
++
++/** The Subject a session works on when it is bound to this issue. */
++export function issueSubject(issue: IssueSummary): SessionSubject {
++  return { kind: "issue", repo: repoName(issue), number: issue.ref.number, url: issue.ref.url, repositoryId: issue.ref.repositoryId };
++}
++
++/** The non-archived sessions bound to the issue through their `subject`, newest first. */
++export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {
++  return boundSessions(sessions, issueSubject(issue));
+ }
+ 
+ export function mergeRows(previous: Row[], next: Row[]): Row[] {
+   const rows = new Map(previous.map(row => [issueKey(row.issue.ref), row]));
+   for (const row of next) rows.set(issueKey(row.issue.ref), row);
+   return [...rows.values()];
+ }
+ 
+ function includesOption(filter: string, values: string[]): boolean {
+   const choices = filter.toLowerCase().split(",").map(value => value.trim()).filter(Boolean);
+   return !choices.length || values.some(value => choices.includes(value.toLowerCase()));
+ }
+ 
+ export function visibleRows(rows: Row[], f: Filters): Row[] {
+   const query = f.text.trim().toLowerCase();
+   const numberQuery = /^(?:([\w.-]+\/[\w.-]+))?#(\d+)$/.exec(query);
+   return rows.filter(({ issue, optionId }) => {
+     const searchMatches = numberQuery
+       ? issue.ref.number === Number(numberQuery[2]) && (!numberQuery[1] || numberQuery[1] === repoName(issue).toLowerCase())
+       : issue.title.toLowerCase().includes(query) || issueName(issue).toLowerCase().includes(query);
+     return searchMatches && (f.state === "all" || issue.state === f.state)
+       && (!f.since || issue.updatedAt.slice(0, 10) >= f.since)
+       && includesOption(f.repository, [repoName(issue)]) && includesOption(f.author, [issue.author])
+       && includesOption(f.label, issue.labels) && includesOption(f.assignee, issue.assignees.length ? issue.assignees : ["Unassigned"])
+-      && (!f.stage || (issue.work?.stage ?? "none") === f.stage)
+       && (!f.status || (optionId ?? "unassigned") === f.status);
+   }).sort((a, b) => {
+     const dates = a.issue.updatedAt.localeCompare(b.issue.updatedAt);
+     return (f.sort === "asc" ? dates : -dates) || issueKey(a.issue.ref).localeCompare(issueKey(b.issue.ref));
+   });
+ }
+ 
+ export function readPreferences(key: string): { filters: Filters; list: boolean } {
+   const filters = { ...defaultFilters };
+   try {
+     const raw = JSON.parse(localStorage.getItem(key) ?? "null");
+     if (raw && typeof raw.filters === "object" && raw.filters) {
+-      for (const k of ["text", "repository", "label", "author", "assignee", "stage", "status"] as const)
++      // A stored Flow stage filter from an earlier version is ignored: the filter is gone.
++      for (const k of ["text", "repository", "label", "author", "assignee", "status"] as const)
+         if (typeof raw.filters[k] === "string") filters[k] = raw.filters[k];
+       if (/^\d{4}-\d\d-\d\d$/.test(raw.filters.since)) filters.since = raw.filters.since;
+       if (["open", "closed", "all"].includes(raw.filters.state)) filters.state = raw.filters.state;
+       if (raw.filters.sort === "asc") filters.sort = "asc";
+     }
+     return { filters, list: raw?.list === true };
+   } catch { return { filters, list: false }; }
+ }
+
+--- apps/desktop/src/issues/useIssueCollection.ts
+@@ 1,40 @@
+ import { useCallback, useEffect, useRef, useState } from "react";
+-import { issueViewerKey, type IssuePage, type IssueScope, type IssueSummary, type IssueViewer } from "../../../../src/integrations/issues-contract";
++import { issueViewerKey, type IssueListSource, type IssuePage, type IssueSummary, type IssueViewer } from "../../../../src/integrations/issues-contract";
+ import { errMessage } from "../lib/format";
+ import { requestIssues } from "../platform/issues";
+ import { mergeRows, type Filters, type ProjectBoard, type ProjectSource, type Row } from "./model";
+ 
+ interface Snapshot {
+   viewer: IssueViewer;
+   rows: Row[];
+   project?: ProjectBoard;
+   nextCursor: string | null;
+   incomplete: boolean;
+   readAt: Date;
+ }
+ 
+ export function isAccessError(reason: string) {
+   return /(?:^|\b)(?:access|account_mismatch|source_unavailable):/i.test(reason);
+ }
+ 
+-export function useIssueCollection(cwd: string, login: string, source: IssueScope | "project", target: ProjectSource | null,
++export function useIssueCollection(cwd: string, login: string, source: IssueListSource | "project", target: ProjectSource | null,
+   filters: Filters, verified: IssueViewer, denied: (reason: string) => void, request: typeof requestIssues) {
+   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+   const [busy, setBusy] = useState(true);
+   const [error, setError] = useState("");
+   const newest = useRef(0);
+   const cursor = useRef<string | null>(null);
+   const loading = useRef(false);
+   const viewer = issueViewerKey(verified);
+   const owner = target?.owner;
+   const number = target?.number;
+   const { state, since, sort } = filters;
+ 
+   const invalidate = useCallback((message: string) => {
+     newest.current++;
+     loading.current = false;
+     cursor.current = null;
+     setSnapshot(null);
+     setError(message);
+     setBusy(false);
+   }, []);
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 1,67 @@
++import { useRef, useState } from "react";
++import { createPortal } from "react-dom";
++import { Menu, type MenuItem } from "../components/Menu";
++import type { SessionInfo, SessionSubject } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++import { boundSessions, flowStage, prFlows, prSubject, reviewSlotState, type SubjectSessionTarget } from "./prWork";
++import { reviewNote } from "./model";
++import type { ReviewCard } from "./types";
++
++/** What the work row needs from the board: the repository, the project's Flows and sessions, and where its links go. */
++export interface PrWork {
++  repo: string;
++  repositoryId?: string;
++  flows: readonly FlowCard[];
++  sessions: readonly SessionInfo[];
++  onOpenFlow: (dir: string) => void;
++  onCreateFlow?: ((card: ReviewCard, subject: SessionSubject) => void) | undefined;
++  onOpenSubjectSession?: ((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) => void) | undefined;
++}
++
++/**
++ * The Keryx work row of a PR card or list row: three slots in a fixed order (review, Flow, session), the
++ * same elements whether a slot holds a link or its labelled action, in a row of fixed height.
++ */
++export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: PrWork; onReview: (card: ReviewCard) => void }) {
++  const subject = prSubject(card, work.repo, work.repositoryId);
++  const sessions = boundSessions(work.sessions, subject);
++  const flow = prFlows(card, work.flows, sessions)[0];
++  const state = reviewSlotState(card.localReview);
++  const canReview = !!state || card.state === "open";
++  const reviewText = state ? `Review · ${state}` : "Run review";
++  const reviewTitle = state === "outdated" ? reviewNote(card) ?? reviewText : canReview ? reviewText : "Only an open pull request can be reviewed";
++  const flowText = flow ? `Flow #${flow.id} · ${flowStage(flow)}` : "Create Flow";
++  const sessionText = sessions.length > 1 ? `${sessions.length} sessions` : sessions.length ? "Session" : "Open in session";
++  const openSession = work.onOpenSubjectSession;
++  const createFlow = work.onCreateFlow;
++  const [menu, setMenu] = useState(false);
++  const more = useRef<HTMLButtonElement>(null);
++  const items: MenuItem[] = [
++    ...sessions.map((s): MenuItem => ({ id: "s-" + s.sessionId, label: s.title?.trim() || "New session (not saved yet)",
++      icon: "chat", onSelect: () => openSession?.(card, s.sessionId, subject) })),
++    ...(sessions.length ? [{ kind: "separator" as const, id: "sep" }] : []),
++    { id: "new", label: "New session", icon: "plus", onSelect: () => openSession?.(card, "new", subject) },
++  ];
++  const of = ` for #${card.number}`;
++  return <div className="pr-work-row" role="group" aria-label={`Keryx work${of}`}>
++    <span className="pr-work-slot" data-slot="review">
++      <button type="button" className={"pr-work-link" + (state ? "" : " is-empty")} title={reviewTitle} aria-label={reviewText + of}
++        disabled={!canReview} onClick={() => onReview(card)}>{reviewText}</button>
++    </span>
++    <span className="pr-work-slot" data-slot="flow">
++      <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
++        aria-label={flowText + of} disabled={!flow && !createFlow}
++        onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>
++    </span>
++    <span className="pr-work-slot" data-slot="session">
++      <button type="button" className={"pr-work-link" + (sessions.length ? "" : " is-empty")} title={sessionText}
++        aria-label={sessionText + of} disabled={!openSession} onClick={() => openSession?.(card, "latest", subject)}>{sessionText}</button>
++      <button ref={more} type="button" className="pr-work-more" aria-haspopup="menu" aria-expanded={menu}
++        aria-label={`More sessions${of}`} title="Sessions of this pull request" disabled={!openSession}
++        onClick={() => setMenu(open => !open)}>More</button>
++      {/* Portaled: the card's content-visibility contains paint, which would clip a fixed menu inside it. */}
++      {menu && createPortal(<Menu anchor={more.current} items={items} label={`Sessions${of}`} placement="auto" closeOnScroll
++        onClose={() => setMenu(false)} />, document.body)}
++    </span>
++  </div>;
++}
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 3,72 @@
+ import { EmptyState, overlayOpen, Spinner } from "../components/ui";
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+ import { withRunBackoff } from "./runPolling";
+ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+ import { sameRange, type RunObserver } from "./useReviewRuns";
+ import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+ import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
+ import { ProjectReviewRules } from "./ProjectReviewRules";
+ import { reviewRules } from "../platform/reviewRules";
+ import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
+ import { ReviewWatcher } from "./ReviewWatcher";
+ import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
+ import { readReplies, subscribeReviewReads } from "./reviewReadState";
+ import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
+ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
+ import { ReviewFilters, filterSummary } from "./ReviewFilters";
+ import { ReviewResults } from "./ReviewResults";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+-import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+-import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
++import type { PrWork } from "./PrWorkRow";
++import { prSubject } from "./prWork";
++import type { SessionInfo } from "../acp/types";
++import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
++import {
++  EMPTY_FILTERS, GROUPING_LABEL, QUICK_FILTERS, filterReviews, needsViewerAttention, stateQuery, type Filters, type Grouping, type QuickFilter,
++} from "./model";
+ import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ export type ReviewTabIndicator = "attention" | "watching" | null;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string;
+   active?: boolean;
+   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
++  /** Kept for callers without Subject sessions; the work row and the PR panel prefer `onOpenSubjectSession`. */
+   onOpenSession?: ((card: ReviewCard) => void) | undefined;
++  /** The project's sessions (pending Subject bindings included): the session slot lists those bound to each PR. */
++  sessions?: readonly SessionInfo[];
++  onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
++  onCreateFlow?: PrWork["onCreateFlow"];
++  /** Open this PR's panel; a new `nonce` opens it again. */
++  focus?: { number: number; nonce: number } | null;
+   load?: typeof fetchReviewBoard;
+   loadBadges?: typeof fetchReviewBadges;
+   listRepositories?: typeof fetchReviewRepositories;
+   loadDetail?: typeof fetchReviewDetail;
+   runCommand?: typeof reviewRun;
+   watcherCommand?: typeof reviewWatcher;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+ interface ReadState {
+   scope: string;
+   snapshot: ReviewBoardSnapshot | null;
+   error: string;
+   loading: boolean;
+   /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
+   stale?: boolean;
+ }
+ 
+ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 77,145 @@
+ 
+ const PORTALED_DIALOG_CONTENT = "[data-review-board-dialog]";
+ /** Focus inside the workspace dialogs, the detail panel, or the Review rules and PR watcher dialogs portaled to the body. */
+ function inBoardOverlay(el: Element | null) {
+   if (!el) return false;
+   if (el.closest('.review-workspace [role="dialog"], .review-detail-panel')) return true;
+   return !!el.closest('[role="dialog"]')?.querySelector(PORTALED_DIALOG_CONTENT);
+ }
+ 
+ function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
+   if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+   const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+   return card.addressedReplyIds.filter(id => !readIds.has(id));
+ }
+ const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+ const attentionNumbers = (board: ReviewBoardSnapshot) =>
+   new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+ /** A load of this scope holds every open PR, so it replaces the carried attention set. */
+ const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+ const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
++const NO_SESSIONS: readonly SessionInfo[] = [];
+ 
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
++function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, focus, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+   repo?: string;
+   selectRepo: (repo?: string) => void;
+ }) {
+   // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+   const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
+   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
+   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+   const [filters, setFilters] = useState(EMPTY_FILTERS);
+   const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
+   const [query, setQuery] = useState("");
+   const [filtering, setFiltering] = useState(false);
+   const [dismissedWarning, setDismissedWarning] = useState("");
+   const warningId = useId();
+   const warningToggle = useRef<HTMLButtonElement>(null);
+   const [view, setView] = useState<"board" | "list">("board");
++  const [grouping, setGrouping] = useState<Grouping>("status");
+   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
+   const [attempt, setAttempt] = useState(0);
+   const refresh = useCallback(() => setAttempt(n => n + 1), []);
+   const [alternatives, setAlternatives] = useState<string[]>([]);
+   const search = useRef<HTMLInputElement>(null);
+   const identity = useRef("");
+   const filterKey = useRef<string>();
+   const sequence = useRef(0);
+   // The identity whose carried set was last replaced from a load that holds every open PR (open or all, no period).
+   const seeded = useRef("");
+   const [seedFor, setSeedFor] = useState<{ identity: string } | null>(null);
+   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
+   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
+   const restoreFocus = useRef(false);
+   const state = stateQuery(filters.state);
+   const period = filters.updatedWithin;
+   const scope = `${state}/${period ?? ""}`;
+   const [read, setRead] = useState<ReadState>({ scope, snapshot: null, error: "", loading: true });
+   const latest = useRef(read);
+   latest.current = read;
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 243,283 @@
+         }) };
+       }
+       // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+       const previous = latest.current.snapshot;
+       if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+         const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+         if (replies.size) {
+           snapshot = { ...snapshot, cards: snapshot.cards.map(c => {
+             const prior = replies.get(c.number);
+             return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+               ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+           }) };
+         }
+       }
+       const loaded = snapshot;
+       const nextFilterKey = reviewFilterKey(cwd, loaded.repositoryId, loaded.viewer);
+       if (filterKey.current !== nextFilterKey) {
+         filterKey.current = nextFilterKey;
+         nextFilters = readReviewFilters(nextFilterKey);
+         setFilters(nextFilters);
++        setGrouping(readReviewGrouping(nextFilterKey));
+       }
+       // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
+       // a new identity seen there starts from nothing and gets one open load that only seeds the set.
+       if (holdsAllOpen(state, period)) {
+         seeded.current = nextIdentity;
+         setCarriedAttention(attentionNumbers(loaded));
+         setSeedFor(null);
+       } else {
+         if (identity.current !== nextIdentity) {
+           setCarriedAttention(new Set());
+           seeded.current = "";
+         }
+         // Filters reset to an open scope start that load now; a seed would repeat it.
+         if (nextFilters && holdsAllOpen(stateQuery(nextFilters.state), nextFilters.updatedWithin)) setSeedFor(null);
+         else if (seeded.current !== nextIdentity) setSeedFor(old => old?.identity === nextIdentity ? old : { identity: nextIdentity });
+       }
+       pendingBadges.current = null;
+       setSelected(current => current && loaded.cards.some(c => c.number === current.number) ? current : null);
+       if (!loaded.warnings.length) setDismissedWarning("");
+       identity.current = nextIdentity;
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 379,419 @@
+     let timer = window.setTimeout(poll, 6000);
+     return () => { cancelled = true; window.clearTimeout(timer); };
+   }, [accessLost, cwd, loadBadges, runCommand, selected, snapshot, tabActive]);
+   const needRepositories = read.scope === scope && !!read.error && !snapshot;
+   useEffect(() => {
+     if (!needRepositories) return;
+     let active = true;
+     void listRepositories(cwd).then((names) => {
+       if (active) setAlternatives(names);
+     }).catch(() => { if (active) setAlternatives([]); });
+     return () => { active = false; };
+   }, [cwd, needRepositories, listRepositories]);
+   const [receiptVersion, setReceiptVersion] = useState(0);
+   const viewer = snapshot?.viewer;
+   const repositoryId = snapshot?.repositoryId;
+   useEffect(() => {
+     if (viewer && repositoryId) return subscribeReviewReads(viewer, repositoryId, undefined, () => setReceiptVersion(n => n + 1));
+   }, [viewer, repositoryId]);
+   const visible = useMemo(() => {
+     if (!snapshot) return [];
+-    return filterReviews(snapshot.cards, filters, q).map(card => {
++    return filterReviews(snapshot.cards, filters, q, snapshot.viewer).map(card => {
+       if (!card.addressedReplyIds?.length) return card;
+       const ids = unreadIds(snapshot, card);
+       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
+     });
+   }, [snapshot, filters, q, receiptVersion]);
+   // Receipts and discussion notes change after the load that seeded the carried set, so the shown snapshot is judged here.
+   const attentionPrs = useMemo(() => {
+     const next = new Set(carriedAttention);
+     if (snapshot) {
+       for (const c of snapshot.cards) {
+         if (needsViewerAttention(c, snapshot.viewer, unreadCount(snapshot, c))) next.add(c.number);
+         else next.delete(c.number);
+       }
+     }
+     return next;
+   }, [carriedAttention, snapshot, receiptVersion]);
+   // Removals seen in the shown snapshot must survive a scope switch to a view that does not replace the set.
+   // A cached fallback may predate what later loads observed, so it never writes back.
+   const stale = !!read.stale;
+   useEffect(() => {
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 437,597 @@
+       return;
+     }
+     let current = true;
+     void rulesCommand(cwd, watcherTarget, { kind: "status" }).then(result => {
+       if (current) setSubscriptions(new Set(result.subscriptions?.map(item => item.number)));
+     }).catch(() => {});
+     return () => { current = false; };
+   }, [cwd, rulesCommand, tabActive, watcherTarget]);
+ 
+   const indicator: ReviewTabIndicator = attentionPrs.size ? "attention" :
+     watchingTarget && watcherTarget && watchingTarget.repositoryId === watcherTarget.repositoryId &&
+     watchingTarget.viewer === watcherTarget.viewer ? "watching" : null;
+   useEffect(() => { onIndicatorChange?.(indicator, viewer); }, [indicator, viewer, onIndicatorChange]);
+   useEffect(() => () => onIndicatorChange?.(null), [onIndicatorChange]);
+ 
+   function applyFilters(next: Filters) {
+     setFilters(next);
+     if (filterKey.current) saveReviewFilters(filterKey.current, next);
+   }
+   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
++  function toggleQuick(quick: QuickFilter) {
++    const next = { ...filters };
++    if (next[quick]) delete next[quick];
++    else next[quick] = true;
++    applyFilters(next);
++  }
++  function chooseGrouping(next: Grouping) {
++    setGrouping(next);
++    if (filterKey.current) saveReviewGrouping(filterKey.current, next);
++  }
+   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+   // the reset loads the open scope instead of this fresh one.
+   const shownNumbers = new Set(visible.map(c => c.number));
+   const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+   const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+   const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+   const hiddenText = `Show ${hiddenAttention} waiting on you`;
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+   }, []);
++  // A focus request waits for a snapshot that holds the PR, then opens its panel once per nonce.
++  const focused = useRef<number | null>(null);
++  useEffect(() => {
++    if (!focus || focused.current === focus.nonce || !snapshot?.cards.some(c => c.number === focus.number)) return;
++    focused.current = focus.nonce;
++    setSelected({ number: focus.number });
++  }, [focus, snapshot]);
++  const workRepo = snapshot?.repo ?? "";
++  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), flows, sessions, onOpenFlow, onCreateFlow, onOpenSubjectSession }),
++    [workRepo, repositoryId, flows, sessions, onOpenFlow, onCreateFlow, onOpenSubjectSession]);
++  const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
++    ? () => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId))
++    : onOpenSession && (() => onOpenSession(item));
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+         {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
+       </span>}
+       {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset}
+         aria-label={hiddenText + " — clears filters and search"} title={hiddenText + " — clears filters and search"}>
+         <Icon name="alert" size={13} /> <span className="toolbar-label">{hiddenText}</span><span className="hint-short">{hiddenAttention} hidden</span>
+       </button>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+         <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
+       </button>
+       <div className="grow" />
+       {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
+       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
+       <div className="segmented" role="group" aria-label="Review view">
+         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
+           aria-label={mode === "board" ? "Board" : "List"} title={mode === "board" ? "Board" : "List"}
+           onClick={() => setView(mode)}><Icon name={mode} size={14} /> <span className="toolbar-label">{mode === "board" ? "Board" : "List"}</span></button>)}
+       </div>
+       <button className="btn btn-sm" disabled={loading} onClick={refresh} aria-label="Refresh pull requests" title="Refresh pull requests">
+         {loading ? <Spinner /> : <Icon name="refresh" size={15} />} <span className="toolbar-label">Refresh</span>
+       </button>
+     </div>
+     {(snapshot || repo || (needRepositories && alternatives.length > 0) || active.length > 0) && <div className="review-context">
+       {snapshot && <>
+         <Icon name="branch" size={14} />
+         {snapshot.repositories.length > 1 ? <select className="select-compact" aria-label="Base repository" value={snapshot.repo}
+           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
+           : <strong>{snapshot.repo}</strong>}
+         <span>Signed in as {snapshot.viewer}</span>
++        <div className="review-quick-filters" role="group" aria-label="Quick filters">
++          {(Object.keys(QUICK_FILTERS) as QuickFilter[]).map(quick => <button key={quick} type="button" className="btn btn-sm"
++            aria-pressed={!!filters[quick]} disabled={!filterKey.current} onClick={() => toggleQuick(quick)}>{QUICK_FILTERS[quick]}</button>)}
++        </div>
++        {view === "board" && <label className="review-grouping">Group by
++          <select className="select-compact" value={grouping} onChange={(e) => chooseGrouping(e.target.value === "role" ? "role" : "status")}>
++            {(Object.keys(GROUPING_LABEL) as Grouping[]).map(value => <option key={value} value={value}>{GROUPING_LABEL[value]}</option>)}
++          </select>
++        </label>}
+         <span className="grow" />
+         <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+         {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
+           aria-expanded={showWarning} aria-controls={warningId} onClick={() => setDismissedWarning(showWarning ? warningKey : "")}>
+           <Icon name="info" size={15} />
+         </button>}
+       </>}
+       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
+         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>
+         <option disabled value="">Choose a repository</option>
+         {alternatives.map((name) => <option key={name}>{name}</option>)}
+       </select>}
+       {!snapshot && repo && <><strong>{repo}</strong><button className="link-btn" onClick={() => selectRepo()}>Use default repository</button></>}
+       {active.length > 0 && <div className="review-active-filters">
+         <button className="icon-btn" aria-label="Clear filters" title="Clear filters" onClick={() => applyFilters(EMPTY_FILTERS)}>
+           <Icon name="clearFilters" size={16} />
+         </button>
+         {active.map((label) => <span key={label}>{label}</span>)}
+       </div>}
+     </div>}
+     {error && <div className="inline-banner tone-warn" role="alert">
+       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+       <button className="btn btn-sm" onClick={refresh}>Try again</button>
+     </div>}
+     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
+       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
+       <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
+         onClick={() => { setDismissedWarning(warningKey); warningToggle.current?.focus(); }}>
+         <Icon name="x" size={15} />
+       </button>
+     </div>}
+     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
+-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
++    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} work={work}
+         {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
+       <EmptyState icon={q || active.length ? "search" : "pr"}
+         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
+         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
+         {q || active.length ? "Try another title, number, or filter." : undefined}
+       </EmptyState>)}
+     </section>
+     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+         item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+       models={reviewModels} currentModel={currentRepairModel}
+       watching={watchingTarget !== null} onAccessLost={accessLost}
+       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
+     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
+       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
+     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
+       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+       width={detailWidth} onResize={setDetailWidth}
+-      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
++      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
+       projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
+       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
+   </div>;
+ }
+
+--- apps/desktop/src/review/ReviewFilters.tsx
+@@ 1,47 @@
+ import { useMemo, useState } from "react";
+ import { Dialog } from "../components/ui";
+-import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters } from "./model";
++import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, QUICK_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters, type QuickFilter } from "./model";
+ import type { ReviewCard } from "./types";
+ 
+ const DIMENSIONS: Record<Dimension, string> = {
+   state: "PR state", ci: "Checks on head commit", decision: "GitHub review decision",
+   author: "Author", assignee: "Assignee", reviewer: "Review requested from",
+ };
+ 
+ function roleOptions(values: string[], extra: string[], emptyLabel?: string) {
+   const entries = [...new Set([...values, ...extra])].filter((v) => v !== ":none").sort((a, b) => a.localeCompare(b));
+   return Object.fromEntries([...(emptyLabel ? [[":none", emptyLabel]] : []), ...entries.map((v) => [v, v || "Unknown author"])]);
+ }
+ 
+ export function filterSummary(f: Filters): string[] {
+   const result: string[] = [];
+   for (const dim of Object.keys(DIMENSIONS) as Dimension[]) {
+     const val = f[dim];
+     if (dim === "state" && val.length === 2 && val.includes("open") && val.includes("draft")) continue;
+     if (!val.length && dim !== "state") continue;
+     const labels: Record<string, string> = dim === "state" ? STATE_LABEL : dim === "ci" ? CI_LABEL
+       : dim === "decision" ? { ...DECISION_LABEL, ":none": "No decision" } : dim === "author" ? { "": "Unknown author" } : { ":none": "None" };
+     result.push(DIMENSIONS[dim] + " · " + (val.map((v) => labels[v] ?? v).join(", ") || "All"));
+   }
+   if (f.updatedWithin) result.push(`Updated · Last ${f.updatedWithin} days`);
++  for (const quick of Object.keys(QUICK_FILTERS) as QuickFilter[]) if (f[quick]) result.push(QUICK_FILTERS[quick]);
+   return result;
+ }
+ 
+ interface Props {
+   cards: ReviewCard[];
+   filters: Filters;
+   onClose: () => void;
+   onApply: (filters: Filters) => void;
+ }
+ 
+ export function ReviewFilters({ cards, filters, onClose, onApply }: Props) {
+   const [draft, setDraft] = useState(filters);
+   const options = useMemo<Record<Dimension, Record<string, string>>>(() => ({
+     author: roleOptions(cards.map(c => c.author), filters.author),
+     assignee: roleOptions(cards.flatMap((c) => c.assignees), filters.assignee, "Unassigned"),
+     reviewer: roleOptions(cards.flatMap((c) => c.reviewers), filters.reviewer, "No review requests"),
+     decision: { ...DECISION_LABEL, ":none": "No decision" },
+     state: STATE_LABEL, ci: CI_LABEL,
+   }), [cards, filters]);
+ 
+
+--- apps/desktop/src/review/ReviewResults.tsx
+@@ 1,125 @@
+-import { memo, useState } from "react";
++import { memo, useMemo, useState } from "react";
+ import { CardReviewProgress } from "./ReviewProgress";
+ import { openPullRequest } from "../platform/commands";
+ import { useToast } from "../components/Toasts";
+ import { errMessage } from "../lib/format";
+ import { reviewUrl } from "./ReviewBrowserLink";
+ import { Icon } from "../components/Icon";
+ import { absoluteTime, relativeTime } from "../lib/format";
+-import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, laneReason, prState, reviewLane, reviewNote, type Lane } from "./model";
++import { CI_LABEL, DECISION_LABEL, LANES, STATE_LABEL, drawnLanes, laneReason, newestFirst, prState, reviewLane, type Filters, type Grouping, type Lane } from "./model";
++import { PrWorkRow, type PrWork } from "./PrWorkRow";
+ import type { ReviewCard } from "./types";
+ 
+ interface ReviewActions {
+   onOpen: (number: number) => void;
+   onReview: (card: ReviewCard) => void;
+-  onOpenSession?: (card: ReviewCard) => void;
+   onSubscribe?: (card: ReviewCard) => void;
+   subscriptions?: ReadonlySet<number>;
++  work: PrWork;
+ }
+ 
+ function ReviewTags({ card }: { card: ReviewCard }) {
+   return <span className="review-tags">
+     <span className={`badge pr-${card.state}`}>{STATE_LABEL[card.state]}</span>
+     {prState(card) === "draft" && <span className="badge">Draft</span>}
+     {card.decision && <span className={`badge pr-${card.decision.toLowerCase()}`}>{DECISION_LABEL[card.decision]}</span>}
+     {card.reviewers.length > 0 && <span className="badge pr-review_requested" title={card.reviewers.join(", ")}>Review requested</span>}
+-    {card.state === "open" && card.localReview?.publicationPending && <span className="badge review-publication-pending">Action required</span>}
+   </span>;
+ }
+ 
+-function ReviewAction({ card, onReview, onOpenSession, onSubscribe, subscriptions }: Omit<ReviewActions, "onOpen"> & { card: ReviewCard }) {
++/** The card's own actions, each with visible text; the Keryx work (review, Flow, session) is the work row. */
++function ReviewAction({ card, onSubscribe, subscriptions }: Pick<ReviewActions, "onSubscribe" | "subscriptions"> & { card: ReviewCard }) {
+   const toast = useToast();
+   const href = reviewUrl(card.url);
+-  const showReview = card.state === "open" || card.localReview?.runState;
+-  const label = card.localReview?.awaitingAnswer ? "Answer question" : card.localReview?.active ? "View review" :
+-    card.state === "open" && card.localReview?.publicationPending ? "Review publication" :
+-    card.localReview?.runState ? "View review result" : card.localReview?.outdated ? "Review again" : "Run review";
+-  const browserLabel = `Open PR #${card.number} in browser`;
+-  const sessionLabel = `Open PR #${card.number} in Sessions`;
+   const following = subscriptions?.has(card.number) ?? false;
+-  const watchLabel = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
++  const watchText = following ? "Following" : "Subscribe";
++  const watchTitle = `${following ? "Edit subscription for" : "Subscribe to"} PR #${card.number}`;
+   return <div className="card-actions">
+-    {showReview && <button type="button" className="icon-btn" title={label} aria-label={`${label} for #${card.number}`}
+-      onClick={() => onReview(card)}><Icon name={card.localReview?.runState ? "checklist" : "play"} size={15} /></button>}
+-    {onOpenSession && <button type="button" className="icon-btn" aria-label={sessionLabel} title={sessionLabel} onClick={() => onOpenSession(card)}>
+-      <Icon name="chat" size={15} />
+-    </button>}
+-    {href && <a className="icon-btn" href={href} rel="noreferrer" title={browserLabel} aria-label={browserLabel}
++    {href && <a className="btn btn-sm" href={href} rel="noreferrer" title={`Open PR #${card.number} on GitHub`}
++      aria-label={`Open on GitHub: PR #${card.number}`}
+       onClick={event => {
+         event.preventDefault();
+         void openPullRequest(href).catch(error => toast({ level: "error", title: "Could not open pull request", body: errMessage(error) }));
+-      }}><Icon name="external" size={15} /></a>}
+-    {onSubscribe && <button type="button" className={`icon-btn${following ? " is-following" : ""}`} aria-haspopup="dialog"
+-      aria-label={watchLabel} title={watchLabel} onClick={() => onSubscribe(card)}><Icon name="bell" size={15} /></button>}
++      }}><Icon name="external" size={13} />Open on GitHub</a>}
++    {onSubscribe && <button type="button" className={`btn btn-sm${following ? " is-following" : ""}`} aria-haspopup="dialog"
++      aria-label={`${watchText}: PR #${card.number}`} title={watchTitle} onClick={() => onSubscribe(card)}>
++      <Icon name="bell" size={13} />{watchText}</button>}
+   </div>;
+ }
+ 
+-function secondaryNote(card: ReviewCard, reason: string) {
+-  const note = reviewNote(card);
+-  return note && note !== reason ? note : null;
+-}
+-
+-function ReviewTile({ card, onOpen, ...actions }: ReviewActions & { card: ReviewCard }) {
+-  const reason = laneReason(card);
+-  const note = secondaryNote(card, reason);
++function ReviewTile({ card, onOpen, onReview, work, ...actions }: ReviewActions & { card: ReviewCard }) {
+   return <article className="flow-card">
+     <button className="review-card" onClick={() => onOpen(card.number)}>
+       <span className="flow-card-top">
+         <span className="flow-id">#{card.number}</span>
+         <span className="grow" />
+         <time className="flow-time" dateTime={card.updatedAt} title={absoluteTime(card.updatedAt)}>{relativeTime(card.updatedAt)}</time>
+       </span>
+       <span className="flow-title">{card.title}</span>
+       <ReviewTags card={card} />
+       <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{card.author || "Unknown author"}</span>
+         <span className={'review-ci ci-' + card.ci}>{CI_LABEL[card.ci]}</span>
+       </span>
+-      <span className={card.localReview?.active && !card.localReview.awaitingAnswer ? "review-reason review-live-state" : "review-reason"}>{reason}</span>
+-      {note && <span className="review-note">{note}</span>}
++      <span className="review-reason">{laneReason(card)}</span>
+       <CardReviewProgress badge={card.localReview} />
+       {card.assignees.length > 0 && <span className="review-request">Assigned to {card.assignees.join(", ")}</span>}
+       {card.reviewers.length > 0 && <span className="review-request">Requested from {card.reviewers.join(", ")}</span>}
+     </button>
++    <PrWorkRow card={card} work={work} onReview={onReview} />
+     <ReviewAction card={card} {...actions} />
+   </article>;
+ }
+ 
+ function ReviewLane({ lane, cards, ...actions }: ReviewActions & { lane: Lane; cards: ReviewCard[] }) {
+   const [limit, setLimit] = useState(30);
+   return <section className="lane" aria-label={LANES[lane]}>
+     <header className="lane-head"><span className={'lane-dot review-lane-' + lane} /><h2>{LANES[lane]}</h2><span className="lane-count">{cards.length}</span></header>
+     <div className="lane-body">
+       {!cards.length && <div className="lane-empty">No pull requests</div>}
+       {cards.slice(0, limit).map((card) => <ReviewTile key={card.number} card={card} {...actions} />)}
+       {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 30)}>Show more ({cards.length - limit})</button>}
+     </div>
+   </section>;
+ }
+ 
+-export const ReviewResults = memo(function ReviewResults({ cards, view, showDone, onOpen, ...actions }: ReviewActions & { cards: ReviewCard[]; view: "board" | "list"; showDone: boolean }) {
++interface ResultsProps extends ReviewActions {
++  cards: ReviewCard[];
++  view: "board" | "list";
++  grouping: Grouping;
++  filters: Filters;
++  viewer: string;
++}
++
++export const ReviewResults = memo(function ReviewResults({ cards, view, grouping, filters, viewer, onOpen, onReview, work, ...actions }: ResultsProps) {
+   const [limit, setLimit] = useState(150);
++  const ordered = useMemo(() => newestFirst(cards), [cards]);
+   if (view === "board") {
+-    const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
+-    for (const card of cards) lanes[reviewLane(card)].push(card);
+-    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => lane !== "done" || showDone);
++    const lanes = new Map<Lane, ReviewCard[]>();
++    for (const card of ordered) {
++      const lane = reviewLane(card, grouping, viewer);
++      const bucket = lanes.get(lane);
++      if (bucket) bucket.push(card);
++      else lanes.set(lane, [card]);
++    }
++    // A lane the filters rule out is not drawn, unless a card is in it anyway: no shown card may vanish.
++    const possible = new Set(drawnLanes(grouping, filters, viewer));
++    const drawn = (Object.keys(LANES) as Lane[]).filter((lane) => possible.has(lane) || lanes.has(lane));
+     return <div className="board review-lanes">{drawn.map((lane) =>
+-      <ReviewLane key={lane} lane={lane} cards={lanes[lane]} onOpen={onOpen} {...actions} />)}</div>;
++      <ReviewLane key={lane} lane={lane} cards={lanes.get(lane) ?? []} onOpen={onOpen} onReview={onReview} work={work} {...actions} />)}</div>;
+   }
+   return <div className="flow-list-wrap">
+     <table className="flow-list review-table"><thead><tr>
+-      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Actions</th>
+-    </tr></thead><tbody>{cards.slice(0, limit).map((c) => {
++      <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th><th>Keryx work</th><th>Actions</th>
++    </tr></thead><tbody>{ordered.slice(0, limit).map((c) => {
+       const reason = laneReason(c);
+-      const note = secondaryNote(c, reason);
+       return <tr key={c.number}>
+         <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
+-        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span className={c.localReview?.active && !c.localReview.awaitingAnswer ? "review-live-state" : undefined}>{reason}</span>
+-          {note && <span className="review-note">{note}</span>}
++        <td>{c.author || "Unknown author"}</td><td><ReviewTags card={c} /></td><td title={reason}><span>{reason}</span>
+           <CardReviewProgress badge={c.localReview} /></td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
++        <td><PrWorkRow card={c} work={work} onReview={onReview} /></td>
+         <td><ReviewAction card={c} {...actions} /></td>
+       </tr>;
+     })}</tbody></table>
+-    {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
++    {ordered.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({ordered.length - limit})</button>}
+   </div>;
+ });
+
+--- apps/desktop/src/review/model.ts
+@@ 1,148 @@
+ import type { ReviewBoardState, ReviewCard, ReviewCi } from "./types";
+ 
+ export const CI_LABEL: Record<ReviewCi, string> = {
+   passed: "CI passed", failed: "CI failed", pending: "CI running", none: "No checks", unknown: "CI unknown",
+ };
+ export const DECISION_LABEL = {
+   APPROVED: "Approved", CHANGES_REQUESTED: "Changes requested", REVIEW_REQUIRED: "Review required",
+ };
+ export const STATE_LABEL = { open: "Open", draft: "Draft", closed: "Closed", merged: "Merged" };
+-export const LANES = {
+-  attention: "Needs attention", review: "In review", open: "Open", done: "Done",
++/** Board lanes by GitHub status, in drawing order. */
++export const STATUS_LANES = {
++  draft: "Draft", waiting: "Waiting for review", changes: "Changes requested", approved: "Approved", merged: "Merged", closed: "Closed",
+ } as const;
++/** Board lanes by the viewer's role on the pull request, in drawing order. */
++export const ROLE_LANES = { requested: "Requested from me", mine: "Mine", others: "Others" } as const;
++export const LANES = { ...STATUS_LANES, ...ROLE_LANES } as const;
+ export type Lane = keyof typeof LANES;
++export type Grouping = "status" | "role";
++export const GROUPING_LABEL: Record<Grouping, string> = { status: "Status", role: "My role" };
+ export type Dimension = "author" | "assignee" | "reviewer" | "decision" | "state" | "ci";
+ export const REVIEW_PERIODS = [7, 30, 90] as const;
+ export type ReviewPeriod = typeof REVIEW_PERIODS[number];
+-export type Filters = Record<Dimension, string[]> & { updatedWithin?: ReviewPeriod };
++/** One-click filters shown in the board's context row; a missing key is off. */
++export const QUICK_FILTERS = { requestedFromMe: "Requested from me", mine: "Mine", ciFailed: "CI failed" } as const;
++export type QuickFilter = keyof typeof QUICK_FILTERS;
++export type Filters = Record<Dimension, string[]> & { updatedWithin?: ReviewPeriod } & Partial<Record<QuickFilter, true>>;
+ export const EMPTY_FILTERS: Filters = {
+   author: [], assignee: [], reviewer: [], decision: [], state: ["open", "draft"], ci: [],
+ };
+ 
+ export function stateQuery(states: string[]): ReviewBoardState {
+   if (states.length && states.every((s) => s === "draft" || s === "open")) return "open";
+   if (states.length === 1 && (states[0] === "closed" || states[0] === "merged")) return states[0];
+   return "all";
+ }
+ 
+-/** The Done lane can only hold closed or merged pull requests; an empty state filter means every state. */
+-export function stateFilterShowsDone(states: readonly string[]) {
+-  return !states.length || states.some((s) => s === "closed" || s === "merged");
+-}
+-
+ /**
+  * Whether an open pull request needs the viewer: requested from their login (teams are not matched),
+  * their own change with requested changes, unread replies to them, or a Keryx review that waits on them.
+  */
+ export function needsViewerAttention(c: ReviewCard, viewer: string, unreadReplies: number) {
+   if (c.state !== "open") return false;
+   const login = viewer.toLowerCase();
+   return c.reviewers.some((r) => r.toLowerCase() === login) ||
+     (c.author.toLowerCase() === login && c.decision === "CHANGES_REQUESTED") ||
+     unreadReplies > 0 || !!c.localReview?.awaitingAnswer || !!c.localReview?.publicationPending;
+ }
+ 
+ export function prState(c: ReviewCard) {
+   return c.state === "open" && c.draft ? "draft" : c.state;
+ }
+ 
+ function matchesRole(selected: string[], values: string[], complete = true) {
+   return !selected.length || selected.some((v) => values.includes(v) || (v === ":none" && complete && !values.length));
+ }
+ 
+-export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
++/** A review requested from the viewer's own login; team requests are not matched. */
++function requestedFrom(c: ReviewCard, viewer: string) {
++  const login = viewer.toLowerCase();
++  return !!login && c.reviewers.some((r) => r.toLowerCase() === login);
++}
++
++function authoredBy(c: ReviewCard, viewer: string) {
++  return !!viewer && c.author.toLowerCase() === viewer.toLowerCase();
++}
++
++/** Every filter, the quick filters and the search apply to every card alike: no local review bypasses them. */
++export function filterReviews(cards: ReviewCard[], f: Filters, query: string, viewer = "") {
+   const q = query.trim().toLowerCase();
+   return cards.filter(c => {
+     if (q && !c.title.toLowerCase().includes(q) && !String(c.number).includes(q.replace(/^#(?=\d)/, ""))) return false;
+     return (!f.author.length || f.author.includes(c.author)) &&
+       matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
+       matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
+       (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
+       (!f.ci.length || f.ci.includes(c.ci)) &&
+-      (!f.state.length || f.state.includes(prState(c)));
++      (!f.state.length || f.state.includes(prState(c))) &&
++      (!f.requestedFromMe || requestedFrom(c, viewer)) &&
++      (!f.mine || authoredBy(c, viewer)) &&
++      (!f.ciFailed || c.ci === "failed");
+   });
+ }
+ 
+-function attentionReason(c: ReviewCard): string | null {
+-  if (c.localReview?.publicationPending) return "Choose whether to publish on GitHub";
+-  if (c.localReview?.ready) return "Keryx review result available";
+-  if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+-  if (c.reviewers.length) return "Review requested";
+-  if (c.ci === "failed") return "Checks failed";
+-  if (c.addressedReplyIds?.length) return "New reply to you";
+-  return null;
++/** Newest GitHub update first; ties keep the given order, so local events never move a card. */
++export function newestFirst(cards: readonly ReviewCard[]): ReviewCard[] {
++  const time = (c: ReviewCard) => Date.parse(c.updatedAt) || 0;
++  return [...cards].sort((a, b) => time(b) - time(a));
+ }
+ 
+-export function reviewLane(c: ReviewCard): Lane {
+-  if (c.localReview?.awaitingAnswer) return "attention";
+-  if (c.localReview?.active) return "review";
+-  if (c.state !== "open") return "done";
+-  return attentionReason(c) ? "attention" : "open";
++/** The lane reads GitHub fields only: a local review never moves a card. */
++export function reviewLane(c: ReviewCard, grouping: Grouping = "status", viewer = ""): Lane {
++  if (grouping === "role") return requestedFrom(c, viewer) ? "requested" : authoredBy(c, viewer) ? "mine" : "others";
++  const state = prState(c);
++  if (state !== "open") return state;
++  if (c.decision === "CHANGES_REQUESTED") return "changes";
++  if (c.decision === "APPROVED") return "approved";
++  return "waiting";
++}
++
++const includes = (selected: readonly string[], ...values: string[]) => !selected.length || values.some((v) => selected.includes(v));
++
++/** The lanes of a grouping that can hold a card under these filters, in drawing order. */
++export function drawnLanes(grouping: Grouping, f: Filters, viewer: string): Lane[] {
++  if (grouping === "role") {
++    const login = viewer.toLowerCase();
++    const viewerAuthor = !f.author.length || f.author.some((a) => !!login && a.toLowerCase() === login);
++    const otherAuthor = !f.author.length || f.author.some((a) => !login || a.toLowerCase() !== login);
++    const possible: Record<keyof typeof ROLE_LANES, boolean> = {
++      requested: !f.mine && otherAuthor && (!f.reviewer.length || f.reviewer.some((r) => r !== ":none")),
++      mine: !f.requestedFromMe && viewerAuthor,
++      others: !f.requestedFromMe && !f.mine && otherAuthor,
++    };
++    return (Object.keys(ROLE_LANES) as (keyof typeof ROLE_LANES)[]).filter((lane) => possible[lane]);
++  }
++  const open = includes(f.state, "open");
++  const possible: Record<keyof typeof STATUS_LANES, boolean> = {
++    draft: includes(f.state, "draft"),
++    waiting: open && includes(f.decision, ":none", "REVIEW_REQUIRED"),
++    changes: open && includes(f.decision, "CHANGES_REQUESTED"),
++    approved: open && includes(f.decision, "APPROVED"),
++    merged: includes(f.state, "merged"),
++    closed: includes(f.state, "closed"),
++  };
++  return (Object.keys(STATUS_LANES) as (keyof typeof STATUS_LANES)[]).filter((lane) => possible[lane]);
+ }
+ 
+ /** The outdated-review text whenever the badge has one, independent of which reason ranks first. */
+ export function reviewNote(c: ReviewCard): string | null {
+   const outdated = c.localReview?.outdated;
+   if (!outdated) return null;
+   const partial = outdated.state === "partial" || outdated.state === "budget";
+   const sha = outdated.headSha.slice(0, 7);
+   // Same head, different range: only the base moved, so the reviewed head is not "outdated".
+   if (outdated.headSha === c.headSha) return `${partial ? "Partial review" : "Review"} predates base update · ${sha}`;
+   return `${partial ? "Outdated partial review" : "Outdated review"} · ${sha}`;
+ }
+ 
++/** The card's reason line, from GitHub data only; Keryx review state belongs to the work row. */
+ export function laneReason(c: ReviewCard) {
+-  if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+-  if (c.localReview?.runState === "queued") return "Keryx review queued";
+-  if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
+-  if (c.localReview?.active) return "Keryx review in progress";
+   if (c.state !== "open") return STATE_LABEL[c.state];
+-  if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
+-  const attention = attentionReason(c);
+-  if (attention) return attention;
+-  const note = reviewNote(c);
+-  if (note) return note;
++  if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
++  if (c.reviewers.length) return "Review requested";
++  if (c.ci === "failed") return "Checks failed";
++  if (c.addressedReplyIds?.length) return "New reply to you";
+   if (c.decision) return DECISION_LABEL[c.decision];
+   if (c.draft) return "Draft pull request";
+   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
+ }
+
+--- apps/desktop/src/review/prWork.ts
+@@ 1,135 @@
++import { boundSessions, sessionFlags, type SessionInfo, type SessionSubject } from "../acp/types";
++import { byUpdatedDesc, STATUS_LABEL } from "../flows/model";
++import type { FlowCard } from "../platform/commands";
++import type { ReviewCard } from "./types";
++
++/** Where "Open in session" goes: the newest bound session, a new bound one, or the named session. */
++export type SubjectSessionTarget = "latest" | "new" | string;
++
++/** The Subject of a PR card on the board of `repo` (`owner/name`). */
++export function prSubject(card: Pick<ReviewCard, "number" | "url">, repo: string, repositoryId?: string): SessionSubject {
++  return { kind: "pr", repo, number: card.number, url: card.url, ...(repositoryId ? { repositoryId } : {}) };
++}
++
++export { boundSessions };
++
++/**
++ * The sessions Desktop shows: the stored list plus the bindings still waiting for keryx to store a new
++ * session (it lists one only after its first save). A pending binding wins over a stored flag set
++ * without a subject, so the card shows the session it just opened.
++ */
++export function withPendingSubjects(sessions: readonly SessionInfo[], pending: ReadonlyMap<string, SessionSubject>): SessionInfo[] {
++  if (!pending.size) return [...sessions];
++  const seen = new Set<string>();
++  const merged = sessions.map(s => {
++    seen.add(s.sessionId);
++    const subject = pending.get(s.sessionId);
++    if (!subject || sessionFlags(s).subject) return s;
++    return { ...s, _meta: { ...s._meta, keryx: { ...sessionFlags(s), subject } } };
++  });
++  const fresh = [...pending].filter(([id]) => !seen.has(id))
++    .map(([sessionId, subject]): SessionInfo => ({ sessionId, cwd: "", title: null, updatedAt: null, _meta: { keryx: { subject } } }));
++  return [...fresh, ...merged];
++}
++
++const samePrUrl = (a: string | null | undefined, b: string) => !!a && a.replace(/\/$/, "").toLowerCase() === b.replace(/\/$/, "").toLowerCase();
++
++/** The Flows of a PR: a Flow whose `prUrl` is the PR, or the Flow of a session bound to it. Newest first. */
++export function prFlows(card: Pick<ReviewCard, "url">, flows: readonly FlowCard[], bound: readonly SessionInfo[]): FlowCard[] {
++  const dirs = new Set(bound.map(s => sessionFlags(s).flow).filter((dir): dir is string => !!dir));
++  return flows.filter(flow => samePrUrl(flow.prUrl, card.url) || dirs.has(flow.dir)).sort(byUpdatedDesc);
++}
++
++/** The Flow's stage as the Flows board names it. */
++export function flowStage(flow: Pick<FlowCard, "status" | "blocked">): string {
++  if (flow.blocked || flow.status === "blocked") return STATUS_LABEL.blocked ?? "Blocked";
++  return STATUS_LABEL[flow.status] ?? flow.status;
++}
++
++/**
++ * The state the review slot names, from the card's local review; null when it has none. Stage 1
++ * shows the state only: no round number and no behind count.
++ */
++export function reviewSlotState(badge: ReviewCard["localReview"]): string | null {
++  if (!badge) return null;
++  if (badge.awaitingAnswer) return "needs your answer";
++  if (badge.publicationPending) return "publication pending";
++  switch (badge.runState) {
++    case "queued": return "queued";
++    case "running": case "cancelling": return "running";
++    case "completed": case "budget": return "ready";
++    case "partial": return "partial";
++    case "failed": case "blocked": return "failed";
++    case "cancelled": case "skipped": return "stopped";
++    case "other-revision": return "outdated";
++    default: break;
++  }
++  if (badge.active) return "running";
++  if (badge.ready) return "ready";
++  if (badge.outdated) return "outdated";
++  return null;
++}
++
++/** The composer text "Create Flow" prefills: names the PR, never sent. */
++export function flowPrompt(url: string): string {
++  return `Create a Keryx flow for ${url} with flow-orchestrator.`;
++}
++
++/** The target `/review` opens with: the one typed, else the PR the session is bound to. */
++export function reviewLaunchTarget(typed: string | undefined, subject: SessionSubject | undefined): string | undefined {
++  if (typed?.trim()) return typed;
++  return subject?.kind === "pr" ? subject.url : typed;
++}
++
++/** "Create Flow" waiting for its package: the session that was asked, and the packages that existed then. */
++export interface PendingFlowLink {
++  sessionId: string;
++  knownDirs: ReadonlySet<string>;
++}
++
++export type FlowLinkStep = { action: "wait" } | { action: "link"; dir: string } | { action: "clear" };
++
++/**
++ * What to do with a pending "Create Flow" once the flow list changes: link the one new package; link
++ * none when several appeared (which one is the session's cannot be told) or when the session already has a Flow.
++ */
++export function resolveFlowLink(pending: PendingFlowLink, dirs: readonly string[], sessionFlow: string | undefined): FlowLinkStep {
++  if (sessionFlow) return { action: "clear" };
++  const fresh = [...new Set(dirs)].filter(dir => !pending.knownDirs.has(dir));
++  if (!fresh.length) return { action: "wait" };
++  return fresh.length === 1 && fresh[0] ? { action: "link", dir: fresh[0] } : { action: "clear" };
++}
++
++/** What "Open in session" needs from the app; injected so it can be tested without keryx. */
++export interface SubjectSessionDeps {
++  /** The sessions as Desktop shows them now, pending bindings included. */
++  sessions: () => readonly SessionInfo[];
++  loadSession: (id: string) => Promise<void>;
++  /** A new session, shown; null when none could be started. */
++  newSession: () => Promise<string | null>;
++  /** Bind the new session to the subject (pending until keryx stores it). */
++  bind: (id: string, subject: SessionSubject) => void;
++  /** Prefill the composer; never sends. */
++  fill: (text: string) => void;
++}
++
++/**
++ * Open the session for a Subject: the newest non-archived bound session for "latest", the named one, or a
++ * new bound session for "new" or when none is bound. A new session gets `prompt` in its composer; an
++ * existing one keeps its draft unless `prefillExisting` is set. Resolves the shown session, or null.
++ */
++export async function openSubjectSession(deps: SubjectSessionDeps, subject: SessionSubject, target: SubjectSessionTarget,
++  prompt: string, prefillExisting = false): Promise<string | null> {
++  const bound = boundSessions(deps.sessions(), subject);
++  const existing = target === "latest" ? bound[0]?.sessionId : target === "new" ? undefined : bound.find(s => s.sessionId === target)?.sessionId;
++  if (existing) {
++    await deps.loadSession(existing);
++    if (prefillExisting) deps.fill(prompt);
++    return existing;
++  }
++  const id = await deps.newSession();
++  if (!id) return null;
++  deps.bind(id, subject);
++  deps.fill(prompt);
++  return id;
++}
+
+--- apps/desktop/src/review/reviewFilterStorage.ts
+@@ 1,66 @@
+-import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters } from "./model";
++import {
++  CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, QUICK_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters, type Grouping, type QuickFilter,
++} from "./model";
+ 
+ // GitHub's repository node ID is stable across aliases and renames.
+ export function reviewFilterKey(cwd: string, repositoryId: string, viewer: string): string {
+   return JSON.stringify(["keryx.review.filters", cwd, repositoryId, viewer.toLowerCase()]);
+ }
+ 
+ const allowed: Partial<Record<Dimension, ReadonlySet<string>>> = {
+   state: new Set(Object.keys(STATE_LABEL)),
+   decision: new Set([...Object.keys(DECISION_LABEL), ":none"]),
+   ci: new Set(Object.keys(CI_LABEL)),
+ };
+ 
+ export function readReviewFilters(key: string): Filters {
+   try {
+     const value = localStorage.getItem(key);
+     if (!value) return EMPTY_FILTERS;
+     const record = JSON.parse(value);
+     if (record?.version !== 1 || !record.filters || typeof record.filters !== "object" || Array.isArray(record.filters)) return EMPTY_FILTERS;
+     const filters = { ...EMPTY_FILTERS };
+     for (const dim of Object.keys(EMPTY_FILTERS) as Dimension[]) {
+       if (!Object.hasOwn(record.filters, dim)) continue;
+       const values: unknown = record.filters[dim];
+       const choices = allowed[dim];
+       if (!Array.isArray(values) || !values.every(value => typeof value === "string" && (!choices || choices.has(value)))) return EMPTY_FILTERS;
+       filters[dim] = [...new Set<string>(values)];
+     }
+     const period = REVIEW_PERIODS.find(days => days === record.filters.updatedWithin);
+     if (period) filters.updatedWithin = period;
++    for (const quick of Object.keys(QUICK_FILTERS) as QuickFilter[]) {
++      const value: unknown = record.filters[quick];
++      if (value === true) filters[quick] = true;
++      else if (value !== undefined && value !== false) return EMPTY_FILTERS;
++    }
+     return filters;
+   } catch {
+     return EMPTY_FILTERS;
+   }
+ }
+ 
++/** The board grouping is kept beside the filters of the same project, repository and account. */
++const groupingKey = (filterKey: string) => filterKey + "#grouping";
++
++export function readReviewGrouping(filterKey: string): Grouping {
++  try {
++    return localStorage.getItem(groupingKey(filterKey)) === "role" ? "role" : "status";
++  } catch {
++    return "status";
++  }
++}
++
++export function saveReviewGrouping(filterKey: string, grouping: Grouping): void {
++  try {
++    if (grouping === "status") localStorage.removeItem(groupingKey(filterKey));
++    else localStorage.setItem(groupingKey(filterKey), grouping);
++  } catch { /* Restricted or full storage still allows grouping the current board. */ }
++}
++
+ export function saveReviewFilters(key: string, filters: Filters): void {
+   try {
+     if (filters === EMPTY_FILTERS) localStorage.removeItem(key);
+     else localStorage.setItem(key, JSON.stringify({ version: 1, filters }));
+   } catch { /* Restricted or full storage still allows filtering the current board. */ }
+ }
+
+--- apps/desktop/src/review/usePendingFlowLinks.ts
+@@ 1,34 @@
++import { useCallback, useEffect, useRef, useState } from "react";
++import { sessionFlags, type SessionInfo } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++import { resolveFlowLink, type PendingFlowLink } from "./prWork";
++
++/**
++ * "Create Flow" requests waiting for their package. `known()` takes the packages that exist before the
++ * request (null before the first flow list: nothing can then be told apart, so nothing is linked);
++ * `expect(sessionId, known)` waits for the session's package. The one new package is linked through
++ * `link`; when several appear, none is.
++ */
++export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean, sessions: readonly SessionInfo[],
++  link: (sessionId: string, dir: string) => void) {
++  const [pending, setPending] = useState<PendingFlowLink[]>([]);
++  const linkRef = useRef(link);
++  linkRef.current = link;
++  useEffect(() => {
++    if (!pending.length) return;
++    const dirs = flows.map(flow => flow.dir);
++    const kept = pending.filter(entry => {
++      const session = sessions.find(item => item.sessionId === entry.sessionId);
++      const step = resolveFlowLink(entry, dirs, session && sessionFlags(session).flow);
++      if (step.action === "link") linkRef.current(entry.sessionId, step.dir);
++      return step.action === "wait";
++    });
++    if (kept.length !== pending.length) setPending(kept);
++  }, [pending, flows, sessions]);
++  const known = useCallback((): ReadonlySet<string> | null => loaded ? new Set(flows.map(flow => flow.dir)) : null, [flows, loaded]);
++  const expect = useCallback((sessionId: string, knownDirs: ReadonlySet<string> | null) => {
++    if (!knownDirs) return;
++    setPending(old => [...old.filter(entry => entry.sessionId !== sessionId), { sessionId, knownDirs }]);
++  }, []);
++  return { known, expect };
++}
+
+--- apps/desktop/src/session/SessionSubjectLinks.tsx
+@@ 1,17 @@
++import type { SessionSubject } from "../acp/types";
++import type { FlowCard } from "../platform/commands";
++
++/** The shown session's Subject ("PR owner/repo#N" or "Issue owner/repo#N") and its Flow, as links back to their cards. */
++export function SessionSubjectLinks({ subject, flow, onOpenSubject, onOpenFlow }: {
++  subject?: SessionSubject | undefined;
++  flow?: Pick<FlowCard, "id" | "dir" | "title"> | undefined;
++  onOpenSubject: (subject: SessionSubject) => void;
++  onOpenFlow: (dir: string) => void;
++}) {
++  if (!subject && !flow) return null;
++  const name = subject && `${subject.kind === "pr" ? "PR" : "Issue"} ${subject.repo}#${subject.number}`;
++  return <span className="session-subject-links">
++    {subject && <button type="button" className="link-btn" title={`Open ${name} on its card`} onClick={() => onOpenSubject(subject)}>{name}</button>}
++    {flow && <button type="button" className="link-btn" title={flow.title} onClick={() => onOpenFlow(flow.dir)}>Flow #{flow.id}</button>}
++  </span>;
++}
+
+--- apps/desktop/src/session/subjectBinding.ts
+@@ 1,63 @@
++import type { SessionFlags, SessionSubject } from "../acp/types";
++
++/** Said in the session when keryx answered the binding without a subject: an older keryx that cannot store it. */
++export const SUBJECT_NOT_SAVED = "This keryx did not save the pull request binding: the session works, but the card will not find it again. Update keryx to keep the binding.";
++
++export interface SubjectBindingDeps {
++  /** `_keryx/session_flags` with `subject`; throws while keryx has not stored the new session yet. */
++  write: (sessionId: string, subject: SessionSubject) => Promise<SessionFlags | null | undefined>;
++  /** The flags keryx answered, as stored; the binding stays pending (shown) until a returned promise settles. */
++  onFlags: (sessionId: string, flags: SessionFlags) => void | Promise<unknown>;
++  /** A warning in that session's transcript. */
++  onNotice: (sessionId: string, text: string) => void;
++  /** The pending bindings changed. */
++  onChange: (pending: ReadonlyMap<string, SessionSubject>) => void;
++}
++
++/**
++ * Subject bindings waiting for keryx to store a new session, like the pending flow link: tried at once,
++ * kept quietly when keryx does not have the session yet, tried again after the session's turn.
++ * A reply without `subject` comes from a keryx that ignores the key: the binding is dropped with a notice.
++ */
++export class PendingSubjects {
++  private readonly pending = new Map<string, SessionSubject>();
++
++  constructor(private readonly deps: SubjectBindingDeps) {}
++
++  get(sessionId: string): SessionSubject | undefined {
++    return this.pending.get(sessionId);
++  }
++
++  bind(sessionId: string, subject: SessionSubject): Promise<void> {
++    this.pending.set(sessionId, subject);
++    this.changed();
++    return this.apply(sessionId);
++  }
++
++  /** Try the pending binding of `sessionId`, if any. Never throws. */
++  async apply(sessionId: string): Promise<void> {
++    const subject = this.pending.get(sessionId);
++    if (!subject) return;
++    let flags: SessionFlags;
++    try {
++      flags = (await this.deps.write(sessionId, subject)) ?? {};
++    } catch {
++      return; // not stored yet: tried again after its turn
++    }
++    // A newer bind for the same session replaced this one while the request ran: that one decides.
++    if (this.pending.get(sessionId) !== subject) return;
++    try {
++      await this.deps.onFlags(sessionId, flags);
++    } finally {
++      if (this.pending.get(sessionId) === subject) {
++        this.pending.delete(sessionId);
++        this.changed();
++      }
++    }
++    if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED);
++  }
++
++  private changed() {
++    this.deps.onChange(new Map(this.pending));
++  }
++}
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 22,74 @@
+ import {
+   canOrganizeSessions,
+   hasLiveSessions,
+   DELEGATE_EXITED,
+   DELEGATE_RESULT,
+   DELEGATE_TERMINAL,
+   type DelegateResultParams,
+   SESSION_FLAGS,
+   SESSION_RELEASED,
+   SESSION_SHOWN,
+   SESSION_TRASH,
+   type CommandEffect,
+   type AskUserResult,
+   type ConfigOption,
+   type InitializeResult,
+   type LoadSessionResult,
+   type NewSessionResult,
+   type PermissionOutcome,
+   type SessionFlags,
+   type SessionInfo,
++  type SessionSubject,
+   type SessionUpdate,
+ } from "../acp/types";
+ import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+ import { desktopReviewCommands, runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
+ import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
+ import { readSubagentHistory, subagentHistoryWriter } from "./subagentHistory";
+ import { SessionRegistry } from "./sessionRegistry";
+ import { answerAgentRequest } from "./agentRequests";
+ import { retentionDays } from "../lib/retention";
+ import { idleSessions, pickStartSession } from "./startup";
+ import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN } from "./telegramSession";
++import { PendingSubjects } from "./subjectBinding";
+ 
+ export type { PendingAsk, PendingPermission } from "./dialogQueue";
+ 
+ export interface ReviewDraftRequest extends ReviewDraftHints {
+   prompt?: string;
+   sessionId: string;
+   nonce: string;
+ }
+ 
+ export type Fatal =
+   | { kind: "incompatible"; found: string; required: string }
+   /** This keryx cannot serve the app at all: no shell profile, or one without live sessions. */
+   | { kind: "noShell"; found: string; reason: "no-profile" | "no-live-sessions" }
+   | { kind: "leased"; sessionId: string };
+ 
+ /** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
+ function isLeaseError(e: unknown): boolean {
+   if (e instanceof RpcError) {
+     const reason = (e.data as { reason?: unknown } | undefined)?.reason;
+     if (reason === "session-leased") return true;
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 252,307 @@
+       const all: SessionInfo[] = [];
+       let cursor: string | null | undefined;
+       for (let page = 0; page < 5; page++) {
+         const r: { sessions?: SessionInfo[]; nextCursor?: string | null } = await client.request(
+           "session/list",
+           cursor ? { cwd, cursor } : { cwd },
+         );
+         all.push(...(r.sessions ?? []));
+         cursor = r.nextCursor;
+         if (!cursor) break;
+       }
+       all.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+       if (l.client === client) dispatch({ t: "sessions", sessions: all });
+       return all;
+     } catch {
+       /* listing is optional; an agent without session/list just shows none */
+       return null;
+     }
+   }, [cwd, dispatch]);
+ 
++  /** PR and issue bindings waiting for keryx to store a new session, applied like the pending flow link. */
++  const [pendingSubjects, setPendingSubjects] = useState<ReadonlyMap<string, SessionSubject>>(() => new Map());
++  const subjects = useMemo(() => new PendingSubjects({
++    write: (sessionId, subject) => {
++      const client = live.current.client;
++      return client ? client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, subject }) : Promise.reject(new Error("keryx is not running"));
++    },
++    onFlags: (sessionId, flags) => {
++      dispatch({ t: "flags", sessionId, flags });
++      // The pending binding is dropped only once the stored list (which then holds it) is read.
++      return refreshSessions();
++    },
++    onNotice: (sessionId, text) => dispatch({ t: "notice", sessionId, level: "warn", text }),
++    onChange: setPendingSubjects,
++  }), [cwd, dispatch, refreshSessions]);
++
+   /**
+    * Archive the sessions nobody touched for the retention window (Settings → Sessions). The shown
+    * session and any with a running turn are kept; pinned ones are never archived. Best effort.
+    */
+   const archiveIdle = useCallback(
+     async (sessions: readonly SessionInfo[]) => {
+       const l = live.current;
+       const client = l.client;
+       if (!client || !l.usable || !l.extensions.includes(SESSION_FLAGS)) return;
+       const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys(), ...l.reg.telegramTurns.keys()]);
+       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
+       for (const sessionId of ids) {
+         try {
+           const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, archived: true });
+           if (l.client !== client) return;
+           dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+         } catch {
+           /* in use elsewhere or gone: tried again next time */
+         }
+       }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 393,440 @@
+           const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
+           if (l.client !== client) return;
+           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
+           if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
+           else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
+           else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
+           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
+         } catch (e) {
+           if (l.client === client) {
+             busyRefusal = e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
+             if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
+             dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
+               text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
+           }
+         } finally {
+           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
+           if (l.client === client) {
+             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
+             if (!busyRefusal) dialogs.dropSession(sessionId);
+             dispatch({ t: "busy", sessionId, busy: false });
+-            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
++            // One flags write at a time: the flow link first, then the subject binding.
++            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
+           }
+         }
+       })();
+       return true;
+     },
+-    [dialogs, dispatch, refreshSessions, applyPendingFlow],
++    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
+   );
+ 
+   const resumeIssueQuestions = useCallback((sessionId: string) =>
+     sendPrompt("Resume the pending issue questions.", sessionId, undefined, false, undefined, { resumeIssueQuestions: true }),
+   [sendPrompt]);
+ 
+   /**
+    * session/load of a session the window does not hold. Its replay lands off screen; the session is
+    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
+    */
+   const openLoad = useCallback(
+     async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal): Promise<boolean> => {
+       const l = live.current;
+       if (issueScope?.aborted) return false;
+       const plan = l.reg.planSwitch(sessionId);
+       if (plan === "show") {
+         l.reg.showLocal(sessionId);
+         dispatch({ t: "show", sessionId });
+         return true;
+       }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 764,812 @@
+   /**
+    * Work on a flow: in a new session linked to the flow (`target` "new"), or in a session already
+    * linked to it. Resolves the session that is now shown, or null when none could be opened.
+    */
+   const workOnFlow = useCallback(
+     async (flowDir: string, target: "new" | string): Promise<string | null> => {
+       if (target !== "new") {
+         await loadSession(target);
+         return target;
+       }
+       const id = await newSession();
+       if (id) {
+         pendingFlow.current.set(id, flowDir);
+         await applyPendingFlow(id);
+       }
+       return id;
+     },
+     [loadSession, newSession, applyPendingFlow],
+   );
+ 
++  /** Link a session to a flow package; kept pending and retried after its turn while keryx has not stored the session. */
++  const linkFlow = useCallback((sessionId: string, flowDir: string) => {
++    pendingFlow.current.set(sessionId, flowDir);
++    return applyPendingFlow(sessionId);
++  }, [applyPendingFlow]);
++
++  /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
++  const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
++
+   const setMode = useCallback(
+     async (modeId: string) => {
+       const l = live.current;
+       const client = l.client;
+       const sessionId = l.reg.shown;
+       if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+       try {
+         await client.request("session/set_mode", { sessionId, modeId });
+         if (l.client === client) {
+           dispatch({ t: "updates", updates: [{ sessionId, at: Date.now(), update: { sessionUpdate: "current_mode_update", currentModeId: modeId } }] });
+         }
+       } catch (e) {
+         if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change mode: ${errMessage(e)}` });
+       }
+     },
+     [dispatch],
+   );
+ 
+   const setModel = useCallback(
+     async (configId: string, value: string) => {
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 1047,1081 @@
+     extensions,
+     keryxPath,
+     onLoginChallenge,
+     refreshTasks,
+     /** A notice in the shown session's transcript. */
+     notify: (level: "info" | "warn" | "error", text: string) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "notice", sessionId, level, text });
+     },
+     removeQueued: (index: number) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "queueRemove", sessionId, index });
+     },
+     cancel,
+     newSession,
+     loadSession,
+     reopen,
+     setFlags,
+     trashSession,
+     workOnFlow,
++    linkFlow,
++    bindSubject,
++    /** Bindings keryx has not stored yet, by session id. */
++    pendingSubjects,
+     setMode,
+     setModel,
+     restart,
+     continueAnyway,
+     answerPermission,
+     answerAsk,
+     projectTelegramQuestion,
+     dismissFatal: () => setFatal(null),
+     dismissBanner: (id: number) => dispatch({ t: "dismissBanner", id }),
+   };
+ }
+
+--- apps/desktop/src/shell/AppShell.tsx
+@@ 30,71 @@
+  */
+ function useTitlebarInset(): boolean {
+   const [overlay, setOverlay] = useState(false);
+   useEffect(() => {
+     if (!isTauri()) return;
+     const check = () => setOverlay(window.outerHeight - window.innerHeight < 8);
+     check();
+     window.addEventListener("resize", check);
+     return () => window.removeEventListener("resize", check);
+   }, []);
+   return overlay;
+ }
+ 
+ interface ShellProps {
+   cwd: string;
+   recents: string[];
+   view: View;
+   onView: (v: View) => void;
+   onProjectSettings?: () => void;
+   title: ReactNode;
++  /** Links shown beside the session title (its Subject and Flow). */
++  titleLinks?: ReactNode;
+   hasSession?: boolean;
+   onOpenSourceIssue?: () => void;
+   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
+   flowsActive: number;
+   reviewIndicator?: ReviewTabIndicator;
+   /** The projects on the rail, in the user's order; `cwd` is one of them. */
+   projects: string[];
+   /** This window's project's live state. */
+   activity: ProjectActivity;
+   /** Every project running in a window of the app, this one and those in the background. */
+   live: LiveProject[];
+   onRemoveProject: (cwd: string) => void;
+   onOpenFolder: () => void;
+   onSwitchProject: (cwd: string) => void;
+   onNewWindow: (cwd: string) => void;
+   onCloseProject: () => void;
+   onPalette: () => void;
+   /** Title-bar controls before the palette button (the Project menu). */
+   actions?: ReactNode;
+   children: ReactNode;
+
+--- apps/desktop/src/shell/AppShell.tsx
+@@ 255,295 @@
+     { kind: "separator", id: "s2" },
+     { id: "close", label: "Close project", icon: "x", onSelect: onCloseProject },
+   ];
+   return (
+     <header className="titlebar" data-tauri-drag-region>
+       <div className="titlebar-left" data-tauri-drag-region>
+         <button
+           ref={btn}
+           className="project-switcher"
+           onClick={() => setMenu((m) => !m)}
+           aria-haspopup="menu"
+           aria-expanded={menu}
+           title={cwd}
+         >
+           <Icon name="folder" size={14} />
+           <span className="truncate">{basename(cwd)}</span>
+           <Icon name="chevronDown" size={12} />
+         </button>
+         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
+         <div className="titlebar-title" data-tauri-drag-region>{title}</div>
++        {p.view === "session" && p.titleLinks}
+         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
+       </div>
+       <div className="titlebar-right" data-tauri-drag-region>
+         {p.view === "session" && p.onOpenSourceIssue && <button className="icon-btn" aria-label="Open source issue"
+           title="Open source issue" onClick={p.onOpenSourceIssue}><Icon name="circleDot" size={15} /></button>}
+         <InfoToggle show={p.view === "session"} />
+         {p.view === "session" && p.hasSession && <ActivityToggle />}
+         <SideToggles />
+         {p.actions}
+         <button className="palette-btn" onClick={onPalette} aria-label="Commands and sessions" title="Commands and sessions">
+           <Icon name="search" size={13} />
+           <span>Commands</span>
+           <Kbd>{MOD}K</Kbd>
+         </button>
+         <span className={`conn conn-${status.tone}`} title={status.detail ?? status.label} role="status">
+           <span className="conn-dot" />
+           {status.label}
+         </span>
+       </div>
+     </header>

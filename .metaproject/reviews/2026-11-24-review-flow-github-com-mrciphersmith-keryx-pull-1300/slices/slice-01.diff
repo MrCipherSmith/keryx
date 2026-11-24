@@ -1,0 +1,1905 @@
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md
+@@ 3,34 @@
+ Rules:
+ 
+ - Criteria lines use the exact format `- ACn: <criterion>`.
+ - Every criterion ends with [verify: exec `<command>`],
+   [verify: invariant `<command>`], [verify: judged] or
+   [verify: none — <reason>].
+ - After `flow freeze` this file is checksum-protected: any edit outside
+   `keryx flow ac update` fails every gate and status transition.
+ - Completion requires every ACn to be confirmed via
+   `keryx flow ac confirm <id> <ACn>`.
+ 
+ ## Criteria
+ 
+ - AC1: The PR lane function reads no field of the local review: a model test iterates every local review state (none, queued, running, awaiting answer, ready, partial, publication pending, outdated) for the same GitHub card and gets the same lane; the attention lane and the Keryx "In review" lane no longer exist (R1, D6, spec AC1) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/model.test.ts`]
+ - AC2: On the Pull requests board, a local review starting, finishing or being published changes neither the lane, the position nor the visibility of the card (a DOM test updates `localReview` on a shown card and asserts the same lane and index); cards are ordered by `updatedAt` descending (R1) [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]
+ - AC3: Default grouping "Status" shows Draft · Waiting for review (no decision or REVIEW_REQUIRED) · Changes requested · Approved, with Merged and Closed only when the state filter includes them; grouping "My role" shows Requested from me · Mine · Others; quick filters "Requested from me", "Mine" and "CI failed" narrow the board; every shown card satisfies all filters and the search (no active-review bypass, a test with an active review and a non-matching author shows nothing); a lane that cannot hold a card under the current filters is not drawn (R2, spec AC2, AC13) [verify: exec `cd apps/desktop && bun test src/review`]
+ - AC4: The card reason line is derived from GitHub data only; Keryx review state appears only in the work row [verify: exec `cd apps/desktop && bun test src/review`]
+ - AC5: Every PR card and list row renders a Keryx work row with exactly three slots (review, Flow, session) whose DOM structure is the same with zero and with three links, and the row has a fixed height in `apps/desktop/src/styles/review.css`; the review slot shows the state from `localReview` without a round number or behind count and opens the current review panel; the Flow slot shows "Flow #<id> · <stage>" and opens the Flow; empty slots show the labelled actions "Run review", "Create Flow", "Open in session" (R4 part, R7, spec AC14) [verify: exec `cd apps/desktop && bun test src/review`]
+ - AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); "Fix review comments" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]
+ - AC7: "Open in session" on a PR with no bound session creates a new session bound to the PR Subject and prefills the composer with the PR URL without sending it; pressing it again opens the same session (newest non-archived bound session); the session slot menu lists the bound sessions and "New session", which creates another bound session (R5, spec AC8 part) [verify: exec `cd apps/desktop && bun test src`]
+-- AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]
+-- AC9: "Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]
++- AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]
++- AC9: "Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers "Link Flow #<id>?" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]
+ - AC10: In a PR-bound session, `/review` without a target opens the launch dialog with that PR preselected, and the review started there appears as the review link on that PR card without a manual refresh (R6, spec AC9) [verify: exec `cd apps/desktop && bun test src`]
+ - AC11: Issues board default grouping is by GitHub state (Open · Closed, Closed drawn only when the state filter includes closed issues); GitHub Project grouping is unchanged; the Flow stage filter is gone; issues without a Flow are spread over the GitHub columns (R3, spec AC12) [verify: exec `cd apps/desktop && bun test src/issues`]
+ - AC12: Each Issue card has a work row with a Flow slot (link with stage, or "Create Flow") and a session slot (bound sessions found through `subject`, or "Open in session") [verify: exec `cd apps/desktop && bun test src/issues`]
+ - AC13: The default Issues source is the project repository: `keryx issues list` with `source: "repository"` lists `/repos/{owner}/{repo}/issues` of the repository resolved from the project cwd and excludes pull requests; "Assigned to me" and the other sources stay selectable and a stored source preference wins (D5) [verify: exec `bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues`]
+ - AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]
+ - AC15: `attachBadges` (`src/review/desk-run-store.ts`) and `localBadge` (`src/review/board-badges.ts`) still agree [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]
+ - AC16: Scenario "PR without Flow and review → Open in session → `/review` → review link on the card" passes as one integrated test over the App wiring (bound session created, launch dialog preselects the PR, the started run shows on the card) [verify: exec `cd apps/desktop && bun test src`]
+ - AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]
+ - AC18: Desktop typecheck and the full Desktop test suite pass [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]
+ - AC19: Deviation (a) (team review requests) stays open because stage 1 introduces no team membership; the implementation plan records it [verify: none — documentation statement, checked in review]
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md
+@@ 73,114 @@
+ - 2026-11-23T20:51:42.809Z - task-attempt: T16: started (attempt 1) — 517-T16
+ - 2026-11-23T20:56:23.744Z - task-done: T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork
+ 
+ ## T16 (2026-11-24)
+ 
+ CI "Lint and typecheck" on #1300 failed: root tsc pulled `apps/desktop/src/platform/*` (Tauri modules) through `issues/model.ts` → `review/prWork.ts`. `boundSessions` moved to `acp/types.ts`. Worker reproduced CI by hiding `@tauri-apps`: HEAD fails, fix passes. Root tsc 0, Desktop tsc 0, Desktop tests 1016/0.
+ Broad local root run (src/acp src/session src/integrations src/review): 6976 pass, 5 fail — all ~5s timeouts in rewind/replay/byte-cap tests, outside the change; CI Core tests decide.
+ - 2026-11-23T21:21:21.125Z - task-added: T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)
+ - 2026-11-23T21:21:21.797Z - task-attempt: T17: started (attempt 1) — 517-T17 fix round 1
+ - 2026-11-23T21:40:56.537Z - task-done: T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)
+ 
+ ## Review round 1 on PR #1300 (2026-11-24)
+ 
+ Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300`, head 6a2a3031f. Wave 1: 11 reviewers (10 on slice-02, logic and testing-practices on slice-01). Operator chose "Сначала исправить" and then "override": wave 2 (slice-02/03/04 for 12 reviewers incl. review-pr-contract) not run in round 1; recorded in operator-decisions.json. Wave D premise judge not run. Findings ingested: 32 (2 blocker, 6 major, 9 minor, 15 info). Verifier: HL-001 confirmed by execution (research-evidence/verify-F-001-1.txt), HL-002 unverifiable; the verification file was discarded by ingest (format), recorded here instead. Deviations of this round: memory searched twice (second with --json after plan) → readiness `memory-outside-stage` needs an operator waiver; caller token not exported (log read blocked) → readiness item 10 not observable.
+ 
+ ## T17 fix round 1 (2026-11-24)
+ 
+ Fixed LG-001 (AC4 blocker), HL-001/DG-001/LG-002 (Create Flow: one request ↔ one package, claimed packages, 15-min window, several → none), HL-002 (subjectOpener in-flight guard), FE-001/DG-002/LG-003 (focus carries repo, cleared by App), TP-001 (App-level AC9 + issue session slot tests), AR-001/DG-005 (one prFlows resolver at 4 sites), PF-001 (prWorkIndex, stable callbacks), DG-003 (onOpenSession prop removed), DG-004 (.review-note removed), UX-001 (outline-offset -2px), UX-002 (warn tone), TP-002, TP-003, LY-001. Mutants M19, M23, M38, M39, M40, M42 now red. Desktop tsc 0, `bun test src` 1034/0, root tsc 0 (orchestrator re-ran). Attention-set lines: 0 edited (diff since 6a2a3031f).
+ Behavior changes accepted by the orchestrator, listed for the owner: Create Flow window 15 min (diverged from "next turn": turn end and flow refresh are unordered); review progress only in the slot title, "Transcript updated" stamp gone from the card; a header focus for another repo stays armed until that repo is shown; new PR sessions also link a Flow found via a bound session; launch dialog preselects the newest of several Flows; a repeat press during an open reuses it (flow prompt not applied to that session); warn tone for needs-answer/publication-pending.
+ Left: ARCH-2 re-export, IssueWorkRow per-row sessions, refused subject write stays pending (info).
++
++## Review round 2 owner decisions (2026-11-24)
++
++Operator (AskUserQuestion in this session): HL-001 → "Подтверждение (Recommended)": no silent auto-link; when exactly one new package appears inside the pending window, the work row offers "Link Flow #N?" with Link / Dismiss; flags.json is written only on Link; a pending request is registered only when the flow prompt was actually filled (closes LG-008). Wave 2 of round 2 → "Довести волну 2".
++- 2026-11-24T05:26:50.183Z - ac-updated: AC9: ""Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]" -> ""Create Flow" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers "Link Flow #<id>?" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]" (Owner decision 2026-11-24 in review round 2 (HL-001): no silent link by arrival time; the link is confirmed by the user. Recorded in journal.md 'Review round 2 owner decisions'.)
++- 2026-11-24T05:26:50.378Z - ac-updated: AC8: "Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]" -> "Subject storage: `_keryx/session_flags` accepts `subject` {kind "pr"|"issue", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = "issue"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]" (Review round 2 PC-004: keryx stores a new session only after its first turn, so the older-keryx notice cannot appear before it; criterion text aligned with that fact, and optional repositoryId named.)
++- 2026-11-24T05:26:59.546Z - task-added: T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures
++- 2026-11-24T05:26:59.729Z - task-added: T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests
++- 2026-11-24T05:26:59.911Z - task-added: T20: Fix round 2 (C): PR body, implementation plan, user docs
++- 2026-11-24T05:27:00.670Z - task-attempt: T18: started (attempt 1) — fix round 2 A
++- 2026-11-24T05:27:00.853Z - task-attempt: T19: started (attempt 1) — fix round 2 B
++- 2026-11-24T05:44:30.458Z - task-done: T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests
++- 2026-11-24T05:53:04.638Z - task-done: T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures
++
++## Review round 2 on PR #1300 and its fix round (2026-11-24)
++
++Package `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02`, head 88e3faba9, round 2 (fallback-first: round 1 has no completion evidence; its 32 findings attached as prior). 12 reviewers, 3 waves over 5 slices (29 dispatches; review-frontend and review-pr-contract drivers created by hand because `slice` had not written them). Ingested 44 findings: 1 blocker (HL-001, decided by the operator), 3 major (RG-001 confirmed, TP-R2-001 confirmed, HW2-001 unverifiable), 27 minor, 13 info. Wave D premise judge not run (HL-001 answered by the operator directly). AC8 and AC9 re-frozen with `keryx flow ac update` (reasons recorded there).
++T18 (a7e…) and T19 (80ef58bd5) fixed: HL-001 (Link Flow #N? offer, Link/Dismiss), LG-008, LG-011, DG-006/UX-007, DG-007, LG-009, AR-003, TP-R2-001..005, LG-015, PF-005; RG-001/UX-008/LG-013 (Assigned to me fallback, 410 mapping, update-keryx hint), HW2-001 (per-session flags lock), DG-009 (up to 3 pages), LG-012/PC-003/DG-010 (subject backfill unless unlinked), PF-003, TP-R2-006..009. All named mutants red. Desktop tsc 0, `bun test src` 1051/0; root tsc 0; root focused 44/0. Attention-set lines: 0 edited.
++Deferred info: PF-006/HW2-002 (one nodes hydration per request), AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004 (need real-engine measurement), UX-003..006.
++Behavior changes accepted by the orchestrator (listed for the owner in the PR body): offer has no expiry once shown, Dismiss claims the package; foreign-repo header link shows a banner; session switch during open → no prompt and no request; merged PR keeps "publication pending" text without warn tone; Assigned-to-me fallback only for the default (unstored) source; up to 3 GitHub pages per Issues load; flags write may wait up to 3 s for the lock; subject backfill can re-link a pre-version unlink once.
++Docs left for T20: PR body, implementation-plan stage-1 state, docs/docs/guides/desktop-issues.md, docs/docs/cli-reference.md (PC-001, PC-002, PC-004, LG-010, DG-008).
++- 2026-11-24T06:06:20.351Z - task-done: T20: Fix round 2 (C): PR body, implementation plan, user docs
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 1,39 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "517",
+   "slug": "desktop-review-v2-stage-1-github-slice-a",
+   "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
+   "status": "in-progress",
+   "createdAt": "2026-11-23T19:41:25.622Z",
+-  "updatedAt": "2026-11-23T21:40:56.537Z",
++  "updatedAt": "2026-11-24T06:06:20.351Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+-  "acChecksum": "sha256:772d821796a2a198ae1024e3ca3debdc7a5c2165c3b32ab79fe9bc9cba97416f",
++  "acChecksum": "sha256:da72a72e5ec60754dc27d6402c70d504963f14c2755047d9a08f8aa64635ad98",
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "outcomeAuthor": "agent",
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 340,439 @@
+     {
+       "id": "T17",
+       "title": "Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)",
+       "kind": "implement",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 1,
+         "log": [
+           {
+             "at": "2026-11-23T21:21:21.797Z",
+             "outcome": "started",
+             "detail": "517-T17 fix round 1"
+           }
+         ]
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed"
++    },
++    {
++      "id": "T18",
++      "title": "Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T05:27:00.669Z",
++            "outcome": "started",
++            "detail": "fix round 2 A"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T19",
++      "title": "Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-11-24T05:27:00.853Z",
++            "outcome": "started",
++            "detail": "fix round 2 B"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T20",
++      "title": "Fix round 2 (C): PR body, implementation plan, user docs",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T18",
++        "T19"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-23T19:41:25.622Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-23T19:47:24.862Z",
+       "event": "task-added",
+       "detail": "T5: Subject storage: flags.json subject, session_flags, issue binding"
+     },
+     {
+       "at": "2026-11-23T19:47:25.379Z",
+       "event": "task-added",
+       "detail": "T6: Issues source repository (project repo) in keryx issues list"
+     },
+     {
+       "at": "2026-11-23T19:47:25.904Z",
+       "event": "task-added",
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json
+@@ 605,694 @@
+     },
+     {
+       "at": "2026-11-23T20:56:23.744Z",
+       "event": "task-done",
+       "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
+     },
+     {
+       "at": "2026-11-23T21:21:21.125Z",
+       "event": "task-added",
+       "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
+     },
+     {
+       "at": "2026-11-23T21:21:21.797Z",
+       "event": "task-attempt",
+       "detail": "T17: started (attempt 1) — 517-T17 fix round 1"
+     },
+     {
+       "at": "2026-11-23T21:40:56.537Z",
+       "event": "task-done",
+       "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
++    },
++    {
++      "at": "2026-11-24T05:26:50.183Z",
++      "event": "ac-updated",
++      "detail": "AC9: \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]\" -> \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers \"Link Flow #<id>?\" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]\" (Owner decision 2026-11-24 in review round 2 (HL-001): no silent link by arrival time; the link is confirmed by the user. Recorded in journal.md 'Review round 2 owner decisions'.)"
++    },
++    {
++      "at": "2026-11-24T05:26:50.378Z",
++      "event": "ac-updated",
++      "detail": "AC8: \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" -> \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" (Review round 2 PC-004: keryx stores a new session only after its first turn, so the older-keryx notice cannot appear before it; criterion text aligned with that fact, and optional repositoryId named.)"
++    },
++    {
++      "at": "2026-11-24T05:26:59.546Z",
++      "event": "task-added",
++      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
++    },
++    {
++      "at": "2026-11-24T05:26:59.729Z",
++      "event": "task-added",
++      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
++    },
++    {
++      "at": "2026-11-24T05:26:59.911Z",
++      "event": "task-added",
++      "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
++    },
++    {
++      "at": "2026-11-24T05:27:00.670Z",
++      "event": "task-attempt",
++      "detail": "T18: started (attempt 1) — fix round 2 A"
++    },
++    {
++      "at": "2026-11-24T05:27:00.853Z",
++      "event": "task-attempt",
++      "detail": "T19: started (attempt 1) — fix round 2 B"
++    },
++    {
++      "at": "2026-11-24T05:44:30.458Z",
++      "event": "task-done",
++      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
++    },
++    {
++      "at": "2026-11-24T05:53:04.638Z",
++      "event": "task-done",
++      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
++    },
++    {
++      "at": "2026-11-24T06:06:20.351Z",
++      "event": "task-done",
++      "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review/model.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "cd apps/desktop && bun test src/review"
+     },
+     "AC5": {
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T18.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/App.tsx",
++    "apps/desktop/src/review/PrWorkRow.tsx",
++    "apps/desktop/src/review/ReviewBoard.tsx",
++    "apps/desktop/src/review/prWork.ts",
++    "apps/desktop/src/review/usePendingFlowLinks.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/App.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T19.implement.json
+@@ 1,132 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "apps/desktop/src/issues/IssuesBoard.tsx",
++    "apps/desktop/src/issues/useIssueCollection.ts",
++    "src/integrations/issues-board.ts",
++    "src/session/issues/issue-session.ts",
++    "src/session/organize.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/activity/implement.mdc",
++      "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a",
++      "bytes": 2654,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
++      "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806",
++      "bytes": 4676,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc",
++      "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b",
++      "bytes": 4910,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/security.mdc",
++      "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82",
++      "bytes": 3389,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc",
++      "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2",
++      "bytes": 2938,
++      "reason": "glob:**/*.ts",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507",
++      "bytes": 3734,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6",
++      "bytes": 5462,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
++      "bytes": 7159,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/security-baseline.mdc",
++      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
++      "bytes": 2523,
++      "reason": "file:src/session/issues/issue-session.ts",
++      "tier": "must_read",
++      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/async-patterns.mdc",
++      "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa",
++      "bytes": 2701,
++      "reason": "content:apps/desktop/src/issues/IssuesBoard.tsx",
++      "tier": "must_read",
++      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
++      "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa",
++      "bytes": 3223,
++      "reason": "content:src/session/organize.ts",
++      "tier": "must_read",
++      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/cli-interface-design.mdc",
++      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
++      "bytes": 5195,
++      "reason": "when-relevant",
++      "tier": "on_demand",
++      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- apps/desktop/src/App.tsx
+@@ 15,55 @@
+ import { basename, errMessage } from "./lib/format";
+ import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+ import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
+ import { SettingsView } from "./shell/SettingsView";
+ import { Welcome } from "./shell/Welcome";
+ import { UpdateBanner } from "./shell/UpdateBanner";
+ import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+ import { RoutingDialog } from "./shell/RoutingDialog";
+ import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
+ import { SessionReviewActivity } from "./review/SessionReviewActivity";
+ import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
+ import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
+ import { modelChoices, providerOf } from "./session/Composer";
+ import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
+ import { IssuesView } from "./issues/IssuesView";
+ import { useIssueWork } from "./issues/IssueWork";
+ import { FlowsBoard } from "./flows/FlowsBoard";
+ import type { LinkedSession } from "./flows/FlowDetail";
+ import { boundSessions, sessionFlags, type SessionSubject } from "./acp/types";
+-import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type SubjectSessionTarget } from "./review/prWork";
++import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
+ import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
+ import type { ReviewCard } from "./review/types";
+ import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
+ import type { FlowCard } from "./platform/commands";
+ import { laneOf, workPrompt } from "./flows/model";
+ import { useFlows } from "./flows/useFlows";
+ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
+ import type { ComposerHandle } from "./session/Composer";
+ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
+ import { SessionView } from "./session/SessionView";
+ import { modelOption, useAcpSession } from "./session/useAcpSession";
+ import { ProjectMenu } from "./project/ProjectMenu";
+ import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+ import { TelegramServeSettings } from "./project/TelegramServeSettings";
+ import { TelegramBotSettings } from "./project/TelegramBotSettings";
+ import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
+ import { PROJECT_COMMANDS } from "./project/projectCommands";
+ import { useProjectRunner } from "./project/useProjectRunner";
+ import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
+ import { supportsProviders } from "./acp/providers";
+
+--- apps/desktop/src/App.tsx
+@@ 386,448 @@
+   // Read at call time, so the board's callbacks below keep their identity and its work rows can stay memoised.
+   const acp = useRef(s);
+   acp.current = s;
+   const flowCards = useRef(flows.cards);
+   flowCards.current = flows.cards;
+   /** One open per PR at a time: a second press while `session/new` is in flight gets the same open. */
+   const openSubject = useMemo(() => subjectOpener(), []);
+ 
+   /** Open the PR's bound session (newest, named or new); a new one is bound to the PR and gets `prompt`, never sent. */
+   const openPrSession = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject, prompt: string, prefillExisting = false) => {
+     setView("session");
+     const s = acp.current;
+     const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
+     return openSubject({
+       sessions: () => subjectSessionsRef.current,
+       loadSession: s.loadSession,
+       // The PR's Flow (one naming it, or one a bound session works on) is linked to the new session.
+       newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
+       bind: (id, value) => void s.bindSubject(id, value),
+       fill: fillComposer,
++      isShown: s.isShown,
+     }, subject, target, prompt, prefillExisting);
+   }, [fillComposer, openSubject]);
+ 
+-  /** "Create Flow": the PR's session with a flow prompt; the one package that then appears is linked to it. */
+-  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void s.linkFlow(id, dir));
++  /**
++   * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
++   * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
++   */
++  const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => void acp.current.linkFlow(id, dir));
++  const flowLinkActions = flowLinks.actions;
+   const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
+-    const known = flowLinks.known();
+-    const id = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+-    if (id) flowLinks.expect(id, known);
+-  }, [flowLinks, openPrSession]);
++    const known = flowLinkActions.known();
++    const opened = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
++    // Only a prompt this press put into the shown session can make the package: a press coalesced into an open in
++    // flight, or an open the user switched away from, registers nothing.
++    if (opened?.filled) flowLinkActions.expect(opened.sessionId, known);
++  }, [flowLinkActions, openPrSession]);
++  const flowOffers = useMemo(() => flowLinks.offers.flatMap((offer): PrFlowOffer[] => {
++    const flow = flows.cards.find(card => card.dir === offer.dir);
++    return flow ? [{ sessionId: offer.sessionId, flow }] : [];
++  }), [flowLinks.offers, flows.cards]);
++  const linkFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.accept(offer.sessionId), [flowLinkActions]);
++  const dismissFlowOffer = useCallback((offer: PrFlowOffer) => flowLinkActions.dismiss(offer.sessionId), [flowLinkActions]);
+ 
+   const [reviewFocus, setReviewFocus] = useState<{ repo: string; number: number; nonce: number } | null>(null);
+   // Never reused, also after a handled request is cleared: the board opens each nonce once.
+   const focusNonce = useRef(0);
+   const reviewFocusHandled = useCallback((nonce: number) => setReviewFocus(old => old?.nonce === nonce ? null : old), []);
+   const openPrFromBoard = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) =>
+     void openPrSession(card, target, subject, card.url), [openPrSession]);
+   const createFlowFromBoard = useCallback((card: ReviewCard, subject: SessionSubject) => void createPrFlow(card, subject), [createPrFlow]);
+   const openFlowFromBoard = useCallback((dir: string) => {
+     setLinkedFlow(dir);
+     setView("flows");
+   }, []);
+ 
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => {
+       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+       const k = e.key.toLowerCase();
+       // While any dialog or overlay is up (an approval above all) the shortcuts stand down;
+       // only the palette itself may be toggled closed again.
+       if (overlayOpen()) {
+
+--- apps/desktop/src/App.tsx
+@@ 688,729 @@
+       ) : null}
+       {issueWork.chooser}
+       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+         <IssuesView onViewerChange={issueWork.setViewer} origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+           sessions={state.sessions}
+           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+       </div>}
+       {/* Kept mounted after its first visit so mode, query, selection, filters and Back survive view switches. */}
+       <MetaprojectWork cwd={cwd} view={view} workView={workView} onRebuild={rebuildGraph} onDraft={async task => {
+         if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
+         setView("session");
+       }} />
+       <div className="view" hidden={view !== "review"}>
+         {reviewDisconnected ? (
+           <EmptyState title="GitHub is not connected" icon="pr">
+             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+           </EmptyState>
+         ) : (
+           <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
+             sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
+-            onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard} />
++            onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
++            flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />
+         )}
+       </div>
+       {view === "settings" ? (
+         <div className="view">
+           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} telegramIntegration={<TelegramServeSettings>{(refreshKey) => <TelegramBotSettings refreshKey={refreshKey} />}</TelegramServeSettings>} />
+         </div>
+       ) : null}
+ 
+       {view === "session" && routingSession !== null && routingSession === state.sessionId &&
+         !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <RoutingDialog key={routingSession} sessionId={routingSession} models={reviewModels} rpc={s.rpc}
+           onClose={() => setRoutingSession(null)} />}
+ 
+       {view === "session" && !(routingSession && routingSession === state.sessionId) && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
+           initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)} models={reviewModels} loadTargets={loadReviewTargets}
+           onApply={async (key, revision, options) => {
+             const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
+             const id = result.startedRunId;
+             if (!id || !result.runs.some(run => run.id === id)) throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
+
+--- apps/desktop/src/acp/types.ts
+@@ 156,229 @@
+   pinnedAt?: string;
+   /** The flow package directory this session works on. */
+   flow?: string;
+   /** The GitHub pull request or issue this session works on; keryx before subject support never reports it. */
+   subject?: SessionSubject;
+ }
+ 
+ /** A GitHub pull request or issue a session is bound to (`flags.json` `subject`); keryx validates it on write and read. */
+ export interface SessionSubject {
+   kind: "pr" | "issue";
+   /** `owner/name`. */
+   repo: string;
+   number: number;
+   /** Its github.com page. */
+   url: string;
+   repositoryId?: string;
+ }
+ 
+ /** Whether two subjects name the same PR or issue: same kind and number, repo compared without case as GitHub does. */
+ export function sameSubject(a: SessionSubject | null | undefined, b: SessionSubject | null | undefined): boolean {
+-  if (!a || !b) return false;
+-  return a.kind === b.kind && a.number === b.number && a.repo.toLowerCase() === b.repo.toLowerCase();
++  return !!a && !!b && subjectKey(a) === subjectKey(b);
+ }
+ 
+ export interface SessionInfo {
+   sessionId: string;
+   cwd: string;
+   title?: string | null;
+   updatedAt?: string | null;
+   /** keryx's shell profile reports the flags here, and (0.4.38+) how many messages the session holds. */
+   _meta?: { keryx?: SessionFlags & { messageCount?: number } } | null;
+ }
+ 
+ export function sessionFlags(s: SessionInfo): SessionFlags {
+   return s._meta?.keryx ?? {};
+ }
+ 
+ const unsaved = (s: SessionInfo) => (s.updatedAt ? Date.parse(s.updatedAt) || 0 : Number.POSITIVE_INFINITY);
+ const newestBoundFirst = (a: SessionInfo, b: SessionInfo) => unsaved(b) - unsaved(a);
+ 
+ /**
+  * The non-archived sessions bound to `subject`, newest first. A session keryx has not stored yet (no
+  * `updatedAt`: its binding is still pending) counts as the newest. Lives here, beside `sameSubject`,
+  * so pure models (the issues board, shared with the root tests) reach no platform module.
+  */
+ export function boundSessions(sessions: readonly SessionInfo[], subject: SessionSubject): SessionInfo[] {
+-  return sessions
+-    .filter(s => sessionFlags(s).archivedAt === undefined && sameSubject(sessionFlags(s).subject, subject))
+-    .sort(newestBoundFirst);
++  return [...boundSessionIndex(sessions)(subject)];
+ }
+ 
+-/** A key that is equal for two subjects exactly when `sameSubject` holds. */
++/** The one identity of a Subject: same kind and number, repo without case as GitHub compares it (`sameSubject`). */
+ export function subjectKey(subject: SessionSubject): string {
+   return `${subject.kind}/${subject.repo.toLowerCase()}/${subject.number}`;
+ }
+ 
+-/** `boundSessions` for many subjects: the sessions grouped once, each group in the same order. */
++/** The one rule behind `boundSessions`, for many subjects: the sessions grouped once, each group newest first. */
+ export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {
+   const groups = new Map<string, SessionInfo[]>();
+   for (const session of sessions) {
+     const flags = sessionFlags(session);
+     if (flags.archivedAt !== undefined || !flags.subject) continue;
+     const key = subjectKey(flags.subject);
+     const group = groups.get(key);
+     if (group) group.push(session);
+     else groups.set(key, [session]);
+   }
+   for (const group of groups.values()) group.sort(newestBoundFirst);
+   return subject => groups.get(subjectKey(subject)) ?? [];
+ }
+ 
+ /** Messages the stored session holds; null when this keryx does not report it. */
+ export function messageCount(s: SessionInfo): number | null {
+   const n = s._meta?.keryx?.messageCount;
+   return typeof n === "number" ? n : null;
+ }
+ 
+
+--- apps/desktop/src/issues/IssueWorkRow.tsx
+@@ 1,32 @@
+ import type { IssueSummary } from "../../../../src/integrations/issues-contract";
+-import type { SessionInfo } from "../acp/types";
+ import type { WorkAction } from "./IssueWork";
+-import { issueName, issueSessions, STAGES } from "./model";
++import { issueName, STAGES } from "./model";
+ 
+ /**
+  * The Keryx work row of an Issue card or list row: a Flow slot and a session slot, in the look and fixed
+  * height of the PR work row. A slot holds a link to the issue's work, or its labelled action when there is none.
+  */
+-export function IssueWorkRow({ issue, sessions, pending, onAction }: {
+-  issue: IssueSummary; sessions: readonly SessionInfo[]; pending: boolean; onAction: (action: WorkAction) => void;
++export function IssueWorkRow({ issue, bound, pending, onAction }: {
++  issue: IssueSummary; pending: boolean; onAction: (action: WorkAction) => void;
++  /** Non-archived sessions bound to the issue through their `subject`; the board indexes them once for all rows. */
++  bound: number;
+ }) {
+   const stage = issue.work?.stage ?? "none";
+-  const bound = issueSessions(sessions, issue).length;
+   const flowText = stage === "none" ? "Create Flow" : `Flow · ${STAGES[stage]}`;
+   const sessionText = bound > 1 ? `${bound} sessions` : bound ? "Session"
+     : stage === "needs_answer" ? "Open question" : "Open in session";
+   const of = " for " + issueName(issue);
+   return <div className="pr-work-row issue-work-row" role="group" aria-label={"Keryx work" + of}>
+     <span className="pr-work-slot" data-slot="flow">
+       <button type="button" className={"pr-work-link" + (stage === "none" ? " is-empty" : "")} title={flowText}
+         aria-label={flowText + of} disabled={pending}
+         onClick={() => onAction(stage === "none" ? "prepare-flow" : "open-flow")}>{flowText}</button>
+     </span>
+     <span className="pr-work-slot" data-slot="session">
+       {/* open-session reuses the session bound to the issue, so one link serves both counts. */}
+       <button type="button" className={"pr-work-link" + (bound ? "" : " is-empty")}
+         title={stage === "needs_answer" && !bound ? "Open question in Sessions" : sessionText}
+         aria-label={sessionText + of} disabled={pending} onClick={() => onAction("open-session")}>{sessionText}</button>
+     </span>
+   </div>;
+ }
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 1,30 @@
+ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import { issueKey, issueViewerKey, type IssueRef, type IssueViewer } from "../../../../src/integrations/issues-contract";
+-import type { SessionInfo } from "../acp/types";
++import { boundSessionIndex, type SessionInfo } from "../acp/types";
+ import { Icon } from "../components/Icon";
+ import { errMessage, relativeTime } from "../lib/format";
+ import { requestIssues } from "../platform/issues";
+ import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
+ import { IssueFilters } from "./IssueFilters";
+ import { IssueWorkRow } from "./IssueWorkRow";
+-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, readPreferences, SOURCES, STAGES, visibleRows,
++import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, readPreferences, SOURCES, STAGES, visibleRows,
+   type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
+ import { isAccessError, useIssueCollection } from "./useIssueCollection";
+ import "./IssuesBoard.css";
+ 
+ interface Props extends WorkProps {
+   cwd: string; login: string; onAccessDenied?: () => void; onSettings: () => void; request?: typeof requestIssues;
+   /** The project's sessions; the work row counts those bound to an issue through their `subject`. */
+   sessions?: readonly SessionInfo[];
+ }
+ type Source = IssueSource;
+ const NO_SESSIONS: readonly SessionInfo[] = [];
+ 
+ function stored(key: string): string | null {
+   try { return localStorage.getItem(key); } catch { return null; }
+ }
+ function save(key: string, value: string | null) {
+   try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* Storage unavailable. */ }
+ }
+ 
+ export function IssuesBoard(props: Props) {
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 42,167 @@
+     setError("");
+     void request<{viewer: IssueViewer}>(cwd, login, "viewer", {}).then(({viewer: verified}) => {
+       if (verified.login.toLowerCase() !== login.toLowerCase()) throw new Error("access: GitHub account changed.");
+       if (active) setViewer(verified);
+     }).catch(e => { if (active) { setViewer(null); setError(errMessage(e)); } });
+     return () => { active = false; };
+   }, [login, cwd, request, attempt]);
+   if (!viewer) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1></header>
+     <div className="issues-notice" role={error ? "alert" : "status"}>
+       <p>{error || (login ? "Loading GitHub account…" : "Select a GitHub account to load issues.")}</p>
+       {error && <button className="btn" onClick={() => setAttempt(n => n + 1)}>Retry</button>}
+       {(!login || error) && <button className="btn" onClick={props.onSettings}>GitHub accounts</button>}
+     </div></section>;
+   return <VerifiedBoard key={issueViewerKey(viewer)} {...props} viewer={viewer}
+     verifyAgain={() => { setViewer(null); setAttempt(n => n + 1); }} />;
+ }
+ 
+ function VerifiedBoard({ viewer, verifyAgain, ...props }: Props & {viewer: IssueViewer; verifyAgain: () => void}) {
+   const account = "keryx.issues." + issueViewerKey(viewer);
+   const [denied, setDenied] = useState("");
+-  const [source, setSource] = useState<Source>(() => {
++  const [choice, setChoice] = useState<{ source: Source; chosen: boolean }>(() => {
+     const value = stored(account + ".source");
+-    return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;
++    return value && Object.hasOwn(SOURCES, value) ? { source: value as Source, chosen: true } : { source: DEFAULT_SOURCE, chosen: false };
+   });
++  const { source } = choice;
+   const [target, setTarget] = useState<ProjectSource | null>(() => {
+     try {
+       const value = JSON.parse(stored(account + ".project") ?? "null");
+       return value && typeof value.owner === "string" && Number.isSafeInteger(value.number) && value.number > 0 ? value : null;
+     } catch { return null; }
+   });
+   const [owner, setOwner] = useState(target?.owner ?? "");
+   const [number, setNumber] = useState(target?.number.toString() ?? "");
+-  const change = (next: Source) => { setDenied(""); setSource(next); save(account + ".source", next); };
++  const change = (next: Source) => { setDenied(""); setChoice({ source: next, chosen: true }); save(account + ".source", next); };
++  // The default source can fail where no choice of the person's is at fault: no GitHub.com remote,
++  // Issues turned off (a fork), or a keryx too old to know it. Offer the source that works anywhere.
++  const fallback = source === "repository" && !choice.chosen ? () => change("assigned") : undefined;
+   const sourceControls = <div className="issue-sources">
+     <label>Source <select aria-label="Issue source" value={source} onChange={e => change(e.target.value as Source)}>
+       {Object.entries(SOURCES).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+     </select></label>
+     {source === "project" && <form onSubmit={e => {
+       e.preventDefault();
+       if (!owner.trim() || !Number.isSafeInteger(+number) || +number <= 0) return;
+       const next = { owner: owner.trim(), number: +number };
+       setDenied(""); setTarget(next);
+     }}>
+       <input aria-label="GitHub Project owner" placeholder="Owner" value={owner} required onChange={e => setOwner(e.target.value)} />
+       <input aria-label="GitHub Project number" type="number" placeholder="Number" min={1} value={number} required onChange={e => setNumber(e.target.value)} />
+       <button className="btn btn-sm" type="submit">Open project</button>
+     </form>}
+   </div>;
+   const key = account + ".filters." + JSON.stringify([source, source === "project" ? target : null]);
+   const { onAccessDenied } = props;
+   const clear = useCallback((reason: string) => {
+     onAccessDenied?.();
+     // Private repository names can occur in filters for more than one source.
+     try {
+       for (const k of Object.keys(localStorage)) {
+         if (k.startsWith(account + ".filters.")) localStorage.removeItem(k);
+       }
+     } catch { /* Storage unavailable. */ }
+     save(account + ".project", null);
+     setOwner(""); setNumber(""); setTarget(null); setDenied(reason);
+   }, [account, onAccessDenied]);
+   const remember = useCallback((project: ProjectBoard) => {
+     save(account + ".project", JSON.stringify({ owner: project.owner, number: project.number }));
+   }, [account]);
+   if (denied) return <section className="flows"><header className="flows-toolbar"><h1>Issues</h1>{sourceControls}</header>
+     <div role="alert" className="issues-notice">{denied}
+       <button className="btn btn-sm" onClick={verifyAgain}>Retry</button>
+       <button className="btn btn-sm" onClick={props.onSettings}>GitHub accounts</button>
+     </div></section>;
+   return <Collection key={key} {...props} source={source} target={target} prefsKey={key} viewer={viewer}
+-    sourceControls={sourceControls} clear={clear} remember={remember} />;
++    sourceControls={sourceControls} clear={clear} remember={remember} fallback={fallback} />;
+ }
+ 
+ interface CollectionProps extends Props {
+   prefsKey: string; source: Source; target: ProjectSource | null; sourceControls: React.ReactNode;
+   viewer: IssueViewer; clear: (reason: string) => void; remember: (project: ProjectBoard) => void;
++  /** Switches from the default repository source to "Assigned to me"; absent once the person chose a source. */
++  fallback?: (() => void) | undefined;
+ }
+ 
+ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clear, remember, viewer, onWork, request = requestIssues,
+-  sessions = NO_SESSIONS }: CollectionProps) {
++  sessions = NO_SESSIONS, fallback }: CollectionProps) {
+   const [prefs, setPrefs] = useState(() => readPreferences(prefsKey));
+   const { filters, list } = prefs;
+   const [filterDialog, setFilterDialog] = useState(false);
+   const [selection, setSelection] = useState<Row | null>(null);
+   const [detailRead, setDetailRead] = useState(0);
+   const [moving, setMoving] = useState<string | null>(null);
+   const [working, setWorking] = useState<string | null>(null);
+   const [notice, setNotice] = useState("");
+   const [mobile, setMobile] = useState(false);
+   const board = useRef<HTMLDivElement>(null);
+   const title = useRef<HTMLHeadingElement>(null);
+   const returnFocus = useRef<HTMLElement | null>(null);
+   const alive = useRef(true);
+   const activeMove = useRef(false);
+   const activeWork = useRef(false);
+   const { snapshot, busy, error, load, invalidate, setSnapshot } = useIssueCollection(cwd, login, source, target, filters, viewer, clear, request);
+   const rows = useMemo(() => visibleRows(snapshot?.rows ?? [], filters), [snapshot, filters]);
++  const boundTo = useMemo(() => boundSessionIndex(sessions), [sessions]);
++  // Matched like isAccessError: the CLI's reason may arrive behind a prefix.
++  const unavailable = fallback && /(?:^|\b)configuration:/i.test(error) ? fallback : undefined;
+   const selectedKey = selection && issueKey(selection.issue.ref);
+   const selectedIndex = rows.findIndex(row => issueKey(row.issue.ref) === selectedKey);
+   // Refresh starts again at page one. Keep a selected later-page issue open and
+   // revalidate its detail independently while further pages are available.
+   const selected = rows[selectedIndex] ?? (selection && snapshot?.nextCursor && visibleRows([selection], filters).length ? selection : null);
+ 
+   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+   useEffect(() => {
+     if (snapshot) {
+       save(prefsKey, JSON.stringify(prefs));
+       if (snapshot.project) remember(snapshot.project);
+     }
+   }, [snapshot, prefsKey, prefs, remember]);
+   useLayoutEffect(() => {
+     const el = board.current;
+     if (!el) return;
+     const resize = () => { if (el.clientWidth) setMobile(el.clientWidth < 740); };
+     resize();
+     if (typeof ResizeObserver === "undefined") return;
+     const observer = new ResizeObserver(resize);
+
+--- apps/desktop/src/issues/IssuesBoard.tsx
+@@ 216,292 @@
+       }
+       const option = project.options.find(value => value.id === result.optionId)?.name ?? "No status";
+       setNotice(result.outcome === "conflict" ? "Another update changed this item to " + option + "." : "Project Status: " + option);
+       setSnapshot(current => current && current.project?.id === project.id ? {
+         ...current, rows: current.rows.map(r => r.itemId === result.itemId ? { ...r, optionId: result.optionId } : r),
+       } : current);
+     } catch (cause) {
+       if (!alive.current) return;
+       const message = errMessage(cause);
+       if (isAccessError(message)) accessLost(message);
+       else { setNotice(message); void load(); }
+     } finally { activeMove.current = false; if (alive.current) setMoving(null); }
+   }
+ 
+   /** The issue's work row and actions, each with visible text on the card, the list row and the panel alike. */
+   function workActions(row: Row) {
+     const issue = row.issue;
+     const pending = working !== null;
+     const more = issue.work?.canResumePreparation || project;
+     return <>
+-      <IssueWorkRow issue={issue} sessions={sessions} pending={pending} onAction={action => void act(action, issue.ref)} />
++      <IssueWorkRow issue={issue} bound={boundTo(issueSubject(issue)).length} pending={pending} onAction={action => void act(action, issue.ref)} />
+       {more && <div className="card-actions issue-actions">
+         {issue.work?.canResumePreparation && <button className="btn btn-sm"
+           aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
+           onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={13} />Resume preparation</button>}
+         {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
+       </div>}
+     </>;
+   }
+ 
+   const groups = issueGroups(project, filters.state);
+   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
+   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
+   const dragItem = useRef<Row | null>(null);
+   return <div className="issue-workspace" ref={board}>
+     <section className="flows issues-main" hidden={mobile && !!selected}>
+       <header className="flows-toolbar">
+         <div className="flows-heading"><h1 tabIndex={-1} ref={title}>Issues</h1>{snapshot && <span className="count-label">{snapshot.rows.length} loaded</span>}</div>
+         {sourceControls}
+         <input type="search" aria-label="Search issues" placeholder="Search by title or #number" value={filters.text} onChange={e => setFilters({ ...filters, text: e.target.value })} />
+         <button className="btn btn-sm" onClick={() => setFilterDialog(true)}><Icon name="list" size={14} />Filters{activeFilters.length > 0 && " (" + activeFilters.length + ")"}</button>
+         <div className="segmented" aria-label="Issue layout">{[false, true].map(asList => <button key={String(asList)} aria-pressed={list === asList}
+           onClick={() => setPrefs(p => ({ ...p, list: asList }))}><Icon name={asList ? "list" : "board"} size={14} />{asList ? "List" : "Board"}</button>)}</div>
+         <button className="btn btn-sm" disabled={busy} onClick={() => { setDetailRead(n => n + 1); void load(); }}><Icon name="refresh" size={14} />Refresh</button>
+       </header>
+       {!isAccessError(error) && <div className="review-context"><strong>{snapshot?.viewer.host ?? "GitHub"} · {login}</strong>
+         {project && <span>{project.title}</span>}{snapshot && <span>Read {snapshot.readAt.toLocaleTimeString()}</span>}
+         {activeFilters.map(([key, value]) => <button key={key} className="btn btn-sm" aria-label={"Remove " + key + " filter"} onClick={() => setFilters({ ...filters, [key]: defaultFilters[key as keyof Filters] })}>{key} · {value} ×</button>)}
+       </div>}
+-      {error && <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
++      {error && (unavailable ? <div className="issues-notice" role="alert">
++        <p>{error}</p>
++        <p>This project's repository issues are not available here.
++          {/Invalid Issues request/i.test(error) && " If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings."}</p>
++        <button className="btn btn-sm" onClick={unavailable}>Show issues assigned to me</button>
++      </div> : <div className="issues-notice" role="alert">{error} {snapshot && "Showing the last available snapshot."}
+         <button className="btn btn-sm" onClick={() => void load()}>Retry</button>
+-      </div>}
++      </div>)}
+       {notice && <p className="issues-notice" role="status">{notice}</p>}
+       {busy && <p className="issues-notice" role="status">Loading issues…</p>}
+       {project && (!project.canWrite || !project.fieldId) && <p className="issues-notice">{project.fieldId ? "Read-only access to this Project." : "Project Status field unavailable."}</p>}
+       {snapshot?.incomplete && <p className="issues-notice" role="status">GitHub returned partial results.</p>}
+       {!!snapshot && rows.length === 0 && <p className="issues-notice">{snapshot.nextCursor ? "No matching issues on the loaded pages." : "No matching issues."}</p>}
+       {snapshot && (list || (project && !project.fieldId) ? <div className="flow-list-wrap"><table className="flow-list issue-table"><thead><tr>
+         <th>Issue</th><th>GitHub state</th><th>Keryx stage</th>{project && <th>Project Status</th>}<th>Assignees</th><th>Updated</th><th>Actions</th>
+       </tr></thead><tbody>{rows.map(r => <tr key={issueKey(r.issue.ref)}>
+         <td><button className="review-list-link" onClick={e => show(r, e.currentTarget)}>{issueName(r.issue)} {r.issue.title}</button></td>
+         <td>{r.issue.state}</td><td>{STAGES[r.issue.work?.stage ?? "none"]}{r.issue.work?.reason && <small>{r.issue.work.reason}</small>}</td>
+         {project && <td>{project.options.find(o => o.id === r.optionId)?.name ?? "No status"}</td>}
+         <td>{r.issue.assignees.join(", ") || "Unassigned"}</td><td>{relativeTime(r.issue.updatedAt)}</td><td>{workActions(r)}</td></tr>)}</tbody></table></div>
+       : <div className="board issue-lanes">{groups.map(group => {
+         const cards = rows.filter(r => groupForRow(r, !!project) === group.id);
+         return <section className="lane" key={group.id} aria-label={group.label}
+           onDragOver={e => { if (dragItem.current && project?.canWrite && project.fieldId) e.preventDefault(); }}
+           onDrop={e => { e.preventDefault(); const row = dragItem.current; dragItem.current = null; if (row) void move(row, group.id === "unassigned" ? null : group.id); }}>
+           <header className="lane-head"><h2>{group.label}</h2><span className="lane-count">{cards.length}</span></header>
+           <div className="lane-body">{cards.map(r => <article key={issueKey(r.issue.ref)} className="flow-card"
+             draggable={!!project?.canWrite && !!project.fieldId && !moving} onDragStart={e => {
+
+--- apps/desktop/src/review/PrWorkRow.tsx
+@@ 1,99 @@
+ import { useRef, useState } from "react";
+ import { createPortal } from "react-dom";
+ import { Menu, type MenuItem } from "../components/Menu";
+ import type { SessionInfo, SessionSubject } from "../acp/types";
+-import { flowStage, prSubject, reviewSlotState, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
++import { flowStage, prSubject, reviewSlotState, type PrFlowOffer, type PrWorkIndex, type SubjectSessionTarget } from "./prWork";
+ import { reviewProgressText } from "./ReviewProgress";
+ import { reviewNote } from "./model";
+ import type { ReviewCard } from "./types";
+ 
+ /** What the work row needs from the board: the repository, the indexed Flows and sessions, and where its links go. */
+ export interface PrWork {
+   repo: string;
+   repositoryId?: string;
+   /** Built once per sessions and Flows change (`prWorkIndex`), shared by every row. */
+   index: PrWorkIndex;
+   onOpenFlow: (dir: string) => void;
+   onCreateFlow?: ((card: ReviewCard, subject: SessionSubject) => void) | undefined;
+   onOpenSubjectSession?: ((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) => void) | undefined;
++  /** The new package offered for one of the PR's bound sessions ("Link Flow #<id>?"), if any. */
++  flowOffer?: ((bound: readonly SessionInfo[]) => PrFlowOffer | undefined) | undefined;
++  onLinkFlowOffer?: ((offer: PrFlowOffer) => void) | undefined;
++  onDismissFlowOffer?: ((offer: PrFlowOffer) => void) | undefined;
+ }
+ 
+ /**
+  * The Keryx work row of a PR card or list row: three slots in a fixed order (review, Flow, session), the
+  * same elements whether a slot holds a link or its labelled action, in a row of fixed height.
+  */
+ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: PrWork; onReview: (card: ReviewCard) => void }) {
+   const subject = prSubject(card, work.repo, work.repositoryId);
+   const sessions = work.index.sessions(subject);
+   const flow = work.index.flows(card, sessions)[0];
++  const offer = flow ? undefined : work.flowOffer?.(sessions);
+   const state = reviewSlotState(card.localReview);
+   // A review waiting on the viewer (an answer, a publication decision) gets the warn tone; the text says which.
+-  const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);
++  // Open PRs only, as `needsViewerAttention` counts them for the tab indicator.
++  const waitsOnViewer = card.state === "open" && !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);
+   const canReview = !!state || card.state === "open";
+   const reviewText = state ? `Review · ${state}` : "Run review";
+   const progress = reviewProgressText(card.localReview);
+   const reviewTitle = [state === "outdated" ? reviewNote(card) ?? reviewText : canReview ? reviewText : "Only an open pull request can be reviewed", progress]
+     .filter(Boolean).join(" — ");
+   const flowText = flow ? `Flow #${flow.id} · ${flowStage(flow)}` : "Create Flow";
+   const sessionText = sessions.length > 1 ? `${sessions.length} sessions` : sessions.length ? "Session" : "Open in session";
+   const openSession = work.onOpenSubjectSession;
+   const createFlow = work.onCreateFlow;
+   const [menu, setMenu] = useState(false);
+   const more = useRef<HTMLButtonElement>(null);
+   const of = ` for #${card.number}`;
+   return <div className="pr-work-row" role="group" aria-label={`Keryx work${of}`}>
+     <span className="pr-work-slot" data-slot="review">
+       <button type="button" className={"pr-work-link" + (state ? "" : " is-empty") + (waitsOnViewer ? " is-attention" : "")} title={reviewTitle}
+         aria-label={reviewText + of} disabled={!canReview} onClick={() => onReview(card)}>{reviewText}</button>
+     </span>
+     <span className="pr-work-slot" data-slot="flow">
+-      <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
+-        aria-label={flowText + of} disabled={!flow && !createFlow}
+-        onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>
++      {offer ? <FlowOffer offer={offer} of={of} work={work} /> :
++        <button type="button" className={"pr-work-link" + (flow ? "" : " is-empty")} title={flow ? `${flowText}: ${flow.title}` : flowText}
++          aria-label={flowText + of} disabled={!flow && !createFlow}
++          onClick={() => flow ? work.onOpenFlow(flow.dir) : createFlow?.(card, subject)}>{flowText}</button>}
+     </span>
+     <span className="pr-work-slot" data-slot="session">
+       <button type="button" className={"pr-work-link" + (sessions.length ? "" : " is-empty")} title={sessionText}
+         aria-label={sessionText + of} disabled={!openSession} onClick={() => openSession?.(card, "latest", subject)}>{sessionText}</button>
+       <button ref={more} type="button" className="pr-work-more" aria-haspopup="menu" aria-expanded={menu}
+         aria-label={`More sessions${of}`} title="Sessions of this pull request" disabled={!openSession}
+         onClick={() => setMenu(open => !open)}>More</button>
+       {/* Portaled: the card's content-visibility contains paint, which would clip a fixed menu inside it. */}
+       {menu && createPortal(<Menu anchor={more.current} items={sessionItems(sessions, open => openSession?.(card, open, subject))}
+         label={`Sessions${of}`} placement="auto" closeOnScroll onClose={() => setMenu(false)} />, document.body)}
+     </span>
+   </div>;
+ }
+ 
++/**
++ * "Link Flow #<id>?" for a package that appeared after Create Flow: the link is written only on Link, and
++ * Dismiss drops the question. Fits the slot's fixed height: one line of text and two small buttons.
++ */
++function FlowOffer({ offer, of, work }: { offer: PrFlowOffer; of: string; work: PrWork }) {
++  const name = `Flow #${offer.flow.id}`;
++  return <>
++    <span className="pr-work-link pr-work-offer" title={`${name} (${offer.flow.title}) appeared after Create Flow. Link it to this pull request's session?`}>
++      Link {name}?
++    </span>
++    <button type="button" className="pr-work-more" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}
++      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>
++    <button type="button" className="pr-work-more" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}
++      onClick={() => work.onDismissFlowOffer?.(offer)}>Dismiss</button>
++  </>;
++}
++
+ /** The session menu: the bound sessions, then "New session". Built only while the menu is open. */
+ function sessionItems(sessions: readonly SessionInfo[], open: (target: SubjectSessionTarget) => void): MenuItem[] {
+   return [
+     ...sessions.map((s): MenuItem => ({ id: "s-" + s.sessionId, label: s.title?.trim() || "New session (not saved yet)",
+       icon: "chat", onSelect: () => open(s.sessionId) })),
+     ...(sessions.length ? [{ kind: "separator" as const, id: "sep" }] : []),
+     { id: "new", label: "New session", icon: "plus", onSelect: () => open("new") },
+   ];
+ }
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 4,137 @@
+ import { absoluteTime, errMessage } from "../lib/format";
+ import type { FlowCard } from "../platform/commands";
+ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+ import { withRunBackoff } from "./runPolling";
+ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+ import { sameRange, type RunObserver } from "./useReviewRuns";
+ import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+ import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
+ import { ProjectReviewRules } from "./ProjectReviewRules";
+ import { reviewRules } from "../platform/reviewRules";
+ import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
+ import { ReviewWatcher } from "./ReviewWatcher";
+ import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
+ import { readReplies, subscribeReviewReads } from "./reviewReadState";
+ import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
+ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
+ import { ReviewFilters, filterSummary } from "./ReviewFilters";
+ import { ReviewResults } from "./ReviewResults";
+ import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
+ import type { PrWork } from "./PrWorkRow";
+-import { prSubject, prWorkIndex } from "./prWork";
++import { prSubject, prWorkIndex, type PrFlowOffer } from "./prWork";
+ import type { SessionInfo } from "../acp/types";
+ import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
+ import {
+   EMPTY_FILTERS, GROUPING_LABEL, QUICK_FILTERS, filterReviews, needsViewerAttention, stateQuery, type Filters, type Grouping, type QuickFilter,
+ } from "./model";
+ import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ export type ReviewTabIndicator = "attention" | "watching" | null;
+ 
+ interface Props {
+   cwd: string;
+   expectedViewer?: string;
+   active?: boolean;
+   onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
+   flows: FlowCard[];
+   reviewModels?: readonly ReviewLaunchModel[];
+   currentRepairModel?: ReviewLaunchModel | undefined;
+   onOpenFlow: (dir: string) => void;
+   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
+   /** The project's sessions (pending Subject bindings included): the session slot lists those bound to each PR. */
+   sessions?: readonly SessionInfo[];
+   onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
+   onCreateFlow?: PrWork["onCreateFlow"];
++  /** New packages offered for linking to PR-bound sessions after Create Flow: the work row asks Link / Dismiss. */
++  flowOffers?: readonly PrFlowOffer[];
++  onLinkFlowOffer?: PrWork["onLinkFlowOffer"];
++  onDismissFlowOffer?: PrWork["onDismissFlowOffer"];
+   /**
+-   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. Once
+-   * opened, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board cannot replay it.
++   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. A
++   * `repo` among the board's other repositories is selected first; one the board cannot show gets a notice.
++   * Once opened or refused, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board
++   * cannot replay it.
+    */
+   focus?: { repo: string; number: number; nonce: number } | null;
+   onFocusHandled?: (nonce: number) => void;
+   load?: typeof fetchReviewBoard;
+   loadBadges?: typeof fetchReviewBadges;
+   listRepositories?: typeof fetchReviewRepositories;
+   loadDetail?: typeof fetchReviewDetail;
+   runCommand?: typeof reviewRun;
+   watcherCommand?: typeof reviewWatcher;
+   rulesCommand?: typeof reviewRules;
+ }
+ 
+ interface ReadState {
+   scope: string;
+   snapshot: ReviewBoardSnapshot | null;
+   error: string;
+   loading: boolean;
+   /** The snapshot is a cached fallback from an earlier visit to this scope, not the result of the latest request. */
+   stale?: boolean;
+ }
+ 
+ export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+-    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
++    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending
+     && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
+     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
+ }
+ 
+ const PORTALED_DIALOG_CONTENT = "[data-review-board-dialog]";
+ /** Focus inside the workspace dialogs, the detail panel, or the Review rules and PR watcher dialogs portaled to the body. */
+ function inBoardOverlay(el: Element | null) {
+   if (!el) return false;
+   if (el.closest('.review-workspace [role="dialog"], .review-detail-panel')) return true;
+   return !!el.closest('[role="dialog"]')?.querySelector(PORTALED_DIALOG_CONTENT);
+ }
+ 
+ function unreadIds(board: ReviewBoardSnapshot, card: ReviewCard) {
+   if (!card.addressedReplyIds?.length) return card.addressedReplyIds ?? [];
+   const readIds = readReplies(board.viewer, board.repositoryId, card.number, card.addressedReplyIds);
+   return card.addressedReplyIds.filter(id => !readIds.has(id));
+ }
+ const unreadCount = (board: ReviewBoardSnapshot, card: ReviewCard) => unreadIds(board, card).length;
+ const attentionNumbers = (board: ReviewBoardSnapshot) =>
+   new Set(board.cards.filter(card => needsViewerAttention(card, board.viewer, unreadCount(board, card))).map(card => card.number));
+ /** A load of this scope holds every open PR, so it replaces the carried attention set. */
+ const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
+ const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
+ const NO_SESSIONS: readonly SessionInfo[] = [];
++const NO_OFFERS: readonly PrFlowOffer[] = [];
+ 
+ export function ReviewBoard(props: Props) {
+   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
+ }
+ 
+ function ProjectBoard(props: Props) {
+   const [repo, setRepo] = useState<string>();
+   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+ }
+ 
+-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
++function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+   repo?: string;
+   selectRepo: (repo?: string) => void;
+ }) {
+   // Attention entries that outlive one snapshot; the set the tab shows is derived below from this and the shown snapshot.
+   const [carriedAttention, setCarriedAttention] = useState<ReadonlySet<number>>(() => new Set());
+   const [subscriptionNumber, setSubscriptionNumber] = useState<number | null>(null);
+   const [subscriptions, setSubscriptions] = useState<ReadonlySet<number>>(new Set());
+   const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+   const [filters, setFilters] = useState(EMPTY_FILTERS);
+   const snapshots = useRef(new Map<string, ReviewBoardSnapshot>());
+   const [query, setQuery] = useState("");
+   const [filtering, setFiltering] = useState(false);
+   const [dismissedWarning, setDismissedWarning] = useState("");
+   const warningId = useId();
+   const warningToggle = useRef<HTMLButtonElement>(null);
+   const [view, setView] = useState<"board" | "list">("board");
+   const [grouping, setGrouping] = useState<Grouping>("status");
+   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
+   const [attempt, setAttempt] = useState(0);
+   const refresh = useCallback(() => setAttempt(n => n + 1), []);
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 471,545 @@
+   }
+   function chooseGrouping(next: Grouping) {
+     setGrouping(next);
+     if (filterKey.current) saveReviewGrouping(filterKey.current, next);
+   }
+   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
+   // the reset loads the open scope instead of this fresh one.
+   const shownNumbers = new Set(visible.map(c => c.number));
+   const cardNumbers = new Set(snapshot?.cards.map(c => c.number));
+   const resetLoads = scope !== DEFAULT_SCOPE && !error && !stale;
+   const hiddenAttention = snapshot ? [...attentionPrs].filter(n => !shownNumbers.has(n) && (resetLoads || cardNumbers.has(n))).length : 0;
+   const hiddenText = `Show ${hiddenAttention} waiting on you`;
+ 
+   const openDetails = useCallback((number: number) => setSelected({ number }), []);
+   const [detailWidth, setDetailWidth] = useState(560);
+   const openReview = useCallback((card: ReviewCard) => {
+     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+   }, []);
+   // A focus request waits for a snapshot of its repository that holds the PR, then opens its panel once per nonce.
++  // Another repository of this board is selected first (the board remounts on it); one it cannot show is refused
++  // with a notice, so the request is not left armed for a later, unrelated switch.
+   const focused = useRef<number | null>(null);
++  const [focusNotice, setFocusNotice] = useState("");
+   useEffect(() => {
+-    if (!focus || focused.current === focus.nonce || !snapshot || snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()
+-      || !snapshot.cards.some(c => c.number === focus.number)) return;
++    if (!focus || focused.current === focus.nonce || !snapshot) return;
++    if (snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()) {
++      const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());
++      if (listed) {
++        selectRepo(listed);
++        return;
++      }
++      focused.current = focus.nonce;
++      setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
++      onFocusHandled?.(focus.nonce);
++      return;
++    }
++    if (!snapshot.cards.some(c => c.number === focus.number)) return;
+     focused.current = focus.nonce;
++    setFocusNotice("");
+     setSelected({ number: focus.number });
+     onFocusHandled?.(focus.nonce);
+-  }, [focus, snapshot, onFocusHandled]);
++  }, [focus, snapshot, onFocusHandled, selectRepo]);
+   const workRepo = snapshot?.repo ?? "";
+   // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
+   const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
+-  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession }),
+-    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession]);
++  const flowOffer = useMemo(() => {
++    if (!flowOffers.length) return undefined;
++    const bySession = new Map(flowOffers.map(offer => [offer.sessionId, offer]));
++    return (bound: readonly SessionInfo[]) => bound.map(session => bySession.get(session.sessionId)).find(offer => offer !== undefined);
++  }, [flowOffers]);
++  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession,
++    flowOffer, onLinkFlowOffer, onDismissFlowOffer }),
++    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession, flowOffer, onLinkFlowOffer, onDismissFlowOffer]);
++  const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []);
+   const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
+     && (() => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId)));
+   const panelFlow = (item: ReviewCard) => index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0];
+ 
+   return <div className="review-workspace" hidden={!tabActive}>
+     <section className="flows review-board" aria-label="Pull requests">
+     <div className="flows-toolbar">
+       <div className="flows-heading"><h1>Pull requests</h1>{snapshot && <span className="count-label">
+         {visible.length}<span className="count-word"> {visible.length === 1 ? "pull request" : "pull requests"}</span>
+       </span>}
+       {snapshot && hiddenAttention > 0 && <button className="review-hidden-attention" onClick={reset}
+         aria-label={hiddenText + " — clears filters and search"} title={hiddenText + " — clears filters and search"}>
+         <Icon name="alert" size={13} /> <span className="toolbar-label">{hiddenText}</span><span className="hint-short">{hiddenAttention} hidden</span>
+       </button>}</div>
+       <label className="search-field"><Icon name="search" size={14} />
+         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+       </label>
+       <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog"
+         aria-label={"Filters" + (active.length ? " (" + active.length + ")" : "")} title={"Filters" + (active.length ? " (" + active.length + ")" : "")}>
+
+--- apps/desktop/src/review/ReviewBoard.tsx
+@@ 580,635 @@
+           <Icon name="info" size={15} />
+         </button>}
+       </>}
+       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
+         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>
+         <option disabled value="">Choose a repository</option>
+         {alternatives.map((name) => <option key={name}>{name}</option>)}
+       </select>}
+       {!snapshot && repo && <><strong>{repo}</strong><button className="link-btn" onClick={() => selectRepo()}>Use default repository</button></>}
+       {active.length > 0 && <div className="review-active-filters">
+         <button className="icon-btn" aria-label="Clear filters" title="Clear filters" onClick={() => applyFilters(EMPTY_FILTERS)}>
+           <Icon name="clearFilters" size={16} />
+         </button>
+         {active.map((label) => <span key={label}>{label}</span>)}
+       </div>}
+     </div>}
+     {error && <div className="inline-banner tone-warn" role="alert">
+       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+       <button className="btn btn-sm" onClick={refresh}>Try again</button>
+     </div>}
++    {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">
++      <Icon name="alert" size={15} /><span>{focusNotice}</span>
++      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => setFocusNotice("")}>
++        <Icon name="x" size={15} />
++      </button>
++    </div>}
+     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
+       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
+       <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
+         onClick={() => { setDismissedWarning(warningKey); warningToggle.current?.focus(); }}>
+         <Icon name="x" size={15} />
+       </button>
+     </div>}
+     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
+     {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} work={work}
+-        {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
++        {...(watcherTarget && { onSubscribe: subscribe, subscriptions })} /> :
+       <EmptyState icon={q || active.length ? "search" : "pr"}
+         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
+         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
+         {q || active.length ? "Try another title, number, or filter." : undefined}
+       </EmptyState>)}
+     </section>
+     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
+       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+       owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+         item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
+       models={reviewModels} currentModel={currentRepairModel}
+       watching={watchingTarget !== null} onAccessLost={accessLost}
+       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
+     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
+       onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
+     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
+       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+       width={detailWidth} onResize={setDetailWidth}
+       reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
+       projectFlows={flows} flow={panelFlow(card)}
+
+--- apps/desktop/src/review/ReviewProgress.tsx
+@@ 46,111 @@
+   </span>;
+ }
+ 
+ type Roster = Omit<DeskReviewerProgress, "sessions">;
+ 
+ function runProgress(state: DeskRunState, progress?: Roster) {
+   if (state === "completed") return { percent: 100, label: "Review completed" };
+   const { planned, completed = progress?.finished === 0 ? 0 : undefined } = progress ?? {};
+   if (planned != null && Number.isSafeInteger(planned) && planned > 0 &&
+       completed != null && Number.isSafeInteger(completed) && completed >= 0 && completed <= planned) {
+     // Starting accounts for 5%. Reserve the final 5% for consolidation and the completion gate.
+     return { percent: 5 + Math.floor(90 * completed / planned), label: `${completed} of ${planned} assignments completed` };
+   }
+   if (state === "queued") return { percent: 5, label: "Queued" };
+   if (state === "running" || state === "cancelling") {
+     return { percent: 5, label: "Assignment totals pending" };
+   }
+   return { percent: null, label: "Progress unavailable" };
+ }
+ 
++/** What a progress caption says, in order: wave, percent, the run state when it is not implied, then the label. */
++interface ProgressParts { wave: string; percent: string; state: string; label: string; value: number | null }
++
++/** The one rule for a progress caption, shared by `ReviewProgress` and `reviewProgressText`. */
++function progressParts(state: DeskRunState, progress: Roster | undefined, showState: boolean): ProgressParts {
++  const { percent, label } = runProgress(state, progress);
++  return {
++    wave: progress?.wave != null ? `Wave ${progress.wave}` : "",
++    percent: percent != null ? `${percent}%` : "",
++    state: showState && !["running", "queued", "completed"].includes(state) ? RUN_STATE_LABEL[state] : "",
++    label,
++    value: percent,
++  };
++}
++
+ export function ReviewProgress({ progress, state, showState }: {
+   progress?: Roster; state: DeskRunState; showState?: boolean;
+ }) {
+-  const { percent, label } = runProgress(state, progress);
++  const parts = progressParts(state, progress, !!showState);
++  const { value: percent, label } = parts;
+   return <span className="review-progress">
+     <span className="review-progress-caption">
+-      {progress?.wave != null && <span className="review-wave">Wave {progress.wave}</span>}
+-      {percent != null && <strong>{percent}%</strong>}
+-      <span>{showState && !["running", "queued", "completed"].includes(state) && RUN_STATE_LABEL[state] + " · "}{label}</span>
++      {parts.wave && <span className="review-wave">{parts.wave}</span>}
++      {parts.percent && <strong>{parts.percent}</strong>}
++      <span>{parts.state && parts.state + " · "}{label}</span>
+     </span>
+     {percent != null && <span role="progressbar" aria-label="Review progress" aria-valuetext={`${percent}% · ${label}`}
+       aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="review-progress-track">
+       <span style={{ width: percent + "%" }} />
+     </span>}
+   </span>;
+ }
+ 
+ /**
+  * A card's local review progress as one line ("Wave 2 · 27% · 1 of 4 assignments completed"), for the title
+  * of the work row's review slot: AC4 keeps Keryx review state out of the card body, and the row's fixed
+- * height leaves no room for a progress block. Null when the card has no run to report on.
++ * height leaves no room for a progress block. The same parts as the `ReviewProgress` caption, with the state
++ * shown. Null when the card has no run to report on.
+  */
+ export function reviewProgressText(badge: ReviewCard["localReview"]): string | null {
+   if (badge?.runState === "other-revision") return "Reviewing an earlier revision";
+   const state = badge?.runState ?? (badge?.active ? "running" : undefined);
+   if (!state || (badge?.awaitingAnswer && !badge.progress)) return null;
+-  const { percent, label } = runProgress(state, badge?.progress);
+-  return [
+-    badge?.progress?.wave != null ? `Wave ${badge.progress.wave}` : "",
+-    percent != null ? `${percent}%` : "",
+-    ["running", "queued", "completed"].includes(state) ? "" : RUN_STATE_LABEL[state],
+-    label,
+-  ].filter(Boolean).join(" · ");
++  const { wave, percent, state: shown, label } = progressParts(state, badge?.progress, true);
++  return [wave, percent, shown, label].filter(Boolean).join(" · ");
+ }
+
+--- apps/desktop/src/review/prWork.ts
+@@ 120,234 @@
+ export function reviewLaunchTarget(typed: string | undefined, subject: SessionSubject | undefined): string | undefined {
+   if (typed?.trim()) return typed;
+   return subject?.kind === "pr" ? subject.url : typed;
+ }
+ 
+ /**
+  * How long a "Create Flow" request waits for its package: 15 minutes from the press. The prompt is only
+  * prefilled, so the window covers sending it and the orchestrator creating the package early in its turn;
+  * a package that appears later (another window, the CLI, the Issues board) is not linked.
+  */
+ export const FLOW_LINK_WINDOW_MS = 15 * 60_000;
+ 
+ /** "Create Flow" waiting for its package: the session that was asked, the packages that existed then, and when it expires. */
+ export interface PendingFlowLink {
+   sessionId: string;
+   knownDirs: ReadonlySet<string>;
+   /** Epoch ms; at or after it the request is dropped unlinked. */
+   expiresAt: number;
+ }
+ 
+-/** One pass over the pending requests: those still waiting, and the links to write. */
++/** A new flow package offered for linking to a PR-bound session ("Link Flow #<id>?"); written only on Link. */
++export interface PrFlowOffer {
++  sessionId: string;
++  flow: FlowCard;
++}
++
++/** One pass over the pending requests: those still waiting, and the links to offer. */
+ export interface FlowLinkPass {
+   pending: PendingFlowLink[];
+   links: Array<{ sessionId: string; dir: string }>;
+ }
+ 
+ /**
+- * What to do with the pending "Create Flow" requests once the flow list changes. A package is linked only
+- * when exactly one request is pending and exactly one package appeared since it was recorded: which package
+- * belongs to which request cannot be told otherwise, so several new packages or several pending requests
+- * link none and end every request. An expired request, or one whose session already has a Flow, ends
+- * unlinked. A package in `claimed` (already linked to a request) is never a candidate again.
++ * What to do with the pending "Create Flow" requests once the flow list changes. A package is offered for
++ * linking (`links`; the user confirms it, nothing is written here) only when exactly one request is pending
++ * and exactly one package appeared since it was recorded. Arrival alone cannot tell who made a package, so
++ * the offer is a question, never a silent link; several new packages or several pending requests offer none
++ * and end every request. An expired request, or one whose session already has a Flow, ends unlinked. A
++ * package in `claimed` (already offered for a request) is never a candidate again.
+  */
+ export function resolveFlowLinks(pending: readonly PendingFlowLink[], dirs: readonly string[],
+   sessionFlow: (sessionId: string) => string | undefined, claimed: ReadonlySet<string>, now: number): FlowLinkPass {
+   const live = pending.filter(entry => entry.expiresAt > now && !sessionFlow(entry.sessionId));
+   const candidates = [...new Set(dirs)].filter(dir => !claimed.has(dir));
+   const freshFor = (entry: PendingFlowLink) => candidates.filter(dir => !entry.knownDirs.has(dir));
+   if (!live.some(entry => freshFor(entry).length)) return { pending: live, links: [] };
+   const only = live.length === 1 ? live[0] : undefined;
+   const fresh = only ? freshFor(only) : [];
+   return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };
+ }
+ 
+ /** What "Open in session" needs from the app; injected so it can be tested without keryx. */
+ export interface SubjectSessionDeps {
+   /** The sessions as Desktop shows them now, pending bindings included. */
+   sessions: () => readonly SessionInfo[];
+   loadSession: (id: string) => Promise<void>;
+   /** A new session, shown; null when none could be started. */
+   newSession: () => Promise<string | null>;
+   /** Bind the new session to the subject (pending until keryx stores it). */
+   bind: (id: string, subject: SessionSubject) => void;
+-  /** Prefill the composer; never sends. */
++  /** Prefill the composer of the shown session; never sends. */
+   fill: (text: string) => void;
++  /** Whether `id` is the session shown now: the user may have switched elsewhere while it opened. */
++  isShown: (id: string) => boolean;
++}
++
++/** The session "Open in session" resolved, and whether this call put its prompt into that session's composer. */
++export interface SubjectOpen {
++  sessionId: string;
++  filled: boolean;
+ }
+ 
+ /**
+  * Open the session for a Subject: the newest non-archived bound session for "latest", the named one, or a
+  * new bound session for "new" or when none is bound. A new session gets `prompt` in its composer; an
+- * existing one keeps its draft unless `prefillExisting` is set. Resolves the shown session, or null.
++ * existing one keeps its draft unless `prefillExisting` is set. The prompt goes in only when that session is
++ * the one shown once it has opened: a switch made meanwhile keeps the other session's draft (`filled` false).
++ * Resolves the opened session, or null.
+  */
+ export async function openSubjectSession(deps: SubjectSessionDeps, subject: SessionSubject, target: SubjectSessionTarget,
+-  prompt: string, prefillExisting = false): Promise<string | null> {
++  prompt: string, prefillExisting = false): Promise<SubjectOpen | null> {
+   const bound = boundSessions(deps.sessions(), subject);
+   const existing = target === "latest" ? bound[0]?.sessionId : target === "new" ? undefined : bound.find(s => s.sessionId === target)?.sessionId;
+   if (existing) {
+     await deps.loadSession(existing);
+-    if (prefillExisting) deps.fill(prompt);
+-    return existing;
++    return { sessionId: existing, filled: prefillExisting && fillShown(deps, existing, prompt) };
+   }
+   const id = await deps.newSession();
+   if (!id) return null;
+   deps.bind(id, subject);
++  return { sessionId: id, filled: fillShown(deps, id, prompt) };
++}
++
++function fillShown(deps: SubjectSessionDeps, id: string, prompt: string): boolean {
++  if (!deps.isShown(id)) return false;
+   deps.fill(prompt);
+-  return id;
++  return true;
+ }
+ 
+ /**
+  * `openSubjectSession` with one open per Subject at a time: a repeat call for the same Subject while an
+- * open is in flight (a second press before `session/new` answers) gets that open's promise, whatever its
+- * target or prompt, so it cannot start a second bound session.
++ * open is in flight (a second press before `session/new` answers) gets that open's session, whatever its
++ * target or prompt, so it cannot start a second bound session. Its own prompt was not filled (`filled` false).
+  */
+ export function subjectOpener(): typeof openSubjectSession {
+-  const inFlight = new Map<string, Promise<string | null>>();
++  const inFlight = new Map<string, Promise<SubjectOpen | null>>();
+   return (deps, subject, target, prompt, prefillExisting = false) => {
+     const key = subjectKey(subject);
+     const running = inFlight.get(key);
+-    if (running) return running;
++    if (running) return running.then(open => open && { ...open, filled: false });
+     const open = openSubjectSession(deps, subject, target, prompt, prefillExisting).finally(() => inFlight.delete(key));
+     inFlight.set(key, open);
+     return open;
+   };
+ }
+
+--- apps/desktop/src/review/usePendingFlowLinks.ts
+@@ 1,69 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { sessionFlags, type SessionInfo } from "../acp/types";
+ import type { FlowCard } from "../platform/commands";
+ import { FLOW_LINK_WINDOW_MS, resolveFlowLinks, type PendingFlowLink } from "./prWork";
+ 
++/** A package offered for linking to the session that asked for it; nothing is written until `accept`. */
++export interface FlowLinkOffer {
++  sessionId: string;
++  dir: string;
++}
++
+ /**
+  * "Create Flow" requests waiting for their package. `known()` takes the packages that exist before the
+- * request (null before the first flow list: nothing can then be told apart, so nothing is linked);
+- * `expect(sessionId, known)` waits for the session's package for `FLOW_LINK_WINDOW_MS`. The new package is
+- * linked through `link` only when it is the one new package and this is the one pending request; a package
+- * once linked is never linked again (`resolveFlowLinks`). The returned api keeps its identity.
++ * request (null before the first flow list: nothing can then be told apart, so nothing is offered);
++ * `expect(sessionId, known)` waits for the session's package for `FLOW_LINK_WINDOW_MS`. When it is the one
++ * new package and this is the one pending request (`resolveFlowLinks`), it becomes an offer: arrival alone
++ * cannot tell who made it, so the user confirms. `accept(sessionId)` writes the link through `link`,
++ * `dismiss(sessionId)` drops the offer and writes nothing; a package once offered is never offered again.
++ * An offer whose session has meanwhile got a Flow is dropped. `actions` keeps its identity.
+  */
+ export function usePendingFlowLinks(flows: readonly FlowCard[], loaded: boolean, sessions: readonly SessionInfo[],
+   link: (sessionId: string, dir: string) => void, now: () => number = Date.now) {
+   const [pending, setPending] = useState<PendingFlowLink[]>([]);
++  const [offered, setOffered] = useState<FlowLinkOffer[]>([]);
+   const linkRef = useRef(link);
+   linkRef.current = link;
+   const nowRef = useRef(now);
+   nowRef.current = now;
+   const listed = useRef({ flows, loaded });
+   listed.current = { flows, loaded };
+   const claimed = useRef(new Set<string>());
++  const flowOf = useCallback((sessionId: string) => {
++    const session = sessions.find(item => item.sessionId === sessionId);
++    return session && sessionFlags(session).flow;
++  }, [sessions]);
+   useEffect(() => {
+     if (!pending.length) return;
+-    const flowOf = (sessionId: string) => {
+-      const session = sessions.find(item => item.sessionId === sessionId);
+-      return session && sessionFlags(session).flow;
+-    };
+     const pass = resolveFlowLinks(pending, flows.map(flow => flow.dir), flowOf, claimed.current, nowRef.current());
+-    for (const { sessionId, dir } of pass.links) {
+-      claimed.current.add(dir);
+-      linkRef.current(sessionId, dir);
++    for (const { dir } of pass.links) claimed.current.add(dir);
++    if (pass.links.length) {
++      setOffered(old => [...old.filter(offer => !pass.links.some(next => next.sessionId === offer.sessionId)), ...pass.links]);
+     }
+     if (pass.pending.length !== pending.length) setPending(pass.pending);
+-  }, [pending, flows, sessions]);
++  }, [pending, flows, flowOf]);
++  const offers = useMemo(() => offered.filter(offer => !flowOf(offer.sessionId)), [offered, flowOf]);
++  const offersRef = useRef(offers);
++  offersRef.current = offers;
+   const known = useCallback((): ReadonlySet<string> | null =>
+     listed.current.loaded ? new Set(listed.current.flows.map(flow => flow.dir)) : null, []);
+   const expect = useCallback((sessionId: string, knownDirs: ReadonlySet<string> | null) => {
+     if (!knownDirs) return;
+     const expiresAt = nowRef.current() + FLOW_LINK_WINDOW_MS;
+     setPending(old => [...old.filter(entry => entry.sessionId !== sessionId), { sessionId, knownDirs, expiresAt }]);
+   }, []);
+-  return useMemo(() => ({ known, expect }), [known, expect]);
++  const accept = useCallback((sessionId: string) => {
++    const offer = offersRef.current.find(item => item.sessionId === sessionId);
++    if (!offer) return;
++    // Read and cleared at once, so a second press before the next render cannot write the link twice.
++    offersRef.current = offersRef.current.filter(item => item !== offer);
++    setOffered(old => old.filter(item => item.sessionId !== sessionId));
++    linkRef.current(offer.sessionId, offer.dir);
++  }, []);
++  const dismiss = useCallback((sessionId: string) => {
++    offersRef.current = offersRef.current.filter(item => item.sessionId !== sessionId);
++    setOffered(old => old.filter(item => item.sessionId !== sessionId));
++  }, []);
++  const actions = useMemo(() => ({ known, expect, accept, dismiss }), [known, expect, accept, dismiss]);
++  return { offers, actions };
+ }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 1049,1083 @@
+     onLoginChallenge,
+     refreshTasks,
+     /** A notice in the shown session's transcript. */
+     notify: (level: "info" | "warn" | "error", text: string) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "notice", sessionId, level, text });
+     },
+     removeQueued: (index: number) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "queueRemove", sessionId, index });
+     },
+     cancel,
+     newSession,
+     loadSession,
+     reopen,
+     setFlags,
+     trashSession,
+     workOnFlow,
+     linkFlow,
+     bindSubject,
++    /** Whether `sessionId` is the session shown now (read live, not from the last render). */
++    isShown: (sessionId: string) => live.current.reg.shown === sessionId,
+     /** Bindings keryx has not stored yet, by session id. */
+     pendingSubjects,
+     setMode,
+     setModel,
+     restart,
+     continueAnyway,
+     answerPermission,
+     answerAsk,
+     projectTelegramQuestion,
+     dismissFatal: () => setFatal(null),
+     dismissBanner: (id: number) => dispatch({ t: "dismissBanner", id }),
+   };
+ }
+
+--- apps/desktop/src/styles/review.css
+@@ 17,58 @@
+ .review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+ .review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }
+ .review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
+ .review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
+ .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+ .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
+ .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
+ .review-board .card-actions { flex-wrap: wrap; }
+ .review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
+ /* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
+ .pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
+ .pr-work-slot { display: flex; min-width: 0; height: 24px; }
+ .pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
+ .pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+ .pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
+ .pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
+ .pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+ .pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
+ /* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
+ .pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
++/* "Link Flow #<id>?" after Create Flow: a question, not a link, until Link is pressed; one line of the slot's height. */
++.pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }
+ /* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
+ .pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
+ .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
+ .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
+ .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
+ .review-ci { font-size: var(--fs-xs); font-weight: 550; color: var(--fg-muted); }
+ .review-ci.ci-passed { color: var(--ok); }
+ .review-ci.ci-failed { color: var(--danger); }
+ .review-ci.ci-pending { color: var(--warn); }
+ .review-table { min-width: 1000px; }
+ .review-table th:first-child { width: 30%; }
+ .review-table th:last-child { width: 11rem; }
+ .review-table th:nth-child(6) { width: 16rem; }
+ .review-table th:nth-child(4) { width: 18%; }
+ .review-table tbody tr:hover { background: transparent; }
+ .review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
+ .review-list-link:hover { text-decoration-thickness: 2px; }
+ .review-filter-hint { margin: 0 0 var(--sp-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+ .review-filter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--sp-4); }
+ .review-filter-groups fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }

@@ -1,0 +1,58 @@
+STATUS: DONE
+
+## Frontend Review — round 4, wave 3 (slice-03, range d7b0f7058..4cb6c43ef)
+
+Lens this wave: the wire contract Desktop relies on — `_keryx/session_flags` replies and errors, and the Issues reason texts Desktop matches in `apps/desktop/src/issues/useIssueCollection.ts` (`repositoryUnavailable`).
+
+### Contract checks (no defect)
+
+- `unusableRemote` ("configuration: This project's GitHub.com remote names no usable repository.") is matched by Desktop's `/names no usable repository/` -> "unavailable". Before this range a `..` remote threw `invalidInput`, which Desktop's first-page rule reads as "older keryx" (update hint). The rename removes that misattribution; Desktop's DOM test (IssuesBoard.dom.test.tsx:471) uses the exact string.
+- `invalidInput` is still thrown for the repository source with no cwd. Desktop would read it as "older", but the only caller (`src/commands/issues.ts:56`) passes `cwd` defaulting to `process.cwd()`, so it is not reachable from Desktop.
+- The viewer-source 410 keeps the bare `issuesDisabled` text, which Desktop's `/has Issues turned off for/` would match, but `fallback` (and so `repositoryUnavailable`) only exists when `source === "repository"` (IssuesBoard.tsx:88, 156). No wrong fallback.
+- `_keryx/session_flags` is now async; the dispatch table (server.ts:3307) already serves the async `handleSessionTrash`, so a rejected promise from `refuseStore` reaches the client as the same ACP error as before. Error texts unchanged for Desktop: lock timeout keeps "...are locked by another keryx process; retry" (Desktop fixtures app-work-row.fixture.tsx:189 and usePendingFlowLinks.dom.test.tsx:208 use it, prefix-tolerant); a trashed or half-moved session now gets "no session <id> in this project" instead of a recreated stub, which Desktop's pending flow/subject writes swallow quietly (useAcpSession.ts:240) and the Link offer shows as "Not linked: ...". The 3 s production timeout is unchanged.
+
+### Findings
+
+- FE-R4-003 (info): async wait can reorder two same-field writes from one client — see JSON.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-frontend",
+    "slices": ["slice-03"],
+    "findings": [
+      {
+        "id": "FE-R4-003",
+        "severity": "info",
+        "category": "contract",
+        "file": "src/lib/file-lock.ts",
+        "quote": "    await new Promise((resolve) => setTimeout(resolve, RETRY_MS));",
+        "title": "Async flags wait no longer keeps one client's same-session writes in arrival order",
+        "problem": "Before this range the ACP server waited for another process's flags lock synchronously, so a second `_keryx/session_flags` request from the same Desktop window was only read after the first landed: arrival order was write order. Now each waiting request polls on its own 15 ms timer (withFileLockAsync via setSessionFlagsAsync in handleSessionFlags). When another process holds the lock and two requests for the same field of one session are waiting (e.g. archiveIdle's `archived: true` and a person's unarchive of that session), whichever timer fires first after release wins, so the older intent can land last. Desktop then shows the reply of the last-landing write, consistent with disk but not with the person's last action.",
+        "evidence": "src/acp/server.ts handleSessionFlags now `return await setSessionFlagsAsync(...)`; src/lib/file-lock.ts withFileLockAsync loop; Desktop same-session writers: useAcpSession.ts archiveIdle (archived:true), applyPendingFlow (flow), subject write (line 277), plus the pin/archive toggles.",
+        "why_info": "Law 1: needs a lock held by another process at the same moment as two same-field requests from this window; no Desktop path was shown to send a second same-field request before the first resolves. Settled by checking whether the pin/archive toggles disable while a flags request is in flight, or by a test that holds the lock and sends two requests.",
+        "suggested_fix": "If it matters, serialise flags requests per session inside the server (a per-sessionId promise chain in handleSessionFlags) so in-process order is kept while the cross-process wait stays async.",
+        "dedupe_key": "acp-session-flags-async-order"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "fixed", "note": "handleSessionFlags now awaits setSessionFlagsAsync -> withFileLockAsync, which yields between attempts instead of Bun.sleepSync; the sync path stays for sync callers (issue binding, CLI)." },
+      { "id": "HL3-002", "disposition": "fixed", "note": "lockOptions passes createDir:false and whileStored checks summary.json; a trashed dir surfaces as 'no session <id> in this project' and is not recreated (organize.test 'a flags write to a session removed since it was located...')." },
+      { "id": "TP-R3-008", "disposition": "fixed", "note": "Elapsed-time assertions replaced by barrier files and explicit timing options; no wall-clock assertion remains in the flags-lock tests." },
+      { "id": "TP-R3-007", "disposition": "fixed", "note": "'a flags change held off past its timeout fails with the retry error' asserts the lockedError text for both sync and async paths." },
+      { "id": "TP-R3-009", "disposition": "fixed", "note": "'a backfill of an invalid subject is refused and writes nothing' exercises backfillSessionSubject's own validation." },
+      { "id": "TP-R3-006", "disposition": "fixed", "note": "New tests: viewer-source 410 keeps the unnamed text; a viewer page made only of PRs does not page on." },
+      { "id": "DG3-001", "disposition": "fixed", "note": "A later open checks sessionSubjectSettled (unlocked read) and skips the locked backfill; a failed later backfill no longer fails the open. One flags.json read per open remains, by design." },
+      { "id": "SC3-001", "disposition": "still_open", "note": "The LockAttempt refactor keeps the same stale-takeover rule, so the deferred race is unchanged (owner-deferred, predates the PR)." },
+      { "id": "HL3-004", "disposition": "still_open", "note": "FLAGS_LOCK_TIMING keeps staleMs 2000; deferred info." }
+    ],
+    "stats": { "files_reviewed": 12, "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+  }
+}
+```
+
+### Not verified
+- No tests run (exec_budget_s 0). cli-reference.md is not in slice-03, so PC-008 was not assessed here. FE-R4-001/002 not re-filed.
+
+Routing audit: graph_used: no (not-relevant: contract read through targeted searches), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

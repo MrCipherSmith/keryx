@@ -1,0 +1,77 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage1`, round 4, wave 2, range d7b0f7058..4cb6c43ef (code commit 055115a20), mode explicit-hash-range. slice-02 read in full (2153 lines: flow.json/journal, App.tsx, IssuesBoard.tsx, issues/model.ts, useIssueCollection.ts, PrWorkRow.tsx, ReviewBoard.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css, and the Desktop tests/fixtures). Head code read beyond the hunks: PrWorkRow.tsx FlowOffer, ReviewBoard.tsx focus effect and work/flowOffer memos.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### What was checked, with frequencies
+- **PrWorkRow per-row work.** The new `useEffect(..., [offer])` is one per row; `offer` is `undefined` for every row without an offer, so the effect does not re-run on those rows. For the offered row it re-runs when the offer object changes (linking → settled/error), and its body returns at once unless `refocusFlow` was set by a click. `document.activeElement` and `querySelector("button")` run only after a Link/Dismiss click, on one row. FlowOffer builds three template strings per render. No per-row allocation that scales with sessions or flows was added; the row still reads `index.sessions`/`index.flows` from the shared `prWorkIndex`.
+- **Re-render churn from the offer state (UX-010 fix).** `accept` now changes `offered` twice per Link (linking, then removed or error) instead of once. Each change gives App's `flowOffers` memo a new array, so ReviewBoard's `flowOffer` and `work` memos change and every PR row re-renders. This happens per user click on Link, twice, over the rows of one loaded board. It is not a keystroke, frame or loop, so it is not a finding. `offers` in the hook is `offered.filter(...)` with a `sessions.find` per offer: offers are 0-1 in practice.
+- **Focus effect (FE-R3-001 fix).** The deps gained `loading` and `stale`, so the effect also runs when a load starts or ends. Without a pending focus, or with a nonce already handled, it returns on the first line. With a focus it does one `cards.some` over the snapshot. Each load toggles it twice at most. Negligible.
+- **IssuesBoard.** `fallback` is now a fresh closure on every render whenever the source is `repository` (it was only for an unchosen source). Its consumer `Collection` is not `React.memo`, so the new identity costs nothing extra. `sourceKey` does a `JSON.stringify(cwd)` per render. `repositoryUnavailable` runs two regex tests per render, and only while an error is shown. The `useEffect([source])` focus hook does nothing unless its ref flag is set. Storage reads (`stored(sourceKey) ?? stored(legacy)`) run in the `useState` initialiser only, once per mount.
+- **useAcpSession.linkFlow.** One `_keryx/session_flags` request per Link, with stable `useCallback([cwd, dispatch])` deps. The earlier `pendingFlow` and after-turn retry path is gone for this caller, so no request repeats.
+- **App.** The `flowOffers` mapping adds two conditional spreads per offer. `linkFlowOffer` keeps its identity, because `flowLinkActions` is stable.
+- **Memory leaks.** No listeners, timers or subscriptions were added. If the component unmounts during an `accept`, the awaited `setOffered` is a no-op after unmount, not a leak. `claimed` (Set of offered dirs) grows only by offered packages, and that predates this range.
+- **CSS.** `.pr-work-slot { overflow: hidden }` and the offer's ellipsis rules are static. No layout-thrash pattern.
+- **N+1 / indexes / pagination / bundle imports / redundant API calls:** none in this slice. `errMessage` is a local named import. Tests and fixtures are not on a production path.
+
+### Prior dispositions (findings whose code is in slice-02; read from the diff, not executed)
+- FE-R3-001: fixed. The card-absent branch waits only while `loading || stale`, then sets `focused.current`, shows a notice and calls `onFocusHandled`. Tests: "FE-R3-001 ...".
+- FE-R3-002: fixed. PrWorkRow refocuses the Flow slot's button after Link/Dismiss. Dismiss notice focuses `search`. The Issues fallback sets `focusSource` and focuses `sourceSelect`.
+- AR-007: fixed on the Desktop side. `repositoryUnavailable` in useIssueCollection.ts, beside `isAccessError`, matches only the named reasons. "older" counts only on the first page.
+- DG-R3-002: fixed. `issueSessions` was removed, and model.test.ts now pins `boundSessionIndex(...)(issueSubject(issue))`.
+- TP-R3-001, TP-R3-002, TP-R3-003, TP-R3-004, TP-R3-005: fixed. The tests named in their suggested fixes were added. I did not run the mutants.
+- UX-009, UX-010, UX-011, UX-012, UX-013, UX-015: fixed, as the diff reads (title in the text and aria-label; linking and error state; source key per project; own `.pr-work-offer` class; prefix stripped; "Bundled keryx" wording).
+- LY-005: fixed in CSS (slot `overflow: hidden`, offer `min-width: 0` + ellipsis). Not measured in a real engine.
+- HL3-003, LG-R3-003, UX-014, UX-016: deferred and unchanged in this range.
+
+### Layers
+- graph: not used. The payload `layers.affected` list was enough as a lead, and the slice is the whole code under review. wiki: not-relevant. ctx: used (`keryx ctx read`, `keryx ctx rg`). raw_rg_used: no.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-performance",
+    "round": 4,
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "FE-R3-001", "dedupe_key": "review-focus-armed-card-absent", "disposition": "fixed", "evidence": "ReviewBoard.tsx focus effect: card-absent branch returns only while loading||stale, else sets focused.current, setFocusNotice, onFocusHandled; deps now include loading, stale. PrWorkRow.dom.test.tsx FE-R3-001 tests." },
+      { "id": "FE-R3-002", "dedupe_key": "focus-lost-self-removing-controls", "disposition": "fixed", "evidence": "PrWorkRow.tsx refocusFlow ref + useEffect([offer]) focusing flowSlot button; ReviewBoard Dismiss notice calls search.current?.focus(); IssuesBoard fallback sets focusSource and focuses sourceSelect. Tests assert document.activeElement." },
+      { "id": "AR-007", "dedupe_key": "desktop-issues-fallback-decodes-configuration-category", "disposition": "fixed", "evidence": "useIssueCollection.ts repositoryUnavailable(reason, firstPage) matches named reasons only; 'older' only when !snapshot; IssuesBoard uses it. Tests for rate-limit, connection, stale cursor and later-page Invalid Issues request keep Retry." },
+      { "id": "DG-R3-002", "dedupe_key": null, "disposition": "fixed", "evidence": "issues/model.ts no longer imports boundSessions; model.test.ts uses boundSessionIndex(sessions)(issueSubject(issue))." },
+      { "id": "TP-R3-001", "dedupe_key": "tp-r3-flowlink-hook-guards", "disposition": "fixed", "evidence": "usePendingFlowLinks.dom.test.tsx adds double-accept, dismiss-then-accept and replacement tests. Not executed." },
+      { "id": "TP-R3-002", "dedupe_key": "tp-r3-offer-vs-flow", "disposition": "fixed", "evidence": "PrWorkRow.dom.test.tsx 'TP-R3-002: a PR that already has a Flow shows that Flow, not an offer'. Not executed." },
+      { "id": "TP-R3-003", "dedupe_key": "tp-r3-issues-fallback-filter", "disposition": "fixed", "evidence": "IssuesBoard.dom.test.tsx 'AR-007/TP-R3-003' loop over non-repository reasons asserts Retry kept. Not executed." },
+      { "id": "TP-R3-004", "dedupe_key": "tp-r3-focus-refusal", "disposition": "fixed", "evidence": "PrWorkRow.dom.test.tsx two TP-R3-004 tests. Not executed." },
+      { "id": "TP-R3-005", "dedupe_key": "tp-r3-progress-showstate", "disposition": "fixed", "evidence": "New ReviewProgress.test.tsx. Not executed." },
+      { "id": "UX-009", "dedupe_key": "pr-flow-offer-title-hover-only", "disposition": "fixed", "evidence": "FlowOffer name = 'Flow #id · title' in the visible text and in the Link/Dismiss aria-labels." },
+      { "id": "UX-010", "dedupe_key": "pr-flow-offer-link-no-pending-or-error-state", "disposition": "fixed", "evidence": "usePendingFlowLinks.accept keeps the offer as linking, removes it on success, keeps it with error on failure; linkFlow now rejects instead of swallowing." },
+      { "id": "UX-011", "dedupe_key": "issues-fallback-persists-account-wide-source", "disposition": "fixed", "evidence": "IssuesBoard sourceKey = account + '.source.' + JSON.stringify(cwd); legacy per-account key read only as fallback." },
+      { "id": "UX-012", "dedupe_key": "pr-flow-offer-false-affordance", "disposition": "fixed", "evidence": "Offer span class is 'pr-work-offer' only; test asserts no pr-work-link class and no .pr-work-link.pr-work-offer rule." },
+      { "id": "UX-013", "dedupe_key": "issues-fallback-error-prefix-verbatim", "disposition": "fixed", "evidence": "Unavailable branch renders error.replace(/^configuration:\\s*/i, '')." },
+      { "id": "UX-015", "dedupe_key": "issues-older-keryx-hint-setting-name", "disposition": "fixed", "evidence": "Hint now 'choose Bundled keryx in Settings → Desktop'." },
+      { "id": "LY-005", "dedupe_key": "layout:pr-work-row:flow-offer-overflow", "disposition": "fixed", "evidence": "review.css .pr-work-slot overflow: hidden; .pr-work-offer min-width 0 with text-overflow ellipsis. Not measured in a real engine." },
+      { "id": "HL3-003", "dedupe_key": "subject-open-fill-raf-gap", "disposition": "deferred", "evidence": "No change to fillShown/fillComposer in this range." },
+      { "id": "LG-R3-003", "dedupe_key": null, "disposition": "deferred", "evidence": "resolveFlowLinks and dismiss unchanged in their offer-ends-request behaviour." },
+      { "id": "UX-014", "dedupe_key": "review-focus-notice-no-remedy", "disposition": "deferred", "evidence": "Focus notice still has only Dismiss." },
+      { "id": "UX-016", "dedupe_key": "pr-flow-offer-not-visible-from-session", "disposition": "deferred", "evidence": "Offer still rendered only in the PR work row." }
+    ],
+    "stats": {
+      "files_reviewed": 19,
+      "findings": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+      "prior_dispositions": 20
+    }
+  }
+}
+```
+
+Summary: slice-02 of the round-3 fix range has no performance findings. The new per-row effect in PrWorkRow re-runs only on the one offered row, and its DOM work runs only after a click. The Link linking/settle state costs two board-wide row re-renders per Link click, which is not a hot path. The focus effect's added `loading`/`stale` deps return early. The IssuesBoard source key, fallback closure and classifier are per-render trivia or run once per mount. Dispositions are recorded for the 20 prior findings whose code is in this slice: 16 fixed (read, not executed) and 4 deferred unchanged.

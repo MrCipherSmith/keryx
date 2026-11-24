@@ -1,0 +1,64 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: PR #1300, branch feat/desktop-review-v2-stage1, round 4 fix range d7b0f7058..4cb6c43ef (code commit 055115a20), scope mode diff, wave 1 = slice-01 (read in full). Load profile: not provided; concrete triggers used are several keryx processes on one session store (one ACP server per Desktop window, the issue-workspace CLI child), concurrent `_keryx/session_flags` requests, and `_keryx/session_trash` in another process. Files read: slice-01.diff in full; src/lib/file-lock.ts at head in full and at base d7b0f7058 (lines 30-140) for a semantic diff; src/session/organize.ts lines 125-365; src/lib/config-dir.ts writeOwnerOnlyFileAtomic; src/acp/server.ts handleSessionFlags; src/session/issues/issue-session.ts lines 1-125.
+
+Summary: The file-lock refactor keeps the shared lock's rules for every other importer (project registry, serve credential, config-update, permission-mode-config, mcp-servers credentials, worktree ports/promote): none passes `createDir`, so `prepare()` still mkdirs, and `step()` keeps exclusive create, the nonce, deadline-before-stale, stale takeover, the 15 ms pause and the one-time waiting notice. The ACP flags path now waits with `setTimeout` and runs a synchronous critical section, so HL3-001 is closed; `createDir: false` plus the in-lock `summary.json` check closes HL3-002. The stale-takeover items (HL3-004, SC3-001) are unchanged and remain open as deferred. Stats: blocker 0 | major 0 | minor 0 | info 1.
+
+### CLI / Multi-Session
+- [HL4-001] info — trashSession still takes no flags lock; on the cross-device (EXDEV) path a flags write that lands between `cpSync` and `rmSync` is reported as stored but is missing from the trashed copy. Pre-existing (trashSession is unchanged in this range); the round-3 fix does not make it worse. See JSON.
+
+### Concurrency & Races
+None detected in the range. Checked:
+- In-process: two concurrent `_keryx/session_flags` calls in one server serialise on O_EXCL. Each `step()` is synchronous, so two in-process waiters cannot interleave a stat with a rm. That means the async path adds no new SC3-001 window. The critical section is synchronous (`whileStored(dir, apply)()`), so `await fn()` holds the lock for one microtask only.
+- `createDir: false`: ENOENT from `openSync(..., "wx")` is thrown at once. statSync on a missing lock still yields `undefined`. A dir removed mid-wait gives ENOENT on the next attempt, which maps to `goneError`. `writeOwnerOnlyFileAtomic` creates no directory, so a trash (rename) between the in-lock `summary.json` check and the write fails with ENOENT. The write does not recreate the dir. `release()` swallows the ENOENT of the moved lock.
+- The sync `withFlagsLock` remains only on CLI paths: issue-workspace/issues commands through withIssueBinding → bindIssueSubject, and issues-launch setSessionFlags. The ACP server calls only `setSessionFlagsAsync`.
+
+### Resources
+None detected. One behaviour difference, too narrow for a finding: in `step()` a throw from `closeSync`/`rmSync` after a failed nonce write now escapes `withFileLock` as an exception, where callers expect `null`. Before, it went to the retry branch. That base path left `handle` non-null after a failed `closeSync` and ran `fn` on a nonce-less lock, so the new behaviour is safer.
+
+### Caching / Lock Contention / Async-Queues / Retry-Timeout / Idempotency
+None detected. The retry loop is capped by the deadline (3 s flags, 15 s default) with a fixed 15 ms pause. No timer is left behind: each `setTimeout` resolves its own promise. Nothing outlives the request beyond the bounded deadline.
+
+Clean Areas: Part 0 (multi-session state dir, retry caps, timer leaks), A, B, C, D, E, F, G reviewed for the slice.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-highload",
+    "summary": "file-lock refactor keeps lock semantics for all other importers (none passes createDir); async ACP flags path no longer blocks the event loop (HL3-001 closed); createDir:false plus in-lock summary.json check closes HL3-002; stale-takeover items HL3-004 and SC3-001 unchanged (open, deferred). One info: trashSession's EXDEV copy path can drop a concurrent flags write (pre-existing).",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "HL4-001",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "quote": "      cpSync(dir, target, { recursive: true });\n      rmSync(dir, { recursive: true, force: true });",
+        "problem": "trashSession takes no flags lock. On the EXDEV path it copies the session and then removes the source. A flags write from another keryx process (another Desktop window's ACP server) whose in-lock summary.json check and atomic write both fall between cpSync and rmSync succeeds in the source directory. The write is reported as stored, and then rmSync deletes it. The trashed copy keeps the old flags.json (and may carry a flags.json.lock or .tmp file copied mid-write).",
+        "impact": "Trigger: a session stored on a different volume from ~/.Trash, trashed in one window while another window pins/archives/links it. The copy of a large transcript makes the window last seconds. The lost change only matters if the session is later put back. The rename path is not affected: after the rename the write fails with ENOENT and maps to goneError. The code is unchanged in this range, so this is outside diff scope.",
+        "suggested_fix": "Track separately: have trashSession hold the session's flags lock (withFileLock on <dir>/flags.json.lock with createDir:false and FLAGS_LOCK_TIMING) around the rename/copy. A concurrent writer then either completes before the move or sees the directory gone.",
+        "evidence": "src/session/organize.ts trashSession: renameSync(dir, target), on EXDEV cpSync then rmSync, with no lock. whileStored checks existsSync(summary.json) only at the start of the critical section. writeOwnerOnlyFileAtomic (src/lib/config-dir.ts) writes a temp file beside the target and renames, with no mkdir. Read from code, not executed.",
+        "confidence": "medium",
+        "dedupe_key": "trash-exdev-copy-drops-concurrent-flags-write"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HL3-001", "disposition": "closed" },
+      { "id": "HL3-002", "disposition": "closed" },
+      { "id": "HL3-004", "disposition": "open" },
+      { "id": "SC3-001", "disposition": "open" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+  }
+}
+```
+
+Prior disposition evidence:
+- HL3-001 closed: src/acp/server.ts handleSessionFlags awaits setSessionFlagsAsync. That goes through withFlagsLockAsync and then withFileLockAsync, which waits with `await new Promise(r => setTimeout(r, RETRY_MS))`. The ACP server has no other flags-lock call. The sync form stays on CLI paths only: commands/issue-workspace and commands/issues, through issues-launch.
+- HL3-002 closed: lockOptions passes `createDir: false`, so prepare() skips mkdir and an ENOENT from open throws at once. whileStored refuses the write when summary.json is gone, inside the lock. withFlagsLock and withFlagsLockAsync map ENOENT on a missing dir to goneError. writeOwnerOnlyFileAtomic does not mkdir. The EXDEV residual (HL4-001) is a different shape, a lost write on a trashed copy rather than a recreated orphan, and it predates this range.
+- HL3-004 open: FLAGS_LOCK_TIMING keeps staleMs 2_000. The stale rule in LockAttempt.step is still age-only, with no PID check. The claimed disposition is deferred.
+- SC3-001 open: step() still runs statSync then rmSync with no re-check between them. The claimed disposition is deferred. The async path adds no in-process interleaving because each step() is synchronous.
+
+Routing audit: graph_used: not-relevant (callers enumerated with keryx ctx rg; the slice names the files). wiki_used: not-relevant (a concurrency review of a known helper). ctx_used: yes (keryx ctx rg for importers and callers). raw_rg_used: no. Bounded sed/git show excerpts were marked keryx:raw for exact line ranges. No tests were run (exec_budget_s 0).

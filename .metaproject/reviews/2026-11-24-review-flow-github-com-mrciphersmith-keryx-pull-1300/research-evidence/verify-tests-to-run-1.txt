@@ -1,0 +1,78 @@
+# keryx review verify-run
+finding: tests-to-run
+command: sh -c bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues src/integrations/issues-board.test.ts src/integrations/issues-launch.test.ts src/commands/issues.test.ts src/lib && cd apps/desktop && bun test src
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-24T06:54:49.196Z
+exit: 1
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  keryx init
+  Setting up a .metaproject workspace in keryx-init-sbx-escape-029T3d/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Created .metaproject
+  1 of 9 modules enabled
+  · gdgraph (code graph, symbols, affected context)
+  · gdctx (token-aware command/read output)
+  · gdwiki (project knowledge base)
+  ✓ gdskills (profile: recommended)
+  · health (quality scoring & gate)
+  · testing (test context & intelligence)
+  · memory (lessons, decisions, constraints)
+  · tasks (agent-first flow lifecycle)
+  · security (scanning, redaction, guardrails, audit)
+
+Agent entrypoints
+  Ignore rules: skipped — not a git repository, so there is no info/exclude to write and .gitignore is left as it is. Run `keryx update` after `git init` to have keryx's generated and per-developer files ignored.
+  CLAUDE.local.md: created with the keryx block (a per-developer file).
+  Codex: skipped — AGENTS.md does not exist, and AGENTS.override.md is only ever generated from it. Create AGENTS.md, or set the codex entry's scope to "shared" in .metaproject/metaproject.json.
+
+Git hooks
+  · gdskills post-commit (skipped - not a git repository)
+  Run git init and then keryx init again to install them.
+  ✓ registered in the project registry
+
+Next steps
+  → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
+  → API keys: keryx shell → /connect (user-global auth.json) — never put keys in .keryx/sandbox-policy.json.
+  → Open .metaproject/keryx-dashboard.html for the human dashboard.
+  → After pulling changes, run keryx update to refresh service files.
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice machine-disconnected
+bridge notice machine-request-aborted
+bridge notice machine-stopping
+bridge notice machine-disconnected
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice project-context-setup-required
+bridge notice machine-stopping
+bridge notice quota-exceeded
+bridge notice recovery-required
+--- stderr ---
+
+src/lib/searchable-sources.test.ts:
+(fail) every source file can be found by a text search > the binary list holds nothing that is actually text [5004.36ms]
+  ^ this test timed out after 5000ms.
+
+src/lib/project-sandbox-policy.test.ts:
+
+src/lib/serve-listener.turns.test.ts:
+keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-r4c-socket-mEDGKV/config/turns'
+
+src/lib/serve-turns.route.test.ts:
+keryx serve: request failed: EEXIST: file already exists, mkdir '/private/var/folders/0h/3tmtr97124j3ms95y3_p2pv40000gp/T/keryx-r4c-ytowRM/config/turns/abcdabcd-1234-4567-89ab-cdefcdefcdef'
+keryx serve: request failed: the durable record for turn abcdabcd-1234-4567-89ab-cdefcdefcdef could not be written
+
+src/lib/hub-machine/bridge.network.test.ts:
+
+ 2722 pass
+ 1 todo
+ 1 fail
+ 20511 expect() calls
+Ran 2724 tests across 158 files. [556.84s]

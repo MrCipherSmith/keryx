@@ -1,0 +1,142 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review (round 3, wave 1)
+
+Scope: branch feat/desktop-review-v2-stage1, fix range 88e3faba9..d7b0f7058 (commits 80ef58bd5, c4e8e3e24), diff mode. Load profile: not provided. Triggers used: several keryx processes writing one session's flags.json (one ACP server per Desktop window, the `keryx issue-workspace` child), a session trashed in one window while another writes its flags, a Create Flow press that is coalesced into an open already in flight or followed by a switch.
+Files reviewed: slice-01.diff read in full (all 16 files). The caller asked me to examine the new flags.json lock, which is in slice-03 (src/session/organize.ts, src/session/issues/issue-session.ts). I read its fix-range hunks with `git diff 88e3faba9..d7b0f7058` together with src/lib/file-lock.ts, src/lib/config-dir.ts writeOwnerOnlyFileAtomic, src/session/store.ts listSessions and the flags.json writers (enumerated with `keryx ctx rg "writeFlags\(|FLAGS_FILE|flags\.json" src --glob '!*.test.ts' --all`). I did not read slice-03 in full, so it is not claimed in `slices`.
+Test evidence: `P/research-evidence/verify-tests-to-run-1.txt` is not in this package. Only `ingest-screened.json` is present; the file of that name sits in the r02 package. No tests were run (exec_budget_s 0).
+
+Summary: The round-2 fixes in my lens hold. Create Flow no longer links by arrival. A press coalesced into an open in flight, or one the user switched away from, returns `filled: false` and registers no request. Only Link writes the `flow` flag. Every flags.json writer now goes through one O_EXCL lock with nonce-guarded release and age-based stale recovery. The issue binder takes the flags lock inside the binding lock, and no flags-lock section takes another lock, so the two cannot deadlock. The new lock has two side effects. Its wait is a synchronous sleep on the ACP server's thread, and its `mkdirSync` of the session directory can recreate a session that another process has just trashed.
+Stats: blocker 0 | major 0 | minor 2 | info 2
+
+### CLI / Multi-Session
+
+**[HL3-001] The flags-lock wait freezes the whole ACP server, not just the write** (minor). File src/session/organize.ts (slice-03).
+- Pattern: Part 0 / async-patterns Rule 4: blocking the thread that serves requests.
+- Failure mode: `_keryx/session_flags` → setSessionFlags → withFlagsLock → withFileLock spins in `Bun.sleepSync(15)` until it gets the lock. Under the call's options (staleMs 2 s, timeoutMs 3 s) that is up to about 2 s when a writer was killed mid-section and left `flags.json.lock` behind. For example, a Desktop window closed while its server wrote flags, or the issue-workspace child killed. It is the full 3 s, on every write, when the lock cannot be removed. Throughout that wait the ACP server's event loop is stopped. No session/update streaming, no cancel, no permission answer gets through for the running turn. Desktop also writes flags with no user action: PendingSubjects.apply at turn end, and Link on a Flow offer.
+- Why minor: the PR body accepts that "flags write may wait up to 3 s for the lock". The code comment's reason, "Synchronous: callers are synchronous, and the section is one read and one atomic write", covers how long a holder keeps the lock. It does not cover how long a waiter blocks after an abandoned lock, and the accepted wording does not say that the server freezes. The trigger needs a kill inside a millisecond section, and the stall is bounded at 3 s.
+- Fix: in the ACP server path, wait asynchronously. Either use lib/fs `withFileLock` (async) from an async `setSessionFlags`/`updateSessionFlagsAt`, or try once synchronously and fall back to an async retry loop with `await sleep(15)`. Keep the sync form only for the issue-workspace child.
+
+**[HL3-002] Taking the flags lock recreates a session directory that another process trashed** (minor). File src/session/organize.ts (slice-03).
+- Pattern: Part A: check-then-act (TOCTOU) between `locate()` and the write.
+- Failure mode: `withFileLock` starts with `mkdirSync(path.dirname(lockPath), { recursive: true })`. Here that dirname is the session directory itself. Window A runs `_keryx/session_trash`, which moves `<sessions>/<id>` to the OS trash. If that happens between window B's `locate(cwd, sessionId)` and its lock, B's flags change (archive or pin, a turn-end subject apply, or Link) recreates `<sessions>/<id>/`, writes `flags.json` into it and reports success. Before this PR, `writeOwnerOnlyFileAtomic` failed with ENOENT and the change was refused. The orphan directory has no `summary.json`, so `listSessions` skips it and nobody sees it. It stays behind for good, and a Finder "Put Back" of the trashed session then collides with it.
+- Fix: do not let the lock create the session directory. Check `existsSync(dir)` inside the lock before reading or writing and refuse with "session not found" when it is gone. Or give `withFileLock` a `createDir: false` option for this caller, so a missing directory is a refusal and not a mkdir.
+
+### Concurrency & Races
+
+**[HL3-003] The shown-session check and the composer fill are a frame apart** (info). File apps/desktop/src/review/prWork.ts. This is what remains of LG-011.
+- `fillShown` checks `deps.isShown(id)` and then calls `deps.fill`. App's `fillComposer` defers `composer.current?.setText(text)` to `requestAnimationFrame`. A switch dispatched inside that frame, such as a keyboard shortcut, would put the prompt in the newly shown session while `filled: true` registers the request on the opened one. Since round 2 that request can only produce a "Link Flow #N?" offer that the user confirms, so nothing is written silently. The fix is optional: re-check `isShown(id)` inside the rAF callback and pass that result back, for example by making `fill` return a promise of the outcome.
+
+**[HL3-004] Two-second, age-only stale recovery can break the lock of a holder that is still running** (info). File src/session/organize.ts (slice-03).
+- `FLAGS_LOCK_STALE_MS = 2_000`, with recovery by lock-file mtime only (no PID check). If a holder's read plus atomic write stalls for more than 2 s, a waiter breaks the lock and both write. The nonce keeps the first holder from deleting the second's lock, but the read-modify-write can still lose an update, which is the HW2-001 outcome again. Causes would be synchronous I/O on a slow or network home directory, or a holder process suspended. I show no concrete trigger in this repository, so this is info. It would be settled by recording the holder PID in the lock file and breaking it only when that PID is gone, or when the lock is older than the shared LOCK_STALE_MS (10 s).
+
+### Resources
+None detected. The offer state (`offered`) is bounded by Create Flow presses and pruned on Link, Dismiss, or the session getting a Flow. `claimed` grows by one directory per offered package for the life of App, which is negligible.
+
+### Caching
+None detected. `boundSessionIndex` and `prWorkIndex` are rebuilt per sessions or Flows change and hold no stale cross-scope entries.
+
+### Lock Contention
+HL3-001, HL3-002 and HL3-004 above. Deadlock check: `withIssueBinding` holds the binding lock (lib/fs, async) and calls `bindIssueSubject` → `backfillSessionSubject` → flags lock (lib/file-lock, sync). The flags-lock bodies (`applyFlagsChange`, the backfill closure) only read and write flags.json and take no other lock. No path takes the flags lock and then the binding lock, so the two cannot deadlock. Because the flags lock is fully synchronous, no in-process re-entry is possible either.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+The lock retry is capped by its deadline (3 s), and the deadline is checked before the stale branch, as file-lock.ts requires. Desktop's `applyPendingFlow` retries a refused write only after the session's next turn, so there is no retry storm.
+
+### Idempotency & Distributed Invariants
+Link is idempotent per press: `accept` clears `offersRef` synchronously before calling `link`, so a double click before the next render writes once. Dismiss claims the package, so it is never offered again.
+
+Clean areas: Part E queues, Part C caching, Part G webhooks and cron, connection pools. None of them is present in this range.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "Round-2 fixes in the highload lens hold. Create Flow is now a user-confirmed offer, registered only when this press filled the shown session's composer (a coalesced press or a switch-away returns filled:false). Every flags.json writer goes through one O_EXCL, nonce-guarded lock with age-based stale recovery, and the binding-lock → flags-lock order cannot deadlock. The new lock has two side effects: a synchronous wait of up to 3 s that freezes the ACP server, and a mkdir that can recreate a session directory another process just trashed. Lock code (slice-03) was read via git diff only; slice-03 is not claimed.",
+    "slices": ["slice-01"],
+    "inputs_unreadable": [],
+    "findings": [
+      {
+        "id": "HL3-001",
+        "severity": "minor",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,\n    staleMs: FLAGS_LOCK_STALE_MS,",
+        "problem": "withFlagsLock waits through lib/file-lock withFileLock, which spins in Bun.sleepSync(15) until it gets the lock. The caller is the long-lived ACP server's `_keryx/session_flags` handler (server.ts handleSessionFlags → setSessionFlags → updateSessionFlagsAt). A lock left by a writer killed mid-section therefore blocks the server's event loop for up to about 2 s (staleMs). An unremovable lock blocks it for the full 3 s timeout on every write.",
+        "impact": "While the server waits, the running turn's session/update stream, cancel and permission answers stall. Desktop writes flags without any user action (PendingSubjects.apply at turn end, Link on a Flow offer). The PR body accepts that a 'flags write may wait up to 3 s'; it does not say the whole server freezes.",
+        "suggested_fix": "On the ACP server path, wait asynchronously. Either make setSessionFlags/updateSessionFlagsAt async on top of lib/fs withFileLock, or try the O_EXCL create once synchronously and fall back to an async retry loop (await sleep(15)) until the deadline. Keep the synchronous form for the short-lived issue-workspace child only.",
+        "evidence": "src/session/organize.ts withFlagsLock (FLAGS_LOCK_TIMEOUT_MS 3_000, FLAGS_LOCK_STALE_MS 2_000); src/lib/file-lock.ts sleepSync uses Bun.sleepSync and the wait loop runs until the deadline; src/acp/server.ts calls setSessionFlags synchronously in the session_flags handler. Journal: 'flags write may wait up to 3 s for the lock'. Code comment reason: 'Synchronous: callers are synchronous, and the section is one read and one atomic write'. That reason bounds the holder's time, not a waiter's wait on an abandoned lock.",
+        "confidence": "high",
+        "dedupe_key": "flags-lock-sync-wait-blocks-acp-server",
+        "location_class": "in-diff"
+      },
+      {
+        "id": "HL3-002",
+        "severity": "minor",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {",
+        "problem": "withFileLock begins with mkdirSync(path.dirname(lockPath), { recursive: true }), and here that dirname is the session directory. setSessionFlags resolves the directory with locate() and only then takes the lock. A `_keryx/session_trash` in another keryx process (another Desktop window) that moves the directory between those two steps has it recreated by the lock. The flags write then succeeds into an empty `<sessions>/<id>/` holding only flags.json. Before this PR, writeOwnerOnlyFileAtomic failed with ENOENT on a missing directory and the change was refused.",
+        "impact": "An orphan session directory with no summary.json. listSessions skips it, so it is invisible and never cleaned up. The flags change is reported as stored for a session that is in the trash, and a later Finder 'Put Back' of that session collides with the orphan directory.",
+        "suggested_fix": "Inside withFlagsLock's critical section, refuse when !existsSync(path.join(dir, 'summary.json')) (or the directory), before readStoredFlags. Or add a createDir:false option to withFileLock for this caller, so that a missing directory makes the lock fail as a refusal ('session not found').",
+        "evidence": "src/lib/file-lock.ts: `mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 })` runs before the O_EXCL open. src/session/organize.ts setSessionFlags: `const { dir } = locate(cwd, sessionId, dataDir); return updateSessionFlagsAt(dir, change, now);`. src/session/store.ts listSessions skips entries without summary.json. src/lib/config-dir.ts writeOwnerOnlyFileAtomic creates no directory. Not executed; the interleaving is read from the code.",
+        "confidence": "medium",
+        "dedupe_key": "flags-lock-mkdir-recreates-trashed-session",
+        "location_class": "in-diff"
+      },
+      {
+        "id": "HL3-003",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  if (!deps.isShown(id)) return false;\n  deps.fill(prompt);",
+        "problem": "fillShown checks isShown(id) and then calls fill, but App's fillComposer applies setText inside requestAnimationFrame. A session switch dispatched in that frame would put the prompt in the newly shown session while filled:true registers the Create Flow request on the opened one. This is the residual of LG-011.",
+        "impact": "At most, a wrong draft plus a pending request that can only become a user-confirmed 'Link Flow #N?' offer; nothing is written without Link.",
+        "suggested_fix": "Optional: re-check isShown(id) inside the rAF callback and report the result back (fill returns Promise<boolean>), so that filled reflects what happened.",
+        "evidence": "apps/desktop/src/App.tsx fillComposer: `requestAnimationFrame(() => composer.current?.setText(text));`. apps/desktop/src/session/useAcpSession.ts isShown reads live.current.reg.shown.",
+        "confidence": "medium",
+        "dedupe_key": "subject-open-fill-raf-gap",
+        "location_class": "in-diff",
+        "publication": "finding"
+      },
+      {
+        "id": "HL3-004",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "const FLAGS_LOCK_STALE_MS = 2_000;",
+        "problem": "Stale recovery is by lock-file age only, with a 2 s threshold (the shared default is 10 s). A holder whose read plus atomic write stalls for more than 2 s has its lock broken while it still runs. The nonce stops it from deleting the new holder's lock, but both read-modify-writes proceed, and one update can be lost.",
+        "impact": "The HW2-001 lost update returns whenever a holder stalls for more than 2 s. No concrete trigger is shown in this repository, so this is info.",
+        "suggested_fix": "Record the holder PID in the lock file and break it only when that PID is gone, or use the shared LOCK_STALE_MS (10 s). Either still fits the 3 s timeout if the PID check runs first.",
+        "evidence": "src/lib/file-lock.ts stale branch: `if (age !== undefined && Date.now() - age > staleMs) rmSync(lockPath)`. There is no PID check.",
+        "confidence": "low",
+        "dedupe_key": "flags-lock-age-only-stale-2s",
+        "location_class": "in-diff",
+        "publication": "finding"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "HL-001", "disposition": "closed", "note": "Owner decision applied. resolveFlowLinks now yields offers, not writes, and usePendingFlowLinks.accept is the only path to link(). createPrFlow calls expect only when opened.filled. subjectOpener returns filled:false to a coalesced press, and fillShown returns false after a switch-away. A package from another producer is still offered once (it is claimed at offer time), but only the user's Link writes the flag."},
+      {"id": "HW2-001", "disposition": "closed", "note": "Every flags.json write goes through withFlagsLock: updateSessionFlagsAt (setSessionFlags, ACP server, issues-launch) and backfillSessionSubject (issue binder). Enumerated with keryx ctx rg 'writeFlags\\(|FLAGS_FILE|flags\\.json' src: the two writeFlags calls are both inside withFlagsLock. The lock is O_EXCL, released in finally behind a nonce check, with age-based stale recovery. No deadlock with the binding lock. Side effects are reported as HL3-001, HL3-002 and HL3-004. organize.test.ts covers waiting and stale takeover; there is no multi-process lost-update test."},
+      {"id": "LG-011", "disposition": "closed", "note": "openSubjectSession fills, and createPrFlow expects, only when isShown(id) holds after the open. The residual one-frame rAF gap is reported as HL3-003 (info)."},
+      {"id": "LG-008", "disposition": "closed", "note": "A pending request is registered only when this press filled the prompt: `if (opened?.filled) flowLinkActions.expect(...)`."},
+      {"id": "HL-003", "disposition": "open", "note": "Deferred info; the code is unchanged (`.finally(() => inFlight.delete(key))`), so the deferral still stands."},
+      {"id": "HW2-002", "disposition": "open", "note": "Deferred info. src/integrations/issues-board.ts is in slice-02, which I did not re-read; DG-009 changed paging to up to 3 pages, which multiplies the per-page nodes call by up to 3 per load."}
+    ],
+    "follow_ups": [
+      "Verify HL3-002 by execution: trash a stored session in one keryx process, then call setSessionFlags on it from another (or simulate it by removing the directory between locate and updateSessionFlagsAt), and check whether <sessions>/<id>/flags.json is recreated."
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 2}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the files were named by the slice and the payload's layers carried the affected set); wiki_used: no (not-relevant: the concurrency question was answered from the code and the rules); ctx_used: yes (keryx ctx rg/read; raw `git diff` and `sed` were used with keryx:raw markers to get exact hunk text for quotes); raw_rg_used: no.
+Prior dispositions not given for the 37 other prior findings, which belong to other lenses (logic, testing, degradation, pr-contract, ui-ux, architecture, performance, regression). Their owning reviewers judge them.

@@ -1,0 +1,123 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, round 4, wave 2, slice-02 (fix range d7b0f7058..4cb6c43ef, code commit 055115a20). I read slice-02.diff in full (2154 lines: flow.json, journal.md, App.tsx, IssuesBoard.tsx, issues/model.ts, useIssueCollection.ts, PrWorkRow.tsx, ReviewBoard.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css, and the Desktop tests and fixtures). I also read the head files at the consumer sites listed below. "Worse than base" is measured against d7b0f7058. DG-R4-001..003 from wave 1 are not filed again.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-degradation",
+    "slices": [
+      "slice-02"
+    ],
+    "summary": "Slice-02 has no product-code degradation against d7b0f7058. I filed one minor diff-vs-description: the PR body says the round-3 mutation checks are 'listed in the Flow 517 journal', but the journal and flow.json give only counts. I filed one info blind-test: the new focus-restore test for Link removes the offer synchronously, but App now keeps it as 'linking' until the write answers. I traced every consumer of linkFlow, PrFlowOffer, usePendingFlowLinks, repositoryUnavailable, the Issues source key and .pr-work-slot, with no finding beyond these two.",
+    "findings": [
+      {
+        "id": "DG-R4-004",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "quote": "T21 (Desktop) fixed FE-R3-001 (+TP-R3-004), FE-R3-002, AR-007/DG-R3-001/FE-R3-003/UX-013/TP-R3-003 (fallback only for the named reasons, Retry kept otherwise, prefix stripped), UX-017/UX-011 (fallback whatever the choice; source stored per project and account, legacy per-account key read only), UX-015, UX-009/UX-010/UX-012/LY-005/TP-R3-001/TP-R3-002 (offer names the title, Link keeps the offer until the write succeeds and shows the failure, own offer class, slot clips), TP-R3-005, DG-R3-002 (issueSessions removed), PC-004 fixture half. 32 mutation checks red.",
+        "problem": "The PR body (Verification) says: 'Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal).' The journal entry this range adds gives only the counts ('32 mutation checks red', '14 mutation checks red'), and flow.json T21/T22 dispositionReason repeat those counts. Neither names a mutant, the file and line it reverts, or its red result. The quantifier 'each fix' is also not shown: DG-R3-002 (deleting the dead issueSessions export) is a removal that no test can fail when reverted. This is the same unbacked-claim shape PC-007 reported for round 2.",
+        "impact": "A reader, or the merge decision, cannot check the 'fails with the fix reverted' claim from the place the body points to. The claim is unverified, not contradicted.",
+        "suggested_fix": "Record the 46 checks in journal.md: id, the file and gate reverted, the test that went red. Or narrow the body to 'tested; mutation counts in flow.json' and drop 'listed in the journal' and 'each'.",
+        "evidence": "base-diff (read at head; the body text is the payload's pr.body): journal.md lines added in this range (slice-02 @@ 95,131 @@) and flow.json T21/T22 dispositionReason. Refute: `keryx ctx rg -n --all --hidden \"mutation|mutant|\\bM[0-9]{2}\\b|\\bN0[0-9]\\b\" .metaproject/flows/517-…/` finds no per-check list for round 3, only the counts and the earlier T12 section for round 1. The review package research-evidence/ has only verify-tests-to-run-1.txt (suites 68/0 and 1070/0) and ingest-screened.json, and no mutation runs.",
+        "confidence": "high",
+        "location_class": "pr-process",
+        "publication": "finding",
+        "degradation_class": "diff-vs-description",
+        "evidence_kind": "base-diff",
+        "dedupe_key": "pr-body-round3-mutants-not-listed"
+      },
+      {
+        "id": "DG-R4-005",
+        "severity": "info",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "quote": "      flowOffers: offers, onLinkFlowOffer: () => set([]), onDismissFlowOffer: () => set([]),",
+        "problem": "The FE-R3-002 test 'Link and Dismiss move focus to the Flow slot's control that replaces the offer' uses offerHost. Its Link drops the offer in the same act and expects 'Create Flow for #101' to take focus. App does that only for Dismiss. Since UX-010 in this same commit, Link first re-renders the offer as 'Linking …' (the Link button stays mounted and focused, with aria-disabled). Only after the write answers is the offer removed, and the slot then shows the linked 'Flow #N · stage' button, not 'Create Flow'. The refocusFlow effect has to stay armed across that intermediate render, and no test runs that sequence. A change that resets refocusFlow while the offer is still shown would fail nothing. The App fixture (app-work-row) clicks Link without asserting focus.",
+        "impact": "The current code is correct on the real path: the effect returns early while `offer` is truthy and keeps refocusFlow set. So nothing is worse today, but the focus restore after a successful Link is unpinned.",
+        "suggested_fix": "In offerHost, make Link set the offer to `{...offer, linking: true}` first, then (in a later act) replace it with a flows entry carrying the session's Flow. Assert focus lands on 'Flow #530 · … for #101'.",
+        "evidence": "consumer-trace: usePendingFlowLinks.ts accept -> settle({linking:true}) -> await link -> settle(null). App.tsx flowOffers passes `linking`. PrWorkRow.tsx FlowOffer keeps both buttons mounted while busy, and the useEffect([offer]) returns early while offer is set. PrWorkRow.dom.test.tsx offerHost (slice-02 @@ 319,507 @@) removes synchronously. app-work-row.fixture.tsx Link path asserts only the slot text and flowWrites.",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "publication": "finding",
+        "degradation_class": "blind-test",
+        "evidence_kind": "consumer-trace",
+        "dedupe_key": "link-focus-test-synchronous-removal"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "FE-R3-001", "disposition": "closed" },
+      { "id": "FE-R3-002", "disposition": "closed" },
+      { "id": "AR-007", "disposition": "closed" },
+      { "id": "DG-R3-002", "disposition": "closed" },
+      { "id": "TP-R3-001", "disposition": "closed" },
+      { "id": "TP-R3-002", "disposition": "closed" },
+      { "id": "TP-R3-003", "disposition": "closed" },
+      { "id": "TP-R3-004", "disposition": "closed" },
+      { "id": "TP-R3-005", "disposition": "closed" },
+      { "id": "UX-009", "disposition": "closed" },
+      { "id": "UX-010", "disposition": "closed" },
+      { "id": "UX-011", "disposition": "closed" },
+      { "id": "UX-012", "disposition": "closed" },
+      { "id": "UX-013", "disposition": "closed" },
+      { "id": "UX-015", "disposition": "closed" },
+      { "id": "LY-005", "disposition": "closed" },
+      { "id": "PC-006", "disposition": "partial" },
+      { "id": "PC-007", "disposition": "partial" },
+      { "id": "HL3-003", "disposition": "open" },
+      { "id": "LG-R3-003", "disposition": "open" },
+      { "id": "UX-014", "disposition": "open" },
+      { "id": "UX-016", "disposition": "open" }
+    ],
+    "stats": {
+      "blocker": 0,
+      "major": 0,
+      "minor": 1,
+      "info": 1
+    }
+  }
+}
+```
+
+## Prior dispositions, with reasons (slice-02 view)
+
+- FE-R3-001 closed: ReviewBoard focus effect deps now include loading and stale. The tests 'FE-R3-001: … refused with a notice, and a later load that holds it opens nothing' and '… waits for that load' pin both branches. The residual edge is DG-R4-003 (wave 1).
+- FE-R3-002 closed: refocusFlow in PrWorkRow, `search.current?.focus()` on Dismiss notice, and focusSource with a [source] effect in IssuesBoard. Each has a DOM test that checks `document.activeElement`. The coverage gap on the async Link path is DG-R4-005 (info).
+- AR-007 closed: repositoryUnavailable in useIssueCollection.ts beside isAccessError, and `older` on the first page only. Tests 'AR-007/TP-R3-003' and 'AR-007: an Invalid Issues request on a later page'. The missing reason is DG-R4-001 (wave 1).
+- DG-R3-002 closed: issueSessions and the boundSessions import were removed from issues/model.ts. model.test.ts now pins boundSessionIndex(sessions)(issueSubject(issue)), which is the board's path.
+- TP-R3-001 closed: usePendingFlowLinks.dom.test.tsx adds two accepts in one act, dismiss-then-accept in one act, and the replacement of a session's older offer. Each fails its named mutant (M01/M05/M08) by reading.
+- TP-R3-002 closed: 'TP-R3-002: a PR that already has a Flow shows that Flow, not an offer'.
+- TP-R3-003 closed: rate-limit, unavailable, stale-cursor and other configuration reasons all assert Retry with no fallback.
+- TP-R3-004 closed: the two TP-R3-004 tests (no re-raise after Dismiss and Refresh; a later successful focus clears the notice).
+- TP-R3-005 closed: ReviewProgress.test.tsx renders state="partial" with and without showState.
+- UX-009 closed: the offer text and the Link/Dismiss accessible names now carry the title ('Flow #530 · Work 530').
+- UX-010 closed: accept keeps the offer with linking/error, and linkFlow rejects. Tested in the hook test and in the app-work-row fixture (refuseFlowLink).
+- UX-011 closed: the source is stored per project and account (`account + ".source." + JSON.stringify(cwd)`), and the legacy key is only read. Two UX-011 tests.
+- UX-012 / LY-005 closed: `.pr-work-offer` without pr-work-link, and `.pr-work-slot { overflow: hidden }`. A CSS test pins both.
+- UX-013 closed: the unavailable branch strips `configuration:`.
+- UX-015 closed: the text reads 'Bundled keryx in Settings → Desktop'.
+- PC-006 partial: the PR body now splits the deferred list by package and names HL-003, LG-014 and LG-016. The round-2 paragraph of journal.md still reads 'Deferred info: PF-006/HW2-002, AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004, UX-003..006' (unchanged context in slice-02 @@ 95,131 @@). PC-006 asked for the same correction there.
+- PC-007 partial: the round-2 '44/0' and 'named mutants' claims are gone from the body. The same unbacked shape is back for round 3 (DG-R4-004).
+- HL3-003 open: deferred. fillShown/fillComposer were not changed in this range (prWork.ts hunk only adds PrFlowOffer fields, App.tsx hunk does not touch fillComposer).
+- LG-R3-003 open: deferred. resolveFlowLinks and dismiss are unchanged in their re-arm behaviour.
+- UX-014 / UX-016 open: deferred. No 'Open on GitHub' on the focus notice, and no session-side offer.
+
+## Verified clean (no finding)
+
+- linkFlow (useAcpSession.ts:788): `keryx ctx rg -n --all "linkFlow\b|applyPendingFlow|pendingFlow\.current" apps/desktop/src` finds one caller, App.tsx:414 (usePendingFlowLinks link). The other pendingFlow users (workOnFlow :776, after-turn retry :414) are unchanged. linkFlow no longer seeds pendingFlow, so a failed Link is no longer retried silently after a turn. It is shown with Link kept instead, which the owner accepted (PR body choices). A rejection is caught in accept's try/catch, and App wraps accept in `void`, so no promise rejection goes unhandled.
+- usePendingFlowLinks (accept is now async; link may return a Promise): the only production consumer is App.tsx:414/422-431. Its type widening `void | Promise<void>` stays compatible with the test harness. settle matches by sessionId and dir, so a newer offer for the same session survives an older Link's answer. The double press is guarded by offersRef (linking) and by FlowOffer's busy check.
+- PrFlowOffer (prWork.ts: added optional linking/error fields): consumers are App.tsx:423 (builds it), ReviewBoard.tsx:525-532 (bySession map, passed through unchanged), PrWorkRow.tsx:20-22, 33 and 88-101 (renders them), ReviewResults.tsx (PrWork pass-through). Both fields are optional, so an offer without them renders the base text 'Link … ?'.
+- repositoryUnavailable: its only consumer is IssuesBoard.tsx (Collection). It is called only when `fallback` is set (source === "repository"), so the other sources keep base behaviour (Retry).
+- Issues source key: the per-project key is read first, then the legacy account key (`stored(sourceKey) ?? stored(account + ".source")`), so a choice made on main carries over. `clear()` (IssuesBoard.tsx:106-116) removes only `.filters.` keys and `.project`, as on base. No other Desktop reader of `.source` storage keys exists (search above: the other `.source` hits are unrelated object fields in OpenSpecView, metaproject.ts and ReviewRuns).
+- `.pr-work-slot { overflow: hidden }`: the users are PrWorkRow.tsx:60/64/70 and IssueWorkRow.tsx:20/25. Neither renders an in-slot popover: the session Menu is portaled (PrWorkRow.tsx:77), and focus rings use `outline-offset: -2px` (review.css:42), so nothing that was visible on base is clipped now.
+- ReviewBoard Dismiss notice: `search.current?.focus()` targets the board's search input. tsc is clean per the evidence file.
+- App fixtures: app-navigation now sends one turn so that the older-keryx binding notice appears after it (AC8 as re-frozen). The 'PR URL not sent' assertion still runs before that deliberate send (`!calls.includes("session/prompt")`), and the end assertion compares `prompted` with the turns sent before. AC7 is not weakened.
+- Test evidence: research-evidence/verify-tests-to-run-1.txt shows Desktop 1070/0 and root 68/0 at head. I ran nothing (read-only, exec_budget_s 0). Red-on-parent per added test (round obligation 5) was not run. By reading, TP-R3-001/002/004/005 are mutation guards that also pass on the parent, by design.
+
+## Notes
+
+- Consumers were enumerated by `keryx ctx rg` (search-derived) over apps/desktop/src. I did not query the package graph (`keryx gdgraph affected`). The payload's layers.affected list (25 files) holds no consumer of these exports beyond the ones traced, and no cap applied.
+- The acceptance criteria came from the payload (AC1–AC19). The PR body was used for the description comparison.
+- routing audit: graph_used: no (payload layers list read, symbol consumers enumerated by search), wiki_used: not-relevant (fix-range check against base), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

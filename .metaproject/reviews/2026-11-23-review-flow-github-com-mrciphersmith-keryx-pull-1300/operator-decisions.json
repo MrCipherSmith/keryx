@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "reviewer-override",
+      "quote": "override",
+      "reason": "Round 1 wave 1 found blockers; operator closes round 1 and runs the fix round first; remaining slices go to round 2 on the new head",
+      "confirmedVia": "host-question",
+      "at": "2026-11-23T21:20:07.415Z",
+      "subject": {
+        "head": "6a2a3031f740833e60b82856a9a266b5ffab5e10",
+        "items": [
+          "review-architecture",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-pr-contract",
+          "review-regression",
+          "review-security-code",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "override-question",
+        "questionText": "Для записи в пакет ревью нужно подтверждение с перечнем. Закрыть раунд 1 PR #1300 без второй волны? Не получат оставшиеся срезы (slice-02/03/04) 12 ревьюеров: review-architecture, review-degradation, review-frontend, review-highload, review-layout, review-logic, review-performance, review-pr-contract, review-regression, review-security-code, review-testing-practices, review-ui-ux. Эти срезы уйдут в раунд 2 на новом head после исправлений.",
+        "answerText": "override",
+        "time": "2026-11-23T21:20:07.415Z"
+      }
+    }
+  ]
+}

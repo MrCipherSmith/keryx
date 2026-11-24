@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 126373,
+      "contentHash": "fc6be12b0182d4c2be40e68652f403c22f1abf0ebe3a7cd42b38a6565e699bb7",
+      "files": [
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/acceptance-criteria.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/description.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/plan.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/tasks.md",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T5.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T6.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T7.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T8.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/dispatch/T9.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T17.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T5.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T6.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T7.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T8.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T9.implement.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/resolved/T10.test.json"
+      ],
+      "domain": ".metaproject [docs], .metaproject, .metaproject [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0.15,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 143851,
+      "contentHash": "d0cc9dd91957da88c8ab3d76bb711669e506ef58cce70f6936ca4cc38043299a",
+      "files": [
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/acp/types.ts",
+        "apps/desktop/src/issues/IssueFilters.tsx",
+        "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "apps/desktop/src/issues/IssuesBoard.css",
+        "apps/desktop/src/issues/IssuesBoard.tsx",
+        "apps/desktop/src/issues/IssuesView.tsx",
+        "apps/desktop/src/issues/model.ts",
+        "apps/desktop/src/issues/useIssueCollection.ts",
+        "apps/desktop/src/review/PrWorkRow.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewFilters.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/ReviewProgress.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/model.ts",
+        "apps/desktop/src/review/prWork.ts",
+        "apps/desktop/src/review/reviewFilterStorage.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "apps/desktop/src/session/SessionSubjectLinks.tsx",
+        "apps/desktop/src/session/subjectBinding.ts"
+      ],
+      "domain": "apps",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: apps/desktop/src/session/SessionSubjectLinks.tsx",
+          "risk class auth/permissions: apps/desktop/src/session/subjectBinding.ts",
+          "source code: apps/desktop/src/App.tsx, apps/desktop/src/issues/IssueFilters.tsx, apps/desktop/src/issues/IssueWorkRow.tsx (+16)",
+          "schema: apps/desktop/src/acp/types.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 23841,
+      "contentHash": "2e7213bc31072599c3552e6e1e454284471e9af7c2d5694835cab5ce67c3fb3b",
+      "files": [
+        "apps/desktop/src/session/useAcpSession.ts",
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/styles/review.css"
+      ],
+      "domain": "apps",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: apps/desktop/src/session/useAcpSession.ts",
+          "risk class auth/permissions: apps/desktop/src/session/useAcpSession.ts",
+          "risk class auth/permissions: apps/desktop/src/session/useAcpSession.ts",
+          "risk class auth/permissions: apps/desktop/src/session/useAcpSession.ts",
+          "risk class auth/permissions: apps/desktop/src/session/useAcpSession.ts",
+          "source code: apps/desktop/src/session/useAcpSession.ts, apps/desktop/src/shell/AppShell.tsx"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 146673,
+      "contentHash": "fe3edf8295825d79946e25840d2a151feef41cc375229b41cc1eca7c92ea28ce",
+      "files": [
+        "apps/desktop/src/acp/types.test.ts",
+        "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "apps/desktop/src/issues/model.test.ts",
+        "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+        "apps/desktop/src/review/model.test.ts",
+        "apps/desktop/src/review/prWork.test.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "apps/desktop/src/session/SessionSubjectLinks.dom.test.tsx",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/test/app-navigation.fixture.tsx"
+      ],
+      "domain": "apps [test]",
+      "split": "file",
+      "roles": [
+        "review-frontend",
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 78095,
+      "contentHash": "7b1675c88dbb3d75710526a982cd8a967514c4187f6143df5cb2c71fcc910ac7",
+      "files": [
+        "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "src/acp/server.ts",
+        "src/acp/shell-session-organize.test.ts",
+        "src/commands/issues.ts",
+        "src/integrations/issues-board.test.ts",
+        "src/integrations/issues-board.ts",
+        "src/integrations/issues-contract.ts",
+        "src/session/issues/issue-session.test.ts",
+        "src/session/organize.test.ts",
+        "src/session/issues/issue-session.ts",
+        "src/session/organize.ts"
+      ],
+      "domain": "apps [test], docs [docs], src/acp +6 more",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: src/session/issues/issue-session.ts",
+          "risk class auth/permissions: src/session/organize.ts",
+          "source code: src/acp/server.ts, src/commands/issues.ts, src/integrations/issues-board.ts (+2)",
+          "schema: src/integrations/issues-contract.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 5,
+    "bytes": 518833,
+    "files": 67,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

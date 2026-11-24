@@ -1,0 +1,85 @@
+STATUS: DONE
+
+## Frontend Review — round 4, wave 2 (slice-02)
+
+### Scope
+- Branch: feat/desktop-review-v2-stage1, head 4cb6c43ef
+- Range: d7b0f7058..4cb6c43ef (code commit 055115a20), diff mode
+- slice-02 read in full (2153 lines): App.tsx, IssuesBoard.tsx, issues/model.ts, useIssueCollection.ts, PrWorkRow.tsx, ReviewBoard.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css, and the Desktop tests/App fixtures (IssuesBoard.dom, model.test, PrWorkRow.dom, ReviewProgress.test, usePendingFlowLinks.dom, app-navigation and app-work-row fixtures). Flow package files (flow.json, journal.md) are outside this lens.
+- The slice omits some hunks of IssuesBoard.tsx and PrWorkRow.tsx (the focusSource/sourceSelect declarations and effect, and FlowOffer's busy/text/title); I read them with `git diff d7b0f7058..4cb6c43ef` for context.
+- Also checked: apps/desktop/src/acp/client.ts rejects every pending request on close (`for (const [, p] of this.pending) p.reject(...)`), so a Link write cannot leave the offer "Linking…" with inert buttons after keryx goes away.
+- No MobX in the touched code (React hooks only), so Part B rows did not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0 (FE-R4-001 and FE-R4-002 were filed in wave 1 and are not re-filed)
+
+### Prior findings this slice touches
+- FE-R3-001 closed: ReviewBoard focus effect deps now include `loading` and `stale`; tests "FE-R3-001: a focus for a PR missing…" and "…while a load runs waits…" cover both branches.
+- FE-R3-002 closed: refocus to the Flow slot's replacement button (PrWorkRow effect on `[offer]`), to the search field (Dismiss notice), and to the source select (VerifiedBoard effect on `[source]`); each has a DOM test asserting `document.activeElement` after the control is gone.
+- AR-007 closed: `repositoryUnavailable(reason, firstPage)` in useIssueCollection.ts matches only the three named CLI texts and the old-keryx text on the first page; tests pin Retry for rate-limit, unavailable, stale cursor and a bare "no remote" text, and for Invalid Issues request on a later page.
+- DG-R3-002 closed: issueSessions removed from model.ts; model.test now goes through boundSessionIndex.
+- UX-009 closed: offer text and both accessible names carry `Flow #id · title`.
+- UX-010 closed: accept keeps the offer `linking` until linkFlow answers, restores it with `error` on rejection; linkFlow now throws instead of swallowing; App wires the promise through. Pinned by usePendingFlowLinks and PrWorkRow tests and the app-work-row fixture (refused write keeps Link).
+- UX-011 closed: source key includes cwd; legacy per-account key read only as a fallback (deliberate, commented).
+- UX-013 closed: `configuration:` prefix stripped in the unavailable branch.
+- UX-015 closed: hint names "Bundled keryx" and "Settings → Desktop".
+- TP-R3-001 closed (tests present): double accept in one act, dismiss-then-accept in one act, and offer replacement each assert the guarded outcome; with the synchronous offersRef updates removed each would write or show the wrong thing. Mutation not run here (exec_budget 0).
+- TP-R3-002 closed (tests present): a PR with a prUrl Flow shows the Flow, not the offer.
+- TP-R3-003 closed (tests present): non-named repository-source errors keep Retry, no source switch.
+- TP-R3-004 closed (tests present): refused nonce stays handled across Refresh; a later focus clears the notice.
+- TP-R3-005 closed (tests present): ReviewProgress.test asserts the label only with showState.
+- LY-005 partial: `.pr-work-slot { overflow: hidden }` stops the overlap; the buttons stay `flex: none`, so at a 60px slot the text collapses and Dismiss is clipped. Not engine-measured; layout lens owns the re-check.
+- HL3-003 open (deferred; fillShown unchanged in this range).
+- LG-R3-003 open (deferred; resolveFlowLinks unchanged in this range).
+- UX-016 open (deferred; the offer is still shown only in the PR work row).
+
+### Clean Areas
+- Effects and dependency arrays: PrWorkRow `[offer]` refocus effect, VerifiedBoard `[source]` focus effect (ref attached in Collection's header before the parent effect runs), ReviewBoard focus effect deps.
+- Async state in usePendingFlowLinks: offersRef marked synchronously; settle matches sessionId+dir so a replaced or dismissed offer is not clobbered; no unhandled rejection (`void accept(...)` in App, try/catch in accept).
+- Accessibility: aria-disabled keeps keyboard focus while the write runs; role=alert on the failure text; Flow title in accessible names.
+- Conditional spreads (`...(offer.error && {...})`) spread nothing for "" / undefined.
+- TypeScript: no any, no new non-null assertions in product code.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-frontend",
+    "round": 4,
+    "wave": 2,
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "findings": [],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed", "note": "deps include loading, stale; refusal and wait-for-load both tested"},
+      {"id": "FE-R3-002", "disposition": "closed", "note": "all three self-removing controls move focus; each has an activeElement assertion"},
+      {"id": "AR-007", "disposition": "closed", "note": "repositoryUnavailable in useIssueCollection; named texts only, old-keryx text on first page only"},
+      {"id": "DG-R3-002", "disposition": "closed", "note": "issueSessions removed; tests use boundSessionIndex"},
+      {"id": "UX-009", "disposition": "closed", "note": "title in visible text and accessible names"},
+      {"id": "UX-010", "disposition": "closed", "note": "linking/error states; linkFlow rejects; client rejects pending on close so no stuck Linking"},
+      {"id": "UX-011", "disposition": "closed", "note": "source key includes cwd; legacy key read-only fallback"},
+      {"id": "UX-013", "disposition": "closed", "note": "configuration: prefix stripped"},
+      {"id": "UX-015", "disposition": "closed", "note": "names Bundled keryx and Settings -> Desktop"},
+      {"id": "TP-R3-001", "disposition": "closed", "note": "three tests added for the named guards; mutation not run (exec_budget 0)"},
+      {"id": "TP-R3-002", "disposition": "closed", "note": "test with a prUrl Flow asserts no offer"},
+      {"id": "TP-R3-003", "disposition": "closed", "note": "non-named errors keep Retry, tested"},
+      {"id": "TP-R3-004", "disposition": "closed", "note": "both refusal steps tested"},
+      {"id": "TP-R3-005", "disposition": "closed", "note": "ReviewProgress.test asserts label only with showState"},
+      {"id": "LY-005", "disposition": "partial", "note": "slot clips (no overlap), but Link/Dismiss stay flex:none; text collapses and Dismiss clipped at 60px slot; not engine-measured"},
+      {"id": "HL3-003", "disposition": "open", "note": "deferred; unchanged in range"},
+      {"id": "LG-R3-003", "disposition": "open", "note": "deferred; unchanged in range"},
+      {"id": "UX-016", "disposition": "open", "note": "deferred; unchanged in range"}
+    ],
+    "stats": {
+      "files_reviewed": 19,
+      "slices_read_in_full": 1,
+      "findings": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+      "prior_checked": 18
+    }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the payload's layers block already lists the affected files; no new exports with outside callers in this slice); wiki_used: no (not-relevant: intent stated in code comments and prior findings); ctx_used: yes (keryx ctx rg over the payload, slice and acp/client.ts); raw_rg_used: no. Raw `git diff d7b0f7058..4cb6c43ef` for IssuesBoard.tsx and PrWorkRow.tsx was read with a keryx:raw marker because slice-02 omits hunks needed for context.

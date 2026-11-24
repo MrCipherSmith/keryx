@@ -1,0 +1,138 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Parent ref: `main`
+- Merge-base: `b147408a8748cdbd8506b371adb5957947e4477a` (head `88e3faba9a1732f45a4ff7200588832e8b83f121`)
+- Scope mode: diff, round 2, wave 3. Slices read in full: slice-03 (useAcpSession.ts, AppShell.tsx, review.css) and slice-05 (app-work-row.fixture.tsx, implementation-plan.md, src/acp/server.ts, shell-session-organize.test.ts, src/commands/issues.ts, issues-board.ts and its test, issues-contract.ts, issue-session.ts and its test, organize.ts and its test).
+- Out-of-slice context read at head: apps/desktop/src/session/subjectBinding.ts, the useAcpSession.ts `applyPendingFlow`/`refreshSessions` bodies, apps/desktop/src/acp/types.ts `sameSubject`/`boundSessions`, apps/desktop/src/issues/model.ts `issueSubject`/`issueSessions`, IssueWorkRow.tsx, src/review/board-github.ts `configuredRepositories`/`selectRepository`/`reviewRepositories`, src/integrations/issues-github.ts `failure`, src/commands/issues.ts header, review/model.ts lane ids.
+- Spec compliance gate: ran against AC7, AC8, AC9, AC12 and AC13 for the code in these slices. No unimplemented criterion found here.
+
+### Summary
+The subject store is sound. `parseSessionSubject` checks kind, the `owner/name` charset (no `.`/`..`), a positive safe-integer number and a `https://github.com/<repo>/pull|issues/<n>` URL that agrees with all three. The store checks on both write and read, an invalid subject is refused without touching the stored one, `null` unlinks it, and `writeFlags` persists it. The ACP handler rejects a non-object and leaves field checks to the store. The issue binding writes `kind: "issue"` through `updateSessionFlagsAt` while it holds the binding lock. The Desktop wiring writes one flag at a time at turn end (flow, then subject), and `applyPendingFlow` never rejects, so `subjects.apply` always runs. The repository listing validates first and resolves the repo from the cwd. It omits `filter`/`pulls` for `/repos/{o}/{r}/issues`, drops PR rows, and scopes the cursor to the lowercased repository. It accepts GitHub's `/repositories/{id}/issues` next links but carries only the page keys, so the request path always comes from the cwd. Only `src/commands/issues.ts` calls `listIssuePage` in production, and it passes `cwd`. One new minor finding: a default "repository" source whose first remote has Issues disabled, which is the default for a fork.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected beyond known findings. The flags.json read-modify-write race is HW2-001. The double session/list after a bind is PF-002.
+
+### Error Handling
+
+#### [LG-013] The default "repository" Issues source fails with "unexpected response, refresh and retry" in a fork checkout, because the origin fork has Issues disabled
+- **Severity**: minor
+- **File**: src/integrations/issues-board.ts (`projectRepository`), with src/integrations/issues-github.ts `failure`
+- **Problem**: `projectRepository` takes `selectRepository(await reviewRepositories(cwd))` with no requested repo. `configuredRepositories` puts `origin` first, so the source always lists origin's issues, and Issues has no repository choice the way the PR board does. In the common fork workflow (origin = the user's fork, upstream = the real repo), origin is a fork. GitHub disables Issues on forks by default and answers `GET /repos/{o}/{r}/issues` with **410 Gone**. `failure()` maps 401/404/403 to `denied` and 429 to rate-limit, and turns every other status, 410 included, into `"unavailable: GitHub returned an unexpected Issues response. Refresh and retry."`.
+- **Why it matters**: Trigger: first visit to Issues, with no stored source, in a fork checkout or any project whose first GitHub remote has Issues turned off. Outcome: D5 makes "repository" the default, so the board opens on an error that tells the user to refresh. Refreshing fails the same way every time. The upstream repository's issues, which the project actually tracks, cannot be selected as this source. Workaround: switch the Source select to "Assigned to me". This is distinct from UX-008, which covers a project with no GitHub.com remote at all (a `configuration:` error). Here the remote exists and the request reaches GitHub.
+- **Fix**: Map 410 to a clear configuration error, e.g. `configuration: Issues are disabled for <owner>/<repo>. Choose another source.`. Then either prefer the PR board's selected repository when the project has one, or try the next configured remote (e.g. `upstream`) whose Issues are enabled. Add a test where the REST call answers 410 and assert the configuration-kind message.
+- **Evidence**: issues-board.ts `const repository = selectRepository(await reviewRepositories(cwd));`. board-github.ts `configuredRepositories`: `return [...new Set([...(origin ? [origin] : []), ...choices.values()])];` and `selectRepository`: `if (!requested) return repositories[0]!;`. issues-github.ts `failure`: only 401/404/429/403 are special-cased, and the rest falls through to `invalidResponse` ("Refresh and retry"). The GitHub REST behaviour (410 when Issues are disabled, and forks have Issues off by default) is platform documentation, not observed in this run. No test in issues-board.test.ts covers a non-200 response on the repository source.
+- **Class scope**: sites `src/integrations/issues-board.ts projectRepository` (repo choice) and `src/integrations/issues-github.ts failure` (410 mapping). Enumeration: `keryx ctx rg "listIssuePage\("` shows one production caller (src/commands/issues.ts). `keryx ctx rg "status ===" src/integrations/issues-github.ts` shows the complete status mapping, with no 410 branch.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected. `change.subject = subject as Exclude<...>` in server.ts hides no mismatch: `updateSessionFlagsAt` re-parses it with `parseSessionSubject` and throws `not a GitHub subject` otherwise, and the test refuses a mismatched URL.
+
+### Edge Cases
+
+#### [LG-014] An older keryx that writes the same flags.json drops `subject`
+- **Severity**: info
+- **File**: src/session/organize.ts (`writeFlags`)
+- **Problem**: The new `writeFlags` persists `subject`. A keryx from before this change rewrites flags.json with only `{archivedAt, pinnedAt, flow}`. Any archive, pin or flow-link it performs on a bound session therefore silently unbinds that session.
+- **Why it matters**: It is reached only when two keryx versions share one data dir. That can happen, for example, when a stale installed `keryx` (memory constraint `stale-installed-keryx-binary`) serves `keryx shell` while Desktop runs a newer one. I did not show that Desktop and the shell ever use different builds on the same store, so this is an observation.
+- **Fix**: Optional: note the downgrade limit in the stage-1 section of implementation-plan.md, or have future `writeFlags` versions preserve unknown keys.
+
+### prior_dispositions (findings these slices touch)
+- UX-001 closed: review.css `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`.
+- LY-003 closed: same rule.
+- DG-004 closed: the `.review-note` rule is removed.
+- UX-002 closed (CSS half): `.pr-work-link.is-attention` uses the warn tone. The PrWorkRow class is set for the waiting states (read, slice-02).
+- TP-001 closed, by reading only (no test run): app-work-row.fixture.tsx checks the Create Flow prefill of the existing bound session (M39), the session_flags `flow` write for one new package (M38/M40), no write for two packages, and the Issue slot reading "Session" for an issue-bound session (M42).
+- PF-002 open (deferred): the turn-end chain `applyPendingFlow(...).then(() => subjects.apply(...)).finally(() => void refreshSessions())` still refreshes after `onFlags` already did.
+- LG-004 open (deferred): server.ts still answers a store refusal through `refuseStore`, and `PendingSubjects.apply` still treats it as "not stored yet".
+- LY-004 open: `.session-subject-links { ... flex: none; ... white-space: nowrap; }` is unchanged.
+- LG-012 (w2) still open at this head: `bindIssueSubject` runs only in the `registered` branch. I do not repeat it.
+
+### Suggested Patches
+```diff
+--- src/integrations/issues-github.ts
++  if (response.status === 410) return new Error("configuration: Issues are disabled for this repository. Choose another source.");
+   if (response.status === 403) return new Error(denied);
+   return new Error(invalidResponse);
+```
+
+### Not verified
+- No tests run (exec_budget_s 0). TP-001's closure rests on reading the fixture assertions.
+- The 410 response for a fork with Issues disabled is GitHub's documented behaviour, not reproduced here.
+- `.metaproject/index.md` was not read in this subagent. The caller inlined the routing for this bounded review.
+
+Routing audit: graph_used: no (not-relevant: slice text supplied) · wiki_used: no (not-relevant) · ctx_used: yes (`keryx ctx rg` for callers of listIssuePage, the status mapping, the bindSubject/issueSessions readers and prior raw findings) · raw_rg_used: no
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "round": 2,
+    "wave": 3,
+    "slices": ["slice-03", "slice-05"],
+    "findings": [
+      {
+        "id": "LG-013",
+        "severity": "minor",
+        "reviewer": "review-logic",
+        "file": "src/integrations/issues-board.ts",
+        "quote": "  const repository = selectRepository(await reviewRepositories(cwd));",
+        "problem": "The default 'repository' Issues source always lists the first configured GitHub remote (origin first), with no repository choice. In a fork checkout, origin is a fork, whose Issues GitHub disables by default; /repos/{o}/{r}/issues then answers 410 Gone. issues-github.ts failure() has no 410 branch and reports 'unavailable: GitHub returned an unexpected Issues response. Refresh and retry.'",
+        "impact": "Trigger: first visit to Issues with no stored source, in a fork checkout or a project whose first GitHub remote has Issues disabled. Outcome: the default board shows an error telling the user to refresh, refreshing never helps, and the upstream repository's issues cannot be chosen for this source. Distinct from UX-008 (no GitHub.com remote at all, configuration error).",
+        "suggested_fix": "Map 410 to a configuration-kind message naming the repository and pointing to the Source select. Prefer the PR board's selected repository or the next configured remote with Issues enabled. Add a test where the repository listing answers 410.",
+        "evidence": "board-github.ts configuredRepositories puts origin first; selectRepository returns repositories[0] when nothing is requested; issues-github.ts failure maps only 401/404/403/429, and every other status becomes invalidResponse ('Refresh and retry'). GitHub's 410 for disabled Issues is documented behaviour, not reproduced.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "issues-repository-source-issues-disabled-410",
+        "class_scope": {
+          "sites": [
+            "src/integrations/issues-board.ts projectRepository",
+            "src/integrations/issues-github.ts failure (no 410 branch)"
+          ],
+          "enumeration_method": "keryx ctx rg 'listIssuePage\\(' (one production caller: src/commands/issues.ts); keryx ctx rg 'status ===' src/integrations/issues-github.ts (the complete status mapping)"
+        }
+      },
+      {
+        "id": "LG-014",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "src/session/organize.ts",
+        "quote": "  const stored = { archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow, subject: flags.subject };",
+        "problem": "A keryx from before this change rewrites flags.json with only archivedAt/pinnedAt/flow, so an archive, pin or flow link it performs drops a stored subject.",
+        "impact": "Only when two keryx versions share one data dir. Not shown to happen between Desktop and the shell, so this is an observation.",
+        "suggested_fix": "Optional: record the downgrade limit in the stage-1 notes, or preserve unknown keys in future writeFlags versions.",
+        "evidence": "slice-05 organize.ts writeFlags (new) versus the removed base line writing only {archivedAt, pinnedAt, flow}.",
+        "confidence": "low",
+        "blocking_merge": false,
+        "dedupe_key": "session-flags-subject-dropped-by-older-writer"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "UX-001", "disposition": "closed" },
+      { "id": "LY-003", "disposition": "closed" },
+      { "id": "DG-004", "disposition": "closed" },
+      { "id": "UX-002", "disposition": "closed" },
+      { "id": "TP-001", "disposition": "closed" },
+      { "id": "PF-002", "disposition": "open" },
+      { "id": "LG-004", "disposition": "open" },
+      { "id": "LY-004", "disposition": "open" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+  }
+}
+```

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dialog } from "../components/ui";
-import { defaultFilters, STAGES, type Filters, type ProjectBoard } from "./model";
+import { defaultFilters, type Filters, type ProjectBoard } from "./model";
 
 export function IssueFilters({ filters, project, apply, close }: {
   filters: Filters; project?: ProjectBoard; apply: (filters: Filters) => void; close: () => void;
@@ -19,9 +19,6 @@ export function IssueFilters({ filters, project, apply, close }: {
       <label>Updated since<input type="date" value={draft.since} onChange={e => field("since", e.target.value)} /></label>
       <label>Sort by update<select value={draft.sort} onChange={e => field("sort", e.target.value)}>
         <option value="desc">Newest first</option><option value="asc">Oldest first</option>
-      </select></label>
-      <label>Keryx stage<select value={draft.stage} onChange={e => field("stage", e.target.value)}>
-        <option value="">All stages</option>{Object.entries(STAGES).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
       </select></label>
       {([["repository", "Repository", "owner/repo"], ["author", "Author", "GitHub login"], ["assignee", "Assignee", "Login or Unassigned"],
         ["label", "Label", "Label name"]] as const).map(([key, title, hint]) => <label key={key}>{title}

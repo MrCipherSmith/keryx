@@ -1,0 +1,56 @@
+STATUS: DONE
+
+review-degradation, round 3, wave 2, slice-02 (read in full, 2103 lines). Range 88e3faba9..d7b0f7058. Read-only, nothing run. Test evidence comes from the orchestrator: verify-tests-to-run-1.txt (backend 2722 pass, 1 unrelated timeout in searchable-sources) and -2.txt (that file passes on rerun; Desktop 1051 pass / 0 fail).
+
+Findings: 0 blocker, 0 major, 0 minor, 0 info. DG-R3-001 (over-broad 'configuration:' fallback) and DG-R3-002 (dead issueSessions) from wave 1 are not filed again. The AC13 dom tests in this slice drive only the three named reasons, which is part of DG-R3-001's evidence.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02"],
+  "summary": "Fix round 2 (88e3faba9..d7b0f7058), slice-02 read in full: tests, fixtures, docs and the issues backend. No new degradation. Graph layer: payload layers.affected lists src/integrations/issues/service.ts, issue-source.ts, issues-projects.ts, src/commands/issue-workspace.ts, src/cli-registry.ts and others for the backend files. Consumers of the changed exports were traced by `keryx ctx rg` (search-derived). Verified clean: (1) issues-github.ts failure() now maps any HTTP 410 to issuesDisabled. The only REST callers are issuePage (issues-board.ts:181) and authenticatedAccount's /user, and graphql errors come with HTTP 200. So the new branch only reaches the listing: the repository source rewraps it with the repository name, and /issues for the viewer sources does not answer 410. On base a 410 was 'unavailable: ... unexpected Issues response'. (2) The listIssuePage page loop runs only when repository is set and the page is empty after dropping PRs, and stops at REPOSITORY_PAGES=3 or at no next link. The cursor scope is computed before turnPage mutates base. nextCursor comes from the last page used, through the same pageLink validation. turnPage replaces the inline loop; on the first page it is equivalent because listUrl sets no pageKeys. Worst case per request is 3 serial REST pages plus 1 GraphQL call, intended by the DG-009 fix and bounded. (3) issuesCommand's new third parameter `connect`: the only production caller, cli-registry.ts:128, passes one argument, so the default connectIssueAccount holds. (4) Blind-test pass over the new tests. IssuesBoard AC12 index test: a per-row read gives at least 12 reads per session per render and fails the `rows.length > count` check. prWork TP-R2-003: `every` instead of `some` keeps the pending list and fails. LG-011, LG-015 and the coalesced-press tests fail under their regressions. ReviewBoard TP-R2-005 now moves #202 outside 'Waiting for review' and into 'Mine', and asserts the slot text after each tick, in both groupings. The focus 'nobody clears' test needs focused.current per nonce. In app-work-row.fixture, if the coalesced #15 press registered expect, the single 510-c package would be offered, because the board gets subjectSessions with pending bindings (App.tsx:383,707) and flowOffer maps by sessionId (ReviewBoard.tsx:517-521). packagesAppear's visit to Flows does not refresh by itself: useFlows lives in App and refreshes on focus or the watcher event (useFlows.ts:56-70). So the window-focus refresh is still what is proven. app-navigation.fixture: the account-switch check catches a focus that is never cleared or onFocusHandled not being passed, and the second header press catches a constant nonce. (5) Docs: cli-reference (repository source, three pages, configuration errors), desktop-issues.md (default source, fallback, update hint) and implementation-plan.md (offer/Link/Dismiss, 15-minute window, coalesced press, limits (f) and (g)) match the code in slices 01 and 02. Not traced here: organize.ts/issue-session.ts behaviour (other slices). TP-R2-006/007 organize halves were checked only by `git diff` of organize.test.ts. No acceptance criteria were in the payload beyond the PR context; AC9/AC12/AC13 were read from the tests' own text.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "TP-R2-001", "disposition": "closed" },
+    { "id": "TP-R2-002", "disposition": "closed" },
+    { "id": "TP-R2-003", "disposition": "closed" },
+    { "id": "TP-R2-004", "disposition": "closed" },
+    { "id": "TP-R2-005", "disposition": "closed" },
+    { "id": "TP-R2-006", "disposition": "closed" },
+    { "id": "TP-R2-007", "disposition": "closed" },
+    { "id": "TP-R2-008", "disposition": "closed" },
+    { "id": "TP-R2-009", "disposition": "closed" },
+    { "id": "LG-015", "disposition": "closed" },
+    { "id": "DG-009", "disposition": "closed" },
+    { "id": "LG-013", "disposition": "closed" },
+    { "id": "UX-008", "disposition": "closed" },
+    { "id": "RG-001", "disposition": "closed" },
+    { "id": "PC-001", "disposition": "closed" },
+    { "id": "PC-003", "disposition": "closed" },
+    { "id": "PC-004", "disposition": "closed" },
+    { "id": "LG-007", "disposition": "closed" },
+    { "id": "LG-010", "disposition": "closed" },
+    { "id": "DG-008", "disposition": "closed" },
+    { "id": "DG-007", "disposition": "closed" },
+    { "id": "DG-006", "disposition": "partial" },
+    { "id": "HW2-002", "disposition": "open" },
+    { "id": "PF-006", "disposition": "open" },
+    { "id": "LG-014", "disposition": "open" },
+    { "id": "LG-016", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Notes on prior dispositions:
+- TP-R2-001: every fixed `settle` became `waitFor(predicate)`. One `nextFrame` stays for the negative check that #16's URL does not replace the draft. It runs after a positive wait for #16's subject write, and the comment ties it to App's rAF fill.
+- TP-R2-002: R2-17 is covered by 'Two presses in flight open one session'. R2-22 and R2-25 are covered by the account-switch no-replay check, R2-23 by the second header press, and R2-26 by the menu New session linked to Flow #506.
+- TP-R2-006/007: the issues-board '..' remote and the shell `subject: []` checks are in this slice. The organize.test.ts cases (org/.., org/., a space, mixed case, an extra field dropped) were seen in `git diff 88e3faba9..d7b0f7058 -- src/session/organize.test.ts`, not in a slice I read in full.
+- LG-013: 410 is now a configuration error that names the repository and points to Assigned to me. The 'prefer the next remote with Issues on' half was not taken; the message and the fallback button cover recovery.
+- LG-010/PC-002: implementation-plan.md is updated. The PR body was not checked against head (not in the slice).
+- DG-006 stays partial, as in wave 1: the tone test pins only is-attention, and the 'publication pending' text on a merged PR is an owner choice.
+- HW2-002, PF-006, LG-014 and LG-016 were deferred and have no change in this slice.
+- No disposition given (fix outside slice-02): HW2-001, DG-010, LG-012 (organize.ts, issue-session.ts), and the slice-01 ids already answered in wave 1.
+
+Routing audit: graph_used: yes (payload layers.affected; consumers confirmed by search, labelled search-derived); wiki_used: not-relevant (behaviour read from code and tests); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

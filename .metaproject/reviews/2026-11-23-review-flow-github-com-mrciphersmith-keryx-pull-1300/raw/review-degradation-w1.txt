@@ -1,0 +1,116 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-degradation, wave 1, slice-02 (read in full, 2539 lines). Read-only: no tests run; test evidence is the round's verify-tests-to-run-1.txt (1016 pass, 0 fail).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 (Desktop: App wiring, acp/types, issues board, PR board model/results/work row, prWork, pending flow links, subject binding, AppShell) read in full against the PR body and AC list. Two major behaviour findings on new paths that persist or show the wrong thing (a 'Create Flow' request that never stops waiting and later links an unrelated Flow; a title-link focus that matches PR number only and re-fires on board remount), two minor debt findings. Acceptance criteria were supplied in the payload (AC1-AC19); the description's stated removals (attention/In review lanes, Flow stage filter, local-review reason lines, Action required badge, default issue source) were checked against the diff and match: no diff-vs-description finding. Verified clean: (1) review/model.ts consumers: ReviewRuns.tsx imports only DECISION_LABEL (unchanged); reviewLane/laneReason/drawnLanes/newestFirst have one caller, ReviewResults.tsx; stateFilterShowsDone has no remaining caller (keryx ctx rg over apps/desktop/src). (2) issues/model.ts consumers: IssueDetail.tsx imports issueName, STAGES (unchanged); Filters.stage removal is handled in readPreferences (stored stage ignored) and IssueFilters. (3) Default issue source 'repository': useIssueCollection passes source through to request 'list'; src/integrations/issues-board.ts validateListRequest accepts 'repository' and listUrl filters pull_request items, so the new default is served. (4) acp/types.ts: SessionFlags gains an optional subject and new exports sameSubject/boundSessions; sessionFlags/messageCount unchanged, so the 25 graph-listed acp/types.ts consumers (reducer, providers, commands, Composer, Transcript, ...) receive the same shapes; judged by the additive shape, those consumer files were not opened one by one. (5) useAcpSession: applyPendingFlow never throws (catch-all), so the new .then(() => subjects.apply(id)) chain always runs after a turn. (6) Performance: ReviewResults/PrWorkRow render only when tabActive (workView === 'review', App.tsx:540), so session streaming does not re-run per-card boundSessions/prFlows while on the session view. (7) ReviewLaunchDialog initialTarget: a typed target still wins (reviewLaunchTarget). (8) ReviewFilters/filterSummary and readReviewFilters accept and validate the quick-filter keys; a stored grouping is read per filter key. Not traced: the src/ (root) consumers in the payload (src/acp/*, src/session/issues/*, src/integrations/issue-*.ts, src/commands/*, src/cli-registry.ts) belong to other slices' files and were not opened in this wave; the blast radius cap dropped 24 of 64 consumers (mostly Desktop *.test.ts files and src/session/issues/issue-shell.ts), none traced; 19 changed files are absent from the graph.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "line": null,
+      "quote": "      return step.action === \"wait\";",
+      "problem": "A 'Create Flow' request from a PR card never stops waiting. createPrFlow (App.tsx) calls flowLinks.expect(id, known) after only prefilling the composer (never sent); the pending entry is removed only when a link or clear step happens, and there is no expiry, no reset on session switch and no tie to a turn of that session. If the user does not send the prefilled prompt (or the agent's turn creates no package), the entry stays 'wait' for the life of the window; the next single flow package that appears in the project for any reason (Issues 'Create Flow'/prepare-flow, Flows board, another window or the CLI) is linked to the PR's session through s.linkFlow, which writes it to that session's flags.json.",
+      "impact": "An unrelated Flow is persisted as the PR session's flow, and the PR card's Flow slot then shows it (prFlows includes the Flow of every bound session), with 'Create Flow' replaced by the wrong 'Flow #id · stage'. On base no flow was ever linked automatically.",
+      "suggested_fix": "Bound the pending window: drop the entry when that session's next turn ends without a new package (hook it to the same after-turn point that applies pendingFlow/subjects), or on a short timeout, or when the session is no longer shown; and only link a package created while that session had a turn running. Add a test where Create Flow is not sent and a package appears later.",
+      "evidence": "consumer-trace: App.tsx createPrFlow -> openPrSession(card, 'latest', subject, flowPrompt(card.url), true) prefills via fillComposer only, then flowLinks.expect(id, known); usePendingFlowLinks.ts effect keeps every entry whose resolveFlowLink step is 'wait' and links on the first single fresh dir in flows.cards (all project flows); prWork.ts resolveFlowLink returns 'wait' while no fresh dir exists; PrWorkRow prFlows(card, work.flows, sessions) shows a bound session's flow. Refute: keryx ctx rg 'expire|timeout|forget|clearPending|flowLinks' over App.tsx and usePendingFlowLinks.ts finds only the hook call, known() and expect(): no expiry or cleanup; usePendingFlowLinks.dom.test.tsx covers only a package appearing right after expect, never a late unrelated one. AC9 says 'while that request is pending' and sets no end to pending; the PR's known-gaps list does not name this.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/review/usePendingFlowLinks.ts (effect keeping 'wait' entries, no expiry)",
+          "apps/desktop/src/App.tsx createPrFlow (only caller of flowLinks.expect)"
+        ],
+        "enumeration_method": "keryx ctx rg over apps/desktop/src for usePendingFlowLinks/flowLinks: one hook, one caller (App.tsx); every pending entry is created there"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "    if (!focus || focused.current === focus.nonce || !snapshot?.cards.some(c => c.number === focus.number)) return;",
+      "problem": "The session header's PR link opens the board panel by PR number only. App.tsx sets setReviewFocus({ number: subject.number, nonce }) and drops subject.repo; ReviewBoard matches any card with that number on whatever base repository the board shows. In addition, `focused` is a ref inside RepositoryBoard, which is keyed by [cwd, repo] (and the board by viewer), so after one use of the link, switching the board's base repository (or account) remounts RepositoryBoard with focused = null while App still passes the same focus, and the effect opens PR #N of the new repository unasked.",
+      "impact": "In a project whose board offers more than one base repository (the 'Base repository' select), clicking 'PR owner/a#12' while the board shows owner/b opens owner/b#12, a different pull request; and a later repository switch pops open a panel nobody requested. The bound-session lookup itself compares repo (sameSubject), so only this link path is wrong.",
+      "suggested_fix": "Carry the subject's repo (or repositoryId) in focus and require it to equal snapshot.repo/repositoryId before opening; select that repository when it differs. Clear the focus in App once it has been honoured (e.g. an onFocused callback) instead of keeping the seen nonce in a ref that dies with the remount.",
+      "evidence": "consumer-trace: App.tsx titleLinks onOpenSubject -> go('review'); setReviewFocus(old => ({ number: subject.number, nonce: ... })) (no repo); ReviewBoard.tsx focus effect matches snapshot.cards by number only; ProjectBoard renders <RepositoryBoard key={JSON.stringify([props.cwd, repo])}> so a repo change remounts and resets `focused`; prSubject(card, snapshot.repo, ...) shows subjects are per repo. Refute: read the focus effect and the App producer; no repo check, no focus reset in App (the only setReviewFocus call is the link). Base had no such link, so nothing on base guards it; the description does not mention repository scope.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/App.tsx titleLinks onOpenSubject (setReviewFocus producer)",
+          "apps/desktop/src/review/ReviewBoard.tsx focus effect (only consumer)"
+        ],
+        "enumeration_method": "read of the full App.tsx and ReviewBoard.tsx hunks in slice-02: reviewFocus is new state introduced by this diff with one setter call (titleLinks onOpenSubject) and one consumer (ReviewBoard focus prop/effect); no ctx rg was run for it"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "  /** Kept for callers without Subject sessions; the work row and the PR panel prefer `onOpenSubjectSession`. */",
+      "problem": "ReviewBoard's onOpenSession prop is now passed by no production caller (App.tsx switched to onOpenSubjectSession), and the comment says the work row 'prefers' onOpenSubjectSession, but PrWorkRow has no fallback: without onOpenSubjectSession its session slot and More button are disabled. Only the detail panel (openPanelSession) still falls back. The card-level 'Open in Sessions' button that onOpenSession used to drive is gone.",
+      "impact": "A maintainer reading the prop doc will expect the card's session slot to work with onOpenSession alone; it does not. Dead prop surface left over from the old card action.",
+      "suggested_fix": "Remove onOpenSession from ReviewBoard Props and openPanelSession's fallback, or make PrWorkRow fall back to it and fix the comment.",
+      "evidence": "base-diff: base ReviewResults ReviewAction rendered an icon button calling onOpenSession(card); head ReviewAction has no session button and PrWorkRow uses only work.onOpenSubjectSession (disabled={!openSession}). keryx ctx rg 'onOpenSession' over apps/desktop/src/review and App.tsx: ReviewBoard is given only onOpenSubjectSession by App.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "apps/desktop/src/styles/review.css",
+      "line": null,
+      "quote": ".review-note { display: block; color: var(--warn); font-size: var(--fs-xs); font-weight: 500; overflow-wrap: anywhere; }",
+      "problem": "The change removed every `review-note` element (secondaryNote in ReviewResults tile and list row); the rule is left behind with no user.",
+      "impact": "Leftover of the old card surface; a reader looking for where the outdated-review note renders finds a style for an element that no longer exists.",
+      "suggested_fix": "Delete the .review-note rule (reviewNote() itself is still used for the work row title).",
+      "evidence": "base-diff: base ReviewResults rendered <span className=\"review-note\">; head has none. keryx ctx rg 'review-note\\b' over apps/desktop/src (non-test) matches only styles/review.css.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": null,
+      "quote": "projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\\/$/, \"\").toLowerCase() === card.url.toLowerCase())}",
+      "problem": "Pre-existing: the PR panel's Flow match normalises only the Flow's prUrl, not card.url, while the new flowForPr in App.tsx and samePrUrl in prWork.ts strip the trailing slash on both sides. Not caused by this change; the two matchers now disagree on a URL with a trailing slash.",
+      "impact": "None shown; GitHub card URLs carry no trailing slash.",
+      "suggested_fix": "Use prWork's PR-URL comparison in ReviewDetail's flow prop when that line is next touched.",
+      "evidence": "Read ReviewBoard.tsx ReviewDetail props (unchanged line) and App.tsx flowForPr / prWork.ts samePrUrl (new).",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": {
+    "findings": 5,
+    "blocker": 0,
+    "major": 2,
+    "minor": 2,
+    "info": 1,
+    "consumers_in_payload": 40,
+    "consumers_traced": "desktop review/issues/session consumers in this slice; acp/types.ts consumers judged by additive shape; src/ consumers not traced (other slices)",
+    "cap_dropped": 24
+  },
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: payload blast radius (keryx review blast-radius --degradation); wiki_used: not-relevant (behaviour read from code and the AC list); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

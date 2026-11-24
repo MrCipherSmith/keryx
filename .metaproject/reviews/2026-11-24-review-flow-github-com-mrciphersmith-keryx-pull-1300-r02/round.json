@@ -1,0 +1,888 @@
+{
+  "v": 1,
+  "round": 2,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "1 round(s): 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300; 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300 trusted: local registry (ingest at 2026-11-24T07:15:18.102Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300 was committed by 4cb6c43ef153; chosen 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300 (d7b0f7058e91 is an ancestor of 4cb6c43ef153)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and d7b0f7058e919a5880319588ad95395b7ff66153 (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300",
+    "reviewedHead": "d7b0f7058e919a5880319588ad95395b7ff66153",
+    "packagePath": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "d7b0f7058e919a5880319588ad95395b7ff66153",
+    "head": "4cb6c43ef1532ed245e5617cf74ee55788b91d38"
+  },
+  "fixHunks": [
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 69,
+      "endLine": 76,
+      "findingIds": [
+        "UX-011"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/issues/model.ts",
+      "startLine": 66,
+      "endLine": 66,
+      "findingIds": [
+        "DG-R3-002"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 84,
+      "endLine": 86,
+      "findingIds": [
+        "FE-R3-002",
+        "LY-005"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 88,
+      "endLine": 94,
+      "findingIds": [
+        "LY-005"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 509,
+      "endLine": 516,
+      "findingIds": [
+        "FE-R3-001"
+      ]
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 37,
+      "endLine": 40,
+      "findingIds": [
+        "UX-012"
+      ]
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 477,
+      "endLine": 486,
+      "findingIds": [
+        "PC-008"
+      ]
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 104,
+      "endLine": 112,
+      "findingIds": [
+        "SC3-001"
+      ]
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 116,
+      "endLine": 116,
+      "findingIds": [
+        "DG3-001"
+      ]
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 129,
+      "endLine": 157,
+      "findingIds": [
+        "HL3-001",
+        "HL3-002",
+        "HL3-004",
+        "TP-R3-007"
+      ]
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 205,
+      "endLine": 205,
+      "findingIds": [
+        "TP-R3-009"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      "startLine": 420,
+      "endLine": 480
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      "startLine": 736,
+      "endLine": 775
+    },
+    {
+      "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+      "startLine": 115,
+      "endLine": 131
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 414,
+      "endLine": 414
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 425,
+      "endLine": 425
+    },
+    {
+      "file": "apps/desktop/src/App.tsx",
+      "startLine": 427,
+      "endLine": 427
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 36,
+      "endLine": 36
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 40,
+      "endLine": 41
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 352,
+      "endLine": 352
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 449,
+      "endLine": 451
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 454,
+      "endLine": 456
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 458,
+      "endLine": 463
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 471,
+      "endLine": 471
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 480,
+      "endLine": 482
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 484,
+      "endLine": 484
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 491,
+      "endLine": 492
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 494,
+      "endLine": 519
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "startLine": 524,
+      "endLine": 556
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 61,
+      "endLine": 63
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 65,
+      "endLine": 67
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 85,
+      "endLine": 86
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 88,
+      "endLine": 88
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 90,
+      "endLine": 90
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 156,
+      "endLine": 156
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 274,
+      "endLine": 275
+    },
+    {
+      "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+      "startLine": 277,
+      "endLine": 278
+    },
+    {
+      "file": "apps/desktop/src/issues/model.test.ts",
+      "startLine": 3,
+      "endLine": 4
+    },
+    {
+      "file": "apps/desktop/src/issues/model.test.ts",
+      "startLine": 64,
+      "endLine": 66
+    },
+    {
+      "file": "apps/desktop/src/issues/model.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "apps/desktop/src/issues/useIssueCollection.ts",
+      "startLine": 20,
+      "endLine": 31
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "startLine": 339,
+      "endLine": 471
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "startLine": 478,
+      "endLine": 481
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "startLine": 485,
+      "endLine": 485
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "startLine": 487,
+      "endLine": 487
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 49,
+      "endLine": 57
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 64,
+      "endLine": 65
+    },
+    {
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "startLine": 96,
+      "endLine": 100
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 490,
+      "endLine": 493
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 521,
+      "endLine": 521
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "startLine": 610,
+      "endLine": 610
+    },
+    {
+      "file": "apps/desktop/src/review/ReviewProgress.test.tsx",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": "apps/desktop/src/review/prWork.ts",
+      "startLine": 144,
+      "endLine": 147
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "startLine": 35,
+      "endLine": 36
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "startLine": 45,
+      "endLine": 53
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "startLine": 165,
+      "endLine": 216
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 11,
+      "endLine": 14
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 22,
+      "endLine": 26
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 29,
+      "endLine": 29
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "startLine": 64,
+      "endLine": 77
+    },
+    {
+      "file": "apps/desktop/src/session/useAcpSession.ts",
+      "startLine": 784,
+      "endLine": 794
+    },
+    {
+      "file": "apps/desktop/src/styles/review.css",
+      "startLine": 28,
+      "endLine": 28
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 43,
+      "endLine": 46
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 83,
+      "endLine": 88
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 90,
+      "endLine": 93
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 317,
+      "endLine": 324
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 326,
+      "endLine": 328
+    },
+    {
+      "file": "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "startLine": 435,
+      "endLine": 435
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 23,
+      "endLine": 24
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 65,
+      "endLine": 70
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 129,
+      "endLine": 133
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 176,
+      "endLine": 176
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 178,
+      "endLine": 178
+    },
+    {
+      "file": "apps/desktop/src/test/app-work-row.fixture.tsx",
+      "startLine": 187,
+      "endLine": 193
+    },
+    {
+      "file": "docs/docs/guides/desktop-issues.md",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "docs/docs/guides/desktop-issues.md",
+      "startLine": 46,
+      "endLine": 46
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 35,
+      "endLine": 37
+    },
+    {
+      "file": "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+      "startLine": 46,
+      "endLine": 47
+    },
+    {
+      "file": "src/acp/server.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/acp/server.ts",
+      "startLine": 2940,
+      "endLine": 2940
+    },
+    {
+      "file": "src/acp/server.ts",
+      "startLine": 2964,
+      "endLine": 2965
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "startLine": 616,
+      "endLine": 619
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "startLine": 4,
+      "endLine": 4
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "startLine": 261,
+      "endLine": 261
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "startLine": 269,
+      "endLine": 271
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "startLine": 273,
+      "endLine": 274
+    },
+    {
+      "file": "src/integrations/issues-board.test.ts",
+      "startLine": 313,
+      "endLine": 332
+    },
+    {
+      "file": "src/integrations/issues-board.ts",
+      "startLine": 113,
+      "endLine": 115
+    },
+    {
+      "file": "src/integrations/issues-board.ts",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "src/integrations/issues-board.ts",
+      "startLine": 122,
+      "endLine": 122
+    },
+    {
+      "file": "src/lib/file-lock.test.ts",
+      "startLine": 1,
+      "endLine": 128
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 46,
+      "endLine": 61
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 63,
+      "endLine": 65
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 73,
+      "endLine": 77
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 79,
+      "endLine": 96
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 101,
+      "endLine": 102
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 116,
+      "endLine": 124
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 125,
+      "endLine": 125
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 127,
+      "endLine": 134
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 137,
+      "endLine": 137
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 146,
+      "endLine": 147
+    },
+    {
+      "file": "src/lib/file-lock.ts",
+      "startLine": 154,
+      "endLine": 206
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "startLine": 1,
+      "endLine": 3
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "startLine": 29,
+      "endLine": 35
+    },
+    {
+      "file": "src/session/issues/issue-session.test.ts",
+      "startLine": 98,
+      "endLine": 155
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 52,
+      "endLine": 57
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 59,
+      "endLine": 59
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 62,
+      "endLine": 72
+    },
+    {
+      "file": "src/session/issues/issue-session.ts",
+      "startLine": 100,
+      "endLine": 100
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 8,
+      "endLine": 36
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 166,
+      "endLine": 201
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 205,
+      "endLine": 205
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 207,
+      "endLine": 222
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 223,
+      "endLine": 223
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 225,
+      "endLine": 225
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 229,
+      "endLine": 309
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 314,
+      "endLine": 316
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 318,
+      "endLine": 318
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 320,
+      "endLine": 323
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 325,
+      "endLine": 325
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 333,
+      "endLine": 339
+    },
+    {
+      "file": "src/session/organize.test.ts",
+      "startLine": 346,
+      "endLine": 346
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 162,
+      "endLine": 163
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 165,
+      "endLine": 186
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 190,
+      "endLine": 199
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 213,
+      "endLine": 213
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 221,
+      "endLine": 237
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 282,
+      "endLine": 282
+    },
+    {
+      "file": "src/session/organize.ts",
+      "startLine": 285,
+      "endLine": 301
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "TP-R3-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "AR-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "PC-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "PC-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "TP-R3-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-009",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-010",
+      "disposition": "open"
+    },
+    {
+      "findingId": "HL3-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "LG-R3-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "PC-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-013",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-014",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-015",
+      "disposition": "open"
+    },
+    {
+      "findingId": "UX-016",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "d7b0f7058e919a5880319588ad95395b7ff66153",
+  "modeReason": "d7b0f7058e91 is an ancestor of 4cb6c43ef153"
+}

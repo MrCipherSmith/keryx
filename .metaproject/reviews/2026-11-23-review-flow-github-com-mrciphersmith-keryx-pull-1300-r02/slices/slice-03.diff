@@ -1,0 +1,450 @@
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 22,74 @@
+ import {
+   canOrganizeSessions,
+   hasLiveSessions,
+   DELEGATE_EXITED,
+   DELEGATE_RESULT,
+   DELEGATE_TERMINAL,
+   type DelegateResultParams,
+   SESSION_FLAGS,
+   SESSION_RELEASED,
+   SESSION_SHOWN,
+   SESSION_TRASH,
+   type CommandEffect,
+   type AskUserResult,
+   type ConfigOption,
+   type InitializeResult,
+   type LoadSessionResult,
+   type NewSessionResult,
+   type PermissionOutcome,
+   type SessionFlags,
+   type SessionInfo,
++  type SessionSubject,
+   type SessionUpdate,
+ } from "../acp/types";
+ import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+ import { desktopReviewCommands, runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
+ import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
+ import { readSubagentHistory, subagentHistoryWriter } from "./subagentHistory";
+ import { SessionRegistry } from "./sessionRegistry";
+ import { answerAgentRequest } from "./agentRequests";
+ import { retentionDays } from "../lib/retention";
+ import { idleSessions, pickStartSession } from "./startup";
+ import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN } from "./telegramSession";
++import { PendingSubjects } from "./subjectBinding";
+ 
+ export type { PendingAsk, PendingPermission } from "./dialogQueue";
+ 
+ export interface ReviewDraftRequest extends ReviewDraftHints {
+   prompt?: string;
+   sessionId: string;
+   nonce: string;
+ }
+ 
+ export type Fatal =
+   | { kind: "incompatible"; found: string; required: string }
+   /** This keryx cannot serve the app at all: no shell profile, or one without live sessions. */
+   | { kind: "noShell"; found: string; reason: "no-profile" | "no-live-sessions" }
+   | { kind: "leased"; sessionId: string };
+ 
+ /** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
+ function isLeaseError(e: unknown): boolean {
+   if (e instanceof RpcError) {
+     const reason = (e.data as { reason?: unknown } | undefined)?.reason;
+     if (reason === "session-leased") return true;
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 252,307 @@
+       const all: SessionInfo[] = [];
+       let cursor: string | null | undefined;
+       for (let page = 0; page < 5; page++) {
+         const r: { sessions?: SessionInfo[]; nextCursor?: string | null } = await client.request(
+           "session/list",
+           cursor ? { cwd, cursor } : { cwd },
+         );
+         all.push(...(r.sessions ?? []));
+         cursor = r.nextCursor;
+         if (!cursor) break;
+       }
+       all.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+       if (l.client === client) dispatch({ t: "sessions", sessions: all });
+       return all;
+     } catch {
+       /* listing is optional; an agent without session/list just shows none */
+       return null;
+     }
+   }, [cwd, dispatch]);
+ 
++  /** PR and issue bindings waiting for keryx to store a new session, applied like the pending flow link. */
++  const [pendingSubjects, setPendingSubjects] = useState<ReadonlyMap<string, SessionSubject>>(() => new Map());
++  const subjects = useMemo(() => new PendingSubjects({
++    write: (sessionId, subject) => {
++      const client = live.current.client;
++      return client ? client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, subject }) : Promise.reject(new Error("keryx is not running"));
++    },
++    onFlags: (sessionId, flags) => {
++      dispatch({ t: "flags", sessionId, flags });
++      // The pending binding is dropped only once the stored list (which then holds it) is read.
++      return refreshSessions();
++    },
++    onNotice: (sessionId, text) => dispatch({ t: "notice", sessionId, level: "warn", text }),
++    onChange: setPendingSubjects,
++  }), [cwd, dispatch, refreshSessions]);
++
+   /**
+    * Archive the sessions nobody touched for the retention window (Settings → Sessions). The shown
+    * session and any with a running turn are kept; pinned ones are never archived. Best effort.
+    */
+   const archiveIdle = useCallback(
+     async (sessions: readonly SessionInfo[]) => {
+       const l = live.current;
+       const client = l.client;
+       if (!client || !l.usable || !l.extensions.includes(SESSION_FLAGS)) return;
+       const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys(), ...l.reg.telegramTurns.keys()]);
+       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
+       for (const sessionId of ids) {
+         try {
+           const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, archived: true });
+           if (l.client !== client) return;
+           dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+         } catch {
+           /* in use elsewhere or gone: tried again next time */
+         }
+       }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 393,440 @@
+           const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
+           if (l.client !== client) return;
+           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
+           if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
+           else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
+           else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
+           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
+         } catch (e) {
+           if (l.client === client) {
+             busyRefusal = e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
+             if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
+             dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
+               text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
+           }
+         } finally {
+           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
+           if (l.client === client) {
+             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
+             if (!busyRefusal) dialogs.dropSession(sessionId);
+             dispatch({ t: "busy", sessionId, busy: false });
+-            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
++            // One flags write at a time: the flow link first, then the subject binding.
++            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
+           }
+         }
+       })();
+       return true;
+     },
+-    [dialogs, dispatch, refreshSessions, applyPendingFlow],
++    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
+   );
+ 
+   const resumeIssueQuestions = useCallback((sessionId: string) =>
+     sendPrompt("Resume the pending issue questions.", sessionId, undefined, false, undefined, { resumeIssueQuestions: true }),
+   [sendPrompt]);
+ 
+   /**
+    * session/load of a session the window does not hold. Its replay lands off screen; the session is
+    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
+    */
+   const openLoad = useCallback(
+     async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal): Promise<boolean> => {
+       const l = live.current;
+       if (issueScope?.aborted) return false;
+       const plan = l.reg.planSwitch(sessionId);
+       if (plan === "show") {
+         l.reg.showLocal(sessionId);
+         dispatch({ t: "show", sessionId });
+         return true;
+       }
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 764,812 @@
+   /**
+    * Work on a flow: in a new session linked to the flow (`target` "new"), or in a session already
+    * linked to it. Resolves the session that is now shown, or null when none could be opened.
+    */
+   const workOnFlow = useCallback(
+     async (flowDir: string, target: "new" | string): Promise<string | null> => {
+       if (target !== "new") {
+         await loadSession(target);
+         return target;
+       }
+       const id = await newSession();
+       if (id) {
+         pendingFlow.current.set(id, flowDir);
+         await applyPendingFlow(id);
+       }
+       return id;
+     },
+     [loadSession, newSession, applyPendingFlow],
+   );
+ 
++  /** Link a session to a flow package; kept pending and retried after its turn while keryx has not stored the session. */
++  const linkFlow = useCallback((sessionId: string, flowDir: string) => {
++    pendingFlow.current.set(sessionId, flowDir);
++    return applyPendingFlow(sessionId);
++  }, [applyPendingFlow]);
++
++  /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
++  const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
++
+   const setMode = useCallback(
+     async (modeId: string) => {
+       const l = live.current;
+       const client = l.client;
+       const sessionId = l.reg.shown;
+       if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+       try {
+         await client.request("session/set_mode", { sessionId, modeId });
+         if (l.client === client) {
+           dispatch({ t: "updates", updates: [{ sessionId, at: Date.now(), update: { sessionUpdate: "current_mode_update", currentModeId: modeId } }] });
+         }
+       } catch (e) {
+         if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change mode: ${errMessage(e)}` });
+       }
+     },
+     [dispatch],
+   );
+ 
+   const setModel = useCallback(
+     async (configId: string, value: string) => {
+
+--- apps/desktop/src/session/useAcpSession.ts
+@@ 1047,1081 @@
+     extensions,
+     keryxPath,
+     onLoginChallenge,
+     refreshTasks,
+     /** A notice in the shown session's transcript. */
+     notify: (level: "info" | "warn" | "error", text: string) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "notice", sessionId, level, text });
+     },
+     removeQueued: (index: number) => {
+       const sessionId = live.current.reg.shown;
+       if (sessionId) dispatch({ t: "queueRemove", sessionId, index });
+     },
+     cancel,
+     newSession,
+     loadSession,
+     reopen,
+     setFlags,
+     trashSession,
+     workOnFlow,
++    linkFlow,
++    bindSubject,
++    /** Bindings keryx has not stored yet, by session id. */
++    pendingSubjects,
+     setMode,
+     setModel,
+     restart,
+     continueAnyway,
+     answerPermission,
+     answerAsk,
+     projectTelegramQuestion,
+     dismissFatal: () => setFatal(null),
+     dismissBanner: (id: number) => dispatch({ t: "dismissBanner", id }),
+   };
+ }
+
+--- apps/desktop/src/shell/AppShell.tsx
+@@ 30,71 @@
+  */
+ function useTitlebarInset(): boolean {
+   const [overlay, setOverlay] = useState(false);
+   useEffect(() => {
+     if (!isTauri()) return;
+     const check = () => setOverlay(window.outerHeight - window.innerHeight < 8);
+     check();
+     window.addEventListener("resize", check);
+     return () => window.removeEventListener("resize", check);
+   }, []);
+   return overlay;
+ }
+ 
+ interface ShellProps {
+   cwd: string;
+   recents: string[];
+   view: View;
+   onView: (v: View) => void;
+   onProjectSettings?: () => void;
+   title: ReactNode;
++  /** Links shown beside the session title (its Subject and Flow). */
++  titleLinks?: ReactNode;
+   hasSession?: boolean;
+   onOpenSourceIssue?: () => void;
+   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
+   flowsActive: number;
+   reviewIndicator?: ReviewTabIndicator;
+   /** The projects on the rail, in the user's order; `cwd` is one of them. */
+   projects: string[];
+   /** This window's project's live state. */
+   activity: ProjectActivity;
+   /** Every project running in a window of the app, this one and those in the background. */
+   live: LiveProject[];
+   onRemoveProject: (cwd: string) => void;
+   onOpenFolder: () => void;
+   onSwitchProject: (cwd: string) => void;
+   onNewWindow: (cwd: string) => void;
+   onCloseProject: () => void;
+   onPalette: () => void;
+   /** Title-bar controls before the palette button (the Project menu). */
+   actions?: ReactNode;
+   children: ReactNode;
+
+--- apps/desktop/src/shell/AppShell.tsx
+@@ 255,295 @@
+     { kind: "separator", id: "s2" },
+     { id: "close", label: "Close project", icon: "x", onSelect: onCloseProject },
+   ];
+   return (
+     <header className="titlebar" data-tauri-drag-region>
+       <div className="titlebar-left" data-tauri-drag-region>
+         <button
+           ref={btn}
+           className="project-switcher"
+           onClick={() => setMenu((m) => !m)}
+           aria-haspopup="menu"
+           aria-expanded={menu}
+           title={cwd}
+         >
+           <Icon name="folder" size={14} />
+           <span className="truncate">{basename(cwd)}</span>
+           <Icon name="chevronDown" size={12} />
+         </button>
+         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
+         <div className="titlebar-title" data-tauri-drag-region>{title}</div>
++        {p.view === "session" && p.titleLinks}
+         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
+       </div>
+       <div className="titlebar-right" data-tauri-drag-region>
+         {p.view === "session" && p.onOpenSourceIssue && <button className="icon-btn" aria-label="Open source issue"
+           title="Open source issue" onClick={p.onOpenSourceIssue}><Icon name="circleDot" size={15} /></button>}
+         <InfoToggle show={p.view === "session"} />
+         {p.view === "session" && p.hasSession && <ActivityToggle />}
+         <SideToggles />
+         {p.actions}
+         <button className="palette-btn" onClick={onPalette} aria-label="Commands and sessions" title="Commands and sessions">
+           <Icon name="search" size={13} />
+           <span>Commands</span>
+           <Kbd>{MOD}K</Kbd>
+         </button>
+         <span className={`conn conn-${status.tone}`} title={status.detail ?? status.label} role="status">
+           <span className="conn-dot" />
+           {status.label}
+         </span>
+       </div>
+     </header>
+
+--- apps/desktop/src/styles/review.css
+@@ 1,70 @@
+ .review-context { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) var(--sp-5); color: var(--fg-muted); font-size: var(--fs-sm); border-bottom: 1px solid var(--border); }
+ .review-context strong { color: var(--fg); overflow-wrap: anywhere; }
+ .review-board .sheet-head-row .flow-id { min-width: 0; overflow-wrap: anywhere; }
+ .review-active-filters { flex-basis: 100%; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; max-height: min(8rem, 20vh); overflow: auto; }
+ .review-dismiss-warning { margin-inline-start: auto; }
+ .review-active-filters > span { background: var(--bg-sunken); border-radius: var(--r-sm); padding: 3px 6px; overflow-wrap: anywhere; }
+ .review-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-5); color: var(--fg-muted); }
+ .review-lanes .lane { flex: 1 0 230px; }
+-.review-lane-attention { background: var(--warn); }
+-.review-lane-review { background: var(--accent); }
+-.review-lane-done { background: var(--ok); }
++.review-lane-waiting, .review-lane-requested { background: var(--info); }
++.review-lane-changes { background: var(--warn); }
++.review-lane-approved, .review-lane-mine { background: var(--ok); }
++.review-lane-merged { background: var(--accent); }
++.review-quick-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
++.review-context [aria-pressed="true"] { color: var(--accent-text); background: var(--bg-selected); border-color: var(--accent-text); }
++.review-grouping { display: inline-flex; align-items: center; gap: var(--sp-1); }
+ .review-card { display: grid; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; }
+ .review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+ .review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }
+ .review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
+ .review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
+ .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+ .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
+ .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
+-.review-note { display: block; color: var(--warn); font-size: var(--fs-xs); font-weight: 500; overflow-wrap: anywhere; }
++.review-board .card-actions { flex-wrap: wrap; }
++.review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
++/* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
++.pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
++.pr-work-slot { display: flex; min-width: 0; height: 24px; }
++.pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
++.pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
++.pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
++.pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
++.pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
++.pr-work-link:disabled, .pr-work-more:disabled { cursor: default; opacity: 0.55; }
++/* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
++.pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
++/* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
++.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
+ .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
+ .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
+ .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
+ .review-ci { font-size: var(--fs-xs); font-weight: 550; color: var(--fg-muted); }
+ .review-ci.ci-passed { color: var(--ok); }
+ .review-ci.ci-failed { color: var(--danger); }
+ .review-ci.ci-pending { color: var(--warn); }
+-.review-table { min-width: 780px; }
++.review-table { min-width: 1000px; }
+ .review-table th:first-child { width: 30%; }
+-.review-table th:last-child { width: calc(4 * 28px + 3 * var(--sp-1) + 2 * var(--sp-3)); }
++.review-table th:last-child { width: 11rem; }
++.review-table th:nth-child(6) { width: 16rem; }
+ .review-table th:nth-child(4) { width: 18%; }
+-.review-table .review-progress-caption { min-width: 0; white-space: normal; }
+ .review-table tbody tr:hover { background: transparent; }
+ .review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
+ .review-list-link:hover { text-decoration-thickness: 2px; }
+ .review-filter-hint { margin: 0 0 var(--sp-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+ .review-filter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--sp-4); }
+ .review-filter-groups fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+ .review-filter-groups legend { font-weight: 600; font-size: var(--fs-sm); padding: 0; margin-bottom: var(--sp-1); }
+ .review-filter-period { grid-column: 1 / -1; }
+ .review-filter-values { max-height: 180px; overflow: auto; }
+ .review-filter-values label { display: flex; gap: 6px; align-items: baseline; padding: 3px 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+ .review-filter-values input { flex: none; accent-color: var(--accent); }
+ .review-board .segmented [aria-pressed="true"] { color: var(--fg); background: var(--bg-surface); box-shadow: inset 0 -2px var(--accent-text), var(--shadow-1); }
+ 
+ .watcher-indicator { color: var(--fg-muted); font-size: var(--fs-xs); }
+ .review-watcher { display: grid; gap: var(--sp-3); overflow-wrap: anywhere; }
+ .review-watcher p, .review-watcher dl, .watcher-history ol { margin: 0; }
+ .watcher-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
+ .watcher-facts dt, .watcher-history time { color: var(--fg-muted); }
+ .watcher-facts dd { margin: 0; }
+ .watcher-controls { display: flex; align-items: end; flex-wrap: wrap; gap: var(--sp-2); }
+
+--- apps/desktop/src/styles/review.css
+@@ 104,124 @@
+ .review-board .flows-toolbar > * { flex: none; }
+ .review-board .flows-toolbar > .grow { flex: 1 1 0; min-width: 0; }
+ .review-board .flows-toolbar > .search-field { flex: 1 1 96px; min-width: 96px; width: auto; max-width: 260px; }
+ .review-board .flows-toolbar .btn, .review-board .flows-toolbar .segmented button { white-space: nowrap; }
+ .review-board .flows-toolbar .hint-short { display: none; }
+ @container (max-width: 1100px) {
+   .review-board .flows-toolbar .toolbar-label { display: none; }
+   .review-board .flows-toolbar .hint-short { display: inline; }
+ }
+ @container (max-width: 760px) {
+   .review-board .flows-toolbar .watcher-indicator { display: none; }
+   /* The .sr-only pattern: the bare count keeps its unit for assistive technology. */
+   .review-board .flows-toolbar .count-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+   /* Room for the bare count: keeps one row at the 560px board of the default window with the PR panel open,
+      unless the hidden-attention hint is shown, which may wrap the toolbar to a second row. */
+   .review-board .flows-toolbar > .search-field { flex-basis: 80px; min-width: 80px; }
+ }
+ .review-board .flows-toolbar .review-hidden-attention { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
+ .review-board .flows-toolbar .review-hidden-attention:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
+ .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
++.session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }

@@ -1,0 +1,1086 @@
+{
+  "review_context": {
+    "request": {
+      "text": "Run the review-orchestrator round on PR #1300 (flow 517 completion step)",
+      "flags": [],
+      "mode": "diff",
+      "range": {
+        "base": "d7b0f7058e919a5880319588ad95395b7ff66153",
+        "head": "4cb6c43ef1532ed245e5617cf74ee55788b91d38"
+      }
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat/desktop-review-v2-stage1",
+      "base": "d7b0f7058e919a5880319588ad95395b7ff66153",
+      "head": "4cb6c43ef1532ed245e5617cf74ee55788b91d38"
+    },
+    "pr": {
+      "number": 1300,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1300",
+      "title": "feat(desktop): Review v2 stage 1 — GitHub slice and Keryx links",
+      "body": "Desktop Review v2, stage 1 \"GitHub slice and links\" (Flow 517): the Pull requests and Issues boards group by GitHub data only, every card gets a Keryx work row, and sessions can be bound to a PR or Issue. Three review rounds are done and their findings fixed; owner choices and known gaps are listed below. Requirements: `docs/requirements/keryx-desktop-review-v2/` (PRD R1–R3, R5, R6, parts of R4 and R7; decisions D5, D6). Stage 0 was #1294. Current state and deviations: section \"Состояние этапа 1\" of `implementation-plan.md`.\n\n## What changes\n\n- **Pull requests board, GitHub only (R1, R2, D6).** Groupings \"Status\" (default: Draft · Waiting for review · Changes requested · Approved; Merged and Closed only when the state filter includes them) and \"My role\" (Requested from me · Mine · Others). Quick filters \"Requested from me\", \"Mine\", \"CI failed\" sit in the context row, so the stage 0 toolbar measurements still hold. The attention and \"In review\" lanes are gone; the reason line uses GitHub data only.\n- **Keryx work row (R4 part, R7 part).** A fixed 24px row on every PR card and list row with Review (`Review · <state>` from `localReview`, no round or behind count), Flow (by `prUrl` or a bound session's `flow` flag) and Session slots (count, newest, menu with all and \"New session\"). An empty slot shows its labelled action. \"Fix review comments\" is stage 4.\n- **Sessions bound to a Subject (R5).** `subject` `{kind, repo, number, url, repositoryId?}` in the session's `flags.json`, written through `_keryx/session_flags` under a per-session `flags.json.lock` (the ACP server waits for it without blocking other sessions; a write to a session already moved to the trash is refused and does not bring it back). \"Open in session\" reopens the newest bound session or creates and binds one, prefilling the PR URL without sending. The session header links to the PR or Issue and its Flow. Issue sessions get `subject` from `withIssueBinding`; sessions an older keryx bound without one are backfilled on the next open unless the person unlinked it, and after the first bind a failed backfill no longer stops the issue from opening.\n- **Older keryx.** keryx stores a new session only after its first turn, so the notice \"binding was not saved\" appears after that turn at the latest; the session keeps working.\n- **Work from a bound session (R6).** `/review` with no target preselects the bound PR. \"Create Flow\" opens the bound session with a prefilled flow prompt. When exactly one new flow package appears within 15 minutes while exactly one request with a filled prompt is pending, the PR work row asks \"Link Flow #N · <title>?\" with Link and Dismiss. Only Link writes the session's `flow` flag; the offer stays until that write succeeds and shows why it failed. Dismiss, several new packages or several pending requests link nothing (AC9 as re-frozen in round 2).\n- **Issues (R3, D5).** Default source \"Project repository\" (`keryx issues list` with `source: \"repository\"`, `/repos/{owner}/{repo}/issues`, pull requests dropped, up to 3 pages per load); a stored choice wins, and the choice is stored per project and account. Lanes Open · Closed by GitHub state. The Flow stage filter is gone; the work row has Flow and Session slots (\"Open in session\"). If the repository source is unavailable (no GitHub.com remote, a remote that names no usable repository, Issues turned off → 410, or an older keryx), the board shows the reason and \"Show issues assigned to me\", plus an update hint for an older keryx; any other error keeps Retry.\n- **PR header link.** A header link to a PR in a repository the board lists selects that repository. A link the board cannot show (another repository it does not list, or a PR missing from the loaded list, e.g. filtered out by state) shows a notice and is cleared, so nothing opens later on its own.\n\nNo Rust changes. User docs: `docs/docs/guides/desktop-issues.md`, `docs/docs/cli-reference.md` (`issues`, and `_keryx/session_flags` in the ACP section).\n\n## Verification\n\nAt head (after fix round 3):\n\n- `cd apps/desktop && bunx tsc --noEmit`: clean. `bun test src`: 1070 pass, 0 fail.\n- Root `bunx tsc --noEmit -p .`: clean. Root suites for the touched backend (`src/session/organize`, `src/acp/shell-session-organize`, `src/session/issues`, `src/integrations/issues-board`, `src/integrations/issues-launch`, `src/commands/issues`, `src/lib/file-lock`, `src/commands/acp`): 94 pass, 0 fail. `bun test src/acp`: 455 pass, 0 fail.\n- Round 3 recorded runs (review package `research-evidence/`): the round's root and Desktop suites, and the verifier's repros of the three majors. Each fix in round 3 has a test that fails with the fix reverted (32 Desktop and 14 keryx checks, listed in the Flow 517 journal). The flags-lock tests no longer depend on elapsed time.\n- The scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" is an App-level test.\n- Stage 0 attention set: no line edited in any fix round.\n\nNot verified: no run in the real app with real GitHub data; work row in narrow lanes, session menu placement, list width (1000px) and the LY-002/LY-004/LY-005 widths not measured; lint and the Rust CI path not run locally.\n\n## Review\n\n- Round 1 (head 6a2a3031f): 32 findings (2 blocker, 6 major); fixed in a34d8961b.\n- Round 2 (head 88e3faba9): 44 findings (1 blocker, 3 major); HL-001 decided by the owner (confirmed link instead of a silent one); fixed in 80ef58bd5 and c4e8e3e24.\n- Round 3 (head d7b0f7058, the round-2 fix range): 33 findings (0 blocker, 3 major, all confirmed by execution); fixed in 055115a20.\n- Packages: `.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1300`, `…-pull-1300-r02` and `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300`. Decisions: the Flow 517 journal.\n\n## Choices for the owner\n\nTaken by the orchestrator during the fix rounds; each can be reverted:\n\n- Create Flow waits 15 minutes from the press, not \"until the next turn\".\n- A shown \"Link Flow #N?\" does not expire; Dismiss also stops offering that package. A failed Link is not retried after the turn; it waits for another press.\n- A session switch while \"Open in session\" runs leaves no prompt and no pending request; a repeat press during an open reuses it without a prompt.\n- New PR sessions also count a Flow found through a bound session; the launch dialog preselects the newest of several Flows.\n- Review progress shows only in the slot title; the \"Transcript updated\" stamp left the card.\n- A header link to a PR in a repository the board lists selects that repository; one the board cannot show gets a notice and is cleared.\n- Warn tone for \"needs answer\" and \"publication pending\"; a merged PR keeps the \"publication pending\" text without the warn tone.\n- \"Show issues assigned to me\" appears whenever the repository source is unavailable for one of the named reasons, chosen or not, and stores Assigned to me for this project only.\n- Issues load up to 3 GitHub pages when a page holds only pull requests.\n- A flags write waits up to 3 s for the lock, then fails with \"retry\".\n- Subject backfill can re-link once a session unlinked before this version (no unlink marker then).\n- In a very narrow lane the Flow slot clips the offer's Dismiss instead of overlapping the Session slot.\n- Earlier UI choices: review slot state words; disabled \"Run review\" on merged or closed PRs; session menu button \"More\"; \"not saved yet\" for an unsaved session; \"Create Flow\" replaces the composer draft; Issue card buttons became work-row links.\n\n## Known gaps\n\n- Deviation (a), team review requests for the tab indicator, stays open; (b) is unchanged until stage 2.\n- An Issue has no \"another or new session\" choice: the binding backend keeps one session per issue and account.\n- A Flow created outside the Create Flow window, or with two or more requests pending, is not offered; it shows on the PR once it has a `prUrl`.\n- `subject` names no GitHub account, so issue sessions bound under different accounts count together. GitHub Enterprise issues get no `subject`.\n- A keryx older than this version drops `subject` and the unlink marker when it rewrites `flags.json`, so the next Issues open can re-link a subject the person unlinked (LG-014).\n- Deferred info findings:\n  - round 1 package: AR-002, PF-002, LG-004, LY-002/LY-004, UX-003..005;\n  - round 2 package: PF-006/HW2-002, AR-004..006, HL-003, LG-014, LG-016, UX-006;\n  - round 3 package: HL3-003, HL3-004, LG-R3-003, UX-014, UX-016, and SC3-001 (a stale-lock takeover race in the shared `src/lib/file-lock.ts`, which predates this PR; a separate change).\n\nFlow package: `.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`. Still to do: the merge decision.\n",
+      "state": "open",
+      "base": "main",
+      "head": "4cb6c43ef1532ed245e5617cf74ee55788b91d38"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+        ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "apps/desktop/src/App.tsx",
+        "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+        "apps/desktop/src/issues/IssuesBoard.tsx",
+        "apps/desktop/src/issues/model.test.ts",
+        "apps/desktop/src/issues/model.ts",
+        "apps/desktop/src/issues/useIssueCollection.ts",
+        "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+        "apps/desktop/src/review/PrWorkRow.tsx",
+        "apps/desktop/src/review/ReviewBoard.tsx",
+        "apps/desktop/src/review/ReviewProgress.test.tsx",
+        "apps/desktop/src/review/prWork.ts",
+        "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+        "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "apps/desktop/src/session/useAcpSession.ts",
+        "apps/desktop/src/styles/review.css",
+        "apps/desktop/src/test/app-navigation.fixture.tsx",
+        "apps/desktop/src/test/app-work-row.fixture.tsx",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/desktop-issues.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md",
+        "src/acp/server.ts",
+        "src/commands/acp.ts",
+        "src/integrations/issues-board.test.ts",
+        "src/integrations/issues-board.ts",
+        "src/lib/file-lock.test.ts",
+        "src/lib/file-lock.ts",
+        "src/session/issues/issue-session.test.ts",
+        "src/session/issues/issue-session.ts",
+        "src/session/organize.test.ts",
+        "src/session/organize.ts"
+      ],
+      "changed_lines": 1513,
+      "risk_areas": [
+        "session flags storage (src/session/organize.ts, src/acp/server.ts)",
+        "GitHub REST listing (src/integrations/issues-board.ts)",
+        "PR board attention set (apps/desktop/src/review/ReviewBoard.tsx)",
+        "App session wiring (apps/desktop/src/App.tsx, session/useAcpSession.ts)"
+      ]
+    },
+    "requirements": {
+      "flow": "517",
+      "context_doc": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/context.md",
+      "task_docs": [
+        "docs/requirements/keryx-desktop-review-v2/prd.md",
+        "docs/requirements/keryx-desktop-review-v2/specification.md",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md"
+      ],
+      "acceptance_criteria": [
+        "AC1: The PR lane function reads no field of the local review: a model test iterates every local review state (none, queued, running, awaiting answer, ready, partial, publication pending, outdated) for the same GitHub card and gets the same lane; the attention lane and the Keryx \"In review\" lane no longer exist (R1, D6, spec AC1) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/model.test.ts`]",
+        "AC2: On the Pull requests board, a local review starting, finishing or being published changes neither the lane, the position nor the visibility of the card (a DOM test updates `localReview` on a shown card and asserts the same lane and index); cards are ordered by `updatedAt` descending (R1) [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC3: Default grouping \"Status\" shows Draft · Waiting for review (no decision or REVIEW_REQUIRED) · Changes requested · Approved, with Merged and Closed only when the state filter includes them; grouping \"My role\" shows Requested from me · Mine · Others; quick filters \"Requested from me\", \"Mine\" and \"CI failed\" narrow the board; every shown card satisfies all filters and the search (no active-review bypass, a test with an active review and a non-matching author shows nothing); a lane that cannot hold a card under the current filters is not drawn (R2, spec AC2, AC13) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC4: The card reason line is derived from GitHub data only; Keryx review state appears only in the work row [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC5: Every PR card and list row renders a Keryx work row with exactly three slots (review, Flow, session) whose DOM structure is the same with zero and with three links, and the row has a fixed height in `apps/desktop/src/styles/review.css`; the review slot shows the state from `localReview` without a round number or behind count and opens the current review panel; the Flow slot shows \"Flow #<id> · <stage>\" and opens the Flow; empty slots show the labelled actions \"Run review\", \"Create Flow\", \"Open in session\" (R4 part, R7, spec AC14) [verify: exec `cd apps/desktop && bun test src/review`]",
+        "AC6: Every action on a PR card, PR list row and Issue card has a visible text label (a DOM test asserts non-empty text content for each action control); \"Fix review comments\" is not shown in this stage (R7 part, spec AC15 part) [verify: exec `cd apps/desktop && bun test src/review src/issues`]",
+        "AC7: \"Open in session\" on a PR with no bound session creates a new session bound to the PR Subject and prefills the composer with the PR URL without sending it; pressing it again opens the same session (newest non-archived bound session); the session slot menu lists the bound sessions and \"New session\", which creates another bound session (R5, spec AC8 part) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC8: Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]",
+        "AC9: \"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers \"Link Flow #<id>?\" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC10: In a PR-bound session, `/review` without a target opens the launch dialog with that PR preselected, and the review started there appears as the review link on that PR card without a manual refresh (R6, spec AC9) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC11: Issues board default grouping is by GitHub state (Open · Closed, Closed drawn only when the state filter includes closed issues); GitHub Project grouping is unchanged; the Flow stage filter is gone; issues without a Flow are spread over the GitHub columns (R3, spec AC12) [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC12: Each Issue card has a work row with a Flow slot (link with stage, or \"Create Flow\") and a session slot (bound sessions found through `subject`, or \"Open in session\") [verify: exec `cd apps/desktop && bun test src/issues`]",
+        "AC13: The default Issues source is the project repository: `keryx issues list` with `source: \"repository\"` lists `/repos/{owner}/{repo}/issues` of the repository resolved from the project cwd and excludes pull requests; \"Assigned to me\" and the other sources stay selectable and a stored source preference wins (D5) [verify: exec `bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues`]",
+        "AC14: The Pull requests tab attention set and indicator are preserved: `ReviewBoard.dom.test.tsx` passes, and every edited line in `carriedAttention`, `seeded`, `seedFor`, `attentionPrs` or `stale` handling has a recorded one-line mutation that fails a test (journal) · sensitive: mutation [verify: exec `cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx`]",
+        "AC15: `attachBadges` (`src/review/desk-run-store.ts`) and `localBadge` (`src/review/board-badges.ts`) still agree [verify: exec `bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts`]",
+        "AC16: Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" passes as one integrated test over the App wiring (bound session created, launch dialog preselects the PR, the started run shows on the card) [verify: exec `cd apps/desktop && bun test src`]",
+        "AC17: The Pull requests toolbar keeps the stage 0 behaviour: no element added to `.flows-toolbar`, or, if one is added, the board toolbar is re-measured at the stage 0 widths and the result recorded in the journal [verify: judged]",
+        "AC18: Desktop typecheck and the full Desktop test suite pass [verify: exec `cd apps/desktop && bunx tsc --noEmit && bun test src`]",
+        "AC19: Deviation (a) (team review requests) stays open because stage 1 introduces no team membership; the implementation plan records it [verify: none — documentation statement, checked in review]"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/activity/review.mdc",
+      ".metaproject/rules/stacks/ts-js-node/coding-style.mdc",
+      ".metaproject/rules/stacks/ts-js-node/security.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc"
+    ],
+    "cross_repo": [],
+    "memory": {
+      "query": "desktop review board pull requests issues session flags subject",
+      "status_filter": "accepted",
+      "entries": [
+        {
+          "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "gdctx-flag-allowlist-no-bundle-expansion",
+          "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+        },
+        {
+          "path": "known-mistakes/review-ingest-discards-verdicts.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+          "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+        },
+        {
+          "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+          "type": "known-mistake",
+          "status": "accepted",
+          "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+          "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+        },
+        {
+          "path": "constraints/stale-installed-keryx-binary.md",
+          "type": "constraint",
+          "status": "accepted",
+          "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+          "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+        },
+        {
+          "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+          "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+        },
+        {
+          "path": "lessons/theme-switch-repaint.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+          "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+        },
+        {
+          "path": "lessons/allowlist-not-a-boundary.md",
+          "type": "lesson",
+          "status": "accepted",
+          "title": "A shell allowlist matched against the raw command string is not a security boundary",
+          "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+        },
+        {
+          "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+          "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+        },
+        {
+          "path": "task-notes/sac-proposal-7854a304859a4170.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: найди все не завершенные flow",
+          "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+        },
+        {
+          "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+          "type": "task-note",
+          "status": "accepted",
+          "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+          "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+        }
+      ],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "default": "keryx review required --depth auto roster (operator asked to run the review; defaults taken)"
+      }
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "budget": {
+        "max_findings_per_reviewer": 25
+      },
+      "omissions": [],
+      "model_plan": {
+        "strategy": "adaptive",
+        "current_model": "claude-opus-5-5"
+      }
+    }
+  },
+  "reviewer": "review-logic",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "scope_mode": "diff",
+  "slices": [
+    "slice-02"
+  ],
+  "branch": "feat/desktop-review-v2-stage1",
+  "base_sha": "d7b0f7058e919a5880319588ad95395b7ff66153",
+  "pr_context": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300-r02/pr-context.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_findings": 25
+  },
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "layers": {
+    "version": 1,
+    "files": [
+      ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/flow.json",
+      ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+      "apps/desktop/src/App.tsx",
+      "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "apps/desktop/src/issues/IssuesBoard.tsx",
+      "apps/desktop/src/issues/model.test.ts",
+      "apps/desktop/src/issues/model.ts",
+      "apps/desktop/src/issues/useIssueCollection.ts",
+      "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "apps/desktop/src/review/PrWorkRow.tsx",
+      "apps/desktop/src/review/ReviewBoard.tsx",
+      "apps/desktop/src/review/ReviewProgress.test.tsx",
+      "apps/desktop/src/review/prWork.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "apps/desktop/src/review/usePendingFlowLinks.ts",
+      "apps/desktop/src/session/useAcpSession.ts",
+      "apps/desktop/src/styles/review.css",
+      "apps/desktop/src/test/app-navigation.fixture.tsx",
+      "apps/desktop/src/test/app-work-row.fixture.tsx"
+    ],
+    "prHead": "4cb6c43ef1532ed245e5617cf74ee55788b91d38",
+    "graphCommit": "4cb6c43ef1532ed245e5617cf74ee55788b91d38",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": [
+        "apps/desktop/src/App.dom.test.tsx",
+        "apps/desktop/src/issues/IssueDetail.tsx",
+        "apps/desktop/src/issues/IssueFilters.tsx",
+        "apps/desktop/src/issues/IssueOriginDetail.tsx",
+        "apps/desktop/src/issues/IssueWorkRow.tsx",
+        "apps/desktop/src/issues/IssuesView.tsx",
+        "apps/desktop/src/main.tsx",
+        "apps/desktop/src/panels/RunButton.dom.test.tsx",
+        "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+        "apps/desktop/src/review/PrSubscriptionDialog.tsx",
+        "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+        "apps/desktop/src/review/ReviewDetail.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+        "apps/desktop/src/review/ReviewLaunchDialog.tsx",
+        "apps/desktop/src/review/ReviewResults.tsx",
+        "apps/desktop/src/review/prWork.test.ts",
+        "apps/desktop/src/session/Approvals.tsx",
+        "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+        "apps/desktop/src/session/SessionInfoPanel.tsx",
+        "apps/desktop/src/session/SessionView.tsx",
+        "apps/desktop/src/shell/AppShell.tsx",
+        "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+        "apps/desktop/src/shell/RoutingDialog.tsx",
+        "apps/desktop/src/test/issue-question-resume.fixture.tsx",
+        "src/integrations/issues-board.test.ts"
+      ]
+    },
+    "symbols": [],
+    "relatedTests": [
+      "apps/desktop/src/App.dom.test.tsx",
+      "apps/desktop/src/issues/IssuesBoard.dom.test.tsx",
+      "apps/desktop/src/issues/model.test.ts",
+      "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+      "apps/desktop/src/review/PrWorkRow.dom.test.tsx",
+      "apps/desktop/src/review/ReviewBoard.dom.test.tsx",
+      "apps/desktop/src/review/ReviewLaunchDialog.dom.test.tsx",
+      "apps/desktop/src/review/ReviewProgress.test.tsx",
+      "apps/desktop/src/review/prWork.test.ts",
+      "apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx",
+      "apps/desktop/src/session/SessionInfoPanel.dom.test.tsx",
+      "apps/desktop/src/shell/ProjectNavigation.dom.test.tsx",
+      "src/integrations/issues-board.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  },
+  "metaproject": {
+    "memory": [
+      {
+        "path": "known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "gdctx-flag-allowlist-no-bundle-expansion",
+        "summary": "A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set."
+      },
+      {
+        "path": "known-mistakes/review-ingest-discards-verdicts.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "Findings reach a review round through the report's keryx:findings block, and a round without one silently records none",
+        "summary": "`keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round."
+      },
+      {
+        "path": "known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md",
+        "type": "known-mistake",
+        "status": "accepted",
+        "title": "keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping",
+        "summary": "A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size."
+      },
+      {
+        "path": "constraints/stale-installed-keryx-binary.md",
+        "type": "constraint",
+        "status": "accepted",
+        "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+        "summary": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed."
+      },
+      {
+        "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+        "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom."
+      },
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "summary": "`/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex."
+      },
+      {
+        "path": "lessons/allowlist-not-a-boundary.md",
+        "type": "lesson",
+        "status": "accepted",
+        "title": "A shell allowlist matched against the raw command string is not a security boundary",
+        "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt."
+      },
+      {
+        "path": "task-notes/sac-proposal-d820f7ae5c4b43af.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка…",
+        "summary": "Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit."
+      },
+      {
+        "path": "task-notes/sac-proposal-7854a304859a4170.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: найди все не завершенные flow",
+        "summary": "Незавершённые flow на 2026-08-19 (из 171): 099/100 blocked (нужен Linux/Windows host), 144/145 in-progress (3/4), 130/131/133 implemented (код готов). Плюс done-но-неполные: 064 (5/6), 116 (0/4), 163 (4/5), 169 (9/10), 170 (6/7), 171 (8/10). Следующий шаг — по выбору пользователя: до-закрыть 144/145 или разобрать done-но-неполные."
+      },
+      {
+        "path": "task-notes/sac-proposal-b051e66aebd74f37.md",
+        "type": "task-note",
+        "status": "accepted",
+        "title": "SAC: Anchors: root: ~/goodea/keryx tre…",
+        "summary": "Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task."
+      }
+    ]
+  },
+  "round": 4,
+  "prior_findings": [
+    {
+      "round": 3,
+      "finding": {
+        "id": "FE-R3-001",
+        "severity": "major",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "    if (!snapshot.cards.some(c => c.number === focus.number)) return;",
+        "problem": "The round-2 fix refuses a focus for a repository the board cannot show, but the sibling early return for a card absent from the loaded snapshot of the right repository still leaves the request armed with no notice. The header PR link (App setReviewFocus from SessionSubjectLinks) fires for any PR-bound session, including merged or closed PRs, and the board's default state filter is [\"open\", \"draft\"], so the card is absent.",
+        "impact": "Clicking the header link of a session bound to a merged PR switches to Pull requests and opens nothing, with no message. When the user later changes the state filter to include Merged, or the card appears in a later snapshot, the PR panel opens without being asked. This is the outcome LG-009 reported, through the other early return.",
+        "suggested_fix": "When a fresh (not stale, not loading) snapshot of the focused repository lacks the PR, set focused.current, show a notice (e.g. '#N is not in the current filters' with a 'Show all states' action) and call onFocusHandled(nonce). Keep waiting only on a stale cached snapshot.",
+        "evidence": "ReviewBoard.tsx:490-511 at head (the comment states the intent of not leaving a request armed); App.tsx:648-656 (header link sets focus for any PR subject); model.ts:28 EMPTY_FILTERS state [\"open\",\"draft\"].",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/ReviewBoard.tsx:508"
+          ],
+          "enumeration_method": "Every return in the single useEffect that consumes `focus` (ReviewBoard.tsx:496, 497-506, 508): :496 is a legitimate wait for the load, :497-506 was fixed in this range, :508 is still armed. `focus` has no other consumer."
+        },
+        "dedupe_key": "review-focus-armed-card-absent"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "FE-R3-002",
+        "severity": "major",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "    <button type=\"button\" className=\"pr-work-more\" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}\n      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>",
+        "problem": "Controls added in this range unmount themselves when activated and set no focus target: FlowOffer Link/Dismiss (the offer is dropped and the slot re-renders as a different button), the focus-notice 'Dismiss notice' button in ReviewBoard.tsx (the banner is removed), and 'Show issues assigned to me' in IssuesBoard.tsx (the source change remounts Collection by key). The sibling partial-sync dismiss in ReviewBoard.tsx already returns focus (warningToggle.current?.focus()).",
+        "impact": "A keyboard user who presses Enter on Link, Dismiss or Dismiss notice ends with focus on <body>. The next Tab restarts from the top of the window instead of at the PR card they just acted on.",
+        "suggested_fix": "After the action, focus the element that replaces the control: the Flow slot's button for the offer (keep a slot ref and focus its first button when the offer disappears), the board heading or search field for the notice, and the source select or Issues heading for the fallback.",
+        "evidence": "slice-01: FlowOffer component in PrWorkRow.tsx; focusNotice banner in ReviewBoard.tsx; unavailable panel in IssuesBoard.tsx; usePendingFlowLinks accept/dismiss remove the offer synchronously.",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/PrWorkRow.tsx (FlowOffer Link and Dismiss buttons)",
+            "apps/desktop/src/review/ReviewBoard.tsx (focus-notice 'Dismiss notice' button)",
+            "apps/desktop/src/issues/IssuesBoard.tsx ('Show issues assigned to me' button)"
+          ],
+          "enumeration_method": "Every `<button` on a `+` line of slice-01 (four in all), each checked for whether its own element survives its action. These four do not; nothing else interactive was added in the range."
+        },
+        "dedupe_key": "focus-lost-self-removing-controls"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-008",
+        "severity": "major",
+        "reviewer": "review-testing-practices",
+        "file": "src/session/organize.test.ts",
+        "quote": "    expect(Date.now() - started).toBeGreaterThanOrEqual(1500);",
+        "problem": "tdd-workflow.mdc Rule 5: the flags-lock tests depend on wall-clock time. The lock-wait test proves the wait only through elapsed-time assertions (>= 1500 ms and < 1500 ms) and spends the real 2 s stale window. The two-process test starts its writers on a busy-wait against Date.now() and relies on OS interleaving. Against the parent's unlocked writer, the two-process test is red in only 3 of 7 runs, so the regression test named for HW2-001 does not reliably fail before the fix. The lock is pinned deterministically only by the time-based assertion. Sibling precedent (config-update.test.ts:62, stale-snapshot-writers.test.ts:160) exists, but withFileLock already takes timeoutMs and staleMs, which organize.ts hard-codes.",
+        "impact": "A probabilistic detector: in about half of runs, a regression that drops the lock from updateSessionFlagsAt passes the test that names lost updates. The lock-wait test adds about 2 s of real time per run and is the reason the timeout path (M39) is untestable.",
+        "suggested_fix": "Let a test pass withFlagsLock's options. Replace the elapsed-time assertions with an ordering check: a child holds the lock, writes its flag after a go-file, and the parent's change lands after it with neither lost. Assert the abandoned-lock and timeout ('retry') paths with tiny injected staleMs and timeoutMs values. In the two-process test, replace the Date.now() barrier with a file barrier, or drive a deterministic interleaving in which writer A pauses between read and write until B has tried.",
+        "evidence": "Parent organize.ts and issue-session.ts restored in scratch, two-process test: red, red, red, green, green, green, green (7 runs). M38 at head with -t 'two processes': 7 of 8 red (wave 1: 2 of 3). Lock-wait test red for M38, N07 and N08. Commit 80ef58bd5 gives no reason for the timing design.",
+        "evidence_kind": "red-test",
+        "confidence": "medium",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-flags-lock-wallclock",
+        "class_scope": {
+          "sites": [
+            "src/session/organize.test.ts: lock-wait test, expect(Date.now() - started).toBeGreaterThanOrEqual(1500) and expect(Date.now() - again).toBeLessThan(1500)",
+            "src/session/organize.test.ts: two-process test, while (Date.now() < ${startAt}) {}"
+          ],
+          "enumeration_method": "keryx ctx rg -n --all 'Date\\.now\\(\\)|setTimeout\\(|sleepSync|performance\\.now' over the 11 test files from git diff --name-only 88e3faba9..d7b0f7058: 11 hits; 7 in organize.test.ts (these sites, their start reads, and a utimes setup that is not an assertion); 4 in ReviewBoard.dom.test.tsx, none added in the range (checked with git diff -U0)"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "AR-007",
+        "severity": "minor",
+        "reviewer": "review-architecture",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "  const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;",
+        "problem": "The RG-001/UX-008 fallback decodes the CLI error contract in the view. It decides 'This project's repository issues are not available here' from any `configuration:` reason, and 'this keryx is older than Desktop' from the literal text of `invalidInput` (`/Invalid Issues request/i`). The backend uses the `configuration:` category, and `invalidInput` itself, for unrelated reasons: a stale cursor (issues-github.ts:120), a malformed cursor (:122), a missing cwd or a '.'/'..' repository part (issues-board.ts:115, :118), and a pagination link that fails validation (issues-board.ts:154, :168). The classifier sits inline in Collection, while its sibling `isAccessError` lives in useIssueCollection.ts. The contract already has typed problem codes (issues-contract.ts:115).",
+        "impact": "Trigger: default (unchosen) repository source, more pages loaded, the project's resolved repository changes (origin re-pointed or remotes reordered), then 'Load more'. The cursor scope includes the repository (issues-board.ts:203), so the CLI answers 'configuration: Refresh before loading the next page.' Outcome: Desktop drops Retry, says the repository's issues are not available, and offers only 'Show issues assigned to me'. Pressing it calls change('assigned'), which stores 'assigned' as the person's chosen source, so a transient error becomes a persisted preference. Second path: a remote whose name parses as '.'/'..' gets invalidInput, and Desktop advises updating keryx, which is wrong advice.",
+        "suggested_fix": "Give the repository-source failures (no GitHub.com remote for the issues source, Issues turned off at issues-board.ts:184, the dot-name refusal) a reason of their own on the CLI side, for example a `repository_unavailable:` prefix or a code like IssueWorkspace.problem.code. Classify it beside isAccessError in useIssueCollection.ts so one module maps CLI reasons to UI categories. Keep the old-keryx text match only for a first-page request (no cursor), the one case an old keryx produces.",
+        "evidence": "slice-01 IssuesBoard.tsx hunk @@ 42,167 @@ (unavailable/fallback) and @@ 216,292 @@ (notice). src/integrations/issues-github.ts:8 invalidInput, :120 readCursor, :122; src/integrations/issues-board.ts:110-118, :154, :168, :184, :203 cursorScope includes repository.toLowerCase(); apps/desktop/src/issues/useIssueCollection.ts:16-18 isAccessError; src/integrations/issues-contract.ts:115 problem codes. Enumerated with `keryx ctx rg -n 'invalidInput|issuesDisabled|source_unavailable|Refresh before' src/integrations src/commands` and `keryx ctx rg -n 'configuration:' src/integrations/issues-board.ts src/integrations/issues-github.ts src/commands/issues.ts`.",
+        "confidence": "medium",
+        "dedupe_key": "desktop-issues-fallback-decodes-configuration-category",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/issues/IssuesBoard.tsx:147 (configuration: -> source unavailable)",
+            "apps/desktop/src/issues/IssuesBoard.tsx (notice: /Invalid Issues request/ -> old keryx hint)"
+          ],
+          "enumeration_method": "keryx ctx rg for 'configuration:|Invalid Issues request|isAccessError' over apps/desktop/src: the only Desktop sites that read a configuration: reason or the invalidInput text are these two in IssuesBoard.tsx; ReviewBoard.tsx strips the prefix for display only."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "DG-R3-002",
+        "severity": "minor",
+        "reviewer": "review-degradation",
+        "file": "apps/desktop/src/issues/model.ts",
+        "quote": "export function issueSessions(sessions: readonly SessionInfo[], issue: IssueSummary): SessionInfo[] {",
+        "degradation_class": "debt",
+        "evidence_kind": "consumer-trace",
+        "problem": "The PF-003 fix moved IssueWorkRow from issueSessions(sessions, issue) to a count from boundSessionIndex built once in IssuesBoard. issueSessions now has no production caller. Its only users are issues/model.test.ts:4,64,65, which keep pinning a helper the board no longer uses, beside the index path that is not pinned at that level.",
+        "impact": "A leftover of the old surface: a second entry point for 'sessions bound to an issue', tested while the one the UI uses goes through IssuesBoard. A later change to the board path would leave this green test and dead export misleading.",
+        "suggested_fix": "Delete issueSessions and repoint the model test at boundSessionIndex(sessions)(issueSubject(issue)). Alternatively make IssuesBoard call a model-level index helper that the test pins.",
+        "evidence": "consumer-trace: `keryx ctx rg \"issueSessions|boundSessions\\(\" src apps/desktop/src` finds issueSessions only in model.ts:68 (definition) and model.test.ts:4/64/65. The diff removes the IssueWorkRow import (`-import { issueName, issueSessions, STAGES } from \"./model\";`). Refute: checked root src/ for shared-model users; there are none.",
+        "confidence": "high",
+        "blocking_merge": false
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "HL3-001",
+        "severity": "minor",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "    timeoutMs: FLAGS_LOCK_TIMEOUT_MS,\n    staleMs: FLAGS_LOCK_STALE_MS,",
+        "problem": "withFlagsLock waits through lib/file-lock withFileLock, which spins in Bun.sleepSync(15) until it gets the lock. The caller is the long-lived ACP server's `_keryx/session_flags` handler (server.ts handleSessionFlags → setSessionFlags → updateSessionFlagsAt). A lock left by a writer killed mid-section therefore blocks the server's event loop for up to about 2 s (staleMs). An unremovable lock blocks it for the full 3 s timeout on every write.",
+        "impact": "While the server waits, the running turn's session/update stream, cancel and permission answers stall. Desktop writes flags without any user action (PendingSubjects.apply at turn end, Link on a Flow offer). The PR body accepts that a 'flags write may wait up to 3 s'; it does not say the whole server freezes.",
+        "suggested_fix": "On the ACP server path, wait asynchronously. Either make setSessionFlags/updateSessionFlagsAt async on top of lib/fs withFileLock, or try the O_EXCL create once synchronously and fall back to an async retry loop (await sleep(15)) until the deadline. Keep the synchronous form for the short-lived issue-workspace child only.",
+        "evidence": "src/session/organize.ts withFlagsLock (FLAGS_LOCK_TIMEOUT_MS 3_000, FLAGS_LOCK_STALE_MS 2_000); src/lib/file-lock.ts sleepSync uses Bun.sleepSync and the wait loop runs until the deadline; src/acp/server.ts calls setSessionFlags synchronously in the session_flags handler. Journal: 'flags write may wait up to 3 s for the lock'. Code comment reason: 'Synchronous: callers are synchronous, and the section is one read and one atomic write'. That reason bounds the holder's time, not a waiter's wait on an abandoned lock.",
+        "confidence": "high",
+        "dedupe_key": "flags-lock-sync-wait-blocks-acp-server"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "HL3-002",
+        "severity": "minor",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "  const held = withFileLock(path.join(dir, `${FLAGS_FILE}.lock`), () => ({ value: apply() }), {",
+        "problem": "Correction to the wave-1 filing, which only adds a site. withFileLock starts with mkdirSync(path.dirname(lockPath), { recursive: true }), and that dirname is the session directory. trashSession (organize.ts:252) takes no flags lock. Two callers check that the directory exists and only then lock: setSessionFlags (locate(), then updateSessionFlagsAt) and withIssueBinding (`if (!existsSync(dir)) throw`, then bindIssueSubject → backfillSessionSubject). A trash in another keryx process in either window has the lock recreate <sessions>/<id>/, and flags.json is written into it.",
+        "impact": "An orphan session directory with no summary.json, so listSessions skips it and nothing removes it. The flags change is reported as stored for a trashed session, and a later 'Put Back' collides with the orphan. Since this range the backfill runs on every issue-session open, so the second window opens on every open.",
+        "suggested_fix": "Inside withFlagsLock's critical section, refuse when the session directory (or its summary.json) no longer exists, before readStoredFlags. Or add a createDir:false option to withFileLock for this caller, so that a missing directory is a refusal ('session not found').",
+        "evidence": "src/lib/file-lock.ts: `mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 })` runs before the O_EXCL open. organize.ts setSessionFlags: `const { dir } = locate(cwd, sessionId, dataDir); return updateSessionFlagsAt(dir, change, now);`. issue-session.ts: `if (!existsSync(dir)) throw ...; bindIssueSubject(dir, issue.ref);`. trashSession: renameSync(dir, target), or cpSync then rmSync on EXDEV, with no flags lock. Not executed; the interleaving is read from the code.",
+        "confidence": "medium",
+        "dedupe_key": "flags-lock-mkdir-recreates-trashed-session",
+        "class_scope": {
+          "sites": [
+            "src/session/organize.ts setSessionFlags → updateSessionFlagsAt",
+            "src/session/issues/issue-session.ts withIssueBinding → bindIssueSubject → backfillSessionSubject"
+          ],
+          "enumeration_method": "keryx ctx rg 'setSessionFlags\\(|updateSessionFlagsAt\\(|backfillSessionSubject\\(|withIssueBinding\\(' src --glob '!*.test.ts' (8 matches). Every flags-lock entry is reached through one of these two."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "PC-005",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "      const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());\n      if (listed) {\n        selectRepo(listed);\n        return;\n      }\n      focused.current = focus.nonce;\n      setFocusNotice(",
+        "problem": "PR body, Choices for the owner: 'A header link to a PR of another repository shows a banner and stays armed until that repository is shown.' That describes the round-1 behaviour (journal T17: 'a header focus for another repo stays armed until that repo is shown'). The round-2 LG-009 fix replaced it. A repository among the board's repositories is now selected automatically, with no banner. A repository the board cannot show gets the banner, and the request is cleared through onFocusHandled. The code comment says 'so the request is not left armed for a later, unrelated switch'. Neither branch both shows a banner and stays armed.",
+        "impact": "The owner is asked to accept or revert a behaviour from this list, and this line describes one that no longer exists. They cannot see that the board now switches repository on its own, which is a new choice not listed, or that an unshowable repository drops the request.",
+        "suggested_fix": "Replace the line with: 'A header link to a PR of another repository switches the board to that repository when the board lists it; otherwise it shows a notice and drops the request.' Keep journal.md line 79 ('foreign-repo header link shows a banner') consistent.",
+        "evidence": "slice-01 diff ReviewBoard.tsx @@471 focus effect and its comment 'one it cannot show is refused with a notice, so the request is not left armed'; App.tsx reviewFocusHandled clears reviewFocus on the nonce; PR body from payload review_context.pr.body.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "PC-006",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "quote": "+Deferred info: PF-006/HW2-002 (one nodes hydration per request), AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004 (need real-engine measurement), UX-003..006.",
+        "problem": "PR body Known gaps: 'Deferred info findings: PF-006/HW2-002, AR-002, AR-004..006, PF-002, LG-004, LY-002/LY-004, UX-003..006 (round 2 package).' The journal entry in this range says the same. In the round-2 package (…-pull-1300-r02/findings.json), the info findings left deferred also include HL-003 (prWork.ts: a press after the open settles but before the pendingSubjects commit can start a second bound session), LG-014 and LG-016. The fix-round claims mark all three 'deferred', yet neither list names them. AR-002, PF-002, LG-004, LY-002, LY-004 and UX-003..005 exist only in the round-1 package (…-pull-1300/findings.json), so '(round 2 package)' mislabels them.",
+        "impact": "A reader who takes Known gaps as the full set of accepted leftovers does not see HL-003, a residual second-session race on 'Open in session'. Looking up the listed ids in the named package does not find most of them.",
+        "suggested_fix": "List HL-003, LG-014 and LG-016 among the deferred info findings, and split the list by package: round 1 for AR-002, PF-002, LG-004, LY-002/LY-004 and UX-003..005; round 2 for the rest. Do the same in journal.md.",
+        "evidence": "jq over both packages' findings.json: round 1 holds AR-002, LG-004, LY-002, LY-004, PF-002 and UX-003..005 (info); r02 holds HL-003, LG-014, LG-016, PF-004 and UX-006 (info). The payload prior_findings claimed_disposition is 'deferred' for HL-003, LG-014 and LG-016. PF-004 is effectively fixed by the AR-003 change, so its omission is correct.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "PC-008",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "docs/docs/cli-reference.md",
+        "quote": "The request `_keryx/session_flags {sessionId, cwd?, archived?,\n  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package\n  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and\n  answers `{archivedAt?, pinnedAt?, flow?}`;",
+        "problem": "PR body: 'subject ... written through `_keryx/session_flags` under a per-session `flags.json.lock`'. The handler (src/acp/server.ts handleSessionFlags: 'link it to a flow and a GitHub subject') accepts `subject` (an object, or null to unlink) and answers the stored flags including `subject`. Since 80ef58bd5 it also refuses with '... are locked by another keryx process; retry' after 3 s. The ACP reference was last edited at base b147408a8 and was not touched by this PR. It still lists only archived/pinned/flow, and the answer only archivedAt/pinnedAt/flow. The body's 'User docs' line names cli-reference.md for `issues` only. Sibling site: src/commands/acp.ts:616 help text ('_keryx/session_flags archives or pins a stored session').",
+        "impact": "A client author who reads the ACP reference (the same document the PR updated for `issues`) does not learn that a session can be bound to a PR or issue through this request, what a valid subject is, or that a write can be refused with a retryable lock error. The code is correct. The cost is a reader who trusts the reference.",
+        "suggested_fix": "Extend the cli-reference line to `{sessionId, cwd?, archived?, pinned?, flow?, subject?}`. Describe the subject shape ({kind, repo, number, url, repositoryId?}, github.com only, `subject: null` unlinks), state the answer as the stored flags including `hasIssue` and `subject`, and add the lock refusal ('retry' after 3 s). Optionally update the acp.ts help line. Or name the omission in the PR body.",
+        "evidence": "git diff b147408a8..d7b0f7058 -- docs/docs/cli-reference.md touches only the `issues` section (lines 5175-5181). git show b147408a8:docs/docs/cli-reference.md has the identical `_keryx/session_flags {sessionId, cwd?, archived?, pinned?, flow?}` text. `subject` entered the handler in 5b7b8be56 (this PR). A keryx ctx rg over both earlier review packages for this doc line finds no prior finding.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "docs/docs/cli-reference.md:476",
+            "src/commands/acp.ts:616"
+          ],
+          "enumeration_method": "keryx ctx rg \"session_flags\" src docs (non-test): server.ts and profile.ts are code, desktop-app.md:369 only names the method, implementation-plan.md:35 already describes subject and the lock; the two listed sites describe the request's parameters or effect and omit subject"
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-001",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "quote": "    offersRef.current = offersRef.current.filter(item => item !== offer);",
+        "problem": "Three gates added in the fix round survive deletion with all 6 Desktop suites green: accept's synchronous offersRef clear (M01, the double-press guard its comment names), dismiss's synchronous offersRef clear (M05), and the replacement of a session's older offer by its new one (M08, mutated to [...old, ...pass.links]). The test presses accept twice only across separate act() calls. No test dismisses then accepts before a render, and none gives one session two offers.",
+        "impact": "Undoing any of these is invisible to the suite: a double Link writing the flow flag twice, a Dismiss+Link in one frame linking a dismissed package, or a stale first offer shown after a second Create Flow.",
+        "suggested_fix": "In usePendingFlowLinks.dom.test.tsx: call accept('s1') twice inside one act and assert links has length 1. Call dismiss('s1'); accept('s1') inside one act and assert no link. Expect s1, offer 101, expect s1 again, package 102 appears, and assert offers() equals ['s1 102-...'].",
+        "evidence": "Mutants M01, M05, M08: GREEN on prWork, usePendingFlowLinks, PrWorkRow, ReviewBoard, IssuesBoard and ProjectNavigation (App fixtures) suites; M02/M03/M04/M06/M07 red.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-flowlink-hook-guards"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-002",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "quote": "  const offer = flow ? undefined : work.flowOffer?.(sessions);",
+        "problem": "Deleting the `flow ?` guard (M20) leaves all 6 Desktop suites green: the offer test renders no Flow, so no fixture separates showing an offer from showing the PR's Flow link.",
+        "impact": "If an offered package (or any Flow) carries the PR's prUrl, a regression would show 'Link Flow #N?' in place of the PR's Flow, and nothing would catch it.",
+        "suggested_fix": "In PrWorkRow.dom.test.tsx, render the same offer with flows: [flow('531', { prUrl: pr.url })]. Assert the Flow slot reads 'Flow #531 · In progress' and that there is no 'Link Flow' button.",
+        "evidence": "Mutant M20 GREEN on all 6 Desktop suites.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-offer-vs-flow"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-003",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "quote": "  const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;",
+        "problem": "Replacing the configuration: filter with 'any error' (M34) is green. Every default-source fixture fails with a configuration error, and Retry is kept only through a chosen source, never through a non-configuration error.",
+        "impact": "A regression would hide Retry on the default source for rate-limit, offline or unavailable errors and offer a source switch instead. The suite would not notice.",
+        "suggested_fix": "Add an IssuesBoard test with no stored source whose list rejects 'rate-limit: GitHub request limit reached.'. Assert Retry is present and 'Show issues assigned to me' is absent.",
+        "evidence": "Mutant M34 GREEN on all 6 Desktop suites; M32/M35/M36 red; M33 equivalent.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-issues-fallback-filter"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-004",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "      focused.current = focus.nonce;\n      setFocusNotice(`${focus.repo}#${focus.number} is not in a repository this board shows",
+        "problem": "Two focus-refusal steps survive deletion: marking the refused nonce handled (M24; the LG-009 test's onFocusHandled clears focus, so the effect never re-runs with that nonce) and clearing the notice on a later successful focus (M26, presentation). No test refuses one focus and then opens another.",
+        "impact": "Undoing either is invisible: a board whose owner does not clear focus would re-raise a dismissed notice on each refresh, or a stale notice would sit above the panel that did open.",
+        "suggested_fix": "With focusHost(load, [], false): refuse elsewhere/project, Dismiss the notice, Refresh, and assert no .review-focus-notice. In the LG-009 test, after the refusal, set a new nonce for org/repo#101 and assert the panel opens and the notice is gone.",
+        "evidence": "Mutants M24 and M26 GREEN on all 6 Desktop suites; M22/M23/M25 red.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-focus-refusal"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-005",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "apps/desktop/src/review/ReviewProgress.tsx",
+        "quote": "    state: showState && ![\"running\", \"queued\", \"completed\"].includes(state) ? RUN_STATE_LABEL[state] : \"\",",
+        "problem": "The refactor into progressParts made one rule for ReviewProgress and reviewProgressText. Dropping `showState &&` (M29) is green: no test renders ReviewProgress without showState in a state that has a label.",
+        "impact": "A regression would add the run-state label ('Partial · ', 'Failed · ') to every ReviewProgress rendered without showState. Nothing would catch it.",
+        "suggested_fix": "Render <ReviewProgress state=\"partial\" /> and assert the caption has no 'Partial'; render it with showState and assert it does.",
+        "evidence": "Mutant M29 GREEN on all 6 Desktop suites; M30/M31 red.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-progress-showstate"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-006",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/integrations/issues-board.ts",
+        "quote": "  for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++) {",
+        "problem": "The gates that keep the new extra-page loop and the 410 rename to the repository source survive deletion: M54 (drop `repository &&` in the loop) and M51 (drop `repository &&` in issuePage's 410 branch). No viewer-source fixture returns an empty page with a next link, or a 410. M55 (turnPage not clearing earlier page keys) also survives; it is likely near-equivalent.",
+        "impact": "A regression could make viewer queues read up to 3 pages per request, or report 'Issues turned off for null'. The suite would not notice.",
+        "suggested_fix": "issues-board.test.ts: an 'assigned' page answering [] with a next link makes exactly one request. An 'assigned' 410 does not mention 'turned off for'.",
+        "evidence": "Mutants M54, M51, M55 GREEN on organize, issue-session, issues-board, commands/issues and shell-session-organize suites; M50/M52/M53/M56-M60 red.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-repository-only-gates"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-007",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/session/organize.ts",
+        "quote": "  if (held === null) throw new Error(`the flags of session ${path.basename(dir)} are locked by another keryx process; retry`);",
+        "problem": "Outside slice-02, run because the dispatch asked to mutate the flags lock. The lock-timeout error survives deletion (M39): no test holds the lock past the 3 s timeout, because the wait test lets it go stale at 2 s. backfillSessionSubject without withFlagsLock (M47) also survives: the two-process test drives only updateSessionFlagsAt. That test caught the unlocked updateSessionFlagsAt (M38) in only 2 of 3 runs; M38 is pinned deterministically only by the wall-clock lock-wait test.",
+        "impact": "The 'retry' error ACP clients show, and the backfill's protection against lost updates (issue-workspace child against a Desktop flag write), could regress with the suite green.",
+        "suggested_fix": "Inject lock timing (or a clock) so a test can hold the lock past the timeout and assert the retry message. Add a two-writer case where one process backfills the subject while the other pins.",
+        "evidence": "Mutants M39 and M47 GREEN on the 5 root suites; M38 with -t 'two processes': red, green, red over 3 runs; M38/M40/M41/M44/M46/M48/M49 red on the nearest suites.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-flags-lock-coverage"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "TP-R3-009",
+        "severity": "minor",
+        "reviewer": "review-testing-practices",
+        "file": "src/session/organize.ts",
+        "quote": "  if (parsed === undefined) throw new Error(`not a GitHub subject: ${JSON.stringify(subject).slice(0, 300)}`);",
+        "problem": "backfillSessionSubject's own validation survives deletion (N04) with all 21 nearest tests green. Every test passes it a valid subject, and its one caller parses the subject first.",
+        "impact": "The function is exported. Without the guard, a future caller's unparsed subject would be written to flags.json without validation, and no test would notice. The code is correct today.",
+        "suggested_fix": "In organize.test.ts, assert that backfillSessionSubject(dir, {...issue, url: 'https://github.com/org/other/issues/7'} as never) throws /not a GitHub subject/ and leaves flags.json unchanged.",
+        "evidence": "Mutant N04 GREEN on organize, issue-session and shell-session-organize suites (21/21); N03 and N07–N14 red.",
+        "evidence_kind": "red-test",
+        "confidence": "high",
+        "degradation_class": "blind-test",
+        "dedupe_key": "tp-r3-backfill-validation"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-009",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "<span className=\"pr-work-link pr-work-offer\"",
+        "problem": "Criterion: Nielsen #6 and #1. The 'Link Flow #N?' offer names the package only by number. The flow's title is only in the title attribute of a non-focusable span, which a keyboard user cannot reach and a touch user cannot hover. The Link button's aria-label ('Link Flow #N for #PR') omits it. The owner chose the confirm (HL-001) because arrival time cannot tell who made the package, so identifying it is the user's whole decision.",
+        "impact": "Trigger: every offer. Outcome: the user links or dismisses by number only, or leaves for the Flows board to check. A wrong Link writes the session's flow flag to an unrelated package.",
+        "suggested_fix": "Put the flow title in the Link button's accessible name or an aria-describedby target. Or make 'Flow #N' in the offer a button that opens the Flow, as the filled slot does, so it can be inspected before linking.",
+        "evidence": "FlowOffer in the diff: visible text `Link {name}?`; `title={`${name} (${offer.flow.title}) appeared after Create Flow. ...`}` on a <span>; Link aria-label `Link ${name}${of}`. Not observed on a render.",
+        "confidence": "high",
+        "dedupe_key": "pr-flow-offer-title-hover-only"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-010",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/usePendingFlowLinks.ts",
+        "line": null,
+        "quote": "offersRef.current = offersRef.current.filter(item => item !== offer);",
+        "problem": "Criterion: Nielsen #1 and #9; State: loading and error. accept() removes the offer before calling link. App wires link to linkFlow, which calls applyPendingFlow; that catches every error silently ('retried after its turn') and shows no banner. Until the flags dispatch arrives, the Flow slot falls back to 'Create Flow'. The package is claimed, so it is never offered again. The new flags lock can fail after 3 s with '...locked by another keryx process; retry', and the board no longer has a control to retry with.",
+        "impact": "Trigger: every Link press shows 'Create Flow' for the length of the RPC. A failed write (lock timeout, a keryx disconnect) leaves 'Create Flow' with no message until the session's next turn. Pressing it starts a second Flow.",
+        "suggested_fix": "Keep the offer in a 'Linking…' state with its buttons disabled until linkFlow resolves. On failure, restore the offer and show an inline error or banner; linkFlow must report its result to this caller.",
+        "evidence": "usePendingFlowLinks.ts accept: offersRef filtered and setOffered before linkRef.current(...). App.tsx: `usePendingFlowLinks(..., (id, dir) => void acp.current.linkFlow(id, dir))`. useAcpSession.ts applyPendingFlow: `catch { /* not stored yet: retried after its turn */ }`. src/session/organize.ts withFlagsLock throws after FLAGS_LOCK_TIMEOUT_MS = 3_000. Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-link-no-pending-or-error-state"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-011",
+        "severity": "minor",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "const fallback = source === \"repository\" && !choice.chosen ? () => change(\"assigned\") : undefined;",
+        "problem": "Criterion: Nielsen #3 and #4. The fallback calls change('assigned'), which saves account + '.source'. The account key is 'keryx.issues.' + issueViewerKey(viewer) = [host, nodeId], with no project in it. A button labelled 'Show issues assigned to me', offered for a project-specific failure (no GitHub.com remote here, Issues off on this repo, older keryx), therefore stores an account-wide source preference.",
+        "impact": "Trigger: a user with several projects presses the button once in a project without a GitHub.com remote or with Issues off. Outcome: every other project, including those with a GitHub remote, opens Issues on 'Assigned to me' instead of the D5 default 'Project repository', with no indication why. The select recovers it.",
+        "suggested_fix": "Switch the source for this board only (setChoice without save, with a status line 'Showing issues assigned to you'). Or key the stored source by project and account. If it keeps persisting, label it 'Use Assigned to me'.",
+        "evidence": "IssuesBoard.tsx: `const change = (next: Source) => { ...; save(account + \".source\", next); }`; `const account = \"keryx.issues.\" + issueViewerKey(viewer);`. src/integrations/issues-contract.ts: `issueViewerKey` returns `JSON.stringify([viewer.host.toLowerCase(), viewer.nodeId])`. The owner choice in the PR body covers only where the button appears.",
+        "confidence": "medium",
+        "dedupe_key": "issues-fallback-persists-account-wide-source"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "DG3-001",
+        "severity": "info",
+        "reviewer": "review-degradation",
+        "degradation_class": "behaviour-delta",
+        "evidence_kind": "base-diff",
+        "file": "src/session/issues/issue-session.ts",
+        "quote": "    // On first bind, and for a session an older keryx bound without a subject. The flags lock is\n    // taken inside the binding lock, never the reverse, so the two cannot deadlock.\n    bindIssueSubject(dir, issue.ref);",
+        "problem": "On base, reopening an already bound issue session (stage session_bound or later, action open-session) did no flags.json I/O: bindIssueSubject ran only in the registered branch. On head it runs on every open-session and prepare-flow. backfillSessionSubject takes the flags lock and throws when it cannot: 'the flags of session X are locked by another keryx process; retry' after 3 s, or a write error. Nothing in withIssueBinding catches it, so the whole open fails before saveBinding and apply. The subject is a public decoration; the private binding record stays the authority (bindIssueSubject's own doc). An open that worked on base without touching flags can now be refused because of them. If true: major. The person cannot open the issue's bound session from the Issues board while the flags lock cannot be taken or flags.json cannot be written, for example an unremovable leftover flags.json.lock, a read-only session dir or no free inodes. The same open succeeds on base.",
+        "impact": "It applies only when the flags lock or file is unusable for more than 3 s. The trigger is environmental, which is why this is a question and not a finding. prepare-flow already wrote flags on base (issues-launch.ts:116), so its failure condition is unchanged. Only open-session on a reused binding changed.",
+        "suggested_fix": "Check: on head and on base, bind an issue session, then `chmod 0500` its session dir (or create a flags.json.lock the process cannot remove), then run `keryx issue-workspace open-session` for that issue. Base opens. If head refuses, make the backfill best-effort outside the registered branch: catch and ignore the error, or skip it when the session already has a subject, and keep it fatal only on first bind as on base.",
+        "evidence": "base-diff. Base 88e3faba9 issue-session.ts called bindIssueSubject(dir, issue.ref) inside `if (launch.stage === \"registered\") { ... }`. Head calls it after `if (!existsSync(dir)) throw ...`, unconditionally. organize.ts withFlagsLock: `if (held === null) throw new Error(...)`. backfillSessionSubject calls withFlagsLock before it reads current, so the lock is taken even when a subject already exists. Refute attempt: read issues-launch.ts:91-122. The workspace action returns before withIssueBinding, so read-only loads are unaffected. prepare-flow already called setSessionFlags on base (line 116), so it has no delta. withIssueBinding has no try/catch around bindIssueSubject. The commit 80ef58bd5 text and the PR body record the backfill but give no reason it must be fatal. Not run (read-only, exec_budget 0).",
+        "confidence": "medium",
+        "dedupe_key": "issue-reopen-fails-on-flags-backfill"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "HL3-003",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  if (!deps.isShown(id)) return false;\n  deps.fill(prompt);",
+        "problem": "fillShown checks isShown(id) and then calls fill, but App's fillComposer applies setText inside requestAnimationFrame. A session switch dispatched in that frame would put the prompt in the newly shown session while filled:true registers the Create Flow request on the opened one. This is the residual of LG-011.",
+        "impact": "At most, a wrong draft plus a pending request that can only become a user-confirmed 'Link Flow #N?' offer; nothing is written without Link.",
+        "suggested_fix": "Optional: re-check isShown(id) inside the rAF callback and report the result back (fill returns Promise<boolean>), so that filled reflects what happened.",
+        "evidence": "apps/desktop/src/App.tsx fillComposer: `requestAnimationFrame(() => composer.current?.setText(text));`. apps/desktop/src/session/useAcpSession.ts isShown reads live.current.reg.shown.",
+        "confidence": "medium",
+        "dedupe_key": "subject-open-fill-raf-gap"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "HL3-004",
+        "severity": "info",
+        "reviewer": "review-highload",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "const FLAGS_LOCK_STALE_MS = 2_000;",
+        "problem": "Stale recovery is by lock-file age only, with a 2 s threshold (the shared default is 10 s). A holder whose read plus atomic write stalls for more than 2 s has its lock broken while it still runs. The nonce stops it from deleting the new holder's lock, but both read-modify-writes proceed, and one update can be lost.",
+        "impact": "The HW2-001 lost update returns whenever a holder stalls for more than 2 s. No concrete trigger is shown in this repository, so this is info.",
+        "suggested_fix": "Record the holder PID in the lock file and break it only when that PID is gone, or use the shared LOCK_STALE_MS (10 s). Either still fits the 3 s timeout if the PID check runs first.",
+        "evidence": "src/lib/file-lock.ts stale branch: `if (age !== undefined && Date.now() - age > staleMs) rmSync(lockPath)`. There is no PID check.",
+        "confidence": "low",
+        "dedupe_key": "flags-lock-age-only-stale-2s"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "LY-005",
+        "severity": "info",
+        "reviewer": "review-layout",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "quote": "<button type=\"button\" className=\"pr-work-more\" aria-label={`Dismiss ${name}${of}`} disabled={!work.onDismissFlowOffer}",
+        "problem": "In offer state the Flow slot (display:flex, no overflow clip, a minmax(0,1fr) grid track) holds the question span (flex 1 1 auto, min-width 0) and two flex:none .pr-work-more buttons, 'Link' and 'Dismiss'. The buttons need about 80px with their margins, and the span keeps 14px of padding and border, so about 94px in all. The slot is 60px in a 230px board lane and about 74.7px in the 16rem list column. The question text shrinks to 0px, and the buttons overflow by about 30px (lane) or 16px (list) into the session slot. That slot paints later and holds an opaque 'Session' button, which covers most of Dismiss and receives clicks in the overlap.",
+        "impact": "After Create Flow, at supported widths (the Tauri minWidth is 720; 230px lanes hold up to about a 1000px board), the confirmation the owner chose for HL-001 shows as two bare buttons, 'Link' and a mostly hidden 'Dismiss', with no question and no Flow number; the text is only in a title tooltip. A click on the visible part of 'Dismiss' can land on the Session button.",
+        "suggested_fix": "Make the offer fit the slot instead of overflowing it. Either let the offer buttons shrink (`.pr-work-offer ~ .pr-work-more { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis }`), or render the offer as one truncating 'Link #N?' button plus a 'Dismiss' text button without the static span. Add `overflow: hidden` to `.pr-work-slot`. Then measure in a real engine at a 230px lane and at the 16rem list column.",
+        "evidence": "Static cascade arithmetic, no engine. Tokens: fs-xs 11px, sp-1 4px, sp-2 8px, sp-3 12px. Lane: .review-lanes .lane flex 1 0 230px; minus .lane-body padding 8px x2 and .flow-card padding 12px x2 and border 1px x2 leaves 188px; 3 tracks with 2 gaps of 4px give 60px per slot. List: th:nth-child(6) 16rem (256px) minus td padding 12px x2 leaves 232px, about 74.7px per slot. Button width estimates for SF Pro 11px: Link about 29px, Dismiss about 47px, each with a 2px margin-inline-start. Tauri minWidth 720 (apps/desktop/src-tauri/tauri.conf.json). Settle it with getBoundingClientRect on [data-slot=flow], .pr-work-offer and the two buttons, plus elementFromPoint at the Dismiss centre, at a 720px and a 1180px window, in board and list view.",
+        "confidence": "medium",
+        "dedupe_key": "layout:pr-work-row:flow-offer-overflow",
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (board tile via ReviewResults.tsx ReviewTile)",
+            "apps/desktop/src/review/PrWorkRow.tsx:FlowOffer (list <td> via ReviewResults.tsx)"
+          ],
+          "enumeration_method": "keryx ctx rg \"pr-work\" over apps/desktop/src: .pr-work-offer occurs only in PrWorkRow.tsx and styles/review.css, and PrWorkRow is rendered only from ReviewResults.tsx (board tile and list row). IssueWorkRow renders no offer."
+        }
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "LG-R3-003",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "apps/desktop/src/review/prWork.ts",
+        "line": null,
+        "quote": "  return { pending: [], links: only && fresh.length === 1 && fresh[0] ? [{ sessionId: only.sessionId, dir: fresh[0] }] : [] };",
+        "problem": "Making an offer ends the pending request. When a foreign package arrives first and the person dismisses it, the package their own prompt creates later in the window is not offered.",
+        "impact": "AC9 as re-frozen allows this. The body says Dismiss stops offering that package, but not that it ends the wait for the real one. Recorded for the owner; no change required.",
+        "suggested_fix": "Optional: on Dismiss, re-arm the request with the dismissed dir added to knownDirs until its original expiresAt, or list the limit under Known gaps.",
+        "evidence": "resolveFlowLinks and usePendingFlowLinks.dismiss at d7b0f7058.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "PC-007",
+        "severity": "info",
+        "reviewer": "review-pr-contract",
+        "file": ".metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md",
+        "quote": "All named mutants red. Desktop tsc 0, `bun test src` 1051/0; root tsc 0; root focused 44/0.",
+        "problem": "PR body Verification: 'Root focused suites: 44 pass, 0 fail.' and 'named mutants from both review rounds are red'. This journal line is their only source. The package names no root suite command, no mutant list (for example R2-17, R2-22, R2-23, R2-25, R2-26, S02/S03/S09/S17/S21/S42/S44/S46/S47/S60) and no red result for round 2. The 1051/0 Desktop count is backed by research-evidence/verify-tests-to-run-2.txt; these two claims are not. Unverified, not contradicted.",
+        "impact": "The closure of TP-R2-002..009 rests on mutants being red. A reader cannot tell which mutants were run or against which suites. The cost is limited to trust in the Verification section.",
+        "suggested_fix": "Record the round-2 mutant list with one result each, and the root suite command that gave 44/0, in journal.md (or the review package). Or narrow the body to the runs the package records.",
+        "evidence": "keryx ctx rg 'mutant|R2-17|S02|S09' over journal.md and resolved/T18,T19.implement.json: only journal.md:110 matches. verify-tests-to-run-1.txt ran a wider root set (2722 pass, 1 fail, a searchable-sources timeout that passes alone in -2.txt). Settled by: a mutation log for round 2 or a re-run by the testing lane.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "SC3-001",
+        "severity": "info",
+        "reviewer": "review-security-code",
+        "file": "src/lib/file-lock.ts",
+        "quote": "      const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;\n      if (age !== undefined && Date.now() - age > staleMs) {\n        try {\n          rmSync(lockPath, { force: true });",
+        "problem": "Stale takeover can admit two holders. (a) Two waiters stat the same stale lock; one removes it and takes a fresh lock; the other then removes that fresh lock on the strength of its earlier stat and takes its own. (b) A holder whose section outlives staleMs (2 s for flags.json: a paused process or a stalled disk) is broken and still completes its write; the nonce only stops it deleting the new lock. The helper is unchanged in this range; this PR makes flags.json writers depend on it with a 2 s stale window.",
+        "impact": "No attacker vector: every lock party is a same-user keryx process. Outcome under the trigger (a crashed holder plus two concurrent waiters interleaving within microseconds, or a holder paused past 2 s): one flag change (pin, archive, flow, subject) is silently lost, the residual of HW2-001. Rare and narrow.",
+        "suggested_fix": "Optional, track separately (the helper is shared with the project registry and the serve credential store): break a stale lock by renaming it to a unique name and re-checking its mtime/nonce before deleting, or acquire through link(2), so a waiter never removes a lock it did not stat.",
+        "evidence": "src/lib/file-lock.ts withFileLock: acquire `openSync(lockPath, \"wx\", 0o600)`; on failure `statSync(...)?.mtimeMs` then `rmSync(lockPath)` with no re-check between them; the finally removes only when `readFileSync(lockPath) === nonce`. organize.ts withFlagsLock passes `staleMs: FLAGS_LOCK_STALE_MS` (2_000). git log -- src/lib/file-lock.ts: 18f169be5, 05a9a8e36 (both before base).",
+        "confidence": "medium",
+        "blocking_merge": false,
+        "dedupe_key": "file-lock-stale-takeover-two-holders"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-012",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/styles/review.css",
+        "line": null,
+        "quote": ".pr-work-link.pr-work-offer { display: block; box-sizing: border-box; line-height: 22px; cursor: default; color: var(--fg); border-style: dashed; }",
+        "problem": "Criterion: Nielsen #4; Slop T3 (hover only where clickable). The offer span carries pr-work-link, so it gets the bordered and dashed box of the slot's actions. The existing `.pr-work-link:hover:not(:disabled)` also matches a span, because a span is never :disabled, so hovering changes its background. Clicking it does nothing.",
+        "impact": "The question reads as a third button next to Link and Dismiss. Users may click it expecting to open the Flow.",
+        "suggested_fix": "Give the offer its own class without the button box, or exclude it from the hover rule (`.pr-work-link:not(.pr-work-offer):hover`).",
+        "evidence": "review.css: `.pr-work-link:hover:not(:disabled), .pr-work-more:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }`; FlowOffer uses `<span className=\"pr-work-link pr-work-offer\">`. Not observed on a render.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-false-affordance"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-013",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "<p>{error}</p>",
+        "problem": "Criterion: Nielsen #2, consistency. The new unavailable branch renders the error unchanged, so 'configuration: This project has no GitHub.com fetch remote.', 'configuration: GitHub has Issues turned off for owner/repo. ...' and 'configuration: Invalid Issues request.' all show the machine prefix. ReviewBoard strips the same prefixes.",
+        "impact": "The first thing a user sees on first visiting the Issues tab, in such a project, is an internal error kind.",
+        "suggested_fix": "Strip /^(access|configuration|unavailable):\\s*/i as ReviewBoard does, or share one display helper.",
+        "evidence": "ReviewBoard.tsx: `error.replace(/^(access|configuration|unavailable):\\s*/i, \"\")`. IssuesBoard.dom.test.tsx feeds 'configuration: This project has no GitHub.com fetch remote.' into this branch. Round-2 UX-008 noted the prefix as pre-existing elsewhere; this block is new.",
+        "confidence": "high",
+        "dedupe_key": "issues-fallback-error-prefix-verbatim"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-014",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "is not in a repository this board shows",
+        "problem": "Criterion: Nielsen #9. The other-repository focus banner states the cause and offers only Dismiss. The user came from the PR link in the session header, intending to see that PR. The focus request carries {repo, number, nonce} but not the url that App holds in subject.url.",
+        "impact": "The user's intent ends in a dead end in the app. They must open the PR on GitHub themselves.",
+        "suggested_fix": "Pass url with the focus request and add an 'Open on GitHub' action to the banner.",
+        "evidence": "App.tsx onOpenSubject: `setReviewFocus({ repo: subject.repo, number: subject.number, nonce: ++focusNonce.current })`. ReviewBoard focusNotice banner has only the Dismiss icon button. An improvement on base, where the request stayed armed silently. I did not check whether the session header also has a direct GitHub link.",
+        "confidence": "medium",
+        "dedupe_key": "review-focus-notice-no-remedy"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-015",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "\" If this keryx is older than Desktop, update keryx or choose the bundled CLI in Desktop Settings.\"",
+        "problem": "Criterion: Nielsen #4 and #6. The hint says 'the bundled CLI', but Settings labels the option 'Bundled keryx'.",
+        "impact": "The user has to map two names while searching Settings. Minor friction.",
+        "suggested_fix": "Use the Settings label ('choose Bundled keryx in Settings'), ideally as a button that opens that Settings tab.",
+        "evidence": "apps/desktop/src/shell/SettingsView.tsx: `{ id: \"bundled\", label: \"Bundled keryx\", ... }`.",
+        "confidence": "high",
+        "dedupe_key": "issues-older-keryx-hint-setting-name"
+      },
+      "claimed_disposition": "fixed",
+      "claimed_evidence": "commit 055115a20 (T21 Desktop, T22 keryx, T23 docs); tests and mutation checks listed in .metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/journal.md section 'Review round 3 on PR #1300 and its fix round'"
+    },
+    {
+      "round": 3,
+      "finding": {
+        "id": "UX-016",
+        "severity": "info",
+        "reviewer": "review-ui-ux",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "const offer = flow ? undefined : work.flowOffer?.(sessions);",
+        "problem": "Criterion: Nielsen #1. Create Flow switches to the session view (openPrSession calls setView('session')), and the package is made during that session's turn. The offer is rendered only in the PR work row. Nothing in the session, the tab indicator or a live region mentions it. The owner chose the work row as its place (AC9 re-frozen), so this is info.",
+        "impact": "A user who stays in the session never sees the question, and the Flow stays unlinked: safe, but easy to miss.",
+        "suggested_fix": "Also show the question in the bound session (a notice with Link and Dismiss), or mark the Pull requests tab while an offer is pending.",
+        "evidence": "App.tsx openPrSession: `setView(\"session\")`. flowOffers reach only ReviewBoard to PrWork.flowOffer. Not observed in the app.",
+        "confidence": "medium",
+        "dedupe_key": "pr-flow-offer-not-visible-from-session"
+      },
+      "claimed_disposition": "deferred",
+      "claimed_evidence": null
+    }
+  ]
+}

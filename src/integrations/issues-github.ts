@@ -6,9 +6,12 @@ export const API = "https://api.github.com";
 export const denied = "access: The issue or project is unavailable to this GitHub account.";
 const invalidResponse = "unavailable: GitHub returned an unexpected Issues response. Refresh and retry.";
 export const invalidInput = "configuration: Invalid Issues request.";
+/** GitHub's 410 Gone on a repository's issues: Issues are turned off there (the default on a fork). */
+export const issuesDisabled = "configuration: GitHub has Issues turned off for this repository.";
 export type FetchIssues = (url: URL, options: RequestInit) => Promise<Response>;
 
 function failure(response: Response, diagnostic: string): Error {
+  if (response.status === 410) return new Error(issuesDisabled);
   if (
     response.status === 401 ||
     response.status === 404 ||

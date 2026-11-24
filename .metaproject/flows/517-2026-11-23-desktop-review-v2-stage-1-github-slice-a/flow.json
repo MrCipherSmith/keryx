@@ -1,0 +1,956 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "517",
+  "slug": "desktop-review-v2-stage-1-github-slice-a",
+  "title": "Desktop Review v2 stage 1: GitHub slice and Keryx links on the board",
+  "status": "in-progress",
+  "createdAt": "2026-11-23T19:41:25.622Z",
+  "updatedAt": "2026-11-24T08:37:54.554Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:da72a72e5ec60754dc27d6402c70d504963f14c2755047d9a08f8aa64635ad98",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 implementation tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each implementation task and T10"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Subject storage: flags.json subject, session_flags, issue binding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T19:48:50.862Z",
+            "outcome": "started",
+            "detail": "517-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Issues source repository (project repo) in keryx issues list",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T19:48:51.904Z",
+            "outcome": "started",
+            "detail": "517-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "PR board GitHub-only lanes, grouping, quick filters, GitHub reason",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T19:48:52.927Z",
+            "outcome": "started",
+            "detail": "517-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "PR work row, signed actions, PR-bound sessions, /review and Create Flow from session",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:00:30.163Z",
+            "outcome": "started",
+            "detail": "517-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Issues board GitHub grouping, repository default, work row",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:20:06.915Z",
+            "outcome": "started",
+            "detail": "517-T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Scenario test: PR without Flow and review -> session -> /review -> link on card",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:27:19.698Z",
+            "outcome": "started",
+            "detail": "517-T10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verify focused suites, typecheck, attachBadges/localBadge agreement",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Mutation check of edited attention-set lines",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Toolbar re-measure if .flows-toolbar changed",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "no element added to .flows-toolbar (diff of ReviewBoard.tsx since b147408a8: quick filters and grouping select are in .review-context; a DOM test asserts the toolbar children); stage 0 measurements still apply"
+    },
+    {
+      "id": "T14",
+      "title": "Docs: implementation plan stage 1 state, deviation (a) status",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix root tsc errors in server.ts and issue-session.test.ts (exactOptionalPropertyTypes)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:33:53.559Z",
+            "outcome": "started",
+            "detail": "517-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Fix CI root typecheck: issues/model.ts must not import platform via review/prWork",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T20:51:42.809Z",
+            "outcome": "started",
+            "detail": "517-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-23T21:21:21.797Z",
+            "outcome": "started",
+            "detail": "517-T17 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T05:27:00.669Z",
+            "outcome": "started",
+            "detail": "fix round 2 A"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T05:27:00.853Z",
+            "outcome": "started",
+            "detail": "fix round 2 B"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Fix round 2 (C): PR body, implementation plan, user docs",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T18",
+        "T19"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:15:48.705Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Desktop fixes of review round 3; 32 mutation checks red; desktop tsc 0, bun test src 1070/0"
+    },
+    {
+      "id": "T22",
+      "title": "Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:15:48.890Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx fixes of review round 3; 14 mutation checks red; root tsc 0, focused suites 94/0, src/acp 455/0"
+    },
+    {
+      "id": "T23",
+      "title": "Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T21",
+        "T22"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "cli-reference ACP session_flags, acp help, desktop-issues guide, implementation plan, journal, PR body"
+    },
+    {
+      "id": "T24",
+      "title": "Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:05.579Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Desktop fixes of review round 4; 32 mutants red (research-evidence/round4-fix-mutants-A.md); desktop tsc 0, bun test src 1081/0"
+    },
+    {
+      "id": "T25",
+      "title": "Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:16:05.760Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx fixes of review round 4; 20 mutants red (round4-fix-mutants-B.md); root tsc 0, focused 103/0, src/acp 457/0"
+    },
+    {
+      "id": "T26",
+      "title": "Fix round 4 (C): lock wording, PR body evidence, journal deferred list",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T24",
+        "T25"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "lock wording (cli-reference, plan), Issues guide non-Git reason, journal deferred list, PR body evidence"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-23T19:41:25.622Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-23T19:47:24.862Z",
+      "event": "task-added",
+      "detail": "T5: Subject storage: flags.json subject, session_flags, issue binding"
+    },
+    {
+      "at": "2026-11-23T19:47:25.379Z",
+      "event": "task-added",
+      "detail": "T6: Issues source repository (project repo) in keryx issues list"
+    },
+    {
+      "at": "2026-11-23T19:47:25.904Z",
+      "event": "task-added",
+      "detail": "T7: PR board GitHub-only lanes, grouping, quick filters, GitHub reason"
+    },
+    {
+      "at": "2026-11-23T19:47:26.395Z",
+      "event": "task-added",
+      "detail": "T8: PR work row, signed actions, PR-bound sessions, /review and Create Flow from session"
+    },
+    {
+      "at": "2026-11-23T19:47:26.875Z",
+      "event": "task-added",
+      "detail": "T9: Issues board GitHub grouping, repository default, work row"
+    },
+    {
+      "at": "2026-11-23T19:47:27.374Z",
+      "event": "task-added",
+      "detail": "T10: Scenario test: PR without Flow and review -> session -> /review -> link on card"
+    },
+    {
+      "at": "2026-11-23T19:47:27.976Z",
+      "event": "task-added",
+      "detail": "T11: Verify focused suites, typecheck, attachBadges/localBadge agreement"
+    },
+    {
+      "at": "2026-11-23T19:47:28.524Z",
+      "event": "task-added",
+      "detail": "T12: Mutation check of edited attention-set lines"
+    },
+    {
+      "at": "2026-11-23T19:47:29.079Z",
+      "event": "task-added",
+      "detail": "T13: Toolbar re-measure if .flows-toolbar changed"
+    },
+    {
+      "at": "2026-11-23T19:47:29.702Z",
+      "event": "task-added",
+      "detail": "T14: Docs: implementation plan stage 1 state, deviation (a) status"
+    },
+    {
+      "at": "2026-11-23T19:47:30.848Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-23T19:47:31.541Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-23T19:47:31.973Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-23T19:47:49.906Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-23T19:47:50.376Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-23T19:48:50.862Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 517-T5"
+    },
+    {
+      "at": "2026-11-23T19:48:51.904Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 517-T6"
+    },
+    {
+      "at": "2026-11-23T19:48:52.927Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 517-T7"
+    },
+    {
+      "at": "2026-11-23T19:58:07.656Z",
+      "event": "task-done",
+      "detail": "T6: Issues source repository (project repo) in keryx issues list"
+    },
+    {
+      "at": "2026-11-23T19:58:29.712Z",
+      "event": "task-done",
+      "detail": "T5: Subject storage: flags.json subject, session_flags, issue binding"
+    },
+    {
+      "at": "2026-11-23T20:00:01.262Z",
+      "event": "task-done",
+      "detail": "T7: PR board GitHub-only lanes, grouping, quick filters, GitHub reason"
+    },
+    {
+      "at": "2026-11-23T20:00:30.163Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 517-T8"
+    },
+    {
+      "at": "2026-11-23T20:19:50.259Z",
+      "event": "task-done",
+      "detail": "T8: PR work row, signed actions, PR-bound sessions, /review and Create Flow from session"
+    },
+    {
+      "at": "2026-11-23T20:20:06.915Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 517-T9"
+    },
+    {
+      "at": "2026-11-23T20:20:32.562Z",
+      "event": "task-done",
+      "detail": "T13: Toolbar re-measure if .flows-toolbar changed"
+    },
+    {
+      "at": "2026-11-23T20:26:41.792Z",
+      "event": "task-done",
+      "detail": "T9: Issues board GitHub grouping, repository default, work row"
+    },
+    {
+      "at": "2026-11-23T20:27:11.310Z",
+      "event": "task-done",
+      "detail": "T12: Mutation check of edited attention-set lines"
+    },
+    {
+      "at": "2026-11-23T20:27:19.698Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 517-T10"
+    },
+    {
+      "at": "2026-11-23T20:28:01.241Z",
+      "event": "task-done",
+      "detail": "T14: Docs: implementation plan stage 1 state, deviation (a) status"
+    },
+    {
+      "at": "2026-11-23T20:31:29.447Z",
+      "event": "task-done",
+      "detail": "T10: Scenario test: PR without Flow and review -> session -> /review -> link on card"
+    },
+    {
+      "at": "2026-11-23T20:33:52.825Z",
+      "event": "task-added",
+      "detail": "T15: Fix root tsc errors in server.ts and issue-session.test.ts (exactOptionalPropertyTypes)"
+    },
+    {
+      "at": "2026-11-23T20:33:53.559Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 517-T15"
+    },
+    {
+      "at": "2026-11-23T20:36:20.165Z",
+      "event": "task-done",
+      "detail": "T15: Fix root tsc errors in server.ts and issue-session.test.ts (exactOptionalPropertyTypes)"
+    },
+    {
+      "at": "2026-11-23T20:47:03.788Z",
+      "event": "task-done",
+      "detail": "T11: Verify focused suites, typecheck, attachBadges/localBadge agreement"
+    },
+    {
+      "at": "2026-11-23T20:51:42.451Z",
+      "event": "task-added",
+      "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
+    },
+    {
+      "at": "2026-11-23T20:51:42.809Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 517-T16"
+    },
+    {
+      "at": "2026-11-23T20:56:23.744Z",
+      "event": "task-done",
+      "detail": "T16: Fix CI root typecheck: issues/model.ts must not import platform via review/prWork"
+    },
+    {
+      "at": "2026-11-23T21:21:21.125Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
+    },
+    {
+      "at": "2026-11-23T21:21:21.797Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 517-T17 fix round 1"
+    },
+    {
+      "at": "2026-11-23T21:40:56.537Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 1 review findings on PR #1300 (2 blocker, 6 major, 9 minor)"
+    },
+    {
+      "at": "2026-11-24T05:26:50.183Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; the first new flow package that appears while that request is pending is linked to the session (`flow` flag) and shown as the Flow link on that PR card; when several new packages appear, none is linked automatically (R6) [verify: exec `cd apps/desktop && bun test src`]\" -> \"\"Create Flow\" on a PR card opens the PR-bound session with a prefilled flow prompt naming the PR URL; when exactly one new flow package appears while exactly one Create Flow request with a filled prompt is pending (bounded window), the PR work row offers \"Link Flow #<id>?\" with Link and Dismiss; only Link writes the session `flow` flag, after which the Flow shows on that PR card; Dismiss, several new packages or several pending requests link nothing (R6) [verify: exec `cd apps/desktop && bun test src`]\" (Owner decision 2026-11-24 in review round 2 (HL-001): no silent link by arrival time; the link is confirmed by the user. Recorded in journal.md 'Review round 2 owner decisions'.)"
+    },
+    {
+      "at": "2026-11-24T05:26:50.378Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx replies without `subject`, Desktop still opens the session and shows a notice that the binding was not saved (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" -> \"Subject storage: `_keryx/session_flags` accepts `subject` {kind \"pr\"|\"issue\", repo, number, url, optional repositoryId}, refuses an invalid one, persists it in `flags.json` so a fresh read (restart) returns it, and `null` unlinks it; an Issue session bound by `withIssueBinding` carries `subject.kind = \"issue\"`; when keryx stores the session but replies without `subject` (older keryx), Desktop keeps the session open and shows a notice that the binding was not saved, at the latest after the session's first turn (spec AC8, failure scenario) [verify: exec `bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues`]\" (Review round 2 PC-004: keryx stores a new session only after its first turn, so the older-keryx notice cannot appear before it; criterion text aligned with that fact, and optional repositoryId named.)"
+    },
+    {
+      "at": "2026-11-24T05:26:59.546Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
+    },
+    {
+      "at": "2026-11-24T05:26:59.729Z",
+      "event": "task-added",
+      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
+    },
+    {
+      "at": "2026-11-24T05:26:59.911Z",
+      "event": "task-added",
+      "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
+    },
+    {
+      "at": "2026-11-24T05:27:00.670Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — fix round 2 A"
+    },
+    {
+      "at": "2026-11-24T05:27:00.853Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — fix round 2 B"
+    },
+    {
+      "at": "2026-11-24T05:44:30.458Z",
+      "event": "task-done",
+      "detail": "T19: Fix round 2 (B): Issues source fallbacks, flags.json lock, issue subject backfill, backend tests"
+    },
+    {
+      "at": "2026-11-24T05:53:04.638Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 2 (A): PR board, Create Flow confirmation, sessions, App fixtures"
+    },
+    {
+      "at": "2026-11-24T06:06:20.351Z",
+      "event": "task-done",
+      "detail": "T20: Fix round 2 (C): PR body, implementation plan, user docs"
+    },
+    {
+      "at": "2026-11-24T07:15:43.909Z",
+      "event": "task-added",
+      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
+    },
+    {
+      "at": "2026-11-24T07:15:44.090Z",
+      "event": "task-added",
+      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
+    },
+    {
+      "at": "2026-11-24T07:15:44.266Z",
+      "event": "task-added",
+      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
+    },
+    {
+      "at": "2026-11-24T07:15:48.705Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T07:15:48.890Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T07:41:17.548Z",
+      "event": "task-done",
+      "detail": "T21: Fix round 3 (A): header focus, self-removing controls, Issues fallback and source key, offer, Desktop tests"
+    },
+    {
+      "at": "2026-11-24T07:41:17.792Z",
+      "event": "task-done",
+      "detail": "T22: Fix round 3 (B): flags lock options and trashed-dir guard, best-effort issue backfill, deterministic lock tests, issues-board gates"
+    },
+    {
+      "at": "2026-11-24T07:41:18.017Z",
+      "event": "task-done",
+      "detail": "T23: Fix round 3 (C): ACP session_flags docs, PR body, journal, implementation plan"
+    },
+    {
+      "at": "2026-11-24T08:16:04.996Z",
+      "event": "task-added",
+      "detail": "T24: Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps"
+    },
+    {
+      "at": "2026-11-24T08:16:05.198Z",
+      "event": "task-added",
+      "detail": "T25: Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests"
+    },
+    {
+      "at": "2026-11-24T08:16:05.383Z",
+      "event": "task-added",
+      "detail": "T26: Fix round 4 (C): lock wording, PR body evidence, journal deferred list"
+    },
+    {
+      "at": "2026-11-24T08:16:05.579Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T08:16:05.760Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1)"
+    },
+    {
+      "at": "2026-11-24T08:37:54.030Z",
+      "event": "task-done",
+      "detail": "T24: Fix round 4 (A): Issues reason contract in Desktop, offer slot layout and states, Link refusal reason, focus/test gaps"
+    },
+    {
+      "at": "2026-11-24T08:37:54.333Z",
+      "event": "task-done",
+      "detail": "T25: Fix round 4 (B): per-session flags write order, organize/file-lock API cleanup, reason-contract tests"
+    },
+    {
+      "at": "2026-11-24T08:37:54.554Z",
+      "event": "task-done",
+      "detail": "T26: Fix round 4 (C): lock wording, PR body evidence, journal deferred list"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/model.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review src/issues"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/session/organize.test.ts src/acp/shell-session-organize.test.ts src/session/issues"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/issues"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/issues"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/integrations/issues-board.test.ts && cd apps/desktop && bun test src/issues"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/ReviewBoard.dom.test.tsx"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC17": {
+      "kind": "judged"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit && bun test src"
+    },
+    "AC19": {
+      "kind": "none",
+      "reason": "documentation statement, checked in review"
+    }
+  }
+}

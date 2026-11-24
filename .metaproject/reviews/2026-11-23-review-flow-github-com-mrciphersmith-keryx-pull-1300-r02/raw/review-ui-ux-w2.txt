@@ -1,0 +1,52 @@
+STATUS: DONE
+
+review-ui-ux, round 2, wave 2. I read slice-03 (450 lines) and slice-05 (1330 lines) in full. This is a static code review: the payload has no URL and no screenshots. Most of both slices is backend code or tests. In this lens I checked the strings a user can see: the older-keryx binding notice, the `configuration:` errors that the new default Issues source can now raise, and the session title links. I also read the CSS in slice-03. One new minor finding (UX-008). No blocker or major findings.
+
+Context: Keryx Desktop is an app screen. Its users are developers. Primary task for these slices: open a project's Issues tab and see its issues, and work in a session bound to a PR or Issue. No DESIGN.md is in scope.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2, wave 2, slice-03 and slice-05, code mode only. One minor finding. UX-008: the Issues tab now defaults to the 'Project repository' source. In a project with no GitHub.com remote, the first visit therefore shows 'configuration: This project has no GitHub.com fetch remote.' with a Retry button that cannot succeed, and nothing points to the Source select that would fix it. Before this change, the 'assigned' default did not depend on the project, so such a project opened with no error. The older-keryx notice (SUBJECT_NOT_SAVED) is fine: it names the cause, the consequence and the remedy, and it is accurate because Desktop binds only PR subjects (App.tsx openPrSession). The 'keryx is not running' rejection in useAcpSession is caught and never shown. The server's `subject must be ...` and `not a GitHub subject` refusals are RPC errors for developers and never reach the board. The CSS in slice-03 was covered by wave 1 (UX-001 and UX-002 closed). Not checked on a render.",
+  "slices": ["slice-03", "slice-05"],
+  "findings": [
+    {
+      "id": "UX-008",
+      "severity": "minor",
+      "reviewer": "review-ui-ux",
+      "file": "src/integrations/issues-board.ts",
+      "line": null,
+      "quote": "  const repository = request.source === \"repository\" ? await projectRepository(cwd) : null;",
+      "problem": "Criterion: Nielsen #9 (help users recognize, diagnose and recover from errors), State: error. D5 makes 'repository' the default Issues source (apps/desktop/src/issues/model.ts DEFAULT_SOURCE). For that source, `projectRepository` calls `selectRepository(await reviewRepositories(cwd))`, and in a project without a GitHub.com fetch remote it throws 'configuration: This project has no GitHub.com fetch remote.' (or 'configuration: Open a Git project with a GitHub.com remote.' when git fails). useIssueCollection passes that through errMessage unchanged. IssuesBoard renders it as `{error} ... <button>Retry</button>`. The message states the cause but gives no remedy. Retry repeats the same request, which fails the same way. The text does not mention the 'Source' select in the toolbar, where 'Assigned to me' and the other sources still work. The `configuration:` machine prefix is shown verbatim. That pattern was already there for other Issues errors and is not new here.",
+      "impact": "Trigger: the first visit to the Issues tab, with no stored source preference, in a project whose remotes are not on github.com (no remote, GitLab, or a local-only repository). Outcome: instead of the viewer's issues, which the old 'assigned' default showed in any project, the user gets an error with a futile Retry and has to find the Source select on their own. The data is not lost and the workaround is one select away, so this is minor.",
+      "suggested_fix": "Give the error a remedy next to it. Change the copy, for example: 'This project has no GitHub.com remote, so it has no repository issues. Choose another source, such as Assigned to me.' Or, in the Issues view, when the source is 'repository' and the error has the configuration kind, replace Retry with a button that switches to 'assigned'. A softer alternative is to fall back to 'assigned' for the session when no stored preference exists, and say so in a status line. Add a DOM test for the no-remote case.",
+      "evidence": "slice-05 issues-board.ts: `projectRepository` is called only for `source === \"repository\"`. src/review/board-github.ts `selectRepository`: `if (!repositories.length) throw new Error(\"configuration: This project has no GitHub.com fetch remote.\");`. The test 'AC13 the repository source needs a project with a GitHub remote' asserts exactly this text for a project with no remote and for a gitlab.com remote. apps/desktop/src/issues/useIssueCollection.ts: `const reason = errMessage(e); if (isAccessError(reason)) denied(reason); else setError(reason);`. errMessage (lib/format.ts) returns e.message unchanged. IssuesBoard.tsx: `{error && <div className=\"issues-notice\" role=\"alert\">{error} ... <button className=\"btn btn-sm\" onClick={() => void load()}>Retry</button>`. model.ts: `DEFAULT_SOURCE: IssueSource = \"repository\"`. Not observed on a render. I did not check whether Desktop opens the Issues tab for projects without a GitHub remote; the tab is listed in project navigation and nothing I read gates it on a remote.",
+      "confidence": "medium",
+      "dedupe_key": "issues-repository-default-no-remote-error-no-remedy"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Strings checked, no finding
+
+- `SUBJECT_NOT_SAVED` (apps/desktop/src/session/subjectBinding.ts, wired as a warn notice in useAcpSession.ts). It names the cause ('This keryx did not save the pull request binding'), the consequence ('the card will not find it again') and the remedy ('Update keryx'). It says 'pull request' correctly: the only caller of `bindSubject` is App.tsx `openPrSession`, and issue sessions get their subject on the server side through `withIssueBinding`.
+- `Promise.reject(new Error("keryx is not running"))` in the PendingSubjects `write` (useAcpSession.ts). `PendingSubjects.apply` catches it and retries after the session's turn, so the user never sees it.
+- Server refusals in src/acp/server.ts (`subject must be an object, null or omitted`) and src/session/organize.ts (`not a GitHub subject: ...`) are JSON-RPC errors for client developers. Desktop builds valid subjects, so they never reach a board or a notice.
+- The issue-session error texts in issue-session.ts ('The linked session is archived or missing. Restore it in Sessions and retry.') were not changed by this diff.
+- AppShell `titleLinks` render beside the title only in the session view. The links are review-frontend's concern. `.session-subject-links` uses `white-space: nowrap`, and any overflow belongs to review-layout.
+
+## Slop score
+
+App screen. No behavioural, component or motion tells in these slices: T1 0, T2 0, T3 0, so the score is 0. No exemptions were needed.
+
+## Checks not run
+
+- No live render, because the payload has no URL or screenshots. Not run: the Issues tab opened in a project without a GitHub remote, the older-keryx notice in a transcript, the session title links at 1440, 768 and 390px, and light and dark themes. A screenshot of the Issues tab in a non-GitHub project would settle UX-008's on-screen form.
+- The CSS in slice-03 (work row, lane colours, focus offset) was reviewed in wave 1 under slice-02 (UX-001 and UX-002 closed, UX-006 and UX-007 info). It is not repeated here.
+
+## Routing audit
+
+graph_used: no (not-relevant: both slices were read in full, and only three call sites needed confirming, done with ctx rg). wiki_used: no (not-relevant: a copy and error-state check with the job context in the payload). ctx_used: yes (keryx ctx rg for bindSubject, SUBJECT_NOT_SAVED, the configuration: errors and the Issues error rendering). raw_rg_used: no.

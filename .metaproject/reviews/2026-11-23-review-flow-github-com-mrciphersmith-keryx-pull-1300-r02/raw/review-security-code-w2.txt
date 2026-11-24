@@ -1,0 +1,49 @@
+STATUS: DONE
+
+## Security Review (review-security-code, round 2, wave 2)
+
+### Scope
+- PR: MrCipherSmith/keryx#1300, head 88e3faba9a1732f45a4ff7200588832e8b83f121, base b147408a8748cdbd8506b371adb5957947e4477a
+- Scope mode: diff (supplied slices; diff not rebuilt)
+- Slices read in full: slice-03 (desktop useAcpSession.ts subject binding wiring, AppShell.tsx titleLinks, review.css), slice-05 (app-work-row fixture, implementation-plan.md, src/acp/server.ts handleSessionFlags, shell-session-organize.test.ts, src/commands/issues.ts, src/integrations/issues-board.ts + test, issues-contract.ts, src/session/issues/issue-session.ts + test, src/session/organize.ts + test)
+- Out-of-diff context read at head to close sinks: src/review/board-github.ts (`githubRemote`, `configuredRepositories`, `selectRepository`, `reviewRepositories`), src/integrations/issues-github.ts (`IssueGithub.request`, `cursorScope`, `scopedCursor`, `readCursor`)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No exploitable or reachable security weakness found in slice-03 or slice-05. Wave-1 security found none in slice-02; nothing here duplicates it.
+
+### Verified clean (each line names what it rests on)
+- **Path/URL injection in `/repos/{owner}/{repo}/issues`** (issues-board.ts `listUrl`): the repository comes only from `git remote -v` through board-github.ts `githubRemote`, which accepts exactly one slash and `^[a-z0-9-]+\/[\w.-]+$` (no `%`, `?`, `#`, `/` in either part). The one admitted traversal shape (a name of only dots) is rejected by `projectRepository` (`/^\.+$/`), and each part is additionally `encodeURIComponent`-ed before `new URL(..., API)`. `IssueGithub.request` re-checks `url.origin === API` and no userinfo, and fetches with `redirect: "error"`, so the bearer token cannot leave api.github.com.
+- **Cursor replay across repositories**: the repository (lower-cased) joins `cursorScope` for the repository source, and `readCursor` requires the `scope + "."` prefix, so a cursor from org/base is refused in org/other and in a viewer scope (the new test asserts both). The scope is a public hash, not a MAC, so a client can forge a cursor for its own scope; that is pre-existing design and harmless because the decoded cursor contributes only allow-listed `page|after|before|since_id` keys via `searchParams.set` (encoded), never a path or host.
+- **Pagination link trust**: `pageLink` keeps the origin/userinfo checks; the widened `samePage` accepts `/repositories/<digits>/issues` from GitHub's `Link` header, but only the allow-listed page parameters are extracted and re-applied to the base `/repos/{owner}/{repo}/issues` URL, so a link naming another repository id cannot redirect the next request.
+- **Trust of the remote-derived owner/repo**: the remote is the user's own project git config, read with `execFile` (no shell) under `reviewGitEnvironment` (GitHub credentials and git-discovery overrides stripped); remote URLs are never returned or logged (only owner/name). A remote pointing at a hostile repo yields only a read-only GET of that repo's issues with the user's token; issue titles render as JSX text (wave-1 verified). No reachable impact.
+- **`_keryx/session_flags` subject input** (server.ts `handleSessionFlags`): the wire accepts object/null/omitted; the store (`updateSessionFlagsAt` -> `parseSessionSubject`) rebuilds a fresh object from five named fields only (no prototype pollution, no extra keys persisted), enforces `REPO_REF` (owner charset without dots; name not `.`/`..`), safe positive integer, `SUBJECT_URL` anchored to `https://github.com/` with kind/repo/number cross-checked, and `NODE_ID` for repositoryId. The refusal message echoes at most 300 chars of the caller's own subject back to the same local caller only.
+- **flags.json writes**: `writeFlags` keeps `writeOwnerOnlyFileAtomic`; the `dir` comes from `locate` (exact session id lookup) or, for the issue binder, from `sessionDir(root, launch.sessionId)` of a binder-generated UUID; `readSessionFlags` drops an invalid stored subject (test covers it). No path is built from subject fields.
+- **Issue binding** (issue-session.ts `bindIssueSubject`): runs only after the remote issue and viewer were verified (function contract, unchanged), inside the binding file lock, and stores a subject only when `parseSessionSubject` accepts it (GHE issues get none). The private `issue-link.json` marker stays the authority.
+- **Desktop wiring** (slice-03): `PendingSubjects.write` sends `{ sessionId, cwd, subject }` over the existing ACP client; no new sink, no HTML, no external open; titleLinks are React nodes.
+- Secrets/crypto/command injection: no token logging, `Math.random`, `eval`, or shell-string exec in either slice; test fixtures use `execFileSync` with argument arrays.
+
+### Not in this lens
+- `updateSessionFlagsAt` called from `bindIssueSubject` and `setSessionFlags` are read-modify-write without a flags-file lock (pre-existing for setSessionFlags). A concurrent write could lose a flag; that is a logic/concurrency question, not a security one, and was not rated here.
+
+### Routing audit
+graph_used: no (not-relevant: slice text supplied; the two helper files were located by search) · wiki_used: no (not-relevant) · ctx_used: yes (`keryx ctx rg` for reviewRepositories/selectRepository/cursorScope/readCursor/scopedCursor) · raw_rg_used: no
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 2 wave 2, slice-03 and slice-05 read in full. No security findings. The repository-source issues URL is built from a git-remote owner/name constrained by githubRemote's single-slash charset regex, with dot-only names refused and each part encodeURIComponent-ed; IssueGithub.request pins origin api.github.com with redirect:error. Repository cursors are scoped by the lower-cased repository and decode only allow-listed page keys, so cross-repo replay is refused and a forged or GitHub-supplied /repositories/<id> link cannot redirect the request. The _keryx/session_flags subject is rebuilt from named fields and strictly validated by parseSessionSubject before an owner-only atomic write; invalid stored subjects read as absent.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-03", "slice-05"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0, "files_reviewed": 15 }
+}
+```

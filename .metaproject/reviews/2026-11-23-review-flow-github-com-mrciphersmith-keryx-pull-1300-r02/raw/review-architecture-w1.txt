@@ -1,0 +1,129 @@
+STATUS: DONE
+
+## Architecture Review (round 2)
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: b147408a8748cdbd8506b371adb5957947e4477a..88e3faba9a1732f45a4ff7200588832e8b83f121 (checkout HEAD verified = 88e3faba9)
+- Scope mode: diff (explicit range), round 2 fallback-first: whole range reviewed. The fix commit a34d8961b was read for its file list.
+- Slice: slice-02, read in full (all 2458 lines, 21 files)
+- Stack detected: generic TS + React (no MobX, no NestJS)
+
+### Prior dispositions (checked against the code at 88e3faba9)
+- AR-001 (minor, one PR-Flow rule with four implementations): **closed**. `prFlowIndex` in review/prWork.ts is now the only implementation. `prFlows` delegates to it. The four round-1 sites all go through it: PrWorkRow uses `work.index.flows`, the ReviewBoard panel uses `panelFlow` with the same `index`, App.openPrSession uses `prFlows(card, flowCards.current, boundSessions(...))`, and ReviewLaunchDialog uses `linked = prFlows(card, eligibleFlows, [])[0]`, with a comment saying the dialog has no sessions on purpose. `flowForPr` and `samePrUrl` are gone. Enumeration: `keryx ctx rg --all -n 'prUrl\?\.replace|prUrl\)|\.prUrl|samePrUrl|prUrlKey|flowForPr|prFlows\(|prFlowIndex|boundSessions|...' apps/desktop/src --glob '!*.test.*'`. The only remaining `.prUrl` readers are display code in flows/FlowsBoard.tsx and FlowDetail.tsx, and no comparison is left. Regression check: the panel's `flow` now also resolves a Flow linked through a bound session, sorted newest first. That matches the work row, which is what the finding asked for. No new defect.
+- AR-002 (info, `boundSessions` with two import paths): **partial**. No production file imports it through `./prWork` any more. PrWorkRow now reads `work.index.sessions`, and App and issues/model import from `acp/types`. The re-export `export { boundSessions };` is still in prWork.ts, and its only importer is prWork.test.ts. The fix round left it deferred.
+
+### Summary
+The change adds a review/prWork.ts model layer: the Subject, the PR-to-Flow rule, the work-row index, pending Flow links and the Subject-session opener. It adds `SessionSubject`, `boundSessions` and `boundSessionIndex` to the dependency-free acp/types.ts. On top sit the views PrWorkRow, IssueWorkRow and SessionSubjectLinks. Dependencies point the right way and nothing forms a cycle:
+- `acp/types` has no imports.
+- `prWork` imports only `acp/types`, `flows/model` (type-only `platform/commands`) and `review/types`.
+- `issues/model` reaches `acp/types` only, which was the stated reason in 23844b08e.
+
+The round-1 resolver finding is closed. The fix round added a second copy of the bound-sessions rule and a second copy of the review-progress caption (AR-003, minor).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. Import graph checked:
+- prWork.ts → acp/types, flows/model (→ type-only platform/commands), review/types
+- PrWorkRow.tsx → prWork, ReviewProgress, model
+- ReviewResults.tsx → PrWorkRow
+- ReviewBoard.tsx → PrWorkRow (type only), prWork
+- issues/model.ts → acp/types
+- review/model.ts → ./types only
+
+### Module Boundary Violations
+[AR-004] info: the Subject-session machinery lives in the review feature. See the JSON.
+
+### Design Pattern Misuse
+[AR-003] minor: the fix round restates two rules instead of delegating to them. See the JSON.
+
+### Dependency Inversion
+None detected. `openSubjectSession` takes its I/O through `SubjectSessionDeps`, and `PendingSubjects` takes its I/O through `SubjectBindingDeps`.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A. No MobX or NestJS code. React view, model and hook placement is sound: the views render, prWork holds the rules, and usePendingFlowLinks only orchestrates.
+
+### Pre-existing (round obligation 4)
+[AR-005] info: `WorkAction` is declared twice in the issues feature. Recommended disposition: a small follow-up issue, or fold it into this change.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 2, slice-02 read in full. AR-001 closed: prFlowIndex is now the single PR-to-Flow rule, and all four sites use it. AR-002 partial: the boundSessions re-export remains, with only prWork.test.ts importing it. New: one minor finding, where the fix round added boundSessionIndex beside boundSessions and reviewProgressText beside the ReviewProgress caption, so each rule now has two implementations (round obligation 7). Two info findings: the kind-agnostic Subject-session code sits in review/prWork.ts, and WorkAction is declared twice (pre-existing). No layer, direction or cycle violations.",
+  "slices": ["slice-02"],
+  "prior_dispositions": [
+    {"id": "AR-001", "disposition": "closed"},
+    {"id": "AR-002", "disposition": "partial"}
+  ],
+  "findings": [
+    {
+      "id": "AR-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/acp/types.ts",
+      "line": null,
+      "quote": "export function boundSessionIndex(sessions: readonly SessionInfo[]): (subject: SessionSubject) => readonly SessionInfo[] {",
+      "problem": "The fix round wrote two rules out a second time instead of delegating to one implementation (round obligation 7, 'one rule, one implementation'). (1) Bound sessions: `boundSessions` filters on `archivedAt === undefined && sameSubject(...)`. `boundSessionIndex`, added in a34d8961b, filters on `archivedAt !== undefined || !flags.subject` and groups by `subjectKey`, a second encoding of the same equality. Its doc says it is 'equal ... exactly when sameSubject holds'. Only the sort comparator is shared. (2) Review progress caption: `reviewProgressText` (ReviewProgress.tsx) rebuilds the visible caption of the `ReviewProgress` component: wave, percent, the `![\"running\",\"queued\",\"completed\"].includes(state) && RUN_STATE_LABEL[state]` rule, then label. The same file holds both copies. In the same commit, `prFlows` was correctly made to delegate to `prFlowIndex`. These two pairs were not.",
+      "impact": "No wrong output today: prWork.test.ts asserts that the index and boundSessions agree, and the two captions read the same inputs. The cost falls on the next change. Suppose an archived-but-pinned session, or a repositoryId match, is added to one copy of the bound-session rule. The work row (the index) and App.openPrSession or the Issues board (boundSessions) then disagree about which session is 'the PR's newest', and only the equivalence test notices. The same holds for the caption, between the slot title and the panel progress line.",
+      "suggested_fix": "Mirror prFlows/prFlowIndex. Make `boundSessions(sessions, subject)` return `boundSessionIndex(sessions)(subject)` (as a fresh array), or build the index on `sameSubject` and drop the second equality. Have the `ReviewProgress` component render its caption from the same parts function that `reviewProgressText` joins, so the state-label rule exists once.",
+      "evidence": "slice-02 diff: acp/types.ts adds boundSessions, subjectKey and boundSessionIndex. ReviewProgress.tsx adds reviewProgressText. `git show --stat a34d8961b` lists acp/types.ts (+23) and ReviewProgress.tsx (+22), so both copies came from the fix round. `keryx ctx rg --all -n 'archivedAt === undefined|archivedAt !== undefined|subjectKey\\(|sameSubject\\(|RUN_STATE_LABEL\\[' apps/desktop/src --glob '!*.test.*'` finds acp/types.ts:203 (boundSessions), acp/types.ts:217-224 (boundSessionIndex), ReviewProgress.tsx:74 (component caption) and ReviewProgress.tsx:96 (reviewProgressText).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "desktop-rule-restated-not-delegated",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/acp/types.ts:201-205 (boundSessions)",
+          "apps/desktop/src/acp/types.ts:213-225 (boundSessionIndex + subjectKey)",
+          "apps/desktop/src/review/ReviewProgress.tsx:74 (ReviewProgress caption)",
+          "apps/desktop/src/review/ReviewProgress.tsx:90-99 (reviewProgressText)",
+          "apps/desktop/src/review/prWork.ts:68-70 (prFlows -> prFlowIndex, already delegating: the correct form)"
+        ],
+        "enumeration_method": "keryx ctx rg --all over apps/desktop/src (non-test) for archivedAt checks, subjectKey(/sameSubject( and RUN_STATE_LABEL[; the files a34d8961b touched (git show --stat) cross-checked against the paired index/plain functions in prWork.ts and acp/types.ts"
+      }
+    },
+    {
+      "id": "AR-004",
+      "severity": "info",
+      "file": "apps/desktop/src/review/prWork.ts",
+      "line": null,
+      "quote": "export function withPendingSubjects(sessions: readonly SessionInfo[], pending: ReadonlyMap<string, SessionSubject>): SessionInfo[] {",
+      "problem": "Several pieces of review/prWork.ts work for either Subject kind ('pr' | 'issue') and belong to the session layer, not to PR review: `withPendingSubjects`, `openSubjectSession`, `subjectOpener`, `SubjectSessionDeps` and `SubjectSessionTarget`. App.tsx uses them to build `subjectSessions`, which only the PR board receives. IssuesView gets the raw `state.sessions`. So the merge of pending bindings into the session list is a review-feature helper that the other Subject consumer does not use. Today, issue bindings go through keryx `withIssueBinding` rather than `PendingSubjects`, so I can name no wrong output.",
+      "impact": "No defect today. If Issues later binds through `bindSubject` (the stage 4 plan), its board would miss pending bindings until someone notices that the helper lives under review/.",
+      "suggested_fix": "Optional: move the Subject-session part (withPendingSubjects, openSubjectSession, subjectOpener and their types) next to session/subjectBinding.ts, and keep PR-specific rules in prWork.ts.",
+      "evidence": "slice-02 prWork.ts. App.tsx passes `sessions={subjectSessions}` to ReviewBoard and `sessions={state.sessions}` to IssuesView.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-005",
+      "severity": "info",
+      "file": "apps/desktop/src/issues/IssueWorkRow.tsx",
+      "line": null,
+      "quote": "import type { WorkAction } from \"./IssueWork\";",
+      "problem": "Pre-existing: `export type WorkAction = \"open-session\" | \"prepare-flow\" | \"open-flow\";` is declared in both issues/IssueWork.tsx:9 and issues/IssueDetail.tsx:12. Neither file changed in this range. The new IssueWorkRow imports it from ./IssueWork, while IssuesBoard imports it from ./IssueDetail, and the same `act(action, ...)` flow uses both. The types are structurally identical, so it compiles and behaves correctly.",
+      "impact": "No defect. Adding an action to one declaration and not the other would split the issue work row from the card actions at compile time or quietly at runtime.",
+      "suggested_fix": "Keep the declaration in IssueWork.tsx and re-export or import it in IssueDetail.tsx. This is small enough to fold into this change, or else record it as a follow-up issue.",
+      "evidence": "`keryx ctx rg --all -n 'export type WorkAction|WorkAction' apps/desktop/src/issues/IssueWork.tsx apps/desktop/src/issues/IssueDetail.tsx`. `git diff --stat b147408..88e3faba9` on both files is empty, so the duplication is pre-existing.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 2},
+  "inputs_unreadable": []
+}
+```
+
+Verified clean (sites named):
+- No import cycle among acp/types.ts, review/prWork.ts, review/PrWorkRow.tsx, review/ReviewResults.tsx, review/ReviewBoard.tsx, review/ReviewProgress.tsx, review/model.ts, flows/model.ts or issues/model.ts. Import lines were read with `keryx ctx rg --all -n '^import'`.
+- issues/model.ts imports only acp/types (no platform module), as the 23844b08e rationale requires.
+- The PR-Flow rule has one implementation: prWork.ts:45 `prFlowIndex`. Consumers: App.tsx:398, ReviewLaunchDialog.tsx:220, and ReviewBoard.tsx through `prWorkIndex`.
+
+Not verified / not read: slices 01, 03, 04 and 05 (not in this wave). The ReviewDetail.tsx associatedFlow code was not re-read at head; the file is unchanged in the range per `git diff --stat`. No tests run (exec_budget_s 0). The test evidence file was not consulted.
+
+Routing audit: graph_used: no (layers block in the payload used; no new graph query needed), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg/run/read), raw_rg_used: no.

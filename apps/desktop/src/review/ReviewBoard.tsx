@@ -20,10 +20,16 @@ import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
 import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
-import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
-import { EMPTY_FILTERS, filterReviews, needsViewerAttention, stateFilterShowsDone, stateQuery, type Filters } from "./model";
+import type { PrWork } from "./PrWorkRow";
+import { prSubject, prWorkIndex, type PrFlowOffer } from "./prWork";
+import type { SessionInfo } from "../acp/types";
+import { readReviewFilters, readReviewGrouping, reviewFilterKey, saveReviewFilters, saveReviewGrouping } from "./reviewFilterStorage";
+import {
+  EMPTY_FILTERS, GROUPING_LABEL, QUICK_FILTERS, filterReviews, needsViewerAttention, stateQuery, type Filters, type Grouping, type QuickFilter,
+} from "./model";
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+import { displayReason } from "../../../../src/integrations/issues-contract";
 
 export type ReviewTabIndicator = "attention" | "watching" | null;
 
@@ -37,7 +43,22 @@ interface Props {
   currentRepairModel?: ReviewLaunchModel | undefined;
   onOpenFlow: (dir: string) => void;
   onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;
-  onOpenSession?: ((card: ReviewCard) => void) | undefined;
+  /** The project's sessions (pending Subject bindings included): the session slot lists those bound to each PR. */
+  sessions?: readonly SessionInfo[];
+  onOpenSubjectSession?: PrWork["onOpenSubjectSession"];
+  onCreateFlow?: PrWork["onCreateFlow"];
+  /** New packages offered for linking to PR-bound sessions after Create Flow: the work row asks Link / Dismiss. */
+  flowOffers?: readonly PrFlowOffer[];
+  onLinkFlowOffer?: PrWork["onLinkFlowOffer"];
+  onDismissFlowOffer?: PrWork["onDismissFlowOffer"];
+  /**
+   * Open this PR's panel on the board of `repo` (compared without case); a new `nonce` opens it again. A
+   * `repo` among the board's other repositories is selected first; one the board cannot show gets a notice.
+   * Once opened or refused, `onFocusHandled(nonce)` lets the owner clear the request, so a remounted board
+   * cannot replay it.
+   */
+  focus?: { repo: string; number: number; nonce: number } | null;
+  onFocusHandled?: (nonce: number) => void;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -58,7 +79,7 @@ interface ReadState {
 
 export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
-    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending && a?.lastActivityAt === b?.lastActivityAt
+    && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending
     && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
@@ -82,6 +103,8 @@ const attentionNumbers = (board: ReviewBoardSnapshot) =>
 /** A load of this scope holds every open PR, so it replaces the carried attention set. */
 const holdsAllOpen = (state: string, period?: number) => !period && (state === "open" || state === "all");
 const DEFAULT_SCOPE = `${stateQuery(EMPTY_FILTERS.state)}/`;
+const NO_SESSIONS: readonly SessionInfo[] = [];
+const NO_OFFERS: readonly PrFlowOffer[] = [];
 
 export function ReviewBoard(props: Props) {
   return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
@@ -92,7 +115,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenSession, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -109,6 +132,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const warningId = useId();
   const warningToggle = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<"board" | "list">("board");
+  const [grouping, setGrouping] = useState<Grouping>("status");
   const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const refresh = useCallback(() => setAttempt(n => n + 1), []);
@@ -246,6 +270,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         filterKey.current = nextFilterKey;
         nextFilters = readReviewFilters(nextFilterKey);
         setFilters(nextFilters);
+        setGrouping(readReviewGrouping(nextFilterKey));
       }
       // Closed/merged-only and period views can retire known requests, but cannot replace the open snapshot:
       // a new identity seen there starts from nothing and gets one open load that only seeds the set.
@@ -381,7 +406,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   }, [viewer, repositoryId]);
   const visible = useMemo(() => {
     if (!snapshot) return [];
-    return filterReviews(snapshot.cards, filters, q).map(card => {
+    return filterReviews(snapshot.cards, filters, q, snapshot.viewer).map(card => {
       if (!card.addressedReplyIds?.length) return card;
       const ids = unreadIds(snapshot, card);
       return ids.length === card.addressedReplyIds.length ? card : { ...card, addressedReplyIds: ids };
@@ -439,6 +464,16 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     if (filterKey.current) saveReviewFilters(filterKey.current, next);
   }
   const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); search.current?.focus(); };
+  function toggleQuick(quick: QuickFilter) {
+    const next = { ...filters };
+    if (next[quick]) delete next[quick];
+    else next[quick] = true;
+    applyFilters(next);
+  }
+  function chooseGrouping(next: Grouping) {
+    setGrouping(next);
+    if (filterKey.current) saveReviewGrouping(filterKey.current, next);
+  }
   // The hint counts what its reset shows: hidden cards of this snapshot, plus carried requests only when
   // the reset loads the open scope instead of this fresh one.
   const shownNumbers = new Set(visible.map(c => c.number));
@@ -453,6 +488,49 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
     setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
   }, []);
+  // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.
+  // Another repository of this board is selected first (the board remounts on it). A repository it cannot
+  // show, or a PR missing from the settled list of its repository (its state filtered out, say), is refused
+  // with a notice, so the request is not left armed to open the panel later, unasked.
+  const focused = useRef<number | null>(null);
+  const [focusNotice, setFocusNotice] = useState("");
+  useEffect(() => {
+    if (!focus || focused.current === focus.nonce || !snapshot) return;
+    // Every outcome marks the nonce, sets the notice (empty when the panel opens) and tells the App it is handled.
+    const settle = (notice: string) => {
+      focused.current = focus.nonce;
+      setFocusNotice(notice);
+      onFocusHandled?.(focus.nonce);
+    };
+    if (snapshot.repo.toLowerCase() !== focus.repo.toLowerCase()) {
+      const listed = snapshot.repositories.find(name => name.toLowerCase() === focus.repo.toLowerCase());
+      if (listed) selectRepo(listed);
+      else settle(`${focus.repo}#${focus.number} is not in a repository this board shows (${snapshot.repositories.join(", ") || snapshot.repo}).`);
+      return;
+    }
+    if (!snapshot.cards.some(c => c.number === focus.number)) {
+      // A load in flight, or a cached fallback, may still bring the PR in: wait for the settled list.
+      if (!loading && !stale) settle(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);
+      return;
+    }
+    settle("");
+    setSelected({ number: focus.number });
+  }, [focus, snapshot, loading, stale, onFocusHandled, selectRepo]);
+  const workRepo = snapshot?.repo ?? "";
+  // Indexed once per sessions and Flows change; every work row and the PR panel look up the same rule.
+  const index = useMemo(() => prWorkIndex(flows, sessions), [flows, sessions]);
+  const flowOffer = useMemo(() => {
+    if (!flowOffers.length) return undefined;
+    const bySession = new Map(flowOffers.map(offer => [offer.sessionId, offer]));
+    return (bound: readonly SessionInfo[]) => bound.map(session => bySession.get(session.sessionId)).find(offer => offer !== undefined);
+  }, [flowOffers]);
+  const work = useMemo<PrWork>(() => ({ repo: workRepo, ...(repositoryId && { repositoryId }), index, onOpenFlow, onCreateFlow, onOpenSubjectSession,
+    flowOffer, onLinkFlowOffer, onDismissFlowOffer }),
+    [workRepo, repositoryId, index, onOpenFlow, onCreateFlow, onOpenSubjectSession, flowOffer, onLinkFlowOffer, onDismissFlowOffer]);
+  const subscribe = useCallback((item: ReviewCard) => setSubscriptionNumber(item.number), []);
+  const openPanelSession = (item: ReviewCard) => onOpenSubjectSession
+    && (() => onOpenSubjectSession(item, "latest", prSubject(item, workRepo, repositoryId)));
+  const panelFlow = (item: ReviewCard) => index.flows(item, index.sessions(prSubject(item, workRepo, repositoryId)))[0];
 
   return <div className="review-workspace" hidden={!tabActive}>
     <section className="flows review-board" aria-label="Pull requests">
@@ -491,6 +569,15 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
           onChange={(e) => selectRepo(e.target.value)}>{snapshot.repositories.map((name) => <option key={name}>{name}</option>)}</select>
           : <strong>{snapshot.repo}</strong>}
         <span>Signed in as {snapshot.viewer}</span>
+        <div className="review-quick-filters" role="group" aria-label="Quick filters">
+          {(Object.keys(QUICK_FILTERS) as QuickFilter[]).map(quick => <button key={quick} type="button" className="btn btn-sm"
+            aria-pressed={!!filters[quick]} disabled={!filterKey.current} onClick={() => toggleQuick(quick)}>{QUICK_FILTERS[quick]}</button>)}
+        </div>
+        {view === "board" && <label className="review-grouping">Group by
+          <select className="select-compact" value={grouping} onChange={(e) => chooseGrouping(e.target.value === "role" ? "role" : "status")}>
+            {(Object.keys(GROUPING_LABEL) as Grouping[]).map(value => <option key={value} value={value}>{GROUPING_LABEL[value]}</option>)}
+          </select>
+        </label>}
         <span className="grow" />
         <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
         {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
@@ -512,8 +599,14 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </div>}
     </div>}
     {error && <div className="inline-banner tone-warn" role="alert">
-      <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
+      <Icon name="alert" size={15} /><span>{displayReason(error)}</span>
       <button className="btn btn-sm" onClick={refresh}>Try again</button>
+    </div>}
+    {focusNotice && <div className="inline-banner tone-warn review-focus-notice" role="status">
+      <Icon name="alert" size={15} /><span>{focusNotice}</span>
+      <button className="icon-btn" aria-label="Dismiss notice" title="Dismiss notice" onClick={() => { setFocusNotice(""); search.current?.focus(); }}>
+        <Icon name="x" size={15} />
+      </button>
     </div>}
     {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
@@ -523,8 +616,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} showDone={stateFilterShowsDone(filters.state)} onOpen={openDetails} onReview={openReview} onOpenSession={onOpenSession}
-        {...(watcherTarget && { onSubscribe: (item: ReviewCard) => setSubscriptionNumber(item.number), subscriptions })} /> :
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} grouping={grouping} filters={filters} viewer={snapshot.viewer} onOpen={openDetails} onReview={openReview} work={work}
+        {...(watcherTarget && { onSubscribe: subscribe, subscriptions })} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
@@ -543,8 +636,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
     {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
       width={detailWidth} onResize={setDetailWidth}
-      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={onOpenSession && (() => onOpenSession(card))}
-      projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
+      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
+      projectFlows={flows} flow={panelFlow(card)}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </div>;
 }

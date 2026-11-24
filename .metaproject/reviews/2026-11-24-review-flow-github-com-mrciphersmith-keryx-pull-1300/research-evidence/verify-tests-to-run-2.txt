@@ -1,0 +1,18 @@
+# keryx review verify-run
+finding: tests-to-run
+command: sh -c bun test src/lib/searchable-sources.test.ts src/lib/file-lock 2>&1 | tail -4; cd apps/desktop && bun test src 2>&1 | tail -4
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1
+time: 2026-11-24T06:55:26.956Z
+exit: 0
+
+--- stdout ---
+ 6 pass
+ 0 fail
+ 27 expect() calls
+Ran 6 tests across 1 file. [12.62s]
+ 1051 pass
+ 0 fail
+ 11511 expect() calls
+Ran 1051 tests across 95 files. [11.07s]
+--- stderr ---
+

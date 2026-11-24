@@ -1,0 +1,163 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Frontend Review (round 3, fix range 88e3faba9..d7b0f7058)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058e919a5880319588ad95395b7ff66153` (explicit-hash-range)
+- Slice: slice-01, read in full (1905 lines: flow docs, App.tsx, acp/types.ts, IssueWorkRow.tsx, IssuesBoard.tsx, PrWorkRow.tsx, ReviewBoard.tsx, ReviewProgress.tsx, prWork.ts, usePendingFlowLinks.ts, useAcpSession.ts, review.css)
+- Stack note: Desktop is React with no MobX. Parts B and D of the skill do not apply. `.metaproject/rules/stacks/react/code-style-patterns.mdc` does not exist in this project (only `stacks/ts-js-node`), so findings are rated by the canonical rubric.
+- Head context read beyond the slice: ReviewBoard.tsx focus effect (lines 490-511), App.tsx header-link focus (lines 645-657), model.ts default state filter (`state: ["open", "draft"]`), issues-github.ts `readCursor`, useIssueCollection.ts error path, useAcpSession.ts `linkFlow`.
+
+### Summary
+- Blockers: 0
+- Major: 2
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [FE-R3-001] A focus request for a PR the loaded snapshot does not hold still stays armed and opens later without being asked (LG-009 sibling)
+- **Severity**: major
+- **File**: apps/desktop/src/review/ReviewBoard.tsx
+- **Rule**: canonical rubric (trigger and outcome). The fix's own comment states the intent: "so the request is not left armed for a later, unrelated switch".
+- **Problem**: The round-2 fix refuses a focus for a repository the board cannot show. The other early return, `if (!snapshot.cards.some(c => c.number === focus.number)) return;`, still leaves the request armed with no notice. App's header link (`SessionSubjectLinks` -> `setReviewFocus`) fires for any PR-bound session, including one bound to a merged or closed PR. The board's default state filter is `["open", "draft"]` (model.ts), so the loaded snapshot of the right repository does not hold that card.
+- **Trigger -> outcome**: open a session bound to a merged PR and click its header PR link. The board switches to Pull requests and nothing opens, with no message. Later the user changes the state filter to include Merged, or the card shows up in a later snapshot. The PR panel then opens without being asked. LG-009 was this same outcome for the other early return.
+- **Fix**: once a fresh snapshot of the focused repository is loaded (not `stale`, not `loading`) and still lacks the PR, handle it the way the foreign-repo branch does. Set `focused.current`, show a notice (for example "#N is not in the current filters" with a "Show all states" action), and call `onFocusHandled(nonce)`. A stale cached snapshot keeps waiting, so a PR that was just opened still focuses after the refresh.
+- **class_scope**: the focus effect's early returns at head, ReviewBoard.tsx:496 (`!focus`, already handled, `!snapshot`: a legitimate wait for the load), :497-506 (repository mismatch: fixed in this range), :508 (card absent: still armed). Enumeration: every `return` in the one `useEffect` that consumes `focus`. `focus` has no other consumer (`setSelected({ number: focus.number })` is its only effect).
+
+### [FE-R3-002] Controls added in this range that remove themselves on activation drop keyboard focus to the document body
+- **Severity**: major
+- **File**: apps/desktop/src/review/PrWorkRow.tsx
+- **Rule**: canonical rubric (accessibility basics, keyboard). A sibling in the same file already does this correctly: the partial-sync dismiss in ReviewBoard.tsx calls `warningToggle.current?.focus()` after hiding.
+- **Problem**: In each of these, activating the control unmounts the control itself, and no focus target is set:
+  1. `FlowOffer` "Link" / "Dismiss" (PrWorkRow.tsx). `accept`/`dismiss` drop the offer, and the slot re-renders as a different element (the "Create Flow" button, then "Flow #N").
+  2. The focus-notice "Dismiss notice" icon button (ReviewBoard.tsx). `setFocusNotice("")` removes the whole banner.
+  3. "Show issues assigned to me" (IssuesBoard.tsx). `change("assigned")` changes the `Collection` key (`source` is in `key`), so the panel and its button unmount.
+- **Trigger -> outcome**: a keyboard user presses Enter on Link, Dismiss or Dismiss notice. `document.activeElement` becomes `<body>`, and the next Tab starts again from the top of the window instead of at the PR card they just acted on.
+- **Fix**: after the action, move focus to the element that replaces the control. For the offer, that is the Flow slot's button: keep a ref on the slot and focus its first button in an effect when the offer disappears. For the notice, focus the board heading or the search field. For the Issues fallback, focus the source `<select>` or the Issues heading, as `title` is already used for focus return in that file.
+- **class_scope**: sites PrWorkRow.tsx `FlowOffer` (two buttons), ReviewBoard.tsx focus-notice dismiss, IssuesBoard.tsx unavailable-panel button. Enumeration: every `<button` on a `+` line of slice-01. There are four (Link, Dismiss, Dismiss notice, Show issues assigned to me), and all four remove themselves. Controls only re-indented in the range (the Flow slot's own button, the session menu) keep their element, so they are not affected.
+
+### [FE-R3-003] The repository-unavailable panel matches any `configuration:` error, not only the three reasons it was written for
+- **Severity**: info
+- **File**: apps/desktop/src/issues/IssuesBoard.tsx
+- **Problem**: `const unavailable = fallback && /(?:^|\b)configuration:/i.test(error) ? fallback : undefined;` covers every `configuration:` reason while the default source is unchosen. That includes `readCursor`'s "configuration: Refresh before loading the next page." on a load-more (issues-github.ts). In that case the board says "This project's repository issues are not available here", drops the Retry button and the "Showing the last available snapshot." note, and offers a switch to Assigned to me that is stored for good. I could not name a realistic input that makes Desktop send a cursor outside its scope, so this is an observation and not a defect.
+- **What would settle it**: a load-more scenario that produces that error in practice. Otherwise, match the three reasons the comment names (no GitHub.com remote, Issues turned off, `invalidInput`) instead of the prefix.
+
+### Prior dispositions (slice-01 parts in this lens)
+- HL-001 closed. `resolveFlowLinks` now only produces an offer. `usePendingFlowLinks` writes nothing until `accept`, `claimed` stops the package being offered again, and `PrWorkRow` renders "Link Flow #N?" with Link/Dismiss. This matches the owner decision and the re-frozen AC9.
+- LG-008 closed. `subjectOpener` returns `{...open, filled: false}` for a coalesced call, and `createPrFlow` registers `expect` only on `opened?.filled`.
+- LG-011 closed. `openSubjectSession` fills only when `deps.isShown(id)` (read live from `live.current.reg.shown`) after the open resolves, and reports `filled`.
+- LG-009 partial. The foreign-repository branch now selects a listed repository or refuses with a notice and `onFocusHandled`. The sibling "card absent from the loaded snapshot" return still leaves the request armed (FE-R3-001).
+- RG-001 closed (frontend half). An unchosen default source that fails with a configuration reason shows the reason, "Show issues assigned to me" and, for `Invalid Issues request`, an update hint. The match is broader than intended (FE-R3-003, info).
+- DG-006 closed, and UX-007 closed: `waitsOnViewer` is gated on `card.state === "open"`.
+- DG-007 closed: `lastActivityAt` was removed from `badgesEqual`.
+- AR-003 closed. `boundSessions` delegates to `boundSessionIndex`, and `sameSubject` uses `subjectKey`. `ReviewProgress` and `reviewProgressText` share `progressParts`.
+- PF-003 closed. `IssueWorkRow` takes a `bound` count, and IssuesBoard builds `boundSessionIndex(sessions)` once per sessions change.
+- PF-005 closed: `onSubscribe` is now the stable `subscribe` callback.
+
+### Regression check
+- `usePendingFlowLinks`: the effect deps moved from `sessions` to `flowOf` (memoised on `sessions`), which is the same dependency set. `offersRef` is cleared synchronously in `accept`, so a double press cannot link twice. Entries in `offered` whose session has since gained a Flow are hidden by `offers` but never removed from state, which is harmless.
+- App: the link callback now reads `acp.current.linkFlow`, so it no longer closes over a stale `s`. `flowLinkActions` is stable, so `createPrFlow`, `linkFlowOffer` and `dismissFlowOffer` keep their identity. When there are no offers, `flowOffer` stays `undefined`, so the `work` memo does not churn on that account.
+- The `ReviewProgress` caption output is unchanged for every `showState` / state combination.
+- The `isShown` addition to `SubjectSessionDeps` is wired at the only production call site (App `openPrSession`).
+
+### Clean Areas
+- Hooks dependency arrays (App, ReviewBoard `flowOffer`/`work`/`subscribe`, IssuesBoard `boundTo`, usePendingFlowLinks): correct.
+- Keys and list rendering: unchanged and correct.
+- TypeScript safety: no `any` or non-null `!`. The new interfaces (`PrFlowOffer`, `SubjectOpen`, `FlowLinkOffer`) follow the existing project naming (no `I` prefix, as elsewhere in Desktop).
+- Labels: every new action has visible text plus an `aria-label` that names the PR (AC6).
+- MobX parts: not applicable.
+
+### Routing audit
+- graph_used: no. Not needed: the payload's `layers.affected` was used instead.
+- wiki_used: not-relevant. This is a fix-range review of UI wiring, and the payload carries the requirements.
+- ctx_used: yes (`keryx ctx rg` for issueSubject, lastActivityAt, repositories, linkFlow, configuration:, setReviewFocus).
+- raw_rg_used: no. Raw `sed` was used for two short excerpts (canonical severity text and the `readCursor` lines), each marked with a `keryx:raw` reason.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-frontend",
+    "slices": ["slice-01"],
+    "summary": "Round-2 fixes in the frontend lens hold (HL-001 confirm offer, LG-008/LG-011 filled guard, DG-006/UX-007, DG-007, AR-003, PF-003, PF-005, RG-001 UI). LG-009 is partial: a focus for a PR missing from the loaded snapshot of its own repository is still left armed. Three self-removing controls added in this range drop keyboard focus.",
+    "findings": [
+      {
+        "id": "FE-R3-001",
+        "severity": "major",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "line": null,
+        "quote": "    if (!snapshot.cards.some(c => c.number === focus.number)) return;",
+        "problem": "The round-2 fix refuses a focus for a repository the board cannot show, but the sibling early return for a card absent from the loaded snapshot of the right repository still leaves the request armed with no notice. The header PR link (App setReviewFocus from SessionSubjectLinks) fires for any PR-bound session, including merged or closed PRs, and the board's default state filter is [\"open\", \"draft\"], so the card is absent.",
+        "impact": "Clicking the header link of a session bound to a merged PR switches to Pull requests and opens nothing, with no message. When the user later changes the state filter to include Merged, or the card appears in a later snapshot, the PR panel opens without being asked. This is the outcome LG-009 reported, through the other early return.",
+        "suggested_fix": "When a fresh (not stale, not loading) snapshot of the focused repository lacks the PR, set focused.current, show a notice (e.g. '#N is not in the current filters' with a 'Show all states' action) and call onFocusHandled(nonce). Keep waiting only on a stale cached snapshot.",
+        "evidence": "ReviewBoard.tsx:490-511 at head (the comment states the intent of not leaving a request armed); App.tsx:648-656 (header link sets focus for any PR subject); model.ts:28 EMPTY_FILTERS state [\"open\",\"draft\"].",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": ["apps/desktop/src/review/ReviewBoard.tsx:508"],
+          "enumeration_method": "Every return in the single useEffect that consumes `focus` (ReviewBoard.tsx:496, 497-506, 508): :496 is a legitimate wait for the load, :497-506 was fixed in this range, :508 is still armed. `focus` has no other consumer."
+        },
+        "dedupe_key": "review-focus-armed-card-absent"
+      },
+      {
+        "id": "FE-R3-002",
+        "severity": "major",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/review/PrWorkRow.tsx",
+        "line": null,
+        "quote": "    <button type=\"button\" className=\"pr-work-more\" aria-label={`Link ${name}${of}`} disabled={!work.onLinkFlowOffer}\n      onClick={() => work.onLinkFlowOffer?.(offer)}>Link</button>",
+        "problem": "Controls added in this range unmount themselves when activated and set no focus target: FlowOffer Link/Dismiss (the offer is dropped and the slot re-renders as a different button), the focus-notice 'Dismiss notice' button in ReviewBoard.tsx (the banner is removed), and 'Show issues assigned to me' in IssuesBoard.tsx (the source change remounts Collection by key). The sibling partial-sync dismiss in ReviewBoard.tsx already returns focus (warningToggle.current?.focus()).",
+        "impact": "A keyboard user who presses Enter on Link, Dismiss or Dismiss notice ends with focus on <body>. The next Tab restarts from the top of the window instead of at the PR card they just acted on.",
+        "suggested_fix": "After the action, focus the element that replaces the control: the Flow slot's button for the offer (keep a slot ref and focus its first button when the offer disappears), the board heading or search field for the notice, and the source select or Issues heading for the fallback.",
+        "evidence": "slice-01: FlowOffer component in PrWorkRow.tsx; focusNotice banner in ReviewBoard.tsx; unavailable panel in IssuesBoard.tsx; usePendingFlowLinks accept/dismiss remove the offer synchronously.",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": [
+            "apps/desktop/src/review/PrWorkRow.tsx (FlowOffer Link and Dismiss buttons)",
+            "apps/desktop/src/review/ReviewBoard.tsx (focus-notice 'Dismiss notice' button)",
+            "apps/desktop/src/issues/IssuesBoard.tsx ('Show issues assigned to me' button)"
+          ],
+          "enumeration_method": "Every `<button` on a `+` line of slice-01 (four in all), each checked for whether its own element survives its action. These four do not; nothing else interactive was added in the range."
+        },
+        "dedupe_key": "focus-lost-self-removing-controls"
+      },
+      {
+        "id": "FE-R3-003",
+        "severity": "info",
+        "reviewer": "review-frontend",
+        "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+        "line": null,
+        "quote": "  const unavailable = fallback && /(?:^|\\b)configuration:/i.test(error) ? fallback : undefined;",
+        "problem": "The repository-unavailable panel matches any 'configuration:' reason while the default source is unchosen, including readCursor's 'configuration: Refresh before loading the next page.' (issues-github.ts) on a load-more. It then says repository issues are unavailable, drops Retry and the last-snapshot note, and offers a source switch that is stored for good. No realistic input that makes Desktop send an out-of-scope cursor was found.",
+        "impact": "Observation only: a misleading panel on a paging error, if one is reachable.",
+        "suggested_fix": "Match the three reasons the comment names (no GitHub.com remote, Issues turned off, invalidInput) instead of the prefix, or settle it by showing the paging error cannot reach this path.",
+        "evidence": "src/integrations/issues-github.ts readCursor; apps/desktop/src/issues/useIssueCollection.ts setError(reason) on load failure.",
+        "confidence": "low",
+        "location_class": "in-diff",
+        "blocking_merge": false,
+        "dedupe_key": "issues-unavailable-regex-broad"
+      }
+    ],
+    "prior_dispositions": [
+      { "id": "HL-001", "disposition": "closed" },
+      { "id": "LG-008", "disposition": "closed" },
+      { "id": "LG-011", "disposition": "closed" },
+      { "id": "LG-009", "disposition": "partial" },
+      { "id": "RG-001", "disposition": "closed" },
+      { "id": "DG-006", "disposition": "closed" },
+      { "id": "UX-007", "disposition": "closed" },
+      { "id": "DG-007", "disposition": "closed" },
+      { "id": "AR-003", "disposition": "closed" },
+      { "id": "PF-003", "disposition": "closed" },
+      { "id": "PF-005", "disposition": "closed" }
+    ],
+    "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 1 }
+  }
+}
+```

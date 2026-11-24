@@ -1,0 +1,27 @@
+{
+  "reviewer": "review-pr-contract",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "result": "raw/review-pr-contract-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  }
+}

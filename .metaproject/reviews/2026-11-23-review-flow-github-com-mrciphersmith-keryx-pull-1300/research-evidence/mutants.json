@@ -1,0 +1,317 @@
+[
+  {
+    "id": "M01",
+    "file": "apps/desktop/src/review/ReviewBoard.tsx",
+    "anchor": "filterReviews(snapshot.cards, filters, q, snapshot.viewer)",
+    "replacement": "filterReviews(snapshot.cards, filters, q)",
+    "kind": "behavior"
+  },
+  {
+    "id": "M02",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "  if (c.decision === \"APPROVED\") return \"approved\";\n  return \"waiting\";",
+    "replacement": "  if (c.decision === \"APPROVED\") return \"approved\";\n  return c.localReview?.active ? \"approved\" : \"waiting\";",
+    "kind": "behavior"
+  },
+  {
+    "id": "M03",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "[...cards].sort((a, b) => time(b) - time(a))",
+    "replacement": "[...cards].sort((a, b) => time(a) - time(b))",
+    "kind": "behavior"
+  },
+  {
+    "id": "M04",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "merged: includes(f.state, \"merged\"),",
+    "replacement": "merged: true,",
+    "kind": "behavior"
+  },
+  {
+    "id": "M05",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "mine: !f.requestedFromMe && viewerAuthor,",
+    "replacement": "mine: viewerAuthor,",
+    "kind": "behavior"
+  },
+  {
+    "id": "M06",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "(!f.ciFailed || c.ci === \"failed\")",
+    "replacement": "true",
+    "kind": "behavior"
+  },
+  {
+    "id": "M07",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "(!f.mine || authoredBy(c, viewer)) &&",
+    "replacement": "true &&",
+    "kind": "behavior"
+  },
+  {
+    "id": "M08",
+    "file": "apps/desktop/src/review/model.ts",
+    "anchor": "(!f.requestedFromMe || requestedFrom(c, viewer)) &&",
+    "replacement": "true &&",
+    "kind": "behavior"
+  },
+  {
+    "id": "M09",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "fresh.length === 1 && fresh[0] ?",
+    "replacement": "fresh[0] ?",
+    "kind": "behavior"
+  },
+  {
+    "id": "M10",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "  if (sessionFlow) return { action: \"clear\" };\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M11",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "target === \"latest\" ? bound[0]?.sessionId :",
+    "replacement": "target === \"latest\" ? undefined :",
+    "kind": "behavior"
+  },
+  {
+    "id": "M12",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "  deps.bind(id, subject);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M13",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)}",
+    "replacement": "initialTarget={draftReview.target}",
+    "kind": "behavior"
+  },
+  {
+    "id": "M14",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "            publishSessionReview(cwd, key, result);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M15",
+    "file": "apps/desktop/src/acp/types.ts",
+    "anchor": "sessionFlags(s).archivedAt === undefined && sameSubject",
+    "replacement": "sameSubject",
+    "kind": "behavior"
+  },
+  {
+    "id": "M16",
+    "file": "apps/desktop/src/acp/types.ts",
+    "anchor": ".sort((a, b) => unsaved(b) - unsaved(a));",
+    "replacement": ";",
+    "kind": "behavior"
+  },
+  {
+    "id": "M17",
+    "file": "apps/desktop/src/acp/types.ts",
+    "anchor": "a.repo.toLowerCase() === b.repo.toLowerCase()",
+    "replacement": "a.repo === b.repo",
+    "kind": "behavior"
+  },
+  {
+    "id": "M18",
+    "file": "apps/desktop/src/acp/types.ts",
+    "anchor": "return a.kind === b.kind && a.number",
+    "replacement": "return a.number",
+    "kind": "behavior"
+  },
+  {
+    "id": "M19",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "if (!subject || sessionFlags(s).subject) return s;",
+    "replacement": "if (!subject) return s;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M19b",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "if (!subject || sessionFlags(s).subject) return s;",
+    "replacement": "return s;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M20",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "return subject?.kind === \"pr\" ? subject.url : typed;",
+    "replacement": "return subject ? subject.url : typed;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M21",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "  if (badge.awaitingAnswer) return \"needs your answer\";\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M22",
+    "file": "apps/desktop/src/session/subjectBinding.ts",
+    "anchor": "    if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M23",
+    "file": "apps/desktop/src/session/subjectBinding.ts",
+    "anchor": "    if (this.pending.get(sessionId) !== subject) return;\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M24",
+    "file": "apps/desktop/src/issues/model.ts",
+    "anchor": "...(state === \"open\" ? [] : [{ id: \"closed\", label: \"Closed\" }])",
+    "replacement": "...[{ id: \"closed\", label: \"Closed\" }]",
+    "kind": "behavior"
+  },
+  {
+    "id": "M25",
+    "file": "apps/desktop/src/issues/IssuesBoard.tsx",
+    "anchor": "return value && Object.hasOwn(SOURCES, value) ? value as Source : DEFAULT_SOURCE;",
+    "replacement": "return DEFAULT_SOURCE;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M26",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "return flows.filter(flow => samePrUrl(flow.prUrl, card.url) || dirs.has(flow.dir))",
+    "replacement": "return flows.filter(flow => samePrUrl(flow.prUrl, card.url))",
+    "kind": "behavior"
+  },
+  {
+    "id": "M27",
+    "file": "apps/desktop/src/review/ReviewResults.tsx",
+    "anchor": "useMemo(() => newestFirst(cards), [cards])",
+    "replacement": "useMemo(() => newestFirst(cards).sort((a, b) => Number(!!b.localReview) - Number(!!a.localReview)), [cards])",
+    "kind": "behavior"
+  },
+  {
+    "id": "M28",
+    "file": "src/session/organize.ts",
+    "anchor": "urlRepo.toLowerCase() !== repo.toLowerCase() || ",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M29",
+    "file": "src/session/organize.ts",
+    "anchor": " || Number(urlNumber) !== number) return undefined;",
+    "replacement": ") return undefined;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M30",
+    "file": "src/session/organize.ts",
+    "anchor": "if (URL_KIND[urlKind as keyof typeof URL_KIND] !== kind || ",
+    "replacement": "if (",
+    "kind": "behavior"
+  },
+  {
+    "id": "M31",
+    "file": "src/session/organize.ts",
+    "anchor": "if (change.subject === null) delete next.subject;",
+    "replacement": "if (false) delete next.subject;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M32",
+    "file": "src/session/organize.ts",
+    "anchor": "flow: flags.flow, subject: flags.subject };",
+    "replacement": "flow: flags.flow };",
+    "kind": "behavior"
+  },
+  {
+    "id": "M33",
+    "file": "src/session/issues/issue-session.ts",
+    "anchor": "if (subject !== undefined) updateSessionFlagsAt(dir, { subject });",
+    "replacement": "void subject;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M34",
+    "file": "src/acp/server.ts",
+    "anchor": "if (subject !== null && (typeof subject !== \"object\" || Array.isArray(subject))) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "M35",
+    "file": "src/integrations/issues-board.ts",
+    "anchor": "data.filter((x) => !x.pull_request)",
+    "replacement": "data",
+    "kind": "behavior"
+  },
+  {
+    "id": "M36",
+    "file": "src/integrations/issues-board.ts",
+    "anchor": "? cursorScope(viewer, \"issues\", base.search, labels, repository.toLowerCase())",
+    "replacement": "? cursorScope(viewer, \"issues\", base.search, labels)",
+    "kind": "behavior"
+  },
+  {
+    "id": "M37",
+    "file": "src/session/organize.ts",
+    "anchor": "if (typeof number !== \"number\" || !Number.isSafeInteger(number) || number < 1) return undefined;",
+    "replacement": "if (typeof number !== \"number\") return undefined;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M38",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "if (id) flowLinks.expect(id, known);",
+    "replacement": "void known;",
+    "kind": "behavior"
+  },
+  {
+    "id": "M39",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), true)",
+    "replacement": "openPrSession(card, \"latest\", subject, flowPrompt(card.url), false)",
+    "kind": "behavior"
+  },
+  {
+    "id": "M40",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "(id, dir) => void s.linkFlow(id, dir)",
+    "replacement": "(id, dir) => void [id, dir]",
+    "kind": "behavior"
+  },
+  {
+    "id": "M41",
+    "file": "apps/desktop/src/review/prWork.ts",
+    "anchor": "    if (prefillExisting) deps.fill(prompt);\n",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "M42",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "          sessions={state.sessions}\n",
+    "replacement": "          sessions={[]}\n",
+    "kind": "behavior"
+  },
+  {
+    "id": "M43",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "titleLinks={<SessionSubjectLinks subject={shownSubject}",
+    "replacement": "titleLinks={<SessionSubjectLinks subject={undefined}",
+    "kind": "behavior"
+  },
+  {
+    "id": "M44",
+    "file": "apps/desktop/src/App.tsx",
+    "anchor": "sessions={subjectSessions} focus={reviewFocus}",
+    "replacement": "sessions={subjectSessions}",
+    "kind": "behavior"
+  }
+]

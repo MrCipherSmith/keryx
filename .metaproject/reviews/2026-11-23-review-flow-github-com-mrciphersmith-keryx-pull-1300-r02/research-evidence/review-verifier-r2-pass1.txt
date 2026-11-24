@@ -1,0 +1,52 @@
+STATUS: DONE
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "3 findings checked: 2 confirmed (RG-001 by the saved verify-run plus a version-gate site-check, TP-R2-001 by site-check), 1 unverifiable (HW2-001: the unlocked read-modify-write and its cross-process writers exist, but no concurrent run reproduced a lost update).",
+  "verifications": [
+    {
+      "finding": "RG-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "P/research-evidence/verify-RG-001-1.txt (exit 0): `git show b147408a8:src/integrations/issues-board.ts | sed -n 94,106p` prints listUrl with `![\"assigned\", \"created\", \"mentioned\", \"subscribed\"].includes(source) || ... throw new Error(invalidInput)`, so a base-era keryx rejects source \"repository\"; `git grep -n DEFAULT_SOURCE 88e3faba9 -- apps/desktop/src/issues` shows model.ts:15 `export const DEFAULT_SOURCE: IssueSource = \"repository\"` and IssuesBoard.tsx:64 falling back to it when no source is stored. The check would have shown \"repository\" in the base allow-list if the finding were false; it did not. Supplementary site-check: `git diff --stat b147408a8..88e3faba9 -- apps/desktop/src-tauri/src/version.rs package.json apps/desktop/src-tauri/src/issues.rs apps/desktop/src-tauri/src/locator.rs` is empty; MIN_KERYX_VERSION stays \"0.4.50\" (version.rs:9) and package.json is 0.4.53 at both base and head, so a published keryx 0.4.50-0.4.53 that predates the PR still passes the Automatic-mode version gate and is used. `keryx ctx rg` over apps/desktop/src/platform/issues.ts finds the bundled-CLI hint only for \"does not support Issues\" (line 13) and \"Incompatible Issues response\" (line 18), and useIssueCollection.ts:17 isAccessError matches only access|account_mismatch|source_unavailable. Not run: Desktop end-to-end against an older keryx binary."
+    },
+    {
+      "finding": "TP-R2-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "P/research-evidence/verify-TP-R2-001-1.txt (exit 0): `git grep -n 'setTimeout(resolve, 40)' 88e3faba9 -- apps/desktop/src/test` returns exactly the two named sites, app-navigation.fixture.tsx:287 and app-work-row.fixture.tsx:88, each `const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });`. `keryx ctx rg --all -c 'settle\\(\\)'` counts 5 uses in app-work-row.fixture.tsx and 11 in app-navigation.fixture.tsx. Both are new in this PR: `git grep -n 'setTimeout(resolve, 40)' b147408a8 -- apps/desktop/src/test` exits 1, `git grep -c 'settle()' b147408a8 -- apps/desktop/src/test/app-navigation.fixture.tsx` finds none, app-work-row.fixture.tsx is absent at base (`git cat-file -e` fatal), and `git merge-base --is-ancestor 21030edf0 b147408a8` exits 1. The claim is a code-shape claim (fixed delay used as the async sync point) and the check settles it. Not reproduced: an actual CI flake."
+    },
+    {
+      "finding": "HW2-001",
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "P/research-evidence/verify-HW2-001-1.txt (exit 0) plus follow-up git grep at 88e3faba9: organize.ts:117-138 updateSessionFlagsAt = readSessionFlags(dir) -> `{ ...current }` merge -> writeFlags(dir, next) (line 136), writeFlags = writeOwnerOnlyFileAtomic (line 109); `git grep -n -i -e lock -e withFile 88e3faba9 -- src/session/organize.ts` exits 1 (no lock); setSessionFlags (152-161) delegates straight to it; server.ts:2964 calls setSessionFlags with no lock around it; issue-session.ts:53 bindIssueSubject and issues-launch.ts:116 are the other two non-test writers. All four named sites exist and the read-modify-write is unlocked, so the shape is real. The claimed consequence (a lost update when two keryx processes write one session's flags.json at once) was not reproduced: no concurrent two-process run was executed, and the process model (one ACP server per window, issue-workspace as a separate child) was not checked here. The site check cannot separate the claimed race from a write order that never overlaps in practice."
+    }
+  ],
+  "stats": { "confirmed": 2, "refuted": 0, "unverifiable": 1, "not_checked": 0 }
+}
+```
+
+# Verification Report
+
+## Method mix
+- execution: 1 (RG-001, via the saved verify-run file)
+- site-check: 2 (TP-R2-001, HW2-001)
+- reasoning (capped to unverifiable): 0
+- not checked: 0
+
+## Refuted
+None.
+
+## Confirmed
+- [RG-001] verify-RG-001-1.txt shows the base listUrl allow-list excludes "repository" and head DEFAULT_SOURCE is "repository". The Desktop version gate (MIN_KERYX_VERSION 0.4.50) and the package version (0.4.53) did not change in the PR, so a pre-PR keryx still passes the gate. requestIssues maps neither error to the bundled-CLI hint. Not run end-to-end against an old binary.
+- [TP-R2-001] verify-TP-R2-001-1.txt finds exactly the two 40 ms `settle` definitions. Both are new in this PR, absent on base, and used 5 and 11 times.
+
+## Unverifiable
+- [HW2-001] The unlocked read-modify-write and all four writer sites exist (no `lock` in organize.ts, and no lock around the server.ts caller). The lost update itself needs a concurrent multi-process run, which was not executed.
+
+Successor question (prose, not a claim): RG-001 relies on the version gate at version.rs:9 (MIN_KERYX_VERSION "0.4.50", unchanged at 88e3faba9). Does any Desktop test build a list request rejected with "configuration: Invalid Issues request." for source "repository"? None was found in this pass, and none was searched for exhaustively.
+
+Routing audit: graph_used: no (not-relevant: the sites were named in the findings) · wiki_used: no (not-relevant) · ctx_used: yes (keryx ctx read/rg) · raw_rg_used: no (git grep/git diff/git cat-file at fixed revisions; one small git show of package.json heads, marked keryx:raw).

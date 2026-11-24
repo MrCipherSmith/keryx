@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { PREPARE_REVIEW_METHOD, type ReviewDraftHints } from "../../../../src/acp/review-draft";
 import { AcpClient, RpcError } from "../acp/client";
+import { refusalReason, writeSessionFlags, type SessionFlagsChange } from "./sessionFlagsWrite";
 import { hasCommandExtension } from "../acp/commands";
 import {
   extensionsOf,
@@ -39,6 +40,7 @@ import {
   type PermissionOutcome,
   type SessionFlags,
   type SessionInfo,
+  type SessionSubject,
   type SessionUpdate,
 } from "../acp/types";
 import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
@@ -50,6 +52,7 @@ import { answerAgentRequest } from "./agentRequests";
 import { retentionDays } from "../lib/retention";
 import { idleSessions, pickStartSession } from "./startup";
 import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN } from "./telegramSession";
+import { PendingSubjects } from "./subjectBinding";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
 
@@ -67,10 +70,7 @@ export type Fatal =
 
 /** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
 function isLeaseError(e: unknown): boolean {
-  if (e instanceof RpcError) {
-    const reason = (e.data as { reason?: unknown } | undefined)?.reason;
-    if (reason === "session-leased") return true;
-  }
+  if (refusalReason(e) === "session-leased") return true;
   return /(^|[^\w-])session-leased([^\w-]|$)/.test(errMessage(e));
 }
 
@@ -223,22 +223,26 @@ export function useAcpSession(cwd: string) {
   /** Flow links waiting for keryx to store a new session (it lists one only after its first save). */
   const pendingFlow = useRef(new Map<string, string>());
 
+  /** Every `_keryx/session_flags` write except the subject binding: see writeSessionFlags. Throws on failure. */
+  const writeFlags = useCallback(
+    (sessionId: string, change: SessionFlagsChange) =>
+      writeSessionFlags(live, cwd, sessionId, change, (id, flags) => dispatch({ t: "flags", sessionId: id, flags })),
+    [cwd, dispatch],
+  );
+
   /** Link `sessionId` to its pending flow; quiet, kept for the next try when keryx does not have the session yet. */
   const applyPendingFlow = useCallback(
     async (sessionId: string) => {
-      const l = live.current;
-      const client = l.client;
       const flow = pendingFlow.current.get(sessionId);
-      if (!client || flow === undefined) return;
+      if (!live.current.client || flow === undefined) return;
       try {
-        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow });
+        await writeFlags(sessionId, { flow });
         pendingFlow.current.delete(sessionId);
-        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
       } catch {
         /* not stored yet: retried after its turn */
       }
     },
-    [cwd, dispatch],
+    [writeFlags],
   );
 
   /** The stored sessions of this project, newest first; null when the list could not be read. */
@@ -267,6 +271,22 @@ export function useAcpSession(cwd: string) {
     }
   }, [cwd, dispatch]);
 
+  /** PR and issue bindings waiting for keryx to store a new session, applied like the pending flow link. */
+  const [pendingSubjects, setPendingSubjects] = useState<ReadonlyMap<string, SessionSubject>>(() => new Map());
+  const subjects = useMemo(() => new PendingSubjects({
+    write: (sessionId, subject) => {
+      const client = live.current.client;
+      return client ? client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, subject }) : Promise.reject(new Error("keryx is not running"));
+    },
+    onFlags: (sessionId, flags) => {
+      dispatch({ t: "flags", sessionId, flags });
+      // The pending binding is dropped only once the stored list (which then holds it) is read.
+      return refreshSessions();
+    },
+    onNotice: (sessionId, text) => dispatch({ t: "notice", sessionId, level: "warn", text }),
+    onChange: setPendingSubjects,
+  }), [cwd, dispatch, refreshSessions]);
+
   /**
    * Archive the sessions nobody touched for the retention window (Settings → Sessions). The shown
    * session and any with a running turn are kept; pinned ones are never archived. Best effort.
@@ -280,15 +300,14 @@ export function useAcpSession(cwd: string) {
       const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
       for (const sessionId of ids) {
         try {
-          const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, archived: true });
-          if (l.client !== client) return;
-          dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+          await writeFlags(sessionId, { archived: true });
         } catch {
           /* in use elsewhere or gone: tried again next time */
         }
+        if (l.client !== client) return;
       }
     },
-    [cwd, dispatch],
+    [writeFlags],
   );
 
   /** Re-list a session's background tasks (keryx sends no output chunks, only start/phase/exit events). */
@@ -392,13 +411,14 @@ export function useAcpSession(cwd: string) {
             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
             if (!busyRefusal) dialogs.dropSession(sessionId);
             dispatch({ t: "busy", sessionId, busy: false });
-            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
+            // One flags write at a time: the flow link first, then the subject binding.
+            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
           }
         }
       })();
       return true;
     },
-    [dialogs, dispatch, refreshSessions, applyPendingFlow],
+    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
   );
 
   const resumeIssueQuestions = useCallback((sessionId: string) =>
@@ -762,6 +782,17 @@ export function useAcpSession(cwd: string) {
     [loadSession, newSession, applyPendingFlow],
   );
 
+  /**
+   * Link a stored session to a flow package (the PR work row's Link). Rejects when keryx refuses or cannot be
+   * reached, so the caller can keep its offer and say why; nothing is kept pending for a later retry.
+   */
+  const linkFlow = useCallback(async (sessionId: string, flowDir: string) => {
+    await writeFlags(sessionId, { flow: flowDir });
+  }, [writeFlags]);
+
+  /** Bind a session to a GitHub PR or issue; a new session keeps the binding pending until keryx stores it. */
+  const bindSubject = useCallback((sessionId: string, subject: SessionSubject) => subjects.bind(sessionId, subject), [subjects]);
+
   const setMode = useCallback(
     async (modeId: string) => {
       const l = live.current;
@@ -902,18 +933,17 @@ export function useAcpSession(cwd: string) {
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
   const setFlags = useCallback(
-    async (sessionId: string, change: { archived?: boolean; pinned?: boolean; flow?: string | null }) => {
+    async (sessionId: string, change: SessionFlagsChange) => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return;
       try {
-        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, ...change });
-        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+        await writeFlags(sessionId, change);
       } catch (e) {
         if (l.client === client) dispatch({ t: "banner", level: "error", text: `Could not update the session: ${errMessage(e)}` });
       }
     },
-    [cwd, dispatch],
+    [dispatch, writeFlags],
   );
 
   /**
@@ -1036,6 +1066,12 @@ export function useAcpSession(cwd: string) {
     setFlags,
     trashSession,
     workOnFlow,
+    linkFlow,
+    bindSubject,
+    /** Whether `sessionId` is the session shown now (read live, not from the last render). */
+    isShown: (sessionId: string) => live.current.reg.shown === sessionId,
+    /** Bindings keryx has not stored yet, by session id. */
+    pendingSubjects,
     setMode,
     setModel,
     restart,

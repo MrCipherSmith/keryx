@@ -1,0 +1,2103 @@
+--- apps/desktop/src/issues/IssuesBoard.dom.test.tsx
+@@ 414,503 @@
+   const row = (n: number) => [...host.querySelectorAll<HTMLElement>(".issue-work-row")].find(r => r.getAttribute("aria-label") === "Keryx work for org/sample#" + n)!;
+   const slots = (n: number) => [...row(n).querySelectorAll("[data-slot] button")].map(b => [b.closest("[data-slot]")!.getAttribute("data-slot"), b.textContent]);
+   expect(slots(5)).toEqual([["flow", "Flow · Needs an answer"], ["session", "2 sessions"]]);
+   expect(slots(6)).toEqual([["flow", "Create Flow"], ["session", "Session"]]);
+   expect(slots(7)).toEqual([["flow", "Flow · Done"], ["session", "Open in session"]]);
+   await click(button("2 sessions for org/sample#5"));
+   await click(button("Create Flow for org/sample#6"));
+   await click(button("Flow · Done for org/sample#7"));
+   await click(button("Open in session for org/sample#7"));
+   expect(work).toEqual(["open-session", "prepare-flow", "open-flow", "open-session"]);
+   await click(button("List"));
+   expect(host.querySelectorAll(".issue-table tbody .issue-work-row")).toHaveLength(3);
+ });
+ 
+ test("the Issue work row's two columns beat the PR row's three whatever order the stylesheets load in", () => {
+   const css = readFileSync(new URL("./IssuesBoard.css", import.meta.url), "utf8");
+   // Same specificity as `.pr-work-row` (styles/review.css, loaded later) would lose; both classes win.
+   expect(css).toMatch(/(^|\n)\.pr-work-row\.issue-work-row \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+   expect(css).not.toMatch(/(^|\n)\.issue-work-row \{/);
+ });
++
++const hasButton = (label: string) => [...host.querySelectorAll("button")].some(b => b.textContent?.trim() === label);
++
++test("AC13 an older keryx that refuses the default repository source offers Assigned to me and an update hint", async () => {
++  const sources: string[] = [];
++  await render(async (_login, action, args) => {
++    if (action !== "list") throw new Error("Unexpected " + action);
++    const { source } = args as { source: string };
++    sources.push(source);
++    if (source === "repository") throw new Error("configuration: Invalid Issues request.");
++    return page([issue]);
++  });
++  const alert = host.querySelector('[role="alert"]')!;
++  expect(alert.textContent).toContain("update keryx or choose the bundled CLI in Desktop Settings");
++  // Retry would send the same refused request again.
++  expect(hasButton("Retry")).toBe(false);
++  await click(button("Show issues assigned to me"));
++  expect(sources).toEqual(["repository", "assigned"]);
++  expect(localStorage.getItem(account + ".source")).toBe("assigned");
++  expect(host.querySelector<HTMLSelectElement>('select[aria-label="Issue source"]')!.value).toBe("assigned");
++  expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
++});
++
++test("AC13 a project with no GitHub.com remote, or a repository with Issues turned off, offers Assigned to me instead of Retry", async () => {
++  for (const reason of [
++    "configuration: This project has no GitHub.com fetch remote.",
++    "configuration: GitHub has Issues turned off for fork-owner/sample. Choose another source, such as Assigned to me.",
++  ]) {
++    await act(() => root.render(null)); localStorage.clear();
++    await render(async (_login, action, args) => {
++      if (action !== "list") throw new Error("Unexpected " + action);
++      if ((args as { source: string }).source === "repository") throw new Error(reason);
++      return page([issue]);
++    });
++    const alert = host.querySelector('[role="alert"]')!;
++    expect(alert.textContent).toContain(reason);
++    expect(alert.textContent).toContain("This project's repository issues are not available here.");
++    expect(alert.textContent).not.toContain("bundled CLI");
++    expect(hasButton("Retry")).toBe(false);
++    await click(button("Show issues assigned to me"));
++    expect(host.querySelector(".flow-card")?.textContent).toContain(issue.title);
++  }
++});
++
++test("AC13 a repository source the person chose keeps Retry on a configuration error", async () => {
++  localStorage.setItem(account + ".source", "repository");
++  await render(async () => { throw new Error("configuration: This project has no GitHub.com fetch remote."); });
++  expect(hasButton("Retry")).toBe(true);
++  expect(hasButton("Show issues assigned to me")).toBe(false);
++});
++
++test("AC12 the work rows read the bound sessions from one index, not once per row", async () => {
++  const reads = new Map<string, number>();
++  const sessions = Array.from({ length: 5 }, (_, n) => {
++    const id = String(n + 1);
++    const meta = { keryx: { subject: { kind: "issue", repo: "org/sample", number: 5, url: "https://github.com/org/sample/issues/5" } } };
++    return Object.defineProperty({ sessionId: id, cwd: "/fixture", updatedAt: "2026-11-0" + id }, "_meta", {
++      get: () => { reads.set(id, (reads.get(id) ?? 0) + 1); return meta; },
++    }) as SessionInfo;
++  });
++  const rows = Array.from({ length: 12 }, (_, n) => other(n + 5));
++  await render(async (_login, action) => {
++    if (action === "list") return page(rows);
++    throw new Error("Unexpected " + action);
++  }, viewer.login, () => {}, sessions);
++  expect(button("5 sessions for org/sample#5")).not.toBeUndefined();
++  // Read for the index, a few times at most across renders; never once per row (12 rows).
++  expect(reads.size).toBe(5);
++  for (const count of reads.values()) expect(rows.length).toBeGreaterThan(count);
++});
+
+--- apps/desktop/src/review/PrWorkRow.dom.test.tsx
+@@ 1,96 @@
+ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+ import { readFileSync } from "node:fs";
+ import type { Root } from "react-dom/client";
+ import type { SessionInfo, SessionSubject } from "../acp/types";
+ import type { FlowCard } from "../platform/commands";
+ import type { fetchReviewBoard } from "../platform/review";
+ import type { reviewRules } from "../platform/reviewRules";
+ import type { ReviewWatcherSnapshot } from "../platform/reviewWatcher";
+ import { registerDom, unregisterDom } from "../test/dom";
+-import type { SubjectSessionTarget } from "./prWork";
++import type { PrFlowOffer, SubjectSessionTarget } from "./prWork";
+ import type { ReviewBoardSnapshot, ReviewCard } from "./types";
+ 
+ let root: Root;
+ let host: HTMLElement;
+ let act: (fn: () => void | Promise<void>) => Promise<void>;
+ let createElement: typeof import("react").createElement;
+ let useState: typeof import("react").useState;
+ let ReviewBoard: typeof import("./ReviewBoard").ReviewBoard;
++let PrWorkRow: typeof import("./PrWorkRow").PrWorkRow;
++let prWorkIndex: typeof import("./prWork").prWorkIndex;
+ let publishSessionReview: typeof import("../platform/reviewRuns").publishSessionReview;
+ let renderKey = 0;
+ 
+ beforeAll(async () => {
+   registerDom();
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   createElement = React.createElement;
+   useState = React.useState;
+   ({ ReviewBoard } = await import("./ReviewBoard"));
++  ({ PrWorkRow } = await import("./PrWorkRow"));
++  ({ prWorkIndex } = await import("./prWork"));
+   ({ publishSessionReview } = await import("../platform/reviewRuns"));
+   host = document.createElement("div");
+   document.body.append(host);
+   root = (await import("react-dom/client")).createRoot(host);
+ });
+ beforeEach(() => { localStorage.clear(); });
+ afterAll(async () => {
+   await act(() => root.unmount());
+   await unregisterDom();
+ });
+ 
+ const pr: ReviewCard = {
+   number: 101, title: "Update from colleague", state: "open", draft: false, url: "https://github.com/org/repo/pull/101",
+   author: "lee", assignees: [], reviewers: [], ci: "passed", decision: "REVIEW_REQUIRED",
+   updatedAt: "2026-11-10T01:00:00Z", headSha: "b", baseSha: "a",
+ };
+ const subject: SessionSubject = { kind: "pr", repo: "org/repo", number: 101, url: pr.url };
+ const board = (cards: ReviewCard[]): ReviewBoardSnapshot =>
+   ({ version: 1, repo: "org/repo", repositories: ["org/repo"], repositoryId: "repo1", viewer: "ann", fetchedAt: pr.updatedAt, cards, warnings: [] });
+ const flow = (id: string, extra: Partial<FlowCard> = {}): FlowCard => ({
+   id, dir: id + "-work", idValid: true, commandRef: null, title: "Work " + id, status: "in-progress", previousStatus: null,
+   blocked: false, owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0,
+   updatedAt: null, completionExceptions: false, error: null, ...extra,
+ });
+ const session = (id: string, title: string, flags: Record<string, unknown>, updatedAt: string): SessionInfo =>
+   ({ sessionId: id, cwd: "/project", title, updatedAt, _meta: { keryx: flags } });
+ const watcherOff: ReviewWatcherSnapshot = { version: 1, state: "disabled", installed: false, intervalMinutes: 5,
+   lastAttemptAt: null, lastSuccessAt: null, lastError: null, events: [] };
+ const rules: typeof reviewRules = async () => ({ version: 1, rules: [], subscriptions: [] }) as unknown as Awaited<ReturnType<typeof reviewRules>>;
+ 
+-interface Calls { flows: string[]; created: number[]; sessions: Array<[number, SubjectSessionTarget, SessionSubject]> }
+-function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: SessionInfo[]; calls?: Calls } = {}) {
++interface Calls { flows: string[]; created: number[]; sessions: Array<[number, SubjectSessionTarget, SessionSubject]>; linked?: PrFlowOffer[]; dismissed?: PrFlowOffer[] }
++function render(cards: ReviewCard[], extra: { flows?: FlowCard[]; sessions?: SessionInfo[]; calls?: Calls; offers?: PrFlowOffer[] } = {}) {
+   const calls = extra.calls ?? { flows: [], created: [], sessions: [] };
+   const load: typeof fetchReviewBoard = async () => board(cards);
+   return act(async () => {
+     root.render(createElement(ReviewBoard, {
+       key: ++renderKey, cwd: "/project", flows: extra.flows ?? [], sessions: extra.sessions ?? [], load,
+       listRepositories: async () => [], watcherCommand: async () => watcherOff, rulesCommand: rules,
+       onOpenFlow: dir => calls.flows.push(dir),
+       onCreateFlow: card => calls.created.push(card.number),
+       onOpenSubjectSession: (card, target, value) => calls.sessions.push([card.number, target, value]),
++      flowOffers: extra.offers ?? [],
++      onLinkFlowOffer: offer => calls.linked?.push(offer),
++      onDismissFlowOffer: offer => calls.dismissed?.push(offer),
+     }));
+   });
+ }
+ const click = (el: Element) => act(async () => { (el as HTMLElement).click(); });
+ const rows = () => [...document.body.querySelectorAll<HTMLElement>(".pr-work-row")];
+ const button = (label: string) => {
+   const el = [...document.body.querySelectorAll("button")].find(b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label);
+   if (!el) throw new Error("Missing button " + label);
+   return el;
+ };
+ /** The row's element tree without text or state classes: what must not change between empty and filled slots. */
+ function shape(el: Element): string {
+   const slot = el.getAttribute("data-slot");
+   return `${el.tagName}${slot ? `[${slot}]` : ""}(${[...el.children].map(shape).join(",")})`;
+ }
+ const linked = {
+   flows: [flow("517", { prUrl: pr.url })],
+   sessions: [session("s1", "First", { subject }, "2026-11-20T00:00:00Z"), session("s2", "Second", { subject }, "2026-11-21T00:00:00Z")],
+ };
+ const reviewed: ReviewCard = { ...pr, localReview: { active: false, ready: true, runState: "completed" } };
+
+--- apps/desktop/src/review/PrWorkRow.dom.test.tsx
+@@ 247,381 @@
+   expect(slot(104).classList.contains("is-attention")).toBe(false);
+   for (const n of [101, 102, 103, 104]) expect(rows().find(row => row.getAttribute("aria-label") === `Keryx work for #${n}`)!.children).toHaveLength(3);
+ });
+ 
+ test("review.css: the work row's focus ring is drawn inside its buttons, the warn tone exists, and the unused review note rule is gone", () => {
+   const css = readFileSync(new URL("../styles/review.css", import.meta.url), "utf8");
+   const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*:()]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+   expect(rule(".pr-work-link:focus-visible, .pr-work-more:focus-visible")).toMatch(/outline-offset:\s*-2px/);
+   expect(rule(".pr-work-row")).toContain("overflow: hidden");
+   expect(rule(".pr-work-link.is-attention")).toContain("var(--warn)");
+   expect(css).not.toMatch(/\.review-note\b/);
+ });
+ 
+ test("the PR panel names the same Flow as the work row, a Flow linked to a bound session included", async () => {
+   await render([pr], { flows: [flow("520")], sessions: [session("s1", "Work", { subject, flow: "520-work" }, "2026-11-20T00:00:00Z")] });
+   expect(rows()[0]!.querySelector('[data-slot="flow"] .pr-work-link')?.textContent).toBe("Flow #520 · In progress");
+   await click(document.body.querySelector<HTMLElement>(".review-card")!);
+   expect(document.body.querySelector(".review-detail-panel .review-associated-flow")?.textContent).toContain("Flow #520");
+ });
+ 
+-test("the session header's PR focus opens the panel only on the board of its repository, and a remount does not replay it", async () => {
+-  let handled: number[] = [];
+-  const load: typeof fetchReviewBoard = async () => board([pr]);
+-  type Focus = { repo: string; number: number; nonce: number } | null;
++type Focus = { repo: string; number: number; nonce: number } | null;
++/** A board whose focus the test drives; `handles` false leaves the request armed (no onFocusHandled). */
++function focusHost(load: typeof fetchReviewBoard, handled: number[], handles = true) {
+   let setFocus!: (focus: Focus) => void;
+   function Host({ boardKey, initial }: { boardKey: number; initial: Focus }) {
+     const [focus, set] = useState<Focus>(initial);
+     setFocus = set;
+     return createElement(ReviewBoard, {
+       key: boardKey, cwd: "/project", flows: [], sessions: [], load, listRepositories: async () => [],
+       watcherCommand: async () => watcherOff, rulesCommand: rules, onOpenFlow: () => {}, focus,
+-      onFocusHandled: (nonce: number) => { handled.push(nonce); set(old => old?.nonce === nonce ? null : old); },
++      ...(handles && { onFocusHandled: (nonce: number) => { handled.push(nonce); set(old => old?.nonce === nonce ? null : old); } }),
+     });
+   }
+-  const panel = () => document.body.querySelector(".review-detail-panel");
+-  await act(async () => { root.render(createElement(Host, { key: ++renderKey, boardKey: 1, initial: { repo: "other/repo", number: 101, nonce: 1 } })); });
+-  expect(panel()).toBeNull();
+-  expect(handled).toEqual([]);
+-  await act(async () => setFocus({ repo: "Org/Repo", number: 101, nonce: 2 }));
++  return { Host, setFocus: (focus: Focus) => act(async () => setFocus(focus)) };
++}
++const panel = () => document.body.querySelector(".review-detail-panel");
++
++test("the session header's PR focus opens the panel on the board of its repository, and a remount does not replay it", async () => {
++  const handled: number[] = [];
++  const host = focusHost(async () => board([pr]), handled);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await host.setFocus({ repo: "Org/Repo", number: 101, nonce: 2 });
+   expect(panel()).not.toBeNull();
+   expect(handled).toEqual([2]);
+   await click(button("Close details"));
+-  handled = [];
++  handled.length = 0;
+   // The board remounts (a repository or account switch): the handled request is gone and nothing reopens.
+-  await act(async () => { root.render(createElement(Host, { key: renderKey, boardKey: 2, initial: null })); });
++  await act(async () => { root.render(createElement(host.Host, { key: renderKey, boardKey: 2, initial: null })); });
+   expect(panel()).toBeNull();
+   expect(handled).toEqual([]);
+ });
++
++test("LG-009: a focus for another repository of the board switches to it and opens the panel; one the board cannot show says so", async () => {
++  const handled: number[] = [];
++  const requested: Array<string | undefined> = [];
++  const other: ReviewCard = { ...pr, number: 7, url: "https://github.com/org/other/pull/7", title: "Other repository PR" };
++  const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
++    requested.push(repo);
++    const snapshot = repo === "org/other" ? { ...board([other]), repo: "org/other", repositoryId: "repo2" } : board([pr]);
++    return { ...snapshot, repositories: ["org/repo", "org/other"] };
++  };
++  const host = focusHost(load, handled);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: null })); });
++  await host.setFocus({ repo: "Org/Other", number: 7, nonce: 1 });
++  expect(requested.at(-1)).toBe("org/other");
++  expect(panel()?.textContent).toContain("Other repository PR");
++  expect(handled).toEqual([1]);
++  expect(document.body.querySelector(".review-focus-notice")).toBeNull();
++  await click(button("Close details"));
++  // A repository the board does not list: no panel, a visible notice, and the request is handled (not left armed).
++  await host.setFocus({ repo: "elsewhere/project", number: 3, nonce: 2 });
++  expect(panel()).toBeNull();
++  expect(handled).toEqual([1, 2]);
++  expect(document.body.querySelector(".review-focus-notice")?.textContent).toContain("elsewhere/project#3");
++  await click(button("Dismiss notice"));
++  expect(document.body.querySelector(".review-focus-notice")).toBeNull();
++});
++
++test("a focus that nobody clears opens the panel once per nonce, not again after a refresh", async () => {
++  let loads = 0;
++  const host = focusHost(async () => { loads++; return board([pr]); }, [], false);
++  await act(async () => { root.render(createElement(host.Host, { key: ++renderKey, boardKey: 1, initial: { repo: "org/repo", number: 101, nonce: 5 } })); });
++  expect(panel()).not.toBeNull();
++  await click(button("Close details"));
++  await click(button("Refresh pull requests"));
++  expect(loads).toBe(2);
++  expect(panel()).toBeNull();
++  // A new nonce opens it again.
++  await host.setFocus({ repo: "org/repo", number: 101, nonce: 6 });
++  expect(panel()).not.toBeNull();
++});
++
++test("a new package offered for the PR's bound session shows Link and Dismiss in the Flow slot; only those act on it", async () => {
++  const calls: Calls = { flows: [], created: [], sessions: [], linked: [], dismissed: [] };
++  const offer: PrFlowOffer = { sessionId: "s1", flow: flow("530") };
++  const bound = [session("s1", "Work", { subject }, "2026-11-20T00:00:00Z")];
++  await render([pr, { ...pr, number: 102, url: pr.url.replace("101", "102") }], { sessions: bound, offers: [offer], calls });
++  const flowSlot = (n: number) => document.body.querySelector<HTMLElement>(`[aria-label="Keryx work for #${n}"] [data-slot="flow"]`)!;
++  expect(flowSlot(101).textContent).toBe("Link Flow #530?LinkDismiss");
++  // Only the PR whose bound session asked gets the offer.
++  expect(flowSlot(102).textContent).toBe("Create Flow");
++  expect(rows().every(row => row.children.length === 3)).toBe(true);
++  await click(button("Link Flow #530 for #101"));
++  expect(calls.linked).toEqual([offer]);
++  await click(button("Dismiss Flow #530 for #101"));
++  expect(calls.dismissed).toEqual([offer]);
++  expect(calls.created).toEqual([]);
++  expect(calls.flows).toEqual([]);
++});
++
++/** The work row alone, outside a board: the card's own state decides. */
++function renderRow(card: ReviewCard) {
++  const work = { repo: "org/repo", index: prWorkIndex([], []), onOpenFlow: () => {} };
++  return act(async () => { root.render(createElement(PrWorkRow, { key: ++renderKey, card, work, onReview: () => {} })); });
++}
++const reviewLink = () => document.body.querySelector('[data-slot="review"] .pr-work-link')!;
++
++test("the warn tone marks a review waiting on the viewer only on an open PR, as the tab indicator does", async () => {
++  const publication = { active: false, ready: true, runState: "completed" as const, publicationPending: true as const };
++  const answer = { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const };
++  for (const [state, localReview, warn] of [["open", publication, true], ["merged", publication, false], ["closed", publication, false],
++    ["open", answer, true], ["merged", answer, false]] as const) {
++    await renderRow({ ...pr, state, localReview });
++    expect({ state, warn: reviewLink().classList.contains("is-attention") }).toEqual({ state, warn });
++  }
++});
++
++test("the review slot title carries the progress without the running label, and nothing for an answer without progress", async () => {
++  await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", progress: { wave: 2, planned: 4, finished: 1, completed: 1 } } });
++  expect(reviewLink().getAttribute("title")).toBe("Review · running — Wave 2 · 27% · 1 of 4 assignments completed");
++  await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } });
++  expect(reviewLink().getAttribute("title")).toBe("Review · needs your answer");
++  await renderRow({ ...pr, localReview: { active: false, ready: false, runState: "partial" } });
++  expect(reviewLink().getAttribute("title")).toBe("Review · partial — Partial · Progress unavailable");
++});
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 781,826 @@
+     { ...pr, number: 105, state: "merged", localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } },
+   ];
+   await render(async () => snapshot(cards));
+   await click(button("Filters"));
+   await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   const expected = ["Review requested", "No review requested", "Review requested", "Approved", "Merged"];
+   for (const mode of ["Board", "List"]) {
+     await click(button(mode));
+     const reasons = mode === "Board"
+       ? [...document.body.querySelectorAll(".review-card")].map(card => [card.querySelector(".flow-id")!.textContent, card.querySelector(".review-reason")!.textContent])
+       : [...document.body.querySelectorAll("tbody tr")].map(row => [row.querySelector(".flow-id")!.textContent, row.querySelector("td[title] > span")!.textContent]);
+     expect(Object.fromEntries(reasons)).toEqual(Object.fromEntries(cards.map((card, i) => ["#" + card.number, expected[i]])));
+     for (const text of ["Outdated review", "Keryx review", "Awaiting your answer", "Choose whether to publish", "Action required"]) {
+       expect(document.body.querySelector(".review-lanes, .review-table")!.textContent).not.toContain(text);
+     }
+     expect(document.body.querySelector(".review-note, .review-live-state")).toBeNull();
+   }
+ });
+ 
++test("a badge whose only change is the transcript time is equal: nothing on the board shows it, so the board does not re-render", () => {
++  const a = { active: true, ready: false, runState: "running" as const, lastActivityAt: "2026-11-10T01:00:00Z" };
++  expect(badgesEqual(a, { ...a, lastActivityAt: "2026-11-10T01:05:00Z" })).toBe(true);
++  expect(badgesEqual(a, { ...a, runState: "partial" })).toBe(false);
++});
++
+ test("a badge whose only change is the outdated review counts as changed", () => {
+   const base = { active: false, ready: false };
+   const a = { ...base, outdated: { headSha: "aaa", state: "completed" as const } };
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
+   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
+   expect(badgesEqual(a, base)).toBe(false);
+   expect(badgesEqual(base, a)).toBe(false);
+ });
+ 
+ test("opening a running review from its badge action only reads the run", async () => {
+   const calls: string[] = [];
+   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
+     undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+       headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+   await click(button("Review · running for #101"));
+   expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+   expect(calls).toEqual(["status"]);
+ });
+
+--- apps/desktop/src/review/ReviewBoard.dom.test.tsx
+@@ 1530,1620 @@
+   await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+   await click(button("Apply filters"));
+   expect(indicators.at(-1)).toBe("attention");
+   merged = mine.number;
+   await click(button("Refresh pull requests"));
+   expect(indicators.at(-1)).toBeNull();
+ });
+ 
+ async function chooseGrouping(label: string) {
+   const select = document.body.querySelector<HTMLSelectElement>(".review-context .review-grouping select")!;
+   const value = Array.from(select.options).find(option => option.textContent === label)!.value;
+   await act(async () => {
+     select.value = value;
+     select.dispatchEvent(new Event("change", { bubbles: true }));
+   });
+ }
+ const laneNames = () => Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane => lane.getAttribute("aria-label"));
+ const laneNumbers = (lane: string) =>
+   Array.from(document.body.querySelectorAll(`section[aria-label="${lane}"] .review-card .flow-id`), id => id.textContent);
+ 
+-test("a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first", async () => {
+-  const clock: Window = window;
+-  const schedule = clock.setTimeout;
+-  let tick: (() => unknown) | undefined;
+-  clock.setTimeout = (fn, ms, ...args) => {
+-    if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
+-    tick = () => fn(...args); return -78;
+-  };
+-  const cards: ReviewCard[] = [
+-    { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
+-    { ...pr, number: 202, updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
+-    { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
+-    { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
+-  ];
+-  const badges = [
+-    { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
+-    { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
+-    { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
+-  ];
+-  let polls = 0;
+-  try {
+-    await act(async () => { root.render(createElement(ReviewBoard, {
+-      key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
+-      loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
+-    })); });
+-    const layout = () => ({ waiting: laneNumbers("Waiting for review"), approved: laneNumbers("Approved"),
+-      shown: document.body.querySelectorAll(".review-card").length });
+-    const before = layout();
+-    expect(before).toEqual({ waiting: ["#203", "#202", "#201"], approved: ["#204"], shown: 4 });
+-    for (let step = 0; step < badges.length; step++) {
+-      await act(async () => { await tick!(); });
+-      expect({ step, layout: layout() }).toEqual({ step, layout: before });
+-    }
+-    expect(polls).toBe(3);
+-    await click(button("List"));
+-    expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
+-  } finally { clock.setTimeout = schedule; }
+-});
++const allLanes = () => Object.fromEntries(Array.from(document.body.querySelectorAll(".review-lanes section.lane"), lane =>
++  [lane.getAttribute("aria-label"), Array.from(lane.querySelectorAll(".review-card .flow-id"), id => id.textContent)]));
++const reviewSlot = (n: number) => document.body.querySelector(`[aria-label="Keryx work for #${n}"] [data-slot="review"] .pr-work-link`)?.textContent;
++
++for (const grouping of ["Status", "My role"] as const) {
++  test(`a local review starting, progressing and finishing keeps every card's lane, position and visibility; cards are newest first (${grouping})`, async () => {
++    const clock: Window = window;
++    const schedule = clock.setTimeout;
++    let tick: (() => unknown) | undefined;
++    clock.setTimeout = (fn, ms, ...args) => {
++      if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
++      tick = () => fn(...args); return -78;
++    };
++    // #202 is the viewer's own approved PR: outside "Waiting for review" and in "Mine", so a lane that followed
++    // the local review would move it.
++    const cards: ReviewCard[] = [
++      { ...pr, number: 201, updatedAt: "2026-11-01T00:00:00Z" },
++      { ...pr, number: 202, author: "ann", decision: "APPROVED", updatedAt: "2026-11-03T00:00:00Z", localReview: { active: true, ready: false, runState: "queued" } },
++      { ...pr, number: 203, updatedAt: "2026-11-05T00:00:00Z" },
++      { ...pr, number: 204, updatedAt: "2026-11-04T00:00:00Z", decision: "APPROVED" },
++    ];
++    const badges = [
++      { active: true, ready: false, runState: "running" as const, progress: { wave: 1, planned: 2, finished: 1, completed: 1 } },
++      { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const },
++      { active: false, ready: true, runState: "completed" as const, publicationPending: true as const },
++    ];
++    const slotTexts = ["Review · running", "Review · needs your answer", "Review · publication pending"];
++    let polls = 0;
++    try {
++      await act(async () => { root.render(createElement(ReviewBoard, {
++        key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards), watcherCommand: watcherDisabled,
++        loadBadges: async (_cwd, key, subjects) => ({ version: 1, ...key, cards: subjects.map(card => ({ ...card, localReview: badges[polls++]! })) }),
++      })); });
++      if (grouping === "My role") await chooseGrouping("My role");
++      const layout = () => ({ lanes: allLanes(), shown: document.body.querySelectorAll(".review-card").length });
++      const before = layout();
++      expect(before).toEqual(grouping === "Status"
++        ? { lanes: { Draft: [], "Waiting for review": ["#203", "#201"], "Changes requested": [], Approved: ["#204", "#202"] }, shown: 4 }
++        : { lanes: { "Requested from me": [], Mine: ["#202"], Others: ["#203", "#204", "#201"] }, shown: 4 });
++      expect(reviewSlot(202)).toBe("Review · queued");
++      for (let step = 0; step < badges.length; step++) {
++        await act(async () => { await tick!(); });
++        // The polled badge reached the card, and nothing moved.
++        expect({ step, slot: reviewSlot(202), layout: layout() }).toEqual({ step, slot: slotTexts[step], layout: before });
++      }
++      expect(polls).toBe(3);
++      await click(button("List"));
++      expect(Array.from(document.body.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#203", "#204", "#202", "#201"]);
++    } finally { clock.setTimeout = schedule; }
++  });
++}
+ 
+ test("grouping by my role, quick filters in the context row, and an active review never bypasses them", async () => {
+   const requested: ReviewCard = { ...pr, number: 401, author: "bob", reviewers: ["ann"], updatedAt: "2026-11-10T04:00:00Z" };
+   const mine: ReviewCard = { ...pr, number: 402, author: "ann", reviewers: [], updatedAt: "2026-11-10T03:00:00Z" };
+   const failing: ReviewCard = { ...pr, number: 403, author: "bob", ci: "failed", updatedAt: "2026-11-10T02:00:00Z" };
+   const reviewing: ReviewCard = { ...pr, number: 404, author: "zed", updatedAt: "2026-11-10T01:00:00Z",
+     localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } };
+   await render(async () => snapshot([requested, mine, failing, reviewing]));
+   const toolbar = document.body.querySelector(".flows-toolbar")!;
+   expect(toolbar.querySelector(".review-quick-filters, .review-grouping")).toBeNull();
+   expect(document.body.querySelector(".review-context .review-quick-filters")).not.toBeNull();
+   expect(laneNames()).toEqual(["Draft", "Waiting for review", "Changes requested", "Approved"]);
+ 
+   await chooseGrouping("My role");
+   expect(laneNames()).toEqual(["Requested from me", "Mine", "Others"]);
+   expect(laneNumbers("Requested from me")).toEqual(["#401"]);
+   expect(laneNumbers("Mine")).toEqual(["#402"]);
+   expect(laneNumbers("Others")).toEqual(["#403", "#404"]);
+ 
+   const shown = () => Array.from(document.body.querySelectorAll(".review-card .flow-id"), id => id.textContent);
+
+--- apps/desktop/src/review/prWork.test.ts
+@@ 125,311 @@
+ test("two pending Create Flow requests and one new package: none is linked and both requests end", () => {
+   const pending = [entry("s1", ["1-a"]), entry("s2", ["1-a"])];
+   expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 0)).toEqual({ pending, links: [] });
+   expect(resolveFlowLinks(pending, ["1-a", "2-new"], noFlow, new Set(), 0)).toEqual({ pending: [], links: [] });
+ });
+ 
+ test("a package that appears after the request's window is not linked: the request has expired", () => {
+   const pending = [entry("s1", ["1-a"], 1_000)];
+   expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 999)).toEqual({ pending, links: [] });
+   expect(resolveFlowLinks(pending, ["1-a"], noFlow, new Set(), 1_000)).toEqual({ pending: [], links: [] });
+   expect(resolveFlowLinks(pending, ["1-a", "2-foreign"], noFlow, new Set(), 1_001)).toEqual({ pending: [], links: [] });
+ });
+ 
+ test("a package already linked to one request is never linked to another", () => {
+   const pending = [entry("s2", ["1-a"])];
+   expect(resolveFlowLinks(pending, ["1-a", "2-claimed"], noFlow, new Set(["2-claimed"]), 0)).toEqual({ pending, links: [] });
+   expect(resolveFlowLinks(pending, ["1-a", "2-claimed", "3-own"], noFlow, new Set(["2-claimed"]), 0))
+     .toEqual({ pending: [], links: [{ sessionId: "s2", dir: "3-own" }] });
+ });
+ 
++test("TP-R2-003: one request with a fresh package and one without: no offer, and every request ends", () => {
++  // s2 recorded its request after 2-b appeared, so only s1 sees a new package; `some`, not `every`, decides that a pass happens.
++  expect(resolveFlowLinks([entry("s1", ["1-a"]), entry("s2", ["1-a", "2-b"])], ["1-a", "2-b"], noFlow, new Set(), 0))
++    .toEqual({ pending: [], links: [] });
++});
++
+ /** An app stand-in: new sessions are shown, bound through PendingSubjects, and the composer is only filled. */
+ function fakeApp(reply: (subject: SessionSubject) => Record<string, unknown> | "not-stored" = s => ({ subject: s })) {
+   const stored: SessionInfo[] = [];
+   const events: string[] = [];
+   const notices: string[] = [];
+   let pending: ReadonlyMap<string, SessionSubject> = new Map();
+   let next = 0;
+   const subjects = new PendingSubjects({
+     write: async (sessionId, value) => {
+       const answer = reply(value);
+       if (answer === "not-stored") throw new Error("unknown session");
+       events.push("flags " + sessionId);
+       return answer;
+     },
+     onFlags: (sessionId, flags) => {
+       const index = stored.findIndex(s => s.sessionId === sessionId);
+       const entry = { ...session(sessionId), _meta: { keryx: flags } };
+       if (index < 0) stored.push(entry); else stored[index] = entry;
+     },
+     onNotice: (sessionId, text) => notices.push(sessionId + ": " + text),
+     onChange: value => { pending = value; },
+   });
+   const deps: SubjectSessionDeps = {
+     sessions: () => withPendingSubjects(stored, pending),
+     loadSession: async id => { events.push("load " + id); },
+     newSession: async () => { const id = "s" + ++next; events.push("new " + id); return id; },
+     bind: (id, value) => void subjects.bind(id, value),
+     fill: text => events.push("fill " + text),
++    isShown: () => true,
+   };
+   return { deps, events, notices, subjects, stored };
+ }
+ 
+ test("Open in session: a new bound session with the PR URL in the composer, not sent; again opens the same session", async () => {
+   const app = fakeApp(() => "not-stored");
+-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  expect(await openSubjectSession(app.deps, subject, "latest", url)).toEqual({ sessionId: "s1", filled: true });
+   // Prefilled only: the deps have no way to send, and the composer got the URL.
+   expect(app.events).toEqual(["new s1", "fill " + url]);
+-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  expect(await openSubjectSession(app.deps, subject, "latest", url)).toEqual({ sessionId: "s1", filled: false });
+   expect(app.events.slice(2)).toEqual(["load s1"]);
+ });
+ 
+ test("the session menu's New session creates another bound session; a listed session opens by id", async () => {
+   const app = fakeApp();
+   await openSubjectSession(app.deps, subject, "latest", url);
+   await Promise.resolve();
+   expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId)).toEqual(["s1"]);
+-  expect(await openSubjectSession(app.deps, subject, "new", url)).toBe("s2");
++  expect((await openSubjectSession(app.deps, subject, "new", url))?.sessionId).toBe("s2");
+   await Promise.resolve();
+   expect(boundSessions(app.deps.sessions(), subject).map(s => s.sessionId).sort()).toEqual(["s1", "s2"]);
+-  expect(await openSubjectSession(app.deps, subject, "s1", url)).toBe("s1");
++  expect((await openSubjectSession(app.deps, subject, "s1", url))?.sessionId).toBe("s1");
+   expect(app.events.at(-1)).toBe("load s1");
+ });
+ 
+ test("Create Flow opens the bound session and prefills the flow prompt even when the session exists", async () => {
+   const app = fakeApp(() => "not-stored");
+   await openSubjectSession(app.deps, subject, "latest", url);
+-  expect(await openSubjectSession(app.deps, subject, "latest", flowPrompt(url), true)).toBe("s1");
++  expect(await openSubjectSession(app.deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: true });
+   expect(app.events.slice(-2)).toEqual(["load s1", "fill " + flowPrompt(url)]);
+ });
+ 
+ test("a keryx that answers without subject still opens the session and says the binding was not saved", async () => {
+   let stored = false;
+   const app = fakeApp(() => stored ? { archivedAt: undefined } : "not-stored");
+-  expect(await openSubjectSession(app.deps, subject, "latest", url)).toBe("s1");
++  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("s1");
+   expect(app.events).toEqual(["new s1", "fill " + url]);
+   expect(app.notices).toEqual([]);
+   expect(app.subjects.get("s1")).toEqual(subject);
+   // After the first turn keryx has stored the session and answers, but without the subject.
+   stored = true;
+   await app.subjects.apply("s1");
+   expect(app.notices).toEqual(["s1: " + SUBJECT_NOT_SAVED]);
+   expect(app.subjects.get("s1")).toBeUndefined();
+   await app.subjects.apply("s1");
+   expect(app.notices).toHaveLength(1);
+ });
+ 
+ test("a repeat Open in session for a Subject while one is opening gets the same pending open: one new session", async () => {
+   const app = fakeApp(() => "not-stored");
+   const release: Array<(id: string | null) => void> = [];
+   let created = 0;
+   const deps: SubjectSessionDeps = { ...app.deps, newSession: () => { created++; return new Promise(resolve => { release.push(resolve); }); } };
+   const open = subjectOpener();
+   const first = open(deps, subject, "latest", url);
+   const again = open(deps, { ...subject, repo: "Org/Repo" }, "latest", url);
+   const otherPr = open(deps, { ...subject, number: 102, url: url.replace("101", "102") }, "latest", url);
+-  expect(again).toBe(first);
+-  expect(otherPr).not.toBe(first);
+   expect(created).toBe(2);
+   release[0]!("s1");
+-  expect(await first).toBe("s1");
++  expect(await first).toEqual({ sessionId: "s1", filled: true });
++  // The repeat press shares the open: the same session, and its prompt was not filled again.
++  expect(await again).toEqual({ sessionId: "s1", filled: false });
+   release[1]!("s2");
+   await otherPr;
+   // Settled: the next press opens again (here the bound session, no new one).
+-  expect(await open(deps, subject, "latest", url)).toBe("s1");
++  expect((await open(deps, subject, "latest", url))?.sessionId).toBe("s1");
+   expect(created).toBe(2);
+ });
+ 
+ test("a newer bind for the same session decides: the answer to the superseded write is dropped", async () => {
+   const other: SessionSubject = { ...subject, number: 102, url: url.replace("101", "102") };
+   const writes: Array<(flags: { subject: SessionSubject }) => void> = [];
+   const answered: SessionSubject[] = [];
+   const subjects = new PendingSubjects({
+     write: () => new Promise(resolve => { writes.push(resolve); }),
+     onFlags: (_id, flags) => { if (flags.subject) answered.push(flags.subject); },
+     onNotice: () => {},
+     onChange: () => {},
+   });
+   const first = subjects.bind("s1", subject);
+   const second = subjects.bind("s1", other);
+   writes[0]!({ subject });
+   await first;
+   expect(answered).toEqual([]);
+   expect(subjects.get("s1")).toEqual(other);
+   writes[1]!({ subject: other });
+   await second;
+   expect(answered).toEqual([other]);
+   expect(subjects.get("s1")).toBeUndefined();
+ });
+ 
+ test("a keryx that stores the subject answers it and no notice is shown", async () => {
+   const app = fakeApp();
+   await openSubjectSession(app.deps, subject, "latest", url);
+   await Promise.resolve();
+   expect(app.notices).toEqual([]);
+   expect(app.stored[0]?._meta?.keryx?.subject).toEqual(subject);
+   expect(app.subjects.get("s1")).toBeUndefined();
+ });
++
++test("LG-015: latest opens the newest of two sessions bound to the PR", async () => {
++  const app = fakeApp();
++  app.stored.push(session("older", { subject }, "2026-11-01T00:00:00Z"), session("newer", { subject }, "2026-11-05T00:00:00Z"));
++  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("newer");
++  expect(app.events).toEqual(["load newer"]);
++  app.stored.reverse();
++  expect((await openSubjectSession(app.deps, subject, "latest", url))?.sessionId).toBe("newer");
++});
++
++test("LG-011: a session switch while the new session opens binds it but leaves the shown composer alone", async () => {
++  const app = fakeApp(() => "not-stored");
++  const deps: SubjectSessionDeps = { ...app.deps, isShown: () => false };
++  expect(await openSubjectSession(deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: false });
++  expect(app.events).toEqual(["new s1"]);
++  expect(app.subjects.get("s1")).toEqual(subject);
++  // An existing bound session that another load overtook is not filled either.
++  expect(await openSubjectSession(deps, subject, "latest", flowPrompt(url), true)).toEqual({ sessionId: "s1", filled: false });
++  expect(app.events).toEqual(["new s1", "load s1"]);
++});
++
++test("HL-001/LG-008: a press coalesced into an in-flight open reports that it filled nothing", async () => {
++  const app = fakeApp(() => "not-stored");
++  let release!: (id: string | null) => void;
++  const deps: SubjectSessionDeps = { ...app.deps, newSession: () => new Promise(resolve => { release = resolve; }) };
++  const open = subjectOpener();
++  const first = open(deps, subject, "latest", url);
++  const flow = open(deps, subject, "latest", flowPrompt(url), true);
++  release("s1");
++  expect(await first).toEqual({ sessionId: "s1", filled: true });
++  expect(await flow).toEqual({ sessionId: "s1", filled: false });
++  expect(app.events.filter(event => event.startsWith("fill"))).toEqual(["fill " + url]);
++});
+
+--- apps/desktop/src/review/usePendingFlowLinks.dom.test.tsx
+@@ 10,154 @@
+ let usePendingFlowLinks: typeof import("./usePendingFlowLinks").usePendingFlowLinks;
+ let FLOW_LINK_WINDOW_MS: number;
+ 
+ beforeAll(async () => {
+   registerDom();
+   const React = await import("react");
+   act = React.act as unknown as typeof act;
+   createElement = React.createElement;
+   ({ usePendingFlowLinks } = await import("./usePendingFlowLinks"));
+   ({ FLOW_LINK_WINDOW_MS } = await import("./prWork"));
+   root = (await import("react-dom/client")).createRoot(document.body.appendChild(document.createElement("div")));
+ });
+ afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
+ 
+ const flow = (dir: string): FlowCard => ({
+   id: dir.slice(0, 3), dir, idValid: true, commandRef: null, title: dir, status: "initializing", previousStatus: null, blocked: false,
+   owner: null, prUrl: null, baseBranch: null, tasksDone: 0, tasksTotal: 0, acTotal: 0, acConfirmed: 0, updatedAt: null,
+   completionExceptions: false, error: null,
+ });
+ 
+-type Api = ReturnType<typeof usePendingFlowLinks>;
++type Hook = ReturnType<typeof usePendingFlowLinks>;
+ function harness() {
+   const links: string[] = [];
+-  const apis: Api[] = [];
++  const hooks: Hook[] = [];
+   const clock = { now: 0 };
+   function Probe({ flows, loaded, sessions }: { flows: FlowCard[]; loaded: boolean; sessions: SessionInfo[] }) {
+-    apis.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => links.push(`${id} ${dir}`), () => clock.now));
++    hooks.push(usePendingFlowLinks(flows, loaded, sessions, (id, dir) => links.push(`${id} ${dir}`), () => clock.now));
+     return null;
+   }
+   const render = (flows: FlowCard[], loaded = true, sessions: SessionInfo[] = []) =>
+     act(async () => { root.render(createElement(Probe, { flows, loaded, sessions })); });
+-  return { links, clock, apis, render, api: () => apis.at(-1)! };
++  const api = () => hooks.at(-1)!.actions;
++  const offers = () => hooks.at(-1)!.offers.map(offer => `${offer.sessionId} ${offer.dir}`);
++  return { links, clock, hooks, render, api, offers };
+ }
+ // Each test starts from a fresh hook: the previous test's Probe is unmounted first.
+ beforeEach(async () => { await act(async () => root.render(null)); });
+ 
+-test("the first new flow package after Create Flow is linked to the session, once", async () => {
++test("the one new package after Create Flow is offered, not linked; Link writes it once", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   const known = h.api().known();
+   await act(async () => h.api().expect("s1", known));
+   await h.render([flow("100-old")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+   await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.offers()).toEqual(["s1 101-new"]);
++  expect(h.links).toEqual([]);
++  await act(async () => h.api().accept("s1"));
+   expect(h.links).toEqual(["s1 101-new"]);
++  expect(h.offers()).toEqual([]);
++  await act(async () => h.api().accept("s1"));
+   await h.render([flow("100-old"), flow("101-new"), flow("102-later")]);
+   expect(h.links).toEqual(["s1 101-new"]);
++  expect(h.offers()).toEqual([]);
++});
++
++test("Dismiss drops the offer and writes nothing; the dismissed package is not offered again", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.offers()).toEqual(["s1 101-new"]);
++  await act(async () => h.api().dismiss("s1"));
++  expect(h.offers()).toEqual([]);
++  await act(async () => h.api().accept("s1"));
++  expect(h.links).toEqual([]);
++  await act(async () => h.api().expect("s2", new Set(["100-old"])));
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.offers()).toEqual([]);
++});
++
++test("an offer goes away once its session has a Flow", async () => {
++  const h = harness();
++  await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
++  await h.render([flow("100-old"), flow("101-new")]);
++  expect(h.offers()).toEqual(["s1 101-new"]);
++  const linked: SessionInfo = { sessionId: "s1", cwd: "/p", _meta: { keryx: { flow: "099-earlier" } } };
++  await h.render([flow("100-old"), flow("101-new")], true, [linked]);
++  expect(h.offers()).toEqual([]);
+ });
+ 
+-test("several new packages link none, and nothing is linked before the first flow list or to a session with a Flow", async () => {
++test("several new packages offer none, and nothing is offered before the first flow list or to a session with a Flow", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+   await h.render([flow("100-old"), flow("101-a"), flow("102-b")]);
+   await h.render([flow("100-old"), flow("101-a"), flow("102-b"), flow("103-c")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+ 
+   await h.render([], false);
+   await act(async () => h.api().expect("s2", h.api().known()));
+   await h.render([flow("100-old")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+ 
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s3", h.api().known()));
+   const linked: SessionInfo = { sessionId: "s3", cwd: "/p", _meta: { keryx: { flow: "099-earlier" } } };
+   await h.render([flow("100-old"), flow("104-d")], true, [linked]);
++  expect(h.offers()).toEqual([]);
+   expect(h.links).toEqual([]);
+ });
+ 
+-test("two pending Create Flow requests and one new package: none is linked, and a later package is not linked either", async () => {
++test("two pending Create Flow requests and one new package: none is offered, and a later package is not offered either", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+   await act(async () => h.api().expect("s2", h.api().known()));
+   await h.render([flow("100-old"), flow("101-new")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+   await h.render([flow("100-old"), flow("101-new"), flow("102-later")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+ });
+ 
+-test("a request expires: a package from elsewhere after its window is not linked", async () => {
++test("a request expires: a package from elsewhere after its window is not offered", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+   h.clock.now = FLOW_LINK_WINDOW_MS + 1;
+   await h.render([flow("100-old"), flow("101-foreign")]);
+-  expect(h.links).toEqual([]);
++  expect(h.offers()).toEqual([]);
+ });
+ 
+-test("a package linked to one request is not linked to a request recorded before it appeared", async () => {
++test("a package offered for one request is not offered to a request recorded before it appeared", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
+   await act(async () => h.api().expect("s1", h.api().known()));
+-  // s2 took its known packages before s1's package appeared, and records the request after it was linked.
++  // s2 took its known packages before s1's package appeared, and records the request after it was offered.
+   const before = h.api().known();
+   await h.render([flow("100-old"), flow("101-s1")]);
+-  expect(h.links).toEqual(["s1 101-s1"]);
++  expect(h.offers()).toEqual(["s1 101-s1"]);
+   await act(async () => h.api().expect("s2", before));
+   await h.render([flow("100-old"), flow("101-s1")]);
+-  expect(h.links).toEqual(["s1 101-s1"]);
++  expect(h.offers()).toEqual(["s1 101-s1"]);
+ });
+ 
+-test("the hook's api keeps its identity across renders, so callbacks built on it can be memoised", async () => {
++test("the hook's actions keep their identity across renders, so callbacks built on them can be memoised", async () => {
+   const h = harness();
+   await h.render([flow("100-old")]);
++  await act(async () => h.api().expect("s1", h.api().known()));
+   await h.render([flow("100-old"), flow("101-new")]);
+   await h.render([flow("100-old"), flow("101-new")], true, []);
+-  expect(new Set(h.apis).size).toBe(1);
++  expect(new Set(h.hooks.map(hook => hook.actions)).size).toBe(1);
+ });
+
+--- apps/desktop/src/shell/ProjectNavigation.dom.test.tsx
+@@ 68,96 @@
+     await click(target);
+     expect(target.getAttribute("aria-current")).toBe("page");
+     expect(global.querySelector('[aria-label="alpha"]')!.classList.contains("is-active")).toBe(true);
+   }
+   await click(button(global, "Settings"));
+   expect(project()).toBeNull();
+   expect(button(global, "Settings").getAttribute("aria-current")).toBe("page");
+   await click(global.querySelector<HTMLButtonElement>('[aria-label="alpha"]')!);
+   expect(button(project(), "Sessions").getAttribute("aria-current")).toBe("page");
+   await click(global.querySelector<HTMLButtonElement>('[aria-label="beta"]')!);
+   expect(project().getAttribute("aria-label")).toBe("Project views for beta");
+   expect(global.querySelector('[aria-label="beta"]')!.getAttribute("aria-current")).toBe("true");
+ });
+ 
+ 
+ test("App preserves tab state and starts a background review from the originating session; AC16 a PR without Flow and review opens one bound session whose /review run shows on the card", () => {
+   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
+   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+ });
+ 
+-test("AC9 Create Flow in the App: the bound session gets the flow prompt, the one new package is linked and shown on the card, two link none; AC12 an Issue card counts its bound session", () => {
++test("AC9 Create Flow in the App: the bound session gets the flow prompt, the one new package is offered and linked only on Link, Dismiss, two packages and a coalesced press link none; one open per PR; AC12 an Issue card counts its bound session", () => {
+   const fixture = fileURLToPath(new URL("../test/app-work-row.fixture.tsx", import.meta.url));
+   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+ });
+ 
+ test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
+   const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
+   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+ });
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 123,175 @@
+       return { version: 1, runs: starts.length && (action.activityId === runId || action.kind === "answer")
+         ? [{ ...run, pendingQuestions: questions }] : [] };
+     }
+     case "review_watcher": return { version: 1, state:"disabled", events:[] };
+     default: return null;
+   }
+ }, { shouldMockEvents:true });
+ 
+ const React = await import("react");
+ const { createRoot } = await import("react-dom/client");
+ const { App } = await import("../App");
+ const { ToastProvider } = await import("../components/Toasts");
+ const host = document.createElement("div");
+ document.body.append(host);
+ const root = createRoot(host);
+ async function go(label: string) {
+   const button = [...host.querySelectorAll<HTMLButtonElement>("main nav button")].find(b => b.textContent?.startsWith(label));
+   assert.ok(button, "Missing project view " + label);
+   await React.act(() => button.click());
+ }
++/** Polls until `ok` holds, flushing React between polls; fails with `what` after `ms`. */
++async function waitFor(what: string, ok: () => boolean, ms = 2000) {
++  const deadline = Date.now() + ms;
++  while (!ok()) {
++    if (Date.now() > deadline) assert.fail(`Timed out waiting for: ${what} (title: ${host.querySelector(".titlebar")?.textContent}, last calls: ${calls.slice(-6).join(", ")})`);
++    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
++  }
++}
++function findButton(label: string) {
++  return [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
++}
+ function namedButton(label: string) {
+-  const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
++  const button = findButton(label);
+   assert.ok(button, "Missing button " + label);
+   return button;
+ }
+ 
+ async function chooseAccount(login: string) {
+   const picker = host.querySelector<HTMLSelectElement>('[role="dialog"] select');
+   assert.ok(picker);
+   assert.deepEqual([...picker.options].map(option => option.value), ["", "me", "second", "new-account"]);
+   await React.act(() => {
+     picker.value = login;
+     picker.dispatchEvent(new Event("change", { bubbles: true }));
+   });
+   await React.act(() => namedButton("Use account").click());
+   assert.equal(account, login);
+ }
+ try {
+   await React.act(async () => root.render(<ToastProvider><App /></ToastProvider>));
+   const deadline = Date.now() + 2500;
+   while (host.querySelector("textarea")?.disabled !== false && Date.now() < deadline) {
+     await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+
+--- apps/desktop/src/test/app-navigation.fixture.tsx
+@@ 278,431 @@
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, note);
+     current.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => send.click());
+   assert.equal(current.value, note, "A failed send keeps the draft for the same review question");
+   assert.match(host.textContent ?? "", /Review reply could not be sent/);
+   await React.act(() => send.click());
+   const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
+   assert.deepEqual(replies, [reply, reply]);
+   assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
+   assert.ok([...host.querySelectorAll(".session-review-activity .turn-user")].some(row => row.textContent?.includes(note)));
+   assert.equal(current.placeholder, "Reply to review-logic");
+   assert.equal(current.value, "");
+   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
+   await go("Pull requests");
+   // The review started from the session is the card's review link, without a manual refresh.
+   assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
+ 
+   // "Open in session" with an older keryx: a new session opens, the PR URL waits in the composer, a notice says the binding was not saved.
+   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
+-  const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+   const opened = () => calls.filter(method => method === "session/new").length;
+   const firstOpen = opened();
+   await React.act(() => namedButton("Open in session for #12").click());
+-  await settle();
++  await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
+   assert.equal(opened(), firstOpen + 1);
+-  assert.equal(shownComposer()?.value, prUrl, "The composer holds the PR URL");
+   assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
+-  assert.match(host.textContent ?? "", /did not save the pull request binding/);
++  await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
+   // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
+   storesSubject = true;
+   await go("Pull requests");
+   await React.act(() => namedButton("Open in session for #12").click());
+-  await settle();
++  await waitFor("keryx stores the bound session", () => stored.size === 1 && shownComposer()?.value === prUrl);
+   assert.equal(opened(), firstOpen + 2);
+-  assert.equal(stored.size, 1);
+-  assert.equal(shownComposer()?.value, prUrl);
+   await go("Pull requests");
++  await waitFor("#12 counts its bound session", () => !!findButton("Session for #12"));
+   await React.act(() => namedButton("Session for #12").click());
+-  await settle();
++  await waitFor("the session header names PR #12", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
+   assert.equal(opened(), firstOpen + 2, "Open in session again reuses the bound session");
+-  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"));
+   // /review without a target in the PR-bound session preselects the PR.
+   const draft = shownComposer()!;
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "/review");
+     draft.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+-  await settle();
++  await waitFor("the launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+   const launch = host.querySelector('[role="dialog"]');
+   assert.ok(launch && launch.textContent?.includes("Run review"));
+   assert.equal(launch.querySelector<HTMLInputElement>("input.text-input")?.value, prUrl);
+   assert.equal(launch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "12");
+   await React.act(() => [...launch.querySelectorAll("button")].find(button => button.textContent === "Cancel")!.click());
+   // The menu's New session creates another session bound to the same PR.
+   await go("Pull requests");
+   await React.act(() => namedButton("More sessions for #12").click());
+   const menuNew = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "New session");
+   assert.ok(menuNew);
+   await React.act(() => menuNew.click());
+-  await settle();
++  await waitFor("keryx stores the second bound session", () => stored.size === 2);
+   assert.equal(opened(), firstOpen + 3);
+-  assert.equal(stored.size, 2);
+   assert.ok([...stored.values()].every(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12));
+-  // The session header links back to the PR's card and opens its panel.
++  // The session header links back to the PR's card and opens its panel, each time it is pressed.
++  const panel = () => host.querySelector(".review-detail-panel");
++  await waitFor("the header links the new session's PR", () => !!findButton("PR org/project#12"));
+   await React.act(() => namedButton("PR org/project#12").click());
+-  await settle();
++  await waitFor("the PR panel opens", () => !!panel());
+   assert.ok(host.querySelector('main nav button[aria-current="page"]')?.textContent?.startsWith("Pull requests"));
+-  assert.ok(host.querySelector(".review-detail-panel"), "The PR panel is open");
++  await React.act(() => namedButton("Close details").click());
++  assert.equal(panel(), null);
++  await go("Sessions");
++  await React.act(() => namedButton("PR org/project#12").click());
++  await waitFor("the PR panel opens again from a second header press", () => !!panel());
++  await React.act(() => namedButton("Close details").click());
+ 
+   // AC16: PR without Flow and review -> Open in session -> /review -> review link on the card.
+   await go("Pull requests");
+   const bareSlot = (slot: string) => host.querySelector(`[aria-label="Keryx work for #13"] [data-slot="${slot}"] button`)?.textContent;
+   assert.equal(bareSlot("review"), "Run review", "#13 has no local review");
+   assert.equal(bareSlot("flow"), "Create Flow", "#13 has no Flow");
+   assert.equal(bareSlot("session"), "Open in session", "#13 has no bound session");
+   const beforeBare = opened();
+   await React.act(() => namedButton("Open in session for #13").click());
+-  await settle();
++  await waitFor("keryx stores #13's bound session", () => [...stored.values()].some(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13));
++  await waitFor("the composer holds #13's URL", () => shownComposer()?.value === barePrUrl);
+   assert.equal(opened(), beforeBare + 1, "Open in session creates one session");
+   const bareSessions = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 13);
+   assert.equal(bareSessions.length, 1, "The new session is bound to #13");
+   const bareSession = bareSessions[0]!.sessionId; // length checked above
+   assert.deepEqual(bareSessions[0]!._meta.keryx.subject, { kind: "pr", repo: "org/project", number: 13, url: barePrUrl, repositoryId: "RID" });
+   assert.equal(shownComposer()?.value, barePrUrl, "The composer holds the PR URL");
+   assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
+   // Pressing it again, from another session, opens the same session: no second session/new.
+   await go("Pull requests");
++  // "latest" opens the newest of #12's two bound sessions: the one the menu created.
++  const newest12 = [...stored.values()].filter(entry => (entry._meta.keryx.subject as { number?: number } | undefined)?.number === 12)
++    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!.sessionId; // two are stored, asserted above
+   await React.act(() => namedButton("2 sessions for #12").click());
+-  await settle();
+-  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"), "Another session is shown first");
++  await waitFor("the newest #12 session is shown", () => loaded.at(-1) === newest12
++    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
+   await go("Pull requests");
+   assert.equal(bareSlot("session"), "Session");
+   const loadsBefore = loaded.length;
+   await React.act(() => namedButton("Session for #13").click());
+-  await settle();
++  await waitFor("#13's bound session is shown again", () => loaded.length > loadsBefore
++    && host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13") === true);
+   assert.equal(opened(), beforeBare + 1, "The second press reuses the bound session");
+   assert.equal(stored.size, 3);
+   assert.deepEqual(loaded.slice(loadsBefore), [bareSession], "The bound session is shown again");
+   assert.equal(shownComposer()?.value, barePrUrl, "Its unsent draft is still there");
+   assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#13"));
+   // /review without a target preselects the bound PR.
+   const bareDraft = shownComposer()!;
+   await React.act(() => {
+     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(bareDraft, "/review");
+     bareDraft.dispatchEvent(new Event("input", { bubbles:true }));
+   });
+   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+-  await settle();
++  await waitFor("the launch dialog for #13", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+   const bareLaunch = host.querySelector('[role="dialog"]');
+   assert.ok(bareLaunch && bareLaunch.textContent?.includes("Run review"));
+   assert.equal(bareLaunch.querySelector<HTMLInputElement>("input.text-input")?.value, barePrUrl);
+   assert.equal(bareLaunch.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')?.value, "13");
+   const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
+   assert.ok(bareApply && !bareApply.disabled);
+   await React.act(() => bareApply.click());
+-  await settle();
++  await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
+   assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
+     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
+   assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
+   // The started run is the card's review link, without a manual refresh.
+   await go("Pull requests");
+-  assert.equal(bareSlot("review"), "Review · running");
++  await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
+   assert.equal(bareSlot("flow"), "Create Flow");
+   assert.equal(bareSlot("session"), "Session");
+   assert.ok(!calls.includes("session/prompt"), "Neither the PR URL nor /review is sent as a prompt");
+   await go("Sessions");
+   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
+   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
+   assert.ok(projectSettings);
+   await React.act(() => projectSettings.click());
+   await chooseAccount("second");
++  // The account switch remounts the board: the header request handled earlier is gone and does not reopen the panel.
++  await go("Pull requests");
++  await waitFor("the board of the second account", () => host.textContent?.includes("Signed in as second") === true);
++  assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
++  await go("Sessions");
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
+   await React.act(() => namedButton("GitHub · @second").click());
+   await React.act(() => namedButton("Disconnect from project").click());
+   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
+ } finally {
+   await React.act(() => root.unmount());
+   clearMocks();
+   await unregisterDom();
+ }
+
+--- apps/desktop/src/test/app-work-row.fixture.tsx
+@@ 1,241 @@
+ import assert from "node:assert/strict";
+ import { registerDom, unregisterDom } from "./dom";
+ 
+ // AC9 and AC12 over the App wiring: "Create Flow" on a PR card (prefilled flow prompt in the bound session,
+-// the one new package linked to it and shown on the card, none linked when two appear) and the Issue
+-// card's session slot counting a session bound to the issue. Runs in its own process like
+-// app-navigation.fixture.tsx: the production backend caches its first host connection.
++// the one new package offered as "Link Flow #<id>?" and linked only on Link, Dismiss and two packages link
++// nothing, a press coalesced into an open in flight registers nothing), one open per PR at a time, a new
++// session of the PR linked to the Flow its bound session works on, a session switch during an open leaving
++// the shown composer alone, and the Issue card's session slot counting a session bound to the issue. Runs in
++// its own process like app-navigation.fixture.tsx: the production backend caches its first host connection.
+ registerDom();
+ const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
+ const { emit } = await import("@tauri-apps/api/event");
+ const cwd = "/dev/work-row";
+ const pr = (number: number) => `https://github.com/org/project/pull/${number}`;
+ const subject = (kind: "pr" | "issue", number: number) =>
+   ({ kind, repo: "org/project", number, url: `https://github.com/org/project/${kind === "pr" ? "pull" : "issues"}/${number}` });
+ let flowDirs = ["500-existing"];
+-const flagWrites: Array<{ sessionId: string; flow?: string }> = [];
++const flagWrites: Array<{ sessionId: string; flow?: string; subject?: number }> = [];
+ const calls: string[] = [];
++let created = 0;
++/** While set, session/new answers only once it resolves: a press can land while an open is in flight. */
++let newGate: Promise<void> | undefined;
+ type Stored = { sessionId: string; cwd: string; title: string; updatedAt: string; _meta: { keryx: Record<string, unknown> } };
+ const stored = new Map<string, Stored>([
+   ["pr12-session", { sessionId: "pr12-session", cwd, title: "Work on #12", updatedAt: "2026-11-20T00:00:03Z", _meta: { keryx: { subject: subject("pr", 12) } } }],
+   ["pr13-session", { sessionId: "pr13-session", cwd, title: "Work on #13", updatedAt: "2026-11-20T00:00:02Z", _meta: { keryx: { subject: subject("pr", 13) } } }],
+   ["issue5-session", { sessionId: "issue5-session", cwd, title: "Issue 5", updatedAt: "2026-11-20T00:00:01Z", _meta: { keryx: { subject: subject("issue", 5) } } }],
+ ]);
+ const viewer = { login: "me", nodeId: "U_me", host: "github.com" };
+ const issue = (number: number) => ({
+   ref: { host: "github.com", nodeId: "I_" + number, repositoryId: "RID", owner: "org", repo: "project", number, url: subject("issue", number).url },
+   title: "Issue " + number, state: "open", author: "sam", assignees: [], labels: [], createdAt: "2026-11-01", updatedAt: "2026-11-02",
+   work: { stage: "none" },
+ });
+ const card = (number: number, updatedAt: string) => ({ number, title: "PR " + number, url: pr(number), state: "open", draft: false, author: "author",
+   assignees: [], reviewers: [], decision: null, ci: "passed", headSha: "a".repeat(40), baseSha: "b".repeat(40), updatedAt });
+ 
+ mockWindows("work-row");
+ mockIPC(async (cmd, args) => {
+   switch (cmd) {
+     case "window_initial_cwd": return cwd;
+     case "settings_get": return { recentProjects: [] };
+     case "projects_state": return [];
+     case "flows_list": return flowDirs.map(dir => ({ id: dir.slice(0, 3), idValid: true, dir, title: "Flow " + dir, status: "initializing", prUrl: null }));
+     case "acp_start": return { keryxPath: "/fixture/keryx" };
+     case "version_check": return { ok: true };
+     case "github_accounts": {
+       const request = args as { action: string };
+       if (request.action === "list") return { accounts: [{ login: "me", active: true }] };
+       return { eligible: true, configured: true, login: "me" };
+     }
+     case "issues_request": {
+       const { action } = args as { action: string };
+       if (action === "list") return { viewer, items: [issue(5), issue(6)], nextCursor: null, incomplete: false };
+       return { viewer };
+     }
+     case "acp_send": {
+       const { method, id, params } = JSON.parse(String((args as { message: string }).message));
+       calls.push(method);
+       let result: unknown;
+       if (method === "_keryx/session_flags") {
+-        const { sessionId, cwd: _cwd, ...change } = params as { sessionId: string; cwd: string; flow?: string };
+-        flagWrites.push({ sessionId, ...(change.flow ? { flow: change.flow } : {}) });
++        const { sessionId, cwd: _cwd, ...change } = params as { sessionId: string; cwd: string; flow?: string; subject?: { number: number } };
++        flagWrites.push({ sessionId, ...(change.flow ? { flow: change.flow } : {}), ...(change.subject ? { subject: change.subject.number } : {}) });
+         const entry = stored.get(sessionId);
++        // keryx stores a new session only after its first turn: until then it refuses the flags.
+         if (!entry) throw new Error("no session " + sessionId);
+         entry._meta.keryx = { ...entry._meta.keryx, ...change };
+         result = entry._meta.keryx;
+       } else {
++        if (method === "session/new") await newGate;
+         result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+-          : method === "session/new" ? { sessionId: "fresh-session" }
++          : method === "session/new" ? { sessionId: "fresh-" + ++created }
+           : method === "session/list" ? { sessions: [...stored.values()] } : { sessions: [] };
+       }
+       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
+       return;
+     }
+     case "review_board":
+       return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID", viewer: "me", fetchedAt: "2026-11-19T00:00:00Z",
+-        warnings: [], cards: [card(12, "2026-11-19T00:00:00Z"), card(13, "2026-11-18T00:00:00Z")] };
++        warnings: [], cards: [card(12, "2026-11-19T00:00:00Z"), card(13, "2026-11-18T00:00:00Z"), card(14, "2026-11-17T00:00:00Z"),
++          card(15, "2026-11-16T00:00:00Z"), card(16, "2026-11-15T00:00:00Z")] };
+     case "review_run": return { version: 1, runs: [] };
+     case "review_watcher": return { version: 1, state: "disabled", events: [] };
+     default: return null;
+   }
+ }, { shouldMockEvents: true });
+ 
+ const React = await import("react");
+ const { createRoot } = await import("react-dom/client");
+ const { App } = await import("../App");
+ const { ToastProvider } = await import("../components/Toasts");
+ const { flowPrompt } = await import("../review/prWork");
+ const host = document.createElement("div");
+ document.body.append(host);
+ const root = createRoot(host);
+-const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
++/** Polls until `ok` holds, flushing React between polls; fails with `what` after `ms`. */
++async function waitFor(what: string, ok: () => boolean, ms = 2000) {
++  const deadline = Date.now() + ms;
++  while (!ok()) {
++    if (Date.now() > deadline) assert.fail(`Timed out waiting for: ${what} (composer: ${JSON.stringify(shownComposer()?.value)}, title: ${host.querySelector(".titlebar")?.textContent}, last calls: ${calls.slice(-6).join(", ")})`);
++    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
++  }
++}
+ async function go(label: string) {
+   const button = [...host.querySelectorAll<HTMLButtonElement>("main nav button")].find(b => b.textContent?.startsWith(label));
+   assert.ok(button, "Missing project view " + label);
+   await React.act(() => button.click());
+-  await settle();
++  await waitFor(label + " is the current view", () => button.getAttribute("aria-current") === "page");
++}
++function findButton(label: string) {
++  return [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
+ }
+ function namedButton(label: string) {
+-  const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(b => b.getAttribute("aria-label") === label || b.textContent?.trim() === label);
++  const button = findButton(label);
+   assert.ok(button, "Missing button " + label);
+   return button;
+ }
+ const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
+-const slot = (number: number, name: string) => host.querySelector(`[aria-label="Keryx work for #${number}"] [data-slot="${name}"] button`)?.textContent;
+-/** The flow list changes on disk; the window's focus re-reads it. */
++/** The slot's first element: its link or action, or the text of a Flow offer. */
++const slot = (number: number, name: string) => host.querySelector(`[aria-label="Keryx work for #${number}"] [data-slot="${name}"] > *`)?.textContent;
++/** The Flow slot offers `id` with its Link and Dismiss buttons. */
++const offers = (number: number, id: string) => slot(number, "flow") === `Link Flow #${id}?`
++  && !!findButton(`Link Flow #${id} for #${number}`) && !!findButton(`Dismiss Flow #${id} for #${number}`);
++const newSessions = () => calls.filter(method => method === "session/new").length;
++const flowWrites = () => flagWrites.filter(write => write.flow);
++/** The flow list changes on disk; the window's focus re-reads it. Resolves once the Flows board lists every dir. */
+ async function packagesAppear(...dirs: string[]) {
+   flowDirs = [...flowDirs, ...dirs];
+   await React.act(async () => { window.dispatchEvent(new Event("focus")); });
+-  await settle();
+-  await settle();
++  await go("Flows");
++  await waitFor("the Flows board lists " + dirs.join(", "), () => dirs.every(dir => host.textContent?.includes("Flow " + dir)));
++  await go("Pull requests");
+ }
++/** Holds session/new until the returned release is called; the release lets React render the answer. */
++function holdNewSessions() {
++  let release!: () => void;
++  newGate = new Promise(resolve => { release = resolve; });
++  return () => React.act(async () => { newGate = undefined; release(); });
++}
++/** One animation frame: the composer fill App schedules runs before it. */
++const nextFrame = () => React.act(async () => { await new Promise(resolve => requestAnimationFrame(() => resolve(undefined))); });
+ 
+ try {
+   await React.act(async () => root.render(<ToastProvider><App /></ToastProvider>));
+-  const deadline = Date.now() + 2500;
+-  while (host.querySelector("textarea")?.disabled !== false && Date.now() < deadline) {
+-    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+-  }
+-  assert.ok(host.querySelector("textarea") && !host.querySelector("textarea")!.disabled, "ACP session composer is ready");
++  await waitFor("the ACP session composer is ready", () => host.querySelector("textarea")?.disabled === false, 2500);
+ 
+   // AC12: the Issue card's session slot counts the session bound to that issue through `subject`.
+   await go("Issues");
+   const issueSlot = (number: number) => host.querySelector(`[aria-label="Keryx work for org/project#${number}"] [data-slot="session"] button`)?.textContent;
++  await waitFor("the Issues board shows #5 and #6", () => issueSlot(5) !== undefined && issueSlot(6) !== undefined);
+   assert.equal(issueSlot(5), "Session", "The session bound to issue #5 is counted on its card");
+   assert.equal(issueSlot(6), "Open in session");
+ 
+   // AC9: Create Flow on a PR with a bound session opens that session with the flow prompt, not sent.
+   await go("Pull requests");
++  await waitFor("the PR board shows #12", () => slot(12, "flow") !== undefined);
+   assert.equal(slot(12, "flow"), "Create Flow");
+   assert.equal(slot(12, "session"), "Session");
+-  const newBefore = calls.filter(method => method === "session/new").length;
++  const newBefore = newSessions();
+   await React.act(() => namedButton("Create Flow for #12").click());
+-  await settle();
+-  assert.equal(calls.filter(method => method === "session/new").length, newBefore, "The bound session is reused");
+-  assert.equal(shownComposer()?.value, flowPrompt(pr(12)), "The bound session's composer holds the flow prompt");
++  await waitFor("#12's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(12)));
++  assert.equal(newSessions(), newBefore, "The bound session is reused");
+   assert.ok(!calls.includes("session/prompt"), "The flow prompt is not sent");
+-  // The one package that then appears is linked to the session and shown as the card's Flow.
++  // The one package that then appears is offered on the card, not linked; Link writes it and it becomes the card's Flow.
+   await packagesAppear("506-for-twelve");
+-  assert.deepEqual(flagWrites.filter(write => write.flow), [{ sessionId: "pr12-session", flow: "506-for-twelve" }]);
++  await waitFor("#12 offers Flow #506", () => offers(12, "506"));
++  assert.deepEqual(flowWrites(), [], "Nothing is linked before Link");
++  await React.act(() => namedButton("Link Flow #506 for #12").click());
++  await waitFor("#12 shows the linked Flow", () => slot(12, "flow") === "Flow #506 · Initializing");
++  assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }]);
++
++  // Dismiss: the offer goes away and nothing is written.
++  await React.act(() => namedButton("Create Flow for #13").click());
++  await waitFor("#13's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(13)));
+   await go("Pull requests");
+-  assert.equal(slot(12, "flow"), "Flow #506 · Initializing", "The linked package is the card's Flow");
++  await packagesAppear("507-for-thirteen");
++  await waitFor("#13 offers Flow #507", () => offers(13, "507"));
++  await React.act(() => namedButton("Dismiss Flow #507 for #13").click());
++  await waitFor("#13's offer is gone", () => slot(13, "flow") === "Create Flow");
++  assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Dismiss links nothing");
+ 
+-  // Two packages appearing for one request: none is linked.
++  // Two packages appearing for one request: none is offered or linked.
+   await React.act(() => namedButton("Create Flow for #13").click());
+-  await settle();
+-  assert.equal(shownComposer()?.value, flowPrompt(pr(13)));
+-  await packagesAppear("507-a", "508-b");
+-  assert.deepEqual(flagWrites.filter(write => write.flow), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Nothing more is linked");
++  await waitFor("#13's session composer holds the flow prompt", () => shownComposer()?.value === flowPrompt(pr(13)));
++  await go("Pull requests");
++  await packagesAppear("508-a", "509-b");
++  assert.equal(slot(13, "flow"), "Create Flow", "Two new packages: no offer");
++  assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }], "Nothing more is linked");
++
++  // One open per PR at a time: a second press while session/new is in flight starts no second session.
++  let release = holdNewSessions();
++  const beforeDouble = newSessions();
++  await React.act(() => namedButton("Open in session for #14").click());
++  await go("Pull requests");
++  await React.act(() => namedButton("Open in session for #14").click());
++  await release();
++  await waitFor("#14's new session holds its URL", () => shownComposer()?.value === pr(14));
++  await waitFor("#14's new session is bound", () => flagWrites.some(write => write.subject === 14));
++  assert.equal(newSessions(), beforeDouble + 1, "Two presses in flight open one session");
++
++  // Open in session, then Create Flow before session/new answers: the press joins the open, its flow prompt
++  // is never filled, so it registers no request and the package that then appears is not offered.
++  await go("Pull requests");
++  release = holdNewSessions();
++  await React.act(() => namedButton("Open in session for #15").click());
++  await go("Pull requests");
++  await React.act(() => namedButton("Create Flow for #15").click());
++  await release();
++  await waitFor("#15's new session holds its URL", () => shownComposer()?.value === pr(15));
++  await go("Pull requests");
++  await packagesAppear("510-c");
++  assert.equal(slot(15, "flow"), "Create Flow", "A coalesced press registered no request");
++  assert.deepEqual(flowWrites(), [{ sessionId: "pr12-session", flow: "506-for-twelve" }]);
++
++  // A new session of a PR whose bound session works on a Flow is linked to that Flow.
++  await React.act(() => namedButton("More sessions for #12").click());
++  const menuNew = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "New session");
++  assert.ok(menuNew, "The session menu offers New session");
++  const beforeMenu = newSessions();
++  await React.act(() => menuNew.click());
++  await waitFor("#12's new session is linked to Flow #506", () => flowWrites().some(write => write.sessionId !== "pr12-session" && write.flow === "506-for-twelve"));
++  assert.equal(newSessions(), beforeMenu + 1);
++
++  // A switch to another session while a new one opens: the new session is bound, the shown composer keeps its draft.
++  await go("Pull requests");
++  release = holdNewSessions();
++  await React.act(() => namedButton("Open in session for #16").click());
+   await go("Pull requests");
+-  assert.equal(slot(13, "flow"), "Create Flow");
++  await React.act(() => namedButton("2 sessions for #12").click());
++  await waitFor("#12's session is shown", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12") === true);
++  const draft = shownComposer()?.value;
++  await release();
++  await waitFor("#16's new session is bound", () => flagWrites.some(write => write.subject === 16));
++  await nextFrame();
++  assert.equal(shownComposer()?.value, draft, "The shown session's draft is not replaced by #16's URL");
++  assert.ok(host.querySelector(".titlebar")?.textContent?.includes("PR org/project#12"), "The session the user switched to stays shown");
+ } finally {
+   await React.act(() => root.unmount());
+   clearMocks();
+   await unregisterDom();
+ }
+
+--- docs/docs/cli-reference.md
+@@ 5158,5201 @@
+ ```
+ 
+ | Subcommand | Flags / args | Description |
+ |---|---|---|
+ | default emit | optional runtime id | Build the bounded project-root Metaproject + graph + wiki orientation and format it for the selected runtime (`claude` by default). |
+ | `install-hook` | `--runtime <id\|all>`, `--dry-run` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. `--dry-run` reports the file it would write and changes nothing. |
+ | `uninstall-hook` | `--runtime <id\|all>`, `--dry-run` | Remove only the managed orientation integration. `--dry-run` reports what it would strip and changes nothing. |
+ 
+ Windsurf and Zed do not expose a compatible context-injection hook; use their
+ rules or memories instead. Unknown runtimes exit `1` without modifying config.
+ 
+ ---
+ 
+ ## issues
+ 
+ Browse GitHub issues across repositories using an account connected in Settings → Integrations.
+ Use `viewer` with an empty request object to verify the account identity. List, detail and comments read as the explicitly selected account. The current directory does not restrict the personal queue.
+ 
+ ```bash
+ keryx issues list --login LOGIN --request '{"source":"assigned","state":"open"}' --json
++keryx issues list --login LOGIN --request '{"source":"repository","state":"open"}' --json
+ ```
+ 
+-Use `assigned`, `created`, `mentioned` or `subscribed` for the source. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
++Use `assigned`, `created`, `mentioned` or `subscribed` for the source. The `repository` source lists the issues of the project's GitHub repository instead, resolved from the current directory's GitHub.com fetch remotes with the origin repository first. Pull requests are left out. If a page holds only pull requests, Keryx reads up to three pages in one request. The request fails with a `configuration:` error when the directory has no GitHub.com remote or GitHub has Issues turned off for the repository. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
+ 
+ Use `origin` to resolve an existing Flow or session’s issue as the selected viewer. Use `workspace` to inspect an issue’s local checkout, session and Flow. `open-session` and `prepare-flow` resume or create the linked work in the matching checkout. A failed access check means the selected account or its permissions need attention. Reconnect the account and refresh. If the Desktop reports an incompatible CLI, choose the bundled Keryx CLI in Settings.
+ 
+ ## review
+ 
+ The Desktop Review board reads the current project’s GitHub pull requests with
+ `keryx review board --json`. Select a connected remote using `--repo owner/name`,
+ filter history with `--state open|closed|merged|all`, or read one pull request’s
+ discussion and checks with `--number N`. A partial list includes warnings.
+ `keryx review board --json --repositories` lists the configured GitHub.com fetch
+ remotes without contacting GitHub, with the origin repository first.
+ 
+ `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
+ `keryx review accounts project --json` shows the current project's selection.
+ Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
+ for the project and its linked worktrees. Add `--repo owner/name` to check a connected
+ remote other than the default. The board, private review fetch and local watcher
+ use the selected account. The credentials stay in GitHub CLI.
+ Use `keryx review accounts bind --skip --json` to continue without a connection.
+ Changing or removing a connection pauses the project's watchers. Enable the
+
+--- docs/docs/guides/desktop-issues.md
+@@ 1,61 @@
+ # Work on a GitHub issue in Keryx Desktop
+ 
+-Open **Issues** and select the GitHub account that has access to the ticket. The account menu uses the accounts connected through GitHub CLI. To connect another account, sign in with `gh auth login` and reopen the account settings. The personal board initially shows open issues assigned to the selected account across its repositories. Choose **Created by me**, **Mentioned** or **Subscribed** to change the queue.
++Open **Issues** and select the GitHub account that has access to the ticket. The account menu uses the accounts connected through GitHub CLI. To connect another account, sign in with `gh auth login` and reopen the account settings. The board initially shows open issues of the project's GitHub repository (source **Project repository**). Choose **Assigned to me**, **Created by me**, **Mentioned** or **Subscribed** to see a personal queue across repositories, or **GitHub Project** to open a Project. Desktop remembers the chosen source for the account.
++
++The board has an **Open** column, plus **Closed** when the state filter includes closed issues. Columns follow the GitHub state only. A GitHub Project uses its own columns, described below.
+ 
+ ## Find and read an issue
+ 
+-Search by title, `#number` or `owner/repo#number`. **Filters** can narrow the queue by repository, state, update date, author, label, assignee and Flow stage. Enter **Unassigned** to find unassigned tickets. **Board** and **List** share the filters. Use **Load more issues** to extend the search beyond the loaded pages. **Refresh** reads the current query again.
++Search by title, `#number` or `owner/repo#number`. **Filters** can narrow the queue by repository, GitHub state, update date, author, label and assignee. Enter **Unassigned** to find unassigned tickets. **Board** and **List** share the filters. Use **Load more issues** to extend the search beyond the loaded pages. **Refresh** reads the current query again.
+ 
+ Select a title to read the description, followed by the comments. Use the arrow buttons to navigate between issues or **Open in GitHub** to view the original. On a wide window, drag the divider or focus it and use the arrow keys to resize the panel. Escape returns to the board or list.
+ 
++## See the Keryx work on an issue
++
++Each card, list row and issue panel has a Keryx work row with two slots:
++
++- **Flow.** **Flow · stage** opens the Flow linked to the issue, for example **Flow · In progress** or **Flow · Needs an answer**. Without a Flow, the slot reads **Create Flow**.
++- **Session.** **Session** or **N sessions** counts the sessions bound to the issue and opens its linked session. Without one, the slot reads **Open in session**, or **Open question** when the Flow waits for your answer.
++
++The list and the issue panel also show the Keryx stage next to the GitHub state.
++
+ ## Discuss an issue and prepare a Flow
+ 
+-1. Select **Open session** on the issue. Keryx looks for a registered checkout of the issue repository. If several match, choose the one you want. If none match, use **Choose folder** to open the checkout. The selected account needs access to the repository and the project's GitHub binding.
++1. Select **Open in session** on the issue. Keryx looks for a registered checkout of the issue repository. If several match, choose the one you want. If none match, use **Choose folder** to open the checkout. The selected account needs access to the repository and the project's GitHub binding.
+ 2. Discuss the work in **Sessions**. **Create Flow** from the same issue uses the linked session, including its existing conversation. You may also select **Create Flow** directly. The checkout needs Task Manager and a compatible Keryx shell provider.
+-3. Review the coordinator's plan, dependent tasks and acceptance criteria. When the issue says **Needs an answer**, open the session to read and answer the question. Use **Open Flow** to inspect the package, including an existing package created from the same GitHub issue URL in Shell. If several packages match, choose the intended directory.
++3. Review the coordinator's plan, dependent tasks and acceptance criteria. When the issue says **Needs an answer**, open the session to read and answer the question. Use the Flow slot to inspect the package, including an existing package created from the same GitHub issue URL in Shell. If several packages match, choose the intended directory.
+ 4. When you accept the criteria, freeze and start that Flow from its checkout. For example, with the numeric ID shown in Flows:
+ 
+ ```bash
+ keryx flow status <id>
+ keryx flow freeze <id>
+ keryx flow start <id>
+ keryx flow next <id>
+ ```
+ 
+ The GitHub state and Keryx stage are shown independently. An open issue can have a finished Flow, and work can continue on a closed issue.
+ 
+ ## Use a GitHub Project
+ 
+-Choose **GitHub Project**, enter the organization or user login and the Project number, then select **Open project**. The columns follow the Project's single-select **Status** field. **No status** holds items with no value. The personal board groups those same issues by Keryx stage.
++Choose **GitHub Project**, enter the organization or user login and the Project number, then select **Open project**. The columns follow the Project's single-select **Status** field. **No status** holds items with no value. Other sources group the same issues by GitHub state.
+ 
+ Choose a value in the item's **Change Project Status** menu or drag the card to a column to update that item in the selected Project. Keryx reads the current value before writing and reads it back afterwards. If a teammate changed it first, the board shows the observed value. Choose a new destination only if you still want to move it. In a read-only Project, you can open issues and sessions. If the Status field is unavailable, use the list or select a different Project.
+ 
+ ## Recover a session, an interrupted request or a missing board
+ 
++- **Project repository unavailable.** The default source needs a GitHub.com remote in the project and Issues turned on for that repository. A keryx older than Desktop does not know this source either. If you have not chosen a source yet, Issues shows the reason and **Show issues assigned to me**, which switches to that source and remembers it. For an older keryx, update it or select **Bundled keryx** in **Settings → Desktop**.
+ - **No access or wrong account.** Select the GitHub account with repository access and verify the checkout's GitHub binding. GitHub can report a missing private issue when access is denied. For a restricted Project, switch Source back to a personal queue.
+ - **Offline or rate limited.** A failed refresh can leave the most recent authorized snapshot visible. Read the error and retry after connectivity returns or the stated GitHub limit resets. An access denial clears private board data.
+ - **Interrupted preparation.** Reopen the issue using the same account and checkout, then open its linked session and Flow. Read the latest turn, pending question and package before resuming preparation. If the session was busy when Keryx created the package, wait for the current turn to finish and choose **Resume preparation** on the issue. Keryx reuses that package and session. If another Shell or Desktop window owns the session, finish or disconnect that writer first.
+ - **Incompatible CLI.** In **Settings → Desktop**, select **Bundled keryx** or a CLI with `keryx issues --help`. Reconnect the session and reopen Issues. A local folder with the right remote is needed for session and Flow actions.
+ 
+ ## Return to the source ticket
+ 
+ Choose **Open source issue** beside a linked session's title or in the Flow detail header. Desktop opens the ticket even if it falls outside the current filters. In an issue session, select the GitHub account that created that session. A shared Flow can resolve its source for any selected account with access to the ticket.
+ 
+ From the project checkout, Shell can resolve either link against GitHub with the selected login. Use an exact session UUID or Flow package directory name.
+ 
+ ```sh
+ keryx issues origin --login LOGIN --request '{"sessionId":"SESSION-UUID"}' --json
+ keryx issues origin --login LOGIN --request '{"flowDir":"FLOW-PACKAGE-DIRECTORY"}' --json
+ ```
+
+--- docs/requirements/keryx-desktop-review-v2/implementation-plan.md
+@@ 1,66 @@
+ # План реализации · Review v2
+-Version: 0.1.4
++Version: 0.1.5
+ 
+ Статус: этап 0 реализован и влит в main (Flow 516, PR #1294); этап 1 реализован в Flow 517 (draft PR, см. «Состояние этапа 1»); этапы 2–4 — draft, готовы к запуску по разделу «Передача следующим этапам». Этапы упорядочены так, чтобы каждый можно было выпустить отдельно. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md).
+ 
+ ## Этапы
+ 
+ | Этап | Что делается | Требования | Что показать на выходе |
+ |---|---|---|---|
+ | 0. Исправления текущей доски | Убрать обход фильтров для активного ревью. Убрать подъём активных наверх. Скрывать пустую колонку «Done». Показывать на карточке доски результат прошлого head с пометкой «устарел» (R5 v1 это обещает; сегодня он виден только в истории внутри панели PR). Сузить индикатор вкладки до событий, адресованных пользователю. Убрать перенос панели инструментов (наблюдение при осмотре приложения) | часть R1, R2, R12 | На PR с активным ревью фильтр по другому автору скрывает карточку; после нового коммита карточка на доске показывает прошлый результат как устаревший |
+ | 1. GitHub-срез и ссылки | Колонки Pull requests и Issues только по GitHub. Строка работы Keryx на карточке. «Открыть в сессии» с привязкой Subject и заголовком сессии. Создание ревью и Flow из привязанной сессии. Подписанные действия, кроме «Исправить замечания» | R1–R3, R5, R6, часть R4 (ссылка ревью без номера раунда и отставания), часть R7 | Сценарий «PR без Flow и ревью → сессия → `/review` → ссылка на карточке» |
+ | 2. Сущность Review | Таблица `reviews`, миграция запусков в раунды и попытки. Вкладка Reviews: доска, список, панель. Перенос интерфейса ревью, истории, публикации и правил из панели PR. Ссылка ревью на карточке PR с раундом и отставанием. Индикатор Reviews | R8, остаток R4, R12 | Один PR с тремя историческими запусками виден как один Review с раундами |
+ | 3. Смена head | Проверка head на границе волны. `on_head_move`. Команда раунда обновления и новые правила выбора прошлого раунда. Варианты в диалоге публикации. Перенос ответов по находкам. События `push` вотчера обновляют Review | R9, R10 | Сценарии «коммит после завершения» и «коммит во время раунда» из критериев выпуска |
+ | 4. Единый реестр | Регистрация пакетов сессии как попыток. Общий код публикации. Процедура «Head сдвинулся» в review-orchestrator. Действие «Исправить замечания» как Flow | остаток R7, R11 | Ревью из сессии агента опубликовано из Desktop |
+ 
+ ## Состояние этапа 0
+ 
+ Этап 0 реализован в Flow 516 и влит в main через PR #1294. Ревью: раунд по ветке и пять раундов по PR; после первого раунда ни один не нашёл blocker или major. Пакеты раундов — `.metaproject/reviews/2026-11-23-review-flow-*-pull-1294*`, журнал решений — `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/journal.md`.
+ 
+ Три отклонения от PRD сделаны сознательно и записаны здесь:
+ 
+ - (a) R12 говорит, что индикатор вкладки Pull requests загорается для запроса ревью на пользователя «или его команду». На этапе 0 сопоставляется только логин пользователя; запросы на команды не сопоставляются, пока не появится членство в командах (планируется вместе с этапом 1).
+ - (b) До появления вкладки Reviews (этап 2) индикатор вкладки Pull requests загорается также от локального ревью, которое ждёт пользователя (вопрос ревьюера или решение о публикации).
+ - (c) Панель инструментов доски не гарантированно остаётся в одну строку, и меню для второстепенных элементов нет. Вместо этого подписи кнопок скрываются, когда внутренняя ширина панели (без отступов) не больше 1100px — это панель шириной около 1140px; текст состояния вотчера скрывается при внутренней ширине не больше 760px — панель около 800px, а счётчик pull request'ов остаётся голым числом, и поле поиска сужается до 80px; счётчик активных фильтров остаётся видимым. Измерено на разметке панели с реальными стилями и заглушками вместо данных: одна строка без выхода за край при ширине панели 560, 620, 700, 760, 820, 1101, 1180 и 1380px; при 340px — две строки. Когда показана подсказка о скрытых фильтрами запросах (d) («Show N waiting on you», уже 1100px — «N hidden»), панель переходит на вторую строку при ширине 340–646, 810–908 и 1150–1290px, то есть и при панели 560px в окне по умолчанию с открытой панелью PR; ничего не обрезается. В приложении с реальными данными не измерялось.
+ - (d) Решения оператора от 2026-11-23: кнопка на карточке с устаревшим ревью называется «Review again», пока этап 2 не свяжет раунды между собой; индикатор вкладки считает каждый pull request, которому нужен пользователь, а если часть из них скрыта фильтрами, на панели инструментов показывается подсказка с числом скрытых и кнопкой, которая сбрасывает фильтры и поиск.
+ 
+ Решение оператора от 2026-11-23: закрытый или слитый pull request с идущим ревью скрывается при фильтре по умолчанию «Open + Draft».
+ 
+ ## Состояние этапа 1
+ 
+ Этап 1 реализован в Flow 517 (`.metaproject/flows/517-2026-11-23-desktop-review-v2-stage-1-github-slice-a/`), ветка `feat/desktop-review-v2-stage1`; до слияния — draft.
+ 
+ - **Pull requests.** Колонки и порядок только по GitHub: группировка «Status» (Draft · Waiting for review · Changes requested · Approved, Merged и Closed — по фильтру состояния) и «My role» (Requested from me · Mine · Others). Быстрые фильтры «Requested from me», «Mine», «CI failed» и переключатель группировки стоят в строке контекста, не в тулбаре, поэтому замеры отклонения (c) остаются в силе. Колонка внимания и колонка «In review» убраны (D6). Строка причины на карточке — только по GitHub.
+ - **Строка работы Keryx** (`apps/desktop/src/review/PrWorkRow.tsx`): три места фиксированной высоты 24px — ревью («Review · <состояние>» из `localReview`, без раунда и отставания; открывает текущую панель ревью), Flow (по `prUrl` или через флаг `flow` привязанной сессии), сессии (число, последняя, меню со всеми и «New session»). Пустое место — подписанное действие. «Fix review comments» не показывается (этап 4).
+-- **Привязка сессии к Subject.** `subject` хранится в `flags.json` сессии и пишется через `_keryx/session_flags` (`src/session/organize.ts`); сессия Issue получает `subject` при привязке в `withIssueBinding`. Старый keryx без поддержки `subject`: сессия открывается, в ней появляется уведомление, что привязка не сохранена. Заголовок сессии показывает ссылку на PR или Issue и на Flow.
+-- **Создание из сессии.** `/review` без цели в сессии, привязанной к PR, открывает диалог запуска с этим PR. «Create Flow» открывает привязанную сессию с подготовленным текстом; первый новый пакет Flow, появившийся, пока запрос ждёт, привязывается к сессии. Если появилось несколько — не привязывается ни один; если списка Flow ещё не было — тоже.
+-- **Issues.** По умолчанию колонки по состоянию GitHub (Open · Closed по фильтру), источник по умолчанию — репозиторий проекта (`keryx issues list` с `source: "repository"`, D5); группировка по статусу GitHub Project не изменилась; фильтр по стадии Flow убран, стадия — ссылка в строке работы.
++- **Привязка сессии к Subject.** `subject` хранится в `flags.json` сессии и пишется через `_keryx/session_flags` (`src/session/organize.ts`); сессия Issue получает `subject` при привязке в `withIssueBinding`. keryx сохраняет новую сессию только после её первого хода, поэтому Desktop держит привязку в ожидании и повторяет запись после хода. Старый keryx без поддержки `subject`: сессия открывается и работает, а уведомление, что привязка не сохранена, появляется в ней не позже конца первого хода. Запись `flags.json` идёт под блокировкой `flags.json.lock` на сессию: параллельный писатель ждёт до 3 секунд, затем получает ошибку «retry». Сессии Issue, привязанные старым keryx без `subject`, получают его при следующем открытии через Issues, если пользователь не снял привязку сам (снятие хранится отметкой; снятие, сделанное до этой версии, отметки не имеет и может быть перезаписано один раз). Заголовок сессии показывает ссылку на PR или Issue и на Flow.
++- **Создание из сессии.** `/review` без цели в сессии, привязанной к PR, открывает диалог запуска с этим PR. «Create Flow» открывает привязанную сессию с подготовленным текстом (не отправляет его). Запрос ждёт пакет 15 минут с нажатия и регистрируется, только если текст действительно подставлен в эту сессию (переключение на другую сессию во время открытия — ни текста, ни запроса). Если ждёт ровно один запрос и появился ровно один новый пакет, строка работы PR спрашивает «Link Flow #N?» с кнопками Link и Dismiss: флаг `flow` сессии пишется только по Link; Dismiss ничего не пишет и больше не предлагает этот пакет. Показанный вопрос не истекает. Несколько новых пакетов или несколько ждущих запросов — не предлагается ничего, и все ждущие запросы завершаются; если списка Flow ещё не было — тоже.
++- **Issues.** По умолчанию колонки по состоянию GitHub (Open · Closed по фильтру), источник по умолчанию — репозиторий проекта (`keryx issues list` с `source: "repository"`, D5; запрос читает до трёх страниц, если на странице одни pull request'ы); сохранённый выбор источника важнее; группировка по статусу GitHub Project не изменилась; фильтр по стадии Flow убран, стадия — ссылка в строке работы (слоты Flow и сессии). Если источник по умолчанию недоступен (нет удалённого репозитория GitHub.com, Issues выключены в репозитории — ответ 410, или keryx старше Desktop не знает источник), Issues показывают причину и кнопку «Show issues assigned to me»; для старого keryx — ещё подсказку обновить keryx или выбрать встроенный CLI. Кнопка есть, только пока источник не выбран пользователем.
+ 
+ Отклонения и ограничения этапа 1:
+ 
+ - (a) остаётся открытым: членства в командах этап 1 не ввёл, запросы ревью на команды индикатором не сопоставляются.
+ - (b) остаётся: индикатор Pull requests по-прежнему загорается от локального ревью, ждущего пользователя; снимается на этапе 2.
+ - (e) У Issue нет выбора другой или новой сессии: бэкенд привязки задачи (`withIssueBinding`) держит одну сессию на задачу и аккаунт. Требование R5 для Issue в части «с выбором другой или новой» не выполнено.
+-- (f) Flow, созданный вне окна ожидания «Create Flow» (или в другой сессии), к PR автоматически не привязывается, пока у него нет `prUrl`.
+-- Не проверялось в приложении с реальными данными: строка работы в узких колонках, положение меню сессий, ширина списка (1000px).
++- (f) Flow, созданный вне окна ожидания «Create Flow» (или в другой сессии), к PR не предлагается и не привязывается, пока у него нет `prUrl`. При двух и более ждущих запросах «Create Flow» не предлагается ни один пакет.
++- (g) `subject` не называет аккаунт GitHub: сессии Issue, привязанные под разными аккаунтами, считаются вместе. У Issue из GitHub Enterprise (URL не github.com) `subject` нет, и строка работы такие сессии не считает.
++- Не проверялось в приложении с реальными данными: строка работы в узких колонках, положение меню сессий, ширина списка (1000px); ширины из замечаний LY-002 и LY-004 в приложении не измерялись.
+ 
+ ## Передача следующим этапам
+ 
+ Раздел для агента, который начинает этап 1, 2, 3 или 4. Всё, что ниже названо «сейчас», проверено по коду после слияния этапа 0.
+ 
+ ### Как запускать
+ 
+ - Один этап — один Flow через flow-orchestrator (`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`), ветка от свежего `main`, свой PR. Критерии приёмки замораживаются из строки этапа в таблице «Этапы» и из требований PRD, которые она называет.
+ - Входные документы: [PRD](prd.md) (R1–R12), [спецификация](specification.md), этот план, решения D1–D6 выше. Раздел спецификации «Основания» описывает код на коммите `1b994df18`, то есть до этапа 0; где этап 0 его изменил, верен раздел «Состояние этапа 0» этого плана.
+ - Ревью — review-orchestrator по PR. Составы раундов 3–5 этапа 0 были сокращены решением оператора, и такие пакеты не проходят гейт завершения инструмента; если нужен полный пакет, запускайте полный состав.
+ - Rust-часть Desktop (`apps/desktop/src-tauri`) локально не собирается — проверяется только в CI.
+ 
+ ### Порядок и параллельность
+ 
+ - Этапы 1 и 2 не зависят друг от друга, их можно вести параллельно. Оба трогают карточку PR (`apps/desktop/src/review/ReviewResults.tsx`, `ReviewBoard.tsx`): этап 1 добавляет строку работы Keryx и ссылку на ревью, этап 2 переносит интерфейс ревью из панели PR и добавляет к ссылке раунд и отставание. При параллельной работе договоритесь, какой Flow владеет этими файлами, или ведите этап 2 после слияния этапа 1.
+ - Этап 3 начинается только после слияния этапа 2, этап 4 — после этапов 2 и 3.
+ 
+ ### С чего начать каждый этап
+ 
+ - **Этап 1.** Сначала прочитать, как сейчас хранится связь Issue ↔ сессия ↔ Flow (при подготовке не читалось, см. «Что не проверено»). Ссылка ревью на карточке строится из `localReview` и открывает текущую панель ревью. Здесь же закрывается отклонение (a): сопоставление запросов ревью на команды пользователя, если появится членство в командах. Колонка внимания убирается по D6, Issues по умолчанию показывают репозиторий проекта по D5.
+
+--- src/acp/shell-session-organize.test.ts
+@@ 74,116 @@
+   );
+ 
+   test(
+     "a subject is linked, listed after a fresh read, unlinked by null; an invalid one is refused",
+     async () => {
+       const h = shellHarness();
+       try {
+         await h.initialize();
+         const id = storedSession(h);
+         const subject = { kind: "pr", repo: "org/repo", number: 12, url: "https://github.com/org/repo/pull/12" };
+         const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject });
+         expect(linked.error).toBeUndefined();
+         expect(linked.result?.["subject"]).toEqual(subject);
+         // session/list reads flags.json again, as after a restart.
+         const listed = await call(h, "session/list", { cwd: h.projectDir });
+         const info = (listed.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+         expect(info?.["_meta"]?.keryx?.subject).toEqual(subject);
+ 
+         // Refused at the wire (wrong type) and at the store (URL that does not match).
+         expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: "org/repo#12" })).error?.code).toBe(-32602);
++        // An array is an object to `typeof`; the wire refuses it as a bad parameter, before the store sees it.
++        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [] })).error?.code).toBe(-32602);
++        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: [subject] })).error?.code).toBe(-32602);
+         const mismatch = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: { ...subject, url: "https://github.com/org/repo/issues/12" } });
+         expect(mismatch.error).toBeDefined();
+         expect(mismatch.result).toBeUndefined();
+         // Omitted: a flag change leaves the subject as it is.
+         expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, pinned: true })).result?.["subject"]).toEqual(subject);
+ 
+         const unlinked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, subject: null });
+         expect(unlinked.result?.["subject"]).toBeUndefined();
+         const again = await call(h, "session/list", { cwd: h.projectDir });
+         const cleared = (again.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+         expect(cleared?.["_meta"]?.keryx?.subject).toBeUndefined();
+       } finally {
+         await h.end();
+       }
+     },
+     TIMEOUT_MS,
+   );
+ 
+   test(
+     "trash releases an idle held session and moves its folder; a busy one is refused",
+
+--- src/commands/issues.test.ts
+@@ 1,44 @@
++import { expect, test } from "bun:test";
++import { execFileSync } from "node:child_process";
++import { mkdtemp, rm } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { authenticatedAccount, IssueGithub } from "../integrations/issues-github";
++import { fixtureGitEnv, isolateGitDiscovery } from "../review/test-git-fixture";
++import { issuesCommand } from "./issues";
++
++test("AC13 `keryx issues list` lists the repository of the project it runs in", async () => {
++  const cwd = await mkdtemp(path.join(tmpdir(), "issues-command-"));
++  const restore = isolateGitDiscovery();
++  const requests: string[] = [];
++  const logins: string[] = [];
++  const written: string[] = [];
++  const write = process.stdout.write;
++  try {
++    const env = fixtureGitEnv();
++    execFileSync("git", ["init", "--quiet"], { cwd, env });
++    execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd, env });
++    const api = new IssueGithub("test-token", async (url) => {
++      if (url.pathname === "/user") return Response.json({ login: "viewer", node_id: "U_v" });
++      requests.push(url.pathname);
++      return Response.json([]);
++    });
++    const connect = async (_cwd: string, login: string) => {
++      logins.push(login);
++      return authenticatedAccount(login, api);
++    };
++    process.stdout.write = ((chunk: string, done?: (error?: Error | null) => void) => {
++      written.push(String(chunk));
++      done?.();
++      return true;
++    }) as typeof process.stdout.write;
++    await issuesCommand(["list", "--login", "viewer", "--request", JSON.stringify({ source: "repository" }), "--json"], cwd, connect);
++  } finally {
++    process.stdout.write = write;
++    restore();
++    await rm(cwd, { recursive: true, force: true });
++  }
++  expect(logins).toEqual(["viewer"]);
++  expect(requests).toEqual(["/repos/org/base/issues"]);
++  expect(JSON.parse(written.join(""))).toMatchObject({ viewer: { login: "viewer" }, items: [], nextCursor: null });
++});
+
+--- src/commands/issues.ts
+@@ 2,65 @@
+ import { parseArgs } from "node:util";
+ import {
+   connectIssueAccount,
+   issueComments,
+   issueDetail,
+   issueKey,
+   listIssuePage,
+   readIssueProject,
+   moveIssueProjectItem,
+   type ProjectRequest,
+   type MoveRequest,
+   type IssueRef,
+   type IssueSummary,
+   type IssueViewer,
+   type ListIssueRequest,
+ } from "../integrations/issues/service";
+ 
+ const usage =
+   "keryx issues <viewer|origin|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
+ 
+-export async function issuesCommand(args: string[], cwd = process.cwd()): Promise<void> {
++/** `connect` authenticates the selected GitHub account; tests pass a stand-in that never reads a token. */
++export async function issuesCommand(args: string[], cwd = process.cwd(), connect = connectIssueAccount): Promise<void> {
+   const [action, ...flags] = args;
+   if (!action || action === "help" || action === "--help" || action === "-h") {
+     console.log(usage);
+     return;
+   }
+   if (action === "workspace" || action === "open-session" || action === "prepare-flow") {
+     const { runIssueWorkspaceCommand } = await import("./issue-workspace");
+     return runIssueWorkspaceCommand(action, flags, cwd);
+   }
+   const { values } = parseArgs({
+     args: flags,
+     options: { login: { type: "string" }, request: { type: "string" }, json: { type: "boolean" } },
+   });
+   if (!values.login || !values.request || !values.json || values.request.length > 64000) throw new Error(usage);
+   let request: Record<string, unknown>;
+   try {
+     request = JSON.parse(values.request);
+   } catch {
+     throw new Error(usage);
+   }
+   if (!request || Array.isArray(request) || typeof request !== "object") throw new Error(usage);
+-  const account = await connectIssueAccount(cwd, values.login);
++  const account = await connect(cwd, values.login);
+   let result;
+   switch (action) {
+     case "viewer":
+       result = { viewer: account.viewer };
+       break;
+     case "origin":
+       result = await readIssueOrigin(cwd, account, request);
+       if (result.issue) await attachStages(cwd, account.viewer, [result.issue]);
+       break;
+     case "list": {
+       const page = await listIssuePage(account, request as unknown as ListIssueRequest, cwd);
+       await attachStages(cwd, page.viewer, page.items);
+       result = page;
+       break;
+     }
+     case "project": {
+       const page = await readIssueProject(account, request as ProjectRequest);
+       await attachStages(
+         cwd,
+         page.viewer,
+
+--- src/integrations/issues-board.test.ts
+@@ 241,363 @@
+ });
+ 
+ test("AC13 the repository source needs a project with a GitHub remote", async () => {
+   let requested = 0;
+   const auth = await account(async () => {
+     requested++;
+     return json([]);
+   });
+   await withProject(null, async (cwd) => {
+     await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow(
+       "configuration: This project has no GitHub.com fetch remote.",
+     );
+   });
+   await withProject("https://gitlab.com/org/base.git", async (cwd) => {
+     await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
+   });
+   await expect(listIssuePage(auth, { source: "repository" })).rejects.toThrow("configuration:");
+   expect(requested).toBe(0);
+ });
+ 
++test("AC13 a remote named `..` is refused before any request", async () => {
++  let requested = 0;
++  const auth = await account(async () => {
++    requested++;
++    return json([]);
++  });
++  // The remote parser reads `org/..` from this URL; as a path it would turn /repos/org/../issues into /repos/issues.
++  await withProject("https://github.com/org/...git", async (cwd) => {
++    await expect(listIssuePage(auth, { source: "repository" }, cwd)).rejects.toThrow("configuration:");
++  });
++  expect(requested).toBe(0);
++});
++
++test("AC13 a viewer page refuses a next link outside /issues; a repository page follows GitHub's links in any case", async () => {
++  const viewerAuth = await account(async () =>
++    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/repositories/42/issues?page=2>; rel="next"' } }));
++  await expect(listIssuePage(viewerAuth, { source: "assigned" })).rejects.toThrow("configuration:");
++  const upperAuth = await account(async () =>
++    json([row("a", "I_1")], { headers: { link: '<https://api.github.com/ISSUES?page=2>; rel="next"' } }));
++  await expect(listIssuePage(upperAuth, { source: "assigned" })).rejects.toThrow("configuration:");
++
++  const paths: string[] = [];
++  const auth = await account(async (url) => {
++    paths.push(url.pathname);
++    const n = Number(url.searchParams.get("page") ?? 1);
++    return json([row("base", "I_" + n)], n < 2 ? { headers: { link: '<https://api.github.com/repos/Org/Base/issues?page=2>; rel="next"' } } : {});
++  });
++  await withProject("https://github.com/org/base.git", async (cwd) => {
++    const first = await listIssuePage(auth, { source: "repository" }, cwd);
++    expect(first.nextCursor).not.toBeNull();
++    // The cursor binds the repository without case: the same repository spelled otherwise by its remote accepts it.
++    await withProject("https://github.com/Org/Base.git", async (other) => {
++      const second = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, other);
++      expect(second.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
++    });
++  });
++  expect(paths).toHaveLength(2);
++});
++
++test("AC13 GitHub's 410 for a repository with Issues turned off is a configuration error naming the repository", async () => {
++  const auth = await account(async () => new Response('{"message":"Issues are disabled for this repo"}', { status: 410 }));
++  await withProject("https://github.com/fork-owner/base.git", async (cwd) => {
++    const failure = listIssuePage(auth, { source: "repository" }, cwd);
++    await expect(failure).rejects.toThrow("configuration:");
++    await expect(failure).rejects.toThrow("fork-owner/base");
++  });
++});
++
++test("AC13 a repository page made only of pull requests does not end the load; the search stops after three pages", async () => {
++  const pages: number[] = [];
++  const link = (n: number) => ({ headers: { link: `<https://api.github.com/repositories/42/issues?page=${n}>; rel="next"` } });
++  const pull = (n: number) => ({ ...row("base", "P_" + n), number: 100 + n, pull_request: {} });
++  const auth = await account(async (url) => {
++    const n = Number(url.searchParams.get("page") ?? 1);
++    pages.push(n);
++    return n === 1 ? json([pull(1), pull(2)], link(2)) : n === 2 ? json([row("base", "I_2")], link(3)) : json([row("base", "I_3")]);
++  });
++  await withProject("https://github.com/org/base.git", async (cwd) => {
++    const first = await listIssuePage(auth, { source: "repository" }, cwd);
++    expect(first.items.map((i) => i.ref.nodeId)).toEqual(["I_2"]);
++    expect(pages).toEqual([1, 2]);
++    // The cursor continues after the page that was used, not after the first one.
++    const next = await listIssuePage(auth, { source: "repository", cursor: first.nextCursor }, cwd);
++    expect(next.items.map((i) => i.ref.nodeId)).toEqual(["I_3"]);
++    expect(pages).toEqual([1, 2, 3]);
++  });
++
++  const endless: number[] = [];
++  const onlyPulls = await account(async (url) => {
++    const n = Number(url.searchParams.get("page") ?? 1);
++    endless.push(n);
++    return json([pull(n)], link(n + 1));
++  });
++  await withProject("https://github.com/org/base.git", async (cwd) => {
++    const page = await listIssuePage(onlyPulls, { source: "repository" }, cwd);
++    expect(page.items).toEqual([]);
++    expect(endless).toEqual([1, 2, 3]);
++    const resumed = await listIssuePage(onlyPulls, { source: "repository", cursor: page.nextCursor }, cwd);
++    expect(resumed.items).toEqual([]);
++    expect(endless).toEqual([1, 2, 3, 4, 5, 6]);
++  });
++});
++
+ test("AC3 source links reopen a private session or legacy Flow only after the selected account can read the ticket", async () => {
+   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+   const { tmpdir } = await import("node:os");
+   const { join } = await import("node:path");
+   const { readIssueOrigin } = await import("../session/issues/issue-origin");
+   const { withIssueBinding } = await import("../session/issues/issue-session");
+   const { readSessionFlags } = await import("../session/organize");
+   const { sessionDir } = await import("../session/paths");
+   const root = await mkdtemp(join(tmpdir(), "issue-origin-"));
+   const profile = join(root, "profile");
+   const flowDir = "007-existing-issue";
+   const auth = await account(async (_url, options) => {
+     const variables = JSON.parse(String(options.body)).variables;
+     return json({ data: variables.id
+       ? { node: { ...graphIssue, body: "Authoritative body" } }
+       : { repository: { issue: { ...graphIssue, body: "Authoritative body" } } } });
+   });
+   try {
+     const live = (await issueDetail(auth, ref)).issue;
+     const project = { cwd: root, projectId: "p", cloneId: "c", baseBranch: "main" };
+
+--- src/integrations/issues-board.ts
+@@ 1,38 @@
+ import {
+   isIssueRef,
+   issueKey,
+   type IssueComment,
+   type IssueDetail,
+   type IssuePage,
+   type IssueListSource,
+   type IssueRef,
+   type IssueSummary,
+ } from "./issues-contract";
+ import { reviewRepositories, selectRepository } from "../review/board-github";
+ import {
+   API,
+   connectIssueAccount,
+   cursorScope,
+   denied,
+   invalidInput,
++  issuesDisabled,
+   readCursor,
+   scopedCursor,
+   type IssueAccount,
+ } from "./issues-github";
+ 
+ export interface ListIssueRequest {
+   source: IssueListSource;
+   state?: "open" | "closed" | "all";
+   sort?: "asc" | "desc";
+   updatedSince?: string;
+   labels?: string[];
+   cursor?: string | null;
+ }
+ 
+ interface Repository {
+   id: string;
+   name: string;
+   owner: { login: string };
+ }
+ interface Actor {
+
+--- src/integrations/issues-board.ts
+@@ 141,235 @@
+ function samePage(next: URL, base: URL, repository: boolean): boolean {
+   if (!repository) return next.pathname === base.pathname;
+   return (
+     next.pathname.toLowerCase() === base.pathname.toLowerCase() ||
+     /^\/repositories\/\d+\/issues$/.test(next.pathname)
+   );
+ }
+ 
+ function pageLink(link: string, base: URL, repository: boolean): string | null {
+   const next = /<([^>]+)>;\s*rel="next"/.exec(link)?.[1];
+   if (!next) return null;
+   const url = new URL(next, base);
+   if (url.origin !== API || !samePage(url, base, repository) || url.username || url.password)
+     throw new Error(invalidInput);
+   const params = new URLSearchParams();
+   for (const key of pageKeys) if (url.searchParams.has(key)) params.set(key, url.searchParams.get(key)!);
+   if (!params.size) throw new Error("unavailable: Invalid GitHub pagination link. Refresh and retry.");
+   return params.toString();
+ }
+ 
++/** The most pages one "repository" request reads while its pages hold only pull requests. */
++const REPOSITORY_PAGES = 3;
++
++/** Points `url` at the page a validated continuation names, replacing any earlier page position. */
++function turnPage(url: URL, continuation: string): void {
++  for (const key of pageKeys) url.searchParams.delete(key);
++  for (const [key, value] of new URLSearchParams(continuation)) {
++    if (!pageKeys.includes(key)) throw new Error(invalidInput);
++    url.searchParams.set(key, value);
++  }
++}
++
++/** One REST page, pull requests dropped. GitHub's 410 on a repository names it: Issues are turned off there. */
++async function issuePage(
++  api: IssueAccount["api"],
++  url: URL,
++  repository: string | null,
++): Promise<{ issues: RestIssue[]; link: string }> {
++  let page: { data: RestIssue[]; link: string };
++  try {
++    page = await api.rest<RestIssue[]>(url);
++  } catch (error) {
++    if (repository && error instanceof Error && error.message === issuesDisabled)
++      throw new Error(`configuration: GitHub has Issues turned off for ${repository}. Choose another source, such as Assigned to me.`, { cause: error });
++    throw error;
++  }
++  if (!Array.isArray(page.data)) throw new Error("unavailable: Invalid GitHub issue page.");
++  return { issues: page.data.filter((x) => !x.pull_request), link: page.link };
++}
++
+ /** `cwd` locates the project whose GitHub repository the "repository" source lists. */
+ export async function listIssuePage(
+   { viewer, api }: IssueAccount,
+   request: ListIssueRequest,
+   cwd?: string,
+ ): Promise<IssuePage<IssueSummary>> {
+   validateListRequest(request);
+   const repository = request.source === "repository" ? await projectRepository(cwd) : null;
+   const base = listUrl(request, repository);
+   const labels = [...(request.labels ?? [])].sort();
+   // The repository joins the scope so a cursor cannot be replayed against another project's repository.
+   const scope = repository
+     ? cursorScope(viewer, "issues", base.search, labels, repository.toLowerCase())
+     : cursorScope(viewer, "issues", base.search, labels);
+   const next = readCursor(scope, request.cursor);
+-  if (next)
+-    for (const [key, value] of new URLSearchParams(next)) {
+-      if (!pageKeys.includes(key)) throw new Error(invalidInput);
+-      base.searchParams.set(key, value);
+-    }
+-  const { data, link } = await api.rest<RestIssue[]>(base);
+-  if (!Array.isArray(data)) throw new Error("unavailable: Invalid GitHub issue page.");
+-  const issues = data.filter((x) => !x.pull_request);
++  if (next) turnPage(base, next);
++  let { issues, link } = await issuePage(api, base, repository);
++  // A repository's listing holds pull requests too, dropped after the fetch. A page made only of
++  // them would show an empty board, so look a few pages further within this one request.
++  for (let fetched = 1; repository && !issues.length && fetched < REPOSITORY_PAGES; fetched++) {
++    const following = pageLink(link, base, true);
++    if (!following) break;
++    turnPage(base, following);
++    ({ issues, link } = await issuePage(api, base, repository));
++  }
+   // REST may omit the embedded repository. Hydrate missing identities in one bounded batch.
+   const missing = issues.filter((x) => !x.repository?.node_id);
+   const repositories = new Map<string, Repository>();
+   if (missing.length) {
+     const result = await api.graphql<{ nodes: ({ id: string; repository?: Repository } | null)[] }>(
+       "query($ids:[ID!]!) { nodes(ids:$ids) { id ... on Issue { repository { id name owner { login } } } } }",
+       { ids: missing.map((i) => i.node_id) },
+     );
+     for (const row of result.nodes) if (row?.repository) repositories.set(row.id, row.repository);
+   }
+   const result = new Map<string, IssueSummary>();
+   let incomplete = false;
+   for (const i of issues) {
+     const r = i.repository?.node_id
+       ? { id: i.repository.node_id, name: i.repository.name, owner: i.repository.owner }
+       : repositories.get(i.node_id);
+     if (!r) {
+       incomplete = true;
+       continue;
+     }
+
+--- src/integrations/issues-github.ts
+@@ 1,34 @@
+ import { createHash } from "node:crypto";
+ import { namedGithubEnvironment, validGithubLogin } from "../review/github-cli";
+ import type { IssueViewer } from "./issues-contract";
+ 
+ export const API = "https://api.github.com";
+ export const denied = "access: The issue or project is unavailable to this GitHub account.";
+ const invalidResponse = "unavailable: GitHub returned an unexpected Issues response. Refresh and retry.";
+ export const invalidInput = "configuration: Invalid Issues request.";
++/** GitHub's 410 Gone on a repository's issues: Issues are turned off there (the default on a fork). */
++export const issuesDisabled = "configuration: GitHub has Issues turned off for this repository.";
+ export type FetchIssues = (url: URL, options: RequestInit) => Promise<Response>;
+ 
+ function failure(response: Response, diagnostic: string): Error {
++  if (response.status === 410) return new Error(issuesDisabled);
+   if (
+     response.status === 401 ||
+     response.status === 404 ||
+     /FORBIDDEN|NOT_FOUND|INSUFFICIENT_SCOPES|not accessible|permission|could not resolve/i.test(diagnostic)
+   )
+     return new Error(denied);
+   if (
+     response.status === 429 ||
+     (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0") ||
+     /rate.limit|RATE_LIMITED/i.test(diagnostic)
+   ) {
+     const wait = response.headers.get("retry-after");
+     const reset = Number(response.headers.get("x-ratelimit-reset"));
+     const time = wait && /^\d+$/.test(wait) ? Date.now() + Number(wait) * 1000 : reset * 1000;
+     const retry =
+       Number.isFinite(time) && time > 0 && time < 8.64e15
+         ? " Retry after " + new Date(time).toISOString() + "."
+         : "";
+     return new Error("rate-limit: GitHub request limit reached." + retry);
+   }

@@ -1,0 +1,100 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), round 4, wave 1
+- Scope mode: explicit-hash-range (diff mode), slice-01 read in full
+- Stack detected: fullstack (React Desktop hooks and components, generic-TS keryx backend)
+- Context read beyond the slice, for context only: `git show 055115a20` for src/lib/file-lock.ts, src/session/organize.ts, src/session/issues/issue-session.ts, src/acp/server.ts, src/integrations/issues-board.ts, apps/desktop/src/issues/{IssuesBoard.tsx,useIssueCollection.ts}, apps/desktop/src/review/{PrWorkRow.tsx,ReviewBoard.tsx,usePendingFlowLinks.ts}, apps/desktop/src/session/useAcpSession.ts; src/lib/config-dir.ts writeOwnerOnlyFileAtomic.
+- Test evidence: research-evidence/verify-tests-to-run-1.txt (exit 0; root focused 68/0 across 7 files, Desktop 1070/0 across 96 files). Not run by me (exec_budget 0).
+
+### Summary
+The fix round restructures `withFileLock` into a shared `LockAttempt` with a synchronous and an asynchronous wait over the same lock file. The ACP server now uses the async path. A `createDir:false` option plus an in-section `summary.json` check stop a flags write from recreating a trashed session. The issue-subject backfill is best-effort after the first bind. On the Desktop side, the repository-unavailable classifier moves beside `isAccessError` and narrows to named reasons. Dependency direction is sound: the session domain depends on lib, the server on the session domain, and Desktop on the shared issues contract. One residual of AR-007 remains: Desktop still classifies by matching backend prose that lives in three backend modules, one of them the PR board's, instead of a contract constant or code. It is minor.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. organize.ts -> lib/file-lock, server.ts -> organize (setSessionFlagsAsync), issue-session.ts -> organize (sessionSubjectSettled, backfillSessionSubject); all inward.
+
+### Module Boundary Violations
+[AR-R4-001] minor: Desktop's repository-unavailable classifier matches backend prose instead of a shared contract value (residual of AR-007).
+- File: apps/desktop/src/issues/useIssueCollection.ts (repositoryUnavailable)
+- Problem: `repositoryUnavailable` decides the fallback from three regexes over human-readable sentences. Each is defined in a different backend module: "This project has no GitHub.com fetch remote." in src/review/board-github.ts:45 (the PR board's resolver), "GitHub has Issues turned off for ${repository}" in src/integrations/issues-board.ts:188, and the new exported `unusableRemote` in src/integrations/issues-board.ts:114. The "older keryx" case still matches the `invalidInput` text from src/integrations/issues-github.ts. The fix exported `unusableRemote` as a constant, but Desktop does not import it. Desktop already imports runtime values (issueKey, issueViewerKey) from src/integrations/issues-contract, so a shared constant or a reason code is one import away.
+- Why it matters: trigger: any rewording of one of those sentences, most likely the PR board's message in board-github.ts, which is edited for PR-board reasons. Outcome: the Issues board silently drops the "Show issues assigned to me" fallback and shows Retry for a project with no GitHub.com remote. Nothing goes red. The backend tests pin the backend strings, and IssuesBoard.dom.test.tsx:469-471 repeats the literals by hand, so no test spans the boundary.
+- Fix: give these failures a contract-level reason, for example a `repository_unavailable:` prefix or exported constants in src/integrations/issues-contract.ts that issues-board.ts and board-github.ts throw. Then have `repositoryUnavailable` (and its test fixtures) import them instead of restating the prose.
+
+### Design Pattern Misuse
+None detected. `withFileLockAsync` sits beside the sync form, not on top of lib/fs `withFileLock` (a directory lock). That is a deliberate choice, and its docstring gives the reason: a sync holder in the issue-workspace child must exclude the async server waiter on the same lock file. Read and accepted (law 4).
+
+### Dependency Inversion
+None detected. `FlagsLockTiming` is injected as a defaulted parameter, a plain value seam for tests, with no I/O dependency.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. The React focus handling (PrWorkRow refocus effect, ReviewBoard search focus, IssuesBoard select focus) uses refs and effects inside the owning component; no boundary issue.
+
+### Prior dispositions (slice-01 files, checked against head)
+- FE-R3-001 closed: ReviewBoard refuses a PR absent from the settled list (`if (loading || stale) return;`, then notice plus onFocusHandled); loading and stale were added to the effect deps.
+- FE-R3-002 closed: the PrWorkRow flowSlot refocus runs when the offer disappears and focus is on body; the Link offer now stays while linking, behind aria-disabled. ReviewBoard Dismiss notice focuses `search` (ref exists at ReviewBoard.tsx:139/549). IssuesBoard fallback focuses the source select through focusSource after the remount.
+- AR-007 partial: the impact paths are closed. A stale or malformed cursor no longer triggers the fallback, the dot-remote case gets its own reason (`unusableRemote`) instead of invalidInput, "older" is first-page only, and the classifier moved beside isAccessError. The structural part, a reason of its own instead of prose matching, is not done; it is carried as AR-R4-001.
+- DG-R3-002 closed: issueSessions removed; no reference left in apps/desktop/src.
+- HL3-001 closed: server.ts handleSessionFlags awaits setSessionFlagsAsync, so the wait yields between attempts. The sync path is left only for the issue-workspace CLI callers (issues-launch.ts:116, issue-session.ts), which are not imported by the server.
+- HL3-002 closed: lockOptions sets createDir:false; ENOENT maps to "no session … in this project"; whileStored checks summary.json inside the section. writeOwnerOnlyFileAtomic does no mkdir, so a trash during the section fails the write instead of recreating the directory.
+- PC-008 closed: cli-reference documents `subject`, the answer fields and the "retry" lock refusal; commands/acp.ts help is updated.
+- UX-009 closed: the offer text and aria-label carry `Flow #id · title`.
+- UX-011 closed: the source is stored under `account.source.<cwd>`. Note: a legacy account-wide value is still read as the fallback until a project-level choice is made, and the code comment states this deliberately.
+- UX-012 closed: the offer span no longer carries `.pr-work-link`, so no box and no hover.
+- UX-013 closed: the unavailable branch strips `configuration:`.
+- UX-015 closed: "choose Bundled keryx in Settings → Desktop".
+- DG3-001 closed: bindIssueSubject is fatal only on the first bind. A later open skips it when the subject is settled, and otherwise backfills best-effort inside a try/catch.
+
+Not disposed here (outside this lens and slice, or test-only, covered by waves 2/3): TP-R3-001..009, PC-005, PC-006, PC-007, HL3-003, HL3-004, SC3-001, LY-005, LG-R3-003, UX-010, UX-014, UX-016, TP-R3-008.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-architecture",
+    "status": "DONE",
+    "round": 4,
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "AR-R4-001",
+        "severity": "minor",
+        "reviewer": "review-architecture",
+        "file": "apps/desktop/src/issues/useIssueCollection.ts",
+        "quote": "  if (/has no GitHub\\.com fetch remote|has Issues turned off for|names no usable repository/i.test(reason)) return \"unavailable\";",
+        "problem": "Residual of AR-007. The repository-unavailable classifier matches three human-readable sentences. They are defined in three backend modules: src/review/board-github.ts:45 (the PR board's 'This project has no GitHub.com fetch remote.'), src/integrations/issues-board.ts:188 ('GitHub has Issues turned off for ...') and src/integrations/issues-board.ts:114 (the new exported `unusableRemote`). The 'older' case still matches the invalidInput text of issues-github.ts. The fix exported `unusableRemote`, but Desktop does not import it. Desktop already imports runtime values from src/integrations/issues-contract, so the contract is the natural place for a shared constant or reason code.",
+        "impact": "Trigger: a rewording of any of those sentences, most likely the PR board's message in board-github.ts, which is edited for PR-board reasons. Outcome: the Issues board silently loses the 'Show issues assigned to me' fallback for a project with no GitHub.com remote and shows Retry. No test spans the boundary: backend tests pin the backend strings, and IssuesBoard.dom.test.tsx:469-471 restates the literals by hand.",
+        "suggested_fix": "Define the repository-unavailable reasons once in src/integrations/issues-contract.ts, as exported constants or a `repository_unavailable:` prefix. Throw them from issues-board.ts and board-github.ts, and import them in repositoryUnavailable and in the IssuesBoard test fixtures.",
+        "evidence": "apps/desktop/src/issues/useIssueCollection.ts repositoryUnavailable (055115a20); keryx ctx rg 'has no GitHub.com fetch remote|has Issues turned off for|unusableRemote|names no usable repository' src apps/desktop/src: definitions at src/review/board-github.ts:45, src/integrations/issues-board.ts:114 and :188, src/integrations/issues-github.ts:10 (issuesDisabled, unused by the Desktop regex); Desktop imports issueKey/issueViewerKey from src/integrations/issues-contract (IssuesBoard.tsx:2, useIssueCollection.ts:2).",
+        "confidence": "medium",
+        "dedupe_key": "desktop-issues-fallback-decodes-configuration-category"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "AR-007", "disposition": "partial"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "UX-013", "disposition": "closed"},
+      {"id": "UX-015", "disposition": "closed"},
+      {"id": "DG3-001", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the fix range and its callers were enumerated with keryx ctx rg; the payload's layers block was used as the lead), wiki_used: no (not-relevant: the intent is stated in code comments and the commit), ctx_used: yes (keryx ctx rg), raw_rg_used: no. Raw `git show` was run with a keryx:raw marker to read the exact fix hunks. metaproject: index read.

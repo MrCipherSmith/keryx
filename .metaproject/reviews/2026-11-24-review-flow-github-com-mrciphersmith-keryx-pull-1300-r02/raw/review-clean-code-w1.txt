@@ -1,0 +1,130 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1` | Parent ref: `d7b0f7058` | Head: `4cb6c43ef` (code commit 055115a20)
+- Scope mode: `explicit-hash-range` (round 4, wave 1) | Slice: slice-01 (read in full; 9 files). Full hunks of src/lib/file-lock.ts, src/session/organize.ts and src/session/issues/issue-session.ts read from the fix range for context.
+
+### Summary
+The round-3 fixes are clean in shape: the lock wait was factored into one `LockAttempt` shared by the sync and the new async wait instead of copying the loop, the flags-lock timing is injectable, and the issue-session backfill is best-effort on later opens with a stated reason. Three minor maintenance findings: the focus effect in ReviewBoard now repeats its settle block three times, the test-only `timing` knob was appended as a sixth/fourth positional parameter (tests pass `undefined` to reach it), and the `withFileLock` doc still promises "null rather than a throw" although `createDir: false` now throws.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0
+
+### Findings
+
+#### Functions
+[CC4-002] minor — src/session/organize.ts `setSessionFlagsAsync` / `setSessionFlags` / `updateSessionFlagsAt` / `updateSessionFlagsAtAsync`: the test-only `timing` was added as a trailing positional after the optional `now` (and `dataDir`), so setSessionFlags(Async) take 6 positionals and the update pair 4, and test call sites read `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)` / `updateSessionFlagsAt(trashed, { pinned: true }, undefined, quick)`. Fix: fold the injection knobs into one trailing options object `{ now?, timing? }` on the four functions.
+
+#### Comments
+[CC4-003] minor — src/lib/file-lock.ts: `withFileLock`'s doc still says the function "Returns `null` when the lock could not be taken ... rather than a throw", while the new `createDir: false` option (documented on `FileLockOptions`) makes `step()` throw ENOENT, which `withFlagsLock(Async)` catches. `prepare()`'s doc says "Whether the lock's directory is there" but with `createDir: false` it returns `true` without checking. Fix: add the ENOENT throw for `createDir: false` to the `withFileLock` doc (withFileLockAsync points at it), and say in `prepare()` that it creates the directory only when asked.
+
+#### Error Handling
+No error-handling issues found. The silent `catch` in `bindIssueSubject` is a fallback with a comment giving the reason (error-handling.mdc: not a finding); `goneError` replacing ENOENT is a plain contextual error inside the module.
+
+#### DRY
+[CC4-001] minor — apps/desktop/src/review/ReviewBoard.tsx focus effect: the round-3 fix adds a third copy of the settle sequence `focused.current = focus.nonce; setFocusNotice(...); onFocusHandled?.(focus.nonce);` (lines ~504-506, ~512-514, ~517-520). Before the fix there were two; the threshold (3 copies) is now crossed. Each new refusal branch must remember all three steps; missing `onFocusHandled` leaves the App's request armed (the FE-R3-001 shape). Fix: a local `settle(notice: string)` that marks the nonce, sets the notice and calls `onFocusHandled`, used by all three branches.
+
+withFlagsLock / withFlagsLockAsync repeat their catch-and-map block twice: 2 copies, under threshold, not reported.
+
+#### SOLID
+No SOLID issues found. `LockAttempt` holds one responsibility (one acquisition's rules) and both waits share it. `bindIssueSubject(dir, ref, firstBind)` takes a boolean that selects fail-loud vs best-effort, but its one call site passes a named variable, not a literal (under the threshold's stated condition).
+
+### Clean Areas
+IssuesBoard source focus effect, model.ts (issueSessions removed, no remaining caller), PrWorkRow FlowOffer, review.css offer class, cli-reference.md session_flags text, issue-session.ts best-effort backfill.
+
+### Prior dispositions (slice-01 only)
+- FE-R3-001 closed — the card-absent branch now refuses with a notice and onFocusHandled once the list is settled (not loading, not stale).
+- FE-R3-002 closed — Link/Dismiss set refocusFlow and the slot button is focused; the notice Dismiss focuses search; the Issues fallback focuses the source select.
+- DG-R3-002 closed — issueSessions deleted; no reference left in apps/desktop/src.
+- HL3-001 closed — withFileLockAsync / setSessionFlagsAsync; src/acp/server.ts:2965 awaits setSessionFlagsAsync; the sync form stays for the issue-workspace child.
+- HL3-002 closed — createDir:false plus whileStored (summary.json check) inside the critical section.
+- PC-008 closed — cli-reference lists subject?, its shape, null unbinds, the answer fields and the "retry" lock refusal.
+- DG3-001 closed — later opens skip when settled and swallow a failed backfill; only the first bind fails loudly.
+- UX-009 closed — the offer text and the Link/Dismiss aria-labels carry the flow title.
+- UX-011 closed — the source is stored per account and project (sourceKey includes cwd).
+- UX-012 closed — the offer is its own `.pr-work-offer` class, no button box or hover rule.
+- HL3-004 open (deferred by the author) — FLAGS_LOCK_TIMING.staleMs is still 2_000.
+- SC3-001 open (deferred by the author) — stale takeover in LockAttempt.step() keeps the stat-then-rm shape.
+Not given: TP-R3-007 and TP-R3-009 (their claim is about tests, slice-03); the remaining prior findings are outside slice-01.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-clean-code",
+    "summary": "Round-3 fixes in slice-01 are structurally clean (shared LockAttempt, injectable timing, best-effort backfill with a stated reason). Three minor findings: a third copy of the focus settle block in ReviewBoard, the test-only timing knob added as a trailing positional parameter, and withFileLock's doc not covering the new createDir:false throw.",
+    "slices": ["slice-01"],
+    "findings": [
+      {
+        "id": "CC4-001",
+        "severity": "minor",
+        "reviewer": "review-clean-code",
+        "file": "apps/desktop/src/review/ReviewBoard.tsx",
+        "quote": "      focused.current = focus.nonce;\n      setFocusNotice(`#${focus.number} is not in the current list of ${snapshot.repo}: its state may be filtered out.`);\n      onFocusHandled?.(focus.nonce);",
+        "problem": "Clean Code — DRY. The FE-R3-001 fix adds a third copy of the focus-effect settle sequence (mark the nonce, set the notice, call onFocusHandled). Copies: the repository-not-shown branch, the new card-absent branch, and the success path. Before the fix there were two; the change crosses the 3-copy threshold.",
+        "impact": "Each future refusal branch has to repeat all three steps; dropping onFocusHandled leaves the App's focus request armed, which is the outcome FE-R3-001 and LG-009 reported.",
+        "suggested_fix": "Add a local `const settle = (notice: string) => { focused.current = focus.nonce; setFocusNotice(notice); onFocusHandled?.(focus.nonce); };` inside the effect and call it from the three branches (the success branch calls settle(\"\") then setSelected).",
+        "evidence": "ReviewBoard.tsx:504-506, :512-514, :517-520 at 4cb6c43ef; slice-01 hunk @@ 502,518 @@ adds the third copy.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": ["apps/desktop/src/review/ReviewBoard.tsx:504", "apps/desktop/src/review/ReviewBoard.tsx:512", "apps/desktop/src/review/ReviewBoard.tsx:517"],
+          "enumeration_method": "Read the single useEffect that consumes `focus` (ReviewBoard.tsx:496-521); every branch that writes focused.current."
+        },
+        "dedupe_key": "review-focus-settle-duplicated"
+      },
+      {
+        "id": "CC4-002",
+        "severity": "minor",
+        "reviewer": "review-clean-code",
+        "file": "src/session/organize.ts",
+        "quote": "export async function setSessionFlagsAsync(\n  cwd: string,\n  sessionId: string,\n  change: SessionFlagsChange,\n  dataDir?: string,\n  now: () => Date = () => new Date(),\n  timing: FlagsLockTiming = FLAGS_LOCK_TIMING,\n): Promise<SessionFlags> {",
+        "problem": "Clean Code — function design (Positional parameters, 4 or more, no options object). The fix appends the test-only `timing` after the optional `now` (and `dataDir`) on setSessionFlags and the new setSessionFlagsAsync (6 positionals) and on updateSessionFlagsAt and the new updateSessionFlagsAtAsync (4). The parameters are not a natural ordered set: two optional injection knobs follow each other.",
+        "impact": "Callers that need the timing must pass placeholders: organize.test.ts:209 `setSessionFlags(cwd, id, { pinned: true }, dataDir, undefined, held)`, :222, :255 and :262 `updateSessionFlagsAt(trashed, { pinned: true }, undefined, quick)`. The next knob extends the chain again.",
+        "suggested_fix": "Replace the trailing `now` and `timing` with one options object, e.g. `opts: { now?: () => Date; timing?: FlagsLockTiming } = {}`, on the four functions; production callers (server.ts:2965, issues-launch.ts:116) pass nothing.",
+        "evidence": "organize.ts:221-237, :276-302 at 4cb6c43ef; organize.test.ts:209, :222, :255, :262, :300.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "class_scope": {
+          "sites": ["src/session/organize.ts:221", "src/session/organize.ts:231", "src/session/organize.ts:276", "src/session/organize.ts:292"],
+          "enumeration_method": "keryx ctx rg 'FLAGS_LOCK_TIMING' src (non-test): every function that takes `timing` positionally; backfillSessionSubject (3 params) is under the threshold."
+        },
+        "dedupe_key": "flags-timing-positional"
+      },
+      {
+        "id": "CC4-003",
+        "severity": "minor",
+        "reviewer": "review-clean-code",
+        "file": "src/lib/file-lock.ts",
+        "quote": " * Returns `null` when the lock could not be taken, which callers surface as a\n * write failure rather than a throw.",
+        "problem": "Clean Code — comments (documentation drift). The new `createDir: false` option makes LockAttempt.step() rethrow ENOENT out of withFileLock/withFileLockAsync (documented on FileLockOptions.createDir), but withFileLock's own contract still says a lock that cannot be taken yields null rather than a throw, and withFileLockAsync defers to that doc. Separately, `prepare()`'s doc 'Whether the lock's directory is there' is false for createDir:false, where it returns true without looking.",
+        "impact": "A new caller reading withFileLock's contract handles only null and gets an uncaught ENOENT when it passes createDir:false; organize.ts had to add its own isMissing catch to know about it.",
+        "suggested_fix": "Add to the withFileLock doc: 'With `createDir: false`, a missing directory throws its ENOENT instead.' Reword prepare(): 'Creates the lock's directory unless `createDir` is false; false when it cannot be made.'",
+        "evidence": "file-lock.ts withFileLock doc block and LockAttempt.prepare() doc at 4cb6c43ef versus FileLockOptions.createDir doc and step()'s `if (this.options.createDir === false && ... === \"ENOENT\") throw error;`.",
+        "confidence": "high",
+        "blocking_merge": false,
+        "dedupe_key": "file-lock-doc-createdir-throw"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "DG3-001", "disposition": "closed"},
+      {"id": "UX-009", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"},
+      {"id": "HL3-004", "disposition": "open"},
+      {"id": "SC3-001", "disposition": "open"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: fixed slice and named files supplied by the payload); wiki_used: no (not-relevant: maintainability lens on supplied hunks); ctx_used: yes (keryx ctx rg for callers, siblings and literals); raw_rg_used: no. One raw `git diff` of the fix range for three backend files, marked keryx:raw, to quote hunks verbatim.

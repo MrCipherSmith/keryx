@@ -6,9 +6,13 @@
 .review-active-filters > span { background: var(--bg-sunken); border-radius: var(--r-sm); padding: 3px 6px; overflow-wrap: anywhere; }
 .review-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-5); color: var(--fg-muted); }
 .review-lanes .lane { flex: 1 0 230px; }
-.review-lane-attention { background: var(--warn); }
-.review-lane-review { background: var(--accent); }
-.review-lane-done { background: var(--ok); }
+.review-lane-waiting, .review-lane-requested { background: var(--info); }
+.review-lane-changes { background: var(--warn); }
+.review-lane-approved, .review-lane-mine { background: var(--ok); }
+.review-lane-merged { background: var(--accent); }
+.review-quick-filters { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.review-context [aria-pressed="true"] { color: var(--accent-text); background: var(--bg-selected); border-color: var(--accent-text); }
+.review-grouping { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .review-card { display: grid; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; }
 .review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }
@@ -17,7 +21,25 @@
 .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
 .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
 .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
-.review-note { display: block; color: var(--warn); font-size: var(--fs-xs); font-weight: 500; overflow-wrap: anywhere; }
+.review-board .card-actions { flex-wrap: wrap; }
+.review-board .card-actions .btn { gap: 4px; white-space: nowrap; }
+/* The Keryx work row: three slots (review, Flow, session) of one fixed height, filled or empty; text truncates. */
+.pr-work-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-1); height: 24px; overflow: hidden; align-items: stretch; font-size: var(--fs-xs); }
+.pr-work-slot { display: flex; min-width: 0; height: 24px; overflow: hidden; }
+.pr-work-link, .pr-work-more { height: 24px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--accent-text); font: inherit; cursor: pointer; white-space: nowrap; }
+.pr-work-link { flex: 1 1 auto; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+.pr-work-link.is-empty { color: var(--fg-muted); background: transparent; border-style: dashed; }
+.pr-work-more { flex: none; padding: 0 4px; margin-inline-start: 2px; color: var(--fg-muted); background: transparent; }
+.pr-work-link:hover:not(:disabled):not([aria-disabled="true"]), .pr-work-more:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--bg-hover); color: var(--fg); }
+/* aria-disabled (a Flow offer's buttons while Link runs) keeps focus but looks and acts like disabled. */
+.pr-work-link:disabled, .pr-work-more:disabled, .pr-work-link[aria-disabled="true"], .pr-work-more[aria-disabled="true"] { cursor: default; opacity: 0.55; }
+/* A review waiting on the viewer (an answer, a publication decision): the warn tone; the slot text names which. */
+.pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
+/* A Flow offer after Create Flow: Link is a .pr-work-link and carries the text ("Link Flow #<id> · <title>",
+   "Linking…", "Retry link"), truncating in a narrow slot; Dismiss is a 24px icon that keeps its size. */
+.pr-work-more.pr-work-icon { width: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* The row clips at its fixed height, so the focus ring is drawn inside the buttons instead of around them. */
+.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
 .review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
 .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
@@ -25,11 +47,11 @@
 .review-ci.ci-passed { color: var(--ok); }
 .review-ci.ci-failed { color: var(--danger); }
 .review-ci.ci-pending { color: var(--warn); }
-.review-table { min-width: 780px; }
+.review-table { min-width: 1000px; }
 .review-table th:first-child { width: 30%; }
-.review-table th:last-child { width: calc(4 * 28px + 3 * var(--sp-1) + 2 * var(--sp-3)); }
+.review-table th:last-child { width: 11rem; }
+.review-table th:nth-child(6) { width: 16rem; }
 .review-table th:nth-child(4) { width: 18%; }
-.review-table .review-progress-caption { min-width: 0; white-space: normal; }
 .review-table tbody tr:hover { background: transparent; }
 .review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
 .review-list-link:hover { text-decoration-thickness: 2px; }
@@ -103,3 +125,4 @@
 .review-board .flows-toolbar .review-hidden-attention { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--warn); border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
 .review-board .flows-toolbar .review-hidden-attention:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
 .review-board .flows-toolbar .filter-count { font-variant-numeric: tabular-nums; }
+.session-subject-links { display: inline-flex; align-items: center; flex: none; gap: var(--sp-2); font-size: var(--fs-sm); white-space: nowrap; }

@@ -1,0 +1,77 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 3, wave 3, slice-03 (fix range 88e3faba9..d7b0f7058), read in full (569 lines: src/session/organize.ts, src/session/issues/issue-session.ts and their tests).
+One new minor finding (PC-008): the ACP reference for `_keryx/session_flags` still omits `subject` and the new lock refusal. All other PR-body and commit claims about the flags lock, the backfill and the unlink marker match the code and tests. PC-005, PC-006 and PC-007 come from waves 1 and 2 and are not re-filed here. PC-006 already covers the missing LG-014 and LG-016 entries in Known gaps.
+
+## Prior dispositions (checked against the code at d7b0f7058)
+
+- HW2-001: closed. Only two code paths write flags.json, and both run under `withFlagsLock`, so the read-modify-write is now serialized. Path 1: `updateSessionFlagsAt` -> `withFlagsLock(dir, () => applyFlagsChange(...))`. Path 2: `backfillSessionSubject` -> `withFlagsLock(dir, () => { readStoredFlags ... writeFlags ... })`. Enumeration: `keryx ctx rg "writeFlags\(|withFlagsLock\(|FLAGS_FILE" src` finds only organize.ts:126 (the write), :140 (the lock), :159 and :193 (inside the lock). `setSessionFlags` (the ACP `_keryx/session_flags` handler, src/acp/server.ts `handleSessionFlags`) goes through `updateSessionFlagsAt`. Two tests cover the lock: "a flags change waits for another writer's lock and takes over an abandoned one" and "two processes changing different flags of one session lose neither change".
+- LG-012: closed (confirmed in wave 1). DG-010: closed. `bindIssueSubject(dir, issue.ref)` moved out of the `launch.stage === "registered"` branch and now runs on every `withIssueBinding`, after the `existsSync(dir)` check. The test "a session bound before subjects existed gets its subject on the next open; an unlink still wins" covers it.
+- PC-003: closed (confirmed in wave 1). The issue-session.ts doc comment now says "Written when the session is bound, and on a later open when the session has none". The Enterprise and per-account limits match the body's Known gaps.
+- TP-R2-006: closed. Fixtures `org/..`, `org/.` and `org/re po` now use a matching url, so only REPO_REF can refuse them.
+- TP-R2-007: closed. The test "a subject's repo and url agree without case, and fields the store does not know are dropped" pins S09 and S17.
+- LG-014: open (info, deferred; PC-006 already notes it is missing from Known gaps). This range adds one consequence. A keryx from before this PR writes flags.json with only `{archivedAt, pinnedAt, flow}` (b147408a8:src/session/organize.ts `writeFlags`). So when that older keryx archives, pins or links a flow on a session, it drops the new `subjectUnlinked` marker along with any `subject`. The next Issues open then backfills the subject the person had removed. The body's owner choice "Subject backfill can re-link once a session unlinked before this version" names only the case where the unlink itself came from an older keryx. The mixed-version rewrite reaches the same re-link. Not filed as new: it is the LG-014 shape. The record should note it when LG-014 is decided.
+
+## Checklist form (the PR body has no checkboxes; each claim slice-03 can settle is a row)
+
+| Claim (quoted) | State | What the code/tests show | Result |
+|---|---|---|---|
+| "`subject` ... in the session's `flags.json`, written through `_keryx/session_flags` under a per-session `flags.json.lock`" | claim | organize.ts `withFlagsLock`: `withFileLock(path.join(dir, \`${FLAGS_FILE}.lock\`), ...)`. Both write paths take it (enumeration above). server.ts `handleSessionFlags` -> `setSessionFlags` -> `updateSessionFlagsAt` | holds. User doc gap: PC-008 |
+| "Issue sessions get `subject` from `withIssueBinding`; sessions an older keryx bound without one are backfilled on the next open unless the person unlinked it." | claim | issue-session.ts: `bindIssueSubject(dir, issue.ref);` now runs after `if (!existsSync(dir))` on every bind. `backfillSessionSubject` returns false `if (current.flags.subject !== undefined \|\| current.subjectUnlinked)`. `applyFlagsChange` sets the marker on `subject: null` and clears it on a new subject. Tests: "an unlinked subject is not backfilled; a session that never had one is", and the issue-session test above | holds. "next open" means the next Issues open through `withIssueBinding`, as implementation-plan.md:35 says ("при следующем открытии через Issues"). An archived session is refused before the backfill (`readSessionFlags(dir).archivedAt` throws earlier), which matches "unless" in spirit |
+| "A flags write waits up to 3 s for the lock, then fails with "retry"." | owner choice | `FLAGS_LOCK_TIMEOUT_MS = 3_000`; `if (held === null) throw new Error(\`... locked by another keryx process; retry\`)`. Over ACP, `refuseStore` passes the message through as `invalidRequest.reason` | holds. `FLAGS_LOCK_STALE_MS = 2_000` means a live holder's lock is broken after 2 s. So in practice a write waits at most about 2 s plus the 3 s cap, and only an unremovable lock reaches "retry". The claim is an upper bound and stays true |
+| "Subject backfill can re-link once a session unlinked before this version (no unlink marker then)." | owner choice | `readStoredFlags`: `subjectUnlinked: subject === undefined && raw["subjectUnlinked"] === true`. A pre-PR unlink leaves no marker, so `backfillSessionSubject` writes | holds. The mixed-version rewrite also re-links (LG-014 note above) |
+| "`subject` names no GitHub account, so issue sessions bound under different accounts count together. GitHub Enterprise issues get no `subject`." | known gap | `SessionSubject` has no account field. `SUBJECT_URL = /^https:\/\/github\.com\/.../` refuses Enterprise. The doc comment says the same. Test "an issue outside github.com binds without a subject" expects `{ hasIssue: true }` | holds |
+| Commit 80ef58bd5: "Session flags are written under a per-session lock, and issue sessions bound earlier get their subject on the next open unless it was unlinked." | commit | same evidence as rows 1-2 | holds |
+| Commit c4e8e3e24: "the round 2 test gaps are pinned" | commit | slice-03 part: TP-R2-006/007 fixtures and tests are present | holds for slice-03. I could not check that the mutants are red (PC-007) |
+| The doc comment "The flags lock is taken inside the binding lock, never the reverse" | code claim | `withIssueBinding` takes `withFileLock(file + ".lock", async ...)` (lib/fs) and calls `backfillSessionSubject` -> `withFlagsLock` inside it. `keryx ctx rg "withFlagsLock\("` shows no caller that takes the binding lock while it holds the flags lock | holds |
+
+Documentation outside the diff. `keryx ctx rg "flags\.json|subjectUnlinked|updateSessionFlagsAt|backfillSessionSubject" src apps docs README.md` and `keryx ctx rg "session_flags" src docs` find:
+- docs/docs/desktop-app.md:365 and :419: pins/archives and flow links are "stored by keryx next to the session (`flags.json`)". Still accurate.
+- implementation-plan.md:35: matches the code (lock, 3 s, "retry", the marker, one-time re-link of a pre-version unlink).
+- docs/docs/cli-reference.md:476-479: stale. Filed as PC-008.
+- src/commands/acp.ts:616 help text, "_keryx/session_flags archives or pins a stored session". It already omitted `flow` before this PR. It is recorded as a sibling site under PC-008.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "slices": ["slice-03"],
+    "summary": "Fix range 88e3faba9..d7b0f7058, slice-03 read in full. The PR body's and commits' claims about the per-session flags.json.lock, the 3 s wait with 'retry', the subject backfill on the next Issues open, the unlink marker, the one-time re-link of a pre-version unlink and the account/Enterprise gaps match organize.ts, issue-session.ts and their tests. One minor: the ACP reference for _keryx/session_flags (cli-reference.md) still lists only archived/pinned/flow. It names neither the subject parameter and answer that this PR added nor the lock refusal that this range added. HW2-001, DG-010 and TP-R2-006/007 closed. LG-014 stays open: an older keryx rewriting flags.json also drops the new unlink marker.",
+    "findings": [
+      {
+        "id": "PC-008",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "docs/docs/cli-reference.md",
+        "quote": "The request `_keryx/session_flags {sessionId, cwd?, archived?,\n  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package\n  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and\n  answers `{archivedAt?, pinnedAt?, flow?}`;",
+        "problem": "PR body: 'subject ... written through `_keryx/session_flags` under a per-session `flags.json.lock`'. The handler (src/acp/server.ts handleSessionFlags: 'link it to a flow and a GitHub subject') accepts `subject` (an object, or null to unlink) and answers the stored flags including `subject`. Since 80ef58bd5 it also refuses with '... are locked by another keryx process; retry' after 3 s. The ACP reference was last edited at base b147408a8 and was not touched by this PR. It still lists only archived/pinned/flow, and the answer only archivedAt/pinnedAt/flow. The body's 'User docs' line names cli-reference.md for `issues` only. Sibling site: src/commands/acp.ts:616 help text ('_keryx/session_flags archives or pins a stored session').",
+        "impact": "A client author who reads the ACP reference (the same document the PR updated for `issues`) does not learn that a session can be bound to a PR or issue through this request, what a valid subject is, or that a write can be refused with a retryable lock error. The code is correct. The cost is a reader who trusts the reference.",
+        "suggested_fix": "Extend the cli-reference line to `{sessionId, cwd?, archived?, pinned?, flow?, subject?}`. Describe the subject shape ({kind, repo, number, url, repositoryId?}, github.com only, `subject: null` unlinks), state the answer as the stored flags including `hasIssue` and `subject`, and add the lock refusal ('retry' after 3 s). Optionally update the acp.ts help line. Or name the omission in the PR body.",
+        "evidence": "git diff b147408a8..d7b0f7058 -- docs/docs/cli-reference.md touches only the `issues` section (lines 5175-5181). git show b147408a8:docs/docs/cli-reference.md has the identical `_keryx/session_flags {sessionId, cwd?, archived?, pinned?, flow?}` text. `subject` entered the handler in 5b7b8be56 (this PR). A keryx ctx rg over both earlier review packages for this doc line finds no prior finding.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": ["docs/docs/cli-reference.md:476", "src/commands/acp.ts:616"],
+          "enumeration_method": "keryx ctx rg \"session_flags\" src docs (non-test): server.ts and profile.ts are code, desktop-app.md:369 only names the method, implementation-plan.md:35 already describes subject and the lock; the two listed sites describe the request's parameters or effect and omit subject"
+        }
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "HW2-001", "disposition": "closed"},
+      {"id": "LG-012", "disposition": "closed"},
+      {"id": "DG-010", "disposition": "closed"},
+      {"id": "PC-003", "disposition": "closed"},
+      {"id": "TP-R2-006", "disposition": "closed"},
+      {"id": "TP-R2-007", "disposition": "closed"},
+      {"id": "LG-014", "disposition": "open", "note": "Deferred info. An older keryx's writeFlags ({archivedAt, pinnedAt, flow}) now also drops the subjectUnlinked marker, so a mixed-version archive/pin/flow change re-enables the backfill of an unlinked subject. Missing from Known gaps is already PC-006."}
+    ],
+    "follow_ups": [
+      "PC-008: document subject and the lock refusal on _keryx/session_flags in cli-reference.md (and the acp.ts help line).",
+      "LG-014: when deciding it, record that an older keryx's flags write also drops the unlink marker."
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the flags writers and doc sites were enumerated by text search over src and docs). wiki_used: no (not-relevant: the claims were checked against code, tests, implementation-plan.md and the commits). ctx_used: yes (keryx ctx rg/read for writers, docs, prior packages and the journal). raw_rg_used: no. Raw `git show`/`sed` was used for short exact ranges. No tests or mutants were run (exec budget 0).

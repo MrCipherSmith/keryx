@@ -1,0 +1,66 @@
+STATUS: DONE
+
+## Performance Review (round 3, wave 3, fix range)
+
+### Scope
+- Branch `feat/desktop-review-v2-stage1`, range 88e3faba9a1732f45a4ff7200588832e8b83f121..d7b0f7058, mode explicit-hash-range (diff mode).
+- slice-03 read in full (569 lines): src/session/issues/issue-session.ts, src/session/issues/issue-session.test.ts, src/session/organize.ts, src/session/organize.test.ts.
+- src/acp/server.ts is not in slice-03 and is unchanged in the range (`git diff --stat` of the range lists only the four src/session files). Its caller `handleSessionFlags → setSessionFlags` (server.ts:2964) was read only as the hot-path context for the flags lock.
+- Context read at head (unchanged in range): src/lib/file-lock.ts (`withFileLock`, `sleepSync(15)` retry, age-based stale check via `statSync(...).mtimeMs`). Writers enumerated with `keryx ctx rg -n 'updateSessionFlagsAt|setSessionFlags|backfillSessionSubject' src --glob '!*.test.ts'` (10 matches, 4 files: server.ts:2964, issues-launch.ts:116, issue-session.ts:56, organize.ts). `withIssueBinding(` has one non-test caller, issues-launch.ts:99 (the issue-workspace child).
+- Not re-filed: PF-R3-001 (wave 1). Already filed by highload: HL3-001..004.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0 (new)
+
+### Findings
+None new.
+
+### PF-R3-001 checked against the slice-03 code
+- Confirmed as filed. `withFlagsLock` calls the synchronous `withFileLock` from `../lib/file-lock` with `timeoutMs: 3_000` and `staleMs: 2_000`. On contention the loop retries with `sleepSync(15)` (Bun.sleepSync). `updateSessionFlagsAt` and `backfillSessionSubject` both go through it. On the ACP path (`_keryx/session_flags`, server.ts:2964 → setSessionFlags → updateSessionFlagsAt), a wait blocks the event loop of that window's keryx process.
+- One correction to the wave-1 wording: a 2 s stall does not need a holder that dies inside the section. Any lock file younger than 2 s that nobody removes is enough, because staleness is judged by mtime age only. The new test "a flags change waits for another writer's lock and takes over an abandoned one" shows this: a fresh foreign lock makes `setSessionFlags` wait at least 1500 ms, about 2 s in practice. The rating stays info. Leaving such a file still needs a crash or a foreign writer inside a sub-millisecond section, and no named input reaches it at a stated frequency.
+- Same defect as HL3-001 (highload, minor: the lock wait freezes the whole ACP server). One defect across lenses (review.mdc), so dedupe PF-R3-001 into HL3-001. HL3-004 (age-only stale recovery) is the mechanism behind the correction above and is owned by highload.
+
+### Cost checks on slice-03 production code (no finding)
+- **Backfill on every issue open** (issue-session.ts): `bindIssueSubject` moved out of the `registered` branch, so every `withIssueBinding` call now runs `backfillSessionSubject`. That is one uncontended flags lock (mkdir, open `wx`, nonce write, close, unlink), one flags read, and a write only when the subject is missing and not unlinked. When a subject is already present it returns false with no write. It runs once per user-triggered issue open in the issue-workspace CLI child, never per render or per keystroke. The cost is negligible.
+- **Nested locks** (issue-session.ts): the sync flags lock is taken inside the async issue-binding lock, and the comment documents that order. A flags-lock wait of up to 3 s would block only the issue-workspace child, which is a CLI process with no other work, so it is not interactive-path blocking. A timeout throws out of `withIssueBinding`. That is a correctness or degradation concern, not a cost one, and it belongs to those lenses.
+- **readStoredFlags / writeFlags** (organize.ts): one extra boolean field read and written. `readSessionFlags` stays lock-free, so the cost of listing sessions does not change.
+- **parseSessionSubject in backfillSessionSubject**: one validation before the lock, plus the same regexes `applyFlagsChange` already runs. The regexes are module constants, not compiled per call.
+
+### Test code (not a hot path)
+- organize.test.ts "waits for another writer's lock": on purpose, it waits out the 2 s stale window once per run.
+- organize.test.ts "two processes … lose neither change": spawns two bun children. Each child busy-waits up to about 1.5 s for a common start time and then makes 150 contended writes. The test has a 30 s timeout. This is test-only CPU and wall time. It adds a few seconds to `bun test src/session/organize.test.ts`, which is acceptable for a lost-update regression guard.
+
+### Clean Areas
+- CLI/TUI hot paths: nothing per keystroke, per frame or per file walk. Command startup is unchanged: `file-lock` is a small module already imported elsewhere.
+- N+1 / indexes / pagination: n/a (file store, no DB, no listing change).
+- React re-renders, bundle imports: n/a (backend slice).
+- Memory: no new collection. The lock file is removed in `finally` (nonce-checked).
+- Sync blocking: only PF-R3-001 / HL3-001, already filed.
+
+### Prior dispositions (performance-relevant, touched by slice-03)
+- HW2-001 closed (performance lens): every non-test writer of flags.json (updateSessionFlagsAt, which setSessionFlags uses, and backfillSessionSubject) holds `flags.json.lock` for the read-modify-write. The two-process test guards against lost updates. The cost of the lock is PF-R3-001 / HL3-001 (info / minor).
+- DG-010: the backfill now runs on every open. Its cost is checked above (negligible). Correctness is owned by review-degradation and is not disposed here.
+- LG-014 (deferred): an older keryx still rewrites flags.json without `subject` or `subjectUnlinked`. Not a cost issue and owned by review-logic. Not disposed here.
+- TP-R2-007: testing lens. Not disposed here. Observed only: the new test covers case-insensitive repo/url matching and dropping extra fields.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-performance",
+    "slices": ["slice-03"],
+    "summary": "Round-3 fix range, slice-03 (session flags lock, subject backfill, issue binding): no new performance finding. Backfill on every issue open adds one uncontended lock and read per user action in the issue-workspace child. PF-R3-001 is confirmed against the code, with one correction: a fresh lock of any origin, not only a crashed holder, causes the ~2 s wait. It is the same defect as HL3-001 and should dedupe into it. HW2-001 is closed for this lens.",
+    "findings": [],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+    "prior_dispositions": [
+      { "id": "HW2-001", "disposition": "closed" }
+    ],
+    "follow_ups": [
+      "Dedupe PF-R3-001 (performance, info) into HL3-001 (highload, minor): both are the synchronous flags-lock wait on the ACP server thread. Correction to PF-R3-001: any lock file younger than FLAGS_LOCK_STALE_MS causes the ~2 s wait (mtime-only staleness, see HL3-004), not only a holder killed inside the section.",
+      "Prior findings touched by slice-03 and not disposed by this lens (owned by degradation, logic and testing): DG-010, LG-014, TP-R2-007."
+    ]
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: a bounded slice review; the payload's layers block lists affected files, and writers were enumerated with ctx rg), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx read/rg), raw_rg_used: no. The metaproject index was read. Not verified: no timings were run (exec_budget_s 0). The costs are reasoned from the code and from the waits the tests assert.

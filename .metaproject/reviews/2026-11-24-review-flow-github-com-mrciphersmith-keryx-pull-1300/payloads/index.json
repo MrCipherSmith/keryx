@@ -1,0 +1,515 @@
+{
+  "testsEvidence": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/research-evidence/verify-tests-to-run-2.txt",
+  "dispatches": [
+    {
+      "name": "review-architecture-w1",
+      "reviewer": "review-architecture",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-architecture-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+    },
+    {
+      "name": "review-architecture-w2",
+      "reviewer": "review-architecture",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-architecture-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+    },
+    {
+      "name": "review-architecture-w3",
+      "reviewer": "review-architecture",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-architecture-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+    },
+    {
+      "name": "review-degradation-w1",
+      "reviewer": "review-degradation",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-degradation-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+    },
+    {
+      "name": "review-degradation-w2",
+      "reviewer": "review-degradation",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-degradation-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+    },
+    {
+      "name": "review-degradation-w3",
+      "reviewer": "review-degradation",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-degradation-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+    },
+    {
+      "name": "review-frontend-w1",
+      "reviewer": "review-frontend",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-frontend-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+    },
+    {
+      "name": "review-frontend-w2",
+      "reviewer": "review-frontend",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-frontend-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+    },
+    {
+      "name": "review-frontend-w3",
+      "reviewer": "review-frontend",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-frontend-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+    },
+    {
+      "name": "review-highload-w1",
+      "reviewer": "review-highload",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-highload-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+    },
+    {
+      "name": "review-highload-w2",
+      "reviewer": "review-highload",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-highload-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+    },
+    {
+      "name": "review-highload-w3",
+      "reviewer": "review-highload",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-highload-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+    },
+    {
+      "name": "review-layout-w1",
+      "reviewer": "review-layout",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-layout-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+    },
+    {
+      "name": "review-layout-w2",
+      "reviewer": "review-layout",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-layout-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+    },
+    {
+      "name": "review-logic-w1",
+      "reviewer": "review-logic",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-logic-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+    },
+    {
+      "name": "review-logic-w2",
+      "reviewer": "review-logic",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-logic-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+    },
+    {
+      "name": "review-logic-w3",
+      "reviewer": "review-logic",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-logic-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+    },
+    {
+      "name": "review-performance-w1",
+      "reviewer": "review-performance",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-performance-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+    },
+    {
+      "name": "review-performance-w2",
+      "reviewer": "review-performance",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-performance-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+    },
+    {
+      "name": "review-performance-w3",
+      "reviewer": "review-performance",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-performance-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+    },
+    {
+      "name": "review-pr-contract-w1",
+      "reviewer": "review-pr-contract",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-pr-contract-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+    },
+    {
+      "name": "review-pr-contract-w2",
+      "reviewer": "review-pr-contract",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-pr-contract-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+    },
+    {
+      "name": "review-pr-contract-w3",
+      "reviewer": "review-pr-contract",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-pr-contract-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+    },
+    {
+      "name": "review-security-code-w1",
+      "reviewer": "review-security-code",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-security-code-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+    },
+    {
+      "name": "review-security-code-w2",
+      "reviewer": "review-security-code",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-security-code-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+    },
+    {
+      "name": "review-security-code-w3",
+      "reviewer": "review-security-code",
+      "wave": 3,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-security-code-w3.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+    },
+    {
+      "name": "review-testing-practices-w1",
+      "reviewer": "review-testing-practices",
+      "wave": 1,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-testing-practices-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+    },
+    {
+      "name": "review-testing-practices-w2",
+      "reviewer": "review-testing-practices",
+      "wave": 2,
+      "slices": [
+        "slice-03"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-03",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-03.diff",
+          "bytes": 30402
+        }
+      ],
+      "result": "raw/review-testing-practices-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+    },
+    {
+      "name": "review-ui-ux-w1",
+      "reviewer": "review-ui-ux",
+      "wave": 1,
+      "slices": [
+        "slice-01"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-01",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-01.diff",
+          "bytes": 121207
+        }
+      ],
+      "result": "raw/review-ui-ux-w1.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+    },
+    {
+      "name": "review-ui-ux-w2",
+      "reviewer": "review-ui-ux",
+      "wave": 2,
+      "slices": [
+        "slice-02"
+      ],
+      "slicePaths": [
+        {
+          "id": "slice-02",
+          "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/eager-montalcini-d39bf1/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1300/slices/slice-02.diff",
+          "bytes": 143701
+        }
+      ],
+      "result": "raw/review-ui-ux-w2.txt",
+      "definition": ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+    }
+  ]
+}

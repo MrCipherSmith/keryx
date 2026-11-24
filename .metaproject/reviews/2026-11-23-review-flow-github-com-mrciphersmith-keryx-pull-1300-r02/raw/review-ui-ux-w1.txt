@@ -1,0 +1,83 @@
+STATUS: DONE
+
+review-ui-ux, round 2, wave 1, slice-02 (read in full, 2458 lines). Code mode only: the payload has no URL and no screenshots, so this is a static review. No blocker or major findings. Of the round 1 UX findings, UX-001 and UX-002 are closed by a34d8961b. UX-003, UX-004 and UX-005 are still open; the fix commit did not touch them. Two new info findings, both about the fix commit: the review progress text is now only in a hover title (UX-006), and the new attention tone also appears on merged and closed PRs (UX-007).
+
+Context: Keryx Desktop is an app screen, not a marketing page. Its users are developers driving Keryx review and Flow work from GitHub PR and Issue boards. Primary task: find the PR or Issue that needs you, then start or open its Keryx work (review, Flow, session) from the card's work row. No DESIGN.md is in scope. The job context is flow 517 (context_doc in the payload); the owner-choice list in the PR body is treated as deliberate.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2, slice-02, code mode only (no URL or screenshots). UX-001 closed: `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }` draws the ring inside the 24px buttons. Ring #2b8a71 measures 3.73:1 on --bg-sunken and 3.67:1 on --warn-soft (light); #8dc7ab measures 9.68:1 and 6.71:1 (dark); all meet 3:1. UX-002 closed: `.is-attention` gives 'needs your answer' and 'publication pending' the warn tone. #8a5810 on #f9eedb is 5.25:1 and #eec27a on #3a3020 is 7.78:1, and the slot text names the state, so the cue is not color alone. UX-003, UX-004 and UX-005 are unchanged in code and still open. Two new info findings about the fix commit: UX-006 (progress only in a hover title) and UX-007 (attention tone on non-open PRs). Slop score 0: app screen, no behavioural tells. Not checked on a render.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "UX-006",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "  const reviewTitle = [state === \"outdated\" ? reviewNote(card) ?? reviewText : canReview ? reviewText : \"Only an open pull request can be reviewed\", progress]\n    .filter(Boolean).join(\" — \");",
+      "problem": "Criterion: Nielsen #1 (visibility of system status). The fix commit replaced the card's `CardReviewProgress` (wave, percent, progress bar, last transcript update) with `reviewProgressText`. That text is used only in the review slot's `title`. The board now shows a running review as just 'Review · running', in an 11px slot that review-layout expects to truncate (LY-002). Wave and percent appear only on mouse hover. The `TranscriptUpdate` liveness line is gone entirely. The list view lost the same block. AC4 and the 24px row height are the stated reason (comment on `reviewProgressText`); that explains why the block left the card body, not why the progress has no visible form at all.",
+      "impact": "During a long review, a sighted keyboard user cannot see the run's progress without opening the panel, and a mouse user sees it only by hovering. Screen readers probably get it, because `title` becomes the accessible description when `aria-label` provides the name.",
+      "suggested_fix": "Put the percent in the slot text while the run is active, e.g. 'Review · running 27%'. It fits the 24px row and stays within AC4 (the work row). Keep the full line in the title.",
+      "evidence": "Diff: ReviewResults.tsx removes `<CardReviewProgress badge={card.localReview} />` from ReviewTile and from the list's Reason cell. ReviewProgress.tsx turns `CardReviewProgress` into `reviewProgressText(): string | null`. Its only consumer is `reviewTitle` in PrWorkRow.tsx. review.css drops `.review-table .review-progress-caption`. Not observed on a render.",
+      "confidence": "medium",
+      "dedupe_key": "pr-work-row-progress-title-only"
+    },
+    {
+      "id": "UX-007",
+      "severity": "info",
+      "reviewer": "review-ui-ux",
+      "file": "apps/desktop/src/review/PrWorkRow.tsx",
+      "line": null,
+      "quote": "  const waitsOnViewer = !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);",
+      "problem": "Criterion: Nielsen #4 (consistency), state. The UX-002 fix gives the review slot the warn tone (`.pr-work-link.is-attention`) whenever `publicationPending` is set, whatever the PR state. The code it replaced, and the tab indicator it echoes, both limit that cue to open PRs. The removed badge was `card.state === \"open\" && card.localReview?.publicationPending`, and `needsViewerAttention` returns false when `c.state !== \"open\"`. `localBadge` (src/review/board-badges.ts) sets `publicationPending` from the run's publication state and range, with no PR-state check.",
+      "impact": "When the state filter includes Merged or Closed, a merged PR with an unpublished Keryx review shows 'Review · publication pending' in the warn tone. The Pull requests tab indicator and the 'Show N waiting on you' count do not include it, so the board and the tab disagree about what needs the user.",
+      "suggested_fix": "Gate the tone the way the tab is gated: `const waitsOnViewer = card.state === \"open\" && !!(card.localReview?.awaitingAnswer || card.localReview?.publicationPending);`. If the owner wants publication on a merged PR flagged, record that choice and also count it in `needsViewerAttention`.",
+      "evidence": "Fix commit a34d8961b adds `waitsOnViewer` and `.pr-work-link.is-attention { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }`. Base ReviewResults.tsx gated the 'Action required' badge on `card.state === \"open\"`. model.ts `needsViewerAttention` begins `if (c.state !== \"open\") return false;`. board-badges.ts line with `latest.publication === \"pending\" && sameRange(...)` has no PR-state condition. I did not confirm that a merged PR's card carries `localReview` at run time, so this is filed as info.",
+      "confidence": "medium",
+      "dedupe_key": "pr-work-attention-tone-non-open"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "UX-001", "disposition": "closed" },
+    { "id": "UX-002", "disposition": "closed" },
+    { "id": "UX-003", "disposition": "open" },
+    { "id": "UX-004", "disposition": "open" },
+    { "id": "UX-005", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Prior dispositions (checked against head 88e3faba9)
+
+- UX-001: closed. styles/review.css now has `.pr-work-link:focus-visible, .pr-work-more:focus-visible { outline-offset: -2px; }`, so the ring is drawn inside the 24px buttons and the row's `overflow: hidden` no longer clips it. The Issue work row uses the same classes, so it is covered too. Ring contrast, computed from the tokens: light #2b8a71 is 3.73:1 on #edf2ef and 3.67:1 on #f9eedb; dark #8dc7ab is 9.68:1 on #0d1411 and 6.71:1 on #3a3020. All meet the 3:1 non-text floor. A Tab pass on a render was not run. The same fix also closes LY-003, which is review-layout's to record.
+- UX-002: closed. PrWorkRow adds `is-attention` when `awaitingAnswer || publicationPending`, styled `color: var(--warn); background: var(--warn-soft); border-color: var(--warn)`. Text contrast is 5.25:1 (light) and 7.78:1 (dark), both above 4.5:1 for the 11px text. The text 'needs your answer' / 'publication pending' differs from the other states, so the cue does not rely on color alone. Hover (`.pr-work-link:hover:not(:disabled)`, specificity 0,3,0) replaces the tone with the hover look, which is acceptable. The fix introduced a scope regression, filed as UX-007.
+- UX-003: open. IssueWorkRow.tsx still has ``const flowText = stage === "none" ? "Create Flow" : `Flow · ${STAGES[stage]}`;``, unlike the PR slot's `Flow #id · stage`.
+- UX-004: open. IssuesBoard.tsx's list still has `<th>Keryx stage</th>` and renders the work row in the Actions cell.
+- UX-005: open. PrWorkRow.tsx still has `disabled={!canReview}`, with the reason only in `title` ('Only an open pull request can be reviewed').
+
+## What works (keep)
+
+- Every card action has visible text, and its aria-label starts with that text ('Open on GitHub: PR #N', 'Subscribe: PR #N'), so WCAG 2.5.3 (label in name) holds.
+- Quick filters are real toggles (`aria-pressed`). They appear in the active-filter chips (`filterSummary`) and the filter count, and 'Clear filters' or 'Reset search and filters' clears them. The empty state stays specific.
+- 'Group by' is a labelled select, shown only on the board.
+- Each lane has a text title, so the lane dots are not color-only. Lanes without a color rule (Draft, Closed, Others) use the neutral `--fg-subtle`.
+- Work-row targets are 24px tall, which meets the WCAG 2.5.8 floor (24px).
+- The session menu is portaled, so the card's paint containment cannot clip it. 'New session' is always the last menu item.
+
+## Slop score
+
+App screen. Per Applies to, only the Behavioral slop, Components & surfaces and Motion rows count. Tells counted: none (T1 0, T2 0, T3 0), so the score is 0. No exemptions were needed.
+
+## Checks not run
+
+- No live render, because the payload has no URL or screenshots. Not run: a Tab pass over the work row and the session menu; computed contrast on the render; measuring target boxes; 1440, 768 and 390px viewports; light and dark rendering; a grayscale read. Screenshots of the PR board (Status and My role groupings, with a running review and a 'needs your answer' card), the PR list and the Issues board would close the gap.
+- Contrast was computed only for the default theme tokens in tokens.css. The 13 palettes in styles/themes.css redefine --warn and --warn-soft and were not computed.
+- Truncation and overflow in narrow lanes belong to review-layout and are not reported here (LY-002, LY-004).
+
+## Routing audit
+
+graph_used: no (not-relevant: the payload's layers already held the affected set, and the slice was read in full). wiki_used: no (not-relevant: a UI review of a slice with the job context in the payload). ctx_used: yes (keryx ctx rg and keryx ctx run for git). raw_rg_used: no.

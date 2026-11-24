@@ -1,0 +1,50 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: PR #1300, branch feat/desktop-review-v2-stage1, round 4 fix range d7b0f7058..4cb6c43ef (code commit 055115a20), scope mode diff, wave 2 = slice-02 (read in full: Desktop product code and Desktop tests, plus the flow.json/journal hunks it carries). Load profile: not provided. Concrete triggers used: repeated Link/Dismiss presses inside one frame and while a flags write is in flight, a keryx disconnect during the write, and two `_keryx/session_flags` requests for one session in flight from one window (Link `flow` plus the turn-end `subject` apply). Extra reads: apps/desktop/src/acp/client.ts (request/close), ReviewBoard.tsx focus effect at head (the lines between the slice's two hunks), the call sites of `onCreateFlow`, `flowLinkActions.expect` and `t: "flags"` (keryx ctx rg --all, 15 matches).
+
+Summary: The round-3 Link rework holds up under concurrent presses. `accept` marks the offer `linking` in `offersRef` synchronously, before its first await. A second Link in the same frame, a Link during the write, or a Dismiss then Link before a render therefore writes nothing more. The UI adds a `busy` guard on both buttons. The write cannot hang the offer: `AcpClient.close()` rejects every pending request, and the server's flags lock wait is bounded at 3 s (wave 1). Desktop sends only the changed field (`{sessionId, cwd, flow}`), so a Link and a turn-end subject bind for the same session merge on the server under the per-session lock. Their replies come back in write order, and the later reply carries both fields. Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+### CLI / Multi-Session
+None detected. Offers and pending Create Flow requests are per-window React state; no other window acts on them.
+
+### Concurrency & Races
+None detected. Checked:
+- Concurrent Link presses: `if (!offer || offer.linking) return;` plus the synchronous `offersRef.current = ...map(... linking: true)` before `await linkRef.current(...)`. The new tests "two Link presses before a render write the link once" and "a press while the write runs sends nothing more" pin it.
+- Offer state against the in-flight write: `settle` matches on `sessionId` and `dir`. A success removes the offer. The `flags` dispatch then sets the session's `flow`, and `offers` filters the offer out through `flowOf`. A failure keeps it with `error` and `linking` cleared, so a later press retries. Can a second offer for the same session replace a linking one? Only after a new `expect(sessionId)`, which only the PR Flow slot's Create Flow sends (App.tsx:421; `onCreateFlow` has no other caller). That button does not render while the slot shows the offer. So the late `settle` cannot hit a different package in practice.
+- The hook's `dismiss` has no `linking` guard of its own. It is reachable only through the FlowOffer buttons, which return early while `busy`. No finding.
+- ACP ordering from Desktop: `linkFlow` sends `{ sessionId, cwd, flow }` only; `bindSubject` sends `subject` only. The server serialises both under `flags.json.lock` (async wait, wave 1). When the lock is released, the holder's reply continuation runs as a microtask. A waiter can retry only on a 15 ms timer, so replies leave in write order. Desktop's `dispatch({t:"flags"})` applies them in arrival order, and the last one holds the merged flags. The `l.client === client` guard skips a reply from a client that was replaced. `close()` has already rejected that client's pending requests, so the offer shows the error and does not stay `linking`.
+- ReviewBoard focus effect: the added `loading`/`stale` dependencies make a focus that arrives during a load wait for the settled list. `focused.current = nonce` before `onFocusHandled` keeps each nonce handled once. The refocus effect in PrWorkRow touches the DOM only. No timers were added.
+
+### Resources
+None detected. No listener, timer or subscription was added in the slice. `settle` after an unmount is a no-op state update.
+
+### Caching / Lock Contention / Async-Queues / Retry-Timeout / Idempotency
+None detected. The old after-turn retry for a flow link (`pendingFlow`) was removed. A failed Link now waits for another press (owner choice in the PR body), so no automatic retry loop was added. The per-project Issues source key reads localStorage once per mount, which is negligible.
+
+Clean Areas: Part 0, A, B, C, D, E, F, G reviewed for slice-02.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-highload",
+    "summary": "Round-3 Link rework is safe under concurrent presses: accept marks the offer linking synchronously before awaiting, so double Link, Link during a write and Dismiss-then-Link write at most once. The UI busy guard covers both buttons. The write is bounded: client.close rejects pending requests, and the server lock waits at most 3 s. Desktop sends only the changed flag field, so Link and the turn-end subject bind merge on the server, and replies arrive in write order. No findings.",
+    "slices": ["slice-02"],
+    "findings": [],
+    "prior_dispositions": [
+      { "id": "UX-010", "disposition": "closed" },
+      { "id": "TP-R3-001", "disposition": "closed" },
+      { "id": "HL3-003", "disposition": "open" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
+
+Prior disposition evidence:
+- UX-010 closed (the concurrency half): usePendingFlowLinks.accept keeps the offer with `linking: true` until `await linkRef.current` settles. It removes the offer on success and keeps it with `error` on a failure. App passes `acp.current.linkFlow` without `void`, so the rejection reaches accept. useAcpSession.linkFlow throws "keryx is not connected." with no client and otherwise awaits the SESSION_FLAGS request. AcpClient.close rejects pending requests, so `linking` cannot outlive a disconnect. Covered by the usePendingFlowLinks tests "the offer stays, marked linking..." and "a failed flag write keeps the offer...", and by the App fixture's refused Link (app-work-row.fixture.tsx refuseFlowLink).
+- TP-R3-001 closed: the new tests cover two accepts in one act, dismiss then accept in one act, and a new offer replacing a session's older one. These are the three guards the finding named.
+- HL3-003 open (deferred, unchanged): prWork.ts in this range only adds `linking`/`error` to PrFlowOffer. App.tsx openPrSession still passes `fill: fillComposer` and `isShown: s.isShown`, and fillComposer was not touched. The rAF gap between isShown and setText remains.
+
+Routing audit: graph_used: not-relevant (the slice names the files; callers enumerated with keryx ctx rg --all). wiki_used: not-relevant (concurrency review of a known hook). ctx_used: yes (keryx ctx rg, keryx ctx read on acp/client.ts). raw_rg_used: no. One bounded `git show | sed` excerpt, marked keryx:raw, read the focus effect lines that fall between two slice hunks. No tests run (exec_budget_s 0).

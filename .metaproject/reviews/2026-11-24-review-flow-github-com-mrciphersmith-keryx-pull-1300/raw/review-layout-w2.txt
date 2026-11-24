@@ -1,0 +1,69 @@
+STATUS: DONE
+
+review-layout, round 3, wave 2. Diff mode over the round-2 fix range 88e3faba9..d7b0f7058. I read slice-02 in full (2103 lines).
+
+Slice-02 holds tests, App fixtures, docs and backend code for the Issues listing. It adds and changes no CSS and no rendered markup. The only layout-bearing items are CSS and geometry assertions in tests, plus the plan's statement about what was not measured. I found no new layout finding. LY-005 (wave 1, slice-01) is not filed again.
+
+There was no running app, and the exec budget was 0. Nothing below was measured in an engine. Every statement is a read of the source.
+
+## Findings
+
+None.
+
+## Prior dispositions
+
+The payload's prior_findings (round 2) include no review-layout finding. All of them belong to other lenses, and none rates a box geometry, so I return no disposition. LY-002 and LY-004 are round-2 deferred info findings. They are not among this payload's prior findings, and wave 1 already reported LY-002 as open.
+
+Slice-02 confirms that state. The new line in implementation-plan.md (section "Состояние этапа 1", the list of what was not checked) records that the LY-002 and LY-004 widths were not measured in the app. That is an accurate statement, not a fix.
+
+## Checked in slice-02, no layout finding
+
+- **PrWorkRow.dom.test.tsx, CSS test (unchanged context).** It asserts that the `.pr-work-row` rule contains `overflow: hidden`.
+  - The current CSS agrees. `keryx ctx rg --all -n "^\.pr-work-(row|slot)" apps/desktop/src/styles/review.css` finds:
+    - review.css:27 `.pr-work-row { ...; height: 24px; overflow: hidden; ... }`
+    - review.css:28 `.pr-work-slot { display: flex; min-width: 0; height: 24px; }`
+  - So the clip sits on the row, not the slot. This is consistent with LY-005: the overflowing Dismiss button stays inside the row and overlaps the session slot rather than being clipped at the Flow slot's edge. LY-005 needs no change.
+- **PrWorkRow.dom.test.tsx, new test "a new package offered for the PR's bound session shows Link and Dismiss in the Flow slot".**
+  - It asserts the slot's `textContent` ("Link Flow #530?LinkDismiss") and that each row has 3 children.
+  - The test runs on the DOM stub, so it pins structure (AC5) and cannot observe the overflow LY-005 describes. That is already stated under LY-005's "What would settle it". It is not a separate finding.
+- **IssuesBoard.dom.test.tsx.**
+  - The CSS-specificity test for `.pr-work-row.issue-work-row` with 2 columns is unchanged context.
+  - The new AC13 fallback tests assert alert text and which buttons are present. They do not touch geometry. The alert's layout (`.issues-notice`) was covered in wave 1.
+- **ReviewBoard.dom.test.tsx.**
+  - The lane, position and visibility test now runs for both groupings. It asserts lane membership and order from the DOM, which is a model property and not pixels.
+  - `badgesEqual` ignores `lastActivityAt`. That changes render cost (review-performance's lane), not geometry.
+- **The focus and notice tests (`.review-focus-notice`).** They assert only presence and text. The banner layout was covered in wave 1.
+- **The two App fixtures (app-navigation, app-work-row).** They replace `settle` with `waitFor` polling and add flows for an offer, a coalesced press and a session switch. They make no layout assertion.
+- **Backend files: issues-board.ts, issues-github.ts, commands/issues.ts.** They have no rendered output, so they are out of this lens.
+- **Docs: cli-reference.md, desktop-issues.md, implementation-plan.md.** They make no width or geometry claim that I could check against CSS. Deviation (c) in the plan predates this range and is unchanged.
+
+## Enumeration (round obligation 1)
+
+- `keryx ctx run -- git log --oneline 88e3faba9..d7b0f7058 -- apps/desktop/src/styles/review.css` returns one commit, c4e8e3e24.
+- `git diff 88e3faba9 d7b0f7058 -- apps/desktop/src/styles/review.css` shows that the only CSS change in the range is the `.pr-work-link.pr-work-offer` rule. That rule is in slice-01 and LY-005 covers it.
+- Slice-02's file list (slices/manifest.json) contains no stylesheet.
+
+## What would settle it
+
+Nothing new. The wave-1 measurement for LY-005 and LY-002 still applies: in the running app or a real-CSS probe, at a 720px and a 1180px window, read getBoundingClientRect for `[data-slot=flow]`, `.pr-work-offer` and both `.pr-work-more` buttons, then run elementFromPoint at the centre of the Dismiss button. Do this in board view and in list view.
+
+Routing audit:
+- graph_used: no. Not relevant: the payload and the slice manifest named every file.
+- wiki_used: no. Not relevant to a test, docs and backend slice with no CSS.
+- ctx_used: yes. `keryx ctx read` for .metaproject/index.md. `keryx ctx rg` for the `.pr-work-row` and `.pr-work-slot` rules and the round obligations. `keryx ctx run` for git log and git diff on review.css.
+- raw_rg_used: no.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 3, wave 2, slice-02 (tests, App fixtures, docs, Issues backend), read in full. Static only: no running app, exec budget 0. Slice-02 changes no CSS or rendered markup. Its CSS assertion (.pr-work-row overflow: hidden) matches review.css:27, and it puts the clip on the row, not the slot, which is consistent with wave 1's LY-005. The new offer test pins only DOM structure and text, so it cannot observe LY-005. The plan correctly records LY-002 and LY-004 as unmeasured. No new findings; no round-2 layout finding is in this payload's prior_findings.",
+  "findings": [],
+  "prior_dispositions": [],
+  "follow_ups": [
+    "Measure LY-005 and LY-002 in the running Desktop app at a 720px and a 1180px window with a pending Link Flow offer, in board and list view. The DOM-stub tests in slice-02 cannot observe them."
+  ],
+  "slices": ["slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

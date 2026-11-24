@@ -1,0 +1,74 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, round 2, wave 3. Slices read in full: slice-03 (450 lines: useAcpSession.ts, AppShell.tsx, review.css), slice-04 (2433 lines: desktop tests, app-navigation fixture, ProjectNavigation.dom.test.tsx) and slice-05 (1331 lines: app-work-row fixture, implementation-plan.md, src/acp/server.ts, shell-session-organize test, commands/issues.ts, issues-board.ts and its test, issues-contract.ts, issue-session.ts and its test, organize.ts and its test). The PR body has no checkbox list, so each remaining claim was worked as one row. apps/desktop/src/session/subjectBinding.ts (outside these slices) was read with `keryx ctx read` to settle the older-keryx row. Earlier findings are not repeated: PC-001 (stale user docs), PC-002 (body predates a34d8961b: Create Flow linking, T17 owner choices, test counts incl. root focused suites), PC-003 (issue subject only at first bind and only for github.com).
+
+## Claim rows
+
+| Claim (quoted) | What the slices show | Result |
+|---|---|---|
+| "A new `subject` field in the session's `flags.json`, written through `_keryx/session_flags`, records `{kind, repo, number, url}`." | organize.ts `writeFlags`: `const stored = { archivedAt: ..., flow: flags.flow, subject: flags.subject };`; server.ts `const subject = obj["subject"]; ... change.subject = subject`; `parseSessionSubject` checks kind, `REPO_REF`, positive integer number, `SUBJECT_URL` agreeing with all three; invalid subject in flags.json reads as absent | holds (optional `repositoryId` also stored; omission only, noted in w2) |
+| Subject validation (implied by "records `{kind, repo, number, url}`") | organize.test.ts refuses 14 malformed subjects with `/not a GitHub subject/` and keeps the stored one; shell-session-organize.test.ts refuses a string (-32602) and a mismatched url at the store; `subject: null` unlinks | holds |
+| "Issue sessions get it when `withIssueBinding` binds them." | issue-session.ts `bindIssueSubject(dir, issue.ref);` inside `if (launch.stage === "registered")`; test "an issue outside github.com binds without a subject" | narrower than stated — already PC-003 |
+| "On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved." | subjectBinding.ts: `catch { return; // not stored yet: tried again after its turn }` then `if (!flags.subject) this.deps.onNotice(...)`; useAcpSession.ts retries only in the turn's `finally`: `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId))` | session opens: holds; the notice arrives only after the first turn, and the scenario fixture's mock answers for an unstored session (PC-004) |
+| "`keryx issues list` with `source: \"repository\"` reads `/repos/{owner}/{repo}/issues`." | issues-board.ts `new URL("/repos/" + repository.split("/").map(encodeURIComponent).join("/") + "/issues", API)`; commands/issues.ts `listIssuePage(account, request ..., cwd)`; issues-board.test.ts `expect(url.pathname).toBe("/repos/org/base/issues")`; repo resolved via `selectRepository(await reviewRepositories(cwd))` | holds (CLI reference doc gap is PC-001) |
+| "\"Assigned to me\" and the other sources stay selectable, and a stored choice wins." | IssuesBoard.dom.test.tsx "AC13 a stored source preference wins over the project repository default"; options list `["Project repository", "Assigned to me", "Created by me", "Mentioned", "Subscribed", "GitHub Project"]` | holds |
+| "Default grouping is by GitHub state: Open, plus Closed when the filter includes closed issues." / "The Flow stage filter is removed" | model.test.ts / IssuesBoard.dom.test.tsx AC11 tests; issues-board.test.ts AC5 now expects `"open"`/`"closed"` | holds |
+| "Scenario \"PR without Flow and review → Open in session → `/review` → review link on the card\" is one integrated App-level test in `ProjectNavigation.dom.test.tsx`." | ProjectNavigation.dom.test.tsx test "App preserves tab state ...; AC16 a PR without Flow and review opens one bound session whose /review run shows on the card" runs app-navigation.fixture.tsx, which drives #13: `Run review`/`Create Flow`/`Open in session` → one `session/new` → bound subject → reuse → `/review` preselects `13` → `assert.equal(bareSlot("review"), "Review · running")` | holds (the scenario is a section of an existing App test run as a child process; a second App-level fixture app-work-row.fixture.tsx for AC9/AC12 is not mentioned in the body — wording only) |
+| "Four product mutations each break it: the preselect, the publish, session reuse and the binding." | not checkable read-only; each of the four has an assertion in the fixture (`select ... value "13"`, `bareSlot("review") === "Review · running"`, `opened() === beforeBare + 1`, `bareSessions.length === 1`) | assertions present; mutation runs not re-done (testing lens) |
+| "`cd apps/desktop && bun test src`: 1016 pass" / "Root focused suites ...: 67 pass" | slice-05 adds root tests (organize +3, shell-session-organize +1, issue-session.test.ts 3, issues-board +3) | stale counts already PC-002 |
+| "The session header links back to the PR or Issue and to its Flow." | AppShell.tsx `{p.view === "session" && p.titleLinks}`; SessionSubjectLinks.dom.test.tsx; fixture `namedButton("PR org/project#12")` opens the PR panel | holds |
+| "the list width (now 1000px)" / "A fixed 24px row" | review.css `.review-table { min-width: 1000px; }`, `.pr-work-row { ... height: 24px; overflow: hidden; ...}` | holds |
+| implementation-plan.md "Состояние этапа 1" Subject bullet: "Старый keryx без поддержки `subject`: сессия открывается, в ней появляется уведомление, что привязка не сохранена." | same code as the older-keryx row | same timing gap (PC-004 site) |
+| implementation-plan.md "Создание из сессии" | pre-fix linking rule | already PC-002 |
+
+## Findings
+
+### [PC-004] The older-keryx notice comes only after the session's first turn; the body and the scenario fixture present it on open
+- **Severity**: minor
+- **File**: apps/desktop/src/session/subjectBinding.ts (claim in the PR body, "Sessions bound to a Subject")
+- **Problem**: Body: "On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved." "Open in session" on a PR with no bound session (always the case on an older keryx) creates a new session, which keryx has not stored yet, so `_keryx/session_flags` is refused (`locate` → "no session ... in this project"). `PendingSubjects.apply` then does `catch { return; // not stored yet: tried again after its turn }`, and the only retry is in useAcpSession.ts's turn `finally`: `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId))`. The notice (`if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED)`) therefore appears only after the person sends a first prompt; until then the card counts the session as bound through `withPendingSubjects`. The Verification's scenario evidence shows the opposite timing: app-navigation.fixture.tsx's mock answers `_keryx/session_flags` for any session id (`const flags = storesSubject && subject ? { subject } : {}; ... result = flags;`) and asserts `assert.match(host.textContent ?? "", /did not save the pull request binding/);` right after the open, with no turn. prWork.test.ts models it correctly ("After the first turn keryx has stored the session and answers, but without the subject.").
+- **Why it matters**: the owner and the stage-2 hand-off (implementation-plan.md repeats the claim) read that an older keryx warns on open; in fact a person who opens a PR session and does not send gets no warning, and the card shows the session as bound for the app's lifetime. The App-level test that is cited as proof passes only because its mock accepts flags for an unsaved session, which no keryx does.
+- **Fix**: say in the body and in implementation-plan.md that the notice appears after the session's first turn, and make the fixture's older-keryx mock refuse `_keryx/session_flags` for a session it has not stored (assert the notice after a turn); or surface the notice at open when keryx lacks subject support.
+
+## Not verified
+- The four mutation runs behind "Four product mutations each break it" (testing lens; flow journal).
+- Whether a project whose remote is not github.com sees the new default Issues source fail with "configuration: This project has no GitHub.com fetch remote." on first open; the body names no such limit, but this is a behaviour question, not a quoted claim, and is not filed.
+- No test or app run (read-only lane).
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-pr-contract",
+    "summary": "Slices 03, 04 and 05 read in full; 14 claim rows on subject storage and validation, the older-keryx notice, the repository source of keryx issues list, Issues defaults, the scenario test and Verification. Subject storage/validation, the /repos/{owner}/{repo}/issues source, stored-source precedence and the AC16 scenario all hold. One new minor finding: the older-keryx 'binding not saved' notice only appears after the session's first turn, while the body, implementation-plan.md and the scenario fixture (whose mock accepts flags for an unsaved session) present it on open. PC-001..PC-003 not repeated.",
+    "slices": ["slice-03", "slice-04", "slice-05"],
+    "findings": [
+      {
+        "id": "PC-004",
+        "severity": "minor",
+        "reviewer": "review-pr-contract",
+        "file": "apps/desktop/src/session/subjectBinding.ts",
+        "line": null,
+        "quote": "      return; // not stored yet: tried again after its turn",
+        "problem": "PR body: 'On an older keryx that ignores `subject`, the session still opens, with a notice that the binding was not saved.' Open in session on an older keryx always creates a new, not-yet-stored session, so `_keryx/session_flags` is refused and PendingSubjects keeps the binding; the only retry is in the turn's finally (useAcpSession.ts `void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId))`), so the SUBJECT_NOT_SAVED notice appears only after the first prompt. The scenario fixture asserts the notice right after open because its mock answers flags for any session id (`const flags = storesSubject && subject ? { subject } : {}; ... result = flags;`). implementation-plan.md repeats the claim ('сессия открывается, в ней появляется уведомление, что привязка не сохранена').",
+        "impact": "The owner and the stage-2 hand-off expect a warning on open; a person who opens a PR session on an older keryx and does not send sees none, and the card counts the session as bound for the app's lifetime. The App-level test cited as evidence passes only through a mock behaviour no keryx has.",
+        "suggested_fix": "State in the body and implementation-plan.md that the notice comes after the session's first turn, and make app-navigation.fixture.tsx's older-keryx mock refuse session_flags for an unstored session (assert the notice after a turn); or detect missing subject support and warn at open.",
+        "evidence": "subjectBinding.ts apply(): `try { flags = (await this.deps.write(sessionId, subject)) ?? {}; } catch { return; // not stored yet: tried again after its turn }` ... `if (!flags.subject) this.deps.onNotice(sessionId, SUBJECT_NOT_SAVED);`; useAcpSession.ts (slice-03) turn finally; base server.ts handleSessionFlags → setSessionFlags → locate throws `no session ${sessionId} in this project` for an unsaved session (issue-session.test.ts: 'keryx lists a session only after its first save'); app-navigation.fixture.tsx (slice-04) `assert.match(host.textContent ?? \"\", /did not save the pull request binding/);` directly after `namedButton(\"Open in session for #12\").click()`; prWork.test.ts 'After the first turn keryx has stored the session and answers, but without the subject.'",
+        "confidence": "medium",
+        "location_class": "in-diff",
+        "degradation_class": "diff-vs-description",
+        "dedupe_key": "pr-contract:older-keryx-notice-after-first-turn"
+      }
+    ],
+    "prior_dispositions": [],
+    "stats": {
+      "files_reviewed": 27,
+      "claim_rows": 14,
+      "findings": 1,
+      "by_severity": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+    }
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims checked against supplied slices plus one named file); wiki_used: no (not-relevant: the contract is the PR body); ctx_used: yes (keryx ctx rg on src/commands/issues.ts, keryx ctx read on subjectBinding.ts); raw_rg_used: no.

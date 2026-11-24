@@ -1,0 +1,98 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage1`
+- Range: `d7b0f7058..4cb6c43ef` (code commit 055115a20), explicit-hash-range, round 4 wave 1
+- Slice: slice-01 (read in full; surrounding code read at head for ReviewBoard focus effect and load state, PrWorkRow, IssuesBoard/VerifiedBoard, useIssueCollection.repositoryUnavailable, file-lock LockAttempt, organize withFlagsLock/whileStored/locate/trashSession, issue-session withIssueBinding, server.ts handleSessionFlags dispatch, store.createSession, config-dir.writeOwnerOnlyFileAtomic, review.css slot rules)
+- Spec compliance gate: ran against frozen AC8/AC9 — no gap. AC8: first bind (`launch.stage === "registered"`) still writes `subject.kind = "issue"` loudly; on failure the stage is not saved, so the retry is again a first bind. AC9: offer text still begins "Link Flow #<id>", Link remains the only writer.
+
+### Summary
+The round-3 fixes in this slice are correct. ReviewBoard refuses a focus whose PR is absent from a settled (not loading, not stale) list of the right repository; self-removing controls now move focus to stable controls (Flow slot button, search field, source select — the select is ref-attached before the parent effect runs, so the remounted one is focused). The file-lock refactor preserves the old semantics (deadline first, nonce, stale takeover, nonce-write failure cleanup) and adds `createDir: false` and an async wait; `whileStored` + no-mkdir closes the trashed-session resurrection (writeOwnerOnlyFileAtomic does not create the parent, so a late write fails ENOENT and maps to "no session"). `createSession` writes summary.json at creation, so `whileStored` does not refuse a freshly bound issue session. The server's request map accepts the now-async handler. No regression of blocker/major/minor weight found; one info.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+[LG-R4-001] info — EXDEV trash path can discard a flags write that reported success (see JSON).
+
+### Error Handling
+None detected. The swallowed backfill error on a later open (issue-session.ts) is a documented deliberate choice (subject is a display hint; first bind stays loud).
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected beyond LY-005 residual noted under prior dispositions (layout lens owns it).
+
+### Prior dispositions notes
+- FE-R3-001 closed: absent PR on a settled list now refused with notice and onFocusHandled; waits only while `loading || stale` (a stale cached snapshot keeps it armed until the next load settles, which then opens or refuses — acceptable).
+- FE-R3-002 closed: Link/Dismiss (refocus Flow slot button when focus fell to body), notice Dismiss (search), fallback (source select).
+- DG-R3-002 closed: issueSessions and the boundSessions import removed.
+- DG3-001 closed: later opens read flags lock-free via sessionSubjectSettled and backfill best-effort.
+- HL3-001 closed: server uses setSessionFlagsAsync/withFileLockAsync; the remaining sync caller of the flags lock (issueWorkspace → withIssueBinding) runs in the CLI issue-workspace child, not the server.
+- HL3-002 closed: createDir:false + whileStored(summary.json).
+- HL3-004, SC3-001 open: deferred info, stale rule unchanged by the refactor.
+- LY-005 partial: the slot now clips (`.pr-work-slot { overflow: hidden }`), so nothing reaches the session slot, and the offer span lost the button box. But by LY-005's own measurements (slot ~60px in a 230px lane, Link+Dismiss ~80px with margins, both flex:none) the question/"Not linked: …" text still gets 0px and Dismiss is clipped in the lane; the failed-write reason is then conveyed only through role=alert. Layout lens to confirm.
+- PC-008 closed: cli-reference documents `subject`, the answer fields and the lock refusal.
+- TP-R3-007 closed: timeout tests with injected timing (organize.test.ts updateSessionFlagsAt/backfill `timeoutMs: 20`). TP-R3-009 closed: backfill mismatched-subject test. Mutation not re-run by this lens (exec budget 0).
+- UX-011 closed: source stored under account + ".source." + JSON(cwd); ProjectWindow is keyed by cwd, so the initializer re-reads per project.
+- UX-012 closed: offer is `.pr-work-offer` only; the `.pr-work-link:hover` rule no longer matches it.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE",
+    "reviewer": "review-logic",
+    "slices": ["slice-01"],
+    "summary": "Round-3 fixes in slice-01 are logically sound: settled-list focus refusal, focus restoration for self-removing controls, file-lock refactor (same semantics plus createDir:false and async wait), whileStored guard, best-effort later backfill. No blocker/major/minor regressions; one info on the EXDEV trash copy window. LY-005 only partially closed (layout).",
+    "findings": [
+      {
+        "id": "LG-R4-001",
+        "severity": "info",
+        "reviewer": "review-logic",
+        "file": "src/session/organize.ts",
+        "line": null,
+        "quote": "      cpSync(dir, target, { recursive: true });\n      rmSync(dir, { recursive: true, force: true });",
+        "problem": "HL3-002's fix makes a flags write refuse a session whose summary.json is gone (whileStored) and never recreate the directory. trashSession still takes no flags lock. On the EXDEV branch (data dir and trash on different filesystems, Linux), a flags writer in another process that passed whileStored writes flags.json into the source dir after cpSync copied it and before rmSync removes it; the write succeeds and the caller is answered with the new flags, but the trashed copy does not have them.",
+        "impact": "A flags change on a session being trashed is reported as saved and is lost with the source directory. The session is in the trash, so the user-visible cost is a flag missing after a restore from trash. No data outside that session is affected.",
+        "suggested_fix": "Optional: take the flags lock (createDir:false) around the rename/copy in trashSession, or accept and record the window.",
+        "evidence": "organize.ts trashSession renameSync → EXDEV → cpSync then rmSync without withFlagsLock; withFlagsLock checks summary.json only at section start (whileStored); writeOwnerOnlyFileAtomic writes beside the destination and succeeds while the source dir still exists.",
+        "confidence": "medium",
+        "dedupe_key": "trash-exdev-flags-write-window",
+        "evidence_kind": "code-trace"
+      }
+    ],
+    "prior_dispositions": [
+      {"id": "DG-R3-002", "disposition": "closed"},
+      {"id": "DG3-001", "disposition": "closed"},
+      {"id": "FE-R3-001", "disposition": "closed"},
+      {"id": "FE-R3-002", "disposition": "closed"},
+      {"id": "HL3-001", "disposition": "closed"},
+      {"id": "HL3-002", "disposition": "closed"},
+      {"id": "HL3-004", "disposition": "open"},
+      {"id": "LY-005", "disposition": "partial"},
+      {"id": "PC-008", "disposition": "closed"},
+      {"id": "SC3-001", "disposition": "open"},
+      {"id": "TP-R3-007", "disposition": "closed"},
+      {"id": "TP-R3-009", "disposition": "closed"},
+      {"id": "UX-011", "disposition": "closed"},
+      {"id": "UX-012", "disposition": "closed"}
+    ],
+    "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+  }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: callers found via ctx rg; slice is a narrow fix range) | wiki_used: no (not-relevant: intent stated in commit message and code comments) | ctx_used: yes (keryx ctx rg/read; git show/diff with keryx:raw marker for exact quotes) | raw_rg_used: no.
+Test evidence: research-evidence/verify-tests-to-run-1.txt — root focused 68/0, Desktop 1070/0. No tests or mutants run by this lens (exec_budget_s 0).
