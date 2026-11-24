@@ -483,7 +483,9 @@ test("AC4: two Promise.all-raced runWrapUp calls for the same flow transition pr
   expect(decisionB).toBeDefined();
   if (!decisionA || !decisionB) return;
   const outcomes = [decisionA.outcome, decisionB.outcome].sort();
-  expect(outcomes.every((outcome) => outcome === "proposed" || outcome === "conflict")).toBe(true);
+  // Asserted on the whole group records, not a boolean, so a failure names the
+  // third outcome a losing racer returned — and its `message` when it is "error".
+  expect([decisionA, decisionB].filter((group) => group.outcome !== "proposed" && group.outcome !== "conflict")).toEqual([]);
   if (decisionA.outcome === "proposed" && decisionB.outcome === "proposed") {
     expect((decisionA as { proposalId: string }).proposalId).toBe((decisionB as { proposalId: string }).proposalId);
   } else {
