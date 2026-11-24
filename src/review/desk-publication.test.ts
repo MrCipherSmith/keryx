@@ -432,6 +432,118 @@ test("an update round carries only answers that are valid for its own questions"
   expect(preview.settings.answers).toEqual({ "fixture#F-003": "dismiss" });
 });
 
+const roundOneDraft = (answers: Record<string, string>) => json(path.join(directory, "publication-draft.json"), {
+  savedAt: "2026-11-24T00:00:00.000Z", settings: { inline: false, general: true, keryxTemplate: true, overlay: true,
+    verdict: "comment", verdictOverride: null, answers } });
+
+/** A finished partial attempt for `forKey` at `head`, with round 1's package copied in; returns its id and directory. */
+function finishedAttempt(forKey: typeof key, head: string): { attemptId: string; attemptDirectory: string } {
+  const range = { baseSha: revision.baseSha, headSha: head };
+  const store = new DeskRunStore();
+  try {
+    const attemptId = store.request(project, forKey, range)!;
+    store.end(store.byId(attemptId)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
+      result: { reviewed: range, coverage: "partial", verdict: "REQUEST_CHANGES",
+        findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." } });
+    const attemptDirectory = store.directory(attemptId);
+    cpSync(path.join(directory, "package"), path.join(attemptDirectory, "package"), { recursive: true });
+    json(path.join(attemptDirectory, "package", "manifest.json"), { reviewId: "fixture-round", status: "closed",
+      target: { kind: "pr", ref: `https://github.com/example/project/pull/${forKey.number}`, base: range.baseSha, head },
+      artifacts: {}, coverage: [] });
+    return { attemptId, attemptDirectory };
+  } finally {
+    store.close();
+  }
+}
+
+test("T14: answers come from the newest earlier round that saved a draft, walking past one without", async () => {
+  roundOneDraft({ "fixture#F-002": "dismiss" });
+  const round2 = finishedAttempt(key, movedHead);
+  const round3 = finishedAttempt(key, "d".repeat(40));
+  setHead("d".repeat(40));
+  expect(existsSync(path.join(round2.attemptDirectory, "publication-draft.json"))).toBe(false);
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: round3.attemptId });
+  expect(preview.settings.answers).toEqual({ "fixture#F-002": "dismiss" });
+  // Once round 2 saves a draft of its own, round 3 takes that newer one.
+  json(path.join(round2.attemptDirectory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
+    inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
+    answers: { "fixture#F-002": "uphold" } } });
+  expect((await requestDeskPublication(project, key, { kind: "preview", id: round3.attemptId })).settings.answers)
+    .toEqual({ "fixture#F-002": "uphold" });
+});
+
+test("T14: an attempt of another account or pull request never lends its answers", async () => {
+  for (const other of [{ ...key, viewer: "other-reviewer" }, { ...key, number: 8 }]) {
+    const foreign = finishedAttempt(other, revision.headSha);
+    json(path.join(foreign.attemptDirectory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
+      inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: null,
+      answers: { "fixture#F-002": "dismiss" } } });
+  }
+  const { next } = updateRound();
+  expect((await requestDeskPublication(project, key, { kind: "preview", id: next })).settings.answers).toEqual({});
+});
+
+test("T14 B2: an archived earlier round's draft answers are not carried", async () => {
+  roundOneDraft({ "fixture#F-002": "dismiss" });
+  const { next } = updateRound();
+  const store = new DeskRunStore();
+  try {
+    const first = store.byId(id)!;
+    first.run.decision = { action: "archive", reason: "Withdrawn", at: "2026-11-24T01:00:00.000Z" };
+    store.save(first);
+  } finally {
+    store.close();
+  }
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: next });
+  expect(preview.settings.answers).toEqual({});
+});
+
+test("T14 B2: a retry within the same round does not take answers from its own round", async () => {
+  roundOneDraft({ "fixture#F-002": "dismiss" });
+  const store = new DeskRunStore();
+  let retry: string;
+  let retryDirectory: string;
+  try {
+    retry = store.request(project, key, revision)!;
+    expect(retry).not.toBe(id);
+    store.end(store.byId(retry)!, { state: "partial", phase: "Partial", reason: "Partial fixture",
+      result: { reviewed: revision, coverage: "partial", verdict: "REQUEST_CHANGES",
+        findings: { blocker: 0, major: 1, minor: 1, info: 0 }, report: "Fixture review." } });
+    expect(store.byId(retry)!.run).toMatchObject({ previousRunId: id, round: store.byId(id)!.run.round });
+    retryDirectory = store.directory(retry);
+  } finally {
+    store.close();
+  }
+  cpSync(path.join(directory, "package"), path.join(retryDirectory, "package"), { recursive: true });
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: retry });
+  expect(preview.settings.answers).toEqual({});
+});
+
+test("T14 B5: a definitive diverged head is compared once per current head; a failed compare is asked again", async () => {
+  setHead(movedHead);
+  setCompare("diverged");
+  for (let i = 0; i < 2; i++) expect((await requestDeskPublication(project, key, { kind: "preview", id })).headMoved).toBeUndefined();
+  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(1);
+  // An explicit refresh asks GitHub again.
+  await requestDeskPublication(project, key, { kind: "preview", id, refresh: true });
+  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(2);
+  rmSync(path.join(directory, "publication-preview-cache.json"));
+  rmSync(process.env.FIXTURE_COMPARE_READS!);
+  setCompare("fail:connection reset");
+  for (let i = 0; i < 2; i++) expect((await requestDeskPublication(project, key, { kind: "preview", id })).headMoved).toBeUndefined();
+  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(2);
+});
+
+test("T14 B6: an attempt superseded by a newer round of its Review is not offered as is", async () => {
+  updateRound();
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: { inline: false, general: true,
+    keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
+  expect(preview.headMoved).toBeUndefined();
+  expect(preview.canSubmit).toBe(false);
+  expect(preview.blockedReason).toContain("Round 2 of this review is newer");
+  expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+});
+
 test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {
   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
   const settings = { ...preview.settings, inline: true };

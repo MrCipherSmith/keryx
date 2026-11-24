@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { appendOwnerOnlyLine, ensureKeryxSubdir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { withFileLock } from "../lib/file-lock";
 import { packageFacts, roundStampOf, type PackageHashes } from "./round-record";
 
 export const ROUND_REGISTRY_DIR = "review-rounds";
@@ -131,27 +132,43 @@ export function compactEntries(entries: readonly RoundRegistryEntry[]): RoundReg
   return entries.filter((entry, index) => newest.get(entry.packageId) === index);
 }
 
+/** Test seam for {@link appendRoundRegistry}: runs under the lock, after the re-read and before the compacted rewrite. */
+export interface RoundRegistryPorts {
+  beforeCompactionWrite?: () => void;
+}
+
 /**
  * Append one entry. Past {@link REGISTRY_COMPACT_BYTES} the file is rewritten (atomically, owner-only) with the newest
  * entry per package, so it stays well under the read cap; a file already past the cap cannot be read and is started
  * again, which costs at most one full round per package, never trust it should not give.
+ *
+ * Several processes write this file (`review ingest`/`complete`/`publish` and the Desktop worker's partial-round record),
+ * and the compaction is a read-modify-rename: an append landing between its read and its rename would be lost. So every
+ * append and every compaction runs under one exclusive lock file beside the registry (`O_EXCL`, stale-lock recovery,
+ * released in `finally`; lib/file-lock.ts), and the compaction re-reads the file under it (T14 B3). A lock that cannot
+ * be taken throws: the caller reports a registry it could not write rather than risk losing another writer's entry.
  */
-export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string): { file: string; compacted?: number | undefined; warning?: string | undefined } {
+export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string, ports: RoundRegistryPorts = {}): { file: string; compacted?: number | undefined; warning?: string | undefined } {
   ensureKeryxSubdir([ROUND_REGISTRY_DIR], dir);
   const file = roundRegistryFile(identity, dir);
-  appendOwnerOnlyLine(file, JSON.stringify(entry));
-  const read = readConfigFile(file);
-  if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {
-    const all = parseEntries(read.text);
-    const kept = compactEntries(all);
-    writeOwnerOnlyFileAtomic(file, kept.map((item) => `${JSON.stringify(item)}\n`).join(""));
-    return { file, compacted: all.length - kept.length };
-  }
-  if (!read.ok && read.reason === "too-large") {
-    writeOwnerOnlyFileAtomic(file, `${JSON.stringify(entry)}\n`);
-    return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
-  }
-  return { file };
+  const written = withFileLock(`${file}.lock`, (): { file: string; compacted?: number | undefined; warning?: string | undefined } => {
+    appendOwnerOnlyLine(file, JSON.stringify(entry));
+    const read = readConfigFile(file);
+    if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {
+      const all = parseEntries(read.text);
+      const kept = compactEntries(all);
+      ports.beforeCompactionWrite?.();
+      writeOwnerOnlyFileAtomic(file, kept.map((item) => `${JSON.stringify(item)}\n`).join(""));
+      return { file, compacted: all.length - kept.length };
+    }
+    if (!read.ok && read.reason === "too-large") {
+      writeOwnerOnlyFileAtomic(file, `${JSON.stringify(entry)}\n`);
+      return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
+    }
+    return { file };
+  });
+  if (written === null) throw new Error(`the local round registry ${file} is locked by another keryx process; the entry was not recorded`);
+  return written;
 }
 
 /**
@@ -160,6 +177,11 @@ export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry,
  * recorded one, the same round.json. Changing what the round reviewed or found breaks the match; closing it does not.
  */
 export function registryVouches(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
+  // A partial-round record never vouches for a finished round (T14 B4); only {@link partialRoundVouch} reads it.
+  return matchingEntry(entries.filter((entry) => entry.event !== "desk-partial"), packageId, hashes);
+}
+
+function matchingEntry(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
   if (hashes === undefined) return undefined;
   return [...entries].reverse().find(
     (entry) =>
@@ -177,7 +199,7 @@ export function registryVouches(entries: readonly RoundRegistryEntry[], packageI
  */
 export function partialRoundVouch(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
   if (hashes === undefined || hashes.findingsSha256 === null) return undefined;
-  return registryVouches(entries.filter((entry) => entry.event === "desk-partial"), packageId, hashes);
+  return matchingEntry(entries.filter((entry) => entry.event === "desk-partial"), packageId, hashes);
 }
 
 /** The package id the registry records a package under: its manifest's `reviewId`, else its directory name. */

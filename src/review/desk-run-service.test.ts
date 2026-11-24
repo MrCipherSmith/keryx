@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
-import { previousRoundAttempt } from "./desk-run-service";
+import { earlierRoundAttempts, previousRoundAttempt, previousRoundAttempts, previousRunInputs } from "./update-round";
 
 const SHA = (c: string): string => c.repeat(40);
 /** Overrides may set a field to undefined to model a legacy record that lacks it. */
@@ -75,9 +75,35 @@ describe("previousRoundAttempt", () => {
     expect(previousRoundAttempt([legacyCurrent, sameRange, older], legacyCurrent)?.attempt.id).toBe("older");
   });
 
+  test("T14 B1: a partial newest round falls back to the complete round before it, in that order", () => {
+    const round2 = run("round-2", { headSha: SHA("c"), round: 2, state: "partial", result: result({ coverage: "partial" }) });
+    const round1 = run("round-1", { round: 1 });
+    const round3 = run("current", { headSha: SHA("d"), round: 3, state: "running", result: null });
+    expect(previousRoundAttempts([round3, round2, round1], round3).map((item) => item.attempt.id)).toEqual(["round-2", "round-1"]);
+  });
+
+  test("T14 B2: the earlier-round rule skips withdrawn and imported attempts and the attempt's own round", () => {
+    const decision = (action: "archive" | "delete"): DeskRun["decision"] => ({ action, reason: "r", at: "2026-11-24T01:00:00.000Z" });
+    const runs = [current, run("same-round", { headSha: SHA("c"), round: 2 }), run("archived", { decision: decision("archive") }),
+      run("deleted", { decision: decision("delete") }), run("imported", { source: "existing" }), run("kept", { state: "failed", result: null })];
+    expect(earlierRoundAttempts(runs, current).map((item) => item.id)).toEqual(["kept"]);
+  });
+
+  test("T14: the executor input carries each candidate's run directory and partial flag, in order", () => {
+    const round3 = run("current", { headSha: SHA("d"), round: 3, state: "running", result: null });
+    const round2 = run("round-2", { headSha: SHA("c"), round: 2, state: "partial", result: result({ coverage: "partial" }) });
+    const round1 = run("round-1", { round: 1 });
+    expect(previousRunInputs([round3, round2, round1], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([
+      { runDir: "/runs/round-2", partial: true },
+      { runDir: "/runs/round-1", partial: false },
+    ]);
+    expect(previousRunInputs([round3], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([]);
+  });
+
   test("the worker has one previous-attempt rule: no options-key or completed-and-complete filter of its own", () => {
     const source = readFileSync(path.join(import.meta.dir, "desk-run-service.ts"), "utf8");
-    expect(source).toContain("previousRoundAttempt(store.history(key).runs, run)");
+    expect(source).toContain("previousRunInputs(store.history(key).runs, run,");
+    expect(source).not.toContain("function previousRoundAttempt");
     expect(source).not.toContain("deskOptionsKey(item.options)");
     expect(source).not.toMatch(/item\.result\?\.coverage === "complete"/);
   });

@@ -18,6 +18,7 @@ import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publi
 import { computeReadiness, failingItems } from "./readiness";
 import { readRoundNumber } from "./round-record";
 import type { ManagedReviewManifest } from "./types";
+import { earlierRoundAttempts, newerRoundOf } from "./update-round";
 import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
 
 const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -26,7 +27,6 @@ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
 type Draft = { settings: PublicationSettings; savedAt: string };
-type Attempt = NonNullable<ReturnType<DeskRunStore["byId"]>>;
 /** How many earlier attempts an update round looks through for a draft to take answers from. */
 const answerSourceLimit = 8;
 type Operation = PublicationRequest | { kind: "automatic"; id: string; settings: PublicationSettings };
@@ -35,8 +35,8 @@ type Prepared = { state: PublicationState; comments: ReviewComment[]; publicatio
 type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
 type HeadMoved = NonNullable<PublicationState["headMoved"]>;
 type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string;
-  /** A current head GitHub confirmed is ahead of the reviewed head. */
-  aheadHead?: string };
+  /** GitHub's definitive answer for one current head: ahead of the reviewed head, or not (diverged, behind, identical). */
+  headStatus?: { head: string; ahead: boolean } };
 const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheFile = "publication-preview-cache.json";
@@ -94,11 +94,12 @@ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubC
  * Whether the reviewed head is still in the pull request: GitHub reports the current head `ahead` of it.
  * Anything else (a force-push or rebase reports `diverged`, an older head `behind`) or any failed read, a transient
  * `unavailable:` included, keeps the refusal: posting `commit_id` for a commit outside the PR is never attempted, the
- * draft still saves locally, and a refresh asks again.
+ * draft still saves locally, and a refresh asks again. A definitive status is cached per current head (T14 B5); a failed
+ * read is not, so the next preview asks again.
  */
 async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConnection, cache: PreviewCache,
   reviewedHead: string, currentHead: string): Promise<boolean> {
-  if (cache.aheadHead === currentHead) return true;
+  if (cache.headStatus?.head === currentHead) return cache.headStatus.ahead;
   let status: string;
   try {
     status = (await boardGh(cwd, ["api", "--hostname", "github.com",
@@ -106,28 +107,9 @@ async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConn
   } catch {
     return false; // Fail closed, as described above.
   }
-  if (status !== "ahead") return false;
-  cache.aheadHead = currentHead;
-  return true;
-}
-
-const sameReview = (a: Attempt, b: Attempt) => a.key.number === b.key.number && a.key.repositoryId === b.key.repositoryId &&
-  a.key.repo.toLowerCase() === b.key.repo.toLowerCase() && a.key.viewer.toLowerCase() === b.key.viewer.toLowerCase() &&
-  (typeof a.run.reviewId !== "string" || typeof b.run.reviewId !== "string" || a.run.reviewId === b.run.reviewId);
-
-/** The directories of the attempts this one follows in the same Review, newest first (`previousRunId` links). */
-function earlierAttemptDirectories(store: DeskRunStore, attempt: Attempt): string[] {
-  const directories: string[] = [];
-  const seen = new Set([attempt.run.id]);
-  let previousId = attempt.run.previousRunId;
-  while (previousId && !seen.has(previousId) && directories.length < answerSourceLimit) {
-    seen.add(previousId);
-    const previous = store.byId(previousId);
-    if (!previous || !sameReview(previous, attempt)) break;
-    directories.push(store.directory(previous.run.id));
-    previousId = previous.run.previousRunId;
-  }
-  return directories;
+  if (!["ahead", "behind", "diverged", "identical"].includes(status)) return false;
+  cache.headStatus = { head: currentHead, ahead: status === "ahead" };
+  return status === "ahead";
 }
 
 /** The finding answers of the newest earlier attempt that saved a publication draft; never its other settings. */
@@ -148,10 +130,12 @@ function headMovedLine(moved: HeadMoved): string {
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
   key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
-  /** Earlier attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
+  /** Earlier-round attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
   earlier: readonly string[];
+  /** A later round of the same Review exists: this attempt is superseded and is not published as is (T14 B6). */
+  newerRound?: number | undefined;
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current, headMoved, cache, earlier } = input;
+  const { cwd, directory, run, key, auth, request, current, headMoved, cache, earlier, newerRound } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -309,6 +293,8 @@ async function prepare(input: {
     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
+    : !current && newerRound !== undefined
+      ? `Round ${newerRound} of this review is newer. Publish from that round. You can still save this draft locally.`
     : !current && !headMoved ? "The pull request is closed or its revision moved. You can still save this draft locally."
     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
@@ -361,10 +347,14 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
   const store = new DeskRunStore(undefined, true);
   const directory = store.directory(request.id);
-  const { attempt, earlier } = (() => {
+  const { attempt, earlier, newerRound } = (() => {
     try {
       const found = store.byId(request.id);
-      return { attempt: found, earlier: found ? earlierAttemptDirectories(store, found) : [] };
+      if (!found) return { attempt: found, earlier: [] as string[], newerRound: undefined };
+      // One rule for the attempts before this round (update-round.ts): same Review, earlier rounds, not withdrawn.
+      const runs = store.history(found.key).runs;
+      return { attempt: found, newerRound: newerRoundOf(runs, found.run),
+        earlier: earlierRoundAttempts(runs, found.run).slice(0, answerSourceLimit).map(item => store.directory(item.id)) };
     } finally { store.close(); }
   })();
   const run = attempt?.run;
@@ -384,12 +374,13 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   // Automatic publication never posts the as-is variant, so it is refused before any further GitHub read.
   if (request.kind === "automatic" && open && !current) throw new Error("configuration: This review needs a publication decision in Desktop.");
   // Same base, a newer head that still contains the reviewed commit: the draft becomes the as-is Comment for it.
-  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid) &&
+  // An attempt a later round of its Review superseded is never published as is: that round may already cover the new head.
+  const headMoved: HeadMoved | undefined = open && !current && newerRound === undefined && sha.test(pr.headRefOid) &&
     await reviewedHeadInPull(cwd, key, connection, cache, run.headSha, pr.headRefOid)
     ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
   // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
   const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache, earlier });
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache, earlier, newerRound });
   if (request.kind === "preview") {
     const { state } = await render();
     verifyGithubBindingUnchanged(connection);

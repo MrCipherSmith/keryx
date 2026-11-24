@@ -17,7 +17,7 @@ import { coordinatorActivity } from "./desk-coordinator";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
-import { selectPriorAttempt, type PriorAttempt } from "./update-round";
+import { previousRunInputs } from "./update-round";
 import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedule, DeskRun } from "./desk-run-types";
 import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
 import { applyDeskLifecycle, type DeskLifecycleAction } from "./desk-run-lifecycle";
@@ -303,21 +303,6 @@ export async function requestDeskRun(
   }
 }
 
-/**
- * The attempt a new attempt builds on (flow 520 AC7, spec "Раунд обновления" item 1): {@link selectPriorAttempt} over the
- * attempts of the same Review from earlier rounds, whatever their settings. Never the attempt itself nor another attempt
- * of its own round; a store that has not placed rounds yet treats the attempt's own range as its round.
- */
-export function previousRoundAttempt(runs: readonly DeskRun[], current: DeskRun): PriorAttempt | undefined {
-  const earlier = runs.filter((item) => {
-    if (item.id === current.id) return false;
-    if (current.reviewId !== undefined && item.reviewId !== undefined && item.reviewId !== current.reviewId) return false;
-    if (current.round !== undefined && item.round !== undefined) return item.round < current.round;
-    return item.baseSha !== current.baseSha || item.headSha !== current.headSha;
-  });
-  return selectPriorAttempt(earlier);
-}
-
 export async function runDeskWorker(
   id: string,
   selectModel: DeskModelSelector,
@@ -382,7 +367,8 @@ export async function runDeskWorker(
         active.run.effectiveOptionsKey = effectiveOptionsKey;
         store.save(active);
       });
-      const previous = previousRoundAttempt(store.history(key).runs, run);
+      // Every usable earlier-round attempt, in order: the executor hands on the first whose package qualifies (T14 B1).
+      const previousRuns = previousRunInputs(store.history(key).runs, run, (attemptId) => store.directory(attemptId));
       const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
       const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({
@@ -395,7 +381,7 @@ export async function runDeskWorker(
         viewer: key.viewer,
         baseSha: run.baseSha,
         headSha: run.headSha,
-        ...(previous ? { previousRunDir: store.directory(previous.attempt.id), previousPartial: previous.partial } : {}),
+        ...(previousRuns.length ? { previousRuns } : {}),
         ...(run.continuation && {
           resumeRunDir: store.directory(run.continuation.previousId),
           ...(run.continuation.guidance && { guidance: run.continuation.guidance }),

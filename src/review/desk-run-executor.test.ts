@@ -789,22 +789,28 @@ test("Desktop exempts only the zero-wave roles verified by the original slice ro
 
 // Flow 520 AC7: a partial previous attempt (draft package, ingested findings) is handed to the next round of the same
 // Review with Desktop's own partial-round record, so `review start` in the checkout builds a delta round on it.
-function previousAttempt(files: { status?: string; findings?: unknown } = {}) {
-  const previousRunDir = path.join(root, "runs", "attempt-0");
+function previousAttempt(files: { status?: string; findings?: unknown; name?: string; reviewId?: string; raw?: boolean } = {}) {
+  const previousRunDir = path.join(root, "runs", files.name ?? "attempt-0");
   const dir = path.join(previousRunDir, "package");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ schemaVersion: 1, reviewId: "prev", mode: "review-flow", status: files.status ?? "draft",
+  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ schemaVersion: 1, reviewId: files.reviewId ?? "prev", mode: "review-flow", status: files.status ?? "draft",
     target: { kind: "pr", ref: "https://github.com/example/project/pull/12", base: baseSha, head: baseSha }, createdAt: "2026-11-24T00:00:00.000Z" }));
   if (files.findings !== undefined) writeFileSync(path.join(dir, "findings.json"), JSON.stringify(files.findings));
+  if (files.raw) {
+    // Raw reviewer results the attempt counted findings from, never ingested into a findings.json list.
+    mkdirSync(path.join(dir, "raw"));
+    writeFileSync(path.join(dir, "raw", "review-logic-w1.txt"), 'STATUS: DONE\nREVIEW_RESULT:\n' + JSON.stringify({ reviewer: "review-logic", status: "DONE", findings: [priorFinding] }));
+  }
   writeFileSync(path.join(dir, "research.json"), JSON.stringify({ version: 1, scopeReviewed: false, obligations: [], dispatch: { runs: [] } }));
   return previousRunDir;
 }
 
-async function runWithPrevious(previousRunDir: string, previousPartial: boolean | undefined, inspect: (checkout: string, registryDir: string) => Promise<void>) {
+type PreviousRuns = { runDir: string; partial: boolean }[];
+async function runWithPrevious(previousRuns: PreviousRuns, inspect: (checkout: string, registryDir: string) => Promise<void>) {
   const registryDir = path.join(root, "registry");
   let inspected = false;
   let failure: unknown;
-  await executeDeskReview({ ...options(), previousRunDir, ...(previousPartial === undefined ? {} : { previousPartial }) }, {
+  await executeDeskReview({ ...options(), previousRuns }, {
     selectModel, remoteUrl: cwd, revision, registryDir,
     spawn(spec) {
       const exited = inspect(spec.cwd, registryDir).then(() => { inspected = true; return 0; }, (error: unknown) => { failure = error; return 1; });
@@ -817,15 +823,16 @@ async function runWithPrevious(previousRunDir: string, previousPartial: boolean 
 
 const priorFinding = { id: "F-1", reviewer: "review-logic", severity: "major", problem: "Handle missing repository", file: "src.ts", line: 1 };
 const offlineGithub = async () => ({ status: "not-consulted" as const, detail: "offline (test)" });
+const pr12 = { kind: "pr" as const, ref: "https://github.com/example/project/pull/12", base: "" };
 
 test("flow 520 AC7: a partial previous attempt reaches the next round as a delta base with its findings", async () => {
   const { findPreviousRound } = await import("./prior-round");
   const { readRoundRegistry, repoIdentity } = await import("./round-registry");
-  await runWithPrevious(previousAttempt({ findings: [priorFinding] }), true, async (checkout, registryDir) => {
+  await runWithPrevious([{ runDir: previousAttempt({ findings: [priorFinding] }), partial: true }], async (checkout, registryDir) => {
     expect(existsSync(path.join(checkout, ".metaproject/reviews/prev/findings.json"))).toBe(true);
     const registry = readRoundRegistry(repoIdentity(checkout), registryDir);
     expect(registry).toEqual([expect.objectContaining({ packageId: "prev", reviewedHead: baseSha, event: "desk-partial" })]);
-    const { round, priorFindings } = await findPreviousRound({ kind: "pr", ref: "https://github.com/example/project/pull/12", base: baseSha }, headSha,
+    const { round, priorFindings } = await findPreviousRound({ ...pr12, base: baseSha }, headSha,
       { cwd: checkout, github: offlineGithub, registry });
     expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "prev", reviewedHead: baseSha }, range: { base: baseSha, head: headSha } });
     expect(priorFindings.map(finding => finding.id)).toEqual(["F-1"]);
@@ -838,8 +845,33 @@ test("flow 520 AC7: a draft package is not handed on unless its attempt was part
     expect(existsSync(path.join(registryDir, "review-rounds"))).toBe(false);
   };
   // A completed attempt's package must be closed: a draft from it is not a round.
-  await runWithPrevious(previousAttempt({ findings: [priorFinding] }), false, absent);
+  await runWithPrevious([{ runDir: previousAttempt({ findings: [priorFinding] }), partial: false }], absent);
   rmSync(path.join(root, "runs", "attempt-0"), { recursive: true, force: true });
   // A partial attempt without ingested findings gives no previous round.
-  await runWithPrevious(previousAttempt(), true, absent);
+  await runWithPrevious([{ runDir: previousAttempt(), partial: true }], absent);
+});
+
+test("T14 B1: a partial newest round without an ingested findings list falls back to the closed round before it", async () => {
+  const { findPreviousRound } = await import("./prior-round");
+  const { readRoundRegistry, repoIdentity } = await import("./round-registry");
+  const round2 = previousAttempt({ name: "round-2", reviewId: "round-2", raw: true });
+  const round1 = previousAttempt({ name: "round-1", reviewId: "round-1", status: "closed", findings: [priorFinding] });
+  await runWithPrevious([{ runDir: round2, partial: true }, { runDir: round1, partial: false }], async (checkout, registryDir) => {
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-2"))).toBe(false);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-1/findings.json"))).toBe(true);
+    const registry = readRoundRegistry(repoIdentity(checkout), registryDir);
+    expect(registry).toEqual([]);
+    const { round, priorFindings } = await findPreviousRound({ ...pr12, base: baseSha }, headSha, { cwd: checkout, github: offlineGithub, registry });
+    expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "round-1" } });
+    expect(priorFindings.map(finding => finding.id)).toEqual(["F-1"]);
+  });
+});
+
+test("T14 B1: only the first package that can be handed on reaches the checkout", async () => {
+  const newer = previousAttempt({ name: "newer", reviewId: "newer", status: "closed", findings: [priorFinding] });
+  const older = previousAttempt({ name: "older", reviewId: "older", status: "closed", findings: [] });
+  await runWithPrevious([{ runDir: newer, partial: false }, { runDir: older, partial: false }], async (checkout) => {
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/newer"))).toBe(true);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/older"))).toBe(false);
+  });
 });

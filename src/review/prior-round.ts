@@ -340,8 +340,9 @@ export async function packageTrust(
   if (candidate.packageDir === undefined) return { ok: false, why: "no package directory to check" };
   // The machine-local registry of rounds keryx finished: a package whose files hash to an entry is one keryx finished
   // here, whichever commit carries it (a flow package keryx committed on the PR branch, a round fetched from a branch).
-  // A partial-round record vouches for a partial round only (above), never for the same files claiming completion.
-  const vouched = registryVouches(registry.filter((entry) => entry.event !== "desk-partial"), candidate.reviewId, candidate.hashes);
+  // A partial-round record vouches for a partial round only (above), never for the same files claiming completion:
+  // registryVouches itself never counts a desk-partial entry.
+  const vouched = registryVouches(registry, candidate.reviewId, candidate.hashes);
   const byRegistry = (detail: string): CandidateTrust => ({ ok: true, why: `trusted: local registry (${vouched!.event} at ${vouched!.completedAt}; the files match what keryx recorded), though ${detail}` });
   // A package read from another branch's history is anybody's commit — a checked-out foreign pull request among them.
   // It counts only once merged into the base branch, or with keryx's own record of it.

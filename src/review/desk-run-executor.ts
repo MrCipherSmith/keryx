@@ -47,9 +47,12 @@ interface DeskExecutionOptions {
   baseSha: string;
   headSha: string;
   runDir: string;
-  previousRunDir?: string | undefined;
-  /** The previous attempt ended partial with accepted findings: its draft package is handed on as a partial round (flow 520 AC7). */
-  previousPartial?: boolean | undefined;
+  /**
+   * The earlier-round attempts this round may build on, in the order to try them (update-round.ts `previousRoundAttempts`).
+   * The first whose package can be handed on is: a closed package, or, for an attempt that ended partial, a draft package
+   * with an ingested findings list, handed on as a partial round (flow 520 AC7, T14 B1).
+   */
+  previousRuns?: readonly { runDir: string; partial: boolean }[] | undefined;
   resumeRunDir?: string;
   guidance?: string;
   operatorRunId?: string;
@@ -508,7 +511,6 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
         await mkdir(runnerDir, { recursive: true, mode: 0o700 });
         await writeFileAtomic(path.join(runnerDir, "related-pulls.json"), JSON.stringify(related), { mode: 0o600 });
       }
-      const previous = options.previousRunDir && path.join(options.previousRunDir, "package");
       let resumePackage: string | undefined;
       if (options.resumeRunDir) {
         const dir = path.join(options.resumeRunDir, "package");
@@ -520,14 +522,18 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
           resumePackage = manifest.reviewId;
         }
       }
-      if (previous && !resumePackage) {
+      for (const prior of resumePackage ? [] : options.previousRuns ?? []) {
+        const previous = path.join(prior.runDir, "package");
         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
         const usable = manifest?.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(previous);
         // A closed package is a finished round. A partial attempt's package never got past its draft: only Desktop's own
         // record, written here from the user's run store, lets the next round cut from it (prior-round.ts, TM-04 §4d).
+        // One that cannot be handed on falls back to the next candidate, never to a first review (T14 B1).
         const handOn = usable && (manifest.status === "closed" ||
-          (options.previousPartial === true && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));
-        if (handOn) await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+          (prior.partial && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));
+        if (!handOn) continue;
+        await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
+        break;
       }
       signal.throwIfAborted();
       const childFile = path.join(runDir, "child.json");

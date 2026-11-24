@@ -1,7 +1,7 @@
 // Flow 520 AC5: the previous attempt of an update round is the newest one with accepted findings, whatever its settings.
 import { describe, expect, test } from "bun:test";
 import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
-import { selectPriorAttempt } from "./update-round";
+import { newerRoundOf, priorAttemptCandidates, selectPriorAttempt } from "./update-round";
 
 const SHA = (c: string): string => c.repeat(40);
 /** Overrides may set a field to undefined to model a legacy record that lacks it. */
@@ -43,8 +43,24 @@ describe("selectPriorAttempt", () => {
   });
 
   test("accepts the newest partial attempt with accepted findings and marks it partial", () => {
-    const picked = selectPriorAttempt([run("p", { state: "partial", result: result({ coverage: "partial" }) }), run("c")]);
+    const picked = selectPriorAttempt([run("p", { headSha: SHA("c"), state: "partial", result: result({ coverage: "partial" }) }), run("c")]);
     expect(picked).toMatchObject({ attempt: { id: "p" }, partial: true });
+  });
+
+  test("T14 B1: within one round a complete attempt is preferred over a later partial retry", () => {
+    const retry = run("retry", { round: 1, state: "partial", result: result({ coverage: "partial" }) });
+    const complete = run("complete", { round: 1 });
+    expect(selectPriorAttempt([retry, complete])).toEqual({ attempt: complete, partial: false });
+    // The same with a store that has not placed rounds yet: the shared range is the round.
+    const legacyRetry = run("legacy-retry", { state: "partial", result: result({ coverage: "partial" }) });
+    expect(selectPriorAttempt([legacyRetry, run("legacy-complete")])?.attempt.id).toBe("legacy-complete");
+  });
+
+  test("T14 B1: every usable attempt is a candidate, newest round first, so the executor can fall back", () => {
+    const round2 = run("round-2-partial", { round: 2, headSha: SHA("c"), state: "partial", result: result({ coverage: "partial" }) });
+    const round1 = run("round-1", { round: 1 });
+    expect(priorAttemptCandidates([round2, round1]).map((item) => [item.attempt.id, item.partial]))
+      .toEqual([["round-2-partial", true], ["round-1", false]]);
   });
 
   test("a completed attempt whose coverage is not complete is partial", () => {
@@ -88,5 +104,15 @@ describe("selectPriorAttempt", () => {
 
   test("nothing to pick from is undefined", () => {
     expect(selectPriorAttempt([])).toBeUndefined();
+  });
+});
+
+describe("newerRoundOf", () => {
+  test("T14 B6: the highest later round of the same Review, never another Review's", () => {
+    const round1 = run("r1", { reviewId: "review-1", round: 1 });
+    expect(newerRoundOf([round1], round1)).toBeUndefined();
+    expect(newerRoundOf([run("other", { reviewId: "review-2", round: 5 }), round1], round1)).toBeUndefined();
+    expect(newerRoundOf([run("r3", { reviewId: "review-1", round: 3 }), run("r2", { reviewId: "review-1", round: 2 }), round1], round1)).toBe(3);
+    expect(newerRoundOf([run("legacy")], run("legacy"))).toBeUndefined();
   });
 });
