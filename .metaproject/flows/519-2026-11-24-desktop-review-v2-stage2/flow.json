@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T08:26:21.029Z",
+  "updatedAt": "2026-11-24T08:30:34.162Z",
   "source": {
     "type": "description",
     "ref": null
@@ -223,7 +223,7 @@
       "id": "T11",
       "title": "Reviews toolbar measurement at 1100/760/560px",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -233,7 +233,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -255,7 +256,7 @@
       "id": "T13",
       "title": "Implementation plan stage 2 state, deviation b closed, CLI reference",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -265,7 +266,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -429,6 +431,16 @@
       "at": "2026-11-24T08:26:21.029Z",
       "event": "task-done",
       "detail": "T8: Pull requests board: indicator without local review, New review round label, F-024"
+    },
+    {
+      "at": "2026-11-24T08:30:33.970Z",
+      "event": "task-done",
+      "detail": "T11: Reviews toolbar measurement at 1100/760/560px"
+    },
+    {
+      "at": "2026-11-24T08:30:34.162Z",
+      "event": "task-done",
+      "detail": "T13: Implementation plan stage 2 state, deviation b closed, CLI reference"
     }
   ],
   "acKinds": {
