@@ -693,7 +693,7 @@ test("an outdated review's work-row link starts a new review in board and list",
   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
   for (const mode of ["Board", "List"]) {
     const calls: string[] = [];
-    await render(async () => snapshot([outdated]), "/project", ++renderKey,
+    await render(async () => snapshot([card]), "/project", ++renderKey,
       undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
@@ -742,6 +742,8 @@ test("a badge whose only change is the outdated review counts as changed", () =>
   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed" } })).toBe(true);
   expect(badgesEqual(a, { ...a, outdated: { headSha: "bbb", state: "completed" } })).toBe(false);
   expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "partial" } })).toBe(false);
+  expect(badgesEqual(a, { ...a, outdated: { headSha: "aaa", state: "completed", round: 2 } })).toBe(false);
+  expect(badgesEqual({ ...a, outdated: { ...a.outdated, round: 2 } }, { ...a, outdated: { headSha: "aaa", state: "completed", round: 2 } })).toBe(true);
   expect(badgesEqual(a, base)).toBe(false);
   expect(badgesEqual(base, a)).toBe(false);
 });
@@ -927,7 +929,7 @@ test("Review tab signal follows unfiltered open requests to the viewer and backg
   expect(seen.at(-1)).toBeNull();
 });
 
-test("the tab signal is attention only for requests, owned changes, unread replies or Keryx decisions concerning the viewer", async () => {
+test("the tab signal is attention only for requests, owned changes or unread replies concerning the viewer, not for a local review waiting on them", async () => {
   const base: ReviewCard = { ...pr, reviewers: [], decision: null };
   async function signal(cards: ReviewCard[]) {
     const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
@@ -944,8 +946,9 @@ test("the tab signal is attention only for requests, owned changes, unread repli
   expect(await signal([{ ...base, reviewers: ["bob", "ANN"] }])).toBe("attention");
   expect(await signal([{ ...base, author: "Ann", decision: "CHANGES_REQUESTED" }])).toBe("attention");
   expect(await signal([{ ...base, author: "ann", decision: "REVIEW_REQUIRED" }])).toBeNull();
-  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBe("attention");
-  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBe("attention");
+  // A Keryx question or publication decision lights the Reviews tab, not this one.
+  expect(await signal([{ ...base, localReview: { active: true, ready: false, awaitingAnswer: true } }])).toBeNull();
+  expect(await signal([{ ...base, localReview: { active: false, ready: true, publicationPending: true } }])).toBeNull();
   expect(await signal([{ ...base, state: "merged", reviewers: ["ann"] }])).toBeNull();
   expect(await signal([{ ...base, addressedReplyIds: ["unread-1"] }])).toBe("attention");
   markRepliesRead("ann", "repo1", base.number, ["unread-1"]);

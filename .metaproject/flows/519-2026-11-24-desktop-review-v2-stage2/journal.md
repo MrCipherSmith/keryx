@@ -71,3 +71,13 @@ Not asked, kept as implemented because each keeps the previous PR-panel behaviou
 - 2026-11-24T08:21:04.442Z - task-added: T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab
 - 2026-11-24T08:21:04.796Z - task-attempt: T8: started (attempt 1) — 519-T8
 - 2026-11-24T08:21:05.118Z - task-attempt: T14: started (attempt 1) — 519-T14
+- 2026-11-24T08:23:45.674Z - task-done: T14: Freshness kind unknown when the PR head is unknown (operator decision), CLI and Reviews tab
+
+## 2026-11-24 · T14 accepted, T8 accepted (DONE_WITH_CONCERNS)
+
+- T14: the freshness kind `unknown` is added in the CLI and the Reviews tab. The label is lowercase 'head unknown', matching its neighbours 'current' and 'behind N'. Tests: 25/0 backend, 48/0 reviews DOM.
+- T8: needsViewerAttention drops the local-review clauses, which closes deviation (b). The outdated action is labelled 'New review round'. F-024 (secondaryNote) is removed, and the outdated note now appears once, on its own line.
+- AC9 mutation check, run by the worker: 13 one-line mutations of needsViewerAttention (model.ts lines 39-43), including re-adding each removed clause. Each one failed at least one test. The file was restored byte-identical (cmp).
+- ReviewBoard.tsx: the only T8 edit is the `badgesEqual` line, which now also compares outdated.round. The orchestrator checked the diff; the attention-set code is unchanged.
+- Title wording without a round ('Reviewed abc1234 — start a new round on the current head') was the worker's choice. The orchestrator accepted it as plain and accurate, without an operator question.
+- The orchestrator re-ran apps/desktop `bun test src` (989 pass, 0 fail) and `tsc --noEmit` (clean).

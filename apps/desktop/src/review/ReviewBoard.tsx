@@ -81,7 +81,7 @@ interface ReadState {
 export function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
     && a?.awaitingAnswer === b?.awaitingAnswer && a?.publicationPending === b?.publicationPending
-    && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.progress?.completed === b?.progress?.completed
+    && a?.runState === b?.runState && a?.outdated?.headSha === b?.outdated?.headSha && a?.outdated?.state === b?.outdated?.state && a?.outdated?.round === b?.outdated?.round && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
 
