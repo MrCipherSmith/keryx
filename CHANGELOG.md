@@ -5,6 +5,19 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.54] - 2026-11-24
+
+**Keryx Desktop 0.2.17** bundles Keryx 0.4.54 and supports Keryx 0.4.50 or newer.
+
+### Added
+
+- Browse Metaproject files and Wiki pages as a tree in the Desktop sidebar: in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module); in **Wiki**, pages grouped by page type. Folders load on demand, so the whole project is reachable, and the tree supports full keyboard navigation. With an older Keryx that does not offer the tree, the sidebar keeps the flat list. (#1301)
+- `keryx` serves a read-only explorer `tree` action that lists a graph folder's or a Wiki group's children in pages, with snapshot-bound cursors. (#1301)
+
+### Changed
+
+- If the project knowledge changes while a tree folder is loading, the folder stays on **Loading…** until **Refresh catalog**, which reloads it. (#1301)
+
 ## [0.4.53] - 2026-11-23
 
 **Keryx Desktop 0.2.16** bundles Keryx 0.4.53 and supports Keryx 0.4.50 or newer.
