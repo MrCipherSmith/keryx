@@ -1,0 +1,492 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:ARCH-W1-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding ARCH-W1-001 (The R2 fix makes the shared skill (the callee) recognise one caller's prompt by its exact wording. T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S7",
+      "reason": "duplicate of review-testing-practices-w1:F-001",
+      "finding": "S7"
+    },
+    {
+      "id": "review-architecture-w2:ARCH-W2-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding ARCH-W2-001 (The bundled skill ships to every project that installs keryx skills, yet it now cites keryx's own im) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S5",
+      "reason": "representative",
+      "finding": "S5"
+    },
+    {
+      "id": "review-degradation-w1:DEG-F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-F-001 (The round-2 replacement of per-wave `gh pr view` (R3) moves the prompt from gh to git but does not r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S1",
+      "reason": "duplicate of review-logic-w1:LOG-R2-01",
+      "finding": "S1"
+    },
+    {
+      "id": "review-degradation-w1:DEG-Q-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding DEG-Q-001 (In a clone whose `origin` is a fork (no refs/pull/*), ls-remote prints nothing with exit 0; step 1 t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S8",
+      "reason": "representative",
+      "finding": "S8"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (Pattern A6 (TOCTOU / check-then-act). The procedure guards the D1 rule (a moved head publishes only ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Existing publish code (no re-check after confirmation, no commit_id); deferred to flow 521 T7, as round-1 highload F-001"
+    },
+    {
+      "id": "review-logic-w1:LOG-R2-01",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LOG-R2-01 (Head moved step 1 (the R3 fix) says the per-wave `git ls-remote` read 'stays routine'. It does not: ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S1",
+      "reason": "representative",
+      "finding": "S1"
+    },
+    {
+      "id": "review-logic-w1:LOG-R2-02",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LOG-R2-02 (`follow` (finish, then step 4 without asking) repeats on every further move until the 5-round ceilin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S9",
+      "reason": "representative",
+      "finding": "S9"
+    },
+    {
+      "id": "review-logic-w2:LOG-R2-03",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding LOG-R2-03 (The publication section of SKILL.md (both copies) routes to § 'Head moved' only 'a head that moved a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S2",
+      "reason": "representative",
+      "finding": "S2"
+    },
+    {
+      "id": "review-logic-w3:LOG-R2-04",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding LOG-R2-04 (AC6 gained a second obligation, that line 200 agrees with the skill's unattended rule. Its verify co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S6",
+      "reason": "representative",
+      "finding": "S6"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (PR body (pr-context.md:41, unchanged since round 1 per gh pr view) says 'The procedure describes the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S4",
+      "reason": "duplicate of review-pr-contract-w2:PC-002",
+      "finding": "S4"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-002 (PR body (pr-context.md:27) scopes T8/AC6 to 'src/review/autonomous-profile.ts:199'. At head AC6 adds) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S4",
+      "reason": "representative",
+      "finding": "S4"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-003",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-003 (Body 'Done here' lists two items and describes SKILL.md as only re-pointed. The diff also bumps vers) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S4",
+      "reason": "duplicate of review-pr-contract-w2:PC-002",
+      "finding": "S4"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-004",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-004 (Unverified: specification.md:84 makes `follow` the default for rule-triggered runs; the Unattended r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S9",
+      "reason": "duplicate of review-logic-w1:LOG-R2-02",
+      "finding": "S9"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (Head moved step 1 states that `git ls-remote origin refs/pull/<n>/head` 'stays routine'. The routine) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S1",
+      "reason": "duplicate of review-logic-w1:LOG-R2-01",
+      "finding": "S1"
+    },
+    {
+      "id": "review-security-code-w1:F-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-002 (The head read from the remote (ls-remote first column, or gh headRefOid) is pasted into git argv as ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S8",
+      "reason": "duplicate of review-degradation-w1:DEG-Q-001",
+      "finding": "S8"
+    },
+    {
+      "id": "review-security-code-w1:F-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-003 (Step 3 now pins on_head_move to the keryx-stored Review record. The Unattended bullet adds a second ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S9",
+      "reason": "duplicate of review-logic-w1:LOG-R2-02",
+      "finding": "S9"
+    },
+    {
+      "id": "review-security-code-w3:F-001",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding F-001 (The round-1 review package committed in 0c6ff2b7e stores absolute /Users/<os-user>/... paths (payloa) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "reason": "Absolute local paths in committed review packages are the package writer's existing convention (619 files); not introduced by this diff"
+    },
+    {
+      "id": "review-style-w2:STY-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-001 (The describe block still names AC1-AC3, but this change removed its only AC3 assertion (the bundled/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S3",
+      "reason": "representative",
+      "finding": "S3"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The rewritten Head-moved tests assert that the new clauses are present. Only two assert that the rou) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S7",
+      "reason": "representative",
+      "finding": "S7"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The cross-file test reads src/review/autonomous-profile.ts as source text and asserts that two liter) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S7",
+      "reason": "duplicate of review-testing-practices-w1:F-001",
+      "finding": "S7"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (AC6 now also requires 'its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S6",
+      "reason": "duplicate of review-logic-w3:LOG-R2-04",
+      "finding": "S6"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (The describe is still titled 'Flow 521 AC1-AC3', but the AC3 assertion has moved out of it. The comm) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into S3",
+      "reason": "duplicate of review-style-w2:STY-001",
+      "finding": "S3"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "R1": "closed",
+      "R10": "closed",
+      "R11": "closed",
+      "R12": "closed",
+      "R13": "open",
+      "R2": "closed",
+      "R3": "partial",
+      "R4": "closed",
+      "R5": "closed",
+      "R6": "closed",
+      "R7": "partial",
+      "R8": "closed",
+      "R9": "closed"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:085d5a5d5bc0",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:085d5a5d5bc0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:cf9881277449",
+        "rawEvidence": "raw/review-degradation-w1.txt#sha256:cf9881277449",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:a01bc3c4337b",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:a01bc3c4337b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:4a3059080ec7",
+        "rawEvidence": "raw/review-logic-w3.txt#sha256:4a3059080ec7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:164bbd06f042",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:164bbd06f042",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:550428624f6a",
+        "rawEvidence": "raw/review-pr-contract-w2.txt#sha256:550428624f6a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:15f45dc5ce43",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:15f45dc5ce43",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:354b445164a0",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:354b445164a0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:ba781aa245af",
+        "rawEvidence": "raw/review-style-w2.txt#sha256:ba781aa245af",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:ebb7aa4e6358",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:ebb7aa4e6358",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 20,
+    "known": 0,
+    "unknown": 20,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

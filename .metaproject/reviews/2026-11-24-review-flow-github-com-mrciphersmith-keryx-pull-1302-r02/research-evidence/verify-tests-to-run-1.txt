@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: tests-to-run
+command: bun test src/gdskills/review-orchestrator-preflight.test.ts src/gdskills/review-orchestrator-skill-parity.test.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00
+time: 2026-11-24T08:02:45.357Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+--- stderr ---
+
+ 91 pass
+ 0 fail
+ 536 expect() calls
+Ran 91 tests across 2 files. [321.00ms]

@@ -1,0 +1,40 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1302, merge-base a5d1ab236, head 0c6ff2b7e, round 2. NEW slice: slice-02, 490 lines, read in full. It covers:
+  - the AC6 wording, divergence-map §5, the journal T11 entries and flow.json (T11 task, history, acChecksum);
+  - the "Between waves" stop-list line (both copies) and the start of "Head moved" in the bundled copy;
+  - the SKILL.md version bump 1.17.0 → 1.18.0 (both copies);
+  - the preflight test: the AC3 comment, the removed INSTALLED/test.each, and the new step() helper.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- CLI/TUI hot paths: no runtime source changed. The stop-list edit ("once per head the PR moves to") reduces operator stops between waves. It adds none.
+- Steering-text context cost: the stop-list line grew by a few words, and the SKILL.md change is a version string only. Line ceiling and parity are covered by existing tests.
+- Test code: the `step(n)` helper does indexOf and slice on an in-memory string. It runs a few times per test, which is not a hot path. Removing the duplicate parity test.each drops two file reads per run.
+- Flow data (flow.json, journal, AC): the files are written by the CLI and are not read on any hot path in this diff.
+- N+1, re-renders, memory leaks, bundle imports, sync blocking, pagination, redundant API calls: not applicable, because there is no runtime code in the slice.
+
+Not verified: tests were not run by me (exec_budget_s 0). The package's verify-tests-to-run-1.txt records exit 0.
+
+Routing audit: graph_used: no (payload layers: affected empty at PR head); wiki_used: not-relevant; ctx_used: yes; raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "NEW slice-02 (flow bookkeeping, AC6 wording, stop-list line, version bump, preflight test helpers): no runtime code and no hot path touched; no performance findings.",
+  "findings": [],
+  "slices": ["slice-02"],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

@@ -1,0 +1,154 @@
+[
+  {
+    "id": "review-logic-w1:LOG-R2-01",
+    "status": "finding",
+    "finding": "S1",
+    "evidence": "consolidated into S1",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:DEG-F-001",
+    "status": "finding",
+    "finding": "S1",
+    "evidence": "consolidated into S1",
+    "reason": "duplicate of review-logic-w1:LOG-R2-01"
+  },
+  {
+    "id": "review-security-code-w1:F-001",
+    "status": "finding",
+    "finding": "S1",
+    "evidence": "consolidated into S1",
+    "reason": "duplicate of review-logic-w1:LOG-R2-01"
+  },
+  {
+    "id": "review-logic-w2:LOG-R2-03",
+    "status": "finding",
+    "finding": "S2",
+    "evidence": "consolidated into S2",
+    "reason": "representative"
+  },
+  {
+    "id": "review-style-w2:STY-001",
+    "status": "finding",
+    "finding": "S3",
+    "evidence": "consolidated into S3",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w2:F-002",
+    "status": "finding",
+    "finding": "S3",
+    "evidence": "consolidated into S3",
+    "reason": "duplicate of review-style-w2:STY-001"
+  },
+  {
+    "id": "review-pr-contract-w2:PC-002",
+    "status": "finding",
+    "finding": "S4",
+    "evidence": "consolidated into S4",
+    "reason": "representative"
+  },
+  {
+    "id": "review-pr-contract-w2:PC-003",
+    "status": "finding",
+    "finding": "S4",
+    "evidence": "consolidated into S4",
+    "reason": "duplicate of review-pr-contract-w2:PC-002"
+  },
+  {
+    "id": "review-pr-contract-w1:PC-001",
+    "status": "finding",
+    "finding": "S4",
+    "evidence": "consolidated into S4",
+    "reason": "duplicate of review-pr-contract-w2:PC-002"
+  },
+  {
+    "id": "review-architecture-w2:ARCH-W2-001",
+    "status": "finding",
+    "finding": "S5",
+    "evidence": "consolidated into S5",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w3:LOG-R2-04",
+    "status": "finding",
+    "finding": "S6",
+    "evidence": "consolidated into S6",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w2:F-001",
+    "status": "finding",
+    "finding": "S6",
+    "evidence": "consolidated into S6",
+    "reason": "duplicate of review-logic-w3:LOG-R2-04"
+  },
+  {
+    "id": "review-testing-practices-w1:F-001",
+    "status": "finding",
+    "finding": "S7",
+    "evidence": "consolidated into S7",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w1:F-002",
+    "status": "finding",
+    "finding": "S7",
+    "evidence": "consolidated into S7",
+    "reason": "duplicate of review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-architecture-w1:ARCH-W1-001",
+    "status": "finding",
+    "finding": "S7",
+    "evidence": "consolidated into S7",
+    "reason": "duplicate of review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-degradation-w1:DEG-Q-001",
+    "status": "finding",
+    "finding": "S8",
+    "evidence": "consolidated into S8",
+    "reason": "representative"
+  },
+  {
+    "id": "review-security-code-w1:F-002",
+    "status": "finding",
+    "finding": "S8",
+    "evidence": "consolidated into S8",
+    "reason": "duplicate of review-degradation-w1:DEG-Q-001"
+  },
+  {
+    "id": "review-logic-w1:LOG-R2-02",
+    "status": "finding",
+    "finding": "S9",
+    "evidence": "consolidated into S9",
+    "reason": "representative"
+  },
+  {
+    "id": "review-pr-contract-w2:PC-004",
+    "status": "finding",
+    "finding": "S9",
+    "evidence": "consolidated into S9",
+    "reason": "duplicate of review-logic-w1:LOG-R2-02"
+  },
+  {
+    "id": "review-security-code-w1:F-003",
+    "status": "finding",
+    "finding": "S9",
+    "evidence": "consolidated into S9",
+    "reason": "duplicate of review-logic-w1:LOG-R2-02"
+  },
+  {
+    "id": "review-highload-w1:F-001",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Existing publish code (no re-check after confirmation, no commit_id); deferred to flow 521 T7, as round-1 highload F-001"
+  },
+  {
+    "id": "review-security-code-w3:F-001",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Absolute local paths in committed review packages are the package writer's existing convention (619 files); not introduced by this diff"
+  }
+]

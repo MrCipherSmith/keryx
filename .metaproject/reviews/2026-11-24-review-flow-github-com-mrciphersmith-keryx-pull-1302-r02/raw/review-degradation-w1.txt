@@ -1,0 +1,41 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-degradation",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "DEG-F-001",
+      "severity": "minor",
+      "title": "Per-wave `git ls-remote` is not routine in keryx's own classifier, so a trust/auto round still asks the operator at every wave boundary",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:599",
+      "location_class": "changed",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "evidence": "Read SKILL.detail.md:599 (head 0c6ff2b7e): step 1 runs `git ls-remote origin refs/pull/<n>/head` before each `keryx review next` and says it is 'read-only git, so it stays routine'. Traced the consumer that decides routine-ness: src/commands/agent.ts:6018 calls isTrustRoutineCommand; src/lib/trust-routine-command.ts:391-393 makes a git segment routine only when words[1] is in GIT_READ_SUBCOMMANDS, and that set (trust-routine-command.ts:25-41) is status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame: no ls-remote (keryx ctx rg 'ls-remote' over trust-routine-command.ts and its test: 0 matches). SKILL.md:52 ('Shell calls in a trust or auto session') says only a routine command runs without asking once untrusted content entered the turn, which in a round is always (reviewer results). Base a5d1ab236 has no per-wave head check at all, so base asks nothing at wave boundaries; head asks once per wave. Refute: looked for another allow path for ls-remote (command-risk.ts:214 lists it only in GIT_COMMANDS, the alias-resolution table, not a routine list); none found. Not run (read-only).",
+      "problem": "The round-2 replacement of per-wave `gh pr view` (R3) moves the prompt from gh to git but does not remove it: `git ls-remote` is not in keryx's routine git set, so in a trust/auto session every wave boundary stops on a permission prompt. Base ran waves without that prompt. The skill text also states the opposite ('stays routine'), and the preflight test (review-orchestrator-preflight.test.ts:398) pins that sentence, so it cannot see the mismatch.",
+      "why_it_matters": "An authorized round, which 'Between waves' says must not pause, now pauses once per wave for an approval in keryx shell trust/auto sessions; the R3 fix does not deliver what it claims.",
+      "fix": "Either add `ls-remote` (with a confined, literal-ref shape) to GIT_READ_SUBCOMMANDS in src/lib/trust-routine-command.ts with a test, or drop the 'stays routine' claim and read the head per wave with a routine command (e.g. `keryx` command that prints the PR head) — and make the preflight test assert against the classifier (isTrustRoutineCommand('git ls-remote origin refs/pull/1/head') === true) rather than only the prose.",
+      "publication": "finding"
+    },
+    {
+      "id": "DEG-Q-001",
+      "severity": "info",
+      "title": "`git ls-remote origin refs/pull/<n>/head` assumes `origin` is the PR's base repository",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:599",
+      "location_class": "changed",
+      "degradation_class": "behaviour-delta",
+      "evidence": "Read SKILL.detail.md:599-600: the per-wave check hard-codes remote `origin`; round-1 used `gh pr view <n> --json headRefOid`, which resolves the PR on GitHub regardless of local remotes. Step 1 has no branch for an empty ls-remote output. Refute: in this checkout origin is the upstream repo, so the common case works; whether operators review from fork clones is outside the code. Unrun.",
+      "problem": "In a clone whose `origin` is a fork (no refs/pull/*), ls-remote prints nothing with exit 0; step 1 then compares an empty value with the round's head and has no rule for it, and step 2's fetch/merge-base on an empty SHA ends in the exit-128 stop. If true: minor, a round from a fork clone stops at its first wave boundary on a head that did not move.",
+      "fix": "Check: in a fork clone run `git ls-remote origin refs/pull/1302/head; echo $?` and see empty output with exit 0. If so, add 'empty output: the remote has no PR refs, fall back to the gh read once' to step 1, or use `--exit-code`.",
+      "publication": "question"
+    }
+  ],
+  "summary": "Slice-02 (NEW) compared against base a5d1ab236 and the round-1 head 2e01447f9. One minor behaviour-delta (DEG-F-001: the per-wave `git ls-remote` is not routine in trust-routine-command.ts, so trust/auto rounds now prompt at every wave boundary where base prompted none, and the skill/test claim the opposite) and one info question (DEG-Q-001: hard-coded `origin`). Graph listed no affected files for the three changed files (layers.affected empty), so all consumers are search-derived via keryx ctx rg: 8 traced. Verified clean: (1) review-orchestrator-skill-parity.test.ts still compares both SKILL.md and SKILL.detail.md byte-for-byte, so removing the preflight 'bundled and installed identical' test.each loses no coverage (AC3 still guarded; uses process.cwd() not import.meta.dir, pre-existing). (2) Rewritten Flow 521 preflight block (test.ts:420-470) is strictly stronger than round 1's: pins option order, ignore-not-step-4, COMMENT-only, first-line wording; nothing round 1 asserted was dropped except the replaced gh-per-wave and 'enters the new plan as unchecked' wording, now asserted absent. (3) src/review/autonomous-profile.ts:198-200: fixed-range 'Keep this range' maps to ignore and 'Open one more round only if the head moved' maps to follow, matching the skill's new Unattended bullet. (4) SKILL.md:52 'make it once' rule: the two remaining gh reads (before complete, before publish) are named as its expected calls; consistent. (5) Between-waves stop list 'once per head the PR moves to' agrees with step 1's 'ask again only when the PR moved past it'. (6) SKILL.md version bump 1.17.0->1.18.0 in both copies, no other content change in the SKILL.md hunks. (7) flow.json/acceptance-criteria/journal/divergence-map hunks: bookkeeping and prose; AC6 widened, not loosened (invariant check unchanged). (8) src/lib/command-risk.ts GIT_COMMANDS lists ls-remote only for alias resolution. Not traced/read: src/review/complete-head-gate.ts and src/review/round-record.ts:207 (cited by the skill; unchanged files, their behaviour taken from round-1 verification evidence, not re-read); slice-02 hunks are partial windows, full new sections were read at head. No acceptance-criteria degradation; the degradation brief was not recomputed (blast-radius recount refused), so no cap/drop information exists. Nothing was run (read-only, exec_budget_s 0)."
+}
+```
+
+Summary: one minor degradation (per-wave `git ls-remote` is not a routine command in keryx's classifier, so trust/auto rounds now prompt every wave; skill and test say it stays routine), one info question (hard-coded `origin`). 8 consumers traced, all search-derived (graph returned none). Removal of the copy-parity test is covered by review-orchestrator-skill-parity.test.ts.

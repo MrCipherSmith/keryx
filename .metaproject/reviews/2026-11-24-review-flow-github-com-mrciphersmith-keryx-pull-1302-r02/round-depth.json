@@ -1,0 +1,18 @@
+{
+  "requested": "auto",
+  "depth": "full",
+  "reason": "auto: 9 files exceeds 5",
+  "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+  "files": [
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+    ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/review-orchestrator-preflight.test.ts"
+  ],
+  "changedLines": 270
+}

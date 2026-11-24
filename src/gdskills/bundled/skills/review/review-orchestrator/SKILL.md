@@ -910,8 +910,8 @@ The follow-up file path and the metadata rules (real model names, Run vs Not run
 **No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
 Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
-Re-read the thread before posting; a head that moved after the round follows
-`SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
+Re-read the thread before posting; a head that differs from the round's head, however it moved,
+follows `SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 

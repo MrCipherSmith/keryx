@@ -1,0 +1,75 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-02"],
+  "summary": "This NEW slice changes flow state (AC6 extended, T11 added, journal), bumps the review-orchestrator version to 1.18.0, adds 'once per head the PR moves to' to the stop list, and repeats the § Head moved text in the bundled copy. It introduces no layering, dependency-direction or module-boundary violation. One info finding: the distributed (bundled) skill now cites keryx-internal source paths with line numbers.",
+  "findings": [
+    {
+      "id": "ARCH-W2-001",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "a stopped round is partial and never a previous round (`src/review/round-record.ts:207`)",
+      "problem": "The bundled skill ships to every project that installs keryx skills, yet it now cites keryx's own implementation files: `src/review/round-record.ts:207` (stop-and-start bullet) and `src/review/complete-head-gate.ts` (the moved-head completion paragraph). In a consumer project these paths do not exist, and the line number rots the next time round-record.ts changes. SKILL.md already has one precedent (`classifyRoundNeed` in `src/review/round-need.ts`), but these are the first two in SKILL.detail.md and the first with a line number. The skill's own stated boundary is 'run X; it decides Y and does not repeat the rule'.",
+      "impact": "Low. An agent in a consumer repo cannot follow the reference. A future edit to round-record.ts silently makes ':207' point at the wrong line, and the preflight test (slice-01 line 194) pins the stale reference.",
+      "suggested_fix": "Name the behaviour and the command that enforces it instead of the source line. For example: 'a stopped round is partial and `keryx review plan` never takes it as a previous round'. 'or `keryx review complete` refuses it' would likewise replace the complete-head-gate.ts path. Drop ':207' from the test assertion too.",
+      "evidence": "slice-02.diff line 356 (bundled SKILL.detail.md stop-and-start bullet); slice-01.diff lines 60/95 (complete-head-gate.ts reference, both copies); `keryx ctx rg --hidden '`src/[a-z/-]+\\.ts' src/gdskills/bundled/skills/review/review-orchestrator/` -> SKILL.detail.md:604, :609 (both new in this PR), SKILL.md:29 (pre-existing), templates/review-report.md:98,100 (illustrative examples); src/review/round-record.ts:207 verified at head 0c6ff2b7e.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `0c6ff2b7e6e4118287ef8abd531e7268980435e8` (round 2, delta)
+- Scope mode: `explicit-hash-range` (supplied slice-02, NEW)
+- Stack detected: generic-ts (skill prose, flow JSON/markdown, one bun test file)
+
+### Summary
+Slice 02 covers bookkeeping and the second copy of the skill text:
+- AC6 is extended to autonomous-profile.ts:200, with the matching acChecksum and history in flow.json.
+- Task T11 is added and the journal is updated for round 1 and T11.
+- The stop-list line gains "once per head the PR moves to".
+- The SKILL.md version goes from 1.17.0 to 1.18.0 in both copies.
+- The copy-parity test is removed in favour of the existing parity test.
+
+The bundled and installed copies stay one source of truth, guarded by review-orchestrator-skill-parity.test.ts. Nothing changes dependency direction. The one structural observation is internal source paths leaking into a distributed skill (info).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+ARCH-W2-001 (info): the distributed skill cites keryx-internal `src/review/*.ts` paths and one line number.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+### Notes / not verified
+- Outside this lens, I noticed two things I did not report as findings:
+  - flow.json lists T11 as `status: "todo"` while the journal says T11 fixed R1–R12. This is a flow-state matter for pr-contract or logic.
+  - AC6's new clause ("agrees with the skill's unattended rule") is not covered by its `verify: invariant` grep. It is covered de facto by the slice-01 preflight test that reads autonomous-profile.ts.
+- I did not run tests: exec_budget_s is 0.
+
+Routing audit: graph_used: payload layers (empty affected), not re-run; wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

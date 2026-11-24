@@ -1,0 +1,54 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "STY-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 386,
+      "quote": "describe(\"Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md\", () => {",
+      "problem": "The describe block still names AC1-AC3, but this change removed its only AC3 assertion (the bundled/installed `test.each`) and the comment added directly above it (line 385) says AC3 is review-orchestrator-skill-parity.test.ts's job. The block name claims coverage that the comment one line above denies.",
+      "impact": "Readability / traceability: someone tracing AC3 from test runner output lands on a block with no AC3 test.",
+      "suggested_fix": "Rename to \"Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md\"; the comment already says where AC3 lives.",
+      "evidence": "slice-02.diff lines 422-426 and 466-469 (test.each and INSTALLED removed); file at head :385-386.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+# Style Review Report (round 2, slice-02 NEW)
+
+## Summary
+Slice-02 carries the flow bookkeeping (AC6 text, journal, flow.json T11 and history), the divergence-map risk bullet, the stop-list line "once per head the PR moves to", the SKILL.md version bump 1.17.0 -> 1.18.0 (both copies, consistent) and the test-file removals. One naming finding: the test describe title still claims AC3 after its AC3 test was removed. Nothing else crosses a style threshold.
+
+## Review Scope
+- Branch: feat-/desktop-review-v2-stage4-7dce00
+- Merge-base: a5d1ab236fe85dee62a758a19390049dde4eb7f9; head 0c6ff2b7e
+- Scope mode: delta (round 2, NEW slice)
+- Changed files in slice: 7
+
+## Stats
+- major: 0
+- minor: 1
+- info: 0
+
+## Minor & Info
+### [STY-001] describe title names AC3 after the AC3 test was removed
+- **Severity**: minor
+- **File**: src/gdskills/review-orchestrator-preflight.test.ts:386
+- **Problem**: block title "Flow 521 AC1-AC3" vs the comment on :385 saying AC3 belongs to the parity test; no AC3 assertion is left in the block.
+- **Fix**: rename to "Flow 521 AC1-AC2: ...".
+
+## Out of lane (not reported, noted for the orchestrator)
+- flow.json keeps T11 `status: "todo"` while the journal says T11 fixed R1-R12 and R14; that is flow state, not style.
+
+## Positive Notes
+- The SKILL.md version bump is identical in both copies; the stop-list wording matches step 1's "ask again only when the PR moved past it".

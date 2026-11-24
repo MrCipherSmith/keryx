@@ -1,0 +1,708 @@
+{
+  "review_context": {
+    "request": {
+      "words": "Review round 2 (delta after fix round T11) of flow 521 PR #1302",
+      "flags": [],
+      "mode": "diff",
+      "range": "a5d1ab236fe85dee62a758a19390049dde4eb7f9..0c6ff2b7e6e4118287ef8abd531e7268980435e8"
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat-/desktop-review-v2-stage4-7dce00",
+      "base": "main",
+      "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+      "merge_base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9"
+    },
+    "pr": {
+      "number": 1302,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1302",
+      "title": "feat(review): Desktop Review v2 stage 4 — Head moved procedure (shared publish and update command pending stages 2–3)",
+      "state": "open",
+      "body": "Flow 521 · Desktop Review v2 stage 4 (`docs/requirements/keryx-desktop-review-v2/implementation-plan.md` v0.1.3, row 4 \"Единый реестр\"). Draft: only the parts that do not depend on stages 2 and 3 are in.\n\n## Done here\n\n1. **\"Head moved\" procedure in `review-orchestrator`.** New section `## Head moved` in `SKILL.detail.md`:\n   - The PR head is checked at every wave boundary (before each `keryx review next`), before `review complete`, and before publishing. N new commits are counted, and rewritten history is detected.\n   - `on_head_move` defaults to `ask` (D2), with two operator choices. `follow`, `ignore` and the unattended behaviour are also covered.\n   - The update round runs through `keryx review advance`. While that command does not exist, it falls back to `keryx review plan --head <new sha>`.\n   - Before publishing a moved PR, the options are: update, publish as is, save locally, skip. Publishing the old commit as is is allowed only as `--event COMMENT`, with a first line that names the reviewed commit (D1).\n\n   In `SKILL.md`, Round plan step 5 and the end of \"PR Review Report Publication\" point to the procedure, and \"If head moved, re-check findings\" is gone. Its line count stays at the 918-line ceiling. The bundled and installed copies are byte-identical. Tests: a new block in `src/gdskills/review-orchestrator-preflight.test.ts`.\n2. **Divergence map.** `.metaproject/flows/521-…/divergence-map.md` maps the session `review publish` path against the Desktop `desk-publish` path: entry points, 18 points of divergence with file:line, what is already shared, and a 7-step extraction plan marked by the stage each step needs.\n\n## Waiting on stages 2 and 3 (not in this PR yet)\n\n- **Item 2, shared publish code (T7).** `review publish` would use the acceptance, receipt and duplicate marker from `desk-publication`. Two reasons to wait:\n  - Extracting now would rewrite the same lines of `desk-publication.ts` that stage 3 changes (`blockedReason`, the `current` check, the return shape of `desk-publish`).\n  - The cross-path duplicate test needs session packages registered as Attempts, which is stage 2.\n- **Item 3, the session uses the same update command (T8).** `keryx review advance` comes with stage 3. The Desktop prompt line \"New commits belong to a separate request\" (`src/review/autonomous-profile.ts:199`) is replaced then.\n\nWhen stage 3 is pushed (on top of stage 2), this branch is rebased onto it and T7/T8 are implemented. Nothing is merged into or pushed to those branches.\n\n## Expected overlap\n\n- Stage 3 may also edit `review-orchestrator` (publish variants). If it names the update command something other than `keryx review advance`, the procedure here gets a follow-up edit.\n- Stage 2 and stage 3 own `desk-run-store.ts`, `desk-publication.ts`, `review-desk-publish.ts` and `ReviewPublishDialog.tsx`. This PR does not touch them.\n\n## Not verified\n\n- Lint and type-check did not run locally: the worktree has no `node_modules`. CI is the check.\n- `bun test src/gdskills`: 8470 pass, 1 fail in `install.test.ts` (EACCES on a read-only `rules/core` in a temp dir). That test is outside the changed files and was not confirmed on the base commit.\n- The real-PR scenario (review in a session, publish from Desktop) was not run. It needs items 2 and 3.\n- The procedure describes the spec contract. The current `keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`), which is stage 3's change.\n"
+    },
+    "memory": {
+      "query": "review-orchestrator head moved publish",
+      "status_filter": "accepted",
+      "searched": true,
+      "entries": [
+        {
+          "path": "constraints/flow-ids-allocated-per-clone.md",
+          "title": "Flow ids are allocated per clone",
+          "type": "constraint",
+          "status": "accepted"
+        }
+      ]
+    },
+    "requirements": {
+      "flow": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4",
+      "acceptance_criteria_file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "acceptance_criteria": [
+        "AC1 Head moved section content (preflight test)",
+        "AC2 SKILL.md pointer, phrase removed, line count at ceiling",
+        "AC3 bundled and installed copies identical",
+        "AC4 divergence map with file:line and extraction plan (judged)",
+        "AC5-AC7 blocked on stages 2 and 3, not in this PR"
+      ],
+      "spec": [
+        "docs/requirements/keryx-desktop-review-v2/specification.md (Поведение при смене head, Единый реестр, O13, O15)",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md (D1, D2, Этап 4)"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/activity/review.mdc",
+      ".metaproject/rules/process/agent-conduct.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc",
+      ".metaproject/rules/process/skill-lifecycle.mdc"
+    ],
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "changed_lines": null,
+      "risk_areas": [
+        "skill steering text that agents execute",
+        "line ceiling of review-orchestrator SKILL.md",
+        "copy parity bundled vs installed"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "full",
+      "omissions": [],
+      "budget": {
+        "max_prompt_tokens": null,
+        "max_findings": 30
+      },
+      "model_plan": {
+        "default": {
+          "tier": "standard",
+          "tier_reasons": [
+            "base:standard",
+            "resolve:ranking-refused"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "tier_resolution": "session-fallback",
+          "model_discovery": {
+            "provider": "anthropic",
+            "candidates": [],
+            "ranked": [],
+            "session_rank": null,
+            "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+          },
+          "routed": true
+        },
+        "review-security-code": {
+          "tier": "standard",
+          "tier_reasons": [
+            "base:standard",
+            "floor:security",
+            "resolve:ranking-refused"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "tier_resolution": "session-fallback",
+          "model_discovery": {
+            "provider": "anthropic",
+            "candidates": [],
+            "ranked": [],
+            "session_rank": null,
+            "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+          },
+          "routed": true
+        }
+      }
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "review-architecture": "keryx review plan roster, round 2 delta",
+        "review-degradation": "keryx review plan roster, round 2 delta",
+        "review-highload": "keryx review plan roster, round 2 delta",
+        "review-logic": "keryx review plan roster, round 2 delta",
+        "review-performance": "keryx review plan roster, round 2 delta",
+        "review-pr-contract": "keryx review plan roster, round 2 delta",
+        "review-regression": "keryx review plan roster, round 2 delta",
+        "review-security-code": "keryx review plan roster, round 2 delta",
+        "review-style": "keryx review plan roster, round 2 delta",
+        "review-testing-practices": "keryx review plan roster, round 2 delta"
+      }
+    },
+    "review_plan": {
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02/plan.json",
+      "roster": [
+        "review-architecture",
+        "review-degradation",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "dispatches": 20,
+      "minutes": {
+        "min": 10,
+        "max": 25
+      },
+      "planKey": "0d7820b6d091713b"
+    },
+    "cross_repo": []
+  },
+  "reviewer": "review-performance",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "scope_mode": "diff",
+  "branch": "feat-/desktop-review-v2-stage4-7dce00",
+  "base_sha": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+  "round": 2,
+  "slices": [
+    "slice-01"
+  ],
+  "pr_context": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02/pr-context.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_findings": 30
+  },
+  "layers": {
+    "version": 1,
+    "files": [
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/review-orchestrator-preflight.test.ts"
+    ],
+    "prHead": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+    "graphCommit": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": []
+    },
+    "symbols": [],
+    "relatedTests": [
+      "src/gdskills/review-orchestrator-preflight.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  },
+  "metaproject": {
+    "memory": [
+      {
+        "path": "constraints/flow-ids-allocated-per-clone.md",
+        "title": "Flow ids are allocated per clone",
+        "type": "constraint",
+        "status": "accepted"
+      }
+    ]
+  },
+  "is_fix_round": true,
+  "prior_findings": [
+    {
+      "id": "R1",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 604,
+      "quote": "- **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+      "quoteSha256": "b7d3b8102df963b86b0f964b3803e7998005327497b509fa9fd29db5d83d4d30",
+      "problem": "The procedure states stage-3 carry-over behaviour as current. The `keryx review plan` fallback in step 4 cannot take a stopped or partial round as the prior round. A package that is not eligible is dropped (prior-round.ts:414; round-record.ts:207, 'a draft or partial package is never a previous round'). An eligible but uncompleted package is untrusted: it is used only when no trusted round exists, and then as fallback-first with findings as context only (prior-round.ts:880-886); otherwise it is ignored. Nothing adds the uncovered area as unchecked. Step 5.1's 'answers per finding carry over by finding id' has the same problem. Spec 'Раунд обновления' item 1 lists these rule changes as stage-3 work.",
+      "status": "open",
+      "finding": {
+        "id": "R1",
+        "reviewer": "review-logic",
+        "severity": "major",
+        "problem": "The procedure states stage-3 carry-over behaviour as current. The `keryx review plan` fallback in step 4 cannot take a stopped or partial round as the prior round. A package that is not eligible is dropped (prior-round.ts:414; round-record.ts:207, 'a draft or partial package is never a previous round'). An eligible but uncompleted package is untrusted: it is used only when no trusted round exists, and then as fallback-first with findings as context only (prior-round.ts:880-886); otherwise it is ignored. Nothing adds the uncovered area as unchecked. Step 5.1's 'answers per finding carry over by finding id' has the same problem. Spec 'Раунд обновления' item 1 lists these rule changes as stage-3 work.",
+        "impact": "Silent wrong result. With on_head_move=ask, the operator picks 'Stop and start'. The agent says the work and uncovered area carry over, but the new round starts from an older round or from round 1, and the stopped round's findings are never rechecked or closed. Nothing reports this.",
+        "suggested_fix": "Until `keryx review --help` lists `advance`, either recommend only 'Update after this round finishes' (it reaches `complete`, which gives a trusted prior round), or keep 'Stop and start' with an explicit caveat: the stopped round's findings reach the new round only as context, its uncovered slices must be named in the new report, and per-finding answers do not carry over yet.",
+        "evidence": "SKILL.detail.md:604, :608, :610 (both copies); src/review/round-record.ts:207-209; src/review/prior-round.ts:410-420, :880-890; docs/requirements/keryx-desktop-review-v2/specification.md:108; journal.md T5 entry acknowledges it, PR body does not.",
+        "confidence": "high",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 604,
+        "quote": "- **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "class_scope": {
+          "sites": [
+            ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:604",
+            ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:608",
+            ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:610",
+            "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:604",
+            "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:608",
+            "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:610"
+          ],
+          "enumeration_method": "Read every sentence of the `## Head moved` section (lines 595-616, both copies), keeping each that claims stage-3 carry-over behaviour (partial round as prior, uncovered area as unchecked, answers carried by finding id). Checked each against prior-round.ts candidate selection (:410-420, :872-890) and round-record.ts:207."
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R1",
+        "merged_from": [
+          "review-logic-w1:F-001",
+          "review-architecture-w1:F-002",
+          "review-degradation-w1:DEG-S1",
+          "review-pr-contract-w1:PC-002"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R2",
+      "reviewer": "review-regression",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": 607,
+      "problem": "The change adds a 'Head moved' section to review-orchestrator SKILL.detail.md (both copies). Its Unattended bullet says: 'Finish the round on its pinned head, open no update round unless `on_head_move` is `follow`'. SKILL.md Round plan step 5 (line 64) now sends the agent there after every batch. `on_head_move` has no source anywhere in code: `keryx ctx rg on_head_move src` finds only the new test. So for an unattended run the rule always resolves to 'no update round'. The existing autonomous review prompt, built in code at src/review/autonomous-profile.ts:200 for a run with no fixedBase and pinned by harness-robustness.test.ts:179, tells the same agent: 'Open one more round only if the head moved while you worked, and review the new head.' Line 206 of the same prompt tells the agent to read `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`, so the agent now holds two opposite instructions for the same event. The flow's plan.md step 3 and AC6 track only the fixed-range line 199 for a later fix (T8, blocked on stage 3). Line 200 is not tracked.",
+      "status": "open",
+      "finding": {
+        "id": "R2",
+        "reviewer": "review-regression",
+        "severity": "major",
+        "problem": "The change adds a 'Head moved' section to review-orchestrator SKILL.detail.md (both copies). Its Unattended bullet says: 'Finish the round on its pinned head, open no update round unless `on_head_move` is `follow`'. SKILL.md Round plan step 5 (line 64) now sends the agent there after every batch. `on_head_move` has no source anywhere in code: `keryx ctx rg on_head_move src` finds only the new test. So for an unattended run the rule always resolves to 'no update round'. The existing autonomous review prompt, built in code at src/review/autonomous-profile.ts:200 for a run with no fixedBase and pinned by harness-robustness.test.ts:179, tells the same agent: 'Open one more round only if the head moved while you worked, and review the new head.' Line 206 of the same prompt tells the agent to read `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`, so the agent now holds two opposite instructions for the same event. The flow's plan.md step 3 and AC6 track only the fixed-range line 199 for a later fix (T8, blocked on stage 3). Line 200 is not tracked.",
+        "impact": "If the agent follows the changed skill text, it finishes on the old head and opens no round on the new head. The run then reviews a stale commit, where before this change the prompt's instruction to review the new head stood alone. Which instruction wins is up to the model, so the behaviour varies between runs. The prompt test pins only the prompt string, and per the flow journal it did not even load locally, so nothing catches the change.",
+        "suggested_fix": "Make the two agree in one place. Either have the unattended bullet in SKILL.detail.md § 'Head moved' defer to a caller-supplied policy (the autonomous prompt counts as `follow`), or change autonomous-profile.ts:200 to the skill's rule and update harness-robustness.test.ts:179 with it. Add a test that reads both texts and asserts they agree, and add line 200 to T8/AC6 next to line 199.",
+        "evidence": "SKILL.detail.md:607 (bundled and .metaproject copies, identical; slice-01 lines 340 and 987); SKILL.md:64; src/review/autonomous-profile.ts:199, :200, :206; src/review/harness-robustness.test.ts:179; flow 521 plan.md step 3 and acceptance-criteria AC6 name only line 199 (slice-01 lines 23, 252); `keryx ctx rg on_head_move src` -> only src/gdskills/review-orchestrator-preflight.test.ts:406,408,438.",
+        "confidence": "high",
+        "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "line": 607,
+        "class_scope": {
+          "sites": [
+            "src/review/autonomous-profile.ts:200",
+            "src/review/autonomous-profile.ts:199",
+            "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:607",
+            ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:607"
+          ],
+          "enumeration_method": "`keryx ctx rg 'head moved|Re-read head|If head moved|unchecked commits' src` and `keryx ctx rg on_head_move src`, then reading every code-built prompt that tells an agent to run review-orchestrator (buildAutonomousPrompt, the only caller being autonomous-run.ts:346). Two prompt branches state a head-move policy. Line 200 (no fixedBase, unattended) contradicts the new rule directly and is untracked. Line 199 (fixedBase, Desktop) says 'Keep this range throughout'; under the skill's `ask` path an operator can pick 'Stop and start on the new head', which conflicts with it. That conflict is already tracked by AC6/T8. The skill-text sites are the two identical copies of the changed line."
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R2",
+        "merged_from": [
+          "review-regression-w1:F-001",
+          "review-logic-w1:F-006"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R3",
+      "reviewer": "review-performance",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 599,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+      "quoteSha256": "339c453991710b4eb7c03e51e9aee529c43a35b1c4792d4c004f3fae9599aef6",
+      "problem": "The per-wave head check is a `gh pr view` call. SKILL.md 'Shell calls in a trust or auto session' says 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.' The new procedure requires a fresh gh call at every wave boundary.",
+      "status": "open",
+      "finding": {
+        "id": "R3",
+        "reviewer": "review-performance",
+        "severity": "minor",
+        "problem": "The per-wave head check is a `gh pr view` call. SKILL.md 'Shell calls in a trust or auto session' says 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.' The new procedure requires a fresh gh call at every wave boundary.",
+        "impact": "In trust/auto sessions, each wave boundary becomes an operator permission prompt (about 3-6 per round). That adds operator latency to a round that 'Between waves' rule 2 says must not pause while the plan is authorized. The API cost itself is negligible.",
+        "suggested_fix": "Either state that the per-wave head read is an expected exception to 'make it once', or use a routine read-only git probe (e.g. `git ls-remote origin refs/pull/<n>/head`) at wave boundaries and keep `gh pr view` for the pre-complete and pre-publish checks.",
+        "evidence": "slice-01: SKILL.detail.md § Head moved step 1 (new); SKILL.md Round plan step 5 (new text 'After each batch, read the pull request's head'); SKILL.md 'Shell calls in a trust or auto session' (unchanged context line, 'A `gh` call still asks ... make it once and reuse what it printed'); SKILL.detail.md 'Between waves' rule 2.",
+        "confidence": "medium",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 599,
+        "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+        "locator": {
+          "state": "derived",
+          "method": "substring",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R3",
+        "merged_from": [
+          "review-performance-w1:F-001",
+          "review-security-code-w1:F-001",
+          "review-architecture-w1:F-001",
+          "review-degradation-w1:DEG-1",
+          "review-highload-w1:F-002"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R4",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": 608,
+      "quote": "4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command.",
+      "quoteSha256": "f2205a2e9f2337b7b4d5380ed210af68439365d7a446d52e69520cde95faa241",
+      "problem": "Head moved step 4 says 'Desktop runs the same command'. The PR body lists that as pending (Item 3, T8, stage 3), and src/review/autonomous-profile.ts:199 still tells Desktop 'New commits belong to a separate request.' The same text is in the installed copy.",
+      "status": "open",
+      "finding": {
+        "id": "R4",
+        "reviewer": "review-pr-contract",
+        "severity": "minor",
+        "problem": "Head moved step 4 says 'Desktop runs the same command'. The PR body lists that as pending (Item 3, T8, stage 3), and src/review/autonomous-profile.ts:199 still tells Desktop 'New commits belong to a separate request.' The same text is in the installed copy.",
+        "impact": "A reader of the skill takes session/Desktop parity on the update command as true today; the PR body and the code say it is not.",
+        "suggested_fix": "Word it as the target (\"Desktop will run the same command once stage 3 lands\") or drop the clause until T8.",
+        "evidence": "slice-01.diff SKILL.detail.md hunk (both copies); keryx ctx rg 'New commits belong to a separate request' src -> src/review/autonomous-profile.ts:199; pr-context.md 'Waiting on stages 2 and 3' item 3.",
+        "confidence": "high",
+        "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "line": 608,
+        "quote": "4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command.",
+        "locator": {
+          "state": "derived",
+          "method": "substring",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R4",
+        "merged_from": [
+          "review-pr-contract-w1:PC-001"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R5",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 599,
+      "quote": "The same SHA as the round's `head`: carry on.",
+      "quoteSha256": "3915354cc307ca28892a00acce4fd8a7cc59a41dca4dae33a61b6e33a2fd606e",
+      "problem": "The check compares the PR head with the round's pinned head before every `keryx review next`. After the operator answers 'Update after this round finishes', the head still differs at the next boundary, so step 3 asks again and the stop list stops the round again. Nothing says to remember the answer.",
+      "status": "open",
+      "finding": {
+        "id": "R5",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "problem": "The check compares the PR head with the round's pinned head before every `keryx review next`. After the operator answers 'Update after this round finishes', the head still differs at the next boundary, so step 3 asks again and the stop list stops the round again. Nothing says to remember the answer.",
+        "impact": "Literal execution re-asks the same question at every wave boundary: a repeated pace-style stop, and a fresh Telegram poll each time.",
+        "suggested_fix": "Compare with the last head the operator answered for (or the round's head before any answer); ask again only when the PR moved past it.",
+        "evidence": "SKILL.detail.md:599-605 and the stop-list entry at :587 (both copies).",
+        "confidence": "medium",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 599,
+        "quote": "The same SHA as the round's `head`: carry on.",
+        "locator": {
+          "state": "derived",
+          "method": "substring",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R5",
+        "merged_from": [
+          "review-logic-w1:F-002"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R6",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 603,
+      "quote": "- **Update after this round finishes**: the round runs to `complete`, then step 4.",
+      "quoteSha256": "fd1a1260ec2b52ada4e22fc3c4caff94494b57742c610559116e541cd2dc03d3",
+      "problem": "For update-after, follow and ignore, the round completes on a moved head. completeHeadGate throws unless report.md's first line names the reviewed SHA and says the PR moved (complete-head-gate.ts:52-61). The section names that line only for step 5 publish-as-is.",
+      "status": "open",
+      "finding": {
+        "id": "R6",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "problem": "For update-after, follow and ignore, the round completes on a moved head. completeHeadGate throws unless report.md's first line names the reviewed SHA and says the PR moved (complete-head-gate.ts:52-61). The section names that line only for step 5 publish-as-is.",
+        "impact": "`keryx review complete` refuses. The error says how to fix it, so the cost is an extra round-trip.",
+        "suggested_fix": "In step 3 or in step 1's 'before `keryx review complete`', say that the report's first line must be the templates/review-report.md moved-head line before `complete` (as SKILL.md:235 already says).",
+        "evidence": "src/review/complete-head-gate.ts:52-61; templates/review-report.md:37.",
+        "confidence": "high",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 603,
+        "quote": "- **Update after this round finishes**: the round runs to `complete`, then step 4.",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R6",
+        "merged_from": [
+          "review-logic-w1:F-003"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R7",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 609,
+      "quote": "5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:",
+      "quoteSha256": "1e3332fd081c86a0d1bbe8997f328598237037443ecdcebf4e62449e98ea7559",
+      "problem": "Step 1 checks 'before publishing' and then flows into step 3 (on_head_move). Step 5, which holds the D1 COMMENT-only rule, applies only when the head moved after completion. A head that moved during a round under `ignore` and is then published falls under neither step, and the session publish path does not enforce COMMENT (readiness item 7 only warns). Latent today, because no stored on_head_move exists in a session.",
+      "status": "open",
+      "finding": {
+        "id": "R7",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "problem": "Step 1 checks 'before publishing' and then flows into step 3 (on_head_move). Step 5, which holds the D1 COMMENT-only rule, applies only when the head moved after completion. A head that moved during a round under `ignore` and is then published falls under neither step, and the session publish path does not enforce COMMENT (readiness item 7 only warns). Latent today, because no stored on_head_move exists in a session.",
+        "impact": "Once `ignore` is stored (stage 3), REQUEST_CHANGES or APPROVE can be posted for an outdated commit, against D1.",
+        "suggested_fix": "State that step 3 governs a running round, and that any publish of a package whose head differs from the PR head goes through step 5 regardless of on_head_move.",
+        "evidence": "SKILL.detail.md:599-609; implementation-plan.md:81 (D1); divergence-map.md section 2 'head moved' row.",
+        "confidence": "medium",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 609,
+        "quote": "5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R7",
+        "merged_from": [
+          "review-logic-w1:F-004",
+          "review-degradation-w1:DEG-S2"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R8",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 600,
+      "quote": "Exit 1: history was rewritten (force-push or rebase), N is unknown, and the update round will be `fallback-first`.",
+      "quoteSha256": "d5de3c71a446169885af312327913b387b91b08da428e7533518bb5f44b7a346",
+      "problem": "Only exits 0 and 1 are mapped. If the fetch failed or the reviewed SHA is missing locally, `git merge-base --is-ancestor` exits 128, and an agent may report it as rewritten history.",
+      "status": "open",
+      "finding": {
+        "id": "R8",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "problem": "Only exits 0 and 1 are mapped. If the fetch failed or the reviewed SHA is missing locally, `git merge-base --is-ancestor` exits 128, and an agent may report it as rewritten history.",
+        "impact": "A false force-push report goes to the operator; no data is lost.",
+        "suggested_fix": "Add: any other exit means the count is unavailable (fetch or object missing); report 'head moved, count unavailable', not a rewrite.",
+        "evidence": "SKILL.detail.md:600; git merge-base --is-ancestor exits 128 on a bad object (standard git behaviour).",
+        "confidence": "medium",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 600,
+        "quote": "Exit 1: history was rewritten (force-push or rebase), N is unknown, and the update round will be `fallback-first`.",
+        "locator": {
+          "state": "derived",
+          "method": "substring",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R8",
+        "merged_from": [
+          "review-logic-w1:F-005"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R9",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "line": 55,
+      "quote": "Keep D1 out: moved head refuses for now.",
+      "quoteSha256": "796e8937a891d1e7c299c874d8646348b270ef2eb3b84c5527913f7613dd0406",
+      "problem": "Row 4 of the extraction plan sends the session publish through Desktop's head check and refuses a moved head. The 'Head moved' procedure in this same PR prescribes `keryx review publish <package> --event COMMENT` for a moved head (option 2, D1). The journal's T6 note already corrects this ('T7 must add the COMMENT restriction to the session path rather than refusing outright'), but the map, which T7 executes, was not updated. Section 5's last bullet describes the breakage without resolving it.",
+      "status": "open",
+      "finding": {
+        "id": "R9",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "problem": "Row 4 of the extraction plan sends the session publish through Desktop's head check and refuses a moved head. The 'Head moved' procedure in this same PR prescribes `keryx review publish <package> --event COMMENT` for a moved head (option 2, D1). The journal's T6 note already corrects this ('T7 must add the COMMENT restriction to the session path rather than refusing outright'), but the map, which T7 executes, was not updated. Section 5's last bullet describes the breakage without resolving it.",
+        "impact": "If T7 follows the map, the skill's 'Publish as is for <reviewed sha>' option fails at the CLI. The plan and the procedure shipped in the same PR then disagree on the D1 path.",
+        "suggested_fix": "Change row 4 to: moved head allowed only with `--event COMMENT` and the first line naming the reviewed SHA (D1), refused otherwise; closed PR refused. Change its tests to: moved head + REQUEST_CHANGES/APPROVE refused, moved head + COMMENT with reviewed-SHA first line accepted. Drop or resolve section 5's last bullet.",
+        "evidence": "slice-01 line 177 (row 4) vs lines 991 (procedure option 2) and 221 (journal T6 note).",
+        "confidence": "high",
+        "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        "line": 55,
+        "quote": "Keep D1 out: moved head refuses for now.",
+        "locator": {
+          "state": "derived",
+          "method": "substring",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R9",
+        "merged_from": [
+          "review-architecture-w1:F-003"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R10",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 430,
+      "quote": "expect(text).toContain(\"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\");",
+      "quoteSha256": "98673272a8e7eb6a1a5bdbf0d0f38e77a16bbadbc8080daedc0ab4fa87cef072",
+      "problem": "AC1's D1 rule says an old commit is published as is only with a FIRST line naming the reviewed commit. The test pins the sentence text but not its position: neither 'first line' nor 'The body's first line is' is asserted. The clause 'the body names the commits it did not check (`<reviewed sha>..<new sha>`)' is not asserted either.",
+      "status": "open",
+      "finding": {
+        "id": "R10",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "problem": "AC1's D1 rule says an old commit is published as is only with a FIRST line naming the reviewed commit. The test pins the sentence text but not its position: neither 'first line' nor 'The body's first line is' is asserted. The clause 'the body names the commits it did not check (`<reviewed sha>..<new sha>`)' is not asserted either.",
+        "impact": "If the procedure is rewritten to put the sentence anywhere else in the body ('last line', 'a line'), or the unchecked-commit range is dropped, the suite stays green. readiness item 7 (completeHeadGate) only accepts the moved-head report when the first line names the SHA, so a misplaced line would fail at publish time with no test catching the skill text. This is predicted, not run.",
+        "suggested_fix": "Assert the position as well: expect(text).toContain(\"The body's first line is \\\"Reviewed `<reviewed sha>`\") and expect(text).toContain(\"names the commits it did not check (`<reviewed sha>..<new sha>`)\").",
+        "evidence": "Read the D1 test in the new block (diff lines 1155-1163 of slice-01): none of its 6 assertions contains 'first line'. The template src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md:37 requires the line 'as the very first line'. Mutants M01 and M02 are not run.",
+        "confidence": "high",
+        "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+        "line": 430,
+        "quote": "expect(text).toContain(\"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\");",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R10",
+        "merged_from": [
+          "review-testing-practices-w1:F-001",
+          "review-testing-practices-w1:F-002",
+          "review-testing-practices-w1:F-003",
+          "review-testing-practices-w1:F-004"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R11",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 601,
+      "quote": "3. **Decide by `on_head_move`:** the Review's own value when it has one, otherwise `ask` (the default for a manual review).",
+      "quoteSha256": "aa72bfc3b31ef3906ca1431938f20901dc9772e4303b75393b66b9ae8ae0d7fa",
+      "problem": "The text does not say where 'the Review's own value' is read from. No store exists before stage 3, so an agent could take follow/ignore from PR-supplied content.",
+      "status": "open",
+      "finding": {
+        "id": "R11",
+        "reviewer": "review-security-code",
+        "severity": "info",
+        "problem": "The text does not say where 'the Review's own value' is read from. No store exists before stage 3, so an agent could take follow/ignore from PR-supplied content.",
+        "impact": "Untrusted content could suppress the operator's head-move question. Bounded: neither follow nor ignore publishes, and no GitHub write path was found.",
+        "suggested_fix": "State that on_head_move is read only from the keryx-stored Review record (stage 3), never from PR body, branch files or comments, and is 'ask' until that store exists.",
+        "evidence": "slice-01 SKILL.detail.md § Head moved step 3; description.md Out of Scope: on_head_move storage belongs to stage 3.",
+        "confidence": "medium",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 601,
+        "quote": "3. **Decide by `on_head_move`:** the Review's own value when it has one, otherwise `ask` (the default for a manual review).",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R11",
+        "merged_from": [
+          "review-security-code-w1:F-003"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    },
+    {
+      "id": "R12",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 455,
+      "quote": "test.each([\"SKILL.md\", \"SKILL.detail.md\"])(\"the bundled and installed %s are identical\", (file) => {",
+      "quoteSha256": "08b03515c8298c0703347d269053f4e1f6b3e013f1fb7d9d0aaa09023f27663c",
+      "problem": "The new copy-parity assertion repeats `src/gdskills/review-orchestrator-skill-parity.test.ts`, which already asserts both review-orchestrator files are byte-identical across the two copies and that SKILL.md equals its ceiling. The flow's AC3 uses `cmp` anyway.",
+      "status": "open",
+      "finding": {
+        "id": "R12",
+        "reviewer": "review-architecture",
+        "severity": "info",
+        "problem": "The new copy-parity assertion repeats `src/gdskills/review-orchestrator-skill-parity.test.ts`, which already asserts both review-orchestrator files are byte-identical across the two copies and that SKILL.md equals its ceiling. The flow's AC3 uses `cmp` anyway.",
+        "impact": "Two guards for one invariant; harmless. Duplication belongs to review-clean-code's lane, noted here only for the two-copy layout question.",
+        "suggested_fix": "Optional: drop the test.each and point AC3 at review-orchestrator-skill-parity.test.ts.",
+        "evidence": "review-orchestrator-skill-parity.test.ts:30-45 read at head.",
+        "confidence": "high",
+        "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+        "line": 455,
+        "quote": "test.each([\"SKILL.md\", \"SKILL.detail.md\"])(\"the bundled and installed %s are identical\", (file) => {",
+        "locator": {
+          "state": "derived",
+          "method": "exact",
+          "reported_line": null
+        },
+        "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302#R12",
+        "merged_from": [
+          "review-architecture-w1:F-005"
+        ]
+      },
+      "source": "local-package",
+      "round": 1,
+      "claimed_disposition": "fixed"
+    }
+  ],
+  "known_findings": [],
+  "context_doc": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+  "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

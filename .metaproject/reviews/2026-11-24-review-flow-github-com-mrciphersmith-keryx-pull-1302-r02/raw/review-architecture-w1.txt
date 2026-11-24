@@ -1,0 +1,95 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-01"],
+  "summary": "FIX slice: R1-R12 answered by the T11 fix. Each was checked against the code at head 0c6ff2b7e: SKILL.detail.md § Head moved in both copies, divergence-map.md row 4 and § 5, and the preflight test. All 12 are closed. There is one new info finding. The skill's Unattended bullet now names the wording of one caller's prompt, and a test pins the two texts together. That coupling direction is acceptable for now but should become a passed policy with stage 3.",
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "closed"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "ARCH-W1-001",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "Follow the head-move instruction of the run that dispatched you: the autonomous runner's \"open one more round only if the head moved\" is `follow`, a fixed-range Desktop run's \"keep this range\" is `ignore`.",
+      "problem": "The R2 fix makes the shared skill (the callee) recognise one caller's prompt by its exact wording. That caller is src/review/autonomous-profile.ts:199-200. A new test, review-orchestrator-preflight.test.ts 'the autonomous prompt and the skill agree', reads autonomous-profile.ts as text and pins both sentences. The policy reaches the skill as prose that the skill pattern-matches. It is not passed as a value, such as on_head_move, the way step 3 already reads it for the interactive path. There is no named layer violation: this is a coupling-direction observation.",
+      "impact": "Changing the wording of either prompt line, which AC6/T8 must do for line 199, breaks the skill test even when the behaviour is unchanged. A third unattended caller must add its own sentence to the skill's mapping. The test catches the drift, so nothing breaks silently.",
+      "suggested_fix": "No action needed in this PR. With stage 3 (T8), have buildAutonomousPrompt state the policy as the value step 3 reads, for example 'on_head_move: follow' or 'on_head_move: ignore'. The Unattended bullet then says 'use the on_head_move your dispatcher stated', and the test asserts the value instead of the sentences.",
+      "evidence": "slice-01.diff lines 58 and 93 (Unattended bullet, both copies); lines 239-247 (the test reads autonomous-profile.ts and pins 'Open one more round only if the head moved while you worked, and review the new head.' and 'Keep this range throughout the review.'); src/review/autonomous-profile.ts:199-200 at head 0c6ff2b7e; SKILL.detail.md step 3 already defines on_head_move as the single policy input.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Parent ref: `main`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`
+- Head: `0c6ff2b7e6e4118287ef8abd531e7268980435e8` (round 2, delta from 2e01447f9)
+- Scope mode: `explicit-hash-range` (supplied slice-01, FIX)
+- Stack detected: generic-ts (skill prose, flow docs, one bun test file)
+
+### Summary
+Slice 01 is the T11 fix of round-1 findings R1-R12. It rewrites SKILL.detail.md § "Head moved" steps 1-5 (both copies, byte-identical in the slice). It also changes row 4 of divergence-map.md and replaces the head-moved preflight tests with per-step assertions. I checked every prior finding against the text at head, not against the commit message, and all 12 are closed. The fix adds no layering or dependency-direction violation. One info observation: the skill now reads a caller's policy from that caller's prose.
+
+### Prior dispositions (checked against the code)
+- **R1 closed.** "Stop and start" no longer promises carry-over. It says a stopped round is partial and never a previous round, and cites `src/review/round-record.ts:207`. I verified that line: the M1 comment reads "a draft or partial package is never a previous round". The findings reach the new round at most as context, and per-finding answers do not carry over yet. "Update after" is marked recommended, and step 5.1 is limited to "only with `advance`". The tests at slice lines 192-200 pin this.
+- **R2 closed.** The Unattended bullet defers to the dispatcher's head-move instruction: the autonomous runner maps to `follow`, a fixed-range Desktop run to `ignore`. A new test reads `autonomous-profile.ts` and asserts that both texts agree. AC6 is extended to cover line 200 (slice-02). The coupling this creates is ARCH-W1-001 (info).
+- **R3 closed.** Wave boundaries use `git ls-remote origin refs/pull/<n>/head`. The two remaining `gh pr view` calls are declared the expected ones under "make it once".
+- **R4 closed.** "Desktop runs the same command" is replaced by "the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)". A test asserts that the old phrase is absent.
+- **R5 closed.** Step 1 compares against "the head they answered for" and asks again only when the PR moves past it. The stop list (SKILL.detail.md:587) says "once per head the PR moves to".
+- **R6 closed.** A new paragraph in step 3 requires the moved-head first line before `keryx review complete` and names `complete-head-gate.ts`.
+- **R7 closed.** Step 5 now applies to every publish whose head differs, "any `on_head_move`". Step 3 says it governs only a running round.
+- **R8 closed.** "Any other exit (128 …): stop and report the git error; never read it as rewritten history."
+- **R9 closed.** Row 4 of divergence-map.md now prescribes D1: COMMENT only on a moved head, other events refused, closed PR refused, with matching tests listed. The § 5 bullet is resolved to "Row 4 resolves it to D1, not to refusal".
+- **R10 closed.** The test asserts "The body's first line is \"Reviewed …\"" and "names the commits it did not check (`<reviewed sha>..<new sha>`)".
+- **R11 closed.** Step 3: "read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask`."
+- **R12 closed.** The `test.each` copy-parity test and the `INSTALLED` constant are removed. A comment points AC3 at `review-orchestrator-skill-parity.test.ts` (preflight.test.ts:385).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+ARCH-W1-001 (info): the shared skill now recognises a specific caller's prompt sentences, and a skill test reads that caller's source as text. The direction is callee→caller-wording. It is acceptable as a stopgap until stage 3 can pass `on_head_move` as a value.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+### Notes / not verified
+- Layers block: graph `affected` was empty and no wiki or memory entries were supplied. I did not run `keryx gdgraph affected` separately, because the change is skill prose plus one test file.
+- I did not run tests: exec_budget_s is 0. The package's research-evidence reports preflight + parity exit 0.
+- Out of this lens, passed on as a lead for review-logic: after `ingest`, a stopped round's manifest status may be `reviewed`, which makes it eligible (`REVIEWED_STATUSES`, round-record.ts:208). That would make it "eligible but untrusted" rather than "never a previous round", so the absolute wording at R1's fix site may be stronger than the code.
+
+Routing audit: graph_used: payload layers (empty affected), not re-run; wiki_used: not-relevant (payload wiki empty, prose-only change); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

@@ -1,0 +1,99 @@
+STATUS: DONE
+
+# review-pr-contract w2 — PR #1302, round 2 (delta), NEW slice-02, head 0c6ff2b7e6e4118287ef8abd531e7268980435e8
+
+Inputs read: brief.md, pr-context.md (in full), slices/slice-02.diff (in full, 490 lines), the live PR body via `gh pr view 1302 --json body,headRefOid,updatedAt` (identical to the round-1 intent in pr-context.md; not edited after fix commit 0c6ff2b7e), `git diff --name-only a5d1ab236..0c6ff2b7e` (14 non-review files plus 73 files under `.metaproject/reviews/`), `src/review/autonomous-profile.ts:195-202`, `docs/requirements/keryx-desktop-review-v2/specification.md:82-103`. Read-only commands only.
+
+## Checklist form (PR body claims touching slice-02)
+
+| Claim (quoted) | State | What the diff shows | Expectation | Result |
+|---|---|---|---|---|
+| "Item 3 ... The Desktop prompt line 'New commits belong to a separate request' (`src/review/autonomous-profile.ts:199`) is replaced then." | claimed scope of T8/AC6 | acceptance-criteria.md (slice-02:24) extends AC6 to line 200 as well; journal (slice-02:64, 70) records the AC update | body names the whole AC6 scope | contradicted by omission — PC-002 |
+| "In `SKILL.md`, Round plan step 5 and the end of 'PR Review Report Publication' point to the procedure ... Its line count stays at the 918-line ceiling" | claimed | SKILL.md version 1.17.0 -> 1.18.0 (slice-02:121-122, 377-378); 918 lines at head | body lists every SKILL.md change | version bump not mentioned — PC-003 |
+| "Done here": two items (Head moved procedure, divergence map) | claimed scope | 73 committed files under `.metaproject/reviews/2026-11-24-review-flow-...-1302/` and `.metaproject/reviews/pr-comments/` (round-1 package, ~8.4k lines) | body describes what the PR adds | not mentioned — PC-003 |
+| "The bundled and installed copies are byte-identical. Tests: a new block in preflight test" | claimed | slice-02:422, 466-469 move the copy-parity assertion out to review-orchestrator-skill-parity.test.ts | parity still tested | holds |
+| "`bun test src/gdskills`: 8470 pass, 1 fail in `install.test.ts`" | disclosed | journal (slice-02:69) now records 8471 pass, same 1 fail | figure matches head | stale number, folded into PC-003 (no behavioural claim) |
+| "Stage 2 and stage 3 own desk-run-store.ts, desk-publication.ts, review-desk-publish.ts and ReviewPublishDialog.tsx. This PR does not touch them." | claimed | file list a5d1ab236..0c6ff2b7e: none of them | untouched | holds |
+| Divergence map §5 (body item 2) | claimed | slice-02:37 resolves the head-semantics risk to D1 COMMENT-only | consistent with Head moved step 5 | holds |
+| "Between waves" stop list | not claimed in body | slice-02:94-95 "once per head the PR moves to" | — | consistent with Head moved step 1 |
+
+Documentation outside the diff: `keryx ctx rg -i "head moved|on_head_move|re-check findings" docs README.md` — hits only in the requirement docs and docs/docs/guides/autonomous-review.md:73, which agrees with the new rule. No stale document found.
+
+## Findings
+
+### [PC-002] PR body scopes item 3 / AC6 to autonomous-profile.ts:199 only; the head extends AC6 to line 200
+
+- **Severity**: minor
+- **File**: .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md:21
+- **Problem**: pr-context.md:27 "The Desktop prompt line 'New commits belong to a separate request' (`src/review/autonomous-profile.ts:199`) is replaced then." At head AC6 reads "... and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's 'Head moved' unattended rule" (slice-02:24), changed through `keryx flow ac update` (slice-02:64). The body names neither the AC edit nor line 200. AC6's `[verify: invariant ...]` command was not extended, so the added clause is checked only by the new preflight test (slice-01:239-247), which the body also does not mention.
+- **Why it matters**: acceptance-criteria.md is a gate input (checksum changed, slice-02:165-166). An owner approving the PR from its body does not see that a frozen criterion was widened, nor that T8 now has a second line to keep in agreement.
+- **Fix**: add a line under "Waiting on stages 2 and 3" (item 3): AC6 now also covers autonomous-profile.ts:200 (round-1 R2), currently in agreement and pinned by the preflight test.
+
+### [PC-003] PR body omits fix-round changes visible in the diff: skill version bump and the committed round-1 review package
+
+- **Severity**: minor
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:17
+- **Problem**: The body's "Done here" lists two items and its SKILL.md description says only that two places point to the procedure. The diff also bumps `version: "1.17.0"` -> `"1.18.0"` in both SKILL.md copies (slice-02:121-122, 377-378) and commits 73 files under `.metaproject/reviews/` (the round-1 package of this PR plus `pr-comments/MrCipherSmith__keryx__1302.json`, ~8.4k lines of the PR's 9.3k insertions). The "Not verified" figure "8470 pass" is now 8471 per the journal (slice-02:69).
+- **Why it matters**: a reader sizing the PR from the body expects ~14 files; 87 files land. A skill version bump is a consumer-visible change (installed-skill update detection) the body does not announce.
+- **Fix**: add a "Review round 1" paragraph: R1–R12/R14 fixed in 0c6ff2b7e, review-orchestrator 1.18.0, round-1 package committed under `.metaproject/reviews/...-1302/`; update the test count.
+
+### [PC-004] Unattended rule with no dispatcher instruction opens no update round; the spec's default for rule-triggered runs is `follow` (unverified)
+
+- **Severity**: info
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (Head moved step 3, Unattended)
+- **Problem**: The body claims "`follow`, `ignore` and the unattended behaviour are also covered" per the spec. specification.md:84 says `on_head_move` is "`follow` (по умолчанию для запусков по правилу)". The head text says "With no such instruction, open no update round: finish on the pinned head." The autonomous runner supplies a `follow` instruction (autonomous-profile.ts:200), so the known path agrees; I did not establish whether any rule-triggered unattended path reaches the skill without that instruction.
+- **Why it matters**: if such a path exists, it behaves as `ignore` where the spec says `follow`.
+- **Fix**: none required now; settle by listing unattended entry points that load review-orchestrator without autonomous-profile.ts's prompt, or note in the body that the no-instruction fallback is deliberate until the stage-3 Review store holds `on_head_move`.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "NEW slice-02: the PR body was not updated after the fix round. It omits the AC6 widening to autonomous-profile.ts:200, the review-orchestrator 1.18.0 bump and the 73 committed review-package files, and carries a stale test count. One info on the spec's follow default for rule-triggered runs.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "line": 21,
+      "problem": "PR body (pr-context.md:27) scopes T8/AC6 to 'src/review/autonomous-profile.ts:199'. At head AC6 adds 'and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule' (slice-02:24) via keryx flow ac update (slice-02:64); the body mentions neither the AC edit nor line 200, and the AC's invariant command was not extended.",
+      "impact": "An owner approving from the body does not see that a checksum-protected acceptance criterion was widened (acChecksum changed, slice-02:165-166).",
+      "suggested_fix": "Under item 3, state that AC6 now also covers autonomous-profile.ts:200 (round-1 R2), currently in agreement and pinned by the preflight test.",
+      "evidence": "pr-context.md:27; slices/slice-02.diff:24, 64, 165-166",
+      "quote": "(`src/review/autonomous-profile.ts:199`) is replaced then.",
+      "confidence": 0.9,
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 17,
+      "problem": "Body 'Done here' lists two items and describes SKILL.md as only re-pointed. The diff also bumps version 1.17.0 -> 1.18.0 in both SKILL.md copies (slice-02:121-122, 377-378) and commits 73 files under .metaproject/reviews/ (round-1 package, ~8.4k of 9.3k insertions). Body 'Not verified' says 8470 pass; journal now says 8471 (slice-02:69).",
+      "impact": "Reader sizing the PR from the body expects ~14 files, 87 land; the skill version bump is not announced.",
+      "suggested_fix": "Add a 'Review round 1' paragraph: fixes in 0c6ff2b7e, review-orchestrator 1.18.0, round-1 package committed; update the test count.",
+      "evidence": "slices/slice-02.diff:121-122, 377-378, 69; git diff --name-only a5d1ab236..0c6ff2b7e -- .metaproject/reviews (73 files)",
+      "quote": "version: \"1.18.0\"",
+      "confidence": 0.9,
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-004",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 606,
+      "problem": "Unverified: specification.md:84 makes `follow` the default for rule-triggered runs; the Unattended rule says 'With no such instruction, open no update round'. The autonomous runner supplies `follow` (autonomous-profile.ts:200); other unattended entry points were not enumerated.",
+      "impact": "If an unattended rule-triggered path loads the skill without that instruction, it behaves as `ignore` against the spec default.",
+      "suggested_fix": "Enumerate unattended entry points, or state in the body that the no-instruction fallback is deliberate until the stage-3 Review store holds on_head_move.",
+      "evidence": "docs/requirements/keryx-desktop-review-v2/specification.md:84; slices/slice-01.diff:58; src/review/autonomous-profile.ts:199-200",
+      "confidence": 0.5,
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 1}
+}
+```
+
+Summary: the PR body is stale against the head (AC6 widening, version bump, committed review package, test count); two minors and one unverified info.

@@ -1,0 +1,53 @@
+STATUS: DONE
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so no mutant ran. Candidates are listed below. Not reached: all 2 (0 run).
+
+Slice-02 changes the tests touch in three places:
+- The stop-list line ", once per head the PR moves to" in SKILL.detail.md. It is pinned by preflight.test.ts ("after an answer, later boundaries compare with the head they answered for", which reads it from the "Between waves" section).
+- The installed-vs-bundled parity test was removed from the Flow 521 describe, and a comment was added at preflight.test.ts:385. AC3 is still guarded by src/gdskills/review-orchestrator-skill-parity.test.ts:31-37, and by AC3's own `cmp` invariant.
+- AC6 was extended in acceptance-criteria.md and flow.json.
+
+The SKILL.md version bump, divergence-map and journal changes have no testable behaviour.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-02"],
+  "summary": "The new stop-list clause is pinned. AC3 stays covered by the parity suite after the duplicate's removal. Two info items: AC6's new clause is checked by a test its verify command never runs, and the describe title still claims AC3. Mutation pass not run (read-only budget); 2 candidates listed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "line": 23,
+      "problem": "AC6 now also requires 'its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule'. Its verify is still only the invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`, which checks line 199 and says nothing about line 200. The only check of the new clause is the cross-file test in src/gdskills/review-orchestrator-preflight.test.ts:483, and no AC's verify runs that test for AC6.",
+      "impact": "When AC6 is confirmed, it can pass on the git-grep alone while the line-200 agreement has drifted. The new clause has no executable gate of its own.",
+      "suggested_fix": "Through `keryx flow ac update`, make AC6's verify also run `bun test src/gdskills/review-orchestrator-preflight.test.ts -t \"the autonomous prompt and the skill agree\"`. Or confirm AC6 only after that test runs, and say so in the AC text.",
+      "evidence": "slice-02 diff lines 23-24 (AC6 text) and flow.json acKinds. Only AC1/AC2 run the preflight suite.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 386,
+      "problem": "The describe is still titled 'Flow 521 AC1-AC3', but the AC3 assertion has moved out of it. The comment at :385 says the parity suite owns AC3.",
+      "impact": "Someone tracing AC3 from the test name lands on a block that does not check it. It is cosmetic only, because the comment one line above corrects it.",
+      "suggested_fix": "Retitle it 'Flow 521 AC1-AC2 (AC3: review-orchestrator-skill-parity.test.ts)'.",
+      "evidence": "preflight.test.ts:385-386",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M10", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "- a moved pull request head while `on_head_move` is `ask`, once per head the PR moves to (§ \"Head moved\");", "replacement": "- a moved pull request head while `on_head_move` is `ask` (§ \"Head moved\");"},
+    {"id": "M11", "kind": "behavior", "file": "src/review/autonomous-profile.ts", "anchor": "Open one more round only if the head moved while you worked, and review the new head.", "replacement": "Open one more round only if the head moved while you worked."}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+Expected, by reading (not run): M10 is killed by preflight.test.ts. M11 is killed by the cross-file test at preflight.test.ts:483, but survives harness-robustness.test.ts:179, which asserts only the prefix. Run with `--test src/gdskills/review-orchestrator-preflight.test.ts`. A single-copy mutant of SKILL.detail.md is also killed by the parity suite, so leave the parity suite out of `--test` to measure non-parity kills.

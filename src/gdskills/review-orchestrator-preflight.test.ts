@@ -18,6 +18,7 @@ import {
   STEERING_SUFFIX_TOKENS,
   STEERING_WORD_TOKENS,
 } from "../review/round-need";
+import { buildAutonomousPrompt } from "../review/autonomous-profile";
 import { SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 const SKILLS = path.join(import.meta.dir, "bundled", "skills");
@@ -383,7 +384,7 @@ describe("AC11: the skill is internally consistent", () => {
 });
 
 // The two SKILL copies staying byte-identical (AC3) is review-orchestrator-skill-parity.test.ts's job.
-describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md", () => {
+describe("Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md", () => {
   const headMoved = (): string => section(DETAIL, "## Head moved");
   const step = (n: number): string => {
     const text = headMoved();
@@ -393,13 +394,20 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
   };
   const bullet = (label: string): string => headMoved().split("\n").find((line) => line.includes(label)) ?? "";
 
-  test("wave boundaries read the head with routine read-only git; gh is read once before complete and once before publish", () => {
+  test("wave boundaries read the head with git ls-remote, which asks in trust/auto like gh; gh is read once before complete and once before publish", () => {
     const check = step(1);
     expect(check).toContain("At every wave boundary (before each `keryx review next`) read the head with `git ls-remote origin refs/pull/<n>/head`");
+    expect(check).toContain("It is a network read, so in a `trust` or `auto` session it asks, like `gh`: one prompt per wave boundary is expected, the stated exception to SKILL.md's \"make it once\" rule, as is step 2's fetch when the head moved.");
     expect(check).toContain("Before `keryx review complete` and before publishing, read it once each with `gh pr view <n> --json headRefOid --jq .headRefOid`");
-    expect(check).toContain('"make it once"');
     expect(check.indexOf("git ls-remote")).toBeLessThan(check.indexOf("gh pr view"));
+    expect(headMoved()).not.toContain("stays routine");
     expect(headMoved()).toContain("never interrupted on its own");
+  });
+
+  test("an empty ls-remote result falls back to gh, and only a 40-hex SHA is used as a head", () => {
+    const check = step(1);
+    expect(check).toContain("An empty result (`origin` is a fork without `refs/pull/*`): read that boundary with `gh pr view` instead.");
+    expect(check).toContain("Use a head only if it is a 40-hex SHA; anything else, stop and report.");
   });
 
   test("after an answer, later boundaries compare with the head the operator answered for", () => {
@@ -428,14 +436,16 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
     expect(update).toBeGreaterThan(-1);
     expect(stop).toBeGreaterThan(update);
     expect(decide).toContain("which makes it a trusted prior round");
-    expect(bullet("- `follow`:")).toContain("then step 4 without asking");
+    expect(bullet("- `follow`:")).toContain("then step 4 without asking: one update round per head move, and the round ceiling (5) still applies");
     expect(bullet("- `ignore`:")).toContain("finish the round; the report says the review is behind");
     expect(bullet("- `ignore`:")).not.toContain("step 4");
   });
 
   test("stop-and-start says truthfully that nothing carries over until advance exists", () => {
     const stop = bullet("**Stop and start on the new head**");
-    expect(stop).toContain("Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`)");
+    expect(stop).toContain("Until `keryx review --help` lists `advance`, a stopped round is partial and `keryx review plan` never takes a partial package as the previous round");
+    // The bundled skill ships to other projects: no keryx source paths in it.
+    expect(headMoved()).not.toMatch(/`src\/[\w/.-]+\.ts/);
     expect(stop).toContain("the stopped round's findings reach it at most as context");
     expect(stop).toContain("per-finding answers do not carry over yet");
     expect(stop).toContain("names the slices it did not cover");
@@ -446,7 +456,7 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
   test("a round completed on a moved head names the reviewed SHA on the report's first line before complete", () => {
     const decide = step(3);
     expect(decide).toContain("A round that completes on a moved head (update after, `follow`, `ignore`) needs the report's first line to name the reviewed SHA and say the PR moved on");
-    expect(decide).toContain("before `keryx review complete`, or `src/review/complete-head-gate.ts` refuses it");
+    expect(decide).toContain("before completing: `keryx review complete` refuses it otherwise.");
   });
 
   test("the update round is keryx review advance, stage 3's command, with review plan while advance is not listed", () => {
@@ -468,22 +478,30 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
     expect(publish).toContain("The body's first line is \"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\"");
     expect(publish).toContain("the body names the commits it did not check (`<reviewed sha>..<new sha>`)");
     expect(publish).toContain("never `--yes`");
+    expect(publish).not.toContain("when the head moved after the round completed");
+    expect(publish.split("carry over by finding id").length - 1).toBe(1);
+    expect(publish).toContain("carry over by finding id only with `advance`");
   });
 
   test("unattended asks nothing, publishes nothing, follows its dispatcher's instruction, else opens no update round, and reports the move", () => {
     const unattended = bullet("**Unattended**");
     expect(unattended).toContain("ask nothing and never publish");
-    expect(unattended).toContain("Follow the head-move instruction of the run that dispatched you");
+    expect(unattended).toContain("Follow the head-move instruction in the prompt the dispatching run started you with (for the autonomous runner and Desktop, the prompt keryx builds)");
     expect(unattended).toContain("the autonomous runner's \"open one more round only if the head moved\" is `follow`");
     expect(unattended).toContain("a fixed-range Desktop run's \"keep this range\" is `ignore`");
     expect(unattended).toContain("With no such instruction, open no update round: finish on the pinned head.");
     expect(unattended).toContain("report the move (both SHAs, N or \"history rewritten\")");
+    expect(unattended).not.toContain("unless `on_head_move` is `follow`");
   });
 
   test("the autonomous prompt and the skill agree: an unattended run opens one more round on a moved head", () => {
-    const prompt = read(import.meta.dir, "..", "review", "autonomous-profile.ts");
-    expect(prompt).toContain("Open one more round only if the head moved while you worked, and review the new head.");
-    expect(prompt).toContain("Keep this range throughout the review.");
+    const ref = "https://github.com/o/r/pull/7";
+    const fixed = buildAutonomousPrompt({ ref, fixedBase: "a".repeat(40), head: "b".repeat(40) });
+    const open = buildAutonomousPrompt({ ref });
+    expect(fixed).toContain("Keep this range throughout the review.");
+    expect(fixed).not.toContain("Open one more round only if the head moved");
+    expect(open).toContain("Open one more round only if the head moved while you worked, and review the new head.");
+    expect(open).not.toContain("Keep this range throughout the review.");
     const unattended = bullet("**Unattended**");
     expect(unattended.toLowerCase()).toContain("open one more round only if the head moved");
     expect(unattended).toContain("is `follow`");
@@ -497,6 +515,8 @@ describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md",
     expect(step5.indexOf("Head moved")).toBeLessThan(step5.indexOf("`keryx review next"));
     const publication = section(SKILL, "## PR Review Report Publication");
     expect(publication).toContain('`SKILL.detail.md` § "Head moved"');
+    expect(publication).toContain("a head that differs from the round's head, however it moved,");
+    expect(publication).not.toContain("after the round follows");
     expect(publication).toContain("Do not duplicate findings; cite extended ones.");
   });
 });

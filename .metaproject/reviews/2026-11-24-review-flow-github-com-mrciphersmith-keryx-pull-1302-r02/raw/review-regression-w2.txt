@@ -1,0 +1,26 @@
+STATUS: DONE
+
+review-regression, round 2, wave 2: slice-02 (NEW), read in full. It covers flow 521 acceptance-criteria/divergence-map/journal/flow.json, both copies of the SKILL.detail.md "Between waves" stop-list line and the Head moved step 1-3 hunk, the SKILL.md version bump 1.17.0 -> 1.18.0 in both copies, and the preflight test restructuring.
+
+Radius: non-code and skill-text change, so the code graph cannot answer. It is recorded as unresolved, not clean, and nothing was capped. Consumers enumerated with `keryx ctx rg` over src:
+- review-orchestrator-skill-parity.test.ts: both copies are byte-identical (diff).
+- skill-drift (src/review/skill-drift.ts via src/commands/review.ts): compares installed vs bundled versions, both 1.18.0, no other pin of 1.17.0/1.18.0 in the repo.
+- skill-length ceilings: SKILL.md changed only its version line.
+- The tests that read the skill text (review-wave-skill, enforcement-claims, review-skills-class-scope, agent-conduct, package-relative-path, skill-length): none asserts on the changed stop-list line or the Head moved section.
+- autonomous-profile.ts and harness-robustness.test.ts / desk-run-executor.test.ts: unchanged code, and their pinned strings are still present.
+- The new stop-list wording "once per head the PR moves to" is pinned only by the new preflight test.
+- The flow files are gate inputs, not code consumers. AC6 was edited via `keryx flow ac update`, so the checksum route was followed (journal line records it).
+Recorded test evidence: preflight + parity 91 pass.
+
+No regression found. The step-1 `git ls-remote` "stays routine" claim in this hunk is reported once, under R3's disposition in raw/review-regression-w1.txt, not repeated here.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "No regression in slice-02. Consumers of the skill text, the version pin, the parity, skill-drift and the length ceiling were enumerated with keryx ctx rg and all hold. autonomous-profile.ts and its tests are unchanged. Radius unresolved for a skill-text change; no cap.",
+  "findings": [],
+  "slices": ["slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

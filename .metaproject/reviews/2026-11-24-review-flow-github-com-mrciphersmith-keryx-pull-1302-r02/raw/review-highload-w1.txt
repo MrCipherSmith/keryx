@@ -1,0 +1,58 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: branch feat-/desktop-review-v2-stage4-7dce00, merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9, head 0c6ff2b7e, scope mode diff (round 2 delta), slice-02 (NEW) read in full. Load profile: not provided; concrete triggers used: one PR head that the author can push to at any time while a round or a publish is in progress; one head check per wave boundary. Files in the slice: flow 521 acceptance-criteria.md, divergence-map.md, journal.md, flow.json; review-orchestrator SKILL.detail.md (installed lines 567-593, bundled lines 567-605) and SKILL.md (1-37, version bump only) in both copies; src/gdskills/review-orchestrator-preflight.test.ts (365-389, 497-522). Out-of-slice code read for evidence only: src/flow/tracker/github.ts:139-150, src/commands/review.ts:5030-5070, installed SKILL.detail.md:595-617 (steps 4-5 of "Head moved").
+
+Summary: The slice is skill steering text, flow records and a test refactor; almost nothing in it runs concurrently. The one concurrency-shaped point is the head check that guards publishing: it is a check-then-act with an unbounded operator wait between the read and the post, and the post does not pin the reviewed commit, so the D1 "moved head publishes only as COMMENT" guarantee holds only if the PR does not move during the publish confirmation. The defect that makes it real sits in unchanged publish code; the new text defines the single pre-publish read. Stats: blocker 0 | major 0 | minor 1 | info 0.
+
+### CLI / Multi-Session
+None detected. The wave-boundary head read (`git ls-remote origin refs/pull/<n>/head`) runs once per wave boundary, bounded by the number of waves; step 2's fetch/ancestry calls run once per detected move and stop on any non-0/1 exit (no retry loop); "ask again only when the PR moved past it" bounds operator questions to one per distinct head. No shared state file is written by the new text; flow.json/journal.md edits are the record of single CLI calls (`keryx flow ac update`, task events), not concurrent writers.
+
+### Concurrency & Races
+[F-001] minor — see REVIEW_RESULT.
+
+### Resources / Caching / Lock Contention / Async-Queues / Retry-Timeout / Idempotency
+None detected: the slice adds no pool, cache, transaction, queue, retry or event handler. The test change removes the duplicate parity test and narrows assertions to a `step(n)` helper; no shared mutable state across tests.
+
+Clean Areas: Part 0 (multi-session, retry caps, timers, servers), Part B, Part C, Part D, Part E, Part F, Part G reviewed; no findings.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice-02 is skill text, flow records and a test refactor. One minor: the pre-publish head check is a check-then-act; the post (gh pr review, no commit pin) happens after an unbounded operator confirmation, so a push in that window lets APPROVE/REQUEST_CHANGES land on an unreviewed head despite the D1 rule. Root cause is in unchanged publish code; fix belongs with T7.",
+  "slices": [{"id": "slice-02", "status": "DONE", "coverage": "read in full"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "Before `keryx review complete` and before publishing, read it once each with `gh pr view <n> --json headRefOid --jq .headRefOid`",
+      "problem": "Pattern A6 (TOCTOU / check-then-act). The procedure guards the D1 rule (a moved head publishes only as `--event COMMENT`) with one head read before publishing. Between that read and the post sits the operator's confirmation (`review_publish` card, or `promptYes` in src/commands/review.ts publish, an unbounded wait), and the post itself, `githubPostReview` in src/flow/tracker/github.ts:144, runs `gh pr review <url> --approve|--request-changes|--comment` with no `commit_id`, so GitHub attaches the review to whatever the head is at post time. Nothing re-reads the head after the confirmation.",
+      "impact": "Trigger: the PR author pushes while the operator is reading the body at the publish confirmation (the head was equal at the check, so no D1 question was asked). Outcome: an APPROVE or REQUEST_CHANGES computed for the reviewed SHA is recorded against the new, unreviewed head; an APPROVE can satisfy branch protection for commits no reviewer saw. The D1 restriction the new section states is not enforced for that window. Not data loss and not shown persisted, hence minor under this lens; the defect site is unchanged code.",
+      "suggested_fix": "Close the window at post time, not in the text: in T7 (which already plans to move the session post from `gh pr review` to `gh api .../reviews`, journal.md), post with `commit_id=<reviewed sha>` so the review is anchored to the commit it covers, and/or re-read `headRefOid` after the confirmation and immediately before the POST, refusing any event other than COMMENT when it differs from the round's head. Then let step 1 say the publish command performs the final check, so the skill's single read is advisory.",
+      "evidence": "Slice-02 bundled SKILL.detail.md new step 1 (diff line 349) defines the single pre-publish read; installed SKILL.detail.md:611-613 (step 5) relies on it for the COMMENT-only rule; src/flow/tracker/github.ts:143-144 builds `gh pr review url flag --body-file -` with no commit pin; src/commands/review.ts:5044-5061 shows the confirm callback (promptYes / card) running inside publishReview before `post`. Not verified: whether publishReview's readiness prLookup (run before confirm) compares the head; even if it does, it runs before the wait, so the window remains.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "blocking_merge": false,
+      "dedupe_key": "publish-head-check-toctou",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (Head moved step 1, pre-publish read)",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (same text, installed copy)",
+          "src/flow/tracker/github.ts:144 (githubPostReview, no commit pin)"
+        ],
+        "enumeration_method": "keryx ctx rg for githubPostReview across src: the single post implementation, used by src/commands/review.ts:5060 and src/commands/operator-confirm-review.ts:185; Desktop desk-publish path not read (owned by stages 2/3)."
+      }
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: slice supplied, three targeted lookups); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no (one raw `sed` read of src/commands/review.ts:5030-5070 with a keryx:raw reason).

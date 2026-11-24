@@ -1,0 +1,61 @@
+STATUS: DONE
+
+## Security Review — round 2, wave 3 (slice-02, NEW)
+
+### Scope
+- Merge-base `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `0c6ff2b7e6e4118287ef8abd531e7268980435e8`, explicit-hash-range.
+- Read in full: slice-02.diff (490 lines): AC6 text change, divergence-map §5 bullet, journal T11 entries, the "Between waves" stop-list line (both copies), SKILL.md version bump (both copies), the flow.json T11 task, history and acChecksum, and the preflight test restructuring.
+- Also checked the committed round-1 review package (`.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/`, added in 0c6ff2b7e, not in any slice) and `.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1302.json` for secrets and PII, using `keryx ctx rg --hidden` for token prefixes (ghp_/gho_/github_pat/sk-), e-mail addresses and absolute home paths.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [F-001] The committed round-1 review package contains absolute home-directory paths (local OS user name)
+- **Severity**: info
+- **File**: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/ (payloads/*.json, drivers/*.json, plan.json, research-evidence/*.txt, tool-calls/wave-events.jsonl, and others)
+- **Attack vector**: none. This is a privacy and hygiene observation, not an exploit.
+- **Problem**: Package files record `review_plan.path`, `skill_path`, slice paths and test-run cwd as absolute `/Users/<os-user>/…` paths. No tokens, keys or e-mail addresses were found in that package, in pr-comments/MrCipherSmith__keryx__1302.json, or in the flow 521 folder (zero matches for each pattern). The flow folder has no absolute paths.
+- **Why it matters**: It leaks the local account name into a public repository. This is pre-existing: `keryx ctx rg --hidden -l "/Users/" .metaproject/reviews` lists 619 files across earlier packages, so it is the package writer's convention and not something this PR introduced.
+- **Fix**: Optional, outside this PR: have the package writer store paths relative to the project root, or redact the home prefix, when a package is committed. Track it separately.
+
+### Clean Areas
+- Stop-list line "once per head the PR moves to": it limits operator questions and grants no action.
+- AC6 change and the journal/flow.json T11 entries: plain text, no credentials. acChecksum is a content digest, not a secret.
+- Version bump 1.17.0 → 1.18.0: no security content.
+- Test restructuring: it only reads repo files (`read(import.meta.dir, "..", "review", "autonomous-profile.ts")`) with fixed relative segments, so there is no path input. Removing the duplicate parity test.each leaves AC3 to review-orchestrator-skill-parity.test.ts.
+- The divergence-map §5 bullet resolves session moved-head publishing to D1 COMMENT-only. That narrows what can be posted for an outdated commit and is the safer direction.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "NEW slice-02 (AC6, stop-list line, journal/flow.json T11, version bump, test restructuring): no security defect. Committed round-1 review package and pr-comments JSON: no tokens, keys or e-mails; absolute /Users/<os-user> paths are present, a pre-existing package-writer convention (619 files repo-wide), recorded as info.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/plan.json",
+      "line": null,
+      "quote": null,
+      "problem": "The round-1 review package committed in 0c6ff2b7e stores absolute /Users/<os-user>/... paths (payloads, drivers, plan.json, research-evidence, wave-events.jsonl), which exposes the local account name. No tokens, keys or e-mail addresses were found in it, in pr-comments/MrCipherSmith__keryx__1302.json, or in the flow 521 folder.",
+      "impact": "Minor privacy leak of a local user name into the repository; pre-existing package-writer convention (keryx ctx rg --hidden -l '/Users/' .metaproject/reviews: 619 files), not introduced by this PR.",
+      "suggested_fix": "Separately from this PR: write package paths relative to the project root, or redact the home prefix when packages are committed.",
+      "evidence": "keryx ctx rg --hidden -l '/Users/' on the round-1 package (25+ files) and on .metaproject/reviews (619 files); same search with token and e-mail patterns: 0 files.",
+      "confidence": "high",
+      "location_class": "pre-existing",
+      "publication": "omit"
+    }
+  ],
+  "needs_context": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (not-relevant); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg --hidden); raw_rg_used: no.

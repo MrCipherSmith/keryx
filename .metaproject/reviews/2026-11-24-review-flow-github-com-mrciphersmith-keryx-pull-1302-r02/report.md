@@ -1,0 +1,196 @@
+Reviewed `0c6ff2b7e6e4118287ef8abd531e7268980435e8` against `a5d1ab236fe85dee62a758a19390049dde4eb7f9` · round 2 (delta from 2e01447f9) · CI green on the round-1 head.
+
+Evidence level: static only — did not run: mutation pass, verifier (Wave C), premise judge (Wave D); ran — `bun test src/gdskills/review-orchestrator-preflight.test.ts src/gdskills/review-orchestrator-skill-parity.test.ts` (research-evidence/verify-tests-to-run-1.txt).
+
+### Prior findings
+
+R1, R2, R4–R12: closed (every fix-slice reviewer). R3: partial — the per-wave head read moved from `gh` to `git ls-remote`, which is not routine either (S1).
+
+### Minor
+
+**S1. Per-wave `git ls-remote` and `git fetch` are not routine in trust/auto (R3 partial).** Head moved step 1 (the R3 fix) says the per-wave `git ls-remote` read 'stays routine'. It does not: the trust/review-auto routine allowlist for git is GIT_READ_SUBCOMMANDS = status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame (src/lib/trust-routine-command.ts:25-35, used only at :393), plus `cat-file -e/-t` (:377). `ls-remote` is not in it, so once untrusted content has entered the turn the call asks the operator like `gh` does. The same holds for step 2's `git fetch origin <new sha>`, which the text frames under the same 'Shell calls in a trust or auto session' rule.
+**S2. SKILL.md publication tail routes only a head that moved after the round.** The publication section of SKILL.md (both copies) routes to § 'Head moved' only 'a head that moved after the round'. The fixed procedure's step 5 now applies to every publish whose head differs from the round's head, 'however it moved (during or after the round, any `on_head_move`)'. An agent at the publication step that reads SKILL.md, where it is told to 'Re-read the thread before posting', takes the pointer's scope: a head that moved during the round (e.g. under `ignore`, or update-after declined at publish) is not sent to step 5's COMMENT-only rule. The session publish path does not enforce COMMENT (readiness item 7 only checks the first line, per divergence-map row 'head moved / PR closed'). This is R7's case reached through the entry point instead of the detail file.
+**S3. Describe block still titled AC1-AC3.** The describe block still names AC1-AC3, but this change removed its only AC3 assertion (the bundled/installed `test.each`) and the comment added directly above it (line 385) says AC3 is review-orchestrator-skill-parity.test.ts's job. The block name claims coverage that the comment one line above denies.
+**S4. PR body is stale after the fix round.** PR body (pr-context.md:27) scopes T8/AC6 to 'src/review/autonomous-profile.ts:199'. At head AC6 adds 'and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's "Head moved" unattended rule' (slice-02:24) via keryx flow ac update (slice-02:64); the body mentions neither the AC edit nor line 200, and the AC's invariant command was not extended.
+
+### Info
+
+**S5. Bundled skill cites keryx source paths (round-record.ts:207, complete-head-gate.ts).** The bundled skill ships to every project that installs keryx skills, yet it now cites keryx's own implementation files: `src/review/round-record.ts:207` (stop-and-start bullet) and `src/review/complete-head-gate.ts` (the moved-head completion paragraph). In a consumer project these paths do not exist, and the line number rots the next time round-record.ts changes. SKILL.md already has one precedent (`classifyRoundNeed` in `src/review/round-need.ts`), but these are the first two in SKILL.detail.md and the first with a line number. The skill's own stated boundary is 'run X; it decides Y and does not repeat the rule'.
+**S6. AC6 verify command does not check the line-200 clause.** AC6 gained a second obligation, that line 200 agrees with the skill's unattended rule. Its verify command is still only `! git grep -q "New commits belong to a separate request" -- src/review`, so `keryx flow ac` can confirm AC6 without checking the new clause. The preflight test 'the autonomous prompt and the skill agree' does check it, but AC6 does not run that test.
+**S7. Tests assert few absences; cross-file test reads prompt source text.** The rewritten Head-moved tests assert that the new clauses are present. Only two assert that the round-1 text is absent: `stop` not containing 'enters the new plan as unchecked', and step(4) not containing 'Desktop runs the same command'. The old Unattended clause 'open no update round unless `on_head_move` is `follow`' was the R2 major. The old test asserted it, the new test drops that assertion, and nothing forbids it. Neither are the old step-5 trigger 'when the head moved after the round completed' (R7) or the old unconditional 'The operator's answers per finding carry over by finding id.' (R1, step 5.1).
+**S8. Head read: empty ls-remote result and SHA shape not handled.** In a clone whose `origin` is a fork (no refs/pull/*), ls-remote prints nothing with exit 0; step 1 then compares an empty value with the round's head and has no rule for it, and step 2's fetch/merge-base on an empty SHA ends in the exit-128 stop. If true: minor, a round from a fork clone stops at its first wave boundary on a head that did not move.
+**S9. follow repeats per move; unattended policy source wording.** `follow` (finish, then step 4 without asking) repeats on every further move until the 5-round ceiling; the autonomous prompt (autonomous-profile.ts:200) allows one more round. Since the bullet tells the agent to follow the dispatcher's instruction, the literal 'one more' should govern, but the equivalence 'is `follow`' reads as unbounded.
+
+### How this review was run
+
+review-orchestrator, round 2 of 5, delta mode, three slices (fix, new, second-look). Ten reviewers on the session model claude-opus-5-5 (tier standard; security via `--security`): review-architecture, review-degradation, review-highload, review-logic, review-performance, review-pr-contract, review-regression, review-security-code, review-style, review-testing-practices; one agent per reviewer wrote one result per driver. Not run: Wave C verifier, Wave D premise judge (no blocker or major), mutation pass.
+
+```json keryx:findings
+[
+  {
+    "severity": "minor",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": null,
+    "quote": "read the head with `git ls-remote origin refs/pull/<n>/head`, one call with the literal ref: read-only git, so it stays routine.",
+    "problem": "Head moved step 1 (the R3 fix) says the per-wave `git ls-remote` read 'stays routine'. It does not: the trust/review-auto routine allowlist for git is GIT_READ_SUBCOMMANDS = status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame (src/lib/trust-routine-command.ts:25-35, used only at :393), plus `cat-file -e/-t` (:377). `ls-remote` is not in it, so once untrusted content has entered the turn the call asks the operator like `gh` does. The same holds for step 2's `git fetch origin <new sha>`, which the text frames under the same 'Shell calls in a trust or auto session' rule.",
+    "impact": "In a keryx shell trust/auto session the operator is still prompted at every wave boundary, which is the cost R3 reported, now under an instruction that says it will not happen. In an unattended run a refused read leaves the agent without the between-wave head; the move then surfaces only at `complete` through complete-head-gate.",
+    "suggested_fix": "Either add `ls-remote` to GIT_READ_SUBCOMMANDS (it already rejects --upload-pack through EXEC_FLAGS/hasExecWord) with a trust-routine-command test, or reword step 1 to say the wave-boundary read asks once per boundary like `gh` and drop 'so it stays routine'. Do the same check for step 2's `git fetch`.",
+    "evidence": "src/lib/trust-routine-command.ts:25-35 (GIT_READ_SUBCOMMANDS has no ls-remote or fetch), :393 (the only use of that set); `keryx ctx rg GIT_READ_SUBCOMMANDS src` finds no other allowlist.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "id": "S1",
+    "title": "Per-wave `git ls-remote` and `git fetch` are not routine in trust/auto (R3 partial)",
+    "merged_from": [
+      "review-logic-w1:LOG-R2-01",
+      "review-degradation-w1:DEG-F-001",
+      "review-security-code-w1:F-001"
+    ]
+  },
+  {
+    "severity": "minor",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "line": null,
+    "quote": "Re-read the thread before posting; a head that moved after the round follows",
+    "problem": "The publication section of SKILL.md (both copies) routes to § 'Head moved' only 'a head that moved after the round'. The fixed procedure's step 5 now applies to every publish whose head differs from the round's head, 'however it moved (during or after the round, any `on_head_move`)'. An agent at the publication step that reads SKILL.md, where it is told to 'Re-read the thread before posting', takes the pointer's scope: a head that moved during the round (e.g. under `ignore`, or update-after declined at publish) is not sent to step 5's COMMENT-only rule. The session publish path does not enforce COMMENT (readiness item 7 only checks the first line, per divergence-map row 'head moved / PR closed'). This is R7's case reached through the entry point instead of the detail file.",
+    "impact": "A REQUEST_CHANGES or APPROVE on an outdated commit stays possible from the session path in exactly the case R7 named, until T7 adds the code check.",
+    "suggested_fix": "Reword without adding a line (SKILL.md is at its 918-line ceiling): 'Re-read the thread before posting; a head that differs from the round's head follows `SKILL.detail.md` § \"Head moved\".' Apply to both copies and add an assertion to the preflight 'SKILL.md points at the procedure' test that the pointer does not say 'after the round'.",
+    "evidence": "SKILL.md 'PR Review Report Publication' tail (both copies, slice-03 hunk @@ 893,918); SKILL.detail.md Head moved step 5 ('when the head at publish time differs from the round's head**, however it moved'); divergence-map.md §2 row 'head moved / PR closed' (session passes with a first-line warning, any event).",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "id": "S2",
+    "title": "SKILL.md publication tail routes only a head that moved after the round",
+    "merged_from": [
+      "review-logic-w2:LOG-R2-03"
+    ]
+  },
+  {
+    "severity": "minor",
+    "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+    "line": 386,
+    "quote": "describe(\"Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md\", () => {",
+    "problem": "The describe block still names AC1-AC3, but this change removed its only AC3 assertion (the bundled/installed `test.each`) and the comment added directly above it (line 385) says AC3 is review-orchestrator-skill-parity.test.ts's job. The block name claims coverage that the comment one line above denies.",
+    "impact": "Readability / traceability: someone tracing AC3 from test runner output lands on a block with no AC3 test.",
+    "suggested_fix": "Rename to \"Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md\"; the comment already says where AC3 lives.",
+    "evidence": "slice-02.diff lines 422-426 and 466-469 (test.each and INSTALLED removed); file at head :385-386.",
+    "confidence": "high",
+    "reviewer": "review-style",
+    "id": "S3",
+    "title": "Describe block still titled AC1-AC3",
+    "merged_from": [
+      "review-style-w2:STY-001",
+      "review-testing-practices-w2:F-002"
+    ]
+  },
+  {
+    "severity": "minor",
+    "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+    "line": 21,
+    "quote": "(`src/review/autonomous-profile.ts:199`) is replaced then.",
+    "problem": "PR body (pr-context.md:27) scopes T8/AC6 to 'src/review/autonomous-profile.ts:199'. At head AC6 adds 'and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule' (slice-02:24) via keryx flow ac update (slice-02:64); the body mentions neither the AC edit nor line 200, and the AC's invariant command was not extended.",
+    "impact": "An owner approving from the body does not see that a checksum-protected acceptance criterion was widened (acChecksum changed, slice-02:165-166).",
+    "suggested_fix": "Under item 3, state that AC6 now also covers autonomous-profile.ts:200 (round-1 R2), currently in agreement and pinned by the preflight test.",
+    "evidence": "pr-context.md:27; slices/slice-02.diff:24, 64, 165-166",
+    "confidence": "high",
+    "reviewer": "review-pr-contract",
+    "id": "S4",
+    "title": "PR body is stale after the fix round",
+    "merged_from": [
+      "review-pr-contract-w2:PC-002",
+      "review-pr-contract-w2:PC-003",
+      "review-pr-contract-w1:PC-001"
+    ]
+  },
+  {
+    "severity": "info",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "line": null,
+    "quote": "a stopped round is partial and never a previous round (`src/review/round-record.ts:207`)",
+    "problem": "The bundled skill ships to every project that installs keryx skills, yet it now cites keryx's own implementation files: `src/review/round-record.ts:207` (stop-and-start bullet) and `src/review/complete-head-gate.ts` (the moved-head completion paragraph). In a consumer project these paths do not exist, and the line number rots the next time round-record.ts changes. SKILL.md already has one precedent (`classifyRoundNeed` in `src/review/round-need.ts`), but these are the first two in SKILL.detail.md and the first with a line number. The skill's own stated boundary is 'run X; it decides Y and does not repeat the rule'.",
+    "impact": "Low. An agent in a consumer repo cannot follow the reference. A future edit to round-record.ts silently makes ':207' point at the wrong line, and the preflight test (slice-01 line 194) pins the stale reference.",
+    "suggested_fix": "Name the behaviour and the command that enforces it instead of the source line. For example: 'a stopped round is partial and `keryx review plan` never takes it as a previous round'. 'or `keryx review complete` refuses it' would likewise replace the complete-head-gate.ts path. Drop ':207' from the test assertion too.",
+    "evidence": "slice-02.diff line 356 (bundled SKILL.detail.md stop-and-start bullet); slice-01.diff lines 60/95 (complete-head-gate.ts reference, both copies); `keryx ctx rg --hidden '`src/[a-z/-]+\\.ts' src/gdskills/bundled/skills/review/review-orchestrator/` -> SKILL.detail.md:604, :609 (both new in this PR), SKILL.md:29 (pre-existing), templates/review-report.md:98,100 (illustrative examples); src/review/round-record.ts:207 verified at head 0c6ff2b7e.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "id": "S5",
+    "title": "Bundled skill cites keryx source paths (round-record.ts:207, complete-head-gate.ts)",
+    "merged_from": [
+      "review-architecture-w2:ARCH-W2-001"
+    ]
+  },
+  {
+    "severity": "info",
+    "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+    "line": null,
+    "quote": "and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule.",
+    "problem": "AC6 gained a second obligation, that line 200 agrees with the skill's unattended rule. Its verify command is still only `! git grep -q \"New commits belong to a separate request\" -- src/review`, so `keryx flow ac` can confirm AC6 without checking the new clause. The preflight test 'the autonomous prompt and the skill agree' does check it, but AC6 does not run that test.",
+    "impact": "When T8 rewrites line 199/200 in stage 3, AC6 could pass while the two texts disagree again.",
+    "suggested_fix": "Make AC6's verify run the preflight test as well, e.g. invariant `! git grep -q \"New commits belong to a separate request\" -- src/review && bun test src/gdskills/review-orchestrator-preflight.test.ts -t \"autonomous prompt and the skill agree\"`, via `keryx flow ac update`.",
+    "evidence": "acceptance-criteria.md AC6; flow.json acKinds.AC6.check; slice-01 test 'the autonomous prompt and the skill agree'.",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "id": "S6",
+    "title": "AC6 verify command does not check the line-200 clause",
+    "merged_from": [
+      "review-logic-w3:LOG-R2-04",
+      "review-testing-practices-w2:F-001"
+    ]
+  },
+  {
+    "severity": "info",
+    "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+    "line": 473,
+    "problem": "The rewritten Head-moved tests assert that the new clauses are present. Only two assert that the round-1 text is absent: `stop` not containing 'enters the new plan as unchecked', and step(4) not containing 'Desktop runs the same command'. The old Unattended clause 'open no update round unless `on_head_move` is `follow`' was the R2 major. The old test asserted it, the new test drops that assertion, and nothing forbids it. Neither are the old step-5 trigger 'when the head moved after the round completed' (R7) or the old unconditional 'The operator's answers per finding carry over by finding id.' (R1, step 5.1).",
+    "impact": "If a later edit puts one of these sentences back next to the new one, the agent again holds two opposite instructions (the R2 failure), and the suite stays green: every positive assertion still matches. Prediction from reading, not a run (exec budget 0), so info under the lens's no-predicted-mutation rule.",
+    "suggested_fix": "In the unattended test add `expect(unattended).not.toContain(\"unless `on_head_move` is `follow`\")`. In the D1 test add `expect(publish).not.toContain(\"when the head moved after the round completed\")` and `expect(publish).not.toMatch(/carry over by finding id\\.(?! )/)`, or assert that 'carry over by finding id' occurs exactly once in step(5). Then run mutants M1-M3.",
+    "evidence": "preflight.test.ts (slice-01 diff lines 229-237): the unattended test has only positive toContain. Removed at old line 141: `expect(unattended).toContain(\"unless `on_head_move` is `follow`\")`. The only negations in the block are slice-01 diff lines 189, 198 and 212.",
+    "confidence": "medium",
+    "reviewer": "review-testing-practices",
+    "id": "S7",
+    "title": "Tests assert few absences; cross-file test reads prompt source text",
+    "merged_from": [
+      "review-testing-practices-w1:F-001",
+      "review-testing-practices-w1:F-002",
+      "review-architecture-w1:ARCH-W1-001"
+    ]
+  },
+  {
+    "severity": "info",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:599",
+    "problem": "In a clone whose `origin` is a fork (no refs/pull/*), ls-remote prints nothing with exit 0; step 1 then compares an empty value with the round's head and has no rule for it, and step 2's fetch/merge-base on an empty SHA ends in the exit-128 stop. If true: minor, a round from a fork clone stops at its first wave boundary on a head that did not move.",
+    "evidence": "Read SKILL.detail.md:599-600: the per-wave check hard-codes remote `origin`; round-1 used `gh pr view <n> --json headRefOid`, which resolves the PR on GitHub regardless of local remotes. Step 1 has no branch for an empty ls-remote output. Refute: in this checkout origin is the upstream repo, so the common case works; whether operators review from fork clones is outside the code. Unrun.",
+    "impact": "see problem",
+    "suggested_fix": "Check: in a fork clone run `git ls-remote origin refs/pull/1302/head; echo $?` and see empty output with exit 0. If so, add 'empty output: the remote has no PR refs, fall back to the gh read once' to step 1, or use `--exit-code`.",
+    "confidence": "high",
+    "reviewer": "review-degradation",
+    "id": "S8",
+    "title": "Head read: empty ls-remote result and SHA shape not handled",
+    "merged_from": [
+      "review-degradation-w1:DEG-Q-001",
+      "review-security-code-w1:F-002"
+    ]
+  },
+  {
+    "severity": "info",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": null,
+    "quote": "the autonomous runner's \"open one more round only if the head moved\" is `follow`",
+    "problem": "`follow` (finish, then step 4 without asking) repeats on every further move until the 5-round ceiling; the autonomous prompt (autonomous-profile.ts:200) allows one more round. Since the bullet tells the agent to follow the dispatcher's instruction, the literal 'one more' should govern, but the equivalence 'is `follow`' reads as unbounded.",
+    "impact": "An unattended run on a busy PR may open more rounds than the runner intended, bounded by REVIEW_ROUND_CAP.",
+    "suggested_fix": "Say 'is `follow` for one update round' or 'its own limit applies'.",
+    "evidence": "src/review/autonomous-profile.ts:200; SKILL.detail.md Head moved step 3 `follow` bullet.",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "id": "S9",
+    "title": "follow repeats per move; unattended policy source wording",
+    "merged_from": [
+      "review-logic-w1:LOG-R2-02",
+      "review-pr-contract-w2:PC-004",
+      "review-security-code-w1:F-003"
+    ]
+  }
+]
+```
+
+## Token spend
+
+token spend: unknown (20 dispatch(es), none reported usage)

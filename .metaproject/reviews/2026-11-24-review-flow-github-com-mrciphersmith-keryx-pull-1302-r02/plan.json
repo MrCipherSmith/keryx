@@ -1,0 +1,158 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1302",
+    "base": "2e01447f96161913880e02db4394be6ad15e1335",
+    "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8"
+  },
+  "round": {
+    "number": 2,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302",
+    "range": {
+      "base": "2e01447f96161913880e02db4394be6ad15e1335",
+      "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8"
+    },
+    "fixHunks": 6,
+    "newHunks": 17,
+    "priorFindings": 13,
+    "carried": 1,
+    "line": "round 2 (source: local-package; previous 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 at 2e01447f9616; delta 2e01447f9616..0c6ff2b7e6e4)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/review-orchestrator-preflight.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-logic",
+          "review-performance",
+          "review-pr-contract",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ],
+        "findingIds": [
+          "R1",
+          "R10",
+          "R11",
+          "R12",
+          "R2",
+          "R3",
+          "R4",
+          "R5",
+          "R6",
+          "R7",
+          "R8",
+          "R9"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/review-orchestrator-preflight.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-03",
+        "files": [
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/review-orchestrator-preflight.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-pr-contract",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 20,
+  "minutes": {
+    "min": 10,
+    "max": 25
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 8
+    },
+    "new": {
+      "slices": 1,
+      "dispatches": 10
+    },
+    "secondLook": {
+      "slices": 1,
+      "dispatches": 2
+    }
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "0d7820b6d091713b",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 82 changed file(s) but the package's recorded scope holds 9 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "dispatch"
+}

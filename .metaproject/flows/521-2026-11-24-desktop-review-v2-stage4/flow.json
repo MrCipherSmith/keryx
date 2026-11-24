@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T08:00:43.963Z",
+  "updatedAt": "2026-11-24T08:16:03.283Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:122e0be7cab9cc9cd5ec4ba6c89d5446e63c723ca29bc17d2e73aa2a08a6a2c0",
+  "acChecksum": "sha256:2980da572a248e1c25f5607a3725d25442f5ccfd36c89be8f902397dd81b3272",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -222,7 +222,7 @@
       "id": "T11",
       "title": "Fix round 1 findings of PR 1302 (R1-R14)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -238,7 +238,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix round 2 findings of PR 1302 (S1-S9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:11:24.813Z",
+            "outcome": "started",
+            "detail": "521-T12 fix round 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -359,6 +383,31 @@
       "at": "2026-11-24T08:00:43.963Z",
       "event": "ac-updated",
       "detail": "AC6: \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\". [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" -> \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule. [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" (Review round 1 of PR 1302 (review-regression F-001) found autonomous-profile.ts:200 also governs head moves and was untracked)"
+    },
+    {
+      "at": "2026-11-24T08:00:55.107Z",
+      "event": "task-done",
+      "detail": "T11: Fix round 1 findings of PR 1302 (R1-R14)"
+    },
+    {
+      "at": "2026-11-24T08:11:24.588Z",
+      "event": "task-added",
+      "detail": "T12: Fix round 2 findings of PR 1302 (S1-S9)"
+    },
+    {
+      "at": "2026-11-24T08:11:24.813Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 521-T12 fix round 2"
+    },
+    {
+      "at": "2026-11-24T08:11:51.086Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule. [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" -> \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule (asserted by the preflight test). [verify: exec `bun test src/gdskills/review-orchestrator-preflight.test.ts && ! git grep -q \"New commits belong to a separate request\" -- src/review`]\" (Round 2 of PR 1302 (S6): AC6's verify did not check its line-200 clause)"
+    },
+    {
+      "at": "2026-11-24T08:16:03.283Z",
+      "event": "task-done",
+      "detail": "T12: Fix round 2 findings of PR 1302 (S1-S9)"
     }
   ],
   "acKinds": {
@@ -382,8 +431,8 @@
       "check": "bun test src/review/publish.test.ts src/review/desk-publication.test.ts"
     },
     "AC6": {
-      "kind": "invariant",
-      "check": "! git grep -q \"New commits belong to a separate request\" -- src/review"
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-orchestrator-preflight.test.ts && ! git grep -q \"New commits belong to a separate request\" -- src/review"
     },
     "AC7": {
       "kind": "judged"

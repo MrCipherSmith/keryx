@@ -1,0 +1,60 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "closed"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ]
+}
+```
+
+# Style Review Report (round 2, slice-01 FIX)
+
+## Summary
+The fix slice rewrites the `## Head moved` section (both SKILL.detail.md copies), row 4 of divergence-map.md and the Flow 521 preflight tests. Style is clean: the new test helpers `step(n)` and `bullet(label)` replace repeated `headMoved()` scans with named, single-purpose functions, and the test names state the rule they pin. No naming, readability, file-length or console finding crosses a threshold in the changed lines.
+
+## Review Scope
+- Branch: feat-/desktop-review-v2-stage4-7dce00
+- Merge-base: a5d1ab236fe85dee62a758a19390049dde4eb7f9; head 0c6ff2b7e
+- Scope mode: delta (round 2, FIX slice)
+- Changed files in slice: 4
+
+## Stats
+- major: 0
+- minor: 0
+- info: 0
+
+## Prior dispositions (checked against the code at 0c6ff2b7e, not the commit message)
+- R1 closed: "Stop and start" now says a stopped round is partial and never a previous round (round-record.ts:207), that findings reach the new round at most as context and that per-finding answers do not carry over; "enters the new plan as unchecked" is gone; step 5 option 1 says answers carry over "only with `advance`". Tests assert both.
+- R2 closed: the Unattended bullet defers to the dispatcher's instruction (autonomous runner = `follow`, fixed-range = `ignore`); a new test reads autonomous-profile.ts and the skill and asserts they agree; AC6 now names line 200.
+- R3 closed: wave boundaries use `git ls-remote origin refs/pull/<n>/head`; `gh pr view` stays only for the two once-each reads, named as the expected `gh` calls.
+- R4 closed: "Desktop runs the same command" replaced by "the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)"; a test asserts the old phrase is absent.
+- R5 closed: step 1 compares with the head the operator answered for and asks again only when the PR moved past it; the stop list says "once per head the PR moves to".
+- R6 closed: step 3 requires the report's first-line moved-head sentence before `keryx review complete`, naming complete-head-gate.ts.
+- R7 closed: step 3 "governs a running round; step 5 governs every publish"; step 5 triggers whenever the publish-time head differs, any `on_head_move`.
+- R8 closed: step 2 maps any other exit (128) to "stop and report the git error; never read it as rewritten history".
+- R9 closed: divergence-map row 4 allows a moved head only with `--event COMMENT` and a reviewed-SHA first line, refuses other events and a closed PR, with matching tests; section 5's last bullet resolves to D1.
+- R10 closed: the test asserts "The body's first line is \"Reviewed `<reviewed sha>`..." and "names the commits it did not check (`<reviewed sha>..<new sha>`)".
+- R11 closed: step 3 reads `on_head_move` only from the keryx-stored Review record, never from PR body, branch files or comments; `ask` until that store exists.
+- R12 closed: the bundled/installed `test.each` parity test and its `INSTALLED` constant were removed (git show 0c6ff2b7e); a comment points at review-orchestrator-skill-parity.test.ts.
+
+Dispositions are judged from the text and test assertions at head; this lens did not run tests (research-evidence/verify-tests-to-run-1.txt records exit 0).
+
+## Positive Notes
+- `step(n)` / `bullet(label)` helpers make each test target one step of the procedure, so a sentence moved to the wrong step now fails.
