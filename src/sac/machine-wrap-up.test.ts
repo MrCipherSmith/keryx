@@ -483,7 +483,9 @@ test("AC4: two Promise.all-raced runWrapUp calls for the same flow transition pr
   expect(decisionB).toBeDefined();
   if (!decisionA || !decisionB) return;
   const outcomes = [decisionA.outcome, decisionB.outcome].sort();
-  expect(outcomes.every((outcome) => outcome === "proposed" || outcome === "conflict")).toBe(true);
+  // Asserted on the whole group records, not a boolean, so a failure names the
+  // third outcome a losing racer returned — and its `message` when it is "error".
+  expect([decisionA, decisionB].filter((group) => group.outcome !== "proposed" && group.outcome !== "conflict")).toEqual([]);
   if (decisionA.outcome === "proposed" && decisionB.outcome === "proposed") {
     expect((decisionA as { proposalId: string }).proposalId).toBe((decisionB as { proposalId: string }).proposalId);
   } else {
@@ -493,6 +495,34 @@ test("AC4: two Promise.all-raced runWrapUp calls for the same flow transition pr
     expect(outcomes).toContain("proposed");
   }
 });
+
+// TEMPORARY CI DIAGNOSTIC (to be removed before merge): repeats the AC4 race on
+// Linux CI and prints every non-convergent outcome with its message.
+test("DIAG: AC4 race repeated", async () => {
+  const seen: Record<string, number> = {};
+  let proposalCounts: Record<string, number> = {};
+  for (let i = 0; i < 300; i++) {
+    const cwd = await tempGitCwd();
+    await createWorkspace(cwd, "workspace-a");
+    await writeFlowFixture(cwd, "042-race-flow");
+    const slate = baseSlate({ workspaceId: "workspace-a", course: { flowRef: "042" }, seeds: [seed("s1", "the same finding both racers see", "decision")] });
+    const modelTurn = stubModelTurn("racer summary");
+    const started = performance.now();
+    const results = await Promise.all([
+      runWrapUp({ cwd, dir: await tempSessionDir(), slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
+      runWrapUp({ cwd, dir: await tempSessionDir(), slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
+    ]);
+    const elapsed = Math.round(performance.now() - started);
+    const files = (await proposalFiles(cwd, "workspace-a")).length;
+    proposalCounts = { ...proposalCounts, [String(files)]: (proposalCounts[String(files)] ?? 0) + 1 };
+    const key = results.map((r) => r.groups.map((g) => g.outcome).join("+")).sort().join(" | ");
+    seen[key] = (seen[key] ?? 0) + 1;
+    for (const r of results) for (const g of r.groups) {
+      if (g.outcome !== "proposed" && g.outcome !== "conflict") console.log("DIAG-NONCONVERGENT", i, elapsed, "ms", JSON.stringify(g));
+    }
+  }
+  console.log("DIAG-SUMMARY", JSON.stringify(seen), "proposalFiles", JSON.stringify(proposalCounts));
+}, 300000);
 
 test("two DIFFERENT non-empty kind groups in the same runWrapUp call produce two distinct proposals, not a collision", async () => {
   const cwd = await tempGitCwd();
