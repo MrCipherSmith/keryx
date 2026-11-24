@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T11:04:41.923Z",
+  "updatedAt": "2026-11-24T11:06:50.991Z",
   "source": {
     "type": "description",
     "ref": null
@@ -341,7 +341,7 @@
       "id": "T17",
       "title": "Fix F-048: Review panel Open pull request link does nothing",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -355,7 +355,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -556,6 +557,11 @@
       "at": "2026-11-24T11:04:41.923Z",
       "event": "task-attempt",
       "detail": "T17: started (attempt 1) — 519-T17"
+    },
+    {
+      "at": "2026-11-24T11:06:50.991Z",
+      "event": "task-done",
+      "detail": "T17: Fix F-048: Review panel Open pull request link does nothing"
     }
   ],
   "acKinds": {
