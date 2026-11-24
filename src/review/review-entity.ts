@@ -32,11 +32,13 @@ export interface ReviewAttemptSummary {
   /** Total tokens the attempt reported, when known. */
   tokens: number | null;
   awaitingAnswer: boolean;
+  /** Archived by the viewer: still listed, but never the attempt state, findings or publication come from. */
+  archived: boolean;
   createdAt: string;
   finishedAt: string | null;
 }
 
-/** A stored Review with its visible attempts, oldest first. */
+/** A stored Review with its visible attempts (archived ones flagged, deleted ones left out), oldest first. */
 export interface ReviewRow {
   id: string;
   repositoryId: string;
@@ -68,6 +70,10 @@ export interface ReviewSummary {
   /** Newest round first. */
   rounds: ReviewRound[];
   latestRound: number;
+  /** The range the reference attempt (the newest finished attempt with a reviewed range) reviewed; null without one. */
+  reviewed: DeskRevision | null;
+  /** Every attempt is archived: the Review is kept for restore or delete, and its state is its last attempt's. */
+  archived: boolean;
   /** Findings of the latest round that produced a reviewed result. */
   findings: DeskResult["findings"] | null;
   publication: PublicationOutcome | null;
@@ -103,30 +109,57 @@ export function reviewState(latest: ReviewAttemptSummary, closed: boolean): Revi
 /** Whether the PR head moved past the reviewed head. An unknown PR head is `unknown`; an unknown reviewed head cannot be behind. */
 export function freshness(reviewedHead: string | null, prHead: string | null, compare?: ReviewCompare | null): ReviewFreshness {
   if (!prHead) return { kind: "unknown" };
-  if (!reviewedHead || reviewedHead === prHead || compare?.status === "identical") return { kind: "current" };
+  if (!headsDiffer(reviewedHead, prHead) || compare?.status === "identical") return { kind: "current" };
   if (!compare) return { kind: "behind", commits: null, rewritten: false };
   return { kind: "behind", commits: compare.aheadBy, rewritten: compare.status !== "ahead" };
 }
 
-export function reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication">): boolean {
-  return review.state === "needs_answer" || review.state === "stopped" ||
-    (review.state === "ready" && review.publication !== "skipped" && review.publication !== "published");
+/** A pending answer always waits on the viewer. Otherwise a Review whose PR card could not be read does not count
+ * (it may be merged or closed on GitHub), nor does an archived one; `stopped` and `ready` with a publication still
+ * to choose do. `ready` without a publication outcome (partial, budget, an imported package) has no decision to make. */
+export function reviewNeedsViewer(review: Pick<ReviewSummary, "state" | "publication" | "card" | "archived">): boolean {
+  if (review.state === "needs_answer") return true;
+  if (review.archived || review.card === null) return false;
+  return review.state === "stopped" || (review.state === "ready" && review.publication === "pending");
 }
 
-const latestAttempt = (row: ReviewRow) => row.attempts[row.attempts.length - 1];
+const reviewedResult = (attempt: ReviewAttemptSummary) => FINISHED.has(attempt.state) && attempt.reviewed !== null;
+const live = (attempt: ReviewAttemptSummary) => ["queued", "running", "cancelling"].includes(attempt.state);
 function newest(attempts: ReviewAttemptSummary[], wanted: (attempt: ReviewAttemptSummary) => boolean) {
   for (let i = attempts.length - 1; i >= 0; i--) if (wanted(attempts[i]!)) return attempts[i];
 }
-const latestReviewed = (row: ReviewRow) => newest(row.attempts, a => FINISHED.has(a.state) && a.reviewed !== null);
+/** The attempts the Review's state, findings and publication come from: the unarchived ones, or all when every one is archived. */
+function stateAttempts(row: ReviewRow): ReviewAttemptSummary[] {
+  const kept = row.attempts.filter(attempt => !attempt.archived);
+  return kept.length ? kept : row.attempts;
+}
 
 /** The head a Review last checked: the newest reviewed result, else the newest requested range. */
 export function referenceHead(row: ReviewRow): string | null {
-  return latestReviewed(row)?.reviewed?.headSha ?? latestAttempt(row)?.headSha ?? null;
+  const attempts = stateAttempts(row);
+  return newest(attempts, reviewedResult)?.reviewed?.headSha ?? attempts[attempts.length - 1]?.headSha ?? null;
+}
+
+/** The attempt the Review's state comes from: the latest one, unless it stopped in a round that already holds an
+ * accepted (finished, reviewed) result — then that result's attempt, so a failed retry does not undo it. */
+function stateAttempt(attempts: ReviewAttemptSummary[]): ReviewAttemptSummary | undefined {
+  const latest = attempts[attempts.length - 1];
+  if (!latest || live(latest) || reviewedResult(latest)) return latest;
+  return newest(attempts, a => a.round === latest.round && reviewedResult(a)) ?? latest;
 }
 
 export function reviewClosed(row: ReviewRow, card: ReviewCard | null): boolean {
   return row.closedAt !== null || card?.state === "merged" || card?.state === "closed";
 }
+
+/** The (reviewed head, PR head) pair whose commit count freshness needs, or null when there is nothing to count:
+ * the heads are equal or unknown, or the Review is closed. The one rule for the command's comparisons and for `freshness`. */
+export function headComparison(row: ReviewRow, card: ReviewCard | null): { reviewed: string; head: string } | null {
+  const reviewed = referenceHead(row);
+  const head = card?.headSha ?? null;
+  return reviewed && head && headsDiffer(reviewed, head) && !reviewClosed(row, card) ? { reviewed, head } : null;
+}
+const headsDiffer = (reviewed: string | null, head: string | null) => !!reviewed && !!head && reviewed !== head;
 
 function roundsOf(attempts: ReviewAttemptSummary[]): ReviewRound[] {
   const byNumber = new Map<number, ReviewAttemptSummary[]>();
@@ -143,24 +176,28 @@ function roundsOf(attempts: ReviewAttemptSummary[]): ReviewRound[] {
 
 /** Summarize one stored Review. `row.attempts` must be non-empty and oldest first. */
 export function summarizeReview(row: ReviewRow, card: ReviewCard | null, compare?: ReviewCompare | null): ReviewSummary {
-  const latest = latestAttempt(row);
-  if (!latest) throw new Error(`invalid: Review ${row.id} has no visible attempts.`);
-  const reviewed = latestReviewed(row);
-  const tokens = row.attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
+  const attempts = stateAttempts(row);
+  const latest = attempts[attempts.length - 1];
+  const settled = stateAttempt(attempts);
+  if (!latest || !settled) throw new Error(`invalid: Review ${row.id} has no visible attempts.`);
+  const reference = newest(attempts, reviewedResult);
+  const tokens = attempts.reduce<number | null>((sum, a) => a.tokens === null ? sum : (sum ?? 0) + a.tokens, null);
   return {
     id: row.id,
     number: row.number,
     card,
-    state: reviewState(latest, reviewClosed(row, card)),
+    state: reviewState(settled, reviewClosed(row, card)),
     freshness: freshness(referenceHead(row), card?.headSha ?? null, compare),
     onHeadMove: row.onHeadMove,
     closedAt: row.closedAt,
     rounds: roundsOf(row.attempts),
     latestRound: latest.round,
-    findings: reviewed?.findings ?? null,
-    publication: reviewed?.publication ?? null,
+    reviewed: reference?.reviewed ? { baseSha: reference.reviewed.baseSha, headSha: reference.reviewed.headSha } : null,
+    archived: attempts.every(attempt => attempt.archived),
+    findings: reference?.findings ?? null,
+    publication: reference?.publication ?? null,
     source: latest.source,
-    flowId: newest(row.attempts, a => a.flowId !== null)?.flowId ?? null,
+    flowId: newest(attempts, a => a.flowId !== null)?.flowId ?? null,
     tokens,
   };
 }

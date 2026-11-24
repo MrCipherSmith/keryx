@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
+import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED } from "./desk-publication-types";
 import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
 import type { DeskFinish } from "./desk-run-types";
 import { applyDeskLifecycle } from "./desk-run-lifecycle";
@@ -954,4 +955,89 @@ test("a new attempt is assigned its Review and round when it is recorded: start,
     expect(details).toHaveLength(7);
     for (const stored of details) for (const field of ["reviewId", "round", "previousRunId"]) expect(stored).not.toHaveProperty(field);
   } finally { db.close(); }
+});
+
+const placeOf = (id: string) => {
+  const run = store.byId(id)?.run;
+  return [run?.round, run?.previousRunId];
+};
+
+test("a return to an earlier range (A, B, A) opens the next round; a retry joins only the current highest round", () => {
+  const a = store.request("/project", key, revision)!;
+  store.end(store.byId(a)!, { ...finish, state: "partial" });
+  const b = store.atomic(() => store.request("/project", key, next))!;
+  store.end(store.byId(b)!, { ...finish, result: { ...finish.result!, reviewed: next } });
+  const back = store.atomic(() => store.request("/project", key, revision))!;
+  expect(placeOf(back)).toEqual([3, b]);
+  store.end(store.byId(back)!, { ...finish, state: "failed", result: null });
+  const retry = store.atomic(() => store.request("/project", key, revision))!;
+  expect(placeOf(retry)).toEqual([3, back]);
+  const row = store.reviewRows("gid", "user")[0]!;
+  expect(row.attempts.map(attempt => [attempt.id, attempt.round])).toEqual([[a, 1], [b, 2], [back, 3], [retry, 3]]);
+});
+
+test("a queued request superseded before it started keeps no round: the next request takes its round and links past it", () => {
+  const running = started();
+  const queued = store.atomic(() => store.request("/project", key, next))!;
+  expect(placeOf(queued)).toEqual([2, running.run.id]);
+  const third = { ...revision, headSha: "d".repeat(40) };
+  const latest = store.atomic(() => store.request("/project", key, third))!;
+  expect(store.byId(queued)?.run).toMatchObject({ state: "skipped", phase: "Superseded" });
+  expect(placeOf(latest)).toEqual([2, running.run.id]);
+  // The never-started request is not an attempt of the Review.
+  expect(store.reviewRows("gid", "user")[0]!.attempts.map(attempt => attempt.id)).toEqual([running.run.id, latest]);
+});
+
+test("history imported later is numbered when it is recorded, even when it is older than placed rounds (known limitation)", () => {
+  const desktop = store.request("/project", key, revision)!;
+  store.end(store.byId(desktop)!, finish);
+  const older = { ...store.byId(desktop)!.run, id: "older-package", source: "existing" as const, ...next,
+    createdAt: "2020-01-01T00:00:00.000Z", result: { ...finish.result!, reviewed: next } };
+  store.recordExisting("/project", key, [older]);
+  expect(placeOf("older-package")).toEqual([2, desktop]);
+});
+
+test("reviewRows reads a publication outcome for every finished reviewed attempt and keeps archived attempts flagged", () => {
+  const finished = (rev: typeof revision, state: DeskFinish["state"], coverage: "complete" | "partial" = "complete") => {
+    const id = store.atomic(() => store.request("/project", key, rev))!;
+    store.end(store.byId(id)!, { ...finish, state, result: { ...finish.result!, reviewed: rev, coverage } });
+    return id;
+  };
+  const published = finished(revision, "partial", "partial");
+  mkdirSync(store.directory(published), { recursive: true });
+  writeFileSync(path.join(store.directory(published), PUBLICATION_RECEIPT), JSON.stringify({ url: "https://github.com/org/repo/pull/12#r" }));
+  const skipped = finished(next, "budget", "partial");
+  mkdirSync(store.directory(skipped), { recursive: true });
+  writeFileSync(path.join(store.directory(skipped), PUBLICATION_SKIPPED), "");
+  const undecided = finished({ ...revision, headSha: "d".repeat(40) }, "partial", "partial");
+  const pending = finished({ ...revision, headSha: "e".repeat(40) }, "completed");
+  const archived = finished({ ...revision, headSha: "f".repeat(40) }, "completed");
+  const a = store.byId(archived)!;
+  a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
+  store.save(a);
+  const deleted = finished({ ...revision, headSha: "9".repeat(40) }, "completed");
+  const d = store.byId(deleted)!;
+  d.run.decision = { action: "delete", reason: "noise", at: "2026-11-20T00:00:00Z" };
+  store.save(d);
+  const attempts = store.reviewRows("gid", "user")[0]!.attempts;
+  expect(attempts.map(attempt => [attempt.id, attempt.publication, attempt.archived])).toEqual([
+    [published, "published", false], [skipped, "skipped", false], [undecided, null, false], [pending, "pending", false], [archived, null, true],
+  ]);
+  // The attempt history reads the same outcome.
+  expect(store.history(key).runs.find(run => run.id === published)?.publication).toBe("published");
+});
+
+test("a Review whose attempts are all archived is still listed; an interrupted attempt reads as failed", () => {
+  const id = store.request("/project", key, revision)!;
+  store.end(store.byId(id)!, finish);
+  const a = store.byId(id)!;
+  a.run.decision = { action: "archive", reason: "noise", at: "2026-11-20T00:00:00Z" };
+  store.save(a);
+  const interrupted = store.request("/project", { ...key, number: 13 }, revision)!;
+  const db = new Database(path.join(directory, "runs.sqlite"));
+  try { db.run("UPDATE runs SET state='recoverable' WHERE id=?", [interrupted]); } finally { db.close(); }
+  const rows = store.reviewRows("gid", "user");
+  expect(rows.map(row => [row.number, row.attempts.map(attempt => [attempt.id, attempt.archived, attempt.state])])).toEqual([
+    [13, [[interrupted, false, "failed"]]], [12, [[id, true, "completed"]]],
+  ]);
 });

@@ -112,10 +112,11 @@ export async function fetchReviewBadges(cwd: string, key: Omit<DeskRunKey, "numb
   return combined;
 }
 
-/** This account's local Reviews of the project's repository, with state, freshness and rounds. */
-export async function fetchReviews(cwd: string, repo?: string, expectedViewer?: string): Promise<ReviewsSnapshot> {
-  const result = await reviewLists.read(JSON.stringify([cwd, expectedViewer, repo]),
-    () => invoke("review_board", { cwd, reviewsOnly: true, ...(repo && { repo }) }));
+/** This account's local Reviews of the project's repository, with state, freshness and rounds. `includeClosed` also
+ * reads the PR cards of Reviews closed locally (for "Show closed"); without it they come without a card. */
+export async function fetchReviews(cwd: string, repo?: string, expectedViewer?: string, includeClosed = false): Promise<ReviewsSnapshot> {
+  const result = await reviewLists.read(JSON.stringify([cwd, expectedViewer, repo, includeClosed]),
+    () => invoke("review_board", { cwd, reviewsOnly: true, ...(repo && { repo }), ...(includeClosed && { includeClosed: true }) }));
   assertProtocol(result);
   verifyProjectViewer(result.viewer, expectedViewer);
   return result;

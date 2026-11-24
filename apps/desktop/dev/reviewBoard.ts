@@ -2,6 +2,7 @@ type Json = Record<string, unknown>;
 
 export function reviewBoardArgs(args: Json): string[] {
   if (args.reviewsOnly === true) return reviewsArgs(args);
+  if (args.includeClosed === true) throw new Error("configuration: Closed Reviews can be included only in the Reviews list");
   const argv = ["review", "board", "--json"];
   if (args.repo != null) {
     if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
@@ -61,5 +62,6 @@ function reviewsArgs(args: Json): string[] {
     }
     argv.push("--repo", args.repo);
   }
+  if (args.includeClosed === true) argv.push("--include-closed");
   return argv;
 }

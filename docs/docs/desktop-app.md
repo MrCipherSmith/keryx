@@ -89,7 +89,8 @@ and shows the time of the last successful read when an update fails.
 
 Open a PR and choose **Start review** to review the base and head commits recorded when
 the card was fetched. **Review orchestrator** is on by default. Turn it off to run
-one source reviewer with single-reviewer coverage. The Keryx review panel shows the current phase, the revision and
+one source reviewer with single-reviewer coverage. Once a PR has a Review, its panel offers **Open in Reviews**: the
+Review's panel in the **Reviews** tab holds the review interface and shows the current phase, the revision and
 the reason the run stopped. You can return to the card later, cancel an
 active review or retry an interrupted one. Windows and worktrees share an active
 run when the verified GitHub account, PR, and base and head commits match.
@@ -153,7 +154,7 @@ automatic reviews. Enable the watcher under the new account when ready.
 
 ### Set up automatic PR reviews
 
-Open **Review → Review rules → New rule** and choose **Review requested or re-requested** or **New head commit**. You can restrict a rule to a PR author, assignee or requested reviewer. For a team, enter its GitHub slug, such as `my-org/frontend`. **Wait for passing CI** holds the request until checks pass on the current revision. Read the preview and set a time limit. Leave **Token limit (optional)** blank for unlimited tokens, or enter a positive whole number to cap each review. Save the rule.
+Open **Reviews → Review rules → New rule** and choose **Review requested or re-requested** or **New head commit**. You can restrict a rule to a PR author, assignee or requested reviewer. For a team, enter its GitHub slug, such as `my-org/frontend`. **Wait for passing CI** holds the request until checks pass on the current revision. Read the preview and set a time limit. Leave **Token limit (optional)** blank for unlimited tokens, or enter a positive whole number to cap each review. Save the rule.
 
 Enable **PR watcher** to run the rules on its local schedule. Use a Keryx model provider signed in for noninteractive use by the local CLI. The timer can use stored credentials after Desktop exits. Credentials available only in an interactive terminal are outside its environment. The next complete poll establishes a baseline when you enable or edit a rule. Changes already present at that poll are skipped. A temporary connection error leaves pending work in place until the watcher can verify the repository again.
 
@@ -165,7 +166,7 @@ On a PR card, open **Automation**, select a mode and choose **Save mode**.
 | Auto · rule name | Use just this rule. Its trigger, reviewer and CI conditions still apply. |
 | Manual only | Skip scheduled reviews for this PR. You can start a review from the card at any time. |
 
-The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop. The watcher reserves up to four scheduled workers per local Keryx data directory and rechecks eligible rules on its next poll when all four are occupied.
+The Automation tab of the PR panel shows why a rule is waiting, started or skipped. In the Review's panel in the **Reviews** tab, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop. The watcher reserves up to four scheduled workers per local Keryx data directory and rechecks eligible rules on its next poll when all four are occupied.
 
 ## Install
 
@@ -423,7 +424,7 @@ when the window gets focus.
 
 ### Explore Metaproject
 
-Open **Metaproject** in a project window or press **⌘5**. Search wiki text and
+Open **Metaproject** in a project window or press **⌘6**. Search wiki text and
 indexed names or paths, read a page in **Wiki**, and use **Graph** to trace
 its connections. The [Desktop Metaproject guide](guides/desktop-metaproject.md)
 walks through setup, optional symbol indexing, graph filters, keyboard
@@ -434,8 +435,8 @@ navigation, and recovery when an index is stale or missing.
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: commands, sessions, views |
-| ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Review in the current project |
-| ⌘4 / ⌘5 | Issues / Metaproject in the current project |
+| ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Reviews in the current project |
+| ⌘4 / ⌘5 / ⌘6 | Pull requests / Issues / Metaproject in the current project |
 | ⌘, | Settings |
 | ⌘N | New session |
 | ⌘O | Open folder |

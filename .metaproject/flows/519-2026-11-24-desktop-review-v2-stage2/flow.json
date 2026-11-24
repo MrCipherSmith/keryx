@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T08:30:34.162Z",
+  "updatedAt": "2026-11-24T09:21:54.440Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:99b919f89c204f3a50d7753f24d9def4083b08c743e5c70040a7efbe750a73b5",
+  "acChecksum": "sha256:87b175651dede2c2d3222f7d181664715e3aac696f6e97b2246a391a69024f35",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -291,6 +291,42 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 1 backend (FA-1..FA-17)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:21:54.440Z",
+            "outcome": "started",
+            "detail": "519-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 1 Desktop (FB-1..FB-12)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -441,6 +477,26 @@
       "at": "2026-11-24T08:30:34.162Z",
       "event": "task-done",
       "detail": "T13: Implementation plan stage 2 state, deviation b closed, CLI reference"
+    },
+    {
+      "at": "2026-11-24T09:20:30.906Z",
+      "event": "ac-updated",
+      "detail": "Operator decision 2026-11-24 (AskUserQuestion in this session) on review finding logic-w5 F-001: a return to an earlier range (A,B,A) opens a new round instead of rejoining its first round, so round numbers stay in time order for every consumer."
+    },
+    {
+      "at": "2026-11-24T09:21:50.527Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 1 backend (FA-1..FA-17)"
+    },
+    {
+      "at": "2026-11-24T09:21:50.705Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 1 Desktop (FB-1..FB-12)"
+    },
+    {
+      "at": "2026-11-24T09:21:54.440Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 519-T15"
     }
   ],
   "acKinds": {

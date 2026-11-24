@@ -96,3 +96,25 @@ The Reviews toolbar was measured in the browser dev build (`bun run dev:browser`
 ## 2026-11-24 · T13 docs
 
 implementation-plan.md 0.1.4 adds a «Состояние этапа 2» section; deviation (b) and F-024 are marked closed and decision (d) is relabelled. specification.md 0.1.3 adds the freshness kind `unknown`. The orchestrator corrected two lines with facts from the live check and the toolbar numbers.
+- 2026-11-24T08:30:33.970Z - task-done: T11: Reviews toolbar measurement at 1100/760/560px
+- 2026-11-24T08:30:34.162Z - task-done: T13: Implementation plan stage 2 state, deviation b closed, CLI reference
+- 2026-11-24T08:46:54.316Z - decision d-mwugaxqu-aac958 [review confirm-plan, ordinary]: chose yes; no recommendation
+- 2026-11-24T09:20:30.906Z - ac-updated: Operator decision 2026-11-24 (AskUserQuestion in this session) on review finding logic-w5 F-001: a return to an earlier range (A,B,A) opens a new round instead of rejoining its first round, so round numbers stay in time order for every consumer.
+- 2026-11-24T09:21:50.527Z - task-added: T15: Fix round 1 backend (FA-1..FA-17)
+- 2026-11-24T09:21:50.705Z - task-added: T16: Fix round 1 Desktop (FB-1..FB-12)
+
+## 2026-11-24 · Review round 1 (PR #1304) — results and decisions
+
+- Plan confirmed by the operator: 11 reviewers, 31 dispatches; then plan growth (review-pr-contract) also confirmed ("Continue full round").
+- Waves 1-5 dispatched; verifier passes w1 (4 majors) and w2 (3 majors), all confirmed (three narrower than filed). A further major (logic-w5 F-001, A,B,A rounds) came from the last wave.
+- Operator decision D-R1 (AskUserQuestion): retry joins only the current highest round; AC1 re-frozen through `keryx flow ac update`.
+- tests-to-run (`research-evidence/verify-tests-to-run-1.txt`): 2014 pass / 18 fail, all 5 s timeouts or path refusals in suites outside the PR, under heavy local load. T10 local root run: 13158 pass / 18 fail, same pattern. CI on the PR head 20e4281: 29 pass, 0 fail, 1 skipped — local failures treated as load/environment.
+- One reviewer result normalised by the orchestrator: raw/review-degradation-w2.txt `slices` was `[{"id","coverage","status":"read"}]`, rewritten to `["slice-04"]` so `review next` reads it; content unchanged.
+- Fix list: fix-round-1.md (FA backend, FB Desktop).
+- 2026-11-24T09:21:54.440Z - task-attempt: T15: started (attempt 1) — 519-T15
+
+## 2026-11-24 · Fix round 1 backend (T15) and operator answers
+
+FA reported DONE_WITH_CONCERNS: FA-1..FA-17 fixed, red probes first except FA-10 (perf refactor) and pinning fixtures in FA-12; 181 backend tests pass, typecheck and eslint clean. Desktop typecheck/one DOM test await FB (new `reviewed`/`archived` fields, AC8 ready+null case).
+FA also rewrote specification.md «Хранение» migration bullet to D-R1 and desktop-app.md ~92 (outside the exact list, consistent with decisions).
+Operator answers (AskUserQuestion): archived Review never lights the indicator; a Review with no PR card lights only for needs_answer; locally closed Reviews fetch their cards only while 'Show closed' is on (new `--include-closed`, follow-up sent to FA).

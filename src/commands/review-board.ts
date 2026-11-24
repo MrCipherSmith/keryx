@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 import { attachAddressedReplies } from "../review/board-addressed-replies";
 import { listActiveReviewCards, listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
-import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, withCurrentGithubBinding, type GithubConnection } from "../review/board-github";
+import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, writeBoundJson as writeJson, writeBoundJsonText as writeSerialized } from "../review/board-github";
 
 export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N] [--updated-since ISO_TIMESTAMP]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cards-only] [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
 
@@ -105,19 +105,4 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     }
     size = Math.ceil(size / 2);
   }
-}
-
-export function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
-
-async function writeSerialized(json: string, auth: GithubConnection) {
-  // The desktop hosts read through a pipe. Wait until even a large history or
-  // discussion snapshot has been flushed before returning from the command.
-  await new Promise<void>((resolve, reject) => {
-    // Optional API reads can convert their errors into warnings. Check again
-    // at the publication boundary, excluding concurrent writers until the
-    // complete payload is handed to the pipe.
-    withCurrentGithubBinding(auth, () => {
-      process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
-    });
-  });
 }
