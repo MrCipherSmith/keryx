@@ -133,7 +133,7 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
   if ((prepared && typeof plan?.desktopDispatch !== "string") || !Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || typeof plan.dispatches !== "number") return false;
   const keyed = Array.isArray(queue.completedAssignments);
   if (keyed ? plan.dispatches > queue.calls.length : plan.dispatches !== queue.calls.length) return false;
-  const routing = new Map(Array.isArray(queue.modelRouting) ? queue.modelRouting.map(route => [route.result, route]) : []);
+  const routing = new Map(Array.isArray(queue.modelRouting) ? queue.modelRouting.filter(route => route && typeof route.result === "string").map(route => [route.result, route]) : []);
   const sliceFile = path.join(dir, "slices/manifest.json");
   const expected = new Set<string>();
   if (existsSync(sliceFile)) {

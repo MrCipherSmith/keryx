@@ -1,6 +1,6 @@
 import { desktopPassAllocator, preflightDesktopPasses } from "../review/desktop-review-passes";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { refreshLayers } from "../review/layers";
 import { createLayersFixture, git } from "../review/layers.test-helpers";
 import { createPinnedSourceInput, prepareBlastInput } from "./review-plan-desktop-context";
@@ -163,13 +163,23 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   const legacy = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-02"));
   const reopened = original.modelRouting.find((route: { slices: string[] }) => route.slices.includes("slice-03"));
   writeFileSync(path.join(root, legacy.result), "An unverified legacy result");
-  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools, []);
+  const reopenedRaw = readFileSync(path.join(root, reopened.result), "utf8");
+  const reopenedFile = path.basename(reopened.result);
+  await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, selectModel, pools, [{
+    reviewer: role, result: `raw/${reopenedFile}`, wave: Number(reopenedFile.match(/-w(\d+)\.txt$/)?.[1]),
+    slices: ["slice-03"], paths: [path.join(dir, "slices", slices[2]!.path)], bytes: slices[2]!.bytes,
+    wavesLeft: 1, reason: "escalated", detail: "Slice reopened at deep review",
+    tier: "strong", tierReason: "High risk", modelClass: "expert",
+  }]);
   const resumed = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
   expect(resumed.calls).toHaveLength(3);
   expect(resumed.completedAssignments).toEqual([retained.result]);
   expect(resumed.assignments).toEqual(original.assignments.filter((result: string) => result !== retained.result));
   expect(resumed.modelRouting.find((route: { result: string }) => route.result === reopened.result).assignmentKey).not.toBe(reopened.assignmentKey);
   expect(readFileSync(path.join(root, retained.result), "utf8")).toContain("fallback/review-model");
+  const archived = readdirSync(path.join(dir, "raw-history")).find(name => name.startsWith(reopenedFile.replace(".txt", "-")));
+  expect(archived).toBeDefined();
+  expect(readFileSync(path.join(dir, "raw-history", archived!), "utf8")).toBe(reopenedRaw);
   const changedPools = { ...pools, modelPools: { ...pools.modelPools,
     middle: [{ provider: "primary", model: "review-model" }, { provider: "different", model: "review-model" }],
   } };
