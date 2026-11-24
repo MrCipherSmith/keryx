@@ -1,4 +1,6 @@
-import type { ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
+import type { ReviewCard } from "../../../../src/review/board-types";
+import type { DeskRevision, DeskRunKey, DeskRunState } from "../../../../src/review/desk-run-types";
+import type { ReviewAttemptSummary, ReviewFreshness, ReviewSource, ReviewState, ReviewSummary } from "../../../../src/review/review-entity";
 
 export type ReviewColumn = "running" | "waiting" | "behind" | "published" | "closed";
 
@@ -73,6 +75,60 @@ export function findingsLabel(findings: ReviewSummary["findings"]): string {
   if (!findings) return "";
   const parts = SEVERITIES.filter(severity => (findings[severity] ?? 0) > 0).map(severity => `${findings[severity]} ${severity}`);
   return parts.length ? parts.join(" · ") : "No findings";
+}
+
+/** The findings a fix addresses: blocker, major and minor. Info findings are not a fix target. */
+export function openFindingCount(findings: ReviewSummary["findings"]): number {
+  if (!findings) return 0;
+  return (findings.blocker ?? 0) + (findings.major ?? 0) + (findings.minor ?? 0);
+}
+
+/** What "Fix findings" acts on: the PR card and the attempt whose findings the fix reads. */
+export interface FixFindingsTarget {
+  card: ReviewCard;
+  runId: string;
+  round: number;
+  reviewed: DeskRevision;
+}
+
+/** Finished with a result, as the Review read model counts it (src/review/review-entity.ts FINISHED). */
+const FINISHED_ATTEMPT: ReadonlySet<DeskRunState> = new Set(["completed", "partial", "budget"]);
+/** The Review's state while nothing can be fixed yet: a round is queued, running or waits on an answer. */
+const LIVE_STATE: ReadonlySet<ReviewState> = new Set(["queued", "running", "needs_answer"]);
+
+/** The newest unarchived attempt that finished with a reviewed range; rounds and their attempts are newest first. */
+function referenceAttempt(rounds: ReviewSummary["rounds"]): (ReviewAttemptSummary & { reviewed: DeskRevision }) | undefined {
+  for (const round of rounds) {
+    for (const attempt of round.attempts) {
+      if (!attempt.archived && FINISHED_ATTEMPT.has(attempt.state) && attempt.reviewed) return { ...attempt, reviewed: attempt.reviewed };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * "Fix findings" is offered only on the viewer's own open PR (author compared case-insensitively) whose Review is
+ * not closed, archived or live, has a finished reviewed attempt and has blocker, major or minor findings; null otherwise.
+ */
+export function fixFindingsTarget(review: Pick<ReviewSummary, "card" | "state" | "archived" | "findings" | "rounds">, viewer: string): FixFindingsTarget | null {
+  const { card } = review;
+  if (!card || card.state !== "open" || card.author.toLowerCase() !== viewer.toLowerCase()) return null;
+  if (review.state === "closed" || review.archived || LIVE_STATE.has(review.state)) return null;
+  if (openFindingCount(review.findings) === 0) return null;
+  const attempt = referenceAttempt(review.rounds);
+  return attempt ? { card, runId: attempt.id, round: attempt.round, reviewed: attempt.reviewed } : null;
+}
+
+/** The composer text "Fix findings" prefills (never sent): the PR, the reviewed round and range, the open counts and how to read the findings. */
+export function fixFindingsPrompt(review: Pick<ReviewSummary, "number" | "findings">, key: Omit<DeskRunKey, "number">, target: FixFindingsTarget): string {
+  const counts = (["blocker", "major", "minor"] as const).map(severity => `${review.findings?.[severity] ?? 0} ${severity}`).join(", ");
+  const range = `${target.reviewed.baseSha.slice(0, 7)}..${target.reviewed.headSha.slice(0, 7)}`;
+  const command = `keryx review desk-run status --json --repo ${key.repo} --repository-id ${key.repositoryId} --viewer ${key.viewer} --number ${review.number} --id ${target.runId}`;
+  return [
+    `Create a Keryx fix flow for ${target.card.url} with flow-orchestrator to fix the findings of its Keryx review, and land the fixes on the pull request's branch.`,
+    `The review round ${target.round} reviewed ${range} and left ${counts} findings open. Info findings are left out.`,
+    `Read the findings with: ${command}`,
+  ].join("\n");
 }
 
 export function publicationLabel(review: Pick<ReviewSummary, "publication" | "state">): string {
