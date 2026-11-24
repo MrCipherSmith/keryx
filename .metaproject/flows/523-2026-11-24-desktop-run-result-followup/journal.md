@@ -16,3 +16,11 @@
 - 2026-11-24T21:07:48.685Z - task-done: T1: Collect remaining context
 - 2026-11-24T21:07:49.919Z - task-done: T2: Implement per plan
 - 2026-11-24T21:07:51.092Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-24T21:08:47.649Z - task-attempt: T5: started (attempt 1) — 523-T5
+- 2026-11-24T21:08:48.787Z - task-attempt: T6: started (attempt 1) — 523-T6
+- 2026-11-24T21:35Z - orchestrator: edit guard not checked — `.metaproject/tasks.config.json` does not exist in this project, so `review.jev.edit_guard` is off.
+- 2026-11-24T21:35Z - orchestrator: T5 returned DONE_WITH_CONCERNS (results/T5.json); validated against resolved/T5.implement.json (every must_read cited). AC2 command 9 passed / 0 failed; pty/panels/panel_mcp 22 passed; cargo check, clippy -D warnings, tsc pass. Concerns, all pre-existing, none fixed in T5:
+  1. Output of a fast-exiting process can be missing from the ring after exit (the existing test `a_program_runs_directly_with_its_title_and_reports_its_exit_code` failed 1 of 5 full-suite runs; suspected cause: unread PTY output lost when the child closes the last slave fd before the reader drains it). `pty_tail` after exit depends on it → AC3 could deliver empty/short output under load. Carried to the first-green gate as a hardening option; T7 is told about it.
+  2. portable-pty 0.9.0 reports a signal-killed process as code 1, never null, so `exitCode: null` ("ended by a signal") is not produced for Run tabs. The wire still allows null; T7 must not rely on it; the closed-tab case is detected client-side.
+  3. Environmental here: shellenv ×3 and `appupdate::run_status_reads_a_fake_keryx` fail in most full-suite runs also with T5's tests skipped.
+  Gitignored build prerequisites left in place: `apps/desktop/src-tauri/binaries/keryx-aarch64-apple-darwin` stub and an empty `apps/desktop/dist/`.

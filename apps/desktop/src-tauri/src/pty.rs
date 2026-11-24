@@ -176,6 +176,22 @@ pub fn tail_lines(text: &str, lines: usize) -> String {
     all[all.len().saturating_sub(lines)..].join("\n")
 }
 
+/// Most lines `PtyManager::tail` returns.
+pub const TAIL_MAX_LINES: usize = 2000;
+
+/// What follows the user's shell in the argv of a tab that runs exactly one command (the Run
+/// button): a login, interactive shell, so the command sees the PATH, aliases and rc files of a
+/// shell tab. An empty command, and one holding a NUL that no argv can carry, are refused.
+pub fn command_args(command: &str) -> Result<[&str; 4], String> {
+    if command.trim().is_empty() {
+        return Err("Nothing to run: the command is empty".into());
+    }
+    if command.contains('\0') {
+        return Err("The command contains a NUL character".into());
+    }
+    Ok(["-l", "-i", "-c", command])
+}
+
 pub struct Pty {
     pub id: u64,
     pub window: String,
@@ -231,6 +247,11 @@ impl Pty {
 
     pub fn has_exited(&self) -> bool {
         self.exit.lock().unwrap().is_some()
+    }
+
+    /// The last `lines` lines of the kept output as plain text, also after the process exited.
+    pub fn tail(&self, lines: usize) -> String {
+        tail_lines(&plain_text(&self.output_since(0)), lines)
     }
 
     /// Wait until output stops arriving for `quiet` (after at least one chunk
@@ -449,6 +470,21 @@ impl PtyManager {
         spawn_reader(pty.clone(), reader, spec.on_exit, move || child.wait().ok().map(|s| s.exit_code()));
         self.tabs.lock().unwrap().insert(id, pty.clone());
         Ok(pty)
+    }
+
+    /// A tab whose process is the user's shell, resolved as for a shell tab, running exactly
+    /// `command`: `<shell> -l -i -c <command>`. Everything else is `open`'s; `spec.program` is
+    /// replaced. A refused command or a shell that cannot start is an error and no tab exists.
+    pub fn open_command(&self, spec: OpenSpec<'_>, command: &str) -> Result<Arc<Pty>, String> {
+        let args = command_args(command)?;
+        let shell = user_shell(spec.env);
+        self.open(OpenSpec { program: Some((shell.as_str(), &args)), ..spec })
+    }
+
+    /// The last `lines` lines (1 to `TAIL_MAX_LINES`) of a tab's kept output as plain text: also
+    /// after its process exited, until the tab is closed.
+    pub fn tail(&self, window: &str, id: u64, lines: usize) -> Result<String, String> {
+        Ok(self.get(window, id)?.tail(lines.clamp(1, TAIL_MAX_LINES)))
     }
 
     pub fn get(&self, window: &str, id: u64) -> Result<Arc<Pty>, String> {
@@ -791,6 +827,151 @@ mod tests {
         assert!(read_until(&ra, "P=cat G=cat").contains("P=cat"));
         assert!(read_until(&ru, "P=less").contains("P=less"));
         mgr.close_all();
+    }
+
+    /// A command tab's login environment, cut off from the developer's own rc files.
+    fn command_env(home: &Path, shell: &str) -> HashMap<String, String> {
+        let mut env = env();
+        for k in ["ENV", "BASH_ENV", "ZDOTDIR"] {
+            env.remove(k);
+        }
+        env.insert("HOME".into(), home.display().to_string());
+        env.insert("SHELL".into(), shell.into());
+        env
+    }
+
+    fn open_command(
+        mgr: &PtyManager,
+        dir: &Path,
+        env: &HashMap<String, String>,
+        command: &str,
+    ) -> (Result<Arc<Pty>, String>, mpsc::Receiver<Option<u32>>) {
+        let (tx, rx) = mpsc::channel();
+        let spec = OpenSpec {
+            window: "w",
+            owner: Owner::User,
+            cwd: dir,
+            env,
+            cols: 80,
+            rows: 24,
+            program: None,
+            title: Some("run"),
+            on_exit: Some(Box::new(move |_id, code| {
+                let _ = tx.send(code);
+            })),
+        };
+        (mgr.open_command(spec, command), rx)
+    }
+
+    fn exit_code(rx: &mpsc::Receiver<Option<u32>>) -> Option<u32> {
+        rx.recv_timeout(Duration::from_secs(10)).expect("the command never exited")
+    }
+
+    #[test]
+    fn run_command_starts_the_users_shell_as_a_login_interactive_shell_with_exactly_the_command() {
+        let dir = tempfile::tempdir().unwrap();
+        // The user's shell is `echo` here, so the tab prints the arguments it was started with.
+        let env = command_env(dir.path(), "/bin/echo");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "echo 'a b' && exit 3");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("-l -i -c echo 'a b' && exit 3\n"), "{out:?}");
+        let info = pty.info();
+        assert_eq!((info.title.as_str(), info.owner, info.running), ("run", Owner::User, false));
+        mgr.close("w", pty.id);
+    }
+
+    #[test]
+    fn run_command_runs_in_the_project_root_with_the_login_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = command_env(dir.path(), "/bin/sh");
+        env.insert("KERYX_LOGIN_ENV".into(), "kept".into());
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, r#"echo "T=$TERM S=$SHELL L=$KERYX_LOGIN_ENV"; pwd"#);
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("T=xterm-256color S=/bin/sh L=kept"), "{out:?}");
+        let real = std::fs::canonicalize(dir.path()).unwrap();
+        assert!(out.contains(real.to_str().unwrap()) || out.contains(dir.path().to_str().unwrap()), "{out:?}");
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_reports_the_commands_exit_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "exit 3");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(3));
+        assert_eq!(pty.info().exit_code, Some(3));
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_runs_shell_syntax_through_the_shell() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "echo a && echo b");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("a\nb\n"), "{out:?}");
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_tail_returns_the_last_plain_text_lines_also_after_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let command = r"printf '\033[1;32mone\033[0m\n\033]0;title\007two\n50%%\r100%%\n'";
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, command);
+        let id = pty.unwrap().id;
+        assert_eq!(exit_code(&rx), Some(0));
+        assert_eq!(mgr.tail("w", id, 3).unwrap(), "one\ntwo\n100%");
+        assert_eq!(mgr.tail("w", id, 2).unwrap(), "two\n100%");
+        // Fewer than one line is one line.
+        assert_eq!(mgr.tail("w", id, 0).unwrap(), "100%");
+        assert!(mgr.tail("other", id, 2).is_err(), "another window's tab");
+        mgr.close("w", id);
+        assert!(mgr.tail("w", id, 2).is_err(), "a closed tab");
+    }
+
+    #[test]
+    fn run_command_tail_is_capped_at_two_thousand_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "i=1; while [ $i -le 2100 ]; do echo $i; i=$((i+1)); done");
+        let id = pty.unwrap().id;
+        assert_eq!(exit_code(&rx), Some(0));
+        let tail = mgr.tail("w", id, usize::MAX).unwrap();
+        let lines: Vec<&str> = tail.split('\n').collect();
+        assert_eq!((lines.len(), lines[0], lines[lines.len() - 1]), (TAIL_MAX_LINES, "101", "2100"));
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_refuses_an_empty_command_and_a_shell_that_cannot_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = PtyManager::default();
+        let env = command_env(dir.path(), "/bin/sh");
+        for command in ["", "  \n\t", "echo a\0b"] {
+            let (pty, _rx) = open_command(&mgr, dir.path(), &env, command);
+            assert!(pty.is_err(), "{command:?} was accepted");
+        }
+        // The user's shell exists but cannot be executed.
+        let shell = dir.path().join("not-executable");
+        std::fs::write(&shell, "#!/bin/sh\n").unwrap();
+        let env = command_env(dir.path(), shell.to_str().unwrap());
+        let (pty, _rx) = open_command(&mgr, dir.path(), &env, "echo hi");
+        assert!(pty.is_err());
+        assert!(mgr.list("w").is_empty(), "a refused or failed start leaves no tab");
     }
 
     #[test]

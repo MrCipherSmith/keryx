@@ -5,7 +5,7 @@
 //! another view is refused by `PtyManager::get`.
 
 use crate::bridge::AppState;
-use crate::pty::{OpenSpec, Owner, PtyEvent, PtyManager, TabInfo};
+use crate::pty::{ExitHook, OpenSpec, Owner, PtyEvent, PtyManager, TabInfo};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -52,13 +52,19 @@ fn sink(channel: Channel<PtyEvent>) -> crate::pty::Sink {
     })
 }
 
+/// The environment of a tab in `root`: the login-shell environment (this process's while none was
+/// captured) plus the project's GitHub account.
+fn tab_env(app: &AppHandle, root: &Path) -> HashMap<String, String> {
+    let env = app.state::<AppState>().environment().clone();
+    let mut env = if env.is_empty() { std::env::vars().collect() } else { env };
+    env.extend(crate::review::project_github_env(app, root));
+    env
+}
+
 /// Open a tab for `owner` in `root`; the view attaches afterwards and gets the
 /// output so far replayed. Agent tabs are announced to the window.
 pub fn open_tab(app: &AppHandle, window: &str, root: &Path, owner: Owner, cols: u16, rows: u16) -> Result<TabInfo, String> {
-    let env = app.state::<AppState>().environment().clone();
-    let env = if env.is_empty() { std::env::vars().collect() } else { env };
-    let mut env = env;
-    env.extend(crate::review::project_github_env(app, root));
+    let env = tab_env(app, root);
     let pty = app.state::<PtyManager>().open(OpenSpec { window, owner, cwd: root, env: &env, cols, rows, program: None, title: None, on_exit: None })?;
     let info = pty.info();
     if owner == Owner::Agent {
@@ -83,7 +89,7 @@ pub async fn pty_open(
     .map_err(|e| e.to_string())?
 }
 
-/// Exit of a tab opened by `pty_open_run`, announced to its window.
+/// Exit of a tab opened by `pty_open_run` or `pty_open_command`, announced to its window.
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PtyExit {
@@ -91,17 +97,21 @@ pub struct PtyExit {
     pub code: Option<u32>,
 }
 
+/// Sends `panel://pty-exit` to `window` when the tab's process ends, whether or not the tab is on screen.
+fn announce_exit(app: &AppHandle, window: &str) -> ExitHook {
+    let (app, window) = (app.clone(), window.to_string());
+    Box::new(move |id, code| {
+        let _ = app.emit_to(window.as_str(), "panel://pty-exit", &PtyExit { id, code });
+    })
+}
+
 /// Open a tab whose process is `argv` itself (`/delegate`'s vendor CLI, D-14), in `root`, with the
 /// login-shell environment. The window gets `panel://pty-exit` when it ends, whether or not the tab is
 /// on screen. A program that cannot start is an error and no tab exists.
 pub fn open_run_tab(app: &AppHandle, window: &str, root: &Path, argv: &[String], title: &str, cols: u16, rows: u16) -> Result<TabInfo, String> {
     let Some((program, rest)) = argv.split_first() else { return Err("Nothing to run".into()) };
-    let env = app.state::<AppState>().environment().clone();
-    let env = if env.is_empty() { std::env::vars().collect() } else { env };
-    let mut env = env;
-    env.extend(crate::review::project_github_env(app, root));
+    let env = tab_env(app, root);
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
-    let (hook_app, hook_window) = (app.clone(), window.to_string());
     let pty = app.state::<PtyManager>().open(OpenSpec {
         window,
         owner: Owner::User,
@@ -111,10 +121,31 @@ pub fn open_run_tab(app: &AppHandle, window: &str, root: &Path, argv: &[String],
         rows,
         program: Some((program.as_str(), &rest)),
         title: Some(title),
-        on_exit: Some(Box::new(move |id, code| {
-            let _ = hook_app.emit_to(hook_window.as_str(), "panel://pty-exit", &PtyExit { id, code });
-        })),
+        on_exit: Some(announce_exit(app, window)),
     })?;
+    Ok(pty.info())
+}
+
+/// Open a tab whose process is the user's login shell running exactly `command` (`<shell> -l -i -c
+/// <command>`, the Run button), in `root`, with a shell tab's login environment. Like a run tab, the
+/// window gets `panel://pty-exit` when it ends; an empty command or a shell that cannot start is an
+/// error and no tab exists.
+pub fn open_command_tab(app: &AppHandle, window: &str, root: &Path, command: &str, title: &str, cols: u16, rows: u16) -> Result<TabInfo, String> {
+    let env = tab_env(app, root);
+    let pty = app.state::<PtyManager>().open_command(
+        OpenSpec {
+            window,
+            owner: Owner::User,
+            cwd: root,
+            env: &env,
+            cols,
+            rows,
+            program: None,
+            title: Some(title),
+            on_exit: Some(announce_exit(app, window)),
+        },
+        command,
+    )?;
     Ok(pty.info())
 }
 
@@ -131,6 +162,33 @@ pub async fn pty_open_run(
     let root = project_dir(&cwd)?;
     let label = view.label().to_string();
     tauri::async_runtime::spawn_blocking(move || open_run_tab(&app, &label, &root, &argv, &title, cols, rows))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn pty_open_command(
+    app: AppHandle,
+    view: Webview,
+    cwd: String,
+    command: String,
+    title: String,
+    cols: u16,
+    rows: u16,
+) -> Result<TabInfo, String> {
+    let root = project_dir(&cwd)?;
+    let label = view.label().to_string();
+    tauri::async_runtime::spawn_blocking(move || open_command_tab(&app, &label, &root, &command, &title, cols, rows))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The last `lines` lines of a tab's output as plain text, also after its process exited.
+#[tauri::command]
+pub async fn pty_tail(app: AppHandle, view: Webview, id: u64, lines: usize) -> Result<String, String> {
+    let label = view.label().to_string();
+    // Up to the whole 1 MiB ring is decoded: off the main thread.
+    tauri::async_runtime::spawn_blocking(move || app.state::<PtyManager>().tail(&label, id, lines))
         .await
         .map_err(|e| e.to_string())?
 }
