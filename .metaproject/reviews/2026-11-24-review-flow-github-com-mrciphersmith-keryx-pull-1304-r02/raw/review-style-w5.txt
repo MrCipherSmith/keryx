@@ -1,0 +1,103 @@
+STATUS: DONE
+
+# Style Review Report: review-style, round 2 (delta), wave 5
+
+## Summary
+Slice-05 (the backend side of the fix: desk-run-store.ts, review-entity.ts, board-github.ts and their tests) reads cleanly. The new helpers have specific names: `roundFor`, `neverStarted`, `PlacedAttempt`, `headComparison` and `writeBoundJson`. The new doc comments state the contracts. No touched file crosses a length, nesting or branch threshold, and the delta adds no console output. I found two minor naming findings. The `neverStarted` SQL helper takes its table alias as `r`, but the sibling helper in the same class calls it `alias`. And review-entity.ts has two helpers, `stateAttempts` and `stateAttempt`, that differ by one letter and return different things. Slice-06 holds only removed lines and base context; removed lines cannot carry a style finding.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (explicit-hash-range, delta round)
+- Slices read in full: slice-05 (review-reviews.test.ts, board-github.ts, desk-run-store.ts, desk-run-store.test.ts, review-entity.ts, review-entity.test.ts) and slice-06 (deletion-only hunks and base context: review.rs, App.tsx, ReviewBoard.tsx, ReviewDetail.tsx, ReviewResults.tsx, model.ts, reviewPages.test.ts, ReviewBoard.dom.test.tsx, ReviewPanel.dom.test.tsx, app-navigation.fixture.tsx, implementation-plan.md, specification.md, desk-run-store.ts)
+- Head lookups (`keryx ctx rg`): usages of `neverStarted`, `placement(alias)`, `stateAttempt(s)`, `reviewedResult` and `reviewNote`. `git diff --stat` shows that model.ts and ReviewResults.tsx are not changed in this delta, so their slice-06 lines are context only.
+
+## Stats
+- major: 0
+- minor: 2
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+
+### [F-001] `neverStarted` names its table-alias parameter `r`; the sibling helper in the same file calls it `alias`
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:27
+- **Problem**: `const neverStarted = (r = "") => \`(${r}state='skipped' AND …${r}details…\`` takes a SQL table-alias prefix as a single-letter parameter. One call site passes `"r."` (line 606), so `r` names both the parameter and the SQL alias that is passed into it. In the same class, `placement(alias = "")` (line 174) takes the same kind of value and calls it `alias`.
+- **Why it matters**: A reader has to work out from the template body that `r` is an alias prefix. Here one concept has two names (`r` and `alias`), and the Name row says single-letter names are only for loop counters and short callbacks.
+- **Fix**: Rename the parameter to `alias`, to match `placement`: `const neverStarted = (alias = "") => …`.
+
+### [F-002] `stateAttempts` and `stateAttempt` differ by one letter and return different things
+- **Severity**: minor
+- **File**: src/review/review-entity.ts:132
+- **Problem**: `stateAttempts(row)` (line 132) returns the attempts that are used for state, findings and publication: the unarchived ones, or all of them when every one is archived. `stateAttempt(attempts)` (line 145) picks the single attempt that the state comes from, and it does not always pick the latest one. `summarizeReview` calls them on consecutive lines (`const attempts = stateAttempts(row); … const settled = stateAttempt(attempts);`). The result of `stateAttempt` is stored as `settled`, which is a third name for it.
+- **Why it matters**: A one-letter difference between two different concepts is easy to misread and to autocomplete wrongly. A reader of `summarizeReview` has to open both helpers to tell them apart. This is the Name row ("needs a comment / gives one concept two names").
+- **Fix**: Name each helper after what it selects. For example, `countedAttempts(row)` (or `unarchivedOrAll`) for the set, and `stateSource(attempts)` (or `settledAttempt`) for the single attempt. If you use `settledAttempt`, the local `settled` matches the helper's name.
+
+## Considered and not reported
+- `reviewedResult` (review-entity.ts:126) is a predicate with a noun-like name. At its main call site, `newest(attempts, reviewedResult)`, it reads as "the newest reviewed result", and the sibling predicate `live` uses the same bare form. It is an opinion, so not reported.
+- `FINISHED_STATES` in desk-run-store.ts duplicates `FINISHED` in review-entity.ts. review-clean-code-w4 F-003 already reports it (duplication is clean-code's lens).
+- The `Pending` type lacks the selected `round`: review-backend-w4 R2-BE-W4-001.
+- `writeBoundJson` and `writeBoundJsonText` in board-github.ts get a second pair of names: review-style-w4 F-001. `writeBoundJsonText` has no JSDoc of its own, but it sits directly under the documented wrapper, so it is not reported.
+- `roundFor` (desk-run-store.ts) has about 6 decision points, under the "more than 10" threshold. Its tie-break condition `(…) > (…) || (… && …)` is grouped.
+- In `reviewRows`, the condition for `publication` has 3 clauses, which does not exceed the threshold.
+- File lengths: desk-run-store.ts was already past 800 lines at base. review-entity.ts is about 203 lines. Neither crosses a threshold in this delta.
+- Test files (review-reviews.test.ts, desk-run-store.test.ts, review-entity.test.ts) are exempt from the Readability rows. Their new helper names (`editStore`, `prHead`, `placeOf`, `finished`) are specific.
+- Slice-06: every hunk shows removed lines or unchanged base context. model.ts and ReviewResults.tsx are not changed in this delta, and `reviewNote` is still used at ReviewResults.tsx:61 and :110, so it is not dead.
+
+## Positive Notes
+- `neverStarted` replaces an inline three-line SQL predicate at `previousAttempt` and is reused in three queries. Its doc comment states the domain rule.
+- The doc comment on `roundFor` states the round rule in words, including the A, B, A case, and the test names repeat it.
+- `ReviewAttemptSummary.archived` and `ReviewSummary.reviewed` / `.archived` each have a one-line doc that says what the field means.
+
+## Not verified
+- I ran no tests (exec_budget_s 0) and did not open verify-tests-to-run-1.txt. History was read only through `git diff --stat` and `keryx ctx rg` on the head working tree, which matches f6971fd for these files (the git status shows only .metaproject changes).
+
+## Routing audit
+- graph_used: no (not-relevant: the slices were supplied, and lookups were single-symbol)
+- wiki_used: no (not-relevant: naming lens)
+- ctx_used: yes (`keryx ctx rg`)
+- raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-05 reads cleanly, and slice-06 holds only removed lines and context. There are two minor naming findings: the neverStarted SQL helper names its alias parameter r, while the sibling placement(alias) uses alias; and review-entity.ts has stateAttempts and stateAttempt, which differ by one letter and select different things. No length, nesting, branch or console threshold is crossed.",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 27,
+      "quote": "const neverStarted = (r = \"\") => `(${r}state='skipped' AND coalesce(json_extract(${r}details,'$.phase'),'')='Superseded'",
+      "problem": "The table-alias prefix parameter is named r. One call site passes \"r.\" (line 606), so r names both the parameter and the SQL alias passed into it. The sibling helper placement(alias = \"\") at line 174 calls the same kind of value alias.",
+      "impact": "Readability: one concept has two names in the same file, and the single-letter name has to be decoded from the template body. Name row.",
+      "suggested_fix": "Rename the parameter to alias: const neverStarted = (alias = \"\") => `(${alias}state='skipped' ...`.",
+      "evidence": "Head f6971fd desk-run-store.ts:27 (definition), :174 placement(alias = \"\"), :187, :195, :606 neverStarted(\"r.\"), :665. Added by the fix delta (slice-05 hunk @@ 6,50 @@).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "desk-run-store-neverstarted-alias-param-name"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": 132,
+      "quote": "function stateAttempts(row: ReviewRow): ReviewAttemptSummary[] {",
+      "problem": "stateAttempts(row) returns the set of attempts that state, findings and publication come from: the unarchived ones, or all of them. stateAttempt(attempts) at line 145 picks the single attempt the state comes from: the latest one, or the round's accepted result. The two names differ by one letter and are called on consecutive lines in summarizeReview, where the result of the second is stored as settled, a third name.",
+      "impact": "Readability: a one-letter difference between two concepts is easy to misread or autocomplete wrongly, and summarizeReview cannot be read without opening both helpers. Name row.",
+      "suggested_fix": "Name each helper after what it selects, for example countedAttempts(row) for the set and settledAttempt(attempts) or stateSource(attempts) for the single attempt, so the local settled matches its helper.",
+      "evidence": "Head f6971fd review-entity.ts:132 stateAttempts, :139 and :179 its calls, :145 stateAttempt, :181 const settled = stateAttempt(attempts). Both helpers are added by the fix delta (slice-05 hunk @@ 125,204 @@).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "review-entity-stateattempt-stateattempts-names"
+    }
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```

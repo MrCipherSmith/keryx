@@ -1,0 +1,170 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1304, branch feat/desktop-review-v2-stage2, delta round 2 (20e4281a2..f6971fd4a), slice-01 (the fix slice), diff mode. Load profile: not provided (plan.md has none). Concrete triggers used: the number of Reviews stored per repository and account, the triggers that refresh the Reviews list (60 s timer, PR watcher poll, session-review events, panel mutations), and a GitHub stall that runs each `gh` call to its 18 s client timeout.
+Files read beyond the slice: apps/desktop/src/reviews/ReviewsView.tsx (30-260), apps/desktop/src/platform/review.ts (fetchReviews), apps/desktop/src/platform/reviewReadLane.ts, apps/desktop/src/platform/reviewRuns.ts (publish/subscribe), apps/desktop/src/review/ReviewWatcher.tsx (poll and visibility gating), apps/desktop/src/review/SessionReviewActivity.tsx (publish sites), apps/desktop/src/App.tsx (focus, watcher signal, mount gate), src/commands/review-reviews.ts (whole, at f6971fd), src/lib/map-pool.ts, src/review/board-github.ts (boardGh/boardGraphql timeouts), and the store diff in src/review/desk-run-store.ts (assignReviews/roundFor, requestAttempt supersede order, publication, reviewRows).
+
+Summary: Most of the round-1 fixes in this lens hold. The 60 s reload checks visibility. Card batches run three at a time and keep the batches that succeeded. The compare cap follows list order. The compare phase has a deadline. Placement now reads each Review's attempts once per call. ReviewsView mounts only once the account read has settled. Two minor residuals remain. First, the new hidden-tab refresh triggers share the in-flight read, so they can return a snapshot taken before the event that caused them. Second, `readReviews` still has no overall deadline: under a GitHub stall, a store that has grown past about 120 Reviews still crosses the Desktop host's 150 s bound. Stats: blocker 0 | major 0 | minor 2 | info 1.
+
+### CLI / Multi-Session
+None detected. Placement stays serialised: `assignReviews` runs inside the caller's IMMEDIATE transaction. `requestAttempt` marks a superseded queued row before it inserts and places the new one (desk-run-store.ts ~722-761), so `roundFor` sees `superseded=1` and the new request takes that round. The per-call `placed` map is rebuilt on each call and appended after each placement, so it never serves stale rows across processes.
+
+### Concurrency & Races
+[F-001] Refresh triggers added for the hidden tab join an in-flight read, so their result can predate the event (minor, below).
+
+### Resources
+None detected. The ReviewReadLane bounds Reviews-list reads to one in flight per key and two keys plus one waiting. Card batches use mapPool(3, stopOnError). Compares use mapPool(4). The hidden-tab 60 s timer is skipped while the window is hidden. The watcher-status poll that feeds `reloadSignal` is already gated on `document.hidden` (ReviewWatcher.tsx:74).
+
+### Caching
+F-001 also belongs here, as a stale read after a write. Its root is the lane's coalescing.
+
+### Lock Contention
+None detected.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+[F-002] No overall deadline: the card phase grows with stored history, and abandoned compares keep the CLI alive (minor, below).
+
+### Idempotency & Distributed Invariants
+None detected.
+
+---
+
+### [F-001] A refresh that should pick up a just-made change can join an older in-flight read
+- Severity: minor
+- File: apps/desktop/src/reviews/ReviewsView.tsx:198 (also :199-204 and the panel-mutation observer below :258). Root: apps/desktop/src/platform/review.ts:117-119 with apps/desktop/src/platform/reviewReadLane.ts:13-14
+- Pattern: Caching C1, a stale read after a write. Coalescing drops the re-run.
+- Failure mode: `refresh()` bumps `attempt`, and the load effect calls `fetchReviews(cwd, repo, viewer, showClosed)`. The lane key does not change with the trigger (`[cwd, expectedViewer, repo, includeClosed]`), so `reviewLists.read` returns the promise already in flight (`const current = this.active.get(key); if (current) return current;`). That CLI read its store rows (`readReviewRows` runs right after the identity query) before the event. The card and compare phases then take seconds, and up to 60 s or more under load. The new request number is accepted (`request === sequence.current`), so the pre-event snapshot becomes current and nothing reads again.
+  - Trigger: a read is in flight (the 60 s running timer, a tab show, or an earlier event) when one of these lands: a session publish decision (`publishSessionReview` at SessionReviewActivity.tsx:156), a session continuation (:138), a launch (App.tsx:683), a PR watcher poll that scheduled a review (`reloadSignal`), or a decision in the panel.
+  - Outcome: the Reviews indicator and list keep the pre-event state. Examples: still lit after the user skipped or published from a Session, or unlit and not `running` for a review the watcher just queued, in which case the 60 s timer does not start either. This lasts until the next independent trigger, which is the next watcher poll that completes, a tab show, or a manual refresh.
+  - This is the case FB-4 added these triggers for, and the DOM tests inject `load`, so they bypass the lane and cannot see it.
+- Fix: Add an invalidation version to the Reviews-list lane key, as `reviewRun` already does for histories (`histories.read(JSON.stringify([mutationVersion, cwd, key, ...]))` in platform/reviewRuns.ts). Bump it from event-driven refreshes, so an event starts a new read. The lane's single waiting slot still bounds the spawns. Alternatively, ReviewsView can set a `dirty` ref when `refresh()` lands while `read.loading` is true, and refresh once more when that read settles. Pin it with a test that uses the real `fetchReviews` (mocked `invoke`): hold the first invoke, publish a session event, resolve the first, and expect a second invoke.
+- class_scope (optional for minor): sites ReviewsView.tsx:198 (subscribeSessionReview), :199-204 (reloadSignal), the seenRuns observer (panel mutations), :185 (tab show); enumeration: `keryx ctx rg "refresh|subscribeSessionReview|reloadSignal" apps/desktop/src/reviews/ReviewsView.tsx` (36 matches, read 148-260). The 60 s timer at :194 is a sibling with no event to miss. ReviewBoard's `watcherPolled` refresh through the `boards` lane has the same shape, but it predates this delta and is out of scope.
+- Confidence: medium. The coalescing path was read in code. The overlap window was not measured.
+
+### [F-002] `readReviews` has no overall deadline: the card phase grows with history, and abandoned compares outlive the compare deadline
+- Severity: minor
+- File: src/commands/review-reviews.ts (readReviews, readCards, compareHeads)
+- Pattern: Retry/Timeout F2, one timeout for the whole chain.
+- Failure mode: FA-9's deadline covers only the compare phase, and it starts after the cards are read. `readCards` runs ceil(N/20) GraphQL batches three at a time, with no deadline. Each `boardGh`/`boardGraphql` call can take up to 18 s (board-github.ts:133). When the compare deadline passes, `Promise.race` returns "late", but the `gh api .../compare` children are not killed. Up to 4 can still be running, for up to 18 s each. `runReviewReviews` returns through `process.exitCode` and no `process.exit`, so the CLI exits only when they do.
+  - Worst case under a GitHub stall: 18 (identity) + 18 x ceil(ceil(N/20)/3) (cards) + 60 (compares) + 18 (tail).
+  - That is 114 s for N <= 60 and 132 s for N <= 120. It reaches the Desktop bound of `Duration::from_secs(150)` (review.rs:123) at N > 120.
+  - N counts every stored Review that is not closed locally. Merged or closed PRs count too, until the user closes or archives them (F-023 residual).
+  - Trigger: a GitHub or network stall, with more than about 120 such Reviews for one account and repository.
+  - Outcome: the host kills the read, so the whole Reviews list fails instead of degrading to "count unknown". It also holds a lane slot for the full 150 s. This is degradation, not data loss, and it recovers on the next read. Round 1's stated trigger (22+ behind) is now inside the bound.
+- Fix: Take one deadline at the start of `readReviews` (for example 90 s), and use it for both phases. Stop admitting card batches past it, and report their Reviews with `card: null` plus the existing "could not be loaded" warning. Give the compare phase `min(REVIEW_COMPARE_BUDGET_MS, deadline - now)`. Pass a shorter per-call timeout to `boardGh` for compares, for example 8 s, or an AbortSignal that kills the child at the deadline, so the process exits on time. Add a test where the card query hangs for one batch, then check the elapsed time and the warning.
+- Confidence: medium. The arithmetic comes from the code. It assumes `child::run_bounded_with_stdin` waits for the process to exit; that helper was not read.
+
+### [F-003] info: the hidden-tab 60 s reload is a deliberate cost
+- Severity: info
+- File: apps/desktop/src/reviews/ReviewsView.tsx:192-196
+- What changed: FB-4 dropped the `active` gate, so the 60 s timer now runs whenever any Review is queued or running, on any tab while the window is visible.
+- Cost: each tick is one `review reviews` spawn: an identity query, ceil(N/20) card queries, and up to 25 compares, per project window. A long scheduled review keeps it running for its whole duration.
+- Why info: this follows FB-4 and has no failure mode beyond the GitHub budget, which F-002 bounds. If it proves costly, read only the store (no compares) on timer ticks while the tab is hidden.
+- Confidence: high.
+
+---
+
+## Prior dispositions (round-1 findings this slice touches, checked against f6971fd)
+
+- F-011 closed: ReviewsView.tsx:194 `window.setInterval(() => { if (document.visibilityState !== "hidden") refresh(); }, RUNNING_RELOAD_MS)`.
+- F-012 closed: App.tsx mounts ReviewsView only under `(githubAccount || githubAccountError)`. The account read sets one of them in both branches (App.tsx:261-264), so the view no longer mounts as "active-gh" and then remounts.
+- F-022 partial: the cap now follows list order. Rows are sorted by `latestActivity` and then number before `behind.slice(0, MAX_REVIEW_COMPARES)`, so the Reviews the user sees first get counts. The warning still says "Refresh to read more", but a refresh compares the same first 25 again, so the misleading-text half is open. Display only.
+- F-023 partial: card batches now run three at a time (`mapPool(batches, CARD_PARALLEL=3)`), and locally closed Reviews are skipped unless `--include-closed`. Reviews of PRs merged or closed on GitHub, but not closed locally, are still read on every call, so cost still grows with stored history, and more often now because of the hidden-tab triggers. See F-002.
+- F-025 closed for its stated trigger: the compare phase has a 60 s deadline, and unfinished compares report `commits: null` with one warning (test "comparisons that outlast the deadline…"). The residual for larger histories is F-002.
+- F-024 closed: `readCards` keeps the cards of the batches that succeeded, a failed batch adds one warning, and access errors still rethrow (stopOnError). `reviewNeedsViewer` ignores `card === null` except for `needs_answer` (test "one failed card batch keeps…").
+- F-026 closed: `assignReviews` reads each Review's placed attempts once per call into `placed`, using `json_extract` columns only, and appends each new placement. The old per-row `roundFor` queries are gone.
+- F-007 closed in this lens: the list now reloads while hidden on session-review events (:198), on watcher polls (`reloadSignal`, :199-204), and on the 60 s timer without the `active` gate. Residual staleness when a trigger joins an in-flight read: F-001.
+- F-028 closed (store side checked): `neverStarted()` drops a superseded, never-started request from `counted` in `roundFor` and from `reviewRows`. Supersede happens before insert and placement in `requestAttempt`.
+- F-001, F-002, F-003, F-009 closed (checked in this slice, outside my lens):
+  - F-001: focus carries `{repo, repositoryId, number}`, and ReviewsView matches repo and repositoryId before number.
+  - F-002: the intent is cleared through `onIntentConsumed` and when the tab is left (ReviewsView.tsx:255-256, ReviewWorkspace.tsx:92).
+  - F-003: the handled nonce is kept above the keyed child (`taken`), and App clears the focus through `onFocusHandled`.
+  - F-009: `accessLost` calls `settlePending()`.
+- F-004, F-005, F-008: these belong to review-logic. I saw the matching changes in the slice (`reviewNeedsViewer` pending-only, `publication()` for finished states, `reviewedCommit` from `review.reviewed`, `roundFor` current-highest rule) but did not trace their logic, so I give no disposition for them.
+
+Not read or verified: `child::run_bounded_with_stdin` (whether it waits for process exit), `listActiveReviewCards` internals (one query per batch was assumed from its use), and the Rust bridge diff. No tests were run (exec budget 0). Prior findings outside this lens were not re-verified except as listed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-01"],
+  "summary": "Round-1 fixes in this lens hold: the reload checks visibility, card batches run in parallel and survive one failed batch, the compare cap follows list order, the compare phase has a deadline, and placement reads each Review once per call. Two minor residuals: event-driven refreshes join an in-flight read and can keep a pre-event snapshot, and readReviews has no overall deadline, so a large stored history under a GitHub stall still crosses the 150 s host bound.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 198,
+      "quote": "useEffect(() => subscribeSessionReview(project => { if (project === cwd) refresh(); }), [cwd, refresh]);",
+      "problem": "The refreshes added so the hidden tab stays current (session-review events, PR watcher polls, panel mutations) call fetchReviews with an unchanged ReviewReadLane key [cwd, viewer, repo, includeClosed]. If a read is already in flight, the lane returns that promise (reviewReadLane.ts:13-14). That read took its store rows before the event, and its snapshot is accepted as current because the request sequence matches the new effect run.",
+      "impact": "Trigger: a list read (60 s timer, tab show, earlier event) is in flight when a session publish/skip decision, a continuation or launch, a watcher poll that queued a review, or a panel decision lands. Outcome: the Reviews indicator and list keep the pre-event state. Examples: still lit after a decision, or a newly queued review not shown as running, in which case the 60 s timer does not start either. This lasts until the next independent trigger. Display staleness only; no data lost.",
+      "suggested_fix": "Add an invalidation version to the Reviews-list lane key, bumped by event-driven refreshes, as reviewRun does for histories with mutationVersion. Or set a dirty flag when refresh() lands during a load and refresh once more after it settles. Pin it with a test that uses the real fetchReviews and a held invoke: hold the first invoke, publish a session event, resolve, and expect a second invoke.",
+      "evidence": "ReviewsView.tsx:148-175 load effect calls load(cwd, repo, expectedViewer, showClosed) and accepts the result when request === sequence.current. platform/review.ts:117-119 lane key without any version. reviewReadLane.ts:13-14 returns the active promise for the same key. src/commands/review-reviews.ts reads store rows right after the identity query, then spends the card and compare phases on GitHub. platform/reviewRuns.ts keys histories by mutationVersion (precedent). The DOM tests inject `load` and bypass the lane.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-refresh-joins-inflight-read",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/reviews/ReviewsView.tsx:198",
+          "apps/desktop/src/reviews/ReviewsView.tsx:199-204",
+          "apps/desktop/src/reviews/ReviewsView.tsx:185",
+          "apps/desktop/src/reviews/ReviewsView.tsx seenRuns observer (panel mutations)",
+          "apps/desktop/src/platform/review.ts:118"
+        ],
+        "enumeration_method": "keryx ctx rg 'refresh|subscribeSessionReview|reloadSignal' apps/desktop/src/reviews/ReviewsView.tsx (36 matches; read lines 148-260). Every refresh() caller meant to pick up a just-made change; the 60 s timer has no event to miss."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "const comparisons = await compareHeads(behind.slice(0, MAX_REVIEW_COMPARES), compare, compareBudgetMs, snapshot.warnings);",
+      "problem": "The deadline added in FA-9 covers only the compare phase and starts after the card phase. readCards has no deadline and runs ceil(N/20) GraphQL batches three at a time, each up to boardGh's 18 s timeout. A late compare is abandoned through Promise.race, but its gh child keeps running for up to 18 s. The CLI ends through process.exitCode, so it exits only when those children do.",
+      "impact": "Under a GitHub stall the worst case is 18 + 18*ceil(ceil(N/20)/3) + 60 + 18 s. That reaches the Desktop host's 150 s bound (review.rs:123) for N > 120 Reviews not closed locally, and merged PRs count until the user closes them. The host then kills the read: the whole Reviews list fails instead of showing unknown counts, and it holds a lane slot for 150 s. Recovers on the next read.",
+      "suggested_fix": "Take one deadline at the start of readReviews (e.g. 90 s). Skip card batches past it with the existing 'could not be loaded' warning, give compares min(budget, remaining), and pass a shorter per-call timeout or an AbortSignal to the compare boardGh call so its children end at the deadline. Test: one hanging card batch, then check the elapsed time and the warning.",
+      "evidence": "review-reviews.ts: REVIEW_COMPARE_BUDGET_MS = 60_000, CARD_PARALLEL = 3, CARD_BATCH = 20, compareHeads computes the deadline at call time, Promise.race([compare(...), expired]) with no kill, runReviewReviews returns without process.exit. board-github.ts:133 boardGh timeout = 18_000, used by boardGraphql. apps/desktop/src-tauri/src/review.rs:123 Duration::from_secs(150).",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-read-no-overall-deadline"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 192,
+      "quote": "if (!running) return;",
+      "problem": "Since FB-4, the 60 s reload runs while any Review is queued or running, on any tab while the window is visible. Each tick is one `review reviews` spawn: identity, ceil(N/20) card queries and up to 25 compares, per project window.",
+      "impact": "A deliberate cost with no failure mode beyond spending the GitHub budget, which F-002 bounds. A long scheduled review keeps it running for its whole duration.",
+      "suggested_fix": "Optional: on timer ticks while the tab is hidden, read only the store, without cards or compares, which is enough for the indicator.",
+      "evidence": "ReviewsView.tsx:192-196; fix-round-1.md FB-4.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-011", "disposition": "closed" },
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-022", "disposition": "partial" },
+    { "id": "F-023", "disposition": "partial" },
+    { "id": "F-025", "disposition": "closed" },
+    { "id": "F-024", "disposition": "closed" },
+    { "id": "F-026", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-028", "disposition": "closed" },
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" }
+  ]
+}
+```
+
+Routing audit: graph_used: no (the slice and the payload named the files; no file was added or moved). wiki_used: not-relevant (a delta review against fix-round-1.md and the plan). ctx_used: yes (keryx ctx rg for every search). raw_rg_used: no. A few short `sed`/`git show` reads were marked `keryx:raw` to get exact source lines.

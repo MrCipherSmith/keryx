@@ -1,0 +1,34 @@
+{
+  "reviewer": "review-security-code",
+  "wave": 6,
+  "waves": 7,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage2-dce093/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304-r02/slices/slice-04.diff",
+      "bytes": 138908
+    }
+  ],
+  "result": "raw/review-security-code-w6.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": 0,
+      "ranked": 0,
+      "session_rank": null
+    },
+    "inherit": true,
+    "provider": "anthropic",
+    "model": "claude-opus-5-5"
+  }
+}

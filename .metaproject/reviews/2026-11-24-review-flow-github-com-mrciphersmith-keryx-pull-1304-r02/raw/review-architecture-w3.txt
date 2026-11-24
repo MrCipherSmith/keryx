@@ -1,0 +1,58 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-1 head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`
+- Range: `20e4281a2..f6971fd4a` (delta of fix round 1)
+- Scope mode: explicit-hash-range (delta), wave 3, slice-04 (not the FIX slice), read in full (1849 lines)
+- Stack detected: fullstack (Bun/TS CLI commands, React Desktop tests without MobX, docs)
+
+### Summary
+Slice-04 is mostly tests and docs: Desktop DOM/model tests for the round-1 fixes (repository-carrying `onOpenInReviews` target, one-shot focus and answer intents, hidden-tab reload, board identity and watcher-poll signals, archived Reviews under Show closed, `includeClosed` bridge args), docs for `--include-closed`, the D4 shortcut shift (Metaproject on Cmd-6) and the stage-2 plan/spec updates, plus the backend command side: `src/commands/review-board.ts` drops its local `writeJson`/`writeSerialized` and imports `writeBoundJson`/`writeBoundJsonText` from `src/review/board-github.ts`, and `src/commands/review-reviews.ts` stops importing from the `review-board` command, sorts rows before reading cards, and splits card reading and head comparison into `readCards`/`compareHeads` with injected `query`/`compare` and an overall deadline. The command-to-command import (round-1 F-016) is gone in this slice too, the command now uses the domain helper `headComparison` instead of re-deriving `referenceHead`/`reviewClosed`, and the tests import `ReviewsTabIndicator` from `reviews/ReviewsView` instead of `shell/AppShell` (round-1 F-013 direction). No new blocker, major, minor or info in this lens.
+
+Already raised in this round, not re-filed although slice-04 exercises the same code: w1 F-001 (`freshness()` not derived from `headComparison`; `readReviews` here at review-reviews.ts:57 uses the helper, summarizeReview at :62 still goes through `freshness`), w1 F-002 (Desktop `reviewedCommit` fallback; model.test.ts slice lines 1107-1119 pins the `rounds[0]` fallback that finding questions), w1 F-003 (Review-rules fallback from the board identity; ReviewsView.dom.test.tsx slice lines 1013-1021 tests only the viewer check, not the repository case), w2 F-001 (info, split link-opening mechanism; ReviewPanel.dom.test.tsx slice lines 423-438 tests the per-anchor path).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Layer Violations
+None detected. `readReviews` keeps I/O orchestration (batching via `mapPool`, compare deadline) in the command with `query`/`compare` injected; the domain module `review-entity.ts` supplies only pure rules (`headComparison`, `summarizeReview`).
+
+### Dependency Direction
+None detected. `src/commands/review-reviews.ts:5` imports `writeBoundJson` from `../review/board-github` (no command-to-command import remains; `review-board.ts:11` aliases the same exports). `apps/desktop/src/shell/ProjectNavigation.dom.test.tsx` and `apps/desktop/src/reviews/ReviewsView.dom.test.tsx` import `ReviewsTabIndicator` from `reviews/ReviewsView`. Placing stdout publication in `board-github.ts` (beside `withCurrentGithubBinding`) was the fix-round FA-6 decision, closed in w1 as F-016; not re-opened.
+
+### Module Boundary Violations
+None detected in the slice beyond w1 F-001/F-002/F-003 (cited above).
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. `ReviewsSource` gains `compareBudgetMs` and `includeClosed` as plain inputs; the comparison and query seams stay injected, which the tests use.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React: the tests confirm App-mediated cross-tab signals (`onIdentityChange`, `onWatcherPoll`, `onFocusHandled`, `reloadSignal`) rather than views importing each other.
+
+### Not verified
+- Read slice-04 in full plus `src/commands/review-reviews.ts:40-94` at HEAD (the hunk's elided middle). Other code outside the hunks was not read.
+- No tests run (exec_budget 0); the payload's test evidence (194 root + 1008 Desktop, 0 fail at f6971fd) was not re-run.
+- Graph/wiki/memory layers not consulted: the slice is tests, docs and two command files whose dependents were already checked in w1/w2.
+
+### Routing audit
+graph_used: no (not-relevant: change set given by the slice) | wiki_used: no (not-relevant: plan/flow docs and PR context in payload) | ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) | raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 (tests, docs, review-board/review-reviews commands) is architecturally sound: the command-to-command import is gone (writeBoundJson from board-github), readReviews uses the domain helper headComparison with injected query/compare, and tests import ReviewsTabIndicator from the feature. No new findings; w1 F-001/F-002/F-003 and w2 F-001 apply to code this slice exercises and are cited, not re-filed.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [],
+  "not_verified": "Only slice-04 plus review-reviews.ts:40-94 at HEAD; no tests run; graph/wiki/memory not consulted."
+}
+```

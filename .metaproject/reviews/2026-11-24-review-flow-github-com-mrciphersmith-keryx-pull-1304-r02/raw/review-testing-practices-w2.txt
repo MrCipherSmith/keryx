@@ -1,0 +1,87 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 2 (delta 20e4281a2..f6971fd4a), wave 2, slice-04.
+
+Slice-04 contents: test hunks (reviewPages.test.ts, ReviewBoard.dom.test.tsx, ReviewDetail.dom.test.tsx, ReviewPanel.dom.test.tsx, ReviewsView.dom.test.tsx, the new reviews/model.test.ts, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx), docs hunks (cli-reference, desktop-app, desktop-metaproject, implementation-plan, specification), and production hunks in src/commands/review-board.ts (writeJson moved to board-github as writeBoundJson) and src/commands/review-reviews.ts (--include-closed, compare deadline). I read the whole slice.
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so I ran no mutant. Most gates in this slice's production hunks already appear in my wave-1 list: R2-R03, R2-R07, R2-R08, R2-R09 and R2-R11. This reply adds 2 candidates for slice-04 gates that wave 1 did not list. Each anchor occurs exactly once in its head file (checked with keryx ctx rg -F). Not reached: 2 of 2. I report no red or green result.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-04"],
+  "summary": "Slice-04's tests are mostly sound. The new tests assert user-visible DOM and callbacks. They mock at the command seam (runCommand/load/openBrowser), which is the project's established seam. Every flow they drive has a positive artifact, and none of them sleeps, except the fixture loop that wave-1 F-001 already lists. Two minor findings. (1) Three new negative-only tails assert only absence after a re-render or retry, with no proof that the re-render produced the view. (2) Two new fixtures carry shapes the producer cannot emit: an 'archived' Review whose attempts are not archived, and a running Review whose round has zero attempts. I ran no mutants (read-only lane). I list 2 new candidates.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": null,
+      "quote": "await click(button(\"Try again\"));\n  expect(document.body.querySelector(\"aside.review-panel\")).toBeNull();\n  expect(document.body.textContent).not.toContain(\"has no Keryx review\");",
+      "problem": "Lens rule 'Branch Under Test': a test that asserts only falsy state passes when the path never ran. Three tails new in this delta assert only absence after a re-render or a retry. None of them asserts first that the re-render or retry produced the view. (a) ReviewsView.dom.test 'a handled focus request never replays' (slice-04 lines 902-908): after the access failure and Try again, it checks only that no panel is open and no 'has no Keryx review' text shows. It never checks that the retried list loaded, for example that 'In b/y' is shown or the alert is gone. #8 is not in the list in any case, so `aside` is null whether or not the request replays. Only the second negative separates replay from non-replay, and only if the list actually loaded. (b) The same file, 'Review rules stay reachable when the list cannot be read' (lines 1018-1020): the bob render asserts only `has(\"Review rules\") === false`, not the error alert that proves the view rendered its failed state. (c) ReviewPanel.dom.test 'Open pull request opens the PR through the system browser' (lines 434-436): the `javascript:` render asserts only that `.review-pr-link` is null, not that the panel rendered.",
+      "impact": "Each tail stays green if the step before it renders nothing or never runs: a retry that no longer reloads, a view that throws on remount, a panel that fails to mount. The mutants these tests target now fail them (dropping settlePending on lost access replays #8 and shows the message). The next breakage of the load or render path would turn them into tests that cannot fail, and nothing would show it. No current defect is claimed.",
+      "suggested_fix": "Add one positive artifact before each negative: (a) after Try again, `expect(document.body.textContent).toContain(\"In b/y\")` and `expect(document.body.querySelector('[role=\"alert\"]')).toBeNull()`. (b) For the bob render, `expect(document.body.querySelector('[role=\"alert\"]')?.textContent).toContain(\"Unknown command\")`. (c) After the javascript: render, assert that the panel's PR title or number is shown, for example `expect(document.body.textContent).toContain(pr.title)`.",
+      "evidence": "slice-04.diff lines 887-909 (handled-focus test), 1013-1021 (rules-reachable test), 423-438 (Open pull request test). Producer side for (a): src/commands/review-reviews.ts is not involved; the replay signal is the view's 'Pull request #N has no Keryx review in this list.' message, asserted positively in the 'a focus request from Pull requests…' test (slice-04 line 844).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/reviews/ReviewsView.dom.test.tsx (handled-focus test, Try-again tail)",
+          "apps/desktop/src/reviews/ReviewsView.dom.test.tsx (rules-reachable test, bob render)",
+          "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (Open pull request test, javascript: render)"
+        ],
+        "enumeration_method": "I read every test added or changed in slice-04 in full. For each test, I checked whether its last asserted block holds only toBeNull / toBe(false) / not.toContain after a render or click, with no positive assertion in that block. Tails preceded by a positive assertion were excluded, for example the answer-intent test (aside not null) and the ReviewBoard view-action test (panel not null)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": null,
+      "quote": "review(5, { state: \"stopped\", archived: true })",
+      "problem": "Lens rule 'Fixture Shape Against the Producer'. Two new fixtures carry shapes the producer cannot emit. (a) 'an archived Review is listed under Show closed as Archived…' (slice-04 line 1026), and the AC8 case `{ state: \"stopped\", publication: null, archived: true }` (line 622), build `review(n, { archived: true })`. The `review()` helper keeps `rounds[0].attempts = [attempt(...)]`, and `attempt()` now defaults to `archived: false`. The producer derives the summary flag from the attempts: src/review/review-entity.ts:196 `archived: attempts.every(attempt => attempt.archived)`. A Review with archived: true therefore always has every attempt archived. (b) app-navigation.fixture.tsx (slice-04 lines 1198-1201) returns a `running` Review whose only round has `attempts: []`. roundsOf (review-entity.ts:164-175) creates a round only from an attempt, and summarizeReview throws on a Review with no attempts (review-entity.ts:182).",
+      "impact": "Today no Desktop code reads the per-attempt `archived` or relies on a round having attempts. `archived` is read only from the summary, in apps/desktop/src/reviews/model.ts:37, :61 and :66. So nothing is currently mis-pinned. The fixtures still read as coverage of 'an archived Review' and of 'a running Review'. Once the panel marks archived attempts, or the timeline renders attempt rows, these tests will be pinning a state that cannot occur rather than the one that does.",
+      "suggested_fix": "(a) In the archived cases, pass rounds whose attempts carry `archived: true`. For example, add an `archivedReview(n, extra)` helper that sets both the summary flag and every attempt's flag. (b) In the navigation fixture, give the round one attempt that matches `run`: id runId, state running, reviewed null, archived false, and the rest from the ReviewsView helper's attempt shape.",
+      "evidence": "src/review/review-entity.ts:164-175 (roundsOf), :182 (throws on no attempts), :196 (archived = every attempt archived). slice-04 lines 486-492 (`attempt()` default `archived: false`), 493-499 (`review()` default rounds), 1023-1037, 622, 1197-1201. `keryx ctx rg 'archived' apps/desktop/src/reviews apps/desktop/src/review --glob '!*.test.*'` finds only summary-level reads in model.ts, plus run-level reads in ReviewLifecycle.tsx.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "prior_dispositions": [],
+  "mutant_candidates": [
+    {"id": "R2-W01", "file": "src/commands/review-reviews.ts", "anchor": "if (failed) warnings.push(", "replacement": "if (false) warnings.push(", "kind": "behavior"},
+    {"id": "R2-W02", "file": "src/commands/review-reviews.ts", "anchor": "finally { clearTimeout(timer); }", "replacement": "finally { }", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```
+
+## Mutation pass
+
+Skipped: the payload's allowed_tools is read-only and exec_budget_s is 0, so I ran no `keryx review mutate`. Candidates for this slice:
+
+- R2-W01: drop the "could not be read" warning. Nearest suite: `bun test src/commands/review-reviews.test.ts`.
+- R2-W02: drop the timer cleanup. I expect it to survive the suite, because the test uses a 50 ms budget and bun does not wait for pending timers. This is a lead, not a result. It matters because the default budget is 60 s (REVIEW_COMPARE_BUDGET_MS). src/cli.ts ends the command by setting `process.exitCode` rather than calling `process.exit`, so a timer that is never cleared could keep `keryx review reviews` alive for up to 60 s after it writes its JSON.
+
+Wave-1 candidates that cover this slice's production gates are R2-R03, R2-R07, R2-R08, R2-R09 and R2-R11. They are not repeated here. src/commands/review-board.ts only moves writeJson and writeSerialized behind import aliases and adds no gate.
+
+## Prior findings this slice bears on
+
+- Wave-1 F-001 (wall-clock compare-deadline test): its class_scope already names the new app-navigation.fixture.tsx loop with 10 ms real sleeps (slice-04 lines 1295-1307). Not re-filed.
+- Wave-1 F-002 (untested App wirings): slice-04 confirms that the fixture switches the account to 'second' right after the Open-in-Reviews loop (lines 1308-1317) with no Reviews-tab assertion. The reviewsOnly mock returns only a `running` Review, so the Reviews dot is never lit. Unchanged; not re-filed.
+
+## Checked and not filed
+
+- The new CSS-source assertion in reviews/model.test.ts reads ReviewDetail.css. This follows existing precedent in lib/prefs.test.ts:42 and metaproject/RelationshipGraph.dom.test.tsx:138.
+- ReviewBoard 'Only badge polling reads the run status': `actions.every(kind => kind === "status")` is vacuous on an empty array, but `opened` provides the positive artifact. The old `not.toContain("start")` was no stronger.
+- The hidden-window override of document.visibilityState is restored in `finally`.
+- The fixture in 'closed Reviews' PR cards are read only while Show closed is on' returns `card: null` for the closed Review on both calls. That matches the producer without --include-closed (review-reviews.ts:55), and the test pins only the flag.
+
+## Not verified
+
+- No mutant was run (read-only lane).
+- No test was run; I relied on the payload's verify output: 194 root + 1008 Desktop tests, 0 failures, at f6971fd.
+
+Routing audit: graph_used: no (not-relevant: the slice and the producer files were named directly); wiki_used: no (not-relevant: testing-convention review against tdd-workflow and the lens checklist); ctx_used: yes (keryx ctx rg / read); raw_rg_used: no.

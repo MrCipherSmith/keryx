@@ -1,0 +1,70 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1304, branch feat/desktop-review-v2-stage2, delta round 2 (20e4281a2..f6971fd4a), wave 3, slice-04. Diff mode. Slice-04 is not the fix slice, so this wave looks for new findings and gives no prior dispositions. Load profile: not provided. Concrete triggers considered: the number of stored Reviews per account and repository, the Reviews-list refresh triggers (60 s timer, watcher poll, session-review events, panel mutations), and a GitHub stall that runs each `gh` call to its 18 s timeout.
+
+Slice contents: mostly tests. These are platform/reviewPages.test.ts, review/ReviewBoard.dom.test.tsx, review/ReviewDetail.dom.test.tsx, reviews/ReviewPanel.dom.test.tsx, reviews/ReviewsView.dom.test.tsx, the new reviews/model.test.ts, shell/ProjectNavigation.dom.test.tsx and test/app-navigation.fixture.tsx. The slice also has docs: cli-reference.md, desktop-app.md, guides/desktop-metaproject.md, and the review-v2 implementation-plan.md and specification.md. The production code is in two files:
+- src/commands/review-board.ts: `writeJson`/`writeSerialized` moved out.
+- src/commands/review-reviews.ts: `--include-closed`, the card batch constants, the compare-phase deadline with `Promise.race`, `writeBoundJson`.
+
+Files read beyond the slice: the delta of src/review/board-github.ts, to confirm the moved writer. I also read raw/review-highload-w1.txt and raw/review-highload-w2.txt, and searched the other w1/w2 raws for compare, deadline and writer findings, so I would not file anything twice.
+
+Summary: This slice adds no new race, lock, queue, retry or unbounded-resource hazard. `writeBoundJson`/`writeBoundJsonText` in board-github.ts move `writeJson`/`writeSerialized` unchanged: the same `withCurrentGithubBinding` check runs around `process.stdout.write`, and the promise still resolves on the write callback. The only production change with a concurrency or timeout shape is the compare-phase deadline in review-reviews.ts. It is already filed:
+- wave-1 review-highload F-002 (no overall deadline; abandoned compares keep the CLI alive)
+- wave-1 review-backend R2-BE-001 (the compare deadline does not end the `gh` children)
+- wave-1 review-performance I-002
+
+`--include-closed` cost under background refreshes is filed as wave-2 review-highload F-001. The new tests pin behaviour this lens cares about:
+- the 60 s timer runs while the tab is hidden and skips in a hidden window
+- a hidden tab re-reads on a session snapshot only for its own project
+- a mutation re-reads the list once, and opening the panel does not
+- closed cards are read only while Show closed is on
+- a handled focus request never replays
+
+Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+### CLI / Multi-Session
+None detected. The writer move keeps the publication-boundary binding check and the flush-before-return contract. In the fixture, the wait loop that polls for the Reviews panel is bounded (50 x 10 ms).
+
+### Concurrency & Races
+None new. Event-driven refreshes that join an in-flight read are wave-1 F-001. This slice's test "a hidden Reviews tab re-reads its list on a session review snapshot..." injects `load` and bypasses the ReviewReadLane, as wave-1 F-001 already notes. I am not filing it again.
+
+### Resources
+None new. Closed-card reads under background refreshes are wave-2 F-001.
+
+### Caching
+None detected.
+
+### Lock Contention
+None detected. No locks or transactions in this slice. `withCurrentGithubBinding` is held only for the synchronous `stdout.write` call, unchanged from base.
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+None new. The compare deadline does not kill `gh` children, and there is no overall deadline across the card and compare phases: wave-1 F-002, R2-BE-001 and performance I-002. The timer in `compareHeads` is cleared in `finally` on every path, so no timer leaks.
+
+### Idempotency & Distributed Invariants
+None detected. Tests now pin focus and answer intent as once-only ("an answer intent is consumed once", "a handled focus request never replays").
+
+Clean areas reviewed: Part 0, A, B, C, D, E, F, G. None has a new finding in slice-04.
+
+Protected stage-0 code: this slice touches only tests next to it. The ReviewBoard.dom.test.tsx edits change the `onOpenInReviews` signature and the status-only action assertion. The attention set, attachBadges/localBadge parity and the toolbar container queries are not changed in this slice.
+
+Not read or verified: the full review-reviews.ts beyond the slice hunks (wave 1 read it whole at f6971fd), ReviewsView.tsx and ReviewReadLane internals, and the Rust host. No tests were run (exec budget 0). The test results in research-evidence (194 root + 1008 Desktop, 0 fail at f6971fd) were taken as given and not re-run.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 (tests, docs, the writeBoundJson move and the review-reviews.ts hunks) adds no new concurrency, resource, lock, queue or retry hazard. The writer move keeps the binding check and the flush-before-return behaviour. Two residuals are already filed and not filed again: the compare-phase deadline that does not end gh children (wave-1 highload F-002, backend R2-BE-001, performance I-002) and the Show closed card reads (wave-2 highload F-001).",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "findings": [],
+  "prior_dispositions": []
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice named every file, and none was added or moved in this session). wiki_used: not-relevant (a delta review of a test and docs slice). ctx_used: yes (keryx ctx read/rg for the prior raws and the search). raw_rg_used: no. One short `git diff` of src/review/board-github.ts was marked keryx:raw to read the moved code exactly.

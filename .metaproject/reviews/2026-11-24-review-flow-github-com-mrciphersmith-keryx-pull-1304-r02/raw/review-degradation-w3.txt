@@ -1,0 +1,50 @@
+STATUS: DONE
+
+## review-degradation · round 2 · wave 3 · slice-04
+
+### Scope
+Slice-04 (kind `new`, not the FIX slice, so no prior_dispositions): read in full, all 1850 lines. It holds test changes (reviewPages, ReviewBoard, ReviewDetail, ReviewPanel, ReviewsView, model, ProjectNavigation, app-navigation fixture), docs (cli-reference, desktop-app, desktop-metaproject guide, implementation-plan, specification) and two production files, `src/commands/review-board.ts` and `src/commands/review-reviews.ts`. I compared those two with base `20e4281a2` (`git show` through `keryx ctx run`) and with head `f6971fd` (the working tree, HEAD = f6971fd). Acceptance criteria: the flow plan and fix-round-1 decisions (payload `context_doc`). Operator decisions there are treated as settled.
+
+### Summary
+No new degradation finding in this slice. Every behaviour delta in the two production hunks is either equivalent to base, an improvement, or already filed in waves 1–2 of this round. In the test hunks, each changed assertion is as strict as before or stricter. The docs hunks match the code they describe.
+
+### Verified clean (one line per thing traced)
+- `writeJson` removed from `src/commands/review-board.ts` and replaced by `writeBoundJson`/`writeBoundJsonText` in `src/review/board-github.ts:106-116`. The body is unchanged: the binding is checked at publication and the call waits for the pipe flush. Consumers per graph (`keryx gdgraph affected src/commands/review-board.ts --data-dir <package>/layers/graph`): review.ts, board.test.ts, review-reviews.test.ts. A search-derived sweep over src and apps/desktop/src found that only review-reviews.ts imported `writeJson`, and it now imports `writeBoundJson`. review-reviews.test.ts:327-328 pins the move.
+- List order: base sorted the summaries by the newest `createdAt` over `rounds[].attempts`. Head sorts the rows by `latestActivity(row)` over `row.attempts` before summarizing (review-reviews.ts:39,49-52). `summarizeReview` builds `rounds` from `roundsOf(row.attempts)` (review-entity.ts:193), so the attempt set is the same and the order is unchanged. The tiebreak by number is unchanged.
+- Comparison cap: base took the first 25 `behind` pairs in `readReviewRows` order. Head takes them newest-first, which is the visible order. No consumer loses anything.
+- Compare deadline (review-reviews.ts:86-103): a failed compare now maps to `undefined` instead of `null`, and `freshness` treats both as `!compare` (review-entity.ts:113). The output is identical. The un-cancelled gh child and the card phase having no deadline are already filed (backend-w1, performance-w1, highload-w1).
+- Card reads: base made one `listActiveReviewCards` call for all numbers, and a single failure dropped every card. Head reads batches of 20, three at a time, and a failure drops only its batch (review-reviews.ts:66-82). That is equal or better. `access:`/`configuration:` errors are still rethrown.
+- `--include-closed`: CLI parse (review-reviews.ts), Rust `board_read_args` (review.rs:52-67,152-156), Desktop `showClosed` dependency (ReviewsView.tsx:152,175). The reviewPages test pins the argument shape and refuses it outside the Reviews list. Every effect is already filed: the re-read on toggle (degradation-w1, performance-w2), `closed_at` never being written (logic-w1), and a card-less Review dropping its author (ui-ux-w2).
+- `ReviewsTabIndicator` moved from AppShell to ReviewsView. All six importers (App.tsx, AppShell.tsx, ProjectNavigation test, ReviewsView test, ReviewsView.tsx) import it from the new location. Nothing is left behind.
+- `REVIEWS_USAGE` gains `[--include-closed]`. The help text in review.ts:5376,5545 uses the constant, and cli-reference.md:5193,5209 documents the flag.
+- Docs ⌘5→⌘6 for Metaproject: matches `PROJECT_VIEWS` (AppShell.tsx:20-27, Metaproject = `${MOD}6`). The shortcut table at desktop-app.md:438-439 agrees.
+- Test strictness: ReviewBoard "awaiting answer" now asserts every run action is `status` (it was `not.toContain("start")`) and that no PR panel opens. ReviewsView AC6 now checks the Round column cell exactly instead of a bare "2" substring. ReviewDetail narrows the alert selector to `.sheet-body`, matching the moved run-status banner, and a new test pins the header banner. The AC7 "Open in Reviews" for an archived-only PR is the F-006 fix and is intended. None of these weakens a regression check.
+- AC8 indicator: `ready` with `publication: null` changes from `attention` to `null`, and card-less or archived cases are added. This is the settled FA-2/operator decision, and implementation-plan.md (stage-2 «Индикаторы») states it. The lane mismatch is already filed (logic-w1).
+
+### Related findings already raised (not filed again)
+- The app-navigation fixture's Review has `rounds: [{ …, attempts: [] }]`. `roundsOf` never emits that shape, because every round holds at least the attempt that created it (review-entity.ts:164-174). This is the same class as testing-practices-w2 "Fixture Shape Against the Producer", so I cite it rather than file it separately. It does not hide a regression the fixture's assertions check (the panel opens, the tab switches).
+- Stale "Review" tab naming in desktop-app.md:72 and :1408 ("From **Review**, open **PR watcher**"): pr-contract-w1 covers it. The tab was renamed "Pull requests" before this PR (commit 0c7c56571), so it is pre-existing as well.
+- The superseded-only PR panel showing "Open in Reviews": degradation-w2 F-001.
+
+### Not verified
+- Exec budget 0 s: I ran no tests or probes. I relied on `research-evidence/verify-tests-to-run-1.txt` as stated in the dispatch (194 root + 1008 Desktop, 0 fail at f6971fd) and did not open it.
+- Rust `board_read_args`/`include_closed` was read, not compiled (no local toolchain; CI only).
+- The graph was read from the package's `layers/graph`. The command could not confirm freshness, and layers.json records it. The consumer sweep for `writeJson` and `ReviewsTabIndicator` was also search-derived (`keryx ctx rg`).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "Slice-04 (tests, docs, review-board.ts and review-reviews.ts hunks) adds no new degradation finding. Verified clean against base 20e4281a2: the writeJson move to board-github writeBoundJson (graph consumers review.ts, board.test.ts, review-reviews.test.ts plus a search-derived sweep; no other importer), list order (latestActivity over row.attempts equals the base sort over roundsOf(row.attempts)), the newest-first compare cap, the null to undefined compare result (same freshness), batched card reads (only the failed batch is dropped; the base dropped all cards), --include-closed wiring and docs, the ReviewsTabIndicator move (all 6 importers updated), and the ⌘6 Metaproject docs (match PROJECT_VIEWS). Changed test assertions are equal or stricter. The include-closed re-read, closed_at never written, the compare child not cancelled, the card-phase deadline, the fixture shape, the stale Review tab naming and the superseded-only Open in Reviews are already filed in w1/w2. The graph cap dropped nothing. The graph's freshness is unconfirmed. Nothing was run: exec budget 0.",
+  "slices": ["slice-04"],
+  "findings": [],
+  "prior_dispositions": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: yes (`keryx gdgraph affected src/commands/review-board.ts --data-dir <package>/layers/graph`) · wiki_used: no (not-relevant: intent comes from the plan, fix-round-1 and operator decisions) · ctx_used: yes (`keryx ctx rg` for consumers and earlier waves, `keryx ctx run -- git show` for base) · raw_rg_used: no.

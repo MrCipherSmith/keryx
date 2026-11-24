@@ -1,0 +1,77 @@
+STATUS: DONE
+
+# Style Review Report
+
+## Summary
+Slice-04 is mostly tests and docs. Test files are exempt from the Readability thresholds, and the new test names and helpers (`tile`, `numbersIn`, `lane`) are specific. The slice has two production hunks, in `src/commands/review-board.ts` and `src/commands/review-reviews.ts`. They have one minor naming finding: review-board.ts imports the shared writers under aliases, so the same function is called `writeJson` in one command and `writeBoundJson` in the other. review-clean-code-w3 named this and left it to this lens. No length, nesting, clause, export-count or console threshold is newly crossed.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-2 delta
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range` (supplied slice)
+- Slice: slice-04 (read in full, 1850 lines). Also read: `src/commands/review-reviews.ts:80-110` and the `writeJson`/`writeSerialized` call sites in `src/commands/review-board.ts` at HEAD.
+
+## Stats
+- major: 0
+- minor: 1
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+
+### [F-001] review-board.ts gives the shared JSON writers a second pair of names
+- **Severity**: minor
+- **File**: src/commands/review-board.ts:11
+- **Problem**: `import { ..., writeBoundJson as writeJson, writeBoundJsonText as writeSerialized } from "../review/board-github"`. The fix moved the writers to board-github.ts under new names. review-reviews.ts:5 imports `writeBoundJson` under that name, but review-board.ts keeps the old local names as aliases (call sites :45, :64, :99, :103). The same binding-checked writer is now `writeJson` in one command and `writeBoundJson` in the other. The alias also drops "Bound", the part of the name that says the write is checked against the GitHub binding.
+- **Why it matters**: The Name row covers one concept with two names. A search for `writeBoundJson` misses the four review-board call sites, and a reader of review-board.ts cannot see that its writes are binding-checked.
+- **Fix**: Import `writeBoundJson` and `writeBoundJsonText` without aliases and rename the four call sites. review-reviews.ts already does this.
+- **Patch**:
+  ```diff
+  - import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, writeBoundJson as writeJson, writeBoundJsonText as writeSerialized } from "../review/board-github";
+  + import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, writeBoundJson, writeBoundJsonText } from "../review/board-github";
+  ```
+  (and `writeJson(` -> `writeBoundJson(`, `writeSerialized(` -> `writeBoundJsonText(` at :45, :64, :99, :103)
+
+Already raised, not re-filed: review-style-w1 found `compareHeads`/`CompareHeads` and the generic `Pair` in review-reviews.ts. review-clean-code-w1 found the output argument and the positional parameters of `compareHeads`. review-clean-code-w3 found the 3-copy PR-detail loader in ReviewsView.dom.test.tsx.
+
+## Positive Notes
+- The new test helper `tile(number)` replaces three copies of an aria-label selector and has a doc comment.
+- The test names state the behaviour they pin.
+- `latestActivity(row)` is clearer than the removed `latestCreated(review)`.
+
+## Not verified
+- Only slice-04 and the lines named above were read. No tests were run (read-only, exec budget 0).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-04 (tests, docs and two CLI command hunks) has one minor naming finding. review-board.ts imports writeBoundJson/writeBoundJsonText under the aliases writeJson/writeSerialized, so the shared binding-checked writer has two names across the two commands. No readability threshold is crossed. Earlier findings on compareHeads and Pair (style-w1), the compareHeads parameters (clean-code-w1) and the test loader copies (clean-code-w3) are not re-filed.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review-board.ts",
+      "line": 11,
+      "quote": "writeBoundJson as writeJson, writeBoundJsonText as writeSerialized",
+      "problem": "The shared binding-checked writers moved to board-github.ts as writeBoundJson/writeBoundJsonText. review-board.ts imports them under the old local names writeJson/writeSerialized, while review-reviews.ts:5 imports writeBoundJson unaliased. One function now has two names across the two commands, and the alias drops 'Bound', the part of the name that says the write is checked against the GitHub binding.",
+      "impact": "Readability and searchability (Name row: one concept, two names). A search for writeBoundJson misses the four review-board call sites, and a reader of review-board.ts cannot see that its writes are binding-checked.",
+      "suggested_fix": "Import writeBoundJson and writeBoundJsonText without aliases and rename the call sites at review-board.ts:45, :64, :99 and :103, as review-reviews.ts already does.",
+      "evidence": "Head f6971fd: review-board.ts:11 aliased import; call sites :45, :64 writeJson(...), :99 writeSerialized(...), :103 writeJson(...). review-reviews.ts:5 imports writeBoundJson unaliased and calls it at the end of runReviewReviews. review-clean-code-w3 named this alias as a naming concern for review-style and did not file it.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "review-board-writer-import-alias"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Routing audit: graph_used: not-relevant (I reviewed the supplied slice and read named lines only, with no navigation); wiki_used: not-relevant (style lens, no domain question); ctx_used: no (the keryx ctx hook refused raw cat; I used the Read tool and small targeted grep/sed reads with a keryx:raw marker and a stated reason); raw_rg_used: no (grep was used only on review-package raw outputs and two named files, with keryx:raw markers).

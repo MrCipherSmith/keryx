@@ -1,0 +1,144 @@
+STATUS: DONE_WITH_CONCERNS
+
+## PR Contract Review — round 2 (delta), wave 1, slice-01 (FIX slice)
+
+Range: 20e4281a2..f6971fd4a (backend 85fa985c1, Desktop 98c7b37a1, T17 8d95e651a + f6971fd4a).
+Inputs read: payload (prior_findings in full for this lane's and the doc-related findings), pr-context.md (current PR body),
+fix-round-1.md, slice-01 doc hunks and the desk-run-store hunk in full; the code hunks of slice-01 were scanned for
+added user-visible strings (labels, titles, warnings), not read line by line. Head files read to settle rows:
+docs/docs/desktop-app.md (66-180, 427-442), docs/docs/cli-reference.md (5186-5234), specification.md (1-12, 226),
+implementation-plan.md delta, src/review/desk-run-store.ts:102-116, src/review/review-entity.ts:117-124,
+src/commands/review-reviews.ts:1-10, apps/desktop/src/shell/AppShell.tsx:21-26 (and base a5d1ab236 :19-23),
+apps/desktop/src/review/ReviewResults.tsx:36-38, ReviewRuns.tsx:38.
+
+### Checklist form
+
+The PR body has no checkbox list. Every stated claim the delta touches is a row.
+
+| Box or claim (quoted) | State | What the diff / head shows | Verdict |
+|---|---|---|---|
+| Store: "the same base..head joins its existing round as a retry; any other range opens the next round" | stated | desk-run-store.ts:103-115 `roundFor`: retry only when `inTop.some(... base/head match)` for the current highest round | contradicts (PC-001) |
+| "Round rule: a return to an earlier range opens a new round (operator decision; AC1 reworded)" | stated | desk-run-store.ts:104 "any other attempt, a return to an earlier range included, opens the next round" | agrees |
+| CLI: "Freshness is `current`, `behind {commits, rewritten}`, or `unknown`" | stated | cli-reference.md delta lists three kinds | agrees (closes F-019) |
+| CLI: "The read opens the store writable, so it migrates an older `runs.sqlite`." | stated | cli-reference.md delta: "An existing store is opened for writing, so a store that predates Reviews is migrated"; review-reviews.ts:1 still "Read-only list of local Reviews" | partly (F-020 partial) |
+| "Locally closed Reviews get their PR card only with `--include-closed`" | stated | review-reviews.ts:10 REVIEWS_USAGE has `[--include-closed]`; cli-reference.md documents it | agrees |
+| "Indicator rule: ... lights `ready` only when publication is pending. A Review that is archived, or whose PR card could not be read, does not light it unless it asks a question." | stated | review-entity.ts:121-123 | agrees |
+| "Archived Reviews: they are reachable again, under 'Show closed'." | stated | apps/desktop/src/reviews/model.ts:37, :61, :64-66 | agrees |
+| "The PR-card review link with state, round and 'behind' (rest of R4) is **not** in this PR" | stated | implementation-plan.md delta adds «Не сделано на этапе 2» | agrees (closes F-034) |
+| "Expect conflicts in: ... `apps/desktop/src/review/model.test.ts`" | stated | listed in the body now | agrees (closes F-035) |
+| "Its title names the round it follows (decision d)." | stated | ReviewResults.tsx:38 falls back to "Reviewed <sha> — start a new round..." without a round | unqualified (F-060, deferred) |
+| "All are fixed in `85fa985` (backend) and `98c7b37` (Desktop)"; "Desktop: `bun test src` passes 1007 tests ... at `98c7b37`" | stated | head also carries 8d95e651a (T17, F-048: ReviewBrowserLink.tsx, ReviewDetail.tsx, ReviewPanel.tsx, ReviewPanel.dom.test.tsx); test evidence is 1008 at f6971fd | incomplete (PC-003) |
+| "Reviews tab: the tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject, on ⌘1–⌘6" + "The Review rules button moved here" | stated | AppShell.tsx:21-26; desktop-app.md shortcut table and Review rules path fixed; desktop-app.md:70, :72, :147 still name a "Review" tab | sibling missed (PC-002) |
+| "Not verified: The Rust bridge ... CI is the only check" | stated | unchanged; consistent | agrees |
+
+### Prior dispositions (this lane and doc findings the slice touches)
+
+- F-018 (desktop-app.md tabs/shortcuts): closed. Every listed site was fixed: :157 "Reviews → Review rules", :169 "In the Review's panel in the **Reviews** tab", :427 ⌘6, :438-439 table, guides/desktop-metaproject.md:3 ⌘6. Siblings outside the finding's site list remain — filed as PC-002.
+- F-019 (cli-reference freshness `unknown`): closed.
+- F-020 (migration on read undocumented): partial. Body and cli-reference now say the read migrates; the suggested fix also asked to correct src/commands/review-reviews.ts:1 `// Read-only list of local Reviews for the Desktop Reviews tab`, which is unchanged. Code comment only; no reader of the docs is misled any more.
+- F-021 (specification protocol version / schemas): closed. specification.md:8 and :226 now record `version: 1` kept and no schema.
+- F-034 (rest of R4 not delivered): closed (body Sources paragraph + implementation-plan «Не сделано на этапе 2»).
+- F-035 (model.test.ts missing from overlap list): closed.
+- F-059 (implementation-plan «Review again»): closed (stage 2/3 hand-off lines now say «New review round»).
+- F-060 (title names the round only when the badge carries it): open — claimed `deferred`; the body line is unchanged and ReviewResults.tsx:38 still has the round-less fallback. Not re-filed.
+
+### Findings
+
+### [PC-001] PR body Store bullet still states the pre-D-R1 round rule
+
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:103-115
+- **Problem**: PR body, What changes → Store: "the same base..head joins its existing round as a retry; any other range opens the next round." The delta changed `roundFor` to D-R1: `const inTop = counted.filter(attempt => attempt.round === top); ... const retry = inTop.some(attempt => attempt.base === run.base && attempt.head === run.head); return { round: retry ? top : top + 1, previous };` and its doc comment says "an attempt repeating the current highest round's range is a retry in it; any other attempt, a return to an earlier range included, opens the next round". The body's own "Round rule" bullet in the fixes section says the opposite of the Store bullet, so the body contradicts itself.
+- **Why it matters**: the Store bullet is the description a merger or stage-3 author reads for the rule; read alone, it says A,B,A puts the third attempt back in round 1, which the code no longer does.
+- **Fix**: reword the Store bullet to "the same base..head as the current highest round joins it as a retry; any other range, including a return to an earlier one, opens the next round".
+
+### [PC-002] desktop-app.md still sends the reader to a "Review" tab, now ambiguous with the new Reviews tab
+
+- **Severity**: minor
+- **File**: docs/docs/desktop-app.md:147
+- **Problem**: PR body: "the tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject" and "The Review rules button moved here". The fix for F-018 pointed Review rules at Reviews (desktop-app.md:157 "Open **Reviews → Review rules → New rule**") but left three lines naming a tab called "Review": :70 "## Find a pull request in Review", :72 "choose **Review** in its **Sessions / Flows / Review** navigation", :147 "From **Review**, open **PR watcher**". AppShell.tsx:23-24 now has `label: "Reviews"` and `label: "Pull requests"`; the PR watcher is rendered only by ReviewBoard.tsx:487 (Pull requests tab), and ProjectReviewRules only by ReviewsView.tsx:313 (Reviews tab). The "Review" wording was already stale on base (base AppShell.tsx:21 `label: "Pull requests"`), but before this PR no tab had a near-identical name.
+- **Why it matters**: :147 and :157 sit ten lines apart; a reader told "From **Review**, open **PR watcher**" and then "Open **Reviews → Review rules**" goes to the Reviews tab for both and does not find the watcher there.
+- **Fix**: say **Pull requests** at :70, :72 (navigation list Sessions / Flows / Reviews / Pull requests / Issues / Metaproject) and :147.
+- Sites enumerated with `keryx ctx rg --all -n '\*\*Review\*\*|Review tab|the Review board|\*\*Pull requests\*\*' docs/docs` (2 matches: :72, :147) plus reading :66-76 for the heading at :70.
+
+### [PC-003] PR body's fix and verification account stops at 98c7b37; head carries an unmentioned Desktop fix
+
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewPanel.tsx
+- **Problem**: PR body: "All are fixed in `85fa985` (backend) and `98c7b37` (Desktop)", "The full list is in `fix-round-1.md`", and Verification "Desktop: `bun test src` passes 1007 tests with 0 failures at `98c7b37`". The delta's head f6971fd also contains 8d95e651a "fix(desktop): open the PR link from the Review panel in the browser" (task T17, F-048), changing ReviewBrowserLink.tsx (+26/-5), ReviewDetail.tsx, ReviewPanel.tsx and ReviewPanel.dom.test.tsx. fix-round-1.md has no F-048 row; only journal.md:142-152 records T17. research-evidence reports 1008 Desktop tests at f6971fd.
+- **Why it matters**: a reader of the body does not learn that the Review panel's and PR panel's browser-link handling changed after the commit the verification names, nor that the stated test count/commit is not the head.
+- **Fix**: add T17 / 8d95e651a (F-048, the Review panel's "Open pull request" link now opens through followLink) to the fixes section, and restate the Desktop verification at f6971fd (1008 tests, 0 fail).
+
+### Not verified
+
+- Red-first claim ("each with a test that failed before the fix") — not checkable read-only; not filed.
+- Code hunks of slice-01 were scanned for added user-visible text, not read line by line; correctness is other lanes'.
+- The F-020 side question whether `review_board`/`reviews_only` running under `invoke_review(..., true)` (review.rs:163, read permit) while the CLI writes a migration is safe — outside this lane and outside the delta; not checked.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Round-1 PR-contract and doc findings are closed except F-020 (header comment still says read-only: partial) and F-060 (deferred, open). Three new minors: the body's Store bullet still states the pre-D-R1 round rule, desktop-app.md still names a 'Review' tab (PR watcher at :147, :70, :72) next to the new Reviews tab, and the body omits T17 (8d95e651a) and states Desktop verification at 98c7b37 rather than head.",
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"},
+    {"id": "F-020", "disposition": "partial"},
+    {"id": "F-021", "disposition": "closed"},
+    {"id": "F-034", "disposition": "closed"},
+    {"id": "F-035", "disposition": "closed"},
+    {"id": "F-059", "disposition": "closed"},
+    {"id": "F-060", "disposition": "open"}
+  ],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 114,
+      "quote": "const retry = inTop.some(attempt => attempt.base === run.base && attempt.head === run.head);",
+      "problem": "PR body Store bullet: \"the same base..head joins its existing round as a retry; any other range opens the next round.\" roundFor (desk-run-store.ts:103-115) now treats a range as a retry only in the current highest round (D-R1); a return to an earlier range opens the next round. The body's own 'Round rule' fix bullet says the latter, so the body contradicts itself.",
+      "impact": "A merger or stage-3 author reading the What-changes Store bullet gets the old A,B,A behaviour (back into round 1), which the code no longer has.",
+      "suggested_fix": "Reword the Store bullet: the same base..head as the current highest round joins it as a retry; any other range, including a return to an earlier one, opens the next round.",
+      "evidence": "pr-context.md Store bullet vs 'Round rule' bullet; desk-run-store.ts:103-105 doc comment and :109-115 roundFor at f6971fd.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": "docs/docs/desktop-app.md",
+      "line": 147,
+      "quote": "From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**.",
+      "problem": "Body: tabs are now Sessions, Flows, Reviews, Pull requests, Issues, Metaproject; Review rules moved to Reviews. The F-018 fix updated :157 to 'Reviews → Review rules' but left :70 '## Find a pull request in Review', :72 'choose **Review** in its **Sessions / Flows / Review** navigation' and :147 'From **Review**, open **PR watcher**'. AppShell.tsx:23-24 labels the tabs 'Reviews' and 'Pull requests'; ReviewWatcher renders only in ReviewBoard.tsx:487 (Pull requests), ProjectReviewRules only in ReviewsView.tsx:313 (Reviews). Pre-existing staleness (base label was already 'Pull requests'), made misleading by the new near-homonym tab.",
+      "impact": "Reading :147 then :157, a user looks for PR watcher in the Reviews tab and does not find it.",
+      "suggested_fix": "Use **Pull requests** at desktop-app.md:70, :72 (full tab list) and :147.",
+      "evidence": "keryx ctx rg --all '\\*\\*Review\\*\\*|Review tab|the Review board|\\*\\*Pull requests\\*\\*' docs/docs -> desktop-app.md:72, :147; read :66-76 for the :70 heading; git show a5d1ab236:apps/desktop/src/shell/AppShell.tsx:21 label 'Pull requests'; keryx ctx rg '<ReviewWatcher|<ProjectReviewRules' apps/desktop/src.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "class_scope": {
+        "sites": ["docs/docs/desktop-app.md:70", "docs/docs/desktop-app.md:72", "docs/docs/desktop-app.md:147"],
+        "enumeration_method": "keryx ctx rg --all for '**Review**|Review tab|the Review board|**Pull requests**' over docs/docs (2 hits) plus reading the section heading above :72"
+      }
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "Desktop: `bun test src` passes 1007 tests with 0 failures at `98c7b37`",
+      "problem": "Body says the fixes are in 85fa985 and 98c7b37, the full list is in fix-round-1.md, and Desktop verification is at 98c7b37. Head f6971fd also contains 8d95e651a (T17, F-048: ReviewBrowserLink.tsx, ReviewDetail.tsx, ReviewPanel.tsx, ReviewPanel.dom.test.tsx). fix-round-1.md has no F-048 row; only journal.md:142-152 records T17. Test evidence at head is 1008 Desktop tests.",
+      "impact": "The body under-describes the head: a later code change to the PR and Review panels' browser link is absent, and the stated verification commit/count is not the head's.",
+      "suggested_fix": "Add T17 / 8d95e651a (F-048) to the fixes section and restate Desktop verification at f6971fd (1008 pass, 0 fail).",
+      "evidence": "git show --stat 8d95e651a; pr-context.md 'Review round 1 and fixes' and 'Verification'; research-evidence/verify-tests-to-run-1.txt per dispatch (1008 Desktop at f6971fd); journal.md:142-152.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims settled by direct file and line reads); wiki_used: no (not-relevant: user docs located by ctx rg); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no (raw git diff/show/sed/head used with keryx:raw markers for short targeted ranges).

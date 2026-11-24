@@ -1,0 +1,114 @@
+STATUS: DONE_WITH_CONCERNS
+
+## PR Contract Review — round 2 (delta), wave 3, slice-03 (Desktop code: bridge, App, PR board/panel, Reviews tab)
+
+Inputs read: driver, payload, slice-03.diff in full (1781 lines), pr-context.md (current body), raw/review-pr-contract-w1.txt and -w2.txt. Settled rows with: `keryx ctx rg --all` over docs/, README.md, apps/desktop/README.md for the labels and flags the slice changes; docs/docs/desktop-app.md:86-96; `keryx ctx rg` over journal.md for CI/Rust notes; `git log 20e4281a2..f6971fd4a -- review.rs dev/reviewBoard.ts`; `git diff` of origin/feat/desktop-review-v2-stage1 (from its merge-base with main) for the files this slice touches.
+
+Slice-03 is not the FIX slice: no prior_dispositions are returned.
+
+### Checklist form
+
+The PR body has no checkboxes; each stated claim slice-03 bears on is a row.
+
+| Claim (quoted) | State | What slice-03 / head shows | Verdict |
+|---|---|---|---|
+| Desktop bridge: "`review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is refused in combination with any other board mode" | stated | review.rs (slice :78-93) adds `include_closed: bool`, its own refusal "Closed Reviews can be included only in the Reviews list" and `--include-closed`; dev/reviewBoard.ts (slice :7, :51) the same | incomplete — PC-W3-001 |
+| CLI: "Locally closed Reviews get their PR card only with `--include-closed`, which Desktop passes while 'Show closed' is on" | stated | platform/review.ts (slice :421-423) `includeClosed`; ReviewsView.tsx (slice :1345) `load(cwd, repo, expectedViewer, showClosed)`; ReviewTile hides author without a card (slice :1559) | agrees |
+| "Open in Reviews: it now carries the repository" | stated | ReviewBoard.tsx (slice :479, :558, :631) target `{ repo, repositoryId, number }`; ReviewsView.tsx ReviewsFocus has `repo` (slice :1237) | agrees |
+| "One-shot intents: ... each used once and never replayed" | stated | App.tsx `reviewsFocusHandled` (slice :300-302); ReviewsView `taken`/`onFocusHandled` (slice :1305-1317); `consumeIntent` (slice :1429-1430); ReviewWorkspace `onIntentConsumed` (slice :1019, :1024) | agrees |
+| "Indicator freshness: the indicator stays current while the tab is hidden" | stated | ReviewsView 60 s timer no longer gated on `active`, skipped only when the window is hidden (slice :1376-1379); `reloadSignal` from watcher polls (App.tsx slice :304-305, ReviewBoard slice :561) | agrees |
+| "Archived Reviews: they are reachable again, under 'Show closed'" / Board columns "plus Closed when 'Show closed' is on" | stated | reviews/model.ts `isClosedOrArchived`, `reviewColumn` archived → closed (slice :1641-1667, :1711); ReviewDetail `hasReview = local.runs.length > 0` (slice :834) | agrees |
+| "The Review rules button moved here" | stated | ReviewsView renders ProjectReviewRules with board identity fallback (slice :1449-1451, :1490) | agrees |
+| "Outdated-review action: relabelled 'New review round'" | stated | ReviewRuns.tsx launchAction (slice :906) "Review again" → "New review round"; `ctx rg 'Review again'` in docs: only implementation-plan.md:25, which records decision (d) and the stage-2 label | agrees |
+| "That interface was moved out of the PR panel into one shared component" | stated | ReviewDetail drops `onOpenReviewSession` and its `local.error` banner (slice :768-769, :875); ReviewBoard drops `onOpenReviewSession` (slice :473) | agrees |
+| "The attention-set code in `ReviewBoard.tsx` is unchanged" (protected stage-0 code) | stated | slice :512-516 attention helpers are context lines; no `attentionNumbers`/`carriedAttention`/`badgesEqual` line is edited | agrees |
+| Expected overlap: "`ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` ..., adds `outdated.round` to `badgesEqual`"; "`App.tsx` ...: the new tab and the D4 shortcut order" | stated | delta also removes `onOpenReviewSession` from ReviewBoard/ReviewDetail, changes `onOpenInReviews` to an object target, adds `onWatcherPoll`/`onIdentityChange`, and in App.tsx adds focus hand-off, watcher polls and board identity; stage 1 edits the same RepositoryBoard destructuring, the ReviewDetail `onOpenReviewSession` spread and the `<ReviewBoard>` element | stale — PC-W3-002 |
+| Not verified: "The Rust bridge (`review.rs`): there is no local toolchain, so CI is the only check"; Verification: "CI on `20e4281`: 29 checks passed" | stated | review.rs changed after 20e4281 in 85fa985c1 (new parameter, 15 test calls rewritten, 5 new assertions); no CI result at a later commit is stated in the body or journal (journal :138 "CI green at 20e4281") | unverified — PC-W3-003 (info) |
+| desktop-app.md:92 "Once a PR has a Review, its panel offers **Open in Reviews**" | doc | ReviewDetail `hasReview` now counts archived runs (slice :834); archived Reviews are reachable under Show closed | agrees |
+
+### Findings
+
+### [PC-W3-001] Desktop bridge bullet omits the new `include_closed` parameter and its refusal
+
+- **Severity**: minor
+- **File**: apps/desktop/src-tauri/src/review.rs:78
+- **Problem**: PR body, What changes → Desktop bridge: "`review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is refused in combination with any other board mode." The delta adds a second bridge parameter: `paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool, include_closed: bool)`, refused outside the Reviews list (`"configuration: Closed Reviews can be included only in the Reviews list"`), and appended as `--include-closed`; dev/reviewBoard.ts mirrors it (`if (args.includeClosed === true) argv.push("--include-closed");`). The CLI bullet says Desktop passes `--include-closed`, but the bridge bullet, which describes the mapping, still stops at `[--repo]`.
+- **Why it matters**: a reader of the bridge contract (stage-1/3 author, CI reviewer of the unverified Rust) does not learn that `review_board` accepts `includeClosed`, or that it is an error outside `reviews_only`.
+- **Fix**: "`review_board` gains `reviews_only` and `include_closed`, mapping to `review reviews --json [--repo] [--include-closed]`; `reviews_only` is refused with any other board mode, `include_closed` without `reviews_only`."
+
+### [PC-W3-002] Expected-overlap guidance for ReviewBoard.tsx / App.tsx predates the fix round, on lines stage 1 also edits
+
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewBoard.tsx:527
+- **Problem**: PR body, Expected overlap: "`ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` from the toolbar, and adds `outdated.round` to `badgesEqual`" and "`App.tsx` ...: the new tab and the D4 shortcut order". The delta further changes ReviewBoard.tsx: removes the `onOpenReviewSession` prop (`-  onOpenReviewSession?: (key: DeskRunKey, run: DeskRun) => Promise<void>;`) and its pass-through to ReviewDetail (`-      reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })}`), whose prop is also deleted from ReviewDetail.tsx; changes `onOpenInReviews` to `(target: { repo: string; repositoryId: string; number: number }, intent?)`; adds `onWatcherPoll` and `onIdentityChange`. App.tsx gains `reviewsFocusHandled`, `noteWatcherPoll`, `boardIdentity` and new `<ReviewBoard>` props. origin/feat/desktop-review-v2-stage1 edits exactly these lines: it rewrites the `function RepositoryBoard({ ... onOpenReviewSession, ...` destructuring, keeps `{...(onOpenReviewSession && { onOpenReviewSession })}` on the ReviewDetail element, and rewrites the `<ReviewBoard ...>` element in App.tsx.
+- **Why it matters**: the overlap section is the merge guide ("Keep both" / "Take stage 1's ..."). Following it, a merger resolving to stage 1's ReviewBoard lines drops the repo-carrying target, the watcher-poll and identity props (the round-1 multi-repo and hidden-indicator fixes) or re-adds the removed `onOpenReviewSession` pass-through; the type check catches the last, not the first two if the props stay optional.
+- **Fix**: extend the ReviewBoard.tsx and App.tsx overlap entries with the fix-round changes: `onOpenReviewSession` removed from ReviewBoard and ReviewDetail; `onOpenInReviews` takes `{repo, repositoryId, number}`; new `onWatcherPoll` and `onIdentityChange` (App.tsx wires them to the Reviews tab with `onFocusHandled`, `reloadSignal`, `rulesTarget`) — keep them when taking stage 1's board.
+
+### [PC-W3-003] The Rust bridge changed after the only CI run the body cites
+
+- **Severity**: info (unverified)
+- **File**: apps/desktop/src-tauri/src/review.rs:78
+- **Problem**: Body: "CI on `20e4281`: 29 checks passed" and Not verified: "The Rust bridge (`review.rs`): there is no local toolchain, so CI is the only check." `git log 20e4281a2..f6971fd4a -- review.rs` shows 85fa985c1 changed it (new `include_closed` parameter, every `board_read_args` test call rewritten to nine arguments, five new assertions). Neither the body nor journal.md (:138 "CI green at 20e4281") states a CI result at 85fa985c1 or later.
+- **Why it matters**: a reader takes the Rust bridge as CI-checked; its current form has no stated check at all.
+- **Fix**: cite the CI run on f6971fd (or the PR head) for the Rust job, or say the Rust change of 85fa985 awaits CI.
+- **To settle**: the PR's check runs at f6971fd4a (`gh pr checks 1304`), not available read-only here.
+
+### Not verified
+
+- CI status at the delta head (no gh/network use within this lane's tools) — PC-W3-003 is info for that reason.
+- Code correctness of the slice (focus hand-off, timer, archived handling) — other lanes; rows above check only that the code matches the body's claims.
+- Whether the type check would flag every stage-1/stage-2 merge mistake named in PC-W3-002 — reasoned from optional props, not run.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-03 agrees with the body on Open in Reviews carrying the repository, one-shot intents, hidden-tab indicator reloads, archived Reviews under Show closed, Review rules in the Reviews tab, the New review round label and the untouched attention set. Two minors: the Desktop bridge bullet omits include_closed and its refusal, and the Expected-overlap entries for ReviewBoard.tsx/App.tsx predate the fix round although stage 1 edits the same lines. One info: review.rs changed in 85fa985 after the only CI run the body cites (20e4281).",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "PC-W3-001",
+      "severity": "minor",
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "line": 78,
+      "quote": "paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool, include_closed: bool) -> Result<Vec<String>, String> {",
+      "problem": "Body: \"`review_board` gains `reviews_only`, which maps to `review reviews --json [--repo]` and is refused in combination with any other board mode.\" The delta adds include_closed to the bridge (review.rs and dev/reviewBoard.ts), appended as --include-closed and refused outside the Reviews list ('Closed Reviews can be included only in the Reviews list'). The bridge bullet does not mention it.",
+      "impact": "A reader of the bridge contract, including whoever checks the CI-only Rust, misses a new parameter and its refusal.",
+      "suggested_fix": "State that review_board gains reviews_only and include_closed, mapping to `review reviews --json [--repo] [--include-closed]`, with include_closed refused without reviews_only.",
+      "evidence": "slice-03 review.rs hunk @@ 32,87 (lines 78-93) and dev/reviewBoard.ts (lines 7, 51); pr-context.md 'Desktop bridge' bullet.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W3-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewBoard.tsx",
+      "line": 527,
+      "quote": "`ReviewBoard.tsx`: stage 2 adds the `onOpenInReviews` prop, routes `openReview` view/answer to it, removes `ProjectReviewRules` from the toolbar, and adds `outdated.round` to `badgesEqual`.",
+      "problem": "The body's Expected-overlap entries for ReviewBoard.tsx and App.tsx describe only the pre-fix stage-2 changes. The delta also removes onOpenReviewSession from ReviewBoard and ReviewDetail, changes onOpenInReviews to a {repo, repositoryId, number} target, adds onWatcherPoll/onIdentityChange, and wires focus hand-off, watcher polls and board identity in App.tsx. origin/feat/desktop-review-v2-stage1 edits the same RepositoryBoard destructuring, keeps the ReviewDetail onOpenReviewSession spread, and rewrites the <ReviewBoard> element in App.tsx.",
+      "impact": "A merger following the guide and taking stage 1's board lines can drop the round-1 fixes (repo-carrying target, watcher-poll reloads, rules identity) or re-add the removed pass-through.",
+      "suggested_fix": "Add the fix-round changes to the ReviewBoard.tsx and App.tsx overlap entries and say to keep them when taking stage 1's board.",
+      "evidence": "slice-03 ReviewBoard.tsx hunks @@ 4,64, @@ 79,119, @@ 459,507, @@ 536,561; ReviewDetail.tsx @@ 1,61; App.tsx @@ 219,247, @@ 646,676; git diff $(git merge-base origin/feat/desktop-review-v2-stage1 main)..origin/feat/desktop-review-v2-stage1 -- ReviewBoard.tsx App.tsx AppShell.tsx (RepositoryBoard signature, ReviewDetail onOpenReviewSession spread, <ReviewBoard> element changed there).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W3-003",
+      "severity": "info",
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "line": 78,
+      "quote": "CI on `20e4281`: 29 checks passed",
+      "problem": "Unverified. The body names CI as the only check of review.rs and cites CI only at 20e4281; review.rs changed afterwards in 85fa985c1 (include_closed parameter, 15 test calls rewritten, 5 new assertions). Neither the body nor journal.md states a CI result at 85fa985c1 or later.",
+      "impact": "A reader takes the current Rust bridge as CI-checked when no check of its current form is stated.",
+      "suggested_fix": "Cite the CI run at the PR head for the Rust job, or state that the 85fa985 Rust change awaits CI.",
+      "evidence": "git log 20e4281a2..f6971fd4a -- apps/desktop/src-tauri/src/review.rs -> 85fa985c1; journal.md:138 'CI green at 20e4281'; settle with the PR's check runs at f6971fd4a.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: claims settled from the slice, the body and targeted reads); wiki_used: no (not-relevant: user docs located by ctx rg); ctx_used: yes (keryx ctx rg over docs and journal); raw_rg_used: no (raw git log/diff and a 10-line sed read with keryx:raw markers; one grep over another branch's git diff output, not over project files).

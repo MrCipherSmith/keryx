@@ -1,0 +1,82 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` | Parent ref: `20e4281a2` | Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range` (round 2 delta, wave 3) | Slice: slice-04 (Desktop tests: platform/reviewPages, ReviewBoard/ReviewDetail/ReviewPanel/ReviewsView DOM tests, reviews/model.test, ProjectNavigation, app-navigation fixture; docs: cli-reference, desktop-app, desktop-metaproject, implementation-plan, specification; CLI: src/commands/review-board.ts, src/commands/review-reviews.ts hunks). This is not a FIX slice, so it returns no prior dispositions.
+
+### Summary
+The slice is mostly tests and docs. Its two source hunks are clean at function level. `review-board.ts` drops its local `writeJson`/`writeSerialized` for `writeBoundJson`/`writeBoundJsonText` in `board-github.ts`. That removes the command-to-command import `review-reviews.ts -> review-board.ts`. The moved doc comment (85fa985c1) still matches the code. There is one minor DRY finding: the delta adds two more copies of the empty PR-detail loader and its `ReviewDetail` render props in ReviewsView.dom.test.tsx, so the block now has 3 copies.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Findings
+
+#### Functions
+No function-design issues found. The new `compareHeads` body in review-reviews.ts (deadline race, `late`/`failed` flags) was already raised in wave 1: review-clean-code-w1 found the output argument and positional parameters, and review-backend-w1/review-highload-w1 found the uncancelled gh child. It is not re-filed.
+
+#### Comments
+No comment issues found beyond wave 1/2. The touched comments were read against their statements:
+- `MAX_REVIEW_COMPARES`, `REVIEW_COMPARE_BUDGET_MS` and the `includeClosed`/`compareBudgetMs` field docs match their code.
+- The "Freshness stays behind with an unknown count" catch comment matches the code.
+- The test comment at ReviewBoard.dom.test.tsx ("answered in the Review panel (src/reviews/ReviewsView.dom.test.tsx, answer intent)") points at a test that exists in that file.
+- The `writeBoundJson` doc in board-github.ts keeps the pipe-flush and binding-recheck rationale from the removed comments.
+Already filed, not re-filed: the "Read-only list" header in review-reviews.ts (wave 1), the "Refresh to read more" cap warning (wave 1), and desktop-app.md still naming a **Review** tab at :70/:72/:147 (review-pr-contract-w2).
+
+#### Error Handling
+No error-handling issues found. The compare catch turns any failure into an unknown count plus a warning, as documented. Access and configuration errors are rethrown elsewhere through `cannotRetainData`.
+
+#### DRY
+##### [F-001] The empty PR-detail loader and the `ReviewDetail` render props reach 3 copies in ReviewsView.dom.test.tsx
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.dom.test.tsx:510 (copies at :487, :510, :524; the render props at :491–493, :514–515, :526–527)
+- **Principle**: Clean Code: DRY (Duplicated block row, 3 or more copies)
+- **Problem**: Before this delta, the file had one `const detail = async () => ({ version: 1 as const, viewer: "ann", repositoryId: "repo1", number: 4, headSha: "head4", fetchedAt: time, comments: [], reviews: [], threads: [], checks: [], warnings: [] })`, in the AC7 test. The delta adds two tests, "takes only a start intent" and "shows a failed run-status read". Each repeats that loader verbatim and repeats the same `createElement(ReviewDetail, { key: ++renderKey, cwd: "/project", repo: "org/repo", repositoryId: "repo1", viewer: "ann", card: card(4), load: detail, … })` prop set. Any change to the `ReviewDetailSnapshot` shape or the panel's required props now needs three identical edits in this file. ReviewBoard.dom.test.tsx has the same inline loader in 5 places (:666, :693, :764, :776, one more). That file was already over the threshold before the delta, and the delta's new test at :764 adds one more copy. It is noted here, not filed separately.
+- **Fix**: Add file-level helpers next to `card()`/`review()`: `const emptyDetail = async () => ({ ... })` and `function showDetail(extra: Partial<ComponentProps<typeof ReviewDetail>>) { return act(async () => root.render(createElement(ReviewDetail, { key: ++renderKey, cwd: "/project", repo: "org/repo", repositoryId: "repo1", viewer: "ann", card: card(4), load: emptyDetail, onClose: () => {}, ...extra }))); }`. Then use them in the three tests. Optionally, reuse the same factory for the ReviewBoard.dom.test.tsx copies.
+
+#### SOLID
+No SRP, OCP, LSP or ISP violations in the slice. Moving the pipe writer into `board-github.ts` gives it one owner: both commands now import it from there instead of one command importing another. The aliased import `writeBoundJson as writeJson, writeBoundJsonText as writeSerialized` in review-board.ts:12 gives one concept two names. That is a naming concern and belongs to review-style, so it is not filed by this lens.
+
+### Clean Areas
+- src/commands/review-board.ts: the writer extraction.
+- src/commands/review-reviews.ts: `latestActivity` replaces the post-summary `latestCreated` and sorts on rows; the `includeClosed` option and the parseArgs flag.
+- platform/reviewPages.test.ts, ReviewPanel.dom.test.tsx (browser-link test), model.test.ts, ProjectNavigation.dom.test.tsx (type import moved to its owner), and app-navigation.fixture.tsx (the running Review fixture and the dot selector).
+- Docs: implementation-plan.md and specification.md, where the round-numbering rule D-R1 and the indicator rule are stated consistently, and cli-reference.md.
+
+### Not read / not verified
+- slice-04 was read in full. It carries only partial hunks of review-reviews.ts, so lines 44–89 of that file (card reading and pair selection) were not in this slice and were not re-read. They belong to the slice-01 fix review.
+- I read only the 85fa985c1 change to board-github.ts (`git show`), not the whole file.
+- No tests were run (exec budget 0), and verify-tests-to-run-1.txt was not opened.
+- The `keryx ctx rg` copy count for ReviewBoard.dom.test.tsx was partial (4 of 5 lines shown). The fifth location was not opened.
+
+Routing audit: graph_used: no (not-relevant: bounded supplied diff slice) | wiki_used: no (not-relevant: function-level lens on supplied text) | ctx_used: yes (`keryx ctx read` for solid-principles.mdc, `keryx ctx rg` for copy counts and writer call sites, `keryx ctx run -- git log/show`) | raw_rg_used: no (raw grep only over review-package raw/*.txt and git objects, with keryx:raw markers, to list earlier-wave findings)
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "slices": ["slice-04"],
+  "summary": "Tests/docs slice with two clean CLI hunks (pipe writer moved into board-github.ts, removing the command-to-command import). One minor: the empty PR-detail loader and ReviewDetail render props reach 3 copies in ReviewsView.dom.test.tsx. Wave 1/2 findings on review-reviews.ts comments and compareHeads and desktop-app.md tab names are not re-filed.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": 510,
+      "quote": "const detail = async () => ({ version: 1 as const, viewer: \"ann\", repositoryId: \"repo1\", number: 4, headSha: \"head4\", fetchedAt: time,",
+      "problem": "The delta adds two tests that each repeat the AC7 test's empty PR-detail loader and the same createElement(ReviewDetail, { key, cwd, repo, repositoryId, viewer, card: card(4), load: detail, ... }) prop set verbatim, taking the block from 1 to 3 copies (:487, :510, :524; props :491-493, :514-515, :526-527).",
+      "impact": "A change to the ReviewDetailSnapshot shape or to ReviewDetail's required props now needs three identical edits in this file (Duplicated block row). ReviewBoard.dom.test.tsx carries the same inline loader 5 times, already over the threshold before the delta, which adds one more at :764.",
+      "suggested_fix": "Add file-level helpers next to card()/review(): an emptyDetail loader and showDetail(extra) that renders ReviewDetail with the shared props spread under extra; use them in the three tests (optionally the same factory in ReviewBoard.dom.test.tsx).",
+      "evidence": "slice-04 ReviewsView.dom.test.tsx hunk @@ 179,553 (diff lines 911-959); head file lines 485-528 read; keryx ctx rg 'comments: \\[\\], reviews: \\[\\], threads: \\[\\], checks: \\[\\], warnings: \\[\\]' gives 3 in ReviewsView.dom.test.tsx and 5 in ReviewBoard.dom.test.tsx; 'createElement\\(ReviewDetail' gives 3 in ReviewsView.dom.test.tsx.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "reviews-view-test-empty-detail-fixture-dup"
+    }
+  ],
+  "prior_dispositions": []
+}
+```

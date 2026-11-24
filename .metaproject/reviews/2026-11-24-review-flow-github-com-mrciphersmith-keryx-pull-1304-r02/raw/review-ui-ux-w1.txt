@@ -1,0 +1,111 @@
+STATUS: DONE
+
+metaproject: index not read by this reviewer (bounded payload-driven review; routing pointers came from the dispatch). Mode: code only (no URL or screenshots supplied).
+
+Context: Keryx Desktop (Tauri app), audience = developers reviewing PRs with Keryx; primary task on the changed surface = find a Review that waits on me in the Reviews tab and act on it (answer, publish, restore); surface type = app screen (marketing rows of ui-anti-slop do not apply). Round 2 is a delta (fix) round over 20e4281a2..f6971fd4a; slice-01 read in full, plus `git diff 20e4281a2..f6971fd4a` of ReviewBrowserLink.tsx, ReviewDetail.tsx/.css, ReviewRuns.tsx, ReviewWorkspace.tsx, ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts, AppShell.tsx to check the prior-finding sites the slice only partly shows.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-ui-ux",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "criterion": "Nielsen #4 (consistency and standards)",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "(!filters.state || review.state === filters.state) &&",
+      "problem": "The fix for round-1 F-006 lists archived Reviews under Show closed with the state label \"Archived\" (reviewStateLabel) and puts them in the Closed column (reviewColumn). The state filter still matches the underlying `review.state`, and its options (STATES in ReviewsView.tsx) have no \"Archived\" entry. With Show closed on, choosing \"Ready\" (or \"Stopped\", \"Published\") returns tiles and rows whose badge reads \"Archived\", and choosing \"Closed\" leaves out archived Reviews that sit in the Closed column.",
+      "impact": "The filter and the label on screen disagree: a user filtering for Reviews ready to publish gets archived ones mixed in, and cannot filter to the archived Reviews they came to restore.",
+      "suggested_fix": "Match the filter on the shown state: compare against an `archived`-aware key (e.g. `review.archived ? \"archived\" : review.state`) and add an \"Archived\" option shown while Show closed is on; or exclude archived Reviews from every state option except \"Closed\". Add a model test for an archived ready Review under each state filter.",
+      "evidence": "model.ts filterReviewList: `(showClosed || !isClosedOrArchived(review)) && (!filters.state || review.state === filters.state)`; model.ts reviewStateLabel returns \"Archived\" when `review.archived`; reviewColumn sends archived to \"closed\"; ReviewsView.tsx `const STATES: ReviewState[] = [\"queued\", \"running\", \"needs_answer\", \"ready\", \"stopped\", \"published\", \"closed\"]` and `<option value=\"\">All states</option>{STATES.map(...)}`; the CLI keeps the archived Review's derived state (cli-reference.md: archived attempts \"do not decide the state\", a Review whose attempts are all archived is listed with `archived: true`).",
+      "confidence": "high",
+      "reviewer": "review-ui-ux"
+    },
+    {
+      "id": "UX-002",
+      "severity": "info",
+      "criterion": "Nielsen #9 (error messages state the cause) — UNVERIFIED (no render)",
+      "file": "apps/desktop/src/reviews/ReviewPanel.tsx",
+      "line": null,
+      "quote": "<span>GitHub did not return this pull request, so its current range is unknown. Refresh the Reviews list to try again.</span>",
+      "problem": "A Review closed locally has `card: null` while Show closed is off (the CLI reads its card only with --include-closed). When \"Open in Reviews\" targets such a Review, ReviewsView selects it and turns Show closed on in the same pass; the panel renders from the current snapshot (card null) until the reload with includeClosed lands. During that window the panel says GitHub did not return the PR, which is not the cause.",
+      "impact": "A brief, false error banner (and a Refresh button) on the first frame(s) of an Open-in-Reviews to a closed Review; it clears when the reload completes. Not measured on a render.",
+      "suggested_fix": "Distinguish 'card not read' (closed and Show closed was off, or a reload is pending) from 'GitHub did not return it': e.g. show a neutral loading line while `read.loading` and the Review is closed, and keep the warning for a completed read with a null card.",
+      "evidence": "ReviewsView.tsx pending effect: `if (isClosedOrArchived(found)) setShowClosed(true); ... setSelected({ id: found.id, intent: pending.intent });` with load effect deps including showClosed (`load(cwd, repo, expectedViewer, showClosed)`); review-reviews.ts `readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query)`; ReviewPanel.tsx renders the banner whenever `review.card` is null. Would be settled by a screenshot of Open in Reviews on a locally closed Review.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-029", "disposition": "closed"},
+    {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-032", "disposition": "closed"},
+    {"id": "F-048", "disposition": "closed"},
+    {"id": "F-056", "disposition": "closed"},
+    {"id": "F-057", "disposition": "closed"},
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-033", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-006", "disposition": "partial"}
+  ],
+  "summary": "Every UI/UX round-1 finding the delta touches is fixed as claimed; two deferred info findings (F-056, F-057) were fixed too. One new minor: archived Reviews read \"Archived\" but the state filter still matches their underlying state. One unverified info about a transient wrong cause in the no-card banner."
+}
+```
+
+## Prior dispositions — evidence
+
+- F-029 closed: ReviewTile `<button className="review-card" onClick={() => onOpen(review.id)}>` — the aria-label is gone, the name comes from the content as on the PR board.
+- F-030 closed: ReviewDetail.tsx moves `{local.error && !local.staleRange && <p className="inline-banner tone-warn" role="alert">…}` into the sheet header, directly after `.review-detail-actions`, and removes it from the end of the body.
+- F-031 closed: aria-label now ``after ${previous.slice(0, 8)} — go to the attempt this one follows``; it starts with the visible text "after <id>" (WCAG 2.5.3).
+- F-032 closed: ReviewRuns.tsx launchAction returns "New review round" instead of "Review again", so the PR card, PR panel and Review panel share one label. Class scope: `keryx ctx rg 'Review again'` over apps/desktop/src non-test sources finds no remaining label.
+- F-048 closed: ReviewBrowserLink gains `onOpen` (preventDefault, then openReviewLink: openPullRequest for PR URLs, openExternal otherwise; button > 1 ignored); ReviewPanel passes `onOpen={openPullRequestLink}` with an error toast. Class scope: anchors under apps/desktop/src/review and src/reviews (`keryx ctx rg --all '<a |ReviewBrowserLink |href=|followLink'`) — ReviewWorkspace/ReviewRuns render none; the other ReviewBrowserLinks (Discussion, Checks, PR-panel header) sit only inside ReviewDetail, whose followLink handler covers them.
+- F-056 closed (claimed deferred, actually fixed): the no-card banner now has a `Refresh` button wired to onRefresh, copy "Refresh the Reviews list to try again."
+- F-057 closed (claimed deferred, actually fixed): copy is now "The PR revision changed. Refresh to load the latest range." with a "Refresh" button — no longer names "the board".
+- F-018 closed: desktop-app.md shortcuts read ⌘1/⌘2/⌘3 Sessions/Flows/Reviews and ⌘4/⌘5/⌘6 Pull requests/Issues/Metaproject.
+- F-013 closed: ReviewsTabIndicator is now defined in reviews/ReviewsView.tsx and imported by AppShell, matching the PR tab's direction.
+- F-033 closed: matchesSearch checks the title or the number (`includes`, `#` stripped only before a digit).
+- F-002 closed: ReviewWorkspace calls onIntentConsumed when it acts on or drops the intent; ReviewsView consumeIntent strips `intent` from `selected`, also on deactivation.
+- F-003 closed: the focus request is lifted above the keyed RepositoryReviews (`pending` in ReviewsView with a taken-nonce ref) and App is told via onFocusHandled; a repository switch by the user drops it (selectRepo sets pending null).
+- F-009 closed: accessLost calls settlePending().
+- F-011 closed: the interval skips refresh when `document.visibilityState === "hidden"`.
+- F-006 partial (UI half only, from this lens): the PR panel now offers Open in Reviews for an archived-only PR (`hasReview = local.runs.length > 0`) and archived Reviews are listed under Show closed labelled "Archived"; the remaining inconsistency is UX-001 (filter). The backend half and History restore path were not traced by this reviewer.
+- Not judged by this lens (left to their owning reviewers): F-001, F-004, F-005, F-007, F-008, F-010, F-012, F-014–F-017, F-019–F-028, F-034–F-047, F-049–F-055, F-058–F-060. From reading the slice only: F-019 and F-021 docs text was updated as described; not assigned a disposition here.
+
+## Scores
+
+- Slop score: 0 on the changed surface (no new palette, type, radius/shadow, layout or copy tells; app screen, marketing rows N/A). Read from slice-01 and the component diffs above.
+- WCAG 2.2 AA floor (code mode): pass on the touched lines — accessible names present on icon controls ("Open pull request", "Close review", Refresh buttons have text), Label in Name fixed (F-031), error banner role=alert placed next to the control it explains, focus returned to search when an account/repository change closes a dialog or panel (inViewOverlay + restoreFocus). Contrast and target sizes not measured (no render; no token/CSS changes in the delta besides `.review-workspace-block` layout).
+- Viewports checked: not run.
+
+## Top changes
+
+1. UX-001: make the state filter agree with the "Archived" label (add an Archived option or filter on the shown state).
+2. UX-002 (unverified): don't show "GitHub did not return this pull request" while a closed Review's card is simply not loaded yet.
+
+## What works (keep)
+
+- One label for the outdated action across card, PR panel and Review panel.
+- Error banner moved next to the primary action it explains.
+- `title` tooltips on the compact filter selects show the chosen option when the select is narrowed.
+- Neutral refresh copy in the shared ReviewWorkspace banner.
+
+## Checks not run
+
+- Live render at 1440/768/390 px, light/dark: no URL or screenshots supplied.
+- Computed contrast and measured target sizes: no render; no colour or size token changed in the delta.
+- Keyboard walk-through of Open in Reviews → panel → History restore on an archived Review: no render; reasoned from code only.
+- Screen-reader announcement of role=alert / role=status banners: not run.
+- No tests executed (exec_budget_s 0); relied on the supplied verify-tests-to-run-1.txt claim (not re-read).
+
+## Routing audit
+
+graph_used: no (not-relevant: the delta file list was given by the payload and diff); wiki_used: no (not-relevant: UI review of a known delta); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no. One raw `git diff` with a `keryx:raw` marker to read exact delta lines of the prior-finding sites.

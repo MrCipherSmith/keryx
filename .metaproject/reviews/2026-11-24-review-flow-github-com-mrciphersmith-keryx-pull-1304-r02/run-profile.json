@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "operatorGate": 1,
+  "mode": "attended",
+  "declaredVia": "default",
+  "host": "claude-code",
+  "callerToken": "727c1aac52b1b4831126f672",
+  "createdAt": "2026-11-24T11:07:00.423Z"
+}

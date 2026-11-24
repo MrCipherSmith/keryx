@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304#F-016",
+      "answer": "dismiss",
+      "reason": "sibling-command helper imports are accepted practice in src/commands; the move to board-github stays as a tidy-up",
+      "quote": "Dismiss (Recommended)",
+      "at": "2026-11-24T11:01:10.711Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "0b2e34a6e1c85dec5d95e5a52d95f89f0ba1c632df747807c75476aef2d2fed1"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r1-F-016",
+        "questionText": "Held finding F-016: the reviewer called it an architecture defect that the new `review reviews` command imported `writeJson` from the sibling command `review-board`. Several review-* commands already import helpers from sibling commands, and the helper was moved to `board-github` anyway. Defect or accepted practice?",
+        "answerText": "Dismiss (Recommended)",
+        "time": "2026-11-24T11:01:10.711Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304#F-027",
+      "answer": "dismiss",
+      "reason": "Documented limitation: round numbers never change once shown; pinned by the FA-17 test.",
+      "quote": "Dismiss",
+      "at": "2026-11-24T11:04:22.048Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "78ec1a738e205e268e6653f9e80b47cfd30aa517cd5788a0b139487bb5d10bd3"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r1-F-027c",
+        "questionText": "F-027 premise answer for the record (the tool needs a single word): dismiss or uphold?",
+        "answerText": "Dismiss",
+        "time": "2026-11-24T11:04:22.048Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304#F-036",
+      "answer": "dismiss",
+      "reason": "bookkeeping; T10 closed with the journalled run and CI as evidence",
+      "quote": "Dismiss, mark T10 done (Recommended)",
+      "at": "2026-11-24T11:01:11.034Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "5def795d529abb917312f5f67442a03fcebf0b8a4b91e09d8d280f4a2f2518a3"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1304",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-r1-F-036",
+        "questionText": "Held finding F-036: the flow's T10 task (full tests, typecheck, lint) was still 'todo' while the review ran, though the T10 run is journalled and CI (incl. lint/typecheck) was green on the reviewed commit. Defect or bookkeeping?",
+        "answerText": "Dismiss, mark T10 done (Recommended)",
+        "time": "2026-11-24T11:01:11.034Z"
+      }
+    }
+  ]
+}

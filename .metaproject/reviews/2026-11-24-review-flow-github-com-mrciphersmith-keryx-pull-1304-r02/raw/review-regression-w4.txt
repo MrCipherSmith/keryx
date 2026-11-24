@@ -1,0 +1,70 @@
+STATUS: DONE
+
+review-regression, round 2 (delta 20e4281a2..f6971fd4a), wave 4, slices slice-05 and slice-06. Not a FIX slice; prior_findings is empty, so there are no prior_dispositions.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [],
+  "summary": "No regression at major or above in slice-05 or slice-06. Each changed contract in the production files (desk-run-store.ts publication()/reviewRows/roundFor/neverStarted, review-entity.ts summarizeReview/referenceHead/reviewNeedsViewer, board-github.ts writeBoundJson, the Desktop ReviewDetail/ReviewBoard removals) was followed to its consumers at f6971fd4a. None of those consumers breaks. The only behaviour shifts are operator-settled (fix-round-1.md) or fix earlier wrong output."
+}
+```
+
+## What was checked (code at f6971fd4a; both slices read in full: slice-05 1159 lines, slice-06 842 lines)
+
+### desk-run-store.ts: `publication()` widened from completed+complete to every finished state
+`publication()` now returns "published" or "skipped" for `partial` and `budget` runs that have a receipt or a skip marker. `pending` is still returned only for completed+complete. I listed every consumer of the outcome with `keryx ctx rg --all` over src and apps/desktop/src, excluding tests:
+- **board-badges.ts:52 `localBadge` (protected stage-0 parity).** It reads only `publication === "pending"`. Pending is unchanged, so `publicationPending` and the ReviewBoard badge equality at ReviewBoard.tsx:65 are unchanged. The attachBadges path (desk-run-store.ts:563) still gates on the card's own range.
+- **ReviewRuns.tsx:103-171 `RunAttempt`.** `draft` covers completed and partial runs. A partial run that was already published used to show "Publish to GitHub", because the outcome was undefined. It now shows "View publication", and a skipped one shows "Publication skipped". That is a fix to earlier wrong output, not a break. `publicationPending` still keys on "pending" only.
+- **SessionReviewActivity.tsx:76/168, ReviewRunDialog.tsx:99.** These read "pending" only, so they are unchanged.
+- **ReviewsView.tsx:261.** The value is only part of a reload signature.
+- **history() archive gate (desk-run-store.ts:476).** It predates the delta: it is present at 20e4281a2 line 457.
+
+### desk-run-store.ts: `reviewRows` keeps archived attempts and drops never-started superseded requests
+- The only consumer is `readReviewRows`, then review-reviews.ts:57/62, through `headComparison` and `summarizeReview`.
+- `summarizeReview` and `referenceHead` take state, findings, publication and freshness from `stateAttempts` (unarchived, or all when every attempt is archived). An archived attempt therefore cannot change a live Review's state.
+- On the Desktop side, ReviewPanel `Rounds` (ReviewPanel.tsx:39-53) only displays rounds. reviews/model.ts:37/61/66 routes an all-archived Review to the closed column. Nothing offers actions on an attempt summary.
+- The cost of listing archived Reviews (card reads, compare slots) is already raised as degradation w1 F-002. Not re-filed.
+
+### desk-run-store.ts: `roundFor` moved to memory with the D-R1 rule; `neverStarted` extracted
+- `neverStarted("")` in `previousAttempt` is the same SQL predicate as the inline one it replaces.
+- The `placed` cache in `assignReviews` is loaded per Review and appended after each placement, so later pending rows in the same call see earlier ones.
+- `previous_run_id` and `round` have no consumer outside the Reviews list. `keryx ctx rg` over previousRunId, `.round` and reviewId found only managed.ts and prior-round.ts, and those use an unrelated package `reviewId`.
+- Existing placed rows are never renumbered, because the update is guarded with `review_id IS NULL`.
+
+### review-entity.ts
+- **`reviewNeedsViewer` signature.** It now picks `card` and `archived`. Its one production caller is ReviewsView.tsx:206 (`snapshot.reviews.some(reviewNeedsViewer)` over a full `ReviewSummary`), so it still type-checks.
+- **Behaviour changes.** `ready` with a null publication no longer counts. A Review whose card could not be read no longer counts. A failed retry in a round with an accepted result no longer turns the Review stopped. All three are recorded in fix-round-1.md (the AC8 case and R2 decisions) and asserted by the updated tests.
+- **`headComparison`.** It is new, and its one caller is review-reviews.ts:57.
+
+### board-github.ts `writeBoundJson` / `writeBoundJsonText`
+Wave 3 (raw/review-regression-w3.txt) already traced the move out of review-board.ts. The only production importer is review-reviews.ts. Not re-checked beyond confirming that the body matches.
+
+### slice-06 (Desktop removals: ReviewDetail "Keryx review" tab, the ReviewBoard rules button, `onOpenReviewSession`, `secondaryNote`/`reviewNote` in `laneReason`, and the review.rs test lines)
+- **Rules button.** `ProjectReviewRules` is now mounted in ReviewsView.tsx:313. Its two removed tests ("project rule previews …" and the previous-account isolation test) were moved to ReviewsView.dom.test.tsx:562/617, not dropped.
+- **Watcher.** `ReviewWatcher` is still rendered in ReviewBoard.tsx:487.
+- **Dangling references.** None to the removed tab: ReviewDetail.tsx tabs are discussion, checks and automation. `ReviewIntent` is still exported, and its consumers (App.tsx:216, ReviewBoard.tsx:40/116/459) type-check (CI at f6971fd is green).
+- **`laneReason`.** It no longer falls back to `reviewNote`, which changes the Pull requests card reason text only. The protected attention set (`needsViewerAttention`/`attentionNumbers`, ReviewBoard.tsx:83-85) does not read `laneReason`. `reviewNote` is still exported and used.
+- **Rust.** `deny_unknown_fields` in review.rs (lines 43, 297, 306, 527, 535) applies only to request structs. The new output fields (`archived`, `reviewed`) pass through as JSON.
+
+## Protected stage-0 code
+- **Attention set in ReviewBoard.tsx.** Untouched in these slices.
+- **attachBadges/localBadge parity.** Holds, because "pending" is unchanged (see above).
+- **Toolbar container queries.** No CSS is in these slices.
+
+## Not filed here (below major or not a regression)
+- An all-archived Review whose attempt was published reads `ready`, not `published`, because `reviewRows` withholds publication from archived attempts. This path is new in this PR (archived Reviews were not listed before), so it is not a break of existing behaviour. It belongs to scope A if anywhere.
+
+## Coverage and limits
+- **No blast-radius record.** The payload and the r02 package carry no computed blast-radius record, so there is no cap or dropped-file list to report. I enumerated dependents by hand with `keryx ctx rg --all` over the changed symbols: publication/.publication, reviewNeedsViewer, reviewRows, summarizeReview, referenceHead, headComparison, previousRunId/round/reviewId, ProjectReviewRules, ReviewWatcher and ReviewIntent. `keryx gdgraph affected` was not run.
+- **Runtime edges.** The Desktop → Rust → CLI JSON hand-off is invisible to the code graph. I read it by hand only for strict deserialisation.
+- **No tests or Rust compile.** I ran no tests (exec budget 0) and rely on research-evidence/verify-tests-to-run-1.txt and green CI at f6971fd. Rust is not compiled locally.
+
+routing audit:
+- graph_used: no. No blast-radius record was supplied, and `keryx ctx rg --all` enumerated the consumers of each changed symbol.
+- wiki_used: no (not-relevant). The intent is stated in fix-round-1.md and the code comments.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`, `keryx ctx diff --stat`).
+- raw_rg_used: no. Two raw `git diff`/`git show` reads were filtered through awk with a keryx:raw marker, to check whether the history() archive gate predates the delta.

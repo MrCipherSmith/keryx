@@ -1,0 +1,86 @@
+STATUS: DONE
+
+metaproject: index not read by this reviewer (bounded payload-driven review; routing pointers came from the dispatch). Mode: code only (no URL or screenshots supplied).
+
+Context: Keryx Desktop (Tauri app); audience = developers reviewing PRs with Keryx; primary task on the changed surface = open the Reviews tab, find a Review that waits on me and act on it (answer, publish, restore), or jump to it from a PR with "Open in Reviews". Surface type = app screen (marketing rows of ui-anti-slop do not apply). Round 2, wave 2, slice-03 (not the fix slice): read lines 1-20 and 240-1781 of slice-03.diff in full. Lines 21-239 (apps/desktop/dev/reviewBoard.ts argument builder and src-tauri/src/review.rs) are bridge code with no rendered UI and were not read by this lens. Extra reads: App.tsx 618-662 and 250-275 at HEAD, `git diff 20e4281a2..f6971fd4a -- apps/desktop/src/App.tsx`, ui-anti-slop.mdc Review severities and Feedback timing, raw/*-w1.txt and *-w2.txt (searched for overlap).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-ui-ux",
+  "status": "DONE",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "criterion": "Nielsen #1 (visibility of system status) / State: loading",
+      "file": "apps/desktop/src/App.tsx",
+      "line": null,
+      "quote": ") : (githubAccount || githubAccountError) ? (",
+      "problem": "The F-012 fix mounts ReviewsView only once the project account read settled, and renders `null` until then. The account read is `projectRegister(cwd)` followed by `getProjectGitHubAccount(cwd)` (App.tsx refreshGitHubAccount). Until both resolve, the Reviews tab (⌘3) shows an empty pane: no heading, no toolbar, no spinner. ReviewsView's own \"Loading reviews…\" state cannot show because the component is not mounted. The Pull requests tab beside it is not gated and shows its own loading state at once.",
+      "impact": "Opening a project and going straight to Reviews can show a blank tab for the length of the account read. The user cannot tell whether it is loading, empty or broken, and the neighbouring tab behaves differently.",
+      "suggested_fix": "Render a loading placeholder in the null branch, e.g. `<div className=\"review-loading\" role=\"status\"><Spinner /> Loading reviews…</div>` (the same markup ReviewsView uses), shown after the rule's ~150-300 ms loader delay. Or mount the view frame (heading, disabled toolbar) and defer only the read.",
+      "evidence": "App.tsx at f6971fd: `{reviewDisconnected ? (<EmptyState …/>) : (githubAccount || githubAccountError) ? (<ReviewsView …/>) : null}`; refreshGitHubAccount awaits `registration.current` (projectRegister) then `getProjectGitHubAccount(cwd)` before `setGitHubAccount(account)`. ReviewsView.tsx: `{!snapshot && read.loading && <div className=\"review-loading\" role=\"status\"><Spinner /> Loading reviews…</div>}` exists but only inside the mounted view. Rule (ui-anti-slop.mdc Feedback): loaders appear after ~150-300 ms. The duration of the account read was not measured. Rated minor rather than the table's major for a primary view: the view has its own loading state and the gap is a one-time pre-mount window. It is major if a render shows the blank pane for more than ~300 ms. Not raised in wave 1: logic, regression, performance, clean-code, highload and degradation all closed F-012 on correctness grounds only.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux"
+    },
+    {
+      "id": "UX-004",
+      "severity": "info",
+      "criterion": "Nielsen #1 (visibility of system status) — UNVERIFIED (no render)",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "{review.card && <span className=\"flow-meta\"><span className=\"meta-item\"><Icon name=\"user\" size={12} />{review.card.author || \"Unknown author\"}</span></span>}",
+      "problem": "Tiles and list rows without a PR card now drop the author entirely. Before, they read \"Unknown author\". The comment names the case as \"a closed Review read while Show closed was off\". With Show closed off, filterReviewList hides closed and archived Reviews, so that case is almost never on screen. The card-less tile a user actually sees is an open Review whose PR card GitHub did not return. There, the tile now reads only \"Pull request #N\" and gives no sign that the card is missing. The list view's Author cell is an empty string.",
+      "impact": "When GitHub fails to return a PR, its Review tile looks complete but carries less information, and nothing says why. Minor loss of status visibility. The Review panel still explains it with its \"GitHub did not return this pull request\" banner.",
+      "suggested_fix": "Keep a neutral marker when `card` is null on a Review that is not closed (e.g. \"PR details unavailable\"), or restore \"Unknown author\" for that case. Fix the comment to name the real case.",
+      "evidence": "ReviewsView.tsx ReviewTile and ReviewList (`<td>{review.card ? review.card.author || \"Unknown author\" : \"\"}</td>`); model.ts filterReviewList `(showClosed || !isClosedOrArchived(review))`; ReviewPanel.tsx no-card banner. Would be settled by a screenshot of the Reviews board with one Review whose PR card failed to read.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux"
+    }
+  ],
+  "prior_dispositions": [],
+  "summary": "slice-03 is mostly the context of the fix changes already judged in wave 1 (UX-001, UX-002 and the F-0xx dispositions; not re-filed). New in this lens: one minor, where the Reviews tab is blank with no loading state until the account read settles (from the F-012 mount gate), and one unverified info about card-less Review tiles losing their author marker."
+}
+```
+
+## Findings
+
+### [UX-003] Reviews tab is blank until the account read settles
+- **Severity**: minor (major if a render shows more than ~300 ms blank)
+- **Criterion**: Nielsen #1 / State: loading
+- **File**: apps/desktop/src/App.tsx, `) : (githubAccount || githubAccountError) ? (` … `) : null}`
+- **Evidence**: the null branch renders nothing. ReviewsView's own loading line cannot render before mount. The duration of the account read was not measured.
+- **Fix**: in the null branch, show the same `review-loading` spinner line (after the 150-300 ms delay).
+
+### [UX-004] Card-less Review tiles drop the author silently (unverified)
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx ReviewTile and ReviewList
+- **Fix**: keep a neutral "PR details unavailable" marker for a Review that is not closed and has no card, and correct the comment.
+
+## Related wave-1 findings (not re-filed)
+- UX-001 (w1): state filter vs the "Archived" label. slice-03 shows the same lines (`reviewStateLabel`, `isClosedOrArchived`, the STATES select with its new `title`). Nothing changes that finding.
+- UX-002 (w1): transient "GitHub did not return this pull request" banner on Open in Reviews to a closed Review. slice-03 shows the banner with its new Refresh button.
+
+## Scores
+- Slop score: 0 on the changed surface (no new palette, type, radius or shadow, layout or copy tells; app screen). Read from slice-03 and the App.tsx region above.
+- WCAG 2.2 AA floor (code mode): pass on the touched lines. "Open pull request" keeps its accessible name, and its new onClick/onAuxClick keeps keyboard activation (Enter fires click with button 0). The filter selects keep their aria-labels and add `title`. Show closed keeps `aria-pressed` and a name that matches the visible text. The ReviewTile button takes its name from its content (F-029 closed in w1).
+- Viewports checked: not run.
+
+## What works (keep)
+- Review rules stay reachable from the Pull requests board's identity when the Reviews list fails (an error-recovery path).
+- The no-card banner now has a Refresh button, and the revision-changed banner uses neutral "Refresh" copy.
+- The Open pull request link goes to the system browser, with an error toast on failure.
+- One "New review round" label across the card, PR panel and Review panel.
+
+## Checks not run
+- Live render at 1440/768/390 px, light/dark: no URL or screenshots supplied.
+- Timing of the account read (UX-003) and a screenshot of a card-less tile (UX-004): no render.
+- Contrast and target sizes: no render, and the slice has no colour or size token changes (only `.review-workspace-block` layout CSS).
+- Keyboard walk-through of the Reviews toolbar and Open in Reviews: reasoned from code only.
+- slice-03 lines 21-239 (dev bridge argument builder, Rust bridge): not UI, not read by this lens.
+- No tests executed (exec_budget_s 0). verify-tests-to-run-1.txt not re-read.
+
+## Routing audit
+graph_used: no (not-relevant: the slice and file list came from the payload); wiki_used: no (not-relevant: UI delta review); ctx_used: yes (`keryx ctx rg`); raw_rg_used: no. Raw reads with a `keryx:raw` marker: `sed` of App.tsx regions and the rule table, and one `git diff` of App.tsx to confirm which lines the delta added.

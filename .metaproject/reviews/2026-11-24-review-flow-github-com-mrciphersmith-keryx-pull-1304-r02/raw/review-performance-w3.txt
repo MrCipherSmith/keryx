@@ -1,0 +1,52 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1304, branch `feat/desktop-review-v2-stage2`, round 2 (delta), wave 3. Range 20e4281a2..f6971fd4a, mode explicit-hash-range. I read slice-04 in full (1849 lines). It is not the FIX slice, so this report has no prior dispositions.
+- Slice contents: tests (reviewPages.test.ts, ReviewBoard.dom.test.tsx, ReviewDetail.dom.test.tsx, ReviewPanel.dom.test.tsx, ReviewsView.dom.test.tsx, the new reviews/model.test.ts, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx), docs (cli-reference.md, desktop-app.md, guides/desktop-metaproject.md, implementation-plan.md, specification.md), and two production hunks: `src/commands/review-board.ts` (writeJson/writeSerialized moved to board-github as writeBoundJson/writeBoundJsonText) and `src/commands/review-reviews.ts` (--include-closed, card batches, the compare-phase deadline).
+- Outside the slice, I read `src/commands/review-reviews.ts:40-90` at head to see how `latestActivity` and the card phase are used.
+- Earlier waves read: review-performance-w1/w2, and review-highload-w1/w2 and review-degradation-w2 for the same topics.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None new in this slice.
+
+Production code in this slice that earlier waves already covered (not re-filed):
+- The compare deadline in `review-reviews.ts` (`Promise.race` with a `setTimeout` cleared in `finally`). Compares cut off at the deadline are abandoned, not cancelled, and the card phase has no deadline of its own. Both were raised in this round as review-performance-w1 I-002 (info) and review-highload-w1 F-002 (minor). The timer itself is cleared on every path, so the deadline does not leak a timer.
+- `--include-closed` and the re-read on each Show-closed toggle: review-performance-w2 (the showClosed reload finding) and review-highload-w2. Merged-on-GitHub Reviews are still re-read on every call: residual F-023 in review-performance-w1.
+- The 60 s reload while the tab is hidden, but not while the window is hidden. The test at ReviewsView.dom.test.tsx:707-758 pins it. This is settled operator decision FB-4, confirmed closed (F-011) in review-performance-w1.
+
+Checked in this slice and clean:
+- `latestActivity` (review-reviews.ts:45, used at :55-58) is computed once per row, before the sort (decorate, sort, undecorate). It is not computed inside the comparator, so the cost is O(attempts + n log n) per CLI call.
+- `review-board.ts`: the write helpers moved to `board-github.ts` unchanged in behaviour. Serialization and the 30 MiB page check are unchanged.
+
+### Clean Areas
+- CLI/TUI hot paths: no per-keystroke or per-render work was added in production code in this slice. `matchesSearch` and `filterReviewList` appear here only in model.test.ts.
+- React re-renders, memory leaks, bundle imports: there are no production React changes in this slice. Test-only constructs, such as the 50 × 10 ms wait loop in app-navigation.fixture.tsx:1300-1302 and timer stubs restored in `finally`, are outside this lens.
+- N+1 / indexes / pagination: no new queries. Card reads are batched (20 per batch, 3 in parallel), as covered in w1.
+- Synchronous blocking: none added. model.test.ts uses `readFileSync`, but only in a test.
+- Redundant API calls: the include-closed lane key and the coalesced reads were covered in w1/w2. The slice adds nothing new.
+
+### Not verified
+- No timings: my exec budget was 0 s. I did not run tests. I relied on the recorded run, `verify-tests-to-run-1.txt` (194 root + 1008 Desktop tests, 0 fail, at f6971fd), and did not re-read it. I did not run `keryx gdgraph affected` or `keryx test related`, because the slice's only production hunks were already traced in w1/w2.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-04 (tests, docs, and the review-board.ts / review-reviews.ts hunks) adds no new performance finding. The compare-deadline abandonment and the missing card-phase deadline are already filed in this round (review-performance-w1 I-002, review-highload-w1 F-002), as is the Show-closed re-read (review-performance-w2). latestActivity is precomputed before the sort, and the moved write helpers are unchanged in behaviour.",
+  "slices": ["slice-04"],
+  "findings": [],
+  "prior_dispositions": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice's production hunks were already traced in w1/w2; no consumer question arose) · wiki_used: no (not-relevant: intent is given by the plan and the operator decisions) · ctx_used: yes (keryx ctx rg over the earlier wave results, keryx ctx read of review-reviews.ts) · raw_rg_used: no (a grep for diff headers in the slice file and a sed line window, both marked keryx:raw).

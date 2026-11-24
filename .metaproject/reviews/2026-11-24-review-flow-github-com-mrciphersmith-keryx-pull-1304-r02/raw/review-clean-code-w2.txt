@@ -1,0 +1,115 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` | Parent ref: `20e4281a2` | Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range` (round 2 delta, wave 2) | Slice: slice-03 (Desktop: dev/reviewBoard.ts, src-tauri/review.rs, App.tsx, platform/review.ts, review/*, reviews/*, shell/AppShell.tsx) | Not a FIX slice: `prior_findings` is empty, so there are no prior dispositions to return.
+
+### Summary
+The Desktop side of the fix round is clean at function and class level. Doc comments match the statements they describe. Removing `onOpenReviewSession` from the PR panel deletes a pass-through prop that was accepted and never used. `openReviewLink` gives the PR/other-URL choice one home. Focus handling moved above the keyed child with a clear comment. There is one minor finding: the Rust `board_read_args` gains a second behaviour-selecting boolean, so its tests read as `..., None, None, true, true)`. There is also one `info` on where the freshness label map lives. Wave-1 findings on the same files are not re-filed (see below).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Findings
+
+#### Functions
+##### [F-001] `board_read_args` takes a new boolean flag (`include_closed`), its ninth positional parameter, so call sites read `…, None, None, true, true)`
+- **Severity**: minor
+- **File**: apps/desktop/src-tauri/src/review.rs:51 (signature), :156 (the `review_board` call), :679–700 (the test call sites)
+- **Principle**: Clean Code: function design. Thresholds rows: Boolean flag parameter (any) and Positional parameters (4 or more, no options object).
+- **Problem**: This delta adds `include_closed: bool` after `reviews_only: bool`. Both flags select behaviour. `reviews_only` switches to a different command (`review reviews`). `include_closed` either refuses the request or appends `--include-closed`. The function now has 9 positional parameters, 4 of them `bool`, and `#[allow(clippy::too_many_arguments)]` suppresses the lint. The new test lines show the cost: `board_read_args(None, None, None, false, false, None, None, false, true)` and `board_read_args(None, None, None, true, false, None, None, false, true)`. Only the position tells `repositories_only`, `paged`, `reviews_only` and `include_closed` apart, and a swapped pair still compiles. The 8-parameter signature was already over the Positional row before this delta, so that part is old debt. The new behaviour-selecting flag is this change's.
+- **Fix**: Split the Reviews list out of `board_read_args`, as the dev bridge already does with `reviewsArgs`. Add `fn reviews_read_args(repo: Option<&str>, include_closed: bool)`, used by `review_board` when `reviews_only`. Put the refusal of board modes in `review_board`, or pass a small struct. Then `board_read_args` loses both flags. Alternatively, use one `#[derive(Default)] struct BoardRead { … }`, so tests write `BoardRead { reviews_only: true, include_closed: true, ..Default::default() }`.
+- **Class scope**: sites are review.rs:51 (definition), :156 (only production caller), and 20 test calls at :679–700 (`keryx ctx rg 'board_read_args\(' apps/desktop/src-tauri/src/review.rs`: 20 matches). The dev counterpart `apps/desktop/dev/reviewBoard.ts` already takes an args object, so it has no such site.
+
+#### Comments
+No comment issues found. Each touched doc comment was read against the statement beneath it, with no drift:
+- App.tsx "Mounted while hidden … Mounted once the account read settled": `(githubAccount || githubAccountError) ? <ReviewsView …/> : null`.
+- `RUNNING_RELOAD_MS` and the `document.visibilityState` interval.
+- `reloadSignal` and the `lastSignal` effect.
+- `ReviewBrowserLink`/`openReviewLink` ("a pull request through `openPullRequest`, anything else through `openExternal`").
+- `ReviewBoard.openReview` ("Only a start runs in the PR panel"), and ReviewDetail's matching "Only a start reaches this panel".
+- `hasReview = local.runs.length > 0`, with its archived note.
+- `isClosedOrArchived`, `reviewStateLabel` and `reviewColumn` docs.
+- `ReviewsFocus`, and `onFocusHandled`.
+
+#### Error Handling
+No error-handling issues found. `ReviewPanel.openPullRequestLink` catches and toasts only while mounted. `ReviewDetail.followLink` keeps its toast and its in-flight guard. The Rust and dev bridges refuse `includeClosed` outside the Reviews list with a `configuration:` error.
+
+#### DRY
+No duplication at 3 or more copies. Two-copy pairs stay under the threshold: the open-link toast ("Could not open link" in ReviewDetail.tsx:160 and ReviewPanel.tsx:95, which `keryx ctx rg` confirms are the only two), the `event.button > 1` guard (ReviewDetail.tsx:151, ReviewBrowserLink.tsx:30), and the include-closed refusal message (dev/reviewBoard.ts and review.rs, which mirror each other across languages on purpose).
+##### [F-002] `FRESHNESS_LABEL` is defined in the view, while its sibling label maps live in the model; the state and source selects keep their empty-option text twice
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx: `const FRESHNESS_LABEL: Record<ReviewFilters["freshness"], string> = { "": "Any freshness", … }` and the `title={filters.state ? STATE_LABEL[filters.state] : "All states"}` / `title={filters.source ? SOURCE_LABEL[filters.source] : "Any source"}` lines
+- **Principle**: Clean Code: cohesion. A stylistic opinion, so `info`.
+- **Problem**: The delta adds a freshness label map in the component, but `STATE_LABEL` and `SOURCE_LABEL` live in `reviews/model.ts`. The three filter selects now follow two patterns. Freshness draws both its options and its `title` from one map, which includes the `""` key. State and source repeat "All states" and "Any source" in the `<option>` and in the new `title`. That is 2 copies each, under the threshold.
+- **Fix**: Optional. Move `FRESHNESS_LABEL` to model.ts next to the other maps, and give state and source the same `""`-keyed treatment, or a shared `filterTitle` helper.
+
+#### SOLID
+No new SRP, OCP, LSP or ISP violations.
+- `RepositoryReviews` was already over the length row. Wave 1 judged that the delta adds no separable job there, and this slice agrees.
+- `ReviewsView` now owns only the focus hand-off. The new `RepositoryProps` is a narrow interface whose fields are all used.
+- `ReviewPanel` sets `mounted` inside the focus-restore layout effect. Both run at mount and unmount, so this is one lifecycle, not two drivers.
+
+### Wave-1 findings bearing on this slice (not re-filed)
+- review-clean-code-w1 F-001, F-002 and F-003 concern root `src/` files that are not in this slice.
+- review-clean-code-w1 noted the 2-copy closed-or-archived test (`reviewColumn` inline vs `isClosedOrArchived`). This slice confirms it is still 2 copies.
+- review-style-w1 already raised the 6-clause `rulesTarget` expression in ReviewsView.tsx:274–276, with an extract-predicate fix. That is a readability row, not re-filed here.
+- review-frontend-w1, review-degradation-w1 and review-highload-w1 already raised the behaviour of `showClosed` as a load dependency (re-read on toggle, closed Review card). That is not this lens's concern.
+
+### Clean Areas
+dev/reviewBoard.ts (`reviewsArgs` include-closed), App.tsx (`reviewsFocusHandled`, watcher poll signal, board identity), platform/review.ts (`fetchReviews` key includes `includeClosed`), ReviewBoard.tsx (`openReview` routing, `watcherPolled`, `onIdentityChange` effect), ReviewBrowserLink.tsx, ReviewDetail.tsx, ReviewRuns.tsx (label), ReviewWorkspace.tsx (`onIntentConsumed` via latest-ref), ReviewPanel.tsx, ReviewsView.tsx, reviews/model.ts, AppShell.tsx (`ReviewsTabIndicator` moved to its owner), ReviewDetail.css.
+
+### Not read / not verified
+- The slice was read in full. In the head tree, ReviewsView.tsx lines 110–280 and App.tsx 628–650 were read again for context. Other component bodies outside the hunks were not re-read.
+- The Rust code was read only. There is no local toolchain, and the change can be checked only in CI.
+- No tests were run (exec budget 0). verify-tests-to-run-1.txt was not opened.
+- The `inViewOverlay` panel branch has no test. review-testing-practices-w1 R2-V03 already covers this, so it is not re-filed.
+
+Routing audit: graph_used: no (not-relevant: a bounded diff slice was supplied) | wiki_used: no (not-relevant: function-level lens on supplied text) | ctx_used: yes (`keryx ctx rg` for copies/call sites and prior findings; `keryx ctx read`; one raw `sed` with a keryx:raw marker for exact line ranges) | raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "slices": ["slice-03"],
+  "summary": "Desktop fix-round slice is clean at function/class level; doc comments match their statements. 1 minor (Rust board_read_args gains a second behaviour-selecting bool, 9 positional params) and 1 info (FRESHNESS_LABEL placement / filter-title inconsistency). No prior findings to dispose in this slice.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src-tauri/src/review.rs",
+      "line": 51,
+      "quote": "paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool, include_closed: bool) -> Result<Vec<String>, String> {",
+      "problem": "The delta adds include_closed: bool, a second behaviour-selecting flag after reviews_only (one refuses or appends --include-closed, the other switches to a different command), bringing board_read_args to 9 positional parameters, 4 of them bool, behind #[allow(clippy::too_many_arguments)]. Call sites read board_read_args(None, None, None, false, false, None, None, false, true).",
+      "impact": "repositories_only, paged, reviews_only and include_closed differ only by position, and a swapped pair compiles. The 8-parameter signature was old debt; the new flag parameter is this change's (Boolean flag parameter row).",
+      "suggested_fix": "Split the Reviews list into fn reviews_read_args(repo, include_closed), called by review_board when reviews_only, mirroring dev/reviewBoard.ts reviewsArgs, so board_read_args drops both flags. Alternatively, take a #[derive(Default)] struct BoardRead and write tests as BoardRead { reviews_only: true, include_closed: true, ..Default::default() }.",
+      "evidence": "slice-03 review.rs hunk @@ 32,87 (signature and refusal), @@ 133,176 (review_board call), @@ 659,726 (tests). keryx ctx rg 'board_read_args\\(' review.rs: definition :51, production call :156, 20 test calls :679-700.",
+      "class_scope": {
+        "sites": ["apps/desktop/src-tauri/src/review.rs:51", "apps/desktop/src-tauri/src/review.rs:156", "apps/desktop/src-tauri/src/review.rs:679-700 (test calls)"],
+        "enumeration_method": "keryx ctx rg 'fn board_read_args|board_read_args\\(' apps/desktop/src-tauri/src/review.rs (20 matches); the dev counterpart reviewBoardArgs already takes an args object"
+      },
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "review-rs-board-read-args-bool-flags"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": null,
+      "quote": "const FRESHNESS_LABEL: Record<ReviewFilters[\"freshness\"], string> = { \"\": \"Any freshness\", current: \"Current\", behind: \"Behind\", unknown: \"Unknown\" };",
+      "problem": "The new freshness label map is defined in the view, while STATE_LABEL and SOURCE_LABEL live in reviews/model.ts. Freshness draws options and title from one map, but the state and source selects repeat 'All states' and 'Any source' in both the option and the new title (2 copies each, under the threshold).",
+      "impact": "Stylistic. Three filter selects follow two patterns, and the label maps live in two modules.",
+      "suggested_fix": "Optional: move FRESHNESS_LABEL to model.ts and give state and source the same ''-keyed map, or a shared filterTitle helper.",
+      "evidence": "slice-03 ReviewsView.tsx hunk @@ 21,122 (FRESHNESS_LABEL) and @@ 247,417 (title= lines on the three selects).",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "prior_dispositions": []
+}
+```

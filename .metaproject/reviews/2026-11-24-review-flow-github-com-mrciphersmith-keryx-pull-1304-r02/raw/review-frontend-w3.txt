@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## Frontend Review (review-frontend, round 2, wave 3)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: 20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1 (delta round)
+- Slice: slice-04 (kind `new`, not the FIX slice), read in full (1849 lines, 15 files). No `prior_dispositions` are returned, because this is not the FIX slice.
+- Scope mode: explicit-hash-range, supplied slice text. Where a test pins production behaviour, I checked the claim against the files at HEAD f6971fd (ReviewPanel.tsx:115, ReviewDetail.tsx:261, ReviewBrowserLink.tsx:24-34).
+- Files in the slice:
+  - Desktop tests and fixture: reviewPages.test.ts, ReviewBoard.dom.test.tsx, ReviewDetail.dom.test.tsx, ReviewPanel.dom.test.tsx, ReviewsView.dom.test.tsx, reviews/model.test.ts, ProjectNavigation.dom.test.tsx, app-navigation.fixture.tsx.
+  - Docs: cli-reference.md, desktop-app.md, desktop-metaproject.md, implementation-plan.md, specification.md.
+  - Backend: review-board.ts, review-reviews.ts.
+- My lens covers the 8 Desktop test/fixture files. The docs and the two backend command files were read but are outside the frontend lens: review-pr-contract, review-backend and review-logic own them.
+- Project CLAUDE.md: no frontend overrides. Desktop uses React hooks and has no MobX stores in these files, so MobX laws 1-5 do not apply.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+The slice is test, fixture and docs code that pins the round-1 fixes. I found no new defect in my lens. In each case, what the tests assert matches the production component code that waves 1 and 2 reviewed. They use no pattern that would hide a React reactivity or effect bug.
+
+### Related findings already raised (not filed again)
+- review-frontend-w1 F-001: a closed Review's panel shows the "GitHub did not return this pull request … Refresh" banner when Show closed is off. Two slice-04 tests touch it, "closed Reviews' PR cards are read only while Show closed is on" and "a Review without its PR card offers Refresh next to the reason", and neither covers it. Neither test turns Show closed off with a closed Review selected.
+- review-frontend-w1 F-003: the `rulesTarget` fallback. The test "Review rules stay reachable when the list cannot be read" runs with `repo` undefined and the board on the same repository, so it does not pin the multi-repository case.
+- review-frontend-w2 FE2-001: there is no in-flight guard on the Review panel's PR link. The new test "Open pull request opens the PR through the system browser" checks one click only.
+- review-testing-practices-w2 already covers this slice's test-practice points: the vacuous `actions.every(kind => kind === "status")` check, the CSS-source assertion in model.test.ts, the restored `visibilityState` override, and the fixture loop with real 10 ms sleeps (its wave-1 F-001 and F-002).
+- review-pr-contract-w1 owns the stale "Review" navigation wording in desktop-app.md. Lines 72 and 147 are context lines in this slice and are unchanged.
+
+### Clean Areas (checked, nothing to report)
+- **Test act/cleanup hygiene**:
+  - Every render and event goes through `act`.
+  - `beforeEach` renders null, and the Review panel tests reset the root before rendering a different component.
+  - Timer and `visibilityState` overrides are restored in `finally`.
+  - The fixture's new Open-in-Reviews loop closes the panel and returns to Pull requests on each pass, so state does not leak between passes.
+- **Accessibility pinned by tests**:
+  - The `tile()` helper finds the card button by `.flow-id` text and asserts it has no `aria-label`, so the card's accessible name comes from its content (round-1 F-029).
+  - The "after <id>" link test asserts that the accessible name starts with the visible text (WCAG 2.5.3, F-031).
+  - The PR link in ReviewPanel and ReviewDetail is icon-only (`<Icon name="external" />`) with `aria-label`/`title` "Open pull request" (ReviewBrowserLink.tsx:34). An aria-label is correct for an icon-only control.
+  - After an account change, focus moves to "Search reviews" (F-041).
+- **Link handling**:
+  - The ReviewPanel test checks that `defaultPrevented` is set and that the URL goes through the injected `openBrowser`.
+  - With a `javascript:` URL no link is rendered. This matches `ReviewBrowserLink`, which returns null when a label is given and the href is not safe (:28).
+- **Intent and focus contracts** (tested here, implemented in the files reviewed in waves 1 and 2):
+  - The focus carries `{repo, repositoryId?, number}`.
+  - The answer intent is consumed once.
+  - A handled focus does not replay after a repository switch or a retried access failure.
+  - The PR panel takes only a `start` intent.
+  - With `onOpenInReviews` wired, view and answer go to Reviews, and start stays in the PR panel.
+- **Type-only imports**: `ReviewsTabIndicator` now comes from `reviews/ReviewsView` in ProjectNavigation.dom.test.tsx and ReviewsView.dom.test.tsx, matching AppShell's import (F-013). The imports are type-only, so no runtime cycle is added.
+- **Fixture shape**: the `reviewsOnly` mock returns a full `ReviewSummary` (with `reviewed`, `archived`, `rounds[].attempts`) and stays consistent with `review-entity` types. The PR-dot selector excludes `.reviews-tab-dot` (F-050).
+- **Protected stage-0 code**: the slice does not touch the attention set in ReviewBoard.tsx, `attachBadges`/`localBadge`, or the toolbar container queries. The `badgesEqual` test only adds `outdated.round` cases.
+
+### Not verified
+- I ran no tests (`exec_budget_s: 0`). I relied on `research-evidence/verify-tests-to-run-1.txt` (194 root + 1008 Desktop tests, 0 failures at f6971fd) and did not re-check it.
+- I did not type-check the files. The TypeScript judgments come from reading the code.
+- I read the docs and backend hunks but did not review them in depth (outside the frontend lens).
+- I did not read git history for the slice's choices.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Delta round 2, wave 3: read slice-04 (new: Desktop tests and fixture, docs, two backend command files) in full. No new blocker, major, minor or info in the frontend lens. The tests pin the round-1 fixes: focus with repository, one-shot intent, start-only PR panel, accessible names, system-browser link, hidden-tab reloads. They do this with correct act/cleanup hygiene and match the production components at f6971fd. Gaps already raised in waves 1-2 (frontend-w1 F-001/F-003, frontend-w2 FE2-001, testing-practices-w2, pr-contract-w1) are cited, not re-filed.",
+  "slices": ["slice-04"],
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "inputs_unreadable": []
+}
+```
+
+## Routing audit
+- graph_used: no (not-relevant: the slice names its files, and I read the production components the tests target directly).
+- wiki_used: no (not-relevant: intent came from the PR context and the earlier wave outputs).
+- ctx_used: yes (`keryx ctx read` for the driver/payload/manifest, `keryx ctx rg` over apps/desktop/src and docs).
+- raw_rg_used: no. I used raw `grep`/`awk`/`sed`/`python3` only on the review package's own JSON and raw files (marked `# keryx:raw`), never on project code.

@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 4, slice-10)
+
+### Scope
+- PR #1304, branch feat/desktop-review-v2-stage2, delta 20e4281a2..f6971fd4a.
+- I read slice-10 in full (72 591 bytes, 1419 lines). It holds:
+  - src/review/desk-run-store.ts: the Review columns and migration, `assignReviews`, `reviewFor`, `reviewRows`, `readReviewRows`, the `storedDetails` stripping, and `round` in `attachBadges` and `history`.
+  - src/review/review-entity.ts and its test.
+  - src/review/board-badges.ts and board-types.ts (the `outdated.round` field).
+  - src/review/desk-run-types.ts (the placement fields).
+  - The desk-run-store and board-badges tests.
+- I also read these at head:
+  - desk-run-store.ts lines 180-215 (`assignReviews`, `reviewFor`) and 596-630 (the full `reviewRows` query and its WHERE clause).
+  - src/commands/review-reviews.ts (the only production caller of `readReviewRows`).
+  - src/review/pr-context.ts `collectPrContext`, and src/review/desk-run-legacy.ts `readExistingReviews` lines 41-100 (the source of `recordExisting` input).
+- Slice-10 is not the fix slice, and there are no prior_dispositions.
+- Waves 1-3 of this lens raised no security findings, so there is nothing to cite or re-file.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked
+- SQL injection. Every interpolation in the new SQL is built from code constants, never from caller data:
+  - `ALTER TABLE runs ADD COLUMN ${name} ${type}` iterates the literal `reviewColumns` tuple.
+  - `placement()` substitutes either a fixed column name or `NULL`. The alias is the literal `"r."` or `""`.
+  - `${questionRows}`, `${neverStarted()}`, `${scheduledReservation}` and `${liveStates}` are module constants.
+  - `${pending}` in attachBadges is built from `sqlite_schema` names that are filtered by a literal `IN ('review_questions','reviewer_questions')`.
+  - All values (repo, pr, viewer, review id, rowid) are bound parameters: in reviewFor, assignReviews' UPDATE, reviewRows and the json_each card batch.
+- Forged placement and integrity. `storedDetails` strips `reviewId`, `round` and `previousRunId` on every write path in the slice (`save`, `recordExisting`). The new-attempt INSERT stringifies a freshly built run that has no placement fields. `decode` and `history` take placement only from the columns. The test "projected fields it carries are ignored" pins that an imported run carrying `reviewId: "forged", round: 9` is placed by the store. The same test checks that no stored `details` row carries the fields. An imported package therefore cannot attach itself to another account's or PR's Review.
+- Authz and cross-account isolation:
+  - Reviews are keyed `UNIQUE(repo, pr, viewer)`, and viewer compares case-insensitively, which matches GitHub's case-insensitive logins.
+  - `reviewFor` places each attempt by its own row's (repo, pr, viewer).
+  - `reviewRows` filters `v.repo=? AND v.viewer=?` and joins runs only through `review_id=v.id`, so a viewer's Reviews contain only that viewer's attempts. Deleted attempts are excluded.
+  - The only production caller (review-reviews.ts:49) passes the repositoryId and viewer returned by the GitHub identity query, never CLI input.
+  - attachBadges still scopes by `r.repo=?2 AND r.viewer=?3`. The migration test pins that the colleague's history stays out ("Another account's history stays out").
+- Untrusted input reaching the store. `recordExisting` takes runs from `readExistingReviews`:
+  - Packages are read under the realpath of the project's `.metaproject`, and each one is matched to the PR by an anchored URL regex.
+  - SHAs are normalized by `sha()`, and findings come from `countFindings`.
+  - `JSON.parse(item.findings)` in reviewRows therefore parses a store-written counts object, not free text.
+  - `tokens` is accepted only as a safe integer.
+- Data exposure. `reviewRows` and the badges return no report body, reviewer sessions or worker identity. The new `outdated.round` is a small integer, and `flowId` and `tokens` are not secrets.
+- Migration path. The read-only store never migrates: the test asserts that `review_id` and `reviews` are absent from the read-only copy afterwards. The writable migration runs in one `atomic` transaction. `readReviewRows` does not create a missing store. The store root is `deskRunRoot()` or a test temp dir, never user input, so there is no path traversal.
+- Identifiers. Review ids use `crypto.randomUUID()`, not `Math.random()`.
+- Not applicable to this slice: XSS/React patterns (no UI code), command injection (no process spawn added), crypto, CSRF, open redirect, NestJS patterns.
+
+### Clean areas
+SQL injection, integrity of projected fields, authz and cross-account isolation, untrusted-input normalization, data exposure, migration safety, path traversal, identifier randomness, secrets and PII.
+
+### Not verified
+- `neverStarted()`, `roundFor()` and `atomic()` were not read in full. I checked that they are interpolated or used with constants only, using the call sites and the grep. Whether `atomic` nests safely, now that `recordExisting` opens its own `atomic` and its callers wrap it in `store.atomic`, is a correctness question outside this lens. The passing desk-run-legacy tests that nest it are the evidence.
+- The rest of `readExistingReviews` (lines 100 onward, the `json()` reader and `stamp()`) was not read.
+- No tests were run (exec budget 0). I relied on the package's stated test evidence: 194 root and 1008 Desktop tests, 0 failures at f6971fd.
+- No git history was needed for this slice.
+
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-10 has no security findings. It covers the Review entity store, migration, round projection, reviewRows and the badge round. All SQL interpolations are code constants, and every value is bound. The projected placement fields are stripped from details on every write and read only from columns, so imported packages cannot forge placement. Reviews and badges are scoped by the GitHub-verified repo and viewer. Read-only stores never migrate.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": ["slice-10"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+
+Routing audit: graph_used: no (the slice and its single production caller were enough to settle scope); wiki_used: not-relevant (the store's intent is stated in the code and the plan); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

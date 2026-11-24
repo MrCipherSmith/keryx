@@ -1,0 +1,127 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` | Delta: `20e4281a2..f6971fd4a` (round 2, wave 4)
+- Scope mode: `explicit-hash-range` (supplied slices) | Slices reviewed: slice-05 (read in full, 1160 lines), slice-06 (read in full, 843 lines)
+- Standard: `.metaproject/rules/core/solid-principles.mdc` (Thresholds, Review severities).
+
+### Summary
+The round-1 fixes in the Review store and the Review entity are well factored: `neverStarted` removes a duplicated SQL predicate, `roundFor` became a pure function over an in-memory list, and `stateAttempts`/`stateAttempt` keep the state rule in one place. Three minor findings remain. Two doc comments still describe the old rule for which attempt a Review's state comes from, and the fix added another copy of the "finished run state" set when an exported helper for it already exists. slice-06 holds mostly removed lines and moved tests. Nothing in it is a new clean-code finding within the delta.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0
+
+### Findings
+
+#### Functions
+No function issues found. `summarizeReview`, `roundFor` and `assignReviews` stay under 40 lines. `assignReviews` reads from the store and calls the pure `roundFor`, which is the shape the standard asks for.
+
+#### Comments
+
+### [F-001] `ReviewAttemptSummary.archived` says an archived attempt is never the state source; for a fully archived Review it is
+
+- **Severity**: minor
+- **File**: src/review/review-entity.ts:35
+- **Principle**: Clean Code — comments (two places document one field in opposite ways)
+- **Problem**: The field doc says an archived attempt is "never the attempt state, findings or publication come from". `stateAttempts` (review-entity.ts:131) returns every attempt when all of them are archived. `ReviewSummary.archived` (review-entity.ts:75) also says that such a Review takes its state from those attempts. The two field docs contradict each other, and the first one contradicts the code.
+- **Fix**: Add the exception to line 35, for example "never the source of the Review's state, findings or publication while an unarchived attempt exists".
+
+### [F-002] Two docs still say the Review's state comes from its latest/last attempt; `stateAttempt` now picks the round's accepted result
+
+- **Severity**: minor
+- **File**: src/review/review-entity.ts:75
+- **Principle**: Clean Code — comments (doc describes the rule a later change replaced)
+- **Problem**: `ReviewSummary.archived` says a fully archived Review's "state is its last attempt's". The test title at review-entity.test.ts:195 says the same. The fix routed the state through `stateAttempt` (review-entity.ts:141). When the last attempt stopped in a round that already holds a finished, reviewed result, `stateAttempt` returns that result's attempt instead. `reviewState`'s doc ("derived from its latest attempt", review-entity.ts:98) also predates this. `summarizeReview` now passes it `settled`, which is not necessarily the latest attempt.
+- **Fix**: Change both docs to say "the state comes from `stateAttempt`: the latest attempt, or the accepted result of its round when that attempt stopped", and update the test title to match.
+
+#### Error Handling
+No error-handling issues found in the delta. `publication()` keeps its existing receipt-parse catch with a stated reason.
+
+#### DRY
+
+### [F-003] The fix adds a fourth copy of the finished-run-state set; `runFinished` already exports it
+
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:30
+- **Principle**: Clean Code — DRY (duplicated domain rule, 3+ copies)
+- **Problem**: The delta adds `FINISHED_STATES = new Set(["completed", "partial", "budget"])` to desk-run-store.ts, which `publication()` uses. The same domain rule ("this run finished with a result") already exists three times:
+  - `runFinished` in src/review/board-badges.ts:15, exported from a module desk-run-store.ts already imports (line 6);
+  - `FINISHED` in src/review/review-entity.ts:96;
+  - the SQL `r.state IN ('completed','partial','budget') AS done` at src/review/desk-run-store.ts:513.
+
+  Adding a finished state, or reclassifying `budget`, now means four edits. Missing one would make publication outcomes, Review state and board badges disagree about the same attempt.
+- **Fix**: Use the existing `runFinished` in `publication()`, or export one `FINISHED_RUN_STATES` set beside `DeskRun`'s state type and derive the TS checks and the SQL literal from it. Then drop `FINISHED_STATES`.
+
+#### SOLID
+No SOLID issues found. No class gained a new responsibility. `DeskRunStore.publication()` still has one driver (the publication outcome on disk), and the archived-attempt rule lives in review-entity.ts.
+
+### Clean Areas
+- `neverStarted` (desk-run-store.ts:26) consolidates the superseded-before-start predicate that `previousAttempt` held inline. Its doc matches the code.
+- `roundFor` doc and code agree: a continuation joins its round, a same-range attempt in the top round is a retry, and anything else opens the next round.
+- The `assignReviews` doc ("placed attempts are read once per call and kept in memory") matches the per-Review cache.
+- `reviewRows` doc matches the query: archived attempts are kept and flagged, while deleted and never-started attempts are excluded.
+- `writeBoundJson`/`writeBoundJsonText` (board-github.ts:106-115) were moved verbatim from review-board.ts with their existing comment. That is not new debt in this delta.
+- Test helpers (`editStore`, `prHead`, `placeOf`, `finished`) are local and single-purpose.
+- slice-06: the lines removed from ReviewBoard.tsx, ReviewDetail.tsx and model.ts leave no orphaned helper. `reviewNote`, `ProjectReviewRules` and `onOpenReviewSession` still have live callers in ReviewResults.tsx, ReviewsView.tsx and ReviewWorkspace.tsx.
+
+### Not re-filed (raised in waves 1–3)
+- `headComparison`'s "one rule" claim vs `freshness`: architecture-w1 F-001, backend-w1 R2-BE-002, and w2/w3 F-002. This also covers the redundant null checks in `headsDiffer`.
+- A fully archived, published Review reporting `ready` with publication null: backend-w1 R2-BE-006. F-002 above is only about the doc wording, not that behaviour.
+
+### Not verified
+- No tests were run (exec budget 0).
+- slice-06 contains hunks for files outside the delta's `git diff --stat` (e.g. apps/desktop/src/review/model.ts and ReviewResults.tsx). I reviewed them only for leftovers and filed no finding on them.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round-1 store/entity fixes are well factored. Three minor findings: two doc comments still describe the old rule for which attempt a Review's state comes from, and a fourth copy of the finished-run-state set was added though board-badges exports runFinished.",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": 35,
+      "quote": "/** Archived by the viewer: still listed, but never the attempt state, findings or publication come from. */",
+      "problem": "The ReviewAttemptSummary.archived doc says an archived attempt is never the source of state, findings or publication. stateAttempts (review-entity.ts:131) returns all attempts when every one is archived, and ReviewSummary.archived (line 75) documents that case. The two field docs contradict each other.",
+      "impact": "A reader trusting line 35 will mis-predict the summary of a fully archived Review.",
+      "suggested_fix": "Qualify line 35: never the source while an unarchived attempt exists.",
+      "evidence": "review-entity.ts:35 vs :75 and stateAttempts at :131-134",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": 75,
+      "quote": "/** Every attempt is archived: the Review is kept for restore or delete, and its state is its last attempt's. */",
+      "problem": "The doc and the test title (review-entity.test.ts:195) say the state is the last attempt's, and reviewState's doc (line 98) says 'derived from its latest attempt'. The fix routed the state through stateAttempt (line 141), which returns the round's accepted result when the latest attempt stopped.",
+      "impact": "The docs describe the rule the fix replaced, so readers will misread the failed-retry case.",
+      "suggested_fix": "Reword the docs at lines 75 and 98 and the test title to name the stateAttempt rule.",
+      "evidence": "review-entity.ts:75, :98, :141-145; summarizeReview passes `settled` to reviewState",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 30,
+      "quote": "const FINISHED_STATES: ReadonlySet<DeskRun[\"state\"]> = new Set([\"completed\", \"partial\", \"budget\"]);",
+      "problem": "The delta adds a fourth copy of the finished-run-state rule. The others are board-badges.ts:15 (exported runFinished, from a module this file already imports), review-entity.ts:96 (FINISHED) and desk-run-store.ts:513 (SQL IN list).",
+      "impact": "Changing which states count as finished takes four edits. A missed one makes publication outcomes, Review state and board badges disagree.",
+      "suggested_fix": "Use runFinished in publication(), or export one shared set beside DeskRun's state type and derive the others from it.",
+      "evidence": "keryx ctx rg for the partial/budget pair across src/review, src/commands and apps/desktop/src (non-test): 4 sites",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```

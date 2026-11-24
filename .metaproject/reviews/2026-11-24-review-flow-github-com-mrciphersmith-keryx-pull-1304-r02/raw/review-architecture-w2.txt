@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-1 head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`
+- Range: `20e4281a2..f6971fd4a` (delta of fix round 1)
+- Scope mode: explicit-hash-range (delta), wave 2, slice-03 (not the FIX slice), read in full (1782 lines)
+- Stack detected: fullstack Desktop slice (React without MobX, TS dev bridge, Rust Tauri bridge)
+
+### Summary
+Slice-03 carries the Desktop and bridge side of the fixes: the `includeClosed` opt-in through both bridges (`apps/desktop/dev/reviewBoard.ts` and `apps/desktop/src-tauri/src/review.rs`) and `fetchReviews`, the cross-tab wiring through App (focus with repository, one-shot focus hand-off, watcher-poll signal, board identity), the intent hand-off from `ReviewWorkspace` to `ReviewsView`, the move of `ReviewsTabIndicator` into the feature, the archived/closed model helpers, and T17's `openReviewLink`. Dependency direction is sound: the shell now imports the indicator type from `reviews/ReviewsView` (base had `reviews -> shell`, verified with `git show 20e4281:apps/desktop/src/reviews/ReviewsView.tsx`), App mediates sibling-view signals instead of the views importing each other, and the dead `onOpenReviewSession` prop chain into the PR panel is gone. The new `include_closed` refusal is mirrored in both bridges with tests on each side (`reviewPages.test.ts:32-35`, `review.rs` `reviews_list_is_a_separate_read_only_query`). No new blocker, major or minor in this lens; one info.
+
+Already raised in wave 1 (`raw/review-architecture-w1.txt`), not re-filed although slice-03 shows the same code: F-003 (w1) Review-rules fallback from the PR board when the Reviews tab is on its default repository (`ReviewsView.tsx` `rulesTarget`, slice lines 1449-1451); F-002 (w1) `reviewedCommit` fallback.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. `apps/desktop/src/shell/AppShell.tsx` imports `ReviewsTabIndicator` from `../reviews/ReviewsView` (slice 1740), the same direction as its existing `ReviewTabIndicator` import from `../review/ReviewBoard`; `ReviewsView.tsx` no longer imports from `../shell/`.
+
+### Module Boundary Violations
+None detected. `reviews/` keeps depending on `review/` (ReviewWorkspace, ReviewBrowserLink, ProjectReviewRules) as at base; `review/` does not import from `reviews/`.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected. `ReviewPanel` takes `openBrowser` as an injectable defaulting to `openReviewLink`, matching `ReviewDetail`'s existing `openBrowser` seam.
+
+#### [F-001] Link-opening policy now has two mechanisms: parent click delegation and a per-anchor `onOpen`
+- **Severity**: info
+- **File**: apps/desktop/src/review/ReviewBrowserLink.tsx (`openReviewLink`, `onOpen`), apps/desktop/src/reviews/ReviewPanel.tsx (`openPullRequestLink`)
+- **Problem**: T17 moved the "PR URL -> openPullRequest, else openExternal" rule into `openReviewLink` (good: one rule, used by ReviewDetail and ReviewPanel), but how an anchor reaches it is now split: `ReviewDetail` delegates from the sheet body (`followLink`, only on the discussion/checks tabs), `ReviewPanel` passes `onOpen` to one `ReviewBrowserLink`, and `ReviewBrowserLink` without `onOpen` "relies on a parent's click handler" (its own doc comment). A `ReviewBrowserLink` rendered where no parent delegates is a plain in-app navigation the app blocks. I checked the class for the moved review interface: `ReviewReportMarkdown.tsx:9` strips `href` from report links and `ReviewRuns`/`ReviewWorkspace`/`ReviewRunDialog` render no anchors, so the panel header link is the only member today and T17 covers it. Also `openReviewLink` is a platform I/O dispatcher living in a component module.
+- **Why it matters**: No defect now; the next anchor added inside the Review panel silently does nothing unless its author knows which mechanism applies.
+- **Fix**: Optional: make `ReviewBrowserLink` default `onOpen` to `openReviewLink` (with an error callback) so every anchor opens externally by default and delegation becomes the exception, or move `openReviewLink` next to `openExternal` in `platform/`.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React: the one-shot focus hand-off is owned above the keyed list (`ReviewsView` holds `pending`, App clears by nonce via `onFocusHandled`), and the intent hand-off is a callback from `ReviewWorkspace` (`onIntentConsumed`) to the owner of the selection (`ReviewsView.consumeIntent`), so state has one owner on each side of each hand-off.
+
+### Not verified
+- Read only slice-03 in full plus bounded reads: base `ReviewsView.tsx` imports (git show), `review-entity.ts` `archived` field, link-related greps across `apps/desktop/src/review` and `reviews`, `includeClosed` greps. Slice hunks are partial (elided ranges); code outside them was not read.
+- No tests run (exec_budget 0); Rust changes not compiled (no local toolchain).
+- Graph/wiki/memory layers not consulted; not needed for this lens on this slice.
+
+### Routing audit
+graph_used: no (not-relevant: change set given by slice; dependents checked by targeted search) | wiki_used: no (not-relevant: plan/flow docs and PR context in payload) | ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) | raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-03"],
+  "summary": "Slice-03 (Desktop and bridge side of fix round 1) is architecturally sound: shell->feature type import direction restored, App mediates cross-tab signals, include_closed refusal mirrored and tested in both bridges, dead onOpenReviewSession chain removed. No blocker/major/minor; one info on the split link-opening mechanism. Wave-1 F-002/F-003 apply to this code too and are not re-filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewBrowserLink.tsx",
+      "line": null,
+      "quote": "/** `onOpen` receives the checked https URL; without it the anchor relies on a parent's click handler. */",
+      "problem": "Opening review links externally now has two mechanisms: ReviewDetail's sheet-body click delegation (followLink, discussion/checks tabs) and ReviewPanel's per-anchor onOpen; a ReviewBrowserLink without onOpen and without a delegating parent is a blocked in-app navigation. openReviewLink, a platform I/O dispatcher, lives in a component module.",
+      "impact": "No defect today (class checked: ReviewReportMarkdown strips hrefs, ReviewRuns/ReviewWorkspace/ReviewRunDialog render no anchors, so the panel header link fixed by T17 is the only member). The next anchor added to the Review panel silently does nothing unless its author picks the right mechanism.",
+      "suggested_fix": "Default ReviewBrowserLink's onOpen to openReviewLink (with error reporting) so anchors open externally by default, or move openReviewLink beside openExternal in platform/.",
+      "evidence": "slice-03 lines 656-677 (ReviewBrowserLink), 1151-1175 (ReviewPanel onOpen), 805-814 (ReviewDetail followLink); keryx ctx rg over apps/desktop/src/review and reviews for href/<a/ReviewBrowserLink/DiscussionMarkdown; ReviewReportMarkdown.tsx:9 removes href.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "prior_dispositions": []
+}
+```

@@ -149,3 +149,9 @@ Concerns kept: two role=alert elements can coexist in the PR panel when both rea
 - Premise answers recorded (decide-premise): F-016 dismiss, F-036 dismiss, F-027 dismiss (operator re-asked in the tool's single-word terms; the earlier wording was refused by the tool's answer check).
 - Readiness still NOT READY on: blast-radius (86 cap-cut files, mostly .metaproject artifacts — operator chose to waive coverage rather than run 42 chunks ~$6.91), pr-files (fix commits added files), quotes-located (F-034, F-035). These need the operator's own `keryx review complete ... --waive` in their terminal.
 - New minor F-048 (Review panel PR link has no click handler) → T17.
+- 2026-11-24T11:06:50.991Z - task-done: T17: Fix F-048: Review panel Open pull request link does nothing
+- 2026-11-24T11:12:02.278Z - decision d-mwulhksq-42dd06 [review confirm-plan, ordinary]: chose yes; no recommendation
+
+- 2026-11-24 review round 2: normalized `raw/review-regression-w1.txt` — its REVIEW_RESULT lacked `"status"`; added `"status": "DONE"` matching the reply's own `STATUS: DONE` line. No finding content changed.
+
+- 2026-11-24 CI at head f6971fd4a (PR #1304): 30 checks, 0 failed (gh pr view statusCheckRollup). Answers pr-contract-w3 PC-W3-003; the Rust bridge change in 85fa985c1 is covered by this run.

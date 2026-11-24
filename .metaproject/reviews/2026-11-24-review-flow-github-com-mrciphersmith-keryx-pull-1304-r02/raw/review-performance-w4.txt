@@ -1,0 +1,54 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1304, branch `feat/desktop-review-v2-stage2`, round 2 (delta), wave 4. Range 20e4281a2..f6971fd4a, mode explicit-hash-range. I read slice-05 (1160 lines) and slice-06 (843 lines) in full. Neither is the FIX slice, so this report has no prior dispositions.
+- slice-05 production hunks: `src/review/desk-run-store.ts` (`neverStarted`, `FINISHED_STATES`, module-level `roundFor` replacing the per-row SQL `roundFor`, `assignReviews` with an in-memory per-Review cache, `publication()` widened to partial/budget, `reviewRows` keeping archived attempts), `src/review/review-entity.ts` (`stateAttempts`, `stateAttempt`, `headComparison`, the `reviewed` and `archived` summary fields), `src/review/board-github.ts` (`writeBoundJson`/`writeBoundJsonText`). Tests: review-reviews.test.ts, desk-run-store.test.ts, review-entity.test.ts.
+- slice-06 is mostly removal residue: Desktop imports and props removed from App.tsx, ReviewBoard.tsx, ReviewDetail.tsx and ReviewResults.tsx (ProjectReviewRules, ReviewRunHistory, the "Keryx review" tab, `secondaryNote`, the `reviewNote` fallback in `laneReason`), the `board_read_args` test lines in review.rs, removed DOM tests, docs lines and the pre-change lines of the desk-run-store.ts hunks above.
+- Outside the slices, I read `src/review/desk-run-store.ts:180-205` at head, the `assignReviews` loop body that the slice-05 hunk elides.
+- Earlier waves of this round read for duplicates: review-performance-w1/w2/w3 (via `keryx ctx rg` over `raw/`). review-performance-w1 already rates the `publication()` receipt read and `existsSync` per finished attempt as clean: short-lived CLI, off any interactive path, also for partial/budget since FA-2. I do not re-file it.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+No new findings in these slices.
+
+Checked and clean:
+- `assignReviews` (desk-run-store.ts:184-204). The old SQL `roundFor` ran up to four queries per pending row: linked, retry, max(round), and newest per round. Now each Review's placed attempts are read once per call (`WHERE review_id=? AND round IS NOT NULL`, covered by the `review_rounds` index) and extended in memory. Each placement is O(k) over that Review's attempts, so O(k^2) per Review at worst. k is the number of attempts on one PR for one account, which is small. The loop runs only when unassigned rows exist: on migration and inside the request/record transaction for the newly inserted row. This is a cost reduction, not a regression. `reviewFor` still makes one indexed lookup per pending row. That predates this delta.
+- `neverStarted()` adds five `json_extract` predicates to the `reviewRows` WHERE clause and to the `assignReviews` projections. These run per row of one account's Reviews in one repository, in a CLI call. There is no hot path and no new scan shape: `previousAttempt` already used this predicate inline.
+- review-entity.ts: `stateAttempts` (a filter), `stateAttempt` and `newest` (reverse scans) and `headComparison` are each O(attempts) per Review per summary. `referenceHead` re-runs `stateAttempts` inside `summarizeReview`, which is a second O(k) pass on small k. That is not worth filing.
+- `writeBoundJson`/`writeBoundJsonText` (board-github.ts:262-272) moved from review-board.ts with the same behaviour. review-performance-w3 already confirmed that. The payload is serialized once.
+- slice-06 Desktop changes only remove code: imports, a props pass-through, the rules dialog mount in the toolbar, a tab and its panel. Nothing is added per render or per keystroke. Unmounting `ProjectReviewRules` from the board toolbar removes a component and its rules load from the Pull requests tab.
+
+### Clean Areas
+- CLI/TUI hot paths: no per-keystroke or per-frame work added. The changed store and entity code runs once per CLI invocation over one account's Reviews.
+- N+1 queries: reduced in `assignReviews` (one placed-attempts read per Review instead of up to four queries per pending row). No new query inside a loop.
+- Indexes: the per-Review read uses `review_id`, which the existing `review_rounds(review_id, round)` index covers.
+- React re-renders, memory leaks, bundle imports: there are no additions in the Desktop code, only removals.
+- Synchronous blocking: the per-attempt `publication()` file reads are covered in review-performance-w1. Nothing new.
+- Pagination and redundant API calls: no new reads. The test double's `fails` path is test-only.
+
+### Not verified
+- No timings: my exec budget was 0 s, and I ran no tests. I relied on the recorded run at f6971fd (194 root + 1008 Desktop tests, 0 fail) and did not re-read `verify-tests-to-run-1.txt`.
+- I did not measure the size of a real `runs.sqlite`. "k is small" rests on the data model (attempts per PR per account), not on a sample.
+- I did not run `keryx gdgraph affected`, `keryx test related` or `keryx wiki ask`. No question of consumers or intent arose that the slices and plan did not settle.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slices 05 and 06 add no new performance finding. assignReviews now reads each Review's placed attempts once per call and places rows in memory, replacing up to four queries per pending row (an improvement). neverStarted, stateAttempts/stateAttempt/headComparison and the moved writeBoundJson are O(attempts) per CLI call off any hot path. The publication() per-attempt file read was already rated clean in review-performance-w1. slice-06 Desktop changes are removals only.",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [],
+  "prior_dispositions": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the only production hunks are self-contained store/entity functions already traced in earlier waves) · wiki_used: no (not-relevant: intent is given by the plan and the operator decisions) · ctx_used: yes (keryx ctx read of desk-run-store.ts and of review-performance-w3, keryx ctx rg over the earlier wave results) · raw_rg_used: no

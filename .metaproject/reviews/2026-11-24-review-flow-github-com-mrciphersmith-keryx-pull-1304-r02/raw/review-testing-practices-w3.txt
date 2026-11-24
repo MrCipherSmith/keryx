@@ -1,0 +1,113 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, round 2 (delta 20e4281a2..f6971fd4a), wave 3, slices slice-05 and slice-06.
+
+What I read:
+- slice-05 in full. It holds src/commands/review-reviews.test.ts, src/review/board-github.ts (writeBoundJson), src/review/desk-run-store.ts (neverStarted, roundFor, publication, reviewRows), src/review/review-entity.ts (stateAttempts, stateAttempt, headComparison), src/review/desk-run-store.test.ts and src/review/review-entity.test.ts.
+- slice-06 in full. Most of its hunks are old-side ("-") lines. I checked them against `git diff 20e4281a2 f6971fd4a`. They are either the old side of edits that slice-04 already carries, or deletions that were already in the base 20e4281a2. One example: the "project rule previews…" and "rules dialog pending for a previous account…" tests did not disappear in this delta. They live at apps/desktop/src/reviews/ReviewsView.dom.test.tsx:562 and :627. The only new test content in slice-06's files is the review.rs `include_closed` assertions and the reviewPages.test.ts `includeClosed` test. Both assert a positive path and the refusal path.
+- Beyond the slices: the desk-run-store.ts assignReviews body (lines 183-204), the main-DB migration fixture in desk-run-store.test.ts:795-876, review-reviews.ts:30-60 (latestActivity and the sort), and the deleted writeJson/writeSerialized in review-board.ts.
+- I did not re-file anything from waves 1-2. I checked my own w1/w2 and grepped the other w1-w3 raws for the board-github writer.
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so I ran no `keryx review mutate` and I report no red or green result. Wave 1 already lists most of slice-05's production gates: R2-S01 to S11, R2-E01 to E11, R2-R01, R2-R02 and R2-R14. This wave adds 6 candidates, R2-W03 to R2-W08, for the gates those lists miss. Each anchor occurs exactly once in its head file (checked with `keryx ctx rg -F`). Not reached: 6 of 6.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-05", "slice-06"],
+  "summary": "Slice-05's new backend tests are strong. They drive the real DeskRunStore on a temp SQLite file, assert public rows and summaries, and give each negative a positive artifact: the A-B-A round test, the superseded-request test, the publication-outcome matrix, the all-archived Review, and the cap test that names which PRs were compared. Slice-06 adds no new test risk: the review.rs and reviewPages include-closed tests pin both the forwarding and the refusal. Two minor gaps. (1) In the migration batch, a superseded-before-start row is judged by the `superseded` column read with the pending rows (desk-run-store.ts:187). No fixture puts such a row into one placement batch, so that column is unpinned. (2) The writer move (round-1 F-016/FA-6) kept the GitHub-binding recheck at the publication boundary. The recheck has no behavioural test: the only new test asserts module exports. Two info notes on fixture values the producer cannot emit. No mutant was run.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 187,
+      "quote": "json_extract(details,'$.continuation.previousId') AS previousId, ${neverStarted()} AS superseded",
+      "problem": "Lens rule 'The mutation pass': a gate added in answer to an earlier round has no fixture that builds the input that separates it from the code beside it. assignReviews reads `superseded` in two places. Line 195 reads it for rows already placed, fresh on each call. Line 187 reads it for the pending rows, and `attempts.push({ ...row, round })` (line 202) carries that value to the later rows of the same batch. Line 187 decides the round only when one batch holds a request superseded before it started, followed by another request of the same Review. That happens when an existing store is migrated. requestAttempt superseded queued requests before this PR (the old inline predicate in previousAttempt), so real stores hold such rows. No fixture builds that batch. (a) The main-DB migration fixture (desk-run-store.test.ts:809-818) has no `skipped`/`Superseded` row. (b) The review-reviews.test migration (line 291) holds one failed row. (c) The new superseded test (desk-run-store.test.ts, 'a queued request superseded before it started keeps no round') places one row per transaction. There the queued row is still `queued` when line 187 reads it, so line 195 decides the next round.",
+      "impact": "No current defect is claimed. If the line-187 column is dropped or mis-written, migration can number a real store's rounds with a gap where a superseded request sits. That would break plan.md's rule that a request superseded before it started takes no round. The suite would stay green, because only the one-at-a-time insert path is exercised. Mutant R2-W04 is the check; I did not run it.",
+      "suggested_fix": "Add one row to writeMainFixture after a8, or a separate legacy-DB test with two rows. The superseded row has state 'skipped', phase 'Superseded', startedAt/result/usage null, the same Review as a following manual row, and an earlier createdAt. Then assert in the `first.runs` map that the following row takes the superseded row's round, and links its previous_run_id past it, to the newest counted attempt of the top round. Also assert that reviewRows leaves the superseded row out.",
+      "evidence": "desk-run-store.ts:185-202 (pending SELECT with `superseded`, `attempts.push({ ...row, round })`); :194-196 (placed SELECT); desk-run-store.test.ts:809-818 (fixture rows: completed, queued, partial, failed, running, cancelled, with no skipped row); `keryx ctx rg -F Superseded src/review/desk-run-store.test.ts src/commands/review-reviews.test.ts` finds only :357 and :985, both through store.request. Plan rule: .metaproject/flows/519-2026-11-24-desktop-review-v2-stage2/plan.md:20 ('one function, used both for the migration of an existing database and after every insert').",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.test.ts",
+      "line": 326,
+      "quote": "expect(typeof boardGithub.writeBoundJson).toBe(\"function\");\n  expect(Object.keys(boardCommand)).not.toContain(\"writeJson\");",
+      "problem": "tdd-workflow (a changed piece of logic gets a test that can fail) and the lens rule 'Behaviour Assertions'. The round-1 fix moved the pipe writer into board-github.ts as writeBoundJson/writeBoundJsonText (lines 106-115). Its behaviour is to recheck the GitHub binding at the publication boundary through `withCurrentGithubBinding(auth, …)`, and to resolve only after the write callback. The one test added with the move asserts that an export exists and that another export is gone. No test calls writeBoundJson, or a command that reaches it, with a binding whose generation changed. `keryx ctx rg` over src/**/*.test.ts finds no use of withCurrentGithubBinding, verifyGithubBindingUnchanged or writeBoundJson*. The only runReviewReviews calls are argument errors (review-reviews.test.ts:317-323). runReviewBoard is called only with --repositories (board.test.ts:44-50).",
+      "impact": "No current defect is claimed: the moved code matches the removed code (review-regression-w3 and review-security-code-w3 confirm this). Removing the binding recheck would publish one account's Reviews or board on a pipe after the project's account changed mid-read. The suite would stay green. Mutant R2-W03 is the check; I did not run it. The gap predates this delta, because the removed review-board.ts writer was untested too. But the delta rewrote this code, and its new test pins the layout, not the guard.",
+      "suggested_fix": "Add a unit test in src/review/board-github.test.ts or next to the review-accounts tests, which already build a binding and change its generation (review-accounts.test.ts:143). Spy on process.stdout.write. Then (a) with the current generation, `await writeBoundJson({ ok: 1 }, connection)` resolves and writes '{\"ok\":1}\\n'. (b) After the binding's generation changes, `writeBoundJson(...)` rejects with 'account changed' and stdout.write is not called. Keep the structural test if the export boundary is meant to stay pinned. It is not a substitute for the behaviour test.",
+      "evidence": "board-github.ts:106-115 (writer and `withCurrentGithubBinding(auth, () => {` at :112); review-board.ts delta (removed writeJson/writeSerialized with the same check, untested); review-reviews.test.ts:325-329; `keryx ctx rg 'withCurrentGithubBinding|verifyGithubBindingUnchanged|runReviewBoard\\(|runReviewReviews\\(' src --glob '*.test.ts'` gives 8 hits, none on a success path through the writer.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/review-reviews.test.ts",
+      "line": 166,
+      "quote": "`2026-11-${String(40 - Number(n)).padStart(2, \"0\")}T00:00:00.000Z`",
+      "problem": "Lens rule 'Fixture Shape Against the Producer' (a value the producer cannot emit). The cap test rewrites createdAt to days 13-39 of November. The producer writes `new Date().toISOString()` and cannot emit 2026-11-31 to 2026-11-39. Today the ordering is still pinned correctly, because latestActivity (review-reviews.ts:39) and the sort (:51) compare strings.",
+      "impact": "If the sort later parses dates (Date.parse gives NaN for these values), the test fails on the fixture, not on the behaviour. This is a false red, not a false green.",
+      "suggested_fix": "Vary the hour or minute instead, for example `2026-11-20T${String(40 - Number(n)).padStart(2, \"0\")}:00:00.000Z` with minutes, or add n seconds to a base Date and call toISOString().",
+      "evidence": "review-reviews.test.ts:164-167; review-reviews.ts:39, :49-52.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/review-entity.test.ts",
+      "line": null,
+      "quote": "publication: \"published\", decision: \"archive\", archived: true",
+      "problem": "Lens rule 'Fixture Shape Against the Producer'. The 'archived attempts stay listed and flagged…' fixture gives the archived attempt `publication: \"published\"`. reviewRows never emits a publication for an archived attempt: `!archived ? this.publication(...) : undefined`, publication null. The test still pins stateAttempts through the findings (blocker 5 vs major 2), the reviewed head and freshness, so it does not lie. Its publication assertion covers a state the store cannot produce.",
+      "impact": "Low. A reader may take the publication part as coverage of a real archived-and-published attempt.",
+      "suggested_fix": "Use `publication: null` on the archived attempt, matching the producer. Or add a comment that the value is deliberately impossible, to show that summarizeReview ignores archived attempts whatever they carry.",
+      "evidence": "desk-run-store.ts reviewRows (`const archived = item.decision === \"archive\"`, `!archived ? this.publication(...)`); review-entity.test.ts slice-05 lines 1141-1151.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "prior_dispositions": [],
+  "mutant_candidates": [
+    {"id": "R2-W03", "file": "src/review/board-github.ts", "anchor": "withCurrentGithubBinding(auth, () => {", "replacement": "((use: () => void) => use())(() => {", "kind": "behavior"},
+    {"id": "R2-W04", "file": "src/review/desk-run-store.ts", "anchor": "AS previousId, ${neverStarted()} AS superseded", "replacement": "AS previousId, 0 AS superseded", "kind": "behavior"},
+    {"id": "R2-W05", "file": "src/review/desk-run-store.ts", "anchor": "AS head, ${neverStarted()} AS superseded", "replacement": "AS head, 0 AS superseded", "kind": "behavior"},
+    {"id": "R2-W06", "file": "src/review/desk-run-store.ts", "anchor": "if (top === null) return { round: 1, previous: null };", "replacement": "", "kind": "behavior"},
+    {"id": "R2-W07", "file": "apps/desktop/src-tauri/src/review.rs", "anchor": "if include_closed && !reviews_only {", "replacement": "if false {", "kind": "behavior"},
+    {"id": "R2-W08", "file": "apps/desktop/src-tauri/src/review.rs", "anchor": "if include_closed { args.push(\"--include-closed\".into()); }", "replacement": "", "kind": "behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 2}
+}
+```
+
+## Mutation pass
+
+Skipped: read-only lane (allowed_tools read-only, exec_budget_s 0). No mutant was run, and no result is predicted as a finding. Candidates and nearest suites:
+
+- R2-W03 (binding recheck in the pipe writer): no test reaches it (F-002). Nearest suites: `bun test src/commands/review-reviews.test.ts src/review/board.test.ts`.
+- R2-W04 (pending-row `superseded`, migration batch): F-001. Nearest suite: `bun test src/review/desk-run-store.test.ts src/commands/review-reviews.test.ts`.
+- R2-W05 (placed-row `superseded`): 'a queued request superseded before it started…' should kill it (it expects round 2 and the link to the running attempt). Same suite.
+- R2-W06 (empty-Review base case of roundFor): deleting it makes `reduce` throw on the first request of a new Review, so any store test kills it. Listed for completeness.
+- R2-W07, R2-W08 (review.rs include_closed guard and forwarding): `reviews_list_is_a_separate_read_only_query` asserts both. Rust runs only in CI (no local toolchain), so the Tauri test suite there is the nearest.
+
+Wave-1 candidates that cover the rest of slice-05's gates are R2-S01 to S11, R2-E01 to E11, R2-R01, R2-R02 and R2-R14. Not repeated.
+
+## Checked and not filed
+
+- The cap test is adequate for the sort. 'one summary per Review' expects [15, 14, 12], which kills a number-ascending sort. The cap test expects [1, 2, 3] first, which kills a number-descending-only sort. It also checks the exact compared heads (1..25) and the uncounted pair [26, 27].
+- review-reviews.test 'one summary per Review': the archived Review's `reviewNeedsViewer` false would also hold through `publication: null`. R2-E01 (drop the archived check) is still killed by review-entity.test's all-archived 'stopped' case, which would be true without the archived gate.
+- 'history imported later … (known limitation)' pins behaviour the operator settled in plan.md:30. Not a defect.
+- 'a failed attempt carrying a reviewed range…' is the round-1 FA-12 fixture. DeskFinish allows a result on any state (desk-run-types.ts:154), so the shape is emittable.
+- The ReviewBoard rules tests that appear deleted in slice-06 were not deleted in this delta. They are at ReviewsView.dom.test.tsx:562 and :627.
+- `github(…, fails)` is used (review-reviews.test.ts:252). `editStore` is used for createdAt (:166) and closed_at (:225).
+
+## Not verified
+
+- No mutant run and no test run. I relied on research-evidence/verify-tests-to-run-1.txt (194 root + 1008 Desktop, 0 fail, at f6971fd). The Rust tests were not run locally (no toolchain on this machine; CI only).
+- F-001 rests on reading assignReviews and every fixture. A migration with a superseded row might behave correctly today; I claim only that nothing pins it.
+
+Routing audit: graph_used: no (not-relevant: the slices name the files, and the producer lines were read directly); wiki_used: no (not-relevant: testing-convention review; plan.md was read for the settled migration rule); ctx_used: yes (keryx ctx rg; raw git diff/show/sed with a stated keryx:raw reason for exact hunks); raw_rg_used: no.

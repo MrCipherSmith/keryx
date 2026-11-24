@@ -1,0 +1,85 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1304, branch `feat/desktop-review-v2-stage2`, round 2 (delta), wave 2, range 20e4281a2..f6971fd4a, mode explicit-hash-range. I read slice-03 in full. It covers 14 Desktop files: dev/reviewBoard.ts, src-tauri/src/review.rs, App.tsx, platform/review.ts, ReviewBoard.tsx, ReviewBrowserLink.tsx, ReviewDetail.css, ReviewDetail.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts and shell/AppShell.tsx.
+- I also read the head file `apps/desktop/src/reviews/ReviewsView.tsx:130-260` (the load, reload, indicator and focus effects), and checked how `watcherTarget`, `boardRepo` and `boardRepositoryId` are built in `ReviewBoard.tsx:421`, `:456` and `:464`.
+- Not a FIX slice: `prior_findings` is empty and `is_fix_round` is false, so this report has no prior dispositions. I read wave 1 of this round (`review-performance-w1.txt`, `review-highload-w1.txt`) and do not re-file it. Those files already cover the hidden-tab 60 s reload (highload F-003), the event refresh that joins an in-flight read (highload F-001), the two reads per watcher poll (perf I-001) and the missing overall read deadline (highload F-002, perf I-002).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [P2-001] Turning "Show closed" off runs a full GitHub-backed list read, although the list on screen already contains every Review it needs
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:175 (load effect deps), :152
+- **Hot path**: once per click of the "Show closed" toggle, and once when `resetView()` turns `showClosed` back off after an identity change. These are user actions, not a hot loop.
+- **Problem**: `showClosed` is now a dependency of the load effect, and its value is passed to the CLI as `--include-closed`. Turning it on needs a new read, because the PR cards of locally closed Reviews are only fetched with the flag. Turning it off does not: the snapshot read with `includeClosed=true` already contains everything the list needs, and `filterReviewList(..., showClosed=false)` hides closed and archived Reviews on the client (model.ts `isClosedOrArchived`). The effect still spawns `keryx review reviews` again. That read runs the identity GraphQL query, ceil(N/20) card batches and up to 25 compares. The read lane does not dedupe it, because `includeClosed` is part of the lane key (platform/review.ts:117-119).
+- **Why it matters**: each click that turns the filter off costs one CLI spawn and several GitHub round trips, which takes seconds and uses API budget. During that time the toolbar spinner shows, for a change the client could make instantly. The cost grows with lifetime Review history (round-1 F-023, still partial). It is correct today; the cost is on interaction latency and the GitHub budget.
+- **Fix**: read with the flag only when it adds data. Keep a ref with the `includeClosed` value of the current snapshot, and skip the reload when `showClosed` goes from true to false while that snapshot already holds the closed cards. Alternatively, key the effect on a derived "needs closed cards" value that stays true once a closed-inclusive snapshot is held, until the next refresh. Do not change the request on toggle-on.
+
+### [I2-001] Opening a closed or archived Review from the Pull requests tab costs a second full list read
+- **Severity**: info
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:238 (`if (isClosedOrArchived(found)) setShowClosed(true);`)
+- **Hot path**: one "Open in Reviews" click on a PR whose Review is closed locally or archived.
+- **Problem**: the tab-show refresh reads the list without `--include-closed`. The focus effect then finds the Review and sets `showClosed`, and that triggers a second full `review reviews` read so the PR card can be fetched.
+- **Why it matters**: it costs one extra read for each such click. The first read cannot be avoided in this design, because the closed state is only known after it, so this is not a defect.
+- **Fix**: optional. A `ReviewsFocus` could carry a hint (the board knows the badge is archived) so the first read includes closed Reviews.
+
+### Clean Areas
+- **React re-renders.** `onIdentityChange` fires only on identity change, because `watcherTarget` is a `useMemo` on primitives (ReviewBoard.tsx:421). `openReview` depends on the primitives `boardRepo` and `boardRepositoryId`. `consumeIntent` returns the same object when there is no intent, so it causes no extra render. `openPullRequestLink` is a `useCallback`. The ReviewBrowserLink click closure is per render on a single anchor, which is negligible. App's `watcherPolls` state re-renders App once per watcher poll (at least 1 min apart), which is negligible.
+- **Memory leaks.** The interval is cleared. `subscribeSessionReview` returns its unsubscribe. The keydown listener is removed. `mounted` refs are reset on unmount.
+- **Hot paths, CLI and Rust.** The new argument checks in `reviewBoardArgs` and `board_read_args` are constant-time.
+- **Bundle imports.** The one new import (`githubPr` in ReviewBrowserLink) was moved from ReviewDetail, so it adds no net code.
+- **N+1, indexes, pagination.** This slice has no database or list query code. The backend is in other slices.
+- **Synchronous blocking.** None was added.
+
+### Not verified
+- I took no timings, because the execution budget is 0 s. The costs above are reasoned from the effect dependencies and the command's call counts as wave 1 recorded them (identity query, ceil(N/20) card batches, up to 25 compares). I did not run `keryx gdgraph affected` or `keryx test related`: the slice and the head file settled every question.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-03 (Desktop delta): no blocker or major. One minor: turning Show closed off re-runs the full GitHub-backed Reviews read, although the closed-inclusive snapshot already holds everything needed. One info: Open in Reviews on a closed or archived Review costs a second full read. Hidden-tab reload, in-flight join, two reads per watcher poll and the missing overall deadline were raised in wave 1 and are not re-filed.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "P2-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 175,
+      "quote": "}, [cwd, repo, expectedViewer, showClosed, attempt, load, resetView, accessLost]);",
+      "problem": "showClosed is a dependency of the load effect and is passed as --include-closed. Turning it off spawns a new `keryx review reviews` read (identity query, ceil(N/20) card batches, up to 25 compares). The held snapshot, read with includeClosed=true, is already a superset, and filterReviewList hides closed and archived Reviews on the client. The lane key includes includeClosed, so the read is not deduped.",
+      "impact": "Each click that turns the filter off (and resetView's reset after an identity change) costs one CLI spawn and several GitHub round trips. That means seconds of spinner and API budget for a change the client could make instantly. The cost grows with lifetime Review history (round-1 F-023 partial). It is user-driven, not a hot loop.",
+      "suggested_fix": "Track whether the current snapshot was read with includeClosed. Skip the reload when showClosed goes from true to false while that snapshot already holds the closed cards, for example by keying the effect on a derived needsClosedCards value that stays true until the next refresh. Keep the read on toggle-on.",
+      "evidence": "Slice-03 hunks ReviewsView.tsx @@149 (load(cwd, repo, expectedViewer, showClosed)) and @@168 (deps); head ReviewsView.tsx:148-175. platform/review.ts:117-119 lane key [cwd, expectedViewer, repo, includeClosed]. model.ts filterReviewList uses isClosedOrArchived. Read cost per review-performance-w1 / review-highload-w1 (review-reviews.ts card batches and compares).",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "I2-001",
+      "severity": "info",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 238,
+      "quote": "if (isClosedOrArchived(found)) setShowClosed(true);",
+      "problem": "Open in Reviews on a locally closed or archived Review first reads the list without --include-closed (the tab-show refresh). It then sets showClosed, which triggers a second full read to fetch the PR card.",
+      "impact": "One extra full read per such click. The first read cannot be avoided in the current design.",
+      "suggested_fix": "Optional: carry an archived or closed hint on ReviewsFocus from the board badge, so the first read includes closed Reviews.",
+      "evidence": "Head ReviewsView.tsx:180-184 (tab-show refresh), :226-251 (focus effect), :148-175 (load effect keyed on showClosed).",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    }
+  ],
+  "prior_dispositions": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the slice and one head file settled every question; consumers were already enumerated in wave 1) · wiki_used: no (not-relevant: the plan and fix ledger give the intent) · ctx_used: yes (keryx ctx rg) · raw_rg_used: no (one raw `sed` of ReviewsView.tsx:130-260, marked keryx:raw to anchor line numbers).

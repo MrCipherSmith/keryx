@@ -1,0 +1,69 @@
+STATUS: DONE
+
+review-regression, round 2 (delta 20e4281a2..f6971fd4a), wave 3, slice-04. This is not the FIX slice, and prior_findings in the payload is empty, so this report has no prior_dispositions.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-04"],
+  "findings": [],
+  "summary": "No regression at major or above in slice-04. The slice has two production files: src/commands/review-board.ts and src/commands/review-reviews.ts. Every contract they changed was followed to its callers at f6971fd4a, and none of the callers breaks. The rest of the slice is tests, a test fixture and docs."
+}
+```
+
+## What was checked (code at f6971fd4a; slice-04 read in full, 1849 lines)
+
+### src/commands/review-board.ts
+`writeJson` and `writeSerialized` were removed. They moved to src/review/board-github.ts as `writeBoundJson` and `writeBoundJsonText`.
+- I listed every importer of the module with `keryx ctx rg --all` over the repo:
+  - src/commands/review.ts imports `BOARD_USAGE` and `runReviewBoard`.
+  - src/review/board.test.ts imports `runReviewBoard`.
+  - src/commands/review-reviews.test.ts imports the module as a namespace and asserts that `writeJson` is no longer exported.
+- No production code imported `writeJson`. Its one importer, src/commands/review-reviews.ts, now imports `writeBoundJson` from board-github.
+- Inside review-board.ts, the four call sites (lines 45, 64, 99, 103) use the import aliases `writeJson` and `writeSerialized`, so they are unchanged.
+- The behaviour is the same. Both versions run `withCurrentGithubBinding` inside the Promise executor, so a binding change still turns into a rejection. They also resolve on the same `process.stdout.write` callback. `withCurrentGithubBinding` itself was not changed (board-github.ts:89).
+
+### src/commands/review-reviews.ts
+- **Removed imports.** `referenceHead`, `reviewClosed` and `latestCreated` are gone from this file. `referenceHead` and `reviewClosed` are still exported from src/review/review-entity.ts and used there (lines 138, 151, 158-160, 189-190). `latestCreated` was file-local. No other file imported any of them.
+- **`readReviews` signature.** It gained two optional fields, `compareBudgetMs` and `includeClosed`. Old call shapes still type-check. The callers are runReviewReviews and the tests in review-reviews.test.ts.
+- **Closed Reviews no longer get cards by default.** Card reads are skipped for locally closed Reviews unless `includeClosed` is set.
+  - `summarizeReview(row, null, ...)` still reaches the closed state through `reviewClosed(row, null)`, and `headComparison` returns null without a card. A closed Review therefore still lists, without its PR card.
+  - The only Desktop consumer is `fetchReviews` (apps/desktop/src/platform/review.ts:117). It forwards `includeClosed`, and wave 2 (raw/review-regression-w2.txt) traced it through the dev bridge and the Rust `board_read_args`.
+  - The command is new in this PR. No consumer outside it exists yet: stage 1's work row is not merged.
+- **List order.** The sort moved from the summarized rounds to `latestActivity(row)` over `row.attempts`. This can only reorder the list and the order in which the 25-compare cap is applied. No caller depends on the order beyond the test that asserts it. This is not a break at major.
+- **Compare deadline.** It returns null for late compares, and `new Map(...flatMap)` drops those entries. `summarizeReview` already handled a missing comparison (behind with an unknown count), so consumers see the same shape as for a failed compare.
+
+### Tests, fixture and docs
+- The removed assertions match operator-settled behaviour changes recorded in fix-round-1.md:
+  - the `onOpenInReviews(target, intent)` signature;
+  - the AC8 `ready` + `publication: null` indicator case, which now expects no indicator;
+  - the "Review again" label, renamed "New review round";
+  - the ReviewDetail alert, which moved into `.sheet-body`.
+- No assertion that guarded the protected stage-0 code was removed.
+- app-navigation.fixture.tsx is test infrastructure only.
+- The docs and spec/plan hunks have no code dependents.
+
+## Protected stage-0 code
+- **Attention set in ReviewBoard.tsx.** Slice-04 touches only ReviewBoard.dom.test.tsx: the onOpenInReviews target shape and the new onWatcherPoll and onIdentityChange expectations. The "Needs attention" assertion is kept.
+- **attachBadges/localBadge parity.** review-board.ts still imports `attachDeskRunBadges` and `readLocalBadges` unchanged. Only the write helpers moved.
+- **Toolbar container queries.** No CSS is in this slice.
+
+## Already raised in waves 1-2 (not re-filed)
+- R2-BE-001 / highload F-002 / performance I-002: abandoned compares outlive the deadline.
+- R2-BE-003: the cap warning wording.
+- Degradation F-002: archived Reviews take card reads and compare slots.
+- Frontend F-001, highload w2 F-001, performance P2-001 / I2-001: the cost and behaviour of "Show closed".
+- UX-004: card-less tiles.
+
+## Coverage and limits
+- **No blast-radius record.** The payload carries no computed blast-radius record, so there is no cap and no dropped-file record to report. I enumerated dependents by hand with `keryx ctx rg --all` over the changed symbols: writeJson, writeSerialized, writeBoundJson, referenceHead, reviewClosed, latestCreated, readReviews, MAX_REVIEW_COMPARES, includeClosed/reviewsOnly, and the importers of review-board. `keryx gdgraph affected` was not run in this wave.
+- **Runtime edges.** The Desktop invoke to Rust `review_board` to `--include-closed` chain is a runtime edge the code graph cannot see. Wave 2 read it by hand, and I did not re-verify it.
+- **No tests or Rust compile.** I ran no tests (exec budget 0) and rely on research-evidence/verify-tests-to-run-1.txt. The Rust code is not compiled locally.
+
+routing audit:
+- graph_used: no. No blast-radius record was supplied, and `keryx ctx rg --all` enumerated the importers of the changed symbols completely.
+- wiki_used: no (not-relevant). The fix-round notes and the plan state the intent.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx run`, `keryx ctx read`).
+- raw_rg_used: yes. Plain grep was run only over this review package's own files (raw/*.txt titles and slice-04.diff headers and removed lines) with a keryx:raw marker. It was never run over project code.

@@ -1,0 +1,58 @@
+STATUS: DONE
+
+metaproject: index read (.metaproject/index.md). Mode: code only (no URL or screenshots supplied).
+
+Context: Keryx Desktop (Tauri app). Audience: developers reviewing PRs with Keryx. Primary task on the surface this slice touches: find a Review that waits on me in the Reviews tab and act on it, or jump to it from a PR with "Open in Reviews". Surface type: app screen, so the marketing rows of ui-anti-slop do not apply. Round 2, wave 3, slice-04 (kind "new", not the fix slice). All of slice-04.diff was read (lines 1-1834). It holds Desktop DOM and model tests, user docs (cli-reference.md, desktop-app.md, guides/desktop-metaproject.md), requirement docs (implementation-plan.md, specification.md) and two CLI commands (review-board.ts, review-reviews.ts). The slice changes no rendered component or stylesheet. Extra reads: raw/*-w1.txt, *-w2.txt and *-w3.txt (searched for overlap), docs/docs/desktop-app.md at HEAD (nav and watcher lines), ReviewsView.tsx:300-315 at HEAD, and `git diff 20e4281a2..f6971fd4a -- apps/desktop/src/reviews/ReviewsView.tsx` to confirm the Show closed count is not delta code.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-ui-ux",
+  "status": "DONE",
+  "slices": ["slice-04"],
+  "findings": [],
+  "prior_dispositions": [],
+  "summary": "slice-04 is tests, docs and CLI command code. It changes no rendered UI. The UX contracts the tests encode match the round-1 UI fixes judged in wave 1: one-shot answer intent, focus restored to search when the rules dialog closes on an account change, the run-status alert next to the primary action, the 'New review round' label, the neutral 'Refresh' copy, Open pull request through the system browser, archived Reviews under Show closed with Restore reachable, and Label in Name on the 'after <id>' link. In user-visible text, the docs now say Reviews → Review rules and ⌘6 for Metaproject. The new CLI warning 'Some commit counts took too long to read. Refresh to retry.' states the cause and the remedy. No new finding in this lens. The stale 'Sessions / Flows / Review' navigation and 'From **Review**, open **PR watcher**' text in desktop-app.md (context lines in this slice) is already filed by review-pr-contract-w1 and is not re-filed."
+}
+```
+
+## Findings
+
+None new in this lens for slice-04.
+
+## Related findings from earlier waves (not re-filed)
+
+- review-pr-contract-w1: desktop-app.md:72 still says "choose **Review** in its **Sessions / Flows / Review** navigation", and :147 says "From **Review**, open **PR watcher**", while :157 (changed in this slice) now says **Reviews → Review rules**. From the UX side this is a real wayfinding issue (Nielsen #2/#4, the doc names a tab that no longer exists), but the finding is already filed there.
+- UX-001 (w1), state filter vs the "Archived" label: the slice-04 model test "an archived Review is listed only under Show closed, in the Closed column, labelled Archived" pins the label and column. No test pins the state-filter behaviour, so UX-001 stands unchanged.
+- UX-002 (w1) and review-frontend-w3, the no-card banner on a closed Review: the tests "closed Reviews' PR cards are read only while Show closed is on" and "a Review without its PR card offers Refresh next to the reason" cover the open-Review case and the Show-closed read. They do not cover the transient pre-reload frame. Nothing changes UX-002.
+- UX-004 (w2), card-less tiles drop the author: the test comment "A closed Review read without its card shows the PR number only" confirms the intended display. Nothing changes UX-004.
+
+## Observations checked and not filed
+
+- The indicator no longer lights for `ready` with `publication: null` (partial, budget or imported package). The change is deliberate and documented in implementation-plan.md (Индикаторы). It is not re-filed.
+- Search "#1" matches #1, #10 and #11 (substring on the number). This is consistent with the Pull requests board (F-033 fix, model test "as on the Pull requests board"). It is a standard pattern and not a defect.
+- The Show closed count appears only in the button's `title` ("Show closed (1)"). This is not delta code (absent from `git diff 20e4281a2..f6971fd4a` of ReviewsView.tsx), so it is out of scope.
+- The rules-reachability test feeds a raw "unavailable: Unknown command: reviews" into the Reviews alert. Whether a real CLI-version mismatch produces that raw text, rather than the platform's "incompatible … Check the CLI version in Settings" message, was not traced. The error display itself is not delta code, so it is not filed.
+
+## Scores
+
+- Slop score: 0, not applicable. No rendered surface changes in slice-04 (tests, docs, CLI).
+- WCAG 2.2 AA floor (code mode): no markup in the slice. The tests assert accessible-name behaviour that holds: the tile has no aria-label and is named by its content, the 'after <id>' aria-label starts with the visible text (2.5.3), "Open pull request" keeps its name, focus lands on "Search reviews" rather than the page body when a dialog closes, and Show closed keeps `aria-pressed`.
+- Viewports checked: not run.
+
+## What works (keep)
+
+- The tests lock the UX fixes in as behaviour (focus target, alert placement inside `.sheet-head`, one-shot intent, copy strings). This makes regressions in those UX contracts visible in CI.
+- The new CLI timeout warning names the cause ("took too long to read") separately from the failure warning, and both give the remedy (Refresh).
+- The user docs describe where the review interface now lives (Open in Reviews → the Review's panel in the Reviews tab).
+
+## Checks not run
+
+- Live render at 1440/768/390 px, light and dark: no URL or screenshots supplied, and the slice has no UI code.
+- Contrast and target sizes: no render, and the slice changes no tokens or CSS.
+- Tracing a real old-CLI "Unknown command" error through platform/review.ts: not done (out of delta).
+- No tests executed (exec_budget_s 0). verify-tests-to-run-1.txt was not re-read.
+
+## Routing audit
+
+graph_used: no (not-relevant: the slice and its file list came from the payload). wiki_used: no (not-relevant: delta UI review of tests and docs). ctx_used: yes (`keryx ctx rg` over raw/, docs and ReviewsView.tsx). raw_rg_used: no. Raw reads: awk/sed for the slice structure and one ReviewsView.tsx region, plus one `git diff` piped into `keryx ctx rg`, each with a `keryx:raw` marker.

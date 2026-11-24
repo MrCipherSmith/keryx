@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+## review-pr-contract, round 2, wave 5 (slice-05, slice-06)
+
+Read in full: slice-05.diff (1159 lines: review-reviews.test.ts, board-github.ts writeBoundJson, desk-run-store.ts neverStarted/roundFor/assignReviews/publication()/reviewRows, review-entity.ts stateAttempts/stateAttempt/headComparison/summarizeReview, desk-run-store.test.ts, review-entity.test.ts) and slice-06.diff (842 lines, mostly base-side removals: review.rs test call sites, App.tsx/ReviewBoard.tsx/ReviewDetail.tsx prop removals, secondaryNote and laneReason reviewNote removal, ReviewBoard/ReviewPanel test "Keryx review" clicks, implementation-plan/specification removed lines, desk-run-store publication()/previousAttempt old lines). Also read: pr-context body (from the payload), the delta diff of specification.md and cli-reference.md (`git diff 20e4281a2..f6971fd4a`), specification.md:55-75, implementation-plan.md:30-49, and raw/*-w1..w4 for duplicates.
+
+### Checklist form
+
+The PR body has no checkbox items (`keryx ctx rg "\[[ xX]\]" pr-context.md`: none). Each claim that slices 05/06 touch is one row.
+
+| Claim (quoted) | What the slices show | Result |
+|---|---|---|
+| Store: "a continuation joins its predecessor's round; the same base..head joins its existing round as a retry; any other range opens the next round" | roundFor: retry only in the current highest round | already PC-001 (w1) |
+| Fixes: "Round rule: a return to an earlier range opens a new round" | desk-run-store.test.ts "a return to an earlier range (A, B, A) opens the next round" | agrees |
+| Store: "Read-only badge reads still work on an unmigrated database" / "SQL `attachBadges` stays in parity with `localBadge`" | placement() reads NULL columns read-only; publication() still returns `pending` only for completed+complete, so badge parity holds (review-regression-w4 traced it) | agrees |
+| CLI: "lists Reviews with state, freshness, rounds, latest findings, publication, source, Flow and tokens" / "Each summary also carries `reviewed` ... and `archived`" | ReviewSummary gains `reviewed`, `archived`; attempts gain `archived` | agrees |
+| CLI: "one compare call per Review that is behind, capped at 25" | test "at most 25 comparisons per call, for the Reviews with the newest activity"; cli-reference.md documents the 60 s budget | agrees |
+| CLI: "A missing store gives an empty list and creates nothing" / "The read opens the store writable, so it migrates an older runs.sqlite" | tests "a missing store returns an empty list without creating one", "a store that predates Reviews is migrated when it is read" | agrees |
+| Fixes: "Archived Reviews: they are reachable again, under 'Show closed'" | reviewRows keeps archived attempts flagged; summarizeReview `archived: attempts.every(...)` | agrees in code; spec does not (PC-W5-001) |
+| Fixes: "Reviewed commit: cards show the commit range that was actually reviewed" | `reviewed: reference?.reviewed` from the unarchived attempts | agrees in code; cli-reference wording incomplete (PC-W5-002) |
+| Fixes: "Indicator rule ... archived ... does not light it" | review-entity.test.ts reviewNeedsViewer cases, `reviewNeedsViewer(archivedReview!)` false | agrees with fixes bullet; the What-changes bullet is PC-W4-001 |
+| "F-024: `secondaryNote` and its text comparison are removed, and the outdated note shows once" | slice-06 removes secondaryNote and the reviewNote fallback in laneReason | agrees |
+| PR panel: "the 'Keryx review' tab is gone" | slice-06 ReviewDetail.tsx removes the tab button; tests drop `click("Keryx review")` | agrees |
+| Expected overlap ReviewBoard.tsx / ReviewDetail.tsx | slice-06 removes onOpenReviewSession/publishCommand/ReviewRunHistory from ReviewDetail | already PC-W3-002 |
+| Verification: "migration ... 17 attempts ... round 1 × 13 and round 2 × 4" | measured before 85fa985c1 changed the round rule | same defect as review-degradation-w4 (implementation-plan.md cites the pre-D-R1 counts); cited, not re-filed |
+| Spec/plan: "version: 1 kept" | specification.md:12 and :226 now say stage 2 keeps `version: 1`; new fields additive | agrees |
+
+### Findings
+
+### [PC-W5-001] specification.md's state table and freshness rule still derive everything from the last attempt; the delta excludes archived attempts, and the plan and cli-reference say so
+
+- **Severity**: minor
+- **File**: docs/requirements/keryx-desktop-review-v2/specification.md:65
+- **Problem**: specification.md:57 "Состояние выводится из последнего раунда и публикаций", :61-67 every row keyed on "последний Attempt" / "последний раунд", and :70 freshness "head последнего проверенного раунда". AC4 says "state and freshness follow the specification table". The delta (slice-05 :780-784, :833-855) adds `stateAttempts(row)`: "the unarchived ones, or all when every one is archived", and state, latestRound, reviewed, findings, publication, flowId, tokens and the freshness head (`referenceHead`) all come from that set. The test "archived attempts stay listed and flagged, but state, findings, publication and freshness ignore them" (slice-05 :1141-1151) pins a Review whose newest attempt (round 2, archived, published, reviewed head c) yields `state: "ready"`, `latestRound: 1`, `freshness: current` against head b. Under the spec table, the last attempt/round is round 2, published, and freshness compares head c. implementation-plan.md:36 ("Архивные попытки остаются в раундах с пометкой `archived` и не влияют на состояние") and cli-reference.md:5205 state the exception; the spec does not, and it is not among the plan's "Решения, принятые на этапе" (:43-46), which do list the two other deviations from the same table (budget, failed retry).
+- **Why it matters**: The spec is the document AC4 cites. Stage 3/4 authors and the stage-1 card link (which reads `keryx review reviews`) will derive state from the newest attempt and get a different state, round and freshness than the CLI returns for a Review with an archived latest attempt.
+- **Fix**: Add the archived rule to the state section (and the freshness sentence) of specification.md, and list it under the plan's stage-2 decisions. Same class as PC-W4-002 (spec :75 omits plan-only rules): the plan's other stage-2 exception on that line, history imported later receiving the next round regardless of its older `createdAt` (implementation-plan.md:35; desk-run-store.test.ts "history imported later is numbered when it is recorded ... (known limitation)", slice-05 :949-956), is also missing from spec :75 "раунды идут в порядке `createdAt`"; fix both on that line together.
+
+### [PC-W5-002] cli-reference.md describes `reviewed` as the newest finished reviewed attempt and lists only state, findings and publication as ignoring archived attempts
+
+- **Severity**: minor
+- **File**: docs/docs/cli-reference.md:5197
+- **Problem**: cli-reference.md:5197 "the range its newest finished reviewed attempt covered (`reviewed`, or `null`)" and :5205-5206 "Archived attempts stay in the rounds with `archived: true` and do not decide the state, findings or publication". The delta computes `reviewed` from `reference = newest(attempts, reviewedResult)` over `attempts = stateAttempts(row)` (slice-05 :833-852), and `referenceHead` (freshness) from the same unarchived set (:786-791). The test at slice-05 :1141-1151 expects `reviewed: { baseSha: sha("a"), headSha: sha("b") }` and `freshness: { kind: "current" }` while the newest finished reviewed attempt is the archived one with head c. `latestRound` also comes from the unarchived set (`latestRound: 1` there). The ReviewSummary doc comment (review-entity.ts, slice-05 :747) repeats the same unqualified wording.
+- **Why it matters**: A script consumer reading the CLI reference takes `reviewed`, freshness and `latestRound` to cover archived attempts, and gets a different range and round than the JSON carries when the newest attempt is archived.
+- **Fix**: Extend the sentence: archived attempts do not decide the state, `latestRound`, `reviewed`, freshness, findings or publication (unless every attempt is archived); say "newest finished, unarchived reviewed attempt" at :5197 and in the ReviewSummary comment.
+
+### Not read / not verified
+
+- Head files outside the slices were not opened except specification.md:55-75 and implementation-plan.md:30-49; cli-reference.md and specification.md were read as their delta diffs.
+- The `latestRound` vs rounds-list mismatch itself is a code/UI defect already raised (frontend F-001 / review-degradation-w1); PC-W5-002 only covers the documentation wording.
+- No `keryx gdgraph` or `keryx wiki ask` query was run; documents were found with `keryx ctx rg` over docs/ and apps/desktop/src. `.metaproject/` docs other than the flow plan were not searched.
+- No tests run (exec budget 0).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slices 05 and 06 agree with the body's store, CLI, fix and F-024 claims; the store and round-rule body contradictions are already PC-001/PC-W4-001, overlap guidance PC-W3-002, stale migration counts review-degradation-w4. Two new minors on the archived-attempt rule: specification.md's state table and freshness rule (cited by AC4) still derive from the last attempt with no archived exception, and cli-reference.md lists only state, findings and publication as ignoring archived attempts while reviewed, freshness and latestRound ignore them too.",
+  "slices": ["slice-05", "slice-06"],
+  "findings": [
+    {
+      "id": "PC-W5-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "line": 65,
+      "quote": "| `stopped` | последний Attempt закончился как `failed` (включая прерванный, `recoverable`), `cancelled`, `blocked`, `budget`, `skipped` и у раунда нет принятых находок |",
+      "problem": "The spec's state table (:57, :61-67) and freshness rule (:70) derive state, round and freshness from the last attempt/round; AC4 says state follows this table. The delta's stateAttempts excludes archived attempts from state, latestRound, reviewed, findings, publication and the freshness head (review-entity.test.ts 'archived attempts stay listed and flagged, but state, findings, publication and freshness ignore them': archived round-2 published attempt -> state ready, latestRound 1, freshness current). implementation-plan.md:36 and cli-reference.md:5205 state the exception; the spec does not, and the plan's stage-2 decisions (:43-46) omit it. Sibling on spec :75 (same class as PC-W4-002): history imported later takes the next round regardless of older createdAt (plan :35, store test 'known limitation') while the spec says rounds follow createdAt.",
+      "impact": "Readers of the spec (stage 3/4 authors, the stage-1 card link) derive a different state, round and freshness than keryx review reviews returns when the newest attempt is archived.",
+      "suggested_fix": "Add the archived-attempt rule to the spec's state and freshness text and to the plan's stage-2 decisions; add the import-later exception to spec :75 together with PC-W4-002's fix.",
+      "evidence": "slice-05 :780-791, :833-855, :1141-1151; specification.md:57-70 (head); implementation-plan.md:35-36, :43-46 (head); cli-reference.md:5205 (delta).",
+      "class_scope": {
+        "sites": ["docs/requirements/keryx-desktop-review-v2/specification.md:57", "docs/requirements/keryx-desktop-review-v2/specification.md:65", "docs/requirements/keryx-desktop-review-v2/specification.md:70", "docs/requirements/keryx-desktop-review-v2/specification.md:75"],
+        "enumeration_method": "keryx ctx rg 'stopped|needs_answer|архив|archiv' over specification.md, implementation-plan.md, desktop-app.md; spec has no archive rule for Review state; read spec :55-75"
+      },
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W5-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 5197,
+      "quote": "freshness, the range its newest finished reviewed attempt covered (`reviewed`, or",
+      "problem": "cli-reference.md:5197 defines `reviewed` as the newest finished reviewed attempt's range, and :5205 says archived attempts 'do not decide the state, findings or publication'. The delta computes `reviewed`, the freshness head (referenceHead) and `latestRound` from the unarchived attempts only (stateAttempts); the test at slice-05 :1141-1151 expects reviewed head b and freshness current while the newest finished reviewed attempt is the archived one at head c. The ReviewSummary doc comment (slice-05 :747) repeats the unqualified wording.",
+      "impact": "A consumer of the CLI JSON who trusts the reference expects reviewed/freshness/latestRound to reflect an archived newest attempt and gets a different range and round.",
+      "suggested_fix": "Say 'newest finished, unarchived reviewed attempt' and list latestRound, reviewed and freshness alongside state, findings and publication as ignoring archived attempts (unless all are archived); update the ReviewSummary comment to match.",
+      "evidence": "git diff 20e4281a2..f6971fd4a -- docs/docs/cli-reference.md; slice-05 :747, :786-791, :833-855, :1141-1151.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    }
+  ]
+}
+```
+
+Summary: two minor documentation disagreements, both about the archived-attempt rule the round-1 fixes introduced (spec state/freshness table; cli-reference `reviewed`/freshness wording). Everything else in slices 05/06 agrees with the body or is already filed (PC-001, PC-W3-002, PC-W4-001, PC-W4-002, review-degradation-w4).
+
+Routing audit: graph_used: no (not-relevant: documents located by text search; dependents walked in earlier waves); wiki_used: no (not-relevant: requirement docs read directly); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no (one raw `grep` for diff headers returned nothing and was not relied on; one raw `git diff` of two doc files, marked keryx:raw, for verbatim quoting).

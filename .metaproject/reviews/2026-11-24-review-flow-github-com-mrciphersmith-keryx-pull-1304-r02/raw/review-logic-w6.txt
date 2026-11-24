@@ -1,0 +1,75 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (round 2, delta)
+- Slice: slice-02 (flow 519 artifacts: acceptance-criteria.md, fix-round-1.md, journal.md, plan.md, flow.json). I read it in full.
+- Scope mode: explicit-hash-range (from the payload)
+- Spec compliance gate: ran against AC1 (re-frozen under D-R1), plan.md T5/T6 and fix-round-1.md FA-2/FA-7/FA-11
+
+### Summary
+Slice-02 holds flow artifacts only: the re-frozen AC1, the fix list, journal entries, the plan text updated for D-R1/FA-4/FA-11/T11, and the flow.json task and history entries. I checked each rule these documents state against the code that implements it:
+- AC1 and plan T5 (a retry joins only the current highest round; A,B,A opens a new round; a never-started superseded request counts for no lookup and links past it) match `roundFor` and `neverStarted` in `src/review/desk-run-store.ts:26-29,102-116`.
+- The supersede path (`requestAttempt` :722-729 writes `skipped`/`Superseded` with `result: null` and never sets `startedAt`) is flagged by the predicate. Because `assignReviews` re-reads placed rows inside the same transaction, the superseded flag is current when the next request is placed.
+- Plan T6's `reviewNeedsViewer` sentence (ready only with a `pending` publication, a card-less Review counts only for `needs_answer`, an archived Review never counts) matches `src/review/review-entity.ts:120` and its tests at `review-entity.test.ts:85-103`.
+- flow.json: T15/T16/T17 and their history entries are consistent with each other and with the journal (T16 dependsOn T15; T10 done and completed).
+I found no new logic defect in this slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. I did not re-file these document-drift items, which earlier waves already raised:
+- plan.md T7's stale focus shape and active-only reload: PC-W2-001.
+- Plan and spec text that still derives state from the last attempt: clean-code-w4 F-002, PC-W5-001.
+- The spec migration rule that omits the superseded exception: PC-W4-002.
+- The plan's migration check that predates D-R1: logic-w4 F-001, degradation-w4 F-001.
+- A fully archived published Review that reads `ready`: R2-BE-006.
+- A cancelled-before-dispatch request that still opens a round: logic-w5 F-001.
+
+### Suggested Patches
+None warranted.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 (flow 519 artifacts: re-frozen AC1, fix-round-1.md, journal, plan.md, flow.json) is logically consistent with the code it describes. AC1/plan T5 (D-R1 retry only in the current highest round, A,B,A opens a new round, a superseded never-started request is skipped and linked past) matches roundFor/neverStarted/requestAttempt in desk-run-store.ts. Plan T6 reviewNeedsViewer rules match review-entity.ts:120 and its tests. flow.json task and history entries are consistent. Document-drift items already filed in waves 1-5 (PC-W2-001, clean-code-w4 F-002, PC-W5-001, PC-W4-002, logic-w4 F-001, R2-BE-006, logic-w5 F-001) were not re-filed. No new findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": []
+}
+```
+
+### Not read / not verified
+- I ran no tests (exec budget 0). The test claims rest on research-evidence/verify-tests-to-run-1.txt (194 root + 1008 Desktop tests, 0 failed, at f6971fd), which I did not re-run.
+- I did not check the journal's numeric claims (red/green counts, mutation counts, measured widths), because they cannot be reproduced read-only.
+- Code was read only at the sites the slice's rules describe: desk-run-store.ts:20-240 and :690-760, and the reviewNeedsViewer definition and tests. I did not review other slices.
+
+### Routing audit
+- graph_used: no (not-relevant: the slice is flow documents; the code sites were named by the plan text)
+- wiki_used: no (not-relevant: the operator decisions are recorded in the slice and fix-round-1.md)
+- ctx_used: yes (keryx ctx rg / ctx read)
+- raw_rg_used: no

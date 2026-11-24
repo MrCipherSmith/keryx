@@ -1,0 +1,19 @@
+STATUS: DONE
+
+Nothing was measured: exec_budget_s is 0, so no real-CSS run. Slice-06 adds no sizing, spacing, overflow or position change to a rendered element. Its rendered changes all remove content from existing flex rows. So no layout finding needs a measurement, and none is filed.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "slices": ["slice-06"],
+  "summary": "Delta round 2 (20e4281a2..f6971fd4a), slice-06, read in full (843 lines). It is not the FIX slice, so this reply gives no prior dispositions. Layout-relevant rendered changes, each checked against the head f6971fd4a source: (1) ReviewBoard.tsx toolbar: the `ProjectReviewRules` button after `.grow` in `.flows-toolbar` is removed. At head the row is heading, search field, Filters, grow, ReviewWatcher, Board/List segmented, Refresh. Removing an item can only reduce the row's intrinsic width. It cannot add overflow or a wrap. The implementation-plan toolbar numbers were measured on the Reviews toolbar, which this slice does not touch. (2) ReviewDetail.tsx `.sheet-head-row`: `ReviewRunHistory` between `.grow` and the close button is removed. That leaves repo #number, grow, close. This is a narrower row, with no new sizing. (3) ReviewDetail.tsx `.tabs` drops the 'Keryx review' tab (4 tabs to 3). That frees width and declares no sizing. (4) ReviewResults.tsx removes `secondaryNote`, and model.ts `laneReason` no longer returns the outdated note. This is text content, not a box rule. Shorter or absent text cannot overflow where the longer text did not. The slice contains no .css file and no new utility or inline-style dimension. The rest of the slice is Rust tests, DOM tests, a test fixture, requirements docs and the desk-run-store SQL, none of which renders geometry. Stage-0 protected code (implementation-plan 'Что этап 0 оставил в коде') is not touched by a layout change here. Waves 1–3 layout items (wave-3 LY-001, the source-regex gap test for F-054) are not re-filed. Not measured: exec_budget_s 0. Nothing in this slice makes a geometry claim that needs a measurement.",
+  "findings": [],
+  "prior_dispositions": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary: slice-06 has no new layout findings. Its rendered changes only remove items from existing flex rows: the Review rules button from the Pull requests toolbar, the run-history control from the PR panel header, the 'Keryx review' tab, and the secondary outdated note. None of them adds sizing or overflow risk. Nothing was measured because exec_budget_s is 0. Routing audit: graph_used: no (not-relevant: a bounded slice, with files known from the driver); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no. One `git show` of the head ReviewBoard.tsx toolbar was run with a raw marker.

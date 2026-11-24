@@ -1,0 +1,184 @@
+STATUS: DONE
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2` | Parent ref: `20e4281a2` | Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1`
+- Scope mode: `explicit-hash-range` (round 2, delta / FIX slice) | Slice: slice-01 (17 files) | Changed files reviewed: 17 from the slice, read against the full delta hunks of the 14 non-test files (`git diff` of the range) and head text of `src/review/review-entity.ts`
+
+### Summary
+The fix round is clean at function and class level. It removes a duplicated SQL predicate (`neverStarted`), moves the shared JSON writer next to the GitHub binding, takes the per-row SQL out of `roundFor` as a pure function, and makes the Desktop `reviewedCommit` read the domain's `reviewed` range. There are three minor findings. Two are doc comments in `review-entity.ts` that no longer match the code beneath them; one of them means F-015 is only partly fixed. The third is a new helper in `review-reviews.ts` that takes four positional parameters, one of them an output argument. All 34 prior findings in this slice have a disposition below: 32 closed, 2 partial (F-015, F-053).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0
+
+### Findings
+
+#### Functions
+##### [F-003] `compareHeads` takes four positional parameters, one of them an output argument; `readCards` appends to its caller's snapshot
+- **Severity**: minor
+- **File**: src/commands/review-reviews.ts (`async function compareHeads(pairs: Pair[], compare: CompareHeads, budgetMs: number, warnings: string[])`; also `readCards`, `if (unreadable) snapshot.warnings.push(...)`)
+- **Principle**: Clean Code: function design (Thresholds: positional parameters, and output argument)
+- **Problem**: Both helpers are new in this delta, extracted from `readReviews`. `compareHeads` has 4 positional parameters and no options object, and it reports failure by pushing into the caller's `warnings` array. `readCards` takes the whole `snapshot` and mutates `snapshot.warnings`. The return value therefore does not say what the function did. A caller who passes a fresh array, or reuses the helper elsewhere, gets warnings in an unexpected place.
+- **Fix**: Return the warning instead of filling an argument, for example `compareHeads(pairs, { compare, budgetMs }) → { comparisons, warnings }` and `readCards(...) → { cards, unreadable }`. Then `readReviews` is the only place that pushes onto `snapshot.warnings`.
+
+#### Comments
+##### [F-001] `headComparison` says it is "the one rule" for `freshness`, but `summarizeReview` does not use it and the two disagree for closed Reviews
+- **Severity**: minor
+- **File**: src/review/review-entity.ts: the `headComparison` doc comment (`The one rule for the command's comparisons and for \`freshness\`.`) and `summarizeReview`'s `freshness: freshness(referenceHead(row), card?.headSha ?? null, compare)`
+- **Principle**: Clean Code: comments (a comment that asserts a code path that does not exist); DRY. This is also the leftover part of round-1 F-015.
+- **Problem**: `headComparison` returns null for a closed Review (`!reviewClosed(row, card)`), so such a Review is never compared. `summarizeReview` does not call `headComparison`. It calls `freshness(referenceHead(row), card.headSha, compare)`, which has no closed check. So a Review that is closed locally, or whose PR is merged or closed with a head that differs from the reviewed one, is reported as `behind` with `commits: null`, while `headComparison` says there is nothing to compare. The rule still lives in two places, which F-015 asked to remove. The test "summarizeReview reports behind exactly when a comparison is needed" uses only open cards, so it does not catch the difference. Impact: in the closed lane and list (including archived Reviews under Show closed), the card shows "behind" with no count and no warning, and the comment tells a maintainer this cannot happen.
+- **Fix**: Make `summarizeReview` derive freshness from the same helper, e.g. `const pair = headComparison(row, card); freshness: !card?.headSha ? {kind:"unknown"} : pair ? behind(compare) : {kind:"current"}`, and add a closed-card case to the "summarizeReview reports behind exactly when…" test. If closed Reviews are meant to keep showing `behind`, narrow the comment to "the rule for the command's comparisons" instead.
+
+##### [F-002] The `reviewState` doc still says the state comes from the latest attempt
+- **Severity**: minor
+- **File**: src/review/review-entity.ts: `/** The state of a Review, derived from its latest attempt. */` above `export function reviewState(latest: ReviewAttemptSummary, closed: boolean)`
+- **Principle**: Clean Code: comments (a doc describing the rule a later change replaced)
+- **Problem**: The F-010 fix changed the caller to `state: reviewState(settled, reviewClosed(row, card))`. Here `settled = stateAttempt(attempts)` is an earlier finished attempt of the same round when the latest one stopped, and archived attempts are excluded. The doc and the parameter still describe "the latest attempt", so a reader of `reviewState` alone would expect a failed retry to make the Review `stopped`. That is the behaviour F-010 removed.
+- **Fix**: Reword it as "derived from the attempt `stateAttempt` selects: the latest unarchived attempt, or the accepted result of its round when the latest stopped". The parameter name is review-style's call.
+
+#### Error Handling
+No error handling issues found. `readCards` rethrows `access:`/`configuration:` errors and turns any other batch failure into a warning that the caller can see. The bare `catch` in `compareHeads` has a comment explaining that the count stays unknown, and a warning follows. `ReviewPanel.openPullRequestLink` shows a toast on failure.
+
+#### DRY
+No new duplication at or above 3 copies. `neverStarted()` replaces the predicate that was inlined in `requestAttempt` and is now reused by `assignReviews` and `reviewRows`. `writeBoundJson` replaces the copy that review-board exported. Two-copy pairs stay under the threshold and are not findings: `FINISHED_STATES` (desk-run-store) and `FINISHED` (review-entity); the open-link-plus-toast handler in `ReviewDetail.followLink` and `ReviewPanel.openPullRequestLink`; the closed-or-archived test in `reviewColumn` and `isClosedOrArchived`.
+
+#### SOLID
+No new SRP, OCP, LSP or ISP violations. `roundFor` became a pure function over pre-read attempts (I/O moved to the caller, `assignReviews`). `RepositoryReviews` was already over the length threshold before this change, and the delta adds no separable job that crosses a new row.
+
+### Clean Areas
+desk-run-store.ts (`roundFor`, `publication`, `reviewRows`), board-github.ts (`writeBoundJson`), review-board.ts, ReviewBrowserLink.tsx (`openReviewLink`), ReviewBoard.tsx (`openReview` routing), ReviewDetail.tsx, ReviewWorkspace.tsx (`onIntentConsumed`), ReviewPanel.tsx, ReviewsView.tsx (focus hoisted above the keyed child, `consumeIntent`), reviews/model.ts, App.tsx, docs (cli-reference, desktop-app, spec, implementation plan): doc comments read against the statements beneath them, with no drift found.
+
+### Prior dispositions (slice-01 FIX findings)
+Each fix was checked at its sites in the delta. For other lenses' findings this is a site-level read of the fix, not a re-run of their analysis.
+- F-001 closed: `ReviewsFocus` carries `repo`/`repositoryId`, `ReviewBoard` passes `snapshot.repo/repositoryId`, and `ReviewsView` switches with `focusRepo` and matches repo, id and number.
+- F-002 closed: `consumeIntent` runs on `onIntentConsumed` and when `active` turns false.
+- F-003 closed: pending lives in `ReviewsView` above the keyed child (`taken` nonce), and App clears it through `reviewsFocusHandled`.
+- F-004 closed: `reviewNeedsViewer` requires `publication === "pending"`, and `publication()` reads receipts and skips for every finished state.
+- F-005 closed: `reviewedCommit` reads `review.reviewed` (the domain reference), and `latestReviewed` was removed.
+- F-007 closed: `subscribeSessionReview`, `reloadSignal` from the watcher poll, and an interval no longer gated on `active`.
+- F-008 closed: `roundFor` matches a retry only in the current highest round.
+- F-009 closed: `accessLost` calls `settlePending()`.
+- F-010 closed: `stateAttempt` keeps the round's accepted result.
+- F-011 closed: the interval skips when `document.visibilityState === "hidden"`.
+- F-012 closed: `ReviewsView` mounts only once `githubAccount || githubAccountError`.
+- F-013 closed: `ReviewsTabIndicator` is declared in reviews/ReviewsView, and AppShell imports it.
+- F-014 closed: only `start` uses the PR panel; without the callback a view or answer opens the panel without an intent.
+- F-015 partial: the command now calls the domain `headComparison`, but `summarizeReview` still computes freshness separately (see F-001 above).
+- F-017 closed: `rulesTarget` falls back to the board identity.
+- F-018 closed: shortcuts, Review rules path and the panel text are updated.
+- F-019 closed: freshness `unknown`, `reviewed`, `archived` and `--include-closed` are documented.
+- F-021 closed: the spec states that the protocol version is kept.
+- F-022 closed: rows are sorted by latest activity before the cap.
+- F-025 closed: `REVIEW_COMPARE_BUDGET_MS` sets an overall deadline.
+- F-026 closed: placed attempts are read once per Review per call.
+- F-028 closed: `neverStarted` excludes superseded requests from round placement and from `reviewRows`.
+- F-030 closed: the error banner moved into the header next to the actions.
+- F-031 closed: the aria-label starts with the visible "after <id>".
+- F-033 closed: `matchesSearch` checks the title and the number anywhere.
+- F-037 closed: the Round cell is asserted by column index.
+- F-038 closed: there is a board test with and without `onOpenInReviews`.
+- F-039 closed: app-navigation.fixture drives the card, which opens the Review in the Reviews tab, twice.
+- F-041 closed: the ReviewsView account-change test asserts that focus returns to "Search reviews".
+- F-045 closed: the test "a reviewed head that is not a full object id is never sent to GitHub".
+- F-046 closed: the test "a failed attempt carrying a reviewed range is not the reference…".
+- F-047 closed: the assertion now expects `/positional/`.
+- F-053 partial: (a) the exact-25 cap and (c) `ahead_by:"2"` are added. (b) the tie-break and (d) the real compare closure were not seen in the added test titles; not verified further.
+- F-059 closed: implementation-plan.md says "New review round" at both places.
+
+### Not read / not verified
+- Only `git diff` hunks were read for Desktop files, plus head text of review-entity.ts and short ranges of ReviewWorkspace.tsx and ReviewsView.tsx. Whole Desktop component bodies were not re-read.
+- Test files were checked for their test titles and key assertions only.
+- No tests were run (exec budget 0). The package's verify-tests evidence was not opened.
+- review.rs and the flow docs in slice-02 are outside this slice.
+
+Routing audit: graph_used: no (not-relevant: a bounded delta slice was supplied) | wiki_used: no (not-relevant) | ctx_used: yes (`keryx ctx rg`; raw `git diff`/`grep` with keryx:raw markers to quote exact delta lines) | raw_rg_used: no
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "slices": ["slice-01"],
+  "summary": "Fix round is clean at function/class level; 3 minor findings (two stale doc comments in review-entity.ts, one of which leaves F-015 partial; one output-argument/4-positional helper in review-reviews.ts). Dispositions for all 34 slice-01 prior findings: 32 closed, 2 partial (F-015, F-053).",
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "The one rule for the command's comparisons and for `freshness`.",
+      "problem": "headComparison's doc says it is the one rule for freshness, but summarizeReview computes freshness via freshness(referenceHead(row), card?.headSha ?? null, compare), which has no closed check. headComparison returns null for a closed Review; summarizeReview reports behind (commits null) for a closed Review whose PR head differs. The rule still lives in two places (round-1 F-015 leftover), and the comment asserts otherwise.",
+      "impact": "Trigger: a Review closed locally, or whose PR is merged/closed with a head different from the reviewed one. Outcome: the closed lane/list (also archived Reviews under Show closed) shows 'behind' with no count and no warning, while the comment tells maintainers the two cannot diverge. The test 'summarizeReview reports behind exactly when a comparison is needed' covers open cards only.",
+      "suggested_fix": "Derive summarizeReview's freshness from headComparison (null card head -> unknown; pair -> behind(compare); else current) and add a closed-card case to the parity test; or, if closed Reviews should keep 'behind', narrow the comment to the command's comparisons.",
+      "evidence": "review-entity.ts head: headComparison returns `reviewed && head && headsDiffer(reviewed, head) && !reviewClosed(row, card) ? {...} : null`; summarizeReview `freshness: freshness(referenceHead(row), card?.headSha ?? null, compare)`; freshness() checks only !prHead and headsDiffer. keryx ctx rg 'headComparison' shows only review-reviews.ts:57 and tests use it.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "review-entity-headcomparison-not-used-by-freshness"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": null,
+      "quote": "/** The state of a Review, derived from its latest attempt. */",
+      "problem": "After the F-010 fix, summarizeReview calls reviewState(settled, ...) where settled = stateAttempt(attempts): an earlier accepted attempt of the same round when the latest stopped, and archived attempts excluded. The doc still says the state comes from the latest attempt.",
+      "impact": "A maintainer reading reviewState alone expects a failed retry to make the Review stopped, which is the behaviour F-010 removed; a change made on that reading would reintroduce it.",
+      "suggested_fix": "Reword: 'The state of a Review, derived from the attempt stateAttempt selects (the latest unarchived attempt, or its round's accepted result when the latest stopped).'",
+      "evidence": "review-entity.ts head: reviewState doc line above `export function reviewState(latest: ReviewAttemptSummary, closed: boolean)`; summarizeReview `const settled = stateAttempt(attempts);` and `state: reviewState(settled, reviewClosed(row, card))`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-reviews.ts",
+      "line": null,
+      "quote": "async function compareHeads(pairs: Pair[], compare: CompareHeads, budgetMs: number, warnings: string[]): Promise<Map<string, ReviewCompare>> {",
+      "problem": "New helper with 4 positional parameters and no options object, one of them an output argument it fills (warnings.push for failed and late comparisons). The sibling new helper readCards also mutates its caller's snapshot.warnings. Their return values do not say everything they did.",
+      "impact": "Maintenance cost: the warning outcome is invisible at the call site, and reuse with a different array puts warnings in the wrong place. No wrong behaviour today.",
+      "suggested_fix": "Return the warnings: compareHeads(pairs, { compare, budgetMs }) -> { comparisons, warnings }, readCards(...) -> { cards, unreadable }; readReviews alone pushes onto snapshot.warnings.",
+      "evidence": "review-reviews.ts:86 signature; :105-106 warnings.push; :68 readCards(snapshot, ...) and :80 snapshot.warnings.push; both helpers introduced in this delta (extracted from readReviews).",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "F-001", "disposition": "closed" },
+    { "id": "F-002", "disposition": "closed" },
+    { "id": "F-003", "disposition": "closed" },
+    { "id": "F-004", "disposition": "closed" },
+    { "id": "F-005", "disposition": "closed" },
+    { "id": "F-007", "disposition": "closed" },
+    { "id": "F-008", "disposition": "closed" },
+    { "id": "F-009", "disposition": "closed" },
+    { "id": "F-010", "disposition": "closed" },
+    { "id": "F-011", "disposition": "closed" },
+    { "id": "F-012", "disposition": "closed" },
+    { "id": "F-013", "disposition": "closed" },
+    { "id": "F-014", "disposition": "closed" },
+    { "id": "F-015", "disposition": "partial" },
+    { "id": "F-017", "disposition": "closed" },
+    { "id": "F-018", "disposition": "closed" },
+    { "id": "F-019", "disposition": "closed" },
+    { "id": "F-021", "disposition": "closed" },
+    { "id": "F-022", "disposition": "closed" },
+    { "id": "F-025", "disposition": "closed" },
+    { "id": "F-026", "disposition": "closed" },
+    { "id": "F-028", "disposition": "closed" },
+    { "id": "F-030", "disposition": "closed" },
+    { "id": "F-031", "disposition": "closed" },
+    { "id": "F-033", "disposition": "closed" },
+    { "id": "F-037", "disposition": "closed" },
+    { "id": "F-038", "disposition": "closed" },
+    { "id": "F-039", "disposition": "closed" },
+    { "id": "F-041", "disposition": "closed" },
+    { "id": "F-045", "disposition": "closed" },
+    { "id": "F-046", "disposition": "closed" },
+    { "id": "F-047", "disposition": "closed" },
+    { "id": "F-053", "disposition": "partial" },
+    { "id": "F-059", "disposition": "closed" }
+  ]
+}
+```

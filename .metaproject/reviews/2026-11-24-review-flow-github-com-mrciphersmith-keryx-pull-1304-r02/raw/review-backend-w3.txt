@@ -1,0 +1,73 @@
+STATUS: DONE
+
+# Backend Review Report: PR #1304, round 2 (delta), wave 3, slice-04
+
+## Summary
+Slice-04 is mostly Desktop tests, fixtures and docs. In this lens, the backend code is two CLI command files.
+- `src/commands/review-board.ts` moves the pipe writer (`writeJson`/`writeSerialized`) into `src/review/board-github.ts` as `writeBoundJson`/`writeBoundJsonText`.
+- `src/commands/review-reviews.ts` adds `--include-closed`, batches the card reads, and gives the comparison phase an overall deadline.
+
+The move keeps the account-binding check at the publication boundary: `writeBoundJsonText` still wraps the stdout write in `withCurrentGithubBinding` (board-github.ts:109-112). No caller still imports `writeJson` from review-board; a test asserts that (export-check test, lines 327-328).
+
+The new `compareHeads` deadline is sound:
+- The timer is cleared in `finally`.
+- A compare that rejects after the race has already settled on "late" is handled by the race's own subscription, so it raises no unhandled rejection.
+- Failed and late comparisons each add one warning and leave the commit count unknown.
+
+`--include-closed` is a strict boolean in `parseArgs`, and the usage string and cli-reference.md both document it. I found no blocker, major, minor or info in this lens.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2..f6971fd4a` (explicit-hash-range, round 2 delta)
+- Slice: slice-04 (1849 lines), read in full.
+- Backend-relevant hunks: src/commands/review-board.ts (two hunks), src/commands/review-reviews.ts (two hunks), docs/docs/cli-reference.md (`review reviews` usage).
+- Also read, for context the hunks omit: src/commands/review-reviews.ts:40-100 at HEAD (`readReviews`, `readCards`, the head of `compareHeads`), and the definitions of `writeBoundJson`/`writeBoundJsonText`/`withCurrentGithubBinding` in src/review/board-github.ts:89-112. I enumerated every `writeJson`/`writeBoundJson` call site under src and apps/desktop/src.
+- Out of lens, read but not assessed: the Desktop test and fixture hunks (ReviewBoard, ReviewDetail, ReviewPanel, ReviewsView, model, ProjectNavigation, app-navigation fixture), the user docs, and the requirement docs.
+- Not done: I ran no tests (exec budget 0) and did not open verify-tests-to-run-1.txt. I did not read git history for these hunks.
+
+## Stats
+- blocker: 0
+- major: 0
+- minor: 0
+- info: 0
+
+## Blockers (must fix before merge)
+None.
+
+## Major Issues
+None.
+
+## Minor & Info
+None new. Earlier waves already filed the issues this slice touches, so I do not re-file them:
+- review-highload-w1 F-002: abandoned `compare` subprocesses keep running after the deadline, and the card phase has no overall deadline.
+- review-testing-practices-w1: the deadline test uses wall-clock time.
+- review-backend-w2 / wave 1 (F-023 residual): archived-only and GitHub-closed Reviews still get card reads.
+
+## Positive Notes
+- The writer move removes a command-to-command import: `review-reviews.ts` used to import `writeJson` from `./review-board`. Both commands now use the shared binding-checked writer in board-github.ts, and a test pins that review-board no longer exports `writeJson`.
+- `readCards` rethrows `access:`/`configuration:` errors with `stopOnError`, so a revoked account cannot return a partial list that keeps another account's data. Other batch failures add a single warning.
+- Rows are sorted by newest activity before the cap of 25 comparisons, so the comparisons go to the Reviews listed first. The response order is unchanged.
+
+## Routing audit
+- graph_used: no. The question was confined to two command files and one shared module, and I enumerated the call sites with `keryx ctx rg`.
+- wiki_used: not-relevant. plan.md, the implementation plan in the slice, and the CLI usage string define the behaviour.
+- ctx_used: yes (`keryx ctx rg` for slice file headers, writer call sites, the board-github definitions and wave-1/2 overlap; `keryx ctx read` for review-reviews.ts).
+- raw_rg_used: no. Two `cat` reads carried keryx:raw markers: the gdctx raw log of slice file headers, and my own wave-2 output. Neither searches project code.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "slices": ["slice-04"],
+  "summary": "Slice-04's backend content is the move of the binding-checked stdout writer from review-board.ts into board-github.ts (writeBoundJson/writeBoundJsonText), plus --include-closed, batched card reads and an overall compare deadline in review-reviews.ts. The binding check at the publication boundary is preserved, no stale importer of writeJson remains, the deadline clears its timer and cannot leak an unhandled rejection, and the flag is a strict boolean documented in usage and cli-reference. No new findings; related residuals (abandoned compares, wall-clock test, closed-card reads) were filed in waves 1-2.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "findings": [],
+  "prior_dispositions": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Abandoned compare subprocesses after the deadline and the card phase's lack of a deadline are review-highload-w1 F-002; not re-filed.",
+    "Tests were not run by this reviewer (exec budget 0); verify-tests-to-run-1.txt was not opened."
+  ]
+}
+```

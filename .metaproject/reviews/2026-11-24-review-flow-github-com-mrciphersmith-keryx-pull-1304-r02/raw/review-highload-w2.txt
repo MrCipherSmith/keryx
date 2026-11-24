@@ -1,0 +1,87 @@
+STATUS: DONE
+
+## High-Load Review
+
+Scope: PR #1304, branch feat/desktop-review-v2-stage2, delta round 2 (20e4281a2..f6971fd4a), wave 2, slice-03 (Desktop UI and bridge: dev/reviewBoard.ts, src-tauri/src/review.rs, App.tsx, platform/review.ts, ReviewBoard.tsx, ReviewBrowserLink.tsx, ReviewDetail.tsx/.css, ReviewRuns.tsx, ReviewWorkspace.tsx, reviews/ReviewPanel.tsx, reviews/ReviewsView.tsx, reviews/model.ts, shell/AppShell.tsx). Diff mode. Slice-03 is not the fix slice, so this wave reviews it for new findings. Load profile: not provided. Concrete triggers used: the number of Reviews stored per repository and account (closed ones included), and the refresh triggers of the Reviews list: the 60 s timer, PR watcher polls, session-review events, panel mutations and tab shows.
+Files read beyond the slice: apps/desktop/src/reviews/ReviewsView.tsx (whole, at f6971fd); src/commands/review-reviews.ts (the include-closed, CARD_BATCH/CARD_PARALLEL and compare-cap lines only); apps/desktop/src/review/ReviewBoard.tsx (the watcherTarget useMemo at :421 and boardRepo at :456); raw/review-highload-w1.txt.
+
+Summary: The delta in this slice adds no race, lock, queue or retry hazard. The new callbacks are stable: `onIdentityChange` fires off a memoised `watcherTarget`, and `noteWatcherPoll` and `reviewsFocusHandled` are useCallback'd. The focus hand-off is taken once per nonce. The `include_closed` flag is refused outside the Reviews list in both the Rust host and the dev bridge. One minor residual: `includeClosed` follows the "Show closed" toggle, and the toggle persists while the tab is hidden. Once it is on, every background refresh trigger also reads the PR cards of all locally closed Reviews. That set only grows. Stats: blocker 0 | major 0 | minor 1 | info 0.
+
+### CLI / Multi-Session
+None detected. The Rust `board_read_args` and the dev `reviewBoardArgs` both refuse `include_closed` without `reviews_only`, so no board or badge query widens.
+
+### Concurrency & Races
+None detected in this slice. The coalescing staleness of event-driven refreshes is wave-1 F-001 (review-highload-w1). It is not filed again here. Toggling Show closed changes the lane key `[cwd, viewer, repo, includeClosed]`. The previous key's read is not aborted, but its result is discarded by `sequence`, and the lane bounds the keys in flight. No new race.
+
+### Resources
+[F-001] "Show closed" keeps closed-history card reads on every background refresh (minor, below).
+
+### Caching
+None detected. `reviewLists` is keyed by `includeClosed`, so a snapshot without closed cards never serves a Show-closed read, or the reverse.
+
+### Lock Contention
+None detected (no locks or transactions in this slice).
+
+### Async / Queues
+None detected.
+
+### Retry / Timeout / Circuit Breaker
+None detected in this slice. The deadline gap is wave-1 F-002. F-001 below widens its N.
+
+### Idempotency & Distributed Invariants
+None detected. The focus request is taken once per nonce (`taken` ref above the keyed child) and cleared through `onFocusHandled`. The intent is consumed through `onIntentConsumed` and when the tab is left.
+
+Clean areas reviewed: Part 0 (no lock or state-file code; no child fan-out added beyond the existing lane), Part A (no new shared mutable state), Part C (lane key includes the new flag), Part D (n/a), Part E (n/a), Part F (no retry added), Part G (focus and intent are once-only).
+
+---
+
+### [F-001] "Show closed" stays on while the tab is hidden, so every background refresh also reads the cards of all closed Reviews
+- Severity: minor
+- File: apps/desktop/src/reviews/ReviewsView.tsx:152 (`void load(cwd, repo, expectedViewer, showClosed)`), with :124 (`showClosed` state), :238 (a focus request turns it on) and :192-204 (background triggers). Backend: src/commands/review-reviews.ts:55.
+- Pattern: Resource B / Retry-Timeout F2. Per-trigger work grows with stored history.
+- Failure mode: `includeClosed` follows the toggle. `readReviews` then sends every row, closed ones included, to `readCards`: ceil(N/20) GraphQL batches, three at a time (review-reviews.ts:55, :70-72). The toggle is not cleared when the tab is left (`consumeIntent` clears only the intent). An "Open in Reviews" of a closed or archived Review also turns it on by itself (:238). From then on, until a repository or account change remounts the view, every background trigger reads all closed Reviews' cards:
+  - the 60 s timer while any Review runs,
+  - each PR watcher poll (`reloadSignal`),
+  - each session-review event,
+  - each panel mutation.
+  None of these needs the cards: the tab indicator (`reviewNeedsViewer`) is about open work.
+  - Trigger: Show closed is on, the tab is hidden, and a review is running or the watcher is polling. N is the count of locally closed Reviews for the account and repository. It only grows, because closing is how a Review leaves the default list.
+  - Outcome: one extra GitHub batch per 20 closed Reviews on each background read, per project window. Under a GitHub stall, the card phase adds 18 s per 60 closed Reviews, so the 150 s host bound from wave-1 F-002 is reached at a smaller open-Review count. The host then kills the whole list read and the indicator stops updating. This is degradation, not data loss.
+- Fix (either of these):
+  - Read closed cards only when they are shown: pass `showClosed && active` to `load`, or drop `showClosed` when the tab is left, as is already done for the intent.
+  - Have the CLI read closed rows' cards only for the first page or the visible slice.
+  The overall deadline in wave-1 F-002 bounds the worst case either way.
+- class_scope (optional for minor): one call site that passes the flag. `keryx ctx rg "includeClosed|include-closed"` over apps/desktop/src and src/commands/review-reviews.ts found fetchReviews (platform/review.ts:118), the ReviewsView load effect, and the CLI's readCards filter at :55.
+- Confidence: medium. The arithmetic comes from the code, as in wave-1 F-002. The number of closed Reviews in real use is not known.
+
+Not read or verified: the backend slice (cards, compares, store) beyond the lines cited; ReviewReadLane internals (bounds taken from wave-1's reading); App.tsx outside the hunks; the Rust test bodies (no Rust toolchain locally; no tests run, exec budget 0). The protected stage-0 code was not touched by this slice in my lens: attention set, attachBadges/localBadge parity and the toolbar container queries are unchanged in the hunks here.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-03"],
+  "summary": "No concurrency, lock, queue or retry hazard in the Desktop UI and bridge delta. The new callbacks are stable, focus and intent are taken once, and include_closed is refused outside the Reviews list in both hosts. One minor residual: the Show closed toggle persists while the tab is hidden, so every background refresh also reads the PR cards of all locally closed Reviews. That set only grows, which widens wave-1 F-002's stall window.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 152,
+      "quote": "void load(cwd, repo, expectedViewer, showClosed).then(snapshot => {",
+      "problem": "includeClosed follows the Show closed toggle. The toggle persists while the tab is hidden (consumeIntent clears only the intent) and turns on by itself on a focus to a closed or archived Review (:238). So every background refresh then makes readReviews fetch PR cards for all locally closed Reviews: the 60 s running timer, each PR watcher poll, each session-review event and each panel mutation. The indicator does not need those cards.",
+      "impact": "Trigger: Show closed on, tab hidden, a review running or the watcher polling. Cost: ceil(N_closed/20) extra GraphQL batches (3 at a time) per background read per project window, and N_closed only grows. Under a GitHub stall each 60 closed Reviews add 18 s to the card phase. That brings the 150 s host kill (wave-1 F-002) closer, and the whole list read then fails. Degradation only.",
+      "suggested_fix": "Pass showClosed && active to load, or reset showClosed when the tab is left, as consumeIntent does for the intent. So closed cards are read only while they are shown. The overall readReviews deadline from wave-1 F-002 bounds the worst case either way.",
+      "evidence": "ReviewsView.tsx:124 useState(false) for showClosed, reset only in resetView. :152 load(..., showClosed). :192-204 background triggers. :238 setShowClosed(true) on focus. :255 consumeIntent leaves showClosed. src/commands/review-reviews.ts:55 readCards(snapshot, includeClosed ? rows : rows.filter(row => row.closedAt === null), query). :16-17 CARD_BATCH=20, CARD_PARALLEL=3. platform/review.ts:118 lane key includes includeClosed.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "dedupe_key": "reviews-show-closed-background-card-reads"
+    }
+  ],
+  "prior_dispositions": []
+}
+```
+
+Routing audit: graph_used: no (the slice named every file; no file was added or moved in this session). wiki_used: not-relevant (a delta review of a UI slice against wave-1 and the plan). ctx_used: yes (keryx ctx rg and keryx ctx read for every search and source read). raw_rg_used: no.

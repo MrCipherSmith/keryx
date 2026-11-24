@@ -1,0 +1,120 @@
+STATUS: DONE_WITH_CONCERNS
+
+## PR Contract Review — round 2 (delta), wave 4, slice-04 (tests, docs, review-board.ts / review-reviews.ts hunks)
+
+Inputs read: driver, SKILL.md, pr-context.md (current body), slice-04.diff in full (1849 lines), raw/review-pr-contract-w1/-w2/-w3.txt and the finding titles of every other w1-w3 raw file (for dedupe), R2-BE-005 text. Settled rows with: `keryx ctx rg` over docs/docs, README.md, apps/desktop/README.md for "Refresh board", "Review again", "Keryx review", ⌘ shortcuts, Archive/Restore, Show closed and the desktop-app.md headings; docs/docs/cli-reference.md:5186-5215 read at head; `keryx ctx rg` for `neverStarted` in src/review/desk-run-store.ts and for the migration lines in the two requirement docs.
+
+Slice-04 is not the FIX slice: no prior_dispositions are returned.
+
+### Checklist form
+
+The PR body has no checkboxes. Each stated claim that slice-04 bears on is a row.
+
+| Claim (quoted) | State | What slice-04 / head shows | Verdict |
+|---|---|---|---|
+| Indicators: "The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`." | stated | ReviewsView.dom.test.tsx (slice :613-624): `ready` + `publication: null` -> null; `stopped` + `archived` -> null; `stopped` + `card: null` -> null; test renamed from "without a publication decision" to "with a publication to choose" | contradicts — PC-W4-001 |
+| Fixes: "Indicator rule: ... lights `ready` only when publication is pending. A Review that is archived, or whose PR card could not be read, does not light it unless it asks a question." | stated | same test cases (slice :617-624) | agrees |
+| Fixes: "Indicator freshness: the indicator stays current while the tab is hidden." | stated | ReviewsView.dom.test.tsx (slice :707-781): hidden-tab reload on timer, session snapshot and watcher poll; not in a hidden window | agrees |
+| Fixes: "Archived Reviews: they are reachable again, under 'Show closed'." | stated | model.test.ts (slice :1129-1136), ReviewsView.dom.test.tsx (slice :1023-1037), ReviewDetail "Open in Reviews" for an archived run (slice :926-929) | agrees in code; user docs silent — PC-W4-003 |
+| Fixes: "Reviewed commit: cards show the commit range that was actually reviewed." | stated | model.test.ts (slice :1107-1119), ReviewsView test (slice :552) | agrees |
+| Fixes: "Round rule: a return to an earlier range opens a new round (operator decision; AC1 reworded)." | stated | specification.md:75 and implementation-plan.md:35 both reworded (slice :1550, :1634) | agrees; spec omits the superseded exception the plan states — PC-W4-002 |
+| Fixes: "One-shot intents: an answer intent and an Open-in-Reviews request are each used once and never replayed." | stated | ReviewsView.dom.test.tsx (slice :857-909), app-navigation.fixture.tsx (slice :1294-1307) | agrees |
+| Fixes: "Open in Reviews: it now carries the repository" | stated | ReviewBoard.dom.test.tsx (slice :76-80), ReviewsView.dom.test.tsx (slice :873-885) | agrees |
+| "The minors are fixed too: docs and shortcuts, accessibility names, card-read cost and deadline, and test gaps." | stated | desktop-app.md ⌘6, Reviews → Review rules, "Open in Reviews" text (slice :1373-1374, :1419, :1432, :1477); guides/desktop-metaproject.md ⌘6; WCAG 2.5.3 name test (slice :806-808); REVIEW_COMPARE_BUDGET_MS and CARD_BATCH (slice :1748-1752) | agrees; docs gap PC-W4-003; F-060 deferral already PC-W2-002 |
+| CLI: "`keryx review reviews --json [--repo owner/name]` ... adds one compare call per Review that is behind, capped at 25" / "Locally closed Reviews get their PR card only with `--include-closed`" | stated | REVIEWS_USAGE (slice :1745), cli-reference.md:5192-5215 documents `--include-closed`, `reviewed`, `archived`, the 25 cap and the 60-second budget | agrees |
+| "Outdated-review action: relabelled 'New review round'." | stated | ReviewPanel.dom.test.tsx (slice :338, :372-373), ReviewBoard.dom.test.tsx (slice :94); no doc quotes "Review again" (ctx rg docs/docs, README.md, apps/desktop/README.md: 0) | agrees |
+| Store: "the same base..head joins its existing round as a retry" | stated | already PC-001 / R2-BE-005 | not re-filed |
+| Desktop bridge bullet (include_closed missing) | stated | already PC-W3-001 | not re-filed |
+| "Desktop: `bun test src` passes 1007 tests ... at `98c7b37`" | stated | evidence: 1008 at f6971fd; already PC-003 | not re-filed |
+| desktop-app.md "Review" tab wording (:70, :72, :147) | doc | already PC-002 | not re-filed |
+
+The review-board.ts hunk moves `writeJson`/`writeSerialized` to board-github.ts (`writeBoundJson`/`writeBoundJsonText`); it removes an export from `src/commands/review-board.ts`. The body makes no claim about it and no document quotes it; degradation-w3 checked the move. No row.
+
+### Findings
+
+### [PC-W4-001] The body's "What changes → Indicators" bullet still states the pre-fix indicator rule
+
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.dom.test.tsx:613 (slice-04 :612-624)
+- **Problem**: The body, What changes → Indicators: "The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`." The delta changes that rule. Its test is renamed from "the indicator lights for needs_answer, ready without a publication decision and stopped" to "... ready with a publication to choose and stopped". `[{ state: "ready", publication: null }, "attention"]` becomes `[{ state: "ready", publication: null }, null]`, and new cases `[{ state: "stopped", publication: null, archived: true }, null]` and `[{ state: "stopped", publication: null, card: null }, null]` follow. The fixes section of the same body ("lights `ready` only when publication is pending. A Review that is archived, or whose PR card could not be read, does not light it unless it asks a question") agrees with the code. The two bullets disagree. This is the same shape as PC-001 (Store bullet against the Round rule bullet).
+- **Why it matters**: The What-changes bullet is what a merger or a stage-1 author reads as the indicator contract. Read alone, it says a `ready` Review with no publication decision (a partial, budget or imported run) and any `stopped` Review light the tab. The code no longer does that.
+- **Fix**: Reword the bullet to: "lights for `needs_answer`; for `ready` with publication `pending`; and for `stopped`. An archived Review never lights it. A Review whose PR card could not be read lights it only with a question."
+
+### [PC-W4-002] specification.md's reworded migration rule omits the superseded-request exception that implementation-plan.md states in the same delta
+
+- **Severity**: minor
+- **File**: docs/requirements/keryx-desktop-review-v2/specification.md:75 (slice-04 :1634)
+- **Problem**: specification.md:75 (new): "раунды идут в порядке `createdAt`: запуск с `continuation.previousId` попадает в раунд предшественника, запуск с той же парой base..head, что у текущего последнего раунда, — в этот раунд, любой другой (в том числе возврат к более раннему диапазону, A, B, A) открывает следующий раунд". implementation-plan.md:35 (new, slice :1550) adds: "Запрос, вытесненный из очереди до старта, своего раунда не держит: следующий запрос получает его номер, а в списке Review такой запрос не показывается." The code follows the plan: src/review/desk-run-store.ts:27 `neverStarted` (state `skipped`, phase `Superseded`, never started) is selected as `superseded` at :187 and :195 and excluded from round counting. It is also filtered out of `reviewRows` at :606. Under the spec's wording, a superseded request on a new range "открывает следующий раунд"; under the code, it holds no round.
+- **Why it matters**: The specification is the document stage 3 builds the update round on ("Смена head", round selection). Its storage section now states a numbering rule that the code and the plan contradict for superseded requests. A stage-3 author working from it would expect a round number the store never assigns.
+- **Fix**: Add the plan's sentence to specification.md:75: "a request superseded before it started holds no round, the next request takes its number, and the Review list does not show it."
+
+### [PC-W4-003] desktop-app.md has no description of the Reviews tab, though the delta sends readers there for archived runs and adds "Show closed" / "Archived"
+
+- **Severity**: minor
+- **File**: docs/docs/desktop-app.md:93 (slice-04 :1373-1374)
+- **Problem**: The body says "The minors are fixed too: docs and shortcuts" and "Archived Reviews: they are reachable again, under 'Show closed'." The delta's own doc edits only point at the tab. desktop-app.md:93 reads "the Review's panel in the **Reviews** tab holds the review interface", and :169 reads "In the Review's panel in the **Reviews** tab, a scheduled attempt records…". The page's headings (`keryx ctx rg '^#'`: :70 "Find a pull request in Review", :88 "Run a review from a card", :113 "Publish a review to GitHub", :145, :155, then Install … :394 "Flows board", :425 "Explore Metaproject") have no section for the Reviews tab. `keryx ctx rg` for "Show closed" or a review-run Archive/Restore in desktop-app.md finds nothing; its only "Archived" hits (:363-371) are about sessions. The delta adds user-visible behaviour that only that tab explains:
+  - "Show closed" with a count title, `button("Show closed").getAttribute("title")).toBe("Show closed (1)")` (slice :1029);
+  - an "Archived" badge in the Closed column (slice :1032, model.test.ts :1134);
+  - an archived run now offering "Open in Reviews" in the PR panel, with the comment "An archived run still has a Review in the Reviews tab (under Show closed), where History offers Restore and Delete" (slice :926-929).
+- **Why it matters**: A user who archives a review run and opens the PR panel is sent to the Reviews tab. Nothing in the user docs says that archived Reviews are hidden until **Show closed** is on, or that Restore lives in the Review panel's History. The board columns, filters and the indicator rule are not documented either. Part of the gap predates the delta (the tab arrived in round 1). The delta adds the archived-Review path, and the body says the doc minors are fixed.
+- **Fix**: Add a "Reviews" section to desktop-app.md (beside "Flows board"). It should cover the columns (Running · Waiting on you · Behind · Published, plus Closed with **Show closed**), the list view, search and the state, freshness and source filters, the **Archived** label and Restore through History, the rounds timeline, and when the tab's indicator lights. Alternatively, narrow the body's "docs" claim.
+
+### Not read / not verified
+
+- The w1-w3 raw files of other lenses were read for finding titles only, not in full.
+- Desktop app behaviour was not run (exec budget 0). Test outcomes rest on research-evidence/verify-tests-to-run-1.txt as cited by the orchestrator; I did not open that file.
+- I did not open the head code behind the indicator rule (review-entity.ts) again; PC-W1 already checked it against the fixes section.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-04 (tests, user/requirement docs, review-board.ts and review-reviews.ts hunks) agrees with the body's fix claims: one-shot intents, repo-carrying Open in Reviews, hidden-tab indicator reloads, archived Reviews under Show closed, the reviewed commit, the New review round label, and --include-closed with the 25-compare cap and the 60 s budget documented in cli-reference.md. Three minors. The What-changes Indicators bullet still states the pre-fix rule that the updated indicator test now contradicts. specification.md's reworded migration rule omits the superseded-request exception that implementation-plan.md and desk-run-store.ts apply. desktop-app.md still has no Reviews-tab section, although the delta sends archived runs there and adds Show closed and Archived.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "PC-W4-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.dom.test.tsx",
+      "line": 613,
+      "quote": "[{ state: \"ready\", publication: null }, null],",
+      "problem": "Body, What changes -> Indicators: 'The Reviews tab lights for `needs_answer`, `ready` with publication undecided, and `stopped`.' The delta's indicator test now expects ready with publication null -> null, stopped archived -> null and stopped without a card -> null. Its name changes from 'ready without a publication decision' to 'ready with a publication to choose'. The body's own fixes section states the new rule, so the two bullets disagree (same shape as PC-001).",
+      "impact": "A merger or a stage-1 author reading the What-changes bullet expects partial, budget and imported ready Reviews, and every stopped Review, to light the tab. The code no longer does that.",
+      "suggested_fix": "Reword the bullet: lights for needs_answer, ready with publication pending, and stopped; an archived Review never; a Review without its PR card only with a question.",
+      "evidence": "slice-04 :612-624 (ReviewsView.dom.test.tsx AC8 test); pr-context.md 'Indicators' bullet vs 'Indicator rule' bullet.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W4-002",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-desktop-review-v2/specification.md",
+      "line": 75,
+      "quote": "любой другой (в том числе возврат к более раннему диапазону, A, B, A) открывает следующий раунд",
+      "problem": "The reworded storage rule in specification.md does not mention requests superseded before they started. implementation-plan.md:35 (same delta) says such a request holds no round and the next request takes its number. desk-run-store.ts:27/:187/:195 (neverStarted -> superseded) excludes them from round counting, and :606 drops them from reviewRows. The spec's wording gives a superseded request on a new range its own round.",
+      "impact": "Stage 3 builds round selection on the specification, which now states a numbering rule that the code and the plan contradict for superseded requests.",
+      "suggested_fix": "Add to specification.md:75 that a request superseded before it started holds no round, the next request takes its number, and the Review list does not show it.",
+      "evidence": "slice-04 :1550 (implementation-plan.md) vs :1634 (specification.md); keryx ctx rg 'neverStarted' src/review/desk-run-store.ts -> :27, :187, :195, :606.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract"
+    },
+    {
+      "id": "PC-W4-003",
+      "severity": "minor",
+      "file": "docs/docs/desktop-app.md",
+      "line": 93,
+      "quote": "Review's panel in the **Reviews** tab holds the review interface and shows the current phase, the revision and",
+      "problem": "The body says 'The minors are fixed too: docs and shortcuts' and 'Archived Reviews: they are reachable again, under \"Show closed\"'. desktop-app.md has no Reviews-tab section: the headings run from :70-:155 (PR board, run, publish, watcher, rules) to :394 Flows board and :425 Metaproject, and it never mentions Show closed or Restore for review runs. The delta sends readers to the tab for archived runs ('Open in Reviews' for an archived run, slice :926-929, with History offering Restore and Delete there) and adds user-visible 'Show closed (1)' and 'Archived' (slice :1029-1032, model.test.ts :1134).",
+      "impact": "A user who archived a review run is sent to the Reviews tab. The docs do not say that archived Reviews appear only under Show closed or that Restore is in the panel's History. Columns, filters and the indicator rule are not documented either.",
+      "suggested_fix": "Add a Reviews section to desktop-app.md: the columns and Show closed, the list view, search and filters, the Archived label and Restore through History, the rounds timeline, and when the indicator lights. Alternatively, narrow the body's docs claim.",
+      "evidence": "keryx ctx rg '^#' docs/docs/desktop-app.md (29 headings, none for Reviews); keryx ctx rg -i 'archiv|Show closed|reviews tab' docs/docs/desktop-app.md -> only :93, :169 (pointers) and :363-371 (sessions); slice-04 :926-929, :1023-1037, :1129-1136.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant: the claims were settled from the slice, the body and targeted reads); wiki_used: no (not-relevant: the user docs were located with ctx rg); ctx_used: yes (keryx ctx rg over docs/docs, README.md, apps/desktop/README.md, the requirement docs, desk-run-store.ts and the r02 raw files); raw_rg_used: no (raw sed/awk/head reads of the review package and cli-reference.md:5186-5215 carried keryx:raw markers; no raw rg/grep over project code).

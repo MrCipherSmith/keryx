@@ -1,0 +1,85 @@
+STATUS: DONE
+
+# Backend Review Report: PR #1304, round 2 (delta), wave 4, slice-05 and slice-06
+
+## Summary
+Slice-05 carries the store and entity part of the round-1 fixes. Round placement moved out of SQL into `roundFor` over an in-memory list that is read once per Review on each `assignReviews` call. Requests superseded before they started are factored into `neverStarted` and are left out of rounds and `reviewRows`. Archived attempts are kept and flagged. `publication()` now reports a receipt or skip outcome for every finished state. `summarizeReview` takes state, findings and publication from the unarchived attempts and from the accepted result of the current round. Slice-06's backend content is only removed lines: Rust test rows, the old `publication()` and the old superseded clause. The SQL is parameterised, and the only interpolated values are constant aliases. The migration stays inside the constructor's IMMEDIATE transaction, and its UPDATE is guarded by `review_id IS NULL`. The per-Review cache is filled from the indexed `review_rounds` lookup. I found one new minor TypeScript issue and no blocker or major.
+
+## Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Range: `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b..f6971fd4a6cd2031b2479509f6f8ada380f342e1` (explicit-hash-range, delta round)
+- Slices read in full: slice-05 (1160 lines), slice-06 (backend hunks: review.rs, desk-run-store.ts; the Desktop TSX/docs hunks are outside this lens)
+- Code read at head: `src/review/desk-run-store.ts` lines 1-90 and 159-215 (assignReviews, reviewFor)
+
+## Stats
+- blocker: 0
+- major: 0
+- minor: 1
+- info: 0
+
+## Minor & Info
+
+### [R2-BE-W4-001] The `Pending` row type says it has `round: number`, but the query that fills it selects no `round`
+- **Severity**: minor
+- **File**: src/review/desk-run-store.ts:184
+- **Problem**: `type Pending = PlacedAttempt & { repo; pr; viewer; previousId }` inherits `round: number` from `PlacedAttempt`. The `SELECT rowid AS seq, id, repo, pr, viewer, created, base, head, previousId, superseded ... WHERE review_id IS NULL` that fills it returns no `round`, so every `row.round` is `undefined` at runtime while its type says `number`. The code works today only because `roundFor` never reads `run.round`, and `attempts.push({ ...row, round })` overwrites the field.
+- **Why it matters**: The type allows `row.round` to be read on a pending row and promises a number. A later change that passes `row` where a placed attempt is expected, for example to `placed.find` or to a sort by round, would compile and then get `undefined`.
+- **Fix**: Type the pending row without `round`, for example `type Pending = Omit<PlacedAttempt, "round"> & {...}`, and build the placed entry explicitly as `{ ...row, round }`. That already matches `PlacedAttempt`.
+
+## Checked and not filed
+- `roundFor` (desk-run-store.ts:~104): `inTop` is non-empty whenever `top` is non-null, so the `reduce` without a seed is safe. Linking to a continuation's predecessor searches only within the same Review, as it did before. The never-started test, the A-B-A test and the retry test match the documented rule.
+- `neverStarted` is computed live on every call and never stored. A queued attempt that is superseded after placement is therefore excluded on the next placement and in `reviewRows`. Its stored `round` stays, and the next request shares it, which the test asserts as intended.
+- The `publication()` widening affects the board badge only through `publicationPending`. `board-badges.ts:52` reads only `"pending"`, and that outcome is still limited to completed, complete attempts, so badges do not change.
+- `writeBoundJson` and `writeBoundJsonText` were moved unchanged from `review-board.ts`; the old version was read at `20e4281a2`. The binding check at the publication boundary is kept. Already assessed in w3.
+- `reviewRows` SQL: the `delete` exclusion plus `NOT neverStarted("r.")` use no user-controlled interpolation.
+- Slice-06 `review.rs` hunks are removed test assertion lines only.
+
+## Related findings from earlier waves (not re-filed)
+- A fully archived, published Review reports `ready` / `publication: null`: R2-BE-006 (w1).
+- The `headComparison` "one rule" claim is not used by `summarizeReview`: R2-BE-002 (w1).
+- A PR whose only runs were superseded before they started is missing from the Reviews list: F-001 (raised in an earlier wave).
+- Archived attempts in the timeline, and `latestRound` taken from a different set: F-001 (frontend, earlier wave).
+- Fully archived Reviews cost card reads and comparison slots: F-002 (earlier wave).
+
+## Not verified
+- No tests were run (`exec_budget_s: 0`). The package evidence reports 194 root + 1008 Desktop tests passing at f6971fd.
+- `src/commands/review-reviews.ts` (`parseCompare`, list ordering and the compare cap) is outside slices 05 and 06 and was not re-read here.
+
+## Routing audit
+- graph_used: no (not-relevant: the slices are supplied text, and the change is contained in the store and entity files I read)
+- wiki_used: no (not-relevant: the operator decisions are in the flow package, which I did not need beyond the payload)
+- ctx_used: yes (`keryx ctx read`/`show` for desk-run-store.ts, `keryx ctx rg` for publication and writeJson consumers)
+- raw_rg_used: no. Small raw `grep`/`sed` calls on review-package files and `git show` piped through `grep` were used, each marked `keryx:raw`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-backend",
+  "slices": ["slice-05", "slice-06"],
+  "summary": "Store and entity fixes are sound: in-memory round placement inside the migration transaction, a shared neverStarted predicate, archived attempts flagged, publication outcome for every finished state, and state, findings and publication from unarchived attempts. No blocker or major; one minor type inaccuracy in assignReviews' Pending row.",
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "findings": [
+    {
+      "id": "R2-BE-W4-001",
+      "severity": "minor",
+      "file": "src/review/desk-run-store.ts",
+      "line": 184,
+      "quote": "type Pending = PlacedAttempt & { repo: string; pr: number; viewer: string; previousId: string | null };",
+      "problem": "Pending inherits round: number from PlacedAttempt, but the pending SELECT returns no round column, so row.round is undefined at runtime while typed as number.",
+      "impact": "The type allows row.round to be read on an unplaced row; a later change that uses a pending row as a placed attempt compiles and gets undefined.",
+      "suggested_fix": "Declare type Pending = Omit<PlacedAttempt, \"round\"> & { repo; pr; viewer; previousId } and keep attempts.push({ ...row, round }).",
+      "evidence": "desk-run-store.ts:184-201 at f6971fd: the pending query selects seq, id, repo, pr, viewer, created, base, head, previousId, superseded; roundFor reads only base/head/previousId; push overrides round.",
+      "confidence": "high",
+      "reviewer": "review-backend",
+      "blocking_merge": false,
+      "evidence_kind": "code-read"
+    }
+  ],
+  "prior_dispositions": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "R2-BE-006, R2-BE-002 and the earlier F-001/F-002 findings bear on slice-05 and were not re-filed."
+  ]
+}
+```

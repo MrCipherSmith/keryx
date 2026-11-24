@@ -1,0 +1,149 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage2`
+- Parent ref: round-1 head `20e4281a2ac0265ce0a54ebcd200cb3eb55cdc6b`
+- Range: `20e4281a2..f6971fd4a` (fix round 1: backend 85fa985c1, Desktop 98c7b37a1, T17)
+- Scope mode: explicit-hash-range (delta), slice-01 (FIX slice), read in full
+- Stack detected: fullstack (Bun/TS CLI + SQLite store, React desktop without MobX)
+
+### Summary
+The fix round moves the round-1 architecture findings in the right direction: the Reviews indicator type now lives in the feature and the shell imports it; `writeBoundJson` moved beside `withCurrentGithubBinding` in `src/review/board-github.ts`; the "needs a commit count" rule is a domain helper (`headComparison`) used by the command; the Desktop no longer recomputes the reviewed attempt and renders the domain's `reviewed`; round placement is one pure `roundFor` over an in-memory per-Review list, used by the single `assignReviews` path. Cross-tab wiring (focus with repo, watcher-poll signal, board identity) goes through App as mediator, which is the right direction. Two residuals remain, both minor: `freshness()` still does not go through `headComparison` (the closed check is only in the command's path, while the helper's doc says it is the one rule for both), and the Desktop's reviewed-commit fallback still derives a domain fact (reference head) from rounds when `reviewed` is null. One sibling of F-001's class (cross-tab repository identity) remains in the new Review-rules fallback when the Reviews tab is on its default repository.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. F-013 closed: `apps/desktop/src/reviews/ReviewsView.tsx:23` declares `ReviewsTabIndicator`; `apps/desktop/src/shell/AppShell.tsx:15` imports it from `../reviews/ReviewsView`; ReviewsView no longer imports from `../shell/`.
+
+### Module Boundary Violations
+
+#### [F-001] `freshness()` and `headComparison()` still decide "behind" by two rules; the helper's doc claims one
+- **Severity**: minor
+- **File**: src/review/review-entity.ts:155-162 (helper), :110-115 (`freshness`), :187 (`summarizeReview` freshness call)
+- **Problem**: FA-5 asked for one domain helper used "by the command and by `freshness`". `headComparison` (used by `src/commands/review-reviews.ts:57`) returns null for a closed Review (`!reviewClosed(row, card)`), but `summarizeReview` computes `freshness(referenceHead(row), card?.headSha ?? null, compare)`, which shares only `headsDiffer` and has no closed check. The doc comment at :155-156 says "The one rule for the command's comparisons and for `freshness`", which the code does not do. The test "summarizeReview reports behind exactly when a comparison is needed" (review-entity.test.ts, slice lines 778-785) only checks open Reviews, so the "exactly" claim is unpinned for the closed case.
+- **Why it matters**: For a Review closed locally or a merged/closed PR whose head differs from the reviewed head (visible under "Show closed" with `--include-closed`), the summary reports `behind` with `commits: null` while no comparison is ever made, i.e. a permanent "unknown count" that no refresh resolves. The duplication round 1 named (F-015) is narrowed, not removed: a future change to the closed rule changes the comparison set but not reported freshness.
+- **Fix**: Derive freshness from the helper: in `summarizeReview`, `const pair = headComparison(row, card); freshness = !card?.headSha ? unknown : pair ? behind(compare) : current` (or have `freshness` take the pair), or drop the "one rule ... for `freshness`" sentence and decide explicitly what a closed Review's freshness is. Extend the "exactly" test with a closed Review.
+
+#### [F-002] Desktop `reviewedCommit` fallback still re-derives the domain's reference head from rounds
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/model.ts (slice lines 266-271: `review.reviewed?.headSha ?? review.rounds[0]?.headSha`)
+- **Problem**: F-005's fix makes Desktop render the domain's `reviewed` (closed for the stated trigger). When `reviewed` is null, Desktop falls back to `rounds[0].headSha` (the highest-numbered round's first attempt, built by `roundsOf(row.attempts)` over all attempts, archived included), while the domain's freshness is measured from `referenceHead(row)`'s fallback: the head of the newest unarchived attempt (`stateAttempts`, review-entity.ts:137-140). The two coincide in the common case but diverge when the highest round is wholly archived, or when a continuation of an older attempt joins a lower round after a higher one exists (`roundFor` keeps continuations in their predecessor's round, desk-run-store.ts:107-108). The rule "which head is the Review measured from" is again computed on both sides of the CLI boundary, which is the class F-005 was about.
+- **Why it matters**: In those cases the card shows one commit and a freshness measured from another, with no error. Narrow trigger (no finished reviewed attempt, plus archive or late continuation), hence minor.
+- **Fix**: Emit the reference head itself on `ReviewSummary` (e.g. `referenceHead: string | null` from `referenceHead(row)`, or make `reviewed` fall back explicitly in the domain) and render only that in Desktop; delete the `rounds[0]` fallback.
+
+#### [F-003] Review-rules fallback from the PR board can target another repository when the Reviews tab is on its default repository
+- **Severity**: minor
+- **File**: apps/desktop/src/reviews/ReviewsView.tsx:273-276 (`rulesTarget` fallback), App.tsx:227/643 (`boardIdentity` -> `rulesTarget`)
+- **Problem**: Sibling of round-1 F-001's class (cross-tab repository identity). FB-10 passes the PR board's verified identity to the Reviews tab for when the list read fails. The guard checks the repository only when the Reviews tab has an explicit selection: `(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase())`. Both views hold independent `repo` state initialised to undefined (= default repository) (ReviewsView.tsx:88, ReviewBoard.tsx:95). If the user switched the Pull requests board to repository B and the Reviews tab is still on its default A when its read fails (non-access error), `!repo` is true and the Review rules button in the Reviews toolbar opens B's rules.
+- **Why it matters**: The rules dialog the Reviews tab offers belongs to a repository other than the one the tab shows. Only in multi-repository projects with a failed Reviews read; the dialog's own target is the guard against acting blindly.
+- **Fix**: Compare against the repository the failed read was for (the default repository's name, or the identity of the last successful Reviews read) instead of skipping the check when `repo` is undefined; or accept the board identity only when `boardRules.repo` is the project's default repository while `repo` is undefined. Add a DOM test with a board on repository B.
+
+### Design Pattern Misuse
+None detected. `roundFor` is now a module-level pure function over `PlacedAttempt[]` (desk-run-store.ts:106-117) called from the single `assignReviews` path (:183-205), which every write path reaches (:163, :413, :761); migration and live placement share one rule.
+
+### Dependency Inversion
+None detected. `readCards`/`compareHeads` keep I/O orchestration (batching, `mapPool`, deadline) in the command and receive `query`/`compare` as injected functions; the domain helper `headComparison` stays pure.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React: App mediates sibling-view signals (`reviewsFocus` with `onFocusHandled`, `watcherPolls` via `onWatcherPoll`, `boardIdentity` via `onIdentityChange`) instead of the views reaching into each other. F-014 closed: `ReviewBoard.openReview` (ReviewBoard.tsx:457-464) sends only `start` to the PR panel, view/answer go to `onOpenInReviews` with repo and repository id, and without the callback the panel opens with no intent. F-049 closed: `onOpenReviewSession` no longer appears in ReviewDetail.tsx or ReviewBoard.tsx.
+
+### Prior findings (fix-round verification)
+- F-013 (arch): closed — AppShell.tsx:15 imports `ReviewsTabIndicator` from reviews/ReviewsView.tsx:23.
+- F-014 (arch): closed — ReviewBoard.tsx:460-463 routes only `start` locally; fallback carries no intent.
+- F-015 (arch): partial — `headComparison` (review-entity.ts:157) shared by the command (review-reviews.ts:57); `freshness` still separate, see new F-001.
+- F-016 (arch): closed — claimed `disputed`, but the code implements FA-6: `writeBoundJson`/`writeBoundJsonText` in src/review/board-github.ts:106-109, imported by review-reviews.ts:5 and review-board.ts:11 (aliased); no command-to-command import remains.
+- F-049 (arch, info): closed — claimed `deferred`, but FB-7 removed the prop (no match in ReviewDetail.tsx/ReviewBoard.tsx).
+- F-001: closed — App.tsx:216-218 focus carries `{repo, repositoryId, number}`; ReviewsView matches repo + repositoryId + number (slice 226-237), switching repository via `focusRepo` first. Sibling in F-003 above.
+- F-003: closed — App.tsx:221-223 `reviewsFocusHandled` clears focus by nonce; ReviewsView uses `refreshedFor` keyed by nonce.
+- F-005: closed for the stated trigger (Desktop renders `summary.reviewed`, domain picks newest finished reviewed attempt); residual fallback in new F-002.
+- F-008: closed — `roundFor` retries only within the current highest round (desk-run-store.ts:112-116).
+- F-009: closed — `accessLost` calls `settlePending()` (slice 177-181).
+- F-026: closed — per-Review `placed` map; one SELECT per Review per call (desk-run-store.ts:193-203).
+- Other prior findings touched by this slice (F-004, F-007, F-018, F-019, F-021, F-022, F-023, F-024, F-025, F-031, F-033) look addressed in the hunks read, but they belong to other lenses and I did not verify them beyond the slice text; no disposition is claimed for them here.
+
+### Not verified
+- Only slice-01 plus bounded reads of review-entity.ts, desk-run-store.ts, ReviewBoard.tsx, ReviewsView.tsx, App.tsx at HEAD. No tests run (exec_budget 0). Graph/wiki/memory layers not consulted; findings rest on code read.
+
+### Suggested Patches
+```diff
+--- src/review/review-entity.ts (summarizeReview)
+-    freshness: freshness(referenceHead(row), card?.headSha ?? null, compare),
++    freshness: !card?.headSha ? { kind: "unknown" } : headComparison(row, card) ? freshness(referenceHead(row), card.headSha, compare) : { kind: "current" },
+```
+(Only if a closed Review should read `current`; otherwise fix the doc comment instead.)
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/review-entity.ts",
+      "line": 155,
+      "quote": "the heads are equal or unknown, or the Review is closed. The one rule for the command's comparisons and for `freshness`.",
+      "problem": "headComparison (closed check included) drives the command's comparisons, but summarizeReview computes freshness(referenceHead(row), card?.headSha, compare), which shares only headsDiffer and has no closed check. The doc comment claims one rule for both; the 'exactly' test covers only open Reviews.",
+      "impact": "A closed or merged Review whose PR head differs from the reviewed head (shown with --include-closed / Show closed) reports behind with commits null forever, since it is never compared. Round-1 F-015's duplication is narrowed, not removed.",
+      "suggested_fix": "Derive summarizeReview's freshness from headComparison (null pair with a known head -> current, else behind with the compare), or drop the 'one rule for freshness' claim and decide closed freshness explicitly; add a closed case to the 'summarizeReview reports behind exactly when a comparison is needed' test.",
+      "evidence": "review-entity.ts:110-115 freshness (no closed check); :155-162 headComparison with !reviewClosed; :187 summarizeReview freshness call; review-reviews.ts:57 command uses headComparison; review-entity.test.ts slice 778-785 tests only open Reviews.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "freshness-not-derived-from-headComparison"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/model.ts",
+      "line": null,
+      "quote": "const head = review.reviewed?.headSha ?? review.rounds[0]?.headSha ?? \"\";",
+      "problem": "When summary.reviewed is null, Desktop falls back to rounds[0].headSha (highest round, archived attempts included), while the domain measures freshness from referenceHead's fallback: the newest unarchived attempt's head. The 'which head is the Review measured from' rule is again computed on both sides of the CLI boundary (round-1 F-005's class).",
+      "impact": "If the highest round is wholly archived, or a continuation of an older attempt joined a lower round after a higher one exists, the card shows one commit and a freshness measured from another. Narrow: only when no unarchived finished reviewed attempt exists.",
+      "suggested_fix": "Emit the reference head on ReviewSummary (referenceHead(row)) or make the domain's `reviewed` carry the fallback explicitly, render only that in Desktop, and delete the rounds[0] fallback.",
+      "evidence": "slice-01 model.ts hunk 266-271; review-entity.ts:137-140 referenceHead fallback over stateAttempts (unarchived); :167-177 roundsOf over row.attempts incl. archived, round headSha from its first attempt; desk-run-store.ts:107-108 continuation joins predecessor's round.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "desktop-reviewed-commit-fallback-rederives-reference-head"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/reviews/ReviewsView.tsx",
+      "line": 274,
+      "quote": "(!repo || boardRules.repo.toLowerCase() === repo.toLowerCase()) ? boardRules : null);",
+      "problem": "Sibling of round-1 F-001 (cross-tab repository identity). The Review-rules fallback accepts the PR board's identity without a repository check whenever the Reviews tab has no explicit selection (repo undefined = default repository). Both views keep independent repo state (ReviewsView.tsx:88, ReviewBoard.tsx:95).",
+      "impact": "Multi-repository project: board switched to repository B, Reviews tab on its default A, Reviews read fails with a non-access error -> the Reviews toolbar's Review rules opens B's rules.",
+      "suggested_fix": "Compare boardRules.repo with the repository the failed read was for (default repository name or last successful read's repo) instead of skipping the check when repo is undefined; add a DOM test with the board on another repository.",
+      "evidence": "ReviewsView.tsx:273-276 rulesTarget fallback; App.tsx:227 boardIdentity from ReviewBoard onIdentityChange, :643 rulesTarget={boardIdentity}; ReviewsView.tsx:88 and ReviewBoard.tsx:95 useState<string>() repo.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "reviews-rules-fallback-board-repo-unchecked-on-default"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-005", "disposition": "closed"},
+    {"id": "F-008", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-014", "disposition": "closed"},
+    {"id": "F-015", "disposition": "partial"},
+    {"id": "F-016", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-049", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0},
+  "not_verified": "Only slice-01 and bounded HEAD reads of the touched files; no tests run; graph/wiki/memory layers not consulted. Other lenses' prior findings in the slice not dispositioned here."
+}
+```
+
+Routing audit: graph_used: no (not-relevant — sites located by keryx ctx rg within the named files); wiki_used: no (not-relevant — plan/fix-round docs were the context); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no.

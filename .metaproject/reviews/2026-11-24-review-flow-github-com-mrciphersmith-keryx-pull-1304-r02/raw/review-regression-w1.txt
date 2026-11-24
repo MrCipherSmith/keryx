@@ -1,0 +1,89 @@
+STATUS: DONE
+
+review-regression, round 2 (delta 20e4281a2..f6971fd4a), wave 1, slice-01 (FIX slice).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-01"],
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "F-001", "disposition": "closed"},
+    {"id": "F-002", "disposition": "closed"},
+    {"id": "F-003", "disposition": "closed"},
+    {"id": "F-004", "disposition": "closed"},
+    {"id": "F-005", "disposition": "closed"},
+    {"id": "F-006", "disposition": "closed"},
+    {"id": "F-007", "disposition": "closed"},
+    {"id": "F-008", "disposition": "closed"},
+    {"id": "F-009", "disposition": "closed"},
+    {"id": "F-010", "disposition": "closed"},
+    {"id": "F-011", "disposition": "closed"},
+    {"id": "F-012", "disposition": "closed"},
+    {"id": "F-013", "disposition": "closed"},
+    {"id": "F-014", "disposition": "closed"},
+    {"id": "F-015", "disposition": "closed"},
+    {"id": "F-016", "disposition": "closed"},
+    {"id": "F-017", "disposition": "closed"},
+    {"id": "F-018", "disposition": "closed"},
+    {"id": "F-019", "disposition": "closed"},
+    {"id": "F-021", "disposition": "closed"},
+    {"id": "F-022", "disposition": "closed"},
+    {"id": "F-023", "disposition": "closed"},
+    {"id": "F-024", "disposition": "closed"},
+    {"id": "F-025", "disposition": "closed"},
+    {"id": "F-026", "disposition": "closed"},
+    {"id": "F-028", "disposition": "closed"},
+    {"id": "F-029", "disposition": "closed"},
+    {"id": "F-030", "disposition": "closed"},
+    {"id": "F-031", "disposition": "closed"},
+    {"id": "F-033", "disposition": "closed"},
+    {"id": "F-041", "disposition": "closed"},
+    {"id": "F-045", "disposition": "closed"},
+    {"id": "F-049", "disposition": "closed"},
+    {"id": "F-053", "disposition": "closed"},
+    {"id": "F-059", "disposition": "closed"}
+  ],
+  "summary": "No regression found in the round-1 fix delta. No finding at major or above."
+}
+```
+
+## How the claims were checked (code at f6971fd4a, diffs from `git diff 20e4281a2..f6971fd4a`)
+
+- F-001: App `openInReviews(target{repo, repositoryId, number}, intent)`; ReviewBoard passes `snapshot.repo/repositoryId` from both the card action and the panel; ReviewsView switches to `pending.repo` via `focusRepo` before matching, and matches only when `snapshot.repo` (case-insensitive) and `repositoryId` agree. No loop: after `focusRepo`, `repo === wanted` stops a second switch; a failing read settles after one refresh.
+- F-002: ReviewWorkspace calls `onIntentConsumed` on both the drop and the act paths; ReviewsView `consumeIntent` strips `intent` from `selected`, also when `active` turns false.
+- F-003 / F-009: focus request lifted above the keyed `RepositoryReviews`, taken once by nonce (`taken` ref), App clears `reviewsFocus` through `onFocusHandled`; `selectRepo` and `accessLost` call `settlePending`.
+- F-004: `reviewNeedsViewer` lights `ready` only on `publication === "pending"`; `publication()` now reports receipt/skip for every FINISHED state but returns `pending` only for completed+complete, so the board badge (`board-badges.ts:52` reads only `"pending"`) and the `attachBadges`/`localBadge` parity (both go through the same `publication()` at desk-run-store.ts:564 and :477) are unchanged.
+- F-005: Desktop `reviewedCommit` reads the CLI's `reviewed` (= newest finished attempt with a range, same rule as `referenceHead`).
+- F-006: `reviewRows` keeps archived attempts flagged; all-archived Review listed with `archived: true`, shown under Show closed as "Archived"; PR panel `hasReview = local.runs.length > 0` offers Open in Reviews.
+- F-007 / F-011: Reviews list re-reads on `subscribeSessionReview` (fires only on user actions: start, continue, decide — SessionReviewActivity.tsx:138/156, App.tsx:683), on the watcher poll signal, and on the 60 s interval while a Review runs, the interval skipping a hidden document. The watcher signal itself is visibility-gated (ReviewWatcher.tsx:74 `if (!document.hidden)`) and fires only when the background poll's `lastSuccessAt` changes, so the new reload path adds no hidden-window polling.
+- F-008 / F-026 / F-028: `roundFor` is now a pure function over a per-Review in-memory list; retry only in the current top round; never-started superseded rows excluded from top/previous and from `reviewRows`. `requestAttempt` marks the queued row superseded before inserting the new one (desk-run-store.ts:722-760), so the predicate sees it at placement.
+- F-010: `stateAttempt` keeps a round's accepted result when a later attempt in the same round stopped.
+- F-012: ReviewsView mounts once the account read settled (`githubAccount || githubAccountError`); `getProjectGitHubAccount` returns an object, never null, so the gate always opens after the first read.
+- F-013 / F-014 / F-049: `ReviewsTabIndicator` declared in reviews/, shell imports it; ReviewBoard routes only `start` to the PR panel; `onOpenReviewSession` removed from ReviewDetail and ReviewBoard (no remaining reader).
+- F-015 / F-016: `headComparison` in review-entity used by the command and by `freshness`; `writeBoundJson` moved to board-github.ts; no other importer of the removed `review-board.ts` `writeJson` export (`keryx ctx rg` over src and apps: only `review.ts` imports `BOARD_USAGE, runReviewBoard`).
+- F-017: Review rules fall back to the board's verified identity (`rulesTarget`) when the list read failed with a non-access error, guarded by viewer and repo match.
+- F-022 / F-023 / F-024 / F-025: rows sorted by latest activity before the 25-compare cap; locally closed Reviews' cards read only with `--include-closed` (operator plan FA-7 scoped it to local `closedAt`); card batches read independently with one warning; 60 s compare deadline with `clearTimeout` in `finally`.
+- F-018 / F-019 / F-021 / F-059: docs and spec lines updated (desktop-app.md:157/427/438-439, desktop-metaproject.md:3, cli-reference freshness `unknown`, specification.md:8 and the protocol sentence, implementation-plan stage 2/3 hand-off; the remaining «Review again» at implementation-plan.md:25 is the dated historical decision).
+- F-029 / F-030 / F-031 / F-033 / F-041 / F-045 / F-053: tile `aria-label` removed; error banner moved under the header actions; Rounds link name starts with its visible text; search matches title or number anywhere; `restoreFocus` returns focus to search on identity change; non-OID head and exactly-25 cap tests present in the slice.
+
+## Protected stage-0 code
+
+- Attention set in ReviewBoard.tsx: the delta's ReviewBoard hunks touch only `openReview`, `watcherPolled`, `onIdentityChange` and the Props; `carriedAttention/seeded/seedFor/attentionPrs/stale` lines unchanged. `watcherPolled` changes identity exactly when `refresh` does (its other dep `noteWatcherPoll` is a stable `useCallback`), so the watcher's `request` effect re-runs no more often than before. `watcherTarget` is `useMemo`'d (ReviewBoard.tsx:421), so `onIdentityChange` → App `setBoardIdentity` does not loop.
+- attachBadges/localBadge parity: see F-004 above; `previousAttempt` only swapped its inline predicate for the identical `neverStarted()`.
+- Toolbar container queries: `apps/desktop/src/styles/review.css` is not in the delta; the Reviews toolbar change adds only `title` attributes.
+
+## Observation below the scope-B bar (not filed; for scope A if wanted)
+
+- Archived-only Reviews are now listed, so they also get PR card reads and are eligible for the 25-compare cap (`headComparison` does not check `archived`), although they are shown only under Show closed. With more than 25 behind Reviews, hidden archived ones can take compare slots from visible ones. Cost/degradation, no broken behaviour.
+
+## Coverage and limits
+
+- The payload carries no computed blast-radius record and the package holds no blast-radius file, so there was no capped set to report on. I walked dependents with `keryx gdgraph affected --data-dir <package>/layers/graph` for review-entity.ts, desk-run-store.ts and board-github.ts and checked the consumers of the moved behaviour (`publication()` callers, `reviewNeedsViewer`, `readReviewRows`, `writeJson`, `publishSessionReview`, `onOpenReviewSession`); desk-publication, pr-context, lifecycle, service and desk-questions do not read `.publication`.
+- The graph does not carry runtime edges: the Tauri `invoke("review_board", {includeClosed})` → Rust `review_board(include_closed)` → CLI `--include-closed` chain was read by hand; the Rust change is not compiled locally (CI only).
+- Not judged (test-only claims outside what this slice shows): F-037, F-042, F-043, F-044, F-046, F-047. Not in this slice: F-020, F-027, F-032, F-034..F-036, F-038..F-040, F-048, F-050..F-052, F-054..F-058, F-060.
+- No tests run (exec budget 0); relied on research-evidence for the green suites.
+
+routing audit: graph_used: yes (gdgraph affected over the package graph); wiki_used: no (not-relevant, the fix plan and findings state intent); ctx_used: yes (keryx ctx rg; bounded raw reads/diffs marked keryx:raw); raw_rg_used: no (grep used only on docs/.metaproject flow file, which ctx rg skips as hidden).
