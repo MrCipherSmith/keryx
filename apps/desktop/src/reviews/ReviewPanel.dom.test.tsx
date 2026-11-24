@@ -50,7 +50,7 @@ function summary(card: ReviewCard): ReviewSummary {
     closedAt: null, rounds: [{ number: 1, baseSha: card.baseSha, headSha: card.headSha, previousRunId: null, attempts: [] }],
     latestRound: 1, reviewed: null, archived: false, findings: null, publication: null, source: "manual", flowId: null, tokens: null };
 }
-type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose">> & { onRefreshBoard?: () => void };
+type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose" | "onOpenReviewSession">> & { onRefreshBoard?: () => void };
 async function show(command: typeof reviewRun, card: ReviewCard, { onRefreshBoard = () => {}, onClose = () => {}, ...extra }: Extra = {}) {
   await renderComponent({ cwd: "/project", target, review: summary(card), runCommand: command, onRefresh: onRefreshBoard, onClose, ...extra });
 }
@@ -688,7 +688,7 @@ function headMovedFixture(number: number, extraOptions: Partial<DeskReviewOption
   const command: typeof reviewRun = async (_cwd, key, action) => {
     expect(key).toEqual({ ...target, number });
     actions.push(action);
-    if (action.kind === "start") {
+    if (action.kind === "advance") {
       started = true;
       return { version: 1, runs: [next, reviewed], startedRunId: next.id };
     }
@@ -732,7 +732,7 @@ test("Update review is disabled while another review action runs, and nothing st
   await publishFromHistory(reviewed.id, reviewedHead);
   expect(btn("Update review to ccccccc").disabled).toBe(true);
   await click("Update review to ccccccc");
-  expect(actions.some(action => action.kind === "start")).toBe(false);
+  expect(actions.some(action => action.kind === "start" || action.kind === "advance")).toBe(false);
   expect(document.querySelector(".review-publish-footer")).not.toBeNull();
   expect(refreshed).toBe(0);
   await act(async () => cancel.resolve());
@@ -744,13 +744,56 @@ test("a failed Update review start shows its error and does not refresh the boar
   const { reviewedHead, reviewed, publishCommand } = headMovedFixture(53);
   let refreshed = 0;
   await show(async (_cwd, _key, action) => {
-    if (action.kind === "start") throw new Error("The selected Keryx CLI refused the start.");
+    if (action.kind === "advance") throw new Error("The selected Keryx CLI refused the start.");
     return { version: 1, runs: [reviewed] };
   }, { ...pr, number: 53, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
   expect(document.body.textContent).toContain("The selected Keryx CLI refused the start.");
   expect(refreshed).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("a refused Update review that says stale: is shown, but never as a moved range and never as lost access", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(65);
+  let lost = 0;
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "advance") throw new Error("stale: A later round of this Review already exists. Refresh the Review and update from its latest round.");
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 65, headSha: reviewedHead }, { publishCommand, onAccessLost: () => { lost++; } });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.body.textContent).toContain("A later round of this Review already exists");
+  expect(document.body.textContent).not.toContain("The PR revision changed. Refresh to load the latest range.");
+  expect(lost).toBe(0);
+  await act(() => root.render(null));
+});
+
+test("an Update review refused because the pull request moved again asks for a board refresh", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(67);
+  await show(async (_cwd, _key, action) => {
+    if (action.kind === "advance") throw new Error("stale: The pull request revision has changed. Refresh the board to review its current range.");
+    return { version: 1, runs: [reviewed] };
+  }, { ...pr, number: 67, headSha: reviewedHead }, { publishCommand });
+  await click("Publish to GitHub");
+  await click("Update review to ccccccc");
+  expect(document.body.textContent).toContain("The PR revision changed. Refresh to load the latest range.");
+  await act(() => root.render(null));
+});
+
+test("a session attempt is labelled Session and offers no Desktop coordinator session", async () => {
+  const { reviewedHead, reviewed } = headMovedFixture(66);
+  const session: DeskRun = { ...reviewed, id: "attempt-session", source: "session" };
+  const sessionButtons = () => document.querySelectorAll(".review-icon-action[aria-haspopup='dialog']").length;
+  // A Desktop worker's attempt offers its coordinator session; the same attempt made in a session does not.
+  await show(async () => ({ version: 1, runs: [reviewed] }), { ...pr, number: 66, headSha: reviewedHead }, { onOpenReviewSession: async () => {} });
+  const workerButtons = sessionButtons();
+  expect(workerButtons).toBeGreaterThan(0);
+  await act(() => root.render(null));
+  await show(async () => ({ version: 1, runs: [session] }), { ...pr, number: 66, headSha: reviewedHead }, { onOpenReviewSession: async () => {} });
+  expect(document.body.textContent).toContain("Session");
+  expect(document.body.textContent).not.toContain("Existing review");
+  expect(sessionButtons()).toBe(workerButtons - 1);
   await act(() => root.render(null));
 });
 
@@ -768,7 +811,7 @@ test("Update review does not start when the current head already has a failed at
     }, { ...pr, number, headSha: boardHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
     await publishFromHistory(reviewed.id, reviewedHead);
     await click("Update review to ccccccc");
-    expect(actions.some(action => action.kind === "start")).toBe(false);
+    expect(actions.some(action => action.kind === "start" || action.kind === "advance")).toBe(false);
     // A board behind the push is re-read once, so the panel follows the head the attempt covers.
     expect(refreshed).toBe(boardHead === currentHead ? 0 : 1);
     // The attempt that already covers the current head is shown instead.
@@ -789,12 +832,12 @@ test("Update review starts a round when the only attempt on the current head is 
     let started = false;
     await show(async (_cwd, _key, action) => {
       actions.push(action);
-      if (action.kind === "start") started = true;
-      return { version: 1, runs: started ? [next, reviewed, other] : [reviewed, other], ...(action.kind === "start" && { startedRunId: next.id }) };
+      if (action.kind === "advance") started = true;
+      return { version: 1, runs: started ? [next, reviewed, other] : [reviewed, other], ...(action.kind === "advance" && { startedRunId: next.id }) };
     }, { ...pr, number, headSha: currentHead }, { publishCommand });
     await publishFromHistory(reviewed.id, reviewedHead);
     await click("Update review to ccccccc");
-    expect(actions.filter(action => action.kind === "start")).toHaveLength(1);
+    expect(actions.filter(action => action.kind === "advance")).toHaveLength(1);
     expect(toastTitles()).not.toContain("Commit ccccccc already has a review attempt");
     await act(() => root.render(null));
   }
@@ -812,7 +855,7 @@ test("Update review shows the running attempt on the current head rather than a 
   }, { ...pr, number: 63, headSha: currentHead }, { publishCommand });
   await publishFromHistory(reviewed.id, reviewedHead);
   await click("Update review to ccccccc");
-  expect(actions.some(action => action.kind === "start")).toBe(false);
+  expect(actions.some(action => action.kind === "start" || action.kind === "advance")).toBe(false);
   // The running attempt is the panel's latest attempt: no dialog opens on the failed one.
   expect(document.querySelector(".dialog")).toBeNull();
   expect(document.querySelector('article[aria-label="Review attempt attempt-live"]')).not.toBeNull();
@@ -846,16 +889,15 @@ test("an Update review that raced another action does not start, refresh the boa
   await act(() => root.render(null));
 });
 
-test("Update review does not carry automatic publication into the new round", async () => {
-  const { currentHead, options, actions, command, publishCommand } = headMovedFixture(56, { autoPublish: true });
+test("Update review sends no settings: keryx review advance takes the reviewed attempt's, without automatic publication", async () => {
+  const { currentHead, reviewed, options, actions, command, publishCommand } = headMovedFixture(56, { autoPublish: true });
   expect(options.autoPublish).toBe(true);
   await show(command, { ...pr, number: 56, headSha: currentHead }, { publishCommand });
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
-  const { autoPublish: _dropped, ...carried } = options;
-  const starts = actions.filter(action => action.kind === "start");
-  expect(starts).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options: carried }]);
-  expect(starts[0]?.kind === "start" && starts[0].options && "autoPublish" in starts[0].options).toBe(false);
+  // The CLI drops autoPublish (src/review/review-advance.test.ts); the panel cannot add settings to an update round.
+  expect(actions.filter(action => action.kind === "advance")).toEqual([{ kind: "advance", id: reviewed.id, baseSha: "base", headSha: currentHead }]);
+  expect(actions.some(action => action.kind === "start")).toBe(false);
   await act(() => root.render(null));
 });
 
@@ -863,7 +905,7 @@ test("Update review closes the publish dialog before the start answers", async (
   const { currentHead, reviewed, next, publishCommand } = headMovedFixture(57);
   const start = deferred();
   await show(async (_cwd, _key, action) => {
-    if (action.kind === "start") {
+    if (action.kind === "advance") {
       await start.promise;
       return { version: 1, runs: [next, reviewed], startedRunId: next.id };
     }
@@ -986,7 +1028,7 @@ test("a review dialog opened from Sessions offers no Update review", async () =>
 });
 
 test("Update review in a head-moved dialog starts the next round of the same Review on the current head", async () => {
-  const { currentHead, options, next, actions, command, publishCommand } = headMovedFixture(49);
+  const { currentHead, next, actions, command, publishCommand } = headMovedFixture(49);
   let refreshed = 0;
   await show(command, { ...pr, number: 49, headSha: currentHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
   // A keyboard user opens the dialog from the reviewed attempt's button, which the new attempt replaces.
@@ -997,7 +1039,7 @@ test("Update review in a head-moved dialog starts the next round of the same Rev
   expect(document.activeElement?.matches(".desk-runs h3")).toBe(true);
   expect(document.activeElement?.textContent).toBe("Latest review");
   // The same PR and account, the PR's current range, and the reviewed attempt's settings.
-  expect(actions.filter(action => action.kind === "start")).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options }]);
+  expect(actions.filter(action => action.kind === "advance")).toEqual([{ kind: "advance", id: "attempt-reviewed", baseSha: "base", headSha: currentHead }]);
   expect(document.querySelector(".dialog")).toBeNull();
   expect(document.querySelector(`article[aria-label="Review attempt ${next.id}"]`)).not.toBeNull();
   expect(refreshed).toBe(0);
@@ -1005,12 +1047,12 @@ test("Update review in a head-moved dialog starts the next round of the same Rev
 });
 
 test("Update review from a board that has not seen the push starts on the dialog's head and refreshes the board", async () => {
-  const { reviewedHead, currentHead, options, actions, command, publishCommand } = headMovedFixture(50);
+  const { reviewedHead, currentHead, actions, command, publishCommand } = headMovedFixture(50);
   let refreshed = 0;
   await show(command, { ...pr, number: 50, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
-  expect(actions.filter(action => action.kind === "start")).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options }]);
+  expect(actions.filter(action => action.kind === "advance")).toEqual([{ kind: "advance", id: "attempt-reviewed", baseSha: "base", headSha: currentHead }]);
   expect(document.querySelector(".dialog")).toBeNull();
   expect(refreshed).toBe(1);
   await act(() => root.render(null));
@@ -1035,7 +1077,7 @@ test("Update review from an earlier attempt does not start a second attempt when
   const session = document.querySelector('article[aria-label="Review attempt attempt-reviewed"]')!;
   await act(async () => [...session.querySelectorAll("button")].find(node => node.textContent === "Publish to GitHub")!.click());
   await click("Update review to ccccccc");
-  expect(actions.some(action => action.kind === "start")).toBe(false);
+  expect(actions.some(action => action.kind === "start" || action.kind === "advance")).toBe(false);
   expect(document.querySelector(".dialog")).toBeNull();
   expect(document.querySelector('article[aria-label="Review attempt attempt-reviewed"]')).toBeNull();
   // The attempt on the current head is the one shown, and the toast says why nothing started.

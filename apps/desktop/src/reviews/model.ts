@@ -24,6 +24,7 @@ export const SOURCE_LABEL: Record<ReviewSource, string> = {
   manual: "Manual",
   scheduled: "Scheduled",
   existing: "Existing review",
+  session: "Session",
 };
 
 /** Only `behind` is behind: `unknown` (PR head unread) and a kind this build does not know are not. */

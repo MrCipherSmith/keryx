@@ -1,0 +1,72 @@
+STATUS: PARTIAL
+
+## Security Review — wave 2 (slice-02)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 only)
+- Read in full: every hunk of src/commands/operator-confirm-review.ts, src/commands/review-advance.ts, src/commands/review.ts,
+  src/lib/group-subcommands.ts; the added lines of the bundled review-orchestrator SKILL.md/SKILL.detail.md (same text as the
+  .metaproject copies read in wave 1).
+- Code read at HEAD beyond the diff: src/commands/review-desk-run.ts:1-90, src/review/session-attempt.ts (whole new file),
+  src/review/publish.ts publishReview, src/review/session-publish-github.ts, src/review/readiness.ts:362-372.
+- NOT read in full: src/commands/operator-confirm-review-tools.test.ts and src/gdskills/review-orchestrator-preflight.test.ts
+  (test code; not read line by line).
+
+### Summary
+- Blockers: 0 / Major: 0 / Minor: 0 / Info: 1
+
+### Findings
+
+#### [security-w2-1] review_publish card build registers the package before any operator answer (info)
+- File: src/commands/operator-confirm-review.ts:191-192,215 (attemptOf in buildCard) and :927-929 (reviewConfirmSpecs wiring)
+- Problem: `buildCard` of `review_publish` calls `sessionPublication(dir, registerSession…)`, which runs
+  `registerSessionPackageForProject`: a GitHub read with the project account (resolveDeskSubject), a copy of the whole package
+  into the Desktop store, an upsert of a `session` row, and a write of `desk-attempt.json` into the package. All of this happens
+  when the model asks for the card, before the operator says yes or no. Every other card in this file only reads.
+- Trigger/outcome: a model calling `review_publish` on any PR-bound package creates a Desktop Attempt (listed in the Reviews tab
+  and publishable from Desktop) even when the operator then declines. No attacker vector: publishing from Desktop still needs
+  its own operator confirmation, so this is not exploitable; it is a state change outside the operator's yes.
+- Fix: register in `apply` (after the yes, before publishReview), and build the card with the marker id that registration will
+  produce (sessionAttemptId is deterministic from key, reviewId and round), or document that card building may register.
+
+### Checked, clean
+- review_publish apply: the marker read from desk-attempt.json is part of the posted body, and apply refuses when the body differs
+  from the one shown (`changed`), so a desk-attempt.json swapped between card and yes cannot change what is posted. The
+  body screening (`shownBody`/hiddenInCard) still covers the marker line.
+- `keryx review publish --yes` stays terminal-only; the new registration does not touch the confirm path.
+- `review advance` CLI: strict parseArgs, UUID/SHA/owner-name/number validation, no shell; options come from the stored attempt,
+  with autoPublish removed, so a session cannot enable automatic GitHub publication through it
+  (review-desk-run.ts:71-74 gate is not bypassed).
+- `review complete` registration: failures are warnings, not refusals; no secret is printed (only the attempt id).
+- The path-handling defect in reading desk-attempt.json (used here at operator-confirm-review.ts:259) is reported once, in wave 3
+  (security-w3-1), with this site in its class_scope.
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-security-code",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [
+    {
+      "id": "review-security-code-w2-1",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 215,
+      "problem": "review_publish buildCard registers the session package as a Desktop Attempt (GitHub read, package copy into the Desktop store, DB upsert, desk-attempt.json write) before the operator answers; every other card here only reads.",
+      "evidence": "src/commands/operator-confirm-review.ts:191-192,215,927-929; src/review/session-attempt.ts:117-125,129-139",
+      "impact": "A model asking for the card creates a publishable Desktop Attempt even when the operator declines. Not exploitable: Desktop publication needs its own confirmation.",
+      "suggested_fix": "Register in apply after the yes (the attempt id is deterministic, so the card can show the same marker), or state in the tool description that building the card registers the package.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 1
+  }
+}
+```

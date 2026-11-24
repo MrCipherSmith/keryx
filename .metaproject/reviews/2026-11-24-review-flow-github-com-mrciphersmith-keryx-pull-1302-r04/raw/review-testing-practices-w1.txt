@@ -1,0 +1,62 @@
+STATUS: DONE
+
+Scope: slice-01 (production side of `git diff 98f777283..HEAD`, fix commit 8275a66fa): src/review/publish.ts, src/review/session-attempt.ts, src/review/review-advance.ts, src/review/desk-run-types.ts, src/review/session-publish-github.ts, src/review/complete-head-gate.ts, src/commands/operator-confirm-review.ts, src/commands/review.ts, apps/desktop/src/review/{ReviewWorkspace,ReviewRuns,ReviewRunDialog}.tsx, apps/desktop/src/review/useReviewRuns.ts. Checked against round3-canonical-findings.json (T1-T16). Skill/template doc edits not reviewed (not test-relevant).
+
+Baseline (all green before mutation): publish.test.ts 32 pass; desk-publication.test.ts 42 pass; review-advance.test.ts 7 pass; operator-confirm-review-tools.test.ts 79 pass; apps/desktop ReviewPanel.dom.test.tsx 51 pass.
+
+Mutation pass: 31 mutants, one line each, applied by a script that saved the file bytes, ran the suite(s), and wrote the original bytes back. After the pass `git status --short` shows only the pre-existing untracked entries and `git diff --stat` is empty: tree unchanged.
+
+Result: 18 killed, 13 survived.
+
+publish.ts
+- P1 :255 read receipts only from receiptDir (not package) -> KILLED (receipt-loss test)
+- P2 :295 confirm receipt only in receiptDir after post -> KILLED
+- P3 :251 drop the package-level outer lock (lock order, T3) -> SURVIVED (publish + desk-publication suites)
+- P4 :216 laterRound refusal disabled -> KILLED
+- P5 :219 reviewedHeadInPull refusal disabled -> KILLED
+- P6 :294 receipt URL fallback to the PR ref removed (T6) -> KILLED
+- P7 :270 head re-read refusal disabled (T12) -> KILLED
+- P8 :270 drop `pr !== undefined &&` (tracker that never answers) -> KILLED (2 command tests)
+- P9 :261 found-on-GitHub confirm only in receiptDir -> SURVIVED
+- P10 :288 drop receipt on certain refusal only in receiptDir -> SURVIVED
+session-attempt.ts
+- S1 :103 base = recorded value (no symbolic fallback, T1) -> KILLED
+- S2 :103 prefer PR baseRefOid over a recorded full SHA -> SURVIVED
+- S3 :152 never pin base/head in the copied manifest -> KILLED
+- S4 :110 decided-attempt skip disabled (T7) -> KILLED
+- S5 :158 carried receipt disabled (T2) -> KILLED
+- S6 :158 carried receipt overwrites an existing attempt receipt -> SURVIVED
+- S7 :41 "layers" removed from NOT_COPIED (T8) -> KILLED
+- S8 :41 "payloads" removed from NOT_COPIED (T8) -> SURVIVED
+- S9 :50 attempt-id UUID check removed (T9) -> KILLED
+- S10 :54 package-PR number check removed (T9) -> KILLED
+- S11 :145 registration copy not under publication.lock -> SURVIVED
+- S12 :184 registerSessionPackageForProject returns undefined instead of throwing the skip reason -> SURVIVED
+review-advance.ts
+- R1 :29 `stale:` -> `access:` (T10) -> KILLED
+operator-confirm-review.ts
+- O1 :892 review_complete card no longer registers the attempt (T13) -> SURVIVED
+- O2 :268 execute path drops laterRound/reviewedHeadInPull acceptance (T4) -> SURVIVED
+Desktop / desk-run-types
+- D1 ReviewWorkspace.tsx:100 openManagedRun gate back to `source === "existing"` (T5) -> SURVIVED
+- D2 ReviewWorkspace.tsx:213 dialog onOpenWorkspace gate back to `!== "existing"` (T5) -> SURVIVED
+- D3 ReviewRuns.tsx:118 row session button gate back to `!== "existing"` -> KILLED
+- D4 ReviewRunDialog.tsx:56 hasCoordinator back to `!== "existing"` -> SURVIVED
+- D5 useReviewRuns.ts:69 advance error kind mapped to "start" again -> KILLED
+- D6 desk-run-types.ts:108 hasDeskWorker = `!== "existing"` -> KILLED
+
+Assessment. The fix commit materially improved the suite: of round 3's named unpinned guards, receipt reading/writing in both places, laterRound and reviewedHeadInPull refusals, the URL fallback, the head re-read refusal, the symbolic base, the decided-attempt skip, the carried receipt, the layers filter, the attempt-id validation, the stale message, the advance error kind and hasDeskWorker itself are now killed. Still unpinned: the lock order (the T3 fix), the receipt write symmetry on the two non-happy branches, base precedence, the register lock, the project-level registration error, the two operator-card wirings (T13 and T4 on the card path), and the Desktop gating at the workspace/dialog level (only the row button is pinned).
+
+```json
+{"status":"DONE","reviewer":"review-testing-practices","wave":1,"slices":["slice-01"],"findings":[
+{"id":"review-testing-practices-w1-1","severity":"major","file":"src/review/publish.ts","line":251,"problem":"The round-3 fix for T3 (always take the package's publication.lock before the attempt's) is not pinned by any test.","evidence":"Mutant P3 replaced the outer withFileLock on <packageDir>/publication.lock with a direct call; publish.test.ts (32) and desk-publication.test.ts (42) stayed green.","impact":"A refactor can drop the serialization again and reopen the T3 double-post race between two session publishers that resolved different attempt directories, with the suites green.","suggested_fix":"Add a test that runs two publishReview calls concurrently on one package, one with publication={directory:attempt} and one without, with a post seam that awaits a barrier; assert exactly one post and the other refused as already published.","confidence":"high"},
+{"id":"review-testing-practices-w1-2","severity":"minor","file":"src/review/publish.ts","line":261,"problem":"Dual-place receipt writes are pinned only on the success path; the found-on-GitHub confirm (:261) and the drop after a certain refusal (:288) may write one place only and stay green.","evidence":"Mutants P9 (confirm found only in receiptDir) and P10 (drop only in receiptDir) both survived publish.test.ts.","impact":"P10 regression leaves a stale pending receipt in the package dir after GitHub refuses, so every later publish is refused as 'unknown result'; P9 regression leaves the package receipt unconfirmed.","suggested_fix":"Extend the 'receipt is written to the Attempt and to the package' test: one case with a pending receipt and findPublished returning a URL (assert both dirs hold the URL), one with post returning {ok:false} (assert neither dir holds a receipt).","confidence":"high"},
+{"id":"review-testing-practices-w1-3","severity":"minor","file":"src/review/session-attempt.ts","line":103,"problem":"Base precedence (a recorded full SHA wins over the PR's current baseRefOid) is unpinned.","evidence":"Mutant S2 (prefer baseRefOid whenever it is a full SHA) survived; every desk-publication test passes resolveKey a baseRefOid equal to the recorded revision.baseSha.","impact":"A package reviewed against an older base could be registered on the PR's current base, so Desktop would show and accept it for a range it never reviewed.","suggested_fix":"Register a package whose manifest records base A while resolveKey returns baseRefOid B; assert the attempt's baseSha is A.","confidence":"high"},
+{"id":"review-testing-practices-w1-4","severity":"minor","file":"src/review/session-attempt.ts","line":158,"problem":"The 'do not overwrite Desktop's own receipt' half of the carried-receipt guard is unpinned.","evidence":"Mutant S6 (drop `&& readPublicationReceipt(directory) === undefined`) survived desk-publication.test.ts.","impact":"Re-registration could replace a confirmed Desktop receipt (with URL) by an older or pending package receipt, flipping Desktop's published state.","suggested_fix":"Seed the attempt dir with a confirmed receipt and the package with a different/pending one, re-register, assert the attempt receipt is unchanged.","confidence":"high"},
+{"id":"review-testing-practices-w1-5","severity":"minor","file":"src/review/session-attempt.ts","line":145,"problem":"Registration's copy under the attempt's publication.lock is unpinned.","evidence":"Mutant S11 (call the body without withFileLock) survived.","impact":"Desktop preview/submit could read a half-copied package; the guard can be dropped silently.","suggested_fix":"Hold <attempt>/publication.lock in the test (withFileLock with a barrier), start registration, assert the package copy has not been replaced until the lock is released.","confidence":"medium"},
+{"id":"review-testing-practices-w1-6","severity":"minor","file":"src/review/session-attempt.ts","line":184,"problem":"registerSessionPackageForProject's new contract (throw the skip reason, stay silent for non-PR packages) has no test; nor do laterRoundOf (:207) or its newerRoundOf lookup.","evidence":"Mutant S12 (return undefined instead of throw) survived desk-publication and publish suites; keryx ctx rg finds no *.test.ts referencing registerSessionPackageForProject or laterRoundOf.","impact":"The warning a session prints when registration fails (the T1/T2 diagnosability fix) and the real later-round lookup can regress unnoticed; publish tests use a laterRound stub only.","suggested_fix":"Unit-test laterRoundOf against a DeskRunStore holding rounds 1 and 2 of one key (expects 2 for round 1, undefined for round 2 and for a missing store); test the project wrapper's throw/undefined split with a non-PR and an unresolvable-base package.","confidence":"high"},
+{"id":"review-testing-practices-w1-7","severity":"minor","file":"src/commands/operator-confirm-review.ts","line":892,"problem":"The T13 fix (review_complete card registers the attempt) and the card execute path's acceptance wiring (:268, T4) are unpinned; the same wiring in review.ts:5081 runPublish is not exercised either.","evidence":"Mutants O1 (skip registerSession in runCompletionGates) and O2 (drop ...acceptance(publication) on execute) both survived operator-confirm-review-tools.test.ts (79); no test passes registerSession or reviewedHeadInPull seams to reviewCommand or the card specs.","impact":"The card path can silently lose the superseded-round and history checks or stop registering completed rounds, re-creating T4/T13 with green suites.","suggested_fix":"In operator-confirm-review-tools.test.ts drive review_complete with a registerSession seam spy (assert called once with the package dir, and a warning on throw); drive review_publish execute with a moved head and reviewedHeadInPull seam returning false (assert refused, no post).","confidence":"high"},
+{"id":"review-testing-practices-w1-8","severity":"minor","file":"apps/desktop/src/review/ReviewWorkspace.tsx","line":100,"problem":"T5 gating is pinned only on the row button (ReviewRuns.tsx:118); the workspace open path (:100), the dialog's onOpenWorkspace (:213) and ReviewRunDialog's hasCoordinator (ReviewRunDialog.tsx:56) can revert to `source !== \"existing\"` unnoticed.","evidence":"Mutants D1, D2, D4 survived ReviewPanel.dom.test.tsx (51 pass); D3 and D6 were killed.","impact":"A session attempt could again open a non-existent Desktop coordinator session or show coordinator UI in its dialog.","suggested_fix":"In the session-attempt DOM test, open the attempt (click its row) and assert onOpenReviewSession is never called, the dialog has no 'Open workspace' action and shows no coordinator transcript section.","confidence":"high"},
+{"id":"review-testing-practices-w1-9","severity":"info","file":"src/review/session-attempt.ts","line":41,"problem":"Only the `layers` half of the NOT_COPIED extension is pinned.","evidence":"Mutant S8 (drop \"payloads\") survived; S7 (drop \"layers\") killed.","impact":"Low: payloads/ copying would return as a size/perf regression only.","suggested_fix":"Add a payloads/ file next to layers/big.json in the decided-attempt test and assert it is absent from the copy.","confidence":"high"}
+],"stats":{"blocker":0,"major":1,"minor":7,"info":1}}
+```

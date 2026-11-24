@@ -1,0 +1,93 @@
+STATUS: DONE
+
+## Architecture Review — wave 2 (slice-02)
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 commits only)
+- Scope mode: explicit-hash-range, supplied slice text
+- Stack detected: generic-ts (CLI command layer + bundled skill prose + tests)
+
+Read in full: slice-02.diff lines 1-1153 (src/commands/operator-confirm-review-tools.test.ts, src/commands/operator-confirm-review.ts
+three hunks, src/commands/review-advance.ts, src/commands/review.ts eight hunks, bundled review-orchestrator SKILL.detail.md and
+SKILL.md hunks (same text as the installed copy read in wave 1), src/gdskills/review-orchestrator-preflight.test.ts two hunks,
+src/lib/group-subcommands.ts). Code at HEAD read: src/review/session-attempt.ts (whole, via slice-03),
+src/review/desk-run-service.ts:28-60, src/review/board-github.ts:95-125, line numbers of the registration sites by
+`keryx ctx rg` over src/commands.
+
+### Summary
+The command layer is the composition root for the new pieces: `keryx review advance` is a thin CLI adapter that parses flags and
+injects `resolve`/`history`/`start` into the pure `advanceReview` (good DIP: the domain module has no store or GitHub import),
+and `runPublish`, `runComplete` and the `review_publish` card wire the session registrar and the new GitHub port into
+`publishReview` through options and seams. One structural concern: the card's dry-run `buildCard` (and `runPublish` before the
+operator's answer) performs a durable write into the Desktop review store, so a read/preview operation mutates shared state.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. src/commands/* -> src/review/* only; src/review/review-advance.ts takes its I/O through `AdvanceDeps`.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+
+#### [ARCH-W2-1] The publish preview registers the package as a Desktop Attempt (query with a durable side effect)
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:215 (also src/commands/review.ts:5074)
+- **Problem**: `buildCard` is documented as "A dry run of the real function: it checks readiness, builds the body and asks
+  `confirm`, which declines", but before the dry run it calls `attemptOf(dir, ctx.projectRoot)` (line 191/215), which, with the
+  production seam from `reviewConfirmSpecs()` (line 928), runs `registerSessionPackageForProject`: it inserts/updates a `runs` row
+  in the shared Desktop store (`DeskRunStore.recordSession`), copies the package into `<desktop-review>/attempts/<id>/package`
+  and writes `desk-attempt.json` into the package (src/review/session-attempt.ts:116-125). `runPublish` does the same before the
+  operator is asked (review.ts:5074). The marker does not need the registration: the Attempt id is a pure function of key,
+  review id and round (`sessionAttemptId`, session-attempt.ts:30), so only the key lookup is needed to render the body the card shows.
+- **Why it matters**: showing a card, or a terminal publish the operator declines, leaves a new "Session" Attempt in Desktop's
+  Reviews tab and refreshes an existing undecided one's copy, for a publication that never happened; the card is no longer a
+  side-effect-free preview, and the apply path then depends on that side effect having happened (line 259 re-reads
+  `desk-attempt.json` with no registrar).
+- **Fix**: compute `{directory, id}` for the card from the resolved key and `sessionAttemptId` without writing, and register
+  (recordSession + copy) inside the publish lock only after the operator's yes, or keep registration as an explicit step
+  (`keryx review complete` already registers).
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A — not detected in stack.
+
+Not run: tests (read-only review).
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [
+    {
+      "id": "review-architecture-w2-1",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 215,
+      "problem": "The review_publish card's buildCard, documented as a dry run of publishReview, first calls attemptOf -> sessionPublication with the production registrar (line 928: registerSessionPackageForProject), which writes a runs row into the shared Desktop store (recordSession), copies the package into <desktop-review>/attempts/<id>/package and writes desk-attempt.json into the package. runPublish does the same before the operator answers (src/commands/review.ts:5074). A preview/query performs a durable command, although the marker id it needs is a pure function (sessionAttemptId).",
+      "evidence": "src/commands/operator-confirm-review.ts:191,215,259,928; src/commands/review.ts:5074; src/review/session-attempt.ts:30-36,116-125,149-161 (slice-03 lines 789-795, 875-886, 909-921)",
+      "impact": "Showing a card, or a terminal publish the operator declines, leaves (or refreshes) a 'Session' Attempt in Desktop's Reviews tab for a publication that did not happen; the apply path silently depends on that earlier side effect (line 259 passes no registrar).",
+      "suggested_fix": "Derive {directory, id} for the preview from the resolved key and sessionAttemptId without writing; register (recordSession + package copy) only inside the publish lock after the operator's yes, or leave registration to keryx review complete.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```

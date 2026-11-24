@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 149737,
+      "contentHash": "771df35712b6730d91ad15d672c12b87a3dbc21f7cb708af7681fb3246aded08",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+        "apps/desktop/src-tauri/src/review.rs",
+        "apps/desktop/src/platform/reviewRuns.ts",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/review/useReviewRuns.ts",
+        "apps/desktop/src/reviews/model.ts",
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "docs/docs/cli-reference.md"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "source code: apps/desktop/src-tauri/src/review.rs, apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx (+2)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 89695,
+      "contentHash": "45637005249a188848796f09b1f0735b5a87f5af29216166170f7b9d096ca39e",
+      "files": [
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-advance.ts",
+        "src/commands/review.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts",
+        "src/lib/group-subcommands.ts"
+      ],
+      "domain": "src/commands [test], src/commands, src/gdskills [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/operator-confirm-review.ts, src/commands/review-advance.ts, src/commands/review.ts (+1)",
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 97647,
+      "contentHash": "2d160b1e98a556bec76408014d295718413d8720722b49b861b2b1ddf45e7ec1",
+      "files": [
+        "src/review/autonomous-profile.ts",
+        "src/review/desk-publication.ts",
+        "src/review/desk-run-store.ts",
+        "src/review/desk-run-types.ts",
+        "src/review/publication-guard.ts",
+        "src/review/publish.ts",
+        "src/review/review-advance.ts",
+        "src/review/review-entity.ts",
+        "src/review/session-attempt.ts",
+        "src/review/session-publish-github.ts",
+        "src/review/desk-publication.test.ts",
+        "src/review/publish.test.ts",
+        "src/review/review-advance.test.ts",
+        "src/review/session-publish-github.test.ts"
+      ],
+      "domain": "src/review, src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: src/review/session-attempt.ts",
+          "risk class auth/permissions: src/review/session-publish-github.ts",
+          "source code: src/review/autonomous-profile.ts, src/review/desk-publication.ts, src/review/desk-run-store.ts (+7)"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 3,
+    "bytes": 337079,
+    "files": 40,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

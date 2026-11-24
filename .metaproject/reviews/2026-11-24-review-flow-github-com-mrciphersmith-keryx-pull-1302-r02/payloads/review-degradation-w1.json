@@ -1,0 +1,251 @@
+{
+  "review_context": {
+    "request": {
+      "words": "Review round 2 (delta after fix round T11) of flow 521 PR #1302",
+      "flags": [],
+      "mode": "diff",
+      "range": "a5d1ab236fe85dee62a758a19390049dde4eb7f9..0c6ff2b7e6e4118287ef8abd531e7268980435e8"
+    },
+    "git": {
+      "repo": "MrCipherSmith/keryx",
+      "branch": "feat-/desktop-review-v2-stage4-7dce00",
+      "base": "main",
+      "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+      "merge_base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9"
+    },
+    "pr": {
+      "number": 1302,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1302",
+      "title": "feat(review): Desktop Review v2 stage 4 — Head moved procedure (shared publish and update command pending stages 2–3)",
+      "state": "open",
+      "body": "Flow 521 · Desktop Review v2 stage 4 (`docs/requirements/keryx-desktop-review-v2/implementation-plan.md` v0.1.3, row 4 \"Единый реестр\"). Draft: only the parts that do not depend on stages 2 and 3 are in.\n\n## Done here\n\n1. **\"Head moved\" procedure in `review-orchestrator`.** New section `## Head moved` in `SKILL.detail.md`:\n   - The PR head is checked at every wave boundary (before each `keryx review next`), before `review complete`, and before publishing. N new commits are counted, and rewritten history is detected.\n   - `on_head_move` defaults to `ask` (D2), with two operator choices. `follow`, `ignore` and the unattended behaviour are also covered.\n   - The update round runs through `keryx review advance`. While that command does not exist, it falls back to `keryx review plan --head <new sha>`.\n   - Before publishing a moved PR, the options are: update, publish as is, save locally, skip. Publishing the old commit as is is allowed only as `--event COMMENT`, with a first line that names the reviewed commit (D1).\n\n   In `SKILL.md`, Round plan step 5 and the end of \"PR Review Report Publication\" point to the procedure, and \"If head moved, re-check findings\" is gone. Its line count stays at the 918-line ceiling. The bundled and installed copies are byte-identical. Tests: a new block in `src/gdskills/review-orchestrator-preflight.test.ts`.\n2. **Divergence map.** `.metaproject/flows/521-…/divergence-map.md` maps the session `review publish` path against the Desktop `desk-publish` path: entry points, 18 points of divergence with file:line, what is already shared, and a 7-step extraction plan marked by the stage each step needs.\n\n## Waiting on stages 2 and 3 (not in this PR yet)\n\n- **Item 2, shared publish code (T7).** `review publish` would use the acceptance, receipt and duplicate marker from `desk-publication`. Two reasons to wait:\n  - Extracting now would rewrite the same lines of `desk-publication.ts` that stage 3 changes (`blockedReason`, the `current` check, the return shape of `desk-publish`).\n  - The cross-path duplicate test needs session packages registered as Attempts, which is stage 2.\n- **Item 3, the session uses the same update command (T8).** `keryx review advance` comes with stage 3. The Desktop prompt line \"New commits belong to a separate request\" (`src/review/autonomous-profile.ts:199`) is replaced then.\n\nWhen stage 3 is pushed (on top of stage 2), this branch is rebased onto it and T7/T8 are implemented. Nothing is merged into or pushed to those branches.\n\n## Expected overlap\n\n- Stage 3 may also edit `review-orchestrator` (publish variants). If it names the update command something other than `keryx review advance`, the procedure here gets a follow-up edit.\n- Stage 2 and stage 3 own `desk-run-store.ts`, `desk-publication.ts`, `review-desk-publish.ts` and `ReviewPublishDialog.tsx`. This PR does not touch them.\n\n## Not verified\n\n- Lint and type-check did not run locally: the worktree has no `node_modules`. CI is the check.\n- `bun test src/gdskills`: 8470 pass, 1 fail in `install.test.ts` (EACCES on a read-only `rules/core` in a temp dir). That test is outside the changed files and was not confirmed on the base commit.\n- The real-PR scenario (review in a session, publish from Desktop) was not run. It needs items 2 and 3.\n- The procedure describes the spec contract. The current `keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`), which is stage 3's change.\n"
+    },
+    "memory": {
+      "query": "review-orchestrator head moved publish",
+      "status_filter": "accepted",
+      "searched": true,
+      "entries": [
+        {
+          "path": "constraints/flow-ids-allocated-per-clone.md",
+          "title": "Flow ids are allocated per clone",
+          "type": "constraint",
+          "status": "accepted"
+        }
+      ]
+    },
+    "requirements": {
+      "flow": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4",
+      "acceptance_criteria_file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "acceptance_criteria": [
+        "AC1 Head moved section content (preflight test)",
+        "AC2 SKILL.md pointer, phrase removed, line count at ceiling",
+        "AC3 bundled and installed copies identical",
+        "AC4 divergence map with file:line and extraction plan (judged)",
+        "AC5-AC7 blocked on stages 2 and 3, not in this PR"
+      ],
+      "spec": [
+        "docs/requirements/keryx-desktop-review-v2/specification.md (Поведение при смене head, Единый реестр, O13, O15)",
+        "docs/requirements/keryx-desktop-review-v2/implementation-plan.md (D1, D2, Этап 4)"
+      ]
+    },
+    "rules": [
+      ".metaproject/rules/activity/review.mdc",
+      ".metaproject/rules/process/agent-conduct.mdc",
+      ".metaproject/rules/stacks/ts-js-node/testing.mdc",
+      ".metaproject/rules/process/skill-lifecycle.mdc"
+    ],
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "changed_lines": null,
+      "risk_areas": [
+        "skill steering text that agents execute",
+        "line ceiling of review-orchestrator SKILL.md",
+        "copy parity bundled vs installed"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "full",
+      "omissions": [],
+      "budget": {
+        "max_prompt_tokens": null,
+        "max_findings": 30
+      },
+      "model_plan": {
+        "default": {
+          "tier": "standard",
+          "tier_reasons": [
+            "base:standard",
+            "resolve:ranking-refused"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "tier_resolution": "session-fallback",
+          "model_discovery": {
+            "provider": "anthropic",
+            "candidates": [],
+            "ranked": [],
+            "session_rank": null,
+            "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+          },
+          "routed": true
+        },
+        "review-security-code": {
+          "tier": "standard",
+          "tier_reasons": [
+            "base:standard",
+            "floor:security",
+            "resolve:ranking-refused"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "tier_resolution": "session-fallback",
+          "model_discovery": {
+            "provider": "anthropic",
+            "candidates": [],
+            "ranked": [],
+            "session_rank": null,
+            "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+          },
+          "routed": true
+        }
+      }
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "skipped_reviewers": [],
+      "reasons": {
+        "review-architecture": "keryx review plan roster, round 2 delta",
+        "review-degradation": "keryx review plan roster, round 2 delta",
+        "review-highload": "keryx review plan roster, round 2 delta",
+        "review-logic": "keryx review plan roster, round 2 delta",
+        "review-performance": "keryx review plan roster, round 2 delta",
+        "review-pr-contract": "keryx review plan roster, round 2 delta",
+        "review-regression": "keryx review plan roster, round 2 delta",
+        "review-security-code": "keryx review plan roster, round 2 delta",
+        "review-style": "keryx review plan roster, round 2 delta",
+        "review-testing-practices": "keryx review plan roster, round 2 delta"
+      }
+    },
+    "review_plan": {
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02/plan.json",
+      "roster": [
+        "review-architecture",
+        "review-degradation",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "dispatches": 20,
+      "minutes": {
+        "min": 10,
+        "max": 25
+      },
+      "planKey": "0d7820b6d091713b"
+    },
+    "cross_repo": []
+  },
+  "reviewer": "review-degradation",
+  "conduct": "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+  "scope_mode": "diff",
+  "branch": "feat-/desktop-review-v2-stage4-7dce00",
+  "base_sha": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+  "round": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "pr_context": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02/pr-context.md",
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0,
+  "budget": {
+    "max_prompt_tokens": null,
+    "max_findings": 30
+  },
+  "layers": {
+    "version": 1,
+    "files": [
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "src/gdskills/review-orchestrator-preflight.test.ts"
+    ],
+    "prHead": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+    "graphCommit": "0c6ff2b7e6e4118287ef8abd531e7268980435e8",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 2,
+      "files": []
+    },
+    "symbols": [],
+    "relatedTests": [
+      "src/gdskills/review-orchestrator-preflight.test.ts"
+    ],
+    "wiki": [],
+    "memory": [],
+    "truncated": [],
+    "unavailable": []
+  },
+  "metaproject": {
+    "memory": [
+      {
+        "path": "constraints/flow-ids-allocated-per-clone.md",
+        "title": "Flow ids are allocated per clone",
+        "type": "constraint",
+        "status": "accepted"
+      }
+    ]
+  },
+  "is_fix_round": false,
+  "prior_findings": [],
+  "known_findings": [],
+  "context_doc": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+  "skill_path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+}

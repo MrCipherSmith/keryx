@@ -1,0 +1,53 @@
+# keryx review verify-run
+finding: F-001
+command: sed -n '200,212p' src/review/round-record.ts; echo ---; sed -n '405,418p;876,890p' src/review/prior-round.ts
+cwd: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00
+time: 2026-11-24T07:48:30.351Z
+exit: 0
+
+--- stdout ---
+  return {
+    manifestSha256: manifestIdentitySha256(files.manifest),
+    findingsSha256: files.findings === undefined ? null : jsonSha256(files.findings),
+    roundRecordSha256: files.round === undefined ? null : jsonSha256(files.round),
+  };
+}
+
+/** Manifest statuses of a round that got past its draft (M1): a draft or partial package is never a previous round. */
+const REVIEWED_STATUSES = new Set(["reviewed", "decided", "learned", "closed"]);
+/** Statuses that only `review complete` and the steps after it write. */
+const COMPLETED_STATUSES = new Set(["decided", "learned", "closed"]);
+
+/**
+---
+}
+
+const strip = ({ eligible: _eligible, manifest: _manifest, ...candidate }: RoundCandidate & { eligible: boolean; manifest: Record<string, unknown> }): RoundCandidate => candidate;
+
+/** Source 1: packages in this checkout for this target, past their draft (M1), with a head. */
+export function localPackageCandidates(cwd: string, target: PriorRoundTarget, targetKey = targetKeyOf(target)): RoundCandidate[] {
+  const found: RoundCandidate[] = [];
+  for (const dir of packageDirs(cwd)) {
+    const candidate = diskCandidate(dir, cwd, "local-package");
+    if (candidate === undefined || candidate.reviewedHead === null || !candidate.eligible) continue;
+    const match = targetMatchOf(candidate.manifest, target, targetKey);
+    if (match === undefined) continue;
+    found.push({ ...strip(candidate), match });
+  }
+    if (candidate.trust.ok) continue;
+    const at = tried.find((attempt) => attempt.source === candidate.source);
+    if (at !== undefined) at.detail = `${at.detail}; not trusted ${candidate.reviewId}: ${candidate.trust.why}`;
+  }
+  const trusted = candidates.filter((candidate) => candidate.trust?.ok === true);
+  const untrusted = candidates.filter((candidate) => candidate.trust?.ok !== true && candidate.reviewedHead !== null);
+  let choice = await choosePrevious(git, trusted, head);
+  if (choice.previous === undefined && untrusted.length > 0) {
+    const newest = [...untrusted].sort((a, b) => b.at - a.at || SOURCE_RANK[a.source] - SOURCE_RANK[b.source])[0]!;
+    choice = { previous: newest, mode: "fallback-first", detail: `no trusted previous round; ${newest.reviewId} is not trusted (${newest.trust?.why ?? "unchecked"}), so this is a full review with its findings as context only` };
+  }
+  const previous = choice.previous;
+  const priorFindings = [...(previous?.findings ?? []), ...commentFindings];
+  const source: RoundSource = previous?.source ?? (commentFindings.length > 0 ? "github-comments" : "none");
+  const round = previous === undefined ? 1 : previous.round + 1;
+--- stderr ---
+

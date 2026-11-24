@@ -1,0 +1,37 @@
+STATUS: DONE
+
+## Logic Review — wave 2 (slice-02)
+
+### Review Scope
+- Range: 7a846bef1..5957d1249 (stage 4 only); slice-02.diff.
+- Read in full at HEAD / in diff: src/commands/review-advance.ts (new), src/commands/review.ts hunks (advance dispatch, runPublish registration + new publish options, runComplete registration, help/usage), src/commands/operator-confirm-review.ts hunks (card buildCard/apply with `publication`, `findPublished`, `registerSession` seam), src/lib/group-subcommands.ts (+advance), src/commands/operator-confirm-review-tools.test.ts hunk.
+- Bundled skill copies (SKILL.md / SKILL.detail.md) read at HEAD in the installed copy, "Head moved" :595-616 (AC3 says byte-identical); src/gdskills/review-orchestrator-preflight.test.ts hunks skimmed for what they assert.
+- Callers/collaborators read: src/review/review-advance.ts, src/review/desk-run-service.ts requestDeskRun/resolveDeskSubject/verifyDeskSubject, src/commands/review-desk-run.ts (permission gates and arg rules), src/review/session-attempt.ts sessionPublication, src/commands/review.ts trackerPrLookup (:750).
+- Spec compliance gate: ran against AC1-AC6; nothing in this slice leaves a criterion unimplemented.
+
+### Summary
+`keryx review advance` validates its flags (repo shape, positive number, UUID id, base/head both-or-neither, 40-hex lowercase SHAs) and hands a resolved key to `advanceReview`, which re-checks the caller's revision and account before `requestDeskRun` start, whose `verifyDeskSubject` checks them again. Publish and complete register the package before use and treat a failed registration as a warning; the card path registers at buildCard and only reads the recorded Attempt at apply, so the marker in the shown body and in the posted body agree. Advance strips `autoPublish`, so it needs no operator gate like desk-run start's. No defect found in this slice; the publish-guard issues reachable from these entry points are reported once, in wave 3, where the code lives.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Spec Gaps / Logic Bugs / Async / Error Handling / Null safety / Type contracts / Edge cases
+None detected.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

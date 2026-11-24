@@ -1,0 +1,8 @@
+[capability] gdgraph.treesitter unavailable: missing grammar for [typescript, tsx, javascript, java, python]; using deterministic fallback
+graph: ok @2e01447 = head (PR head 2e01447), 4613 nodes, 17776 edges, built 2026-11-24T07:39:32.715Z
+wiki: ok @2e01447, divergence none, 28 page(s) would refresh (dry run), 35 page(s) with stale prose
+memory: ok @2e01447, divergence none, 61 entries
+[capability] gdgraph.treesitter unavailable: missing grammar for [typescript, tsx, javascript, java, python]; using deterministic fallback
+graph: ok @2e01447 = head (PR head 2e01447), 4613 nodes, 17776 edges, built 2026-11-24T07:39:32.715Z
+wiki: ok @2e01447, divergence none, 28 page(s) would refresh (dry run), 35 page(s) with stale prose
+memory: ok @2e01447, divergence none, 61 entries

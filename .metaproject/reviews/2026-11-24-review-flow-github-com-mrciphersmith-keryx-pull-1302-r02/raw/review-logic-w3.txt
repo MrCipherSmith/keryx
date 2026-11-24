@@ -1,0 +1,46 @@
+STATUS: DONE
+
+## Logic Review — round 2, wave 3 (slice-02, NEW)
+
+### Review Scope
+- Merge-base `a5d1ab236`, head `0c6ff2b7e`; slice-02 read in full: acceptance-criteria.md AC6 update, divergence-map §5 bullet, journal T11 entries, Between-waves stop-list line, SKILL.md version bump (both copies), flow.json T11 task and history, the bundled SKILL.detail.md Head moved lines, and the preflight test restructure (removal of INSTALLED/test.each, new `step()`/`bullet()` helpers).
+- Spec compliance gate: ran against AC1–AC4 and the AC6 text change.
+
+### Result
+No blocker, major or minor. Checked:
+- The `step(n)` helper slices from `\n<n>. **` to `\n<n+1>. **`. The nested options in step 5 are indented (`   1. **`), so they do not match a top-level step marker. step(3) therefore includes the moved-head `complete` paragraph, which is what the R6 test expects. step(5) runs to the section end.
+- `bullet(label)` returns the first line holding the label. The labels used (`**Unattended**`, `- \`follow\`:`, `- \`ignore\`:`, `**Stop and start on the new head**`, `**Update the review to`) each occur once in the section.
+- The removed `INSTALLED` constant has no remaining reader in the shown hunks, and the recorded test run (verify-tests-to-run-1.txt) exits 0.
+- The divergence-map §5 bullet now agrees with row 4 (D1, not refusal).
+- The stop-list line "once per head the PR moves to" agrees with Head moved step 1.
+- flow.json: T11 is `todo` with a `started` attempt, consistent with the journal; the acChecksum changed together with the `ac-updated` event.
+
+One info: AC6's new clause has no check of its own (below).
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 is logically sound. Test helpers, stop-list wording, divergence-map §5 and the flow records are consistent. One info: AC6's added 'line 200 agrees' clause is not covered by AC6's own verify command.",
+  "slices": [{"id": "slice-02", "coverage": "read in full"}],
+  "findings": [
+    {
+      "id": "LOG-R2-04",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "line": null,
+      "quote": "and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule.",
+      "problem": "AC6 gained a second obligation, that line 200 agrees with the skill's unattended rule. Its verify command is still only `! git grep -q \"New commits belong to a separate request\" -- src/review`, so `keryx flow ac` can confirm AC6 without checking the new clause. The preflight test 'the autonomous prompt and the skill agree' does check it, but AC6 does not run that test.",
+      "impact": "When T8 rewrites line 199/200 in stage 3, AC6 could pass while the two texts disagree again.",
+      "suggested_fix": "Make AC6's verify run the preflight test as well, e.g. invariant `! git grep -q \"New commits belong to a separate request\" -- src/review && bun test src/gdskills/review-orchestrator-preflight.test.ts -t \"autonomous prompt and the skill agree\"`, via `keryx flow ac update`.",
+      "evidence": "acceptance-criteria.md AC6; flow.json acKinds.AC6.check; slice-01 test 'the autonomous prompt and the skill agree'.",
+      "confidence": "high",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+Not verified: no tests run by this reviewer (read-only); git history not read.

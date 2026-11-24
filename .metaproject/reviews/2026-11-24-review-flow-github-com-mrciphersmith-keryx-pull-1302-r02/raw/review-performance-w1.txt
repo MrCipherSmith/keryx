@@ -1,0 +1,60 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1302, merge-base a5d1ab236, head 0c6ff2b7e, round 2, FIX slice (slice-01, 252 lines, read in full): divergence-map.md row 4; review-orchestrator SKILL.detail.md § "Head moved" (both copies); src/gdskills/review-orchestrator-preflight.test.ts new Flow 521 block.
+- Context read at head: SKILL.md:52 ("Shell calls in a `trust` or `auto` session", including "A `gh` call still asks: that is expected, so make it once and reuse what it printed").
+- Tests: not run by me (exec_budget_s 0). The package's research-evidence/verify-tests-to-run-1.txt records the preflight and parity tests at exit 0.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Prior findings
+- R3 (mine, minor): closed. Step 1 now reads the head at each wave boundary with `git ls-remote origin refs/pull/<n>/head`, a single read-only git call with a literal ref. SKILL.md:52 lists read-only git as routine, so it does not prompt. `gh pr view` is now used only twice per round, before `complete` and before publishing, and the text names those as the expected `gh` calls under "make it once". The test pins this order (`git ls-remote` comes before `gh pr view` in step 1). The per-wave cost is one network round-trip of `ls-remote` per wave, a few per round. That is negligible and adds no operator prompt.
+- R1, R2, R4–R12 are outside the performance lens. I checked each against the slice-01 text and the test, not against the commit message:
+  - R1: the stop-and-start bullet now says a stopped round is partial and never a previous round (round-record.ts:207). It also says findings reach the new round at most as context, answers do not carry over, and the uncovered slices are named. The "enters the new plan as unchecked" claim is gone, and a test asserts its absence.
+  - R2: the Unattended bullet follows the instruction of the dispatching run (the autonomous runner's wording maps to `follow`, Desktop's fixed range to `ignore`). A new test reads autonomous-profile.ts and asserts the two texts agree, and AC6 is extended to line 200.
+  - R4: "Desktop runs the same command" is replaced by the stage-3 wording, and a test asserts the old phrase is absent.
+  - R5: the comparison is against the head the operator answered for, and the stop list says "once per head the PR moves to".
+  - R6: a paragraph now names the required first line of the report before `complete`, citing complete-head-gate.ts.
+  - R7: step 5 now covers every publish whose head differs from the round's head, and step 3 says "step 5 governs every publish".
+  - R8: any exit other than 0 or 1 now means "stop and report the git error; never read it as rewritten history".
+  - R9: row 4 allows only COMMENT with a reviewed-SHA first line on a moved head, and §5 resolves the bullet.
+  - R10: the test now asserts "The body's first line is ..." and the `<reviewed sha>..<new sha>` clause.
+  - R11: on_head_move is read only from the keryx-stored Review record, and is `ask` until that record exists.
+  - R12: the duplicate test.each is removed, and a comment points to review-orchestrator-skill-parity.test.ts, which exists at head.
+
+### Clean Areas
+- Tools and calls per wave boundary: the old problem is resolved, and no new `gh` or network call is added per slice or per reviewer.
+- Test cost: `step(n)` and `bullet()` re-slice DETAIL on each call. This happens a few dozen times per test run over a single in-memory string, is not a hot path, and is not a finding.
+- No runtime code changed in this slice, so N+1, re-renders, leaks, bundle size, sync I/O and pagination do not apply.
+
+Routing audit: graph_used: no (payload layers block: affected empty, at PR head); wiki_used: not-relevant (narrow skill-text delta); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "FIX slice-01: R3 closed. Wave boundaries now use the routine read-only `git ls-remote origin refs/pull/<n>/head`, and `gh pr view` runs once before complete and once before publish, as SKILL.md:52's 'make it once' expects. R1, R2 and R4-R12 checked against the text and tests: all closed. No new performance findings.",
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "closed"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "slices": ["slice-01"],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

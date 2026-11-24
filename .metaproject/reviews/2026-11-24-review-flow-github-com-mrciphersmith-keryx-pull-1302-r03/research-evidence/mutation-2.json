@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00",
+  "command": "bun test src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 14728
+  },
+  "mutants": [
+    {
+      "id": "TP2-M1",
+      "file": "src/commands/review-advance.ts",
+      "anchor": "(v.base === undefined) !== (v.head === undefined) ||",
+      "replacement": "",
+      "note": "--base without --head accepted",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 27,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18500
+    },
+    {
+      "id": "TP2-M2",
+      "file": "src/commands/review-advance.ts",
+      "anchor": "(v.id !== undefined && !uuid.test(v.id)) ||",
+      "replacement": "",
+      "note": "non-UUID --id accepted",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 27,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20911
+    },
+    {
+      "id": "TP2-M3",
+      "file": "src/commands/operator-confirm-review.ts",
+      "anchor": "        findPublished: seams.findPublished ?? githubFindPublished,\n",
+      "replacement": "",
+      "note": "card apply cannot resolve an unknown-result receipt by marker",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 261,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20033
+    },
+    {
+      "id": "TP2-M4",
+      "file": "src/commands/operator-confirm-review.ts",
+      "anchor": "        publication: await sessionPublication(prepared.dir, undefined, () => undefined),\n",
+      "replacement": "",
+      "note": "card apply ignores the registered Attempt: own receipt and session marker",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 259,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 19498
+    },
+    {
+      "id": "TP2-M5",
+      "file": "src/commands/review.ts",
+      "anchor": "  if (register !== undefined) {\n    const recorded",
+      "replacement": "  if (false) {\n    const recorded",
+      "note": "review complete no longer registers the session package",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 5177,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18794
+    },
+    {
+      "id": "TP2-M6",
+      "file": "src/commands/review.ts",
+      "anchor": "    readiness,\n    publication,\n",
+      "replacement": "    readiness,\n",
+      "note": "review publish ignores the registered Attempt",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 5078,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 16715
+    },
+    {
+      "id": "TP2-M7",
+      "file": "src/commands/review.ts",
+      "anchor": "    findPublished: seams?.findPublished ?? githubFindPublished,\n",
+      "replacement": "",
+      "note": "review publish cannot resolve an unknown-result receipt",
+      "command": "bun test --bail src/review/publish.test.ts src/commands/operator-confirm-review-tools.test.ts src/review/review-advance.test.ts",
+      "line": 5081,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18394
+    }
+  ],
+  "totals": {
+    "killed": 0,
+    "survived": 7,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "bail": true,
+  "startedAt": "2026-11-24T11:16:15.553Z",
+  "head": "5957d12494d3cc9df02d0542e30848de8be4d1df",
+  "treeHash": "ae460bbd3b6d99561975e711e7f74748097954067dd5a6941b0a229acfb1414f",
+  "loadavg": [
+    9.77490234375,
+    16.501953125,
+    15.94873046875
+  ],
+  "provenanceMs": 3815,
+  "copyMs": 117601,
+  "mutantsMs": 132845
+}

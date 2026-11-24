@@ -263,6 +263,8 @@ describe("review_publish", () => {
     makePackage();
     for (const tail of ["\u2028", "\u2029", "\ufeff", "\u200b"]) {
       posts.length = 0;
+      // Each tail is a fresh publication of the package: the previous one's receipt would refuse it as a duplicate.
+      rmSync(path.join(pkg, "publication-receipt.json"), { force: true });
       put("report.md", `# Review\n\nlast line${tail}`);
       const t = tool("review_publish");
       const input = { package: pkg, event: "REQUEST_CHANGES", partial: true };

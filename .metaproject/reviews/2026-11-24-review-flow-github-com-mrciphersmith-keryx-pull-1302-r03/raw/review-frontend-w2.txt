@@ -1,0 +1,30 @@
+STATUS: PARTIAL
+
+## Frontend Review — wave 2 (slice-02)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df
+- Read in full: slice-02 lines 1-700: src/commands/operator-confirm-review-tools.test.ts, src/commands/operator-confirm-review.ts (3 hunks), src/commands/review-advance.ts, src/commands/review.ts (8 hunks).
+- NOT read line by line: slice-02 lines 688-end (bundled review-orchestrator SKILL.detail.md / SKILL.md, src/gdskills/review-orchestrator-preflight.test.ts, src/lib/group-subcommands.ts); file headers only. None is React, MobX or Desktop code.
+- This slice holds no React, MobX or Desktop TypeScript. The frontend lens applied only to the contract Desktop consumes: `keryx review advance --json` (src/commands/review-advance.ts) accepts exactly the flags the Tauri run_args builds (--json, --repo, --repository-id, --viewer, --number, --id, --base, --head), requires a UUID --id (Desktop attempt ids are UUIDs; session attempt ids are UUID-shaped by sessionAttemptId), and prints one DeskRunSnapshot JSON line, which reviewRun/useReviewRuns parse. Clean.
+
+### Findings
+None in the frontend lens.
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-frontend",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

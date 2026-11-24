@@ -1,0 +1,358 @@
+{
+  "v": 1,
+  "round": 2,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "1 round(s): 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302; 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 trusted: local registry (ingest at 2026-11-24T07:54:39.529Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 was committed by 0c6ff2b7e6e4; chosen 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302 (2e01447f9616 is an ancestor of 0c6ff2b7e6e4)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302",
+    "reviewedHead": "2e01447f96161913880e02db4394be6ad15e1335",
+    "packagePath": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "2e01447f96161913880e02db4394be6ad15e1335",
+    "head": "0c6ff2b7e6e4118287ef8abd531e7268980435e8"
+  },
+  "fixHunks": [
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 55,
+      "endLine": 55,
+      "findingIds": [
+        "R9"
+      ]
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 599,
+      "endLine": 601,
+      "findingIds": [
+        "R11",
+        "R3",
+        "R5",
+        "R6",
+        "R8"
+      ]
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 603,
+      "endLine": 604,
+      "findingIds": [
+        "R1",
+        "R11",
+        "R6"
+      ]
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 606,
+      "endLine": 612,
+      "findingIds": [
+        "R1",
+        "R7"
+      ]
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 606,
+      "endLine": 612,
+      "findingIds": [
+        "R2",
+        "R4"
+      ]
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 390,
+      "endLine": 490,
+      "findingIds": [
+        "R10",
+        "R12"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 70,
+      "endLine": 70
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 220,
+      "endLine": 241
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 347,
+      "endLine": 361
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+      "startLine": 43,
+      "endLine": 51
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 587,
+      "endLine": 587
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 599,
+      "endLine": 601
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 603,
+      "endLine": 604
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 385,
+      "endLine": 385
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 386,
+      "endLine": 386
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 388,
+      "endLine": 388
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 501,
+      "endLine": 501
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "R13",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+  "modeReason": "2e01447f9616 is an ancestor of 0c6ff2b7e6e4",
+  "secondLookHunks": [
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 20
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 1,
+      "endLine": 54
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 56,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 15,
+      "endLine": 18
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 20,
+      "endLine": 219
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 242,
+      "endLine": 346
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+      "startLine": 362,
+      "endLine": 397
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+      "startLine": 1,
+      "endLine": 42
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+      "startLine": 1,
+      "endLine": 132
+    },
+    {
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 598
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 602,
+      "endLine": 602
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 613,
+      "endLine": 618
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 595,
+      "endLine": 598
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 602,
+      "endLine": 602
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 613,
+      "endLine": 618
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 913,
+      "endLine": 914
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 387,
+      "endLine": 387
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 389,
+      "endLine": 389
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 491,
+      "endLine": 500
+    },
+    {
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "startLine": 502,
+      "endLine": 503
+    }
+  ]
+}

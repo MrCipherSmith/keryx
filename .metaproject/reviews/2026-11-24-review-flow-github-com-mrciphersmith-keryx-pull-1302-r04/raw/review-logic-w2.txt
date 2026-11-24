@@ -1,0 +1,35 @@
+STATUS: DONE
+
+## Logic Review (round 4, wave 2)
+
+### Scope
+- Slice: slice-02 (test half of `git diff 98f777283..HEAD`): src/review/desk-publication.test.ts, src/review/publish.test.ts, src/review/review-advance.test.ts, src/review/session-publish-github.test.ts. Each new test was read against the code it exercises at HEAD (publish.ts, session-attempt.ts, session-publish-github.ts, review-advance.ts, commands/review-advance.ts), and I checked that each assertion would fail if the round-3 fix were reverted.
+- Ran: `bun test src/review/publish.test.ts src/review/review-advance.test.ts src/review/session-publish-github.test.ts src/review/desk-publication.test.ts --timeout 30000`, which gave 87 pass and 0 fail.
+- Spec gate: skipped (no issue or task beyond the round-3 findings).
+
+### Prior-finding verdicts (test evidence for round 3)
+- T1: closed for the base-pinning rule. desk-publication.test.ts "a package that recorded its base as a branch" asserts the Attempt's baseSha comes from baseRefOid, and that the skip reason is returned when neither side gives a base. No test covers a warning on the publish card; that gap is a wave-1 finding (w1-3).
+- T2: closed. "a package published before it was registered brings its receipt" asserts that Desktop's preview shows publishedUrl and canSubmit=false. publish.test.ts "the receipt is written to the Attempt and to the package" asserts both copies, and that a second post is refused after the Attempt's copy is lost.
+- T3: no dedicated concurrency test. The lock order is pinned only by reading the code (publish.ts:251-253). Testing-practices lens.
+- T4: closed for laterRound and ancestry ("a round a later round of its Review follows is refused", "a moved head whose reviewed commit left the PR's history is refused"). The base check is absent in code (w1-2), so no test can exist for it.
+- T5: closed. "only a Desktop worker's attempt has a coordinator and can be continued" covers hasDeskWorker for all four sources and canContinueDeskRun for a partial session/existing run.
+- T6: closed. "without html_url the review's URL is built from its id" and "without GitHub's URL the receipt names the pull request".
+- T7, T8: closed. "a decided session Attempt keeps its copy; layers and payloads are never copied".
+- T9: closed. "a desk-attempt.json is trusted only with a UUID for the package's own pull request" covers path traversal, comment-breaking and wrong-PR records.
+- T10: closed at the library level (review-advance.test.ts asserts `stale: This attempt was archived...`). The commit message says the Desktop DOM test is in ReviewPanel.dom.test.tsx (slice-01), and I did not re-run it.
+- T11: closed. "the moved-head first line follows the head gate" covers both directions: a comment line is skipped, and naming the SHA alone is not enough.
+- T12: closed. "a head that cannot be read again after the operator's yes is not reported as a moved head".
+- T13: open in tests only. The code is fixed (operator-confirm-review.ts:891-897), but no test in this diff drives the review_complete card and asserts registerSession is called or that its failure becomes a warning (info w2-2).
+- T16: partial (info w2-1). The test refuses the malformed vectors. It does not assert that the exact argument vector review.rs builds (apps/desktop/src-tauri/src/review.rs:356, 383-384: `review advance --json --repo … --number … --id … --base … --head …`) is accepted, which the round-3 fix asked for.
+
+### Findings
+
+[review-logic-w2-1] info - src/review/review-advance.test.ts:274-284. The new argument test only checks refusals. If a parser change rejected the vector Tauri emits (for example by making --base/--head mutually required with a different flag spelling), Desktop's Update review would break and every test would stay green. Suggested: add one positive case with the exact review.rs vector, with advanceReview deps stubbed (or with the store/GitHub reads stubbed), and assert that it reaches the deps.
+
+[review-logic-w2-2] info - src/commands/operator-confirm-review.ts:891-897 (no test in slice-02). The T13 fix (the complete card registers the closed round) has no test. Dropping the `seams.registerSession` call from runCompletionGates leaves every suite in this diff green. Suggested: a card test with a stubbed registerSession that asserts it is called after a successful close, and that a throw appears as a `warning: not registered as a Desktop review attempt` line.
+
+No blocker, major or minor findings in this slice. The wave-1 minors (w1-1 dual-receipt recovery message, w1-4 non-URL/unknown ancestry) also have no tests, but they are recorded once, in wave 1.
+
+```json
+{"status":"DONE","reviewer":"review-logic","wave":2,"slices":["slice-02"],"findings":[{"id":"review-logic-w2-1","severity":"info","file":"src/review/review-advance.test.ts","line":274,"problem":"T16 partial: the advance argument test covers only refusals; the exact vector review.rs emits (review advance --json --repo --number --id --base --head) is never asserted to parse.","evidence":"src/review/review-advance.test.ts:274-284; apps/desktop/src-tauri/src/review.rs:356,383-384","impact":"A parser change that rejects Desktop's vector breaks Update review with all suites green.","suggested_fix":"Add a positive case with the exact Tauri vector and stubbed deps, asserting it reaches advanceReview.","confidence":"high"},{"id":"review-logic-w2-2","severity":"info","file":"src/commands/operator-confirm-review.ts","line":892,"problem":"The T13 fix (review_complete card registers the round as a Desktop Attempt) has no test in this diff.","evidence":"src/commands/operator-confirm-review.ts:891-897; slice-02 adds no card test","impact":"Removing the registration call leaves the suites green; the round-3 finding could regress silently.","suggested_fix":"Card test with a stubbed registerSession: called after a successful close; a throw becomes a 'not registered as a Desktop review attempt' warning.","confidence":"high"}],"stats":{"blocker":0,"major":0,"minor":0,"info":2}}
+```

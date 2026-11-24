@@ -1,0 +1,192 @@
+[
+  {
+    "id": "U1",
+    "title": "The lock-order fix (T3) was not pinned by a test",
+    "severity": "major",
+    "file": "src/review/publish.ts",
+    "line": 251,
+    "quote": null,
+    "problem": "The round-3 fix for T3 (always take the package's publication.lock before the attempt's) is not pinned by any test.",
+    "impact": "A refactor can drop the serialization again and reopen the T3 double-post race between two session publishers that resolved different attempt directories, with the suites green.",
+    "suggested_fix": "Add a test that runs two publishReview calls concurrently on one package, one with publication={directory:attempt} and one without, with a post seam that awaits a barrier; assert exactly one post and the other refused as already published.",
+    "evidence": "Mutant P3 replaced the outer withFileLock on <packageDir>/publication.lock with a direct call; publish.test.ts (32) and desk-publication.test.ts (42) stayed green.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "merged_from": "review-testing-practices-w1:review-testing-practices-w1-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "publish.test.ts: a publisher with an Attempt waits for a held package lock before posting."
+    }
+  },
+  {
+    "id": "U2",
+    "title": "The unknown-result refusal named one receipt of two, so removing it looped",
+    "severity": "minor",
+    "file": "src/review/publish.ts",
+    "line": 264,
+    "quote": null,
+    "problem": "The unknown-result refusal names only <receiptDir>/publication-receipt.json, but since the T2 fix the pending receipt is written to both the Attempt dir and the package (publish.ts:247-248,282) and carried by register (session-attempt.ts:157-160); removing the named file leaves the other, so the next publish refuses again naming a file that no longer exists.",
+    "impact": "The documented operator recovery for a lost GitHub answer can never succeed; the operator loops on the same refusal.",
+    "suggested_fix": "Name every path in receiptDirs in the message (or clear both through a keryx command).",
+    "evidence": "src/review/publish.ts:247-248, 255-256, 264, 282; src/review/session-attempt.ts:157-160",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w1:review-logic-w1-1, review-degradation-w1:review-degradation-w1-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The refusal names every receipt path; test added."
+    }
+  },
+  {
+    "id": "U3",
+    "title": "A failed or impossible ancestry read was reported as a force-push",
+    "severity": "minor",
+    "file": "src/review/session-publish-github.ts",
+    "line": 94,
+    "quote": null,
+    "problem": "githubReviewedHeadInPull answers false for 'cannot tell' (non-URL ref, gh error, spawn failure) as well as for rewritten history, and publishReview reports every false as 'no longer in the pull request's history (force-push or rebase)'.",
+    "impact": "For the PR-number/branch/GHE refs restored by T15, a moved-head COMMENT publish is always refused with a false reason; a transient GitHub failure gives the same misleading refusal (T12 class).",
+    "suggested_fix": "Return in/not-in/unknown; on unknown refuse with a could-not-check message, and for refs the compare API cannot address skip the check (GitHub's commit_id refusal remains).",
+    "evidence": "src/review/session-publish-github.ts:92-101; src/review/publish.ts:219-221; src/commands/review.ts:5082; src/commands/operator-confirm-review.ts:197",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w1:review-logic-w1-4, review-degradation-w1:review-degradation-w1-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "githubReviewedHeadInPull answers yes/no/unknown/skip; unknown refuses with its own message, skip (non-URL refs) leaves it to GitHub; tests added."
+    }
+  },
+  {
+    "id": "U4",
+    "title": "A later round refused the current-head publish, unlike Desktop",
+    "severity": "minor",
+    "file": "src/review/publish.ts",
+    "line": 215,
+    "quote": null,
+    "problem": "The session path refuses any Attempt that a later round follows, current head included; Desktop refuses a superseded attempt only when the head is not current (desk-publication.ts:295, :383).",
+    "impact": "The same Attempt is publishable in Desktop and refused by keryx review publish / the review_publish card; the two acceptance copies already drift, which is what T4 asked to prevent.",
+    "suggested_fix": "Apply laterRound only when `moved !== undefined` (as Desktop does), or better, move the rule into one shared acceptance function used by both paths.",
+    "evidence": "publish.ts:215-218 throws whenever options.laterRound() is defined, before and independent of `moved`; desk-publication.ts:293-295 applies supersededReason only under `!current`.",
+    "confidence": "high",
+    "reviewer": "review-architecture",
+    "merged_from": "review-architecture-w1:review-architecture-w1-1, review-degradation-w1:review-degradation-w1-4",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The later-round and ancestry checks apply only to the as-is publish of a moved head, as in desk-publication; test added."
+    }
+  },
+  {
+    "id": "U5",
+    "title": "A refused advance because the PR moved again lost the Refresh board action",
+    "severity": "minor",
+    "file": "apps/desktop/src/review/useReviewRuns.ts",
+    "line": 69,
+    "quote": null,
+    "problem": "An `advance` refusal is never treated as a moved range, but advance has one refusal that is exactly that: review-advance.ts:78 `stale: The pull request revision has changed...` when the PR moved after the publish dialog read it.",
+    "impact": "After a second push the Update review refusal shows only as plain text asking to refresh the board, without the Refresh board button or the disabled launch button the same situation gets on Start; the code comment states the opposite.",
+    "suggested_fix": "Set staleRange for an `advance` error only when it is the revision refusal (e.g. give review-advance.ts:78 a distinct marker or match its text), or keep kind `advance` but let staleRange = (kind start && stale:) || (kind advance && /revision has changed/); fix the comment and add a DOM test for that refusal.",
+    "evidence": "useReviewRuns.ts:67-69 sets kind `advance`; :113 staleRange only for kind `start`; ReviewWorkspace.tsx:152 always sends the revision so review-advance.ts:77-78 is reachable; ReviewWorkspace.tsx:195,203-206 (button disable + Refresh board banner) key on staleRange.",
+    "confidence": "high",
+    "reviewer": "review-frontend",
+    "merged_from": "review-frontend-w1:review-frontend-w1-1, review-ui-ux-w1:review-ui-ux-w1-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "staleRange also covers the advance \"revision has changed\" refusal; DOM test added."
+    }
+  },
+  {
+    "id": "U6",
+    "title": "The review_publish card dropped registration warnings",
+    "severity": "minor",
+    "file": "src/commands/operator-confirm-review.ts",
+    "line": 192,
+    "quote": null,
+    "problem": "T1 partial: the review_publish card passes a no-op warn to sessionPublication, so the skip/failure reasons registerSessionPackageForProject now throws are dropped silently in keryx shell.",
+    "impact": "In keryx shell the operator posts a review that Desktop will not list or guard, with no warning; the terminal and complete-card paths do warn.",
+    "suggested_fix": "Collect sessionPublication warnings in buildCard and render them as card lines.",
+    "evidence": "src/commands/operator-confirm-review.ts:191-192; src/review/session-attempt.ts:179-182,199-202",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w1:review-logic-w1-3",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The card lists them as warning lines."
+    }
+  },
+  {
+    "id": "U7",
+    "title": "A re-registration re-pinned a symbolic base to the PR current base",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 103,
+    "quote": null,
+    "problem": "T4 partial: the session path still never checks the PR base. The T1 fix pins a symbolic base to the PR's current baseRefOid on every registration (each complete and publish), and recordSession overwrites the undecided row, so after a PR retarget the next session publish re-pins the Attempt to the new base and posts, and Desktop's base-unchanged test passes for a range that was never reviewed.",
+    "impact": "A review made against one base is published (by session or Desktop) as current for a PR retargeted to another base.",
+    "suggested_fix": "Carry the base in PrSnapshot and refuse on the session path when a full recorded base differs; pin a symbolic base only on first registration (reuse the stored run.baseSha thereafter).",
+    "evidence": "src/review/session-attempt.ts:100-106,166-168; src/review/desk-run-store.ts:408-409; src/review/publish.ts:206-221 (no base check); src/review/desk-publication.ts:377",
+    "confidence": "medium",
+    "reviewer": "review-logic",
+    "merged_from": "review-logic-w1:review-logic-w1-2, review-degradation-w1:review-degradation-w1-3, review-testing-practices-w2:review-testing-practices-w2-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Later registrations keep the base of the first; test with a retargeted PR added."
+    }
+  },
+  {
+    "id": "U8",
+    "title": "The decided-Attempt check ran before the Attempt lock",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 110,
+    "quote": null,
+    "problem": "T7 partial: the decided-Attempt check runs before the Attempt lock, so a decision taken between the check and the copy still lets registration replace the decided Attempt's package copy.",
+    "impact": "An Attempt completed/archived in Desktop during registration ends up with a package copy newer than the evidence it was decided on.",
+    "suggested_fix": "Re-read store.byId(id) inside the lock immediately before rm/cp and skip the copy when a decision is set.",
+    "evidence": "`if (store.byId(id)?.run.decision) {...return}` at :110; lock taken later at :145; rm/cp at :147-150; Desktop decisions do not take publication.lock.",
+    "confidence": "medium",
+    "reviewer": "review-highload",
+    "merged_from": "review-highload-w1:review-highload-w1-1",
+    "disposition": {
+      "state": "acted-on",
+      "note": "Re-checked inside the lock before copying."
+    }
+  },
+  {
+    "id": "U9",
+    "title": "The comment claimed every Desktop read is under the lock",
+    "severity": "minor",
+    "file": "src/review/desk-publication.ts",
+    "line": 389,
+    "quote": null,
+    "problem": "T7 partial: Desktop's preview renders without the Attempt lock, while registration deletes and re-copies <attempt>/package under it; the comment at session-attempt.ts:144 claims previews are covered.",
+    "impact": "A preview concurrent with registration can read a half-copied package (error or wrong draft), and a submit can post a body different from the last preview the operator saw.",
+    "suggested_fix": "Render the preview under the same lock, or copy into a temporary directory and rename it over package atomically; fix the comment.",
+    "evidence": "`if (request.kind === \"preview\") { const { state } = await render(); ... return state; }` before `withFileLock(... publication.lock ...)` at :394; registration `rm(target)` + `cp(own, target)` under the lock at session-attempt.ts:145-150.",
+    "confidence": "medium",
+    "reviewer": "review-highload",
+    "merged_from": "review-highload-w1:review-highload-w1-2",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The comment now says preview reads without the lock and is read again on refresh."
+    }
+  },
+  {
+    "id": "U10",
+    "title": "Registration base precedence was unpinned",
+    "severity": "minor",
+    "file": "src/review/session-attempt.ts",
+    "line": 103,
+    "quote": null,
+    "problem": "Base precedence (a recorded full SHA wins over the PR's current baseRefOid) is unpinned.",
+    "impact": "A package reviewed against an older base could be registered on the PR's current base, so Desktop would show and accept it for a range it never reviewed.",
+    "suggested_fix": "Register a package whose manifest records base A while resolveKey returns baseRefOid B; assert the attempt's baseSha is A.",
+    "evidence": "Mutant S2 (prefer baseRefOid whenever it is a full SHA) survived; every desk-publication test passes resolveKey a baseRefOid equal to the recorded revision.baseSha.",
+    "confidence": "high",
+    "reviewer": "review-testing-practices",
+    "merged_from": "review-testing-practices-w1:review-testing-practices-w1-3",
+    "disposition": {
+      "state": "acted-on",
+      "note": "The retarget test pins that a registered base wins over the PR current base."
+    }
+  }
+]

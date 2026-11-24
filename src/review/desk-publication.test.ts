@@ -6,6 +6,8 @@ import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publi
 import { DESK_TEMPLATE_SELECTION, projectReviewOverlay, reportTemplateFingerprint } from "./desk-review-report";
 import { DeskRunStore } from "./desk-run-store";
 import { isolateGitDiscovery } from "./test-git-fixture";
+import { publishReview } from "./publish";
+import { readSessionAttempt, registerSessionPackage } from "./session-attempt";
 
 const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
 const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
@@ -767,4 +769,162 @@ test("a concrete report option is saved by identity and published with the findi
   await requestDeskPublication(project, key,
     { kind: "submit", id, settings: reopened.settings, digest: reopened.digest }, confirmFixture);
   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8")).body).toContain(`**Selected answer:** ${selected.label}`);
+});
+
+/** Flow 521 AC5: a package an agent made in a session, registered as a `session` Attempt of the same Review. */
+async function sessionAttempt(reviewId: string) {
+  const pkg = path.join(project, ".metaproject", "reviews", reviewId);
+  cpSync(path.join(directory, "package"), pkg, { recursive: true });
+  json(path.join(pkg, "manifest.json"), { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), reviewId });
+  const registered = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => key });
+  if (!("record" in registered)) throw new Error(registered.skipped);
+  const store = new DeskRunStore();
+  try {
+    return { pkg, id: registered.record.attemptId, directory: store.directory(registered.record.attemptId) };
+  } finally {
+    store.close();
+  }
+}
+
+const sessionPost = () => {
+  const posts: string[] = [];
+  return { posts, post: async (_ref: string, _event: string, body: string) => {
+    posts.push(body);
+    return { ok: true, detail: "posted", url: "https://github.com/example/project/pull/7#pullrequestreview-41" };
+  } };
+};
+
+test("flow 521 AC5: a session package is a session Attempt of the PR's Review, published by either path at most once", async () => {
+  const session = await sessionAttempt("session-review");
+  expect(await readSessionAttempt(session.pkg)).toMatchObject({ attemptId: session.id, repositoryId: key.repositoryId, viewer: key.viewer });
+  const store = new DeskRunStore();
+  try {
+    const runs = store.history(key).runs;
+    const attempt = runs.find(run => run.id === session.id)!;
+    expect(attempt).toMatchObject({ source: "session", baseSha: revision.baseSha, headSha: revision.headSha, result: { reviewed: revision } });
+    // The same Review as the Desktop attempt of this range.
+    expect(attempt.reviewId).toBe(runs.find(run => run.id === id)!.reviewId);
+  } finally {
+    store.close();
+  }
+  // Session first: `keryx review publish` writes the Attempt's receipt and the Attempt's marker...
+  const io = sessionPost();
+  await publishReview(session.pkg, { partial: true, post: io.post, confirm: async () => true, publication: { directory: session.directory, id: session.id } });
+  expect(io.posts[0]).toContain(`<!-- keryx-desktop-review ${session.id} -->`);
+  // ...so Desktop's publish of the same Attempt is refused as a duplicate.
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: session.id });
+  expect(preview.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-41");
+  expect(preview.canSubmit).toBe(false);
+  expect(preview.blockedReason).toBe("This review has already been published.");
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("flow 521 AC5: a session Attempt Desktop published is refused by keryx review publish", async () => {
+  const session = await sessionAttempt("session-review-2");
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: session.id });
+  const settings = { ...preview.settings, verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
+  const draft = await requestDeskPublication(project, key, { kind: "save", id: session.id, settings });
+  const published = await requestDeskPublication(project, key, { kind: "submit", id: session.id, settings: draft.settings, digest: draft.digest }, confirmFixture);
+  expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
+  expect(posted().body).toContain(`<!-- keryx-desktop-review ${session.id} -->`);
+  const io = sessionPost();
+  await expect(publishReview(session.pkg, { partial: true, post: io.post, confirm: async () => true, publication: { directory: session.directory, id: session.id } }))
+    .rejects.toThrow(/already been published: .*pullrequestreview-23/);
+  expect(io.posts).toEqual([]);
+});
+
+test("flow 521: registering again refreshes the session Attempt and keeps Desktop's files; a store package is never a session's", async () => {
+  const first = await sessionAttempt("session-review-3");
+  writeFileSync(path.join(first.directory, "publication-draft.json"), "{}");
+  writeFileSync(path.join(first.pkg, "report.md"), "Updated session review.\n");
+  const again = await registerSessionPackage({ cwd: project, packageDir: first.pkg, resolveKey: async () => key });
+  expect(again).toEqual({ record: expect.objectContaining({ attemptId: first.id }) });
+  expect(readFileSync(path.join(first.directory, "package", "report.md"), "utf8")).toBe("Updated session review.\n");
+  expect(existsSync(path.join(first.directory, "publication-draft.json"))).toBe(true);
+  expect(existsSync(path.join(first.directory, "package", "desk-attempt.json"))).toBe(false);
+  // The Desktop attempt's own package lives in the store: it is not registered as a session review.
+  expect(await registerSessionPackage({ cwd: project, packageDir: path.join(directory, "package"), resolveKey: async () => key }))
+    .toEqual({ skipped: "the package belongs to a Desktop review attempt" });
+});
+
+/** A session package as `review start --target <pr>` writes it: the base recorded as a branch name. */
+function symbolicSessionPackage(reviewId: string) {
+  const pkg = path.join(project, ".metaproject", "reviews", reviewId);
+  cpSync(path.join(directory, "package"), pkg, { recursive: true });
+  const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+  json(path.join(pkg, "manifest.json"), { ...manifest, reviewId, target: { ...manifest.target, base: "origin/main" } });
+  return pkg;
+}
+
+test("flow 521 round 3: a package that recorded its base as a branch registers on the pull request's base commit", async () => {
+  const pkg = symbolicSessionPackage("session-symbolic");
+  const registered = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
+  if (!("record" in registered)) throw new Error(registered.skipped);
+  const store = new DeskRunStore();
+  try {
+    expect(store.byId(registered.record.attemptId)?.run).toMatchObject({ source: "session", baseSha: revision.baseSha, headSha: revision.headSha });
+  } finally {
+    store.close();
+  }
+  // Without a base commit from either side, the reason says so instead of a silent skip.
+  expect(await registerSessionPackage({ cwd: project, packageDir: symbolicSessionPackage("session-unknown"), resolveKey: async () => key }))
+    .toEqual({ skipped: "neither the package nor the pull request gives the full base commit it was reviewed against" });
+});
+
+test("flow 521 round 3: a package published before it was registered brings its receipt, so Desktop refuses a second review", async () => {
+  const pkg = symbolicSessionPackage("session-early");
+  writeFileSync(path.join(pkg, "publication-receipt.json"), JSON.stringify({ url: "https://github.com/example/project/pull/7#pullrequestreview-5" }));
+  const registered = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
+  if (!("record" in registered)) throw new Error(registered.skipped);
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id: registered.record.attemptId });
+  expect(preview.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-5");
+  expect(preview.canSubmit).toBe(false);
+});
+
+test("flow 521 round 3: a decided session Attempt keeps its copy; layers and payloads are never copied", async () => {
+  const pkg = symbolicSessionPackage("session-decided");
+  mkdirSync(path.join(pkg, "layers"));
+  writeFileSync(path.join(pkg, "layers", "big.json"), "{}");
+  const resolveKey = async () => ({ ...key, baseRefOid: revision.baseSha });
+  const first = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey });
+  if (!("record" in first)) throw new Error(first.skipped);
+  const attemptDir = (() => { const store = new DeskRunStore(); try { return store.directory(first.record.attemptId); } finally { store.close(); } })();
+  expect(existsSync(path.join(attemptDir, "package", "layers"))).toBe(false);
+  expect(existsSync(path.join(attemptDir, "package", "report.md"))).toBe(true);
+  const store = new DeskRunStore();
+  try {
+    const attempt = store.byId(first.record.attemptId)!;
+    attempt.run.decision = { action: "close", reason: "done", at: "2026-11-24T00:00:00Z" };
+    store.save(attempt);
+  } finally {
+    store.close();
+  }
+  writeFileSync(path.join(pkg, "report.md"), "Rewritten after the decision.\n");
+  expect(await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey })).toEqual({ record: first.record });
+  expect(readFileSync(path.join(attemptDir, "package", "report.md"), "utf8")).not.toContain("Rewritten after the decision.");
+});
+
+test("flow 521 round 3: a desk-attempt.json is trusted only with a UUID for the package's own pull request", async () => {
+  const pkg = symbolicSessionPackage("session-record");
+  const record = { attemptId: "0b0c1d2e-0000-4000-8000-000000000001", repositoryId: key.repositoryId, viewer: key.viewer, number: key.number };
+  json(path.join(pkg, "desk-attempt.json"), record);
+  expect(await readSessionAttempt(pkg)).toEqual(record);
+  for (const bad of [{ ...record, attemptId: "../../escape" }, { ...record, attemptId: "x --> <!--" }, { ...record, number: 8 }]) {
+    json(path.join(pkg, "desk-attempt.json"), bad);
+    expect(await readSessionAttempt(pkg)).toBeUndefined();
+  }
+});
+
+test("flow 521 round 4: re-registering after the pull request was retargeted keeps the base the round was registered on", async () => {
+  const pkg = symbolicSessionPackage("session-retarget");
+  const first = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
+  if (!("record" in first)) throw new Error(first.skipped);
+  const again = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: "e".repeat(40) }) });
+  expect(again).toEqual({ record: first.record });
+  const store = new DeskRunStore();
+  try {
+    expect(store.byId(first.record.attemptId)?.run.baseSha).toBe(revision.baseSha);
+  } finally {
+    store.close();
+  }
 });

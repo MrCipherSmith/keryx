@@ -1,0 +1,48 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-regression, round 2, wave 1: slice-01 (FIX, T11 fix of R1-R12), read in full.
+
+Radius: this is a skill-text change. The code graph cannot answer for it, so the radius is unresolved, not clean. No computed set was capped; the consumers were enumerated by hand with `keryx ctx rg` over src: tests that read review-orchestrator SKILL.md / SKILL.detail.md, src/review/autonomous-profile.ts and its tests, the version pins, and skill-drift.
+
+R2 (my round-1 F-001): closed. The Unattended bullet (SKILL.detail.md:608, both copies identical) now defers to the dispatching run's head-move instruction. The autonomous runner's "open one more round only if the head moved" is `follow`, so it agrees with src/review/autonomous-profile.ts:200. The fixed-range "Keep this range" (:199) is `ignore`. "No update round" now applies only when there is no such instruction. autonomous-profile.ts is unchanged, so its consumers still pass: harness-robustness.test.ts:179 (prompt contains "Open one more round only if the head moved") and desk-run-executor.test.ts:149 (fixed-range prompt lacks it). A new preflight test reads autonomous-profile.ts and the bullet together and asserts they agree. AC6 was extended to cover line 200.
+
+Consumers checked, none broken: review-orchestrator-skill-parity.test.ts (both copies of SKILL.md and SKILL.detail.md are byte-identical, checked by diff), the SKILL.md version bump 1.17.0 -> 1.18.0 in both copies (no other pin in the repo, so skill-drift sees no mismatch), and the SKILL.md length ceiling (only the version line changed this round). The preflight test that the duplicate parity assertion was removed from still passes: research-evidence/verify-tests-to-run-1.txt, 91 pass. The completeHeadGate rule the text now cites (src/review/complete-head-gate.ts) already exists; the text matches it and no code changed. round-record.ts:207 is cited correctly.
+
+R3: partial. Step 1 now reads the head at wave boundaries with `git ls-remote origin refs/pull/<n>/head` and says it is "read-only git, so it stays routine". In this codebase that is not true. "Routine" (SKILL.md:52 "Shell calls in a trust or auto session") is the allowlist in src/lib/trust-routine-command.ts:25-35, GIT_READ_SUBCOMMANDS = status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame. It does not include `ls-remote`, and the check at :393 rejects any other subcommand. So in a trust or review-auto turn after untrusted content, each wave-boundary head check still prompts, exactly the burden R3 named. The `gh` call has only been swapped for a git call that also prompts. Fix: either add `ls-remote` (confined to `origin` and a `refs/pull/<n>/head` ref) to GIT_READ_SUBCOMMANDS with a test, or drop the "stays routine" claim and say the check asks once per boundary. The same section's step 2 `git fetch` is not routine either, but that is round-1 text. This is not filed as a new finding: it is R3's own defect, and below major it falls outside scope B.
+
+Other dispositions, checked against the text at head 0c6ff2b7e:
+R1 closed (stop-and-start now says the partial round is never a previous round until `advance`, findings reach the new head only as context, answers do not carry over).
+R4 closed ("Desktop runs the same command" removed; step 4 says stage 3 adds it).
+R5 closed (later boundaries compare with the head the operator answered for).
+R6 closed (the step 3 tail requires the reviewed-SHA first line before complete).
+R7 closed (step 5 covers any publish whose head differs from the round head).
+R8 closed (any other exit stops and reports).
+R9 closed (divergence-map row 4 and §5 now D1 COMMENT-only).
+R10 closed (the test pins "The body's first line is").
+R11 closed (read only from the keryx-stored Review record).
+R12 closed (the duplicate parity test was removed; a comment points at the parity test).
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "R2 closed: the Unattended rule defers to the dispatcher's instruction (autonomous-profile.ts:200 maps to follow, :199 to ignore), autonomous-profile.ts is unchanged, and a new test pins the agreement. No consumer breaks: both copies are identical, the version bump 1.18.0 is in both copies with no other pin, and preflight+parity pass 91. R3 partial: `git ls-remote` is not in trust-routine-command.ts GIT_READ_SUBCOMMANDS (:25-35, :393), so the 'stays routine' claim is false and the wave-boundary check still prompts in trust/review-auto. Radius unresolved (skill text); consumers enumerated by keryx ctx rg; no cap.",
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "partial"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

@@ -1,0 +1,69 @@
+STATUS: DONE
+
+## Architecture Review — wave 1 (slice-01)
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 commits only)
+- Scope mode: explicit-hash-range, supplied slice text
+- Stack detected: fullstack (React/TS Desktop webview, Tauri/Rust backend, skill prose, flow records)
+
+Read: slice-01.diff lines 1-850 and 1000-1981; lines 850-1000 (the `history` array of flow.json, machine-written
+events that repeat journal.md lines 199-282, which were read) were not read line by line. Covered: (flow 521 acceptance-criteria/context/description/divergence-map/journal/plan/tasks/flow.json,
+installed review-orchestrator SKILL.md and SKILL.detail.md hunks, resolved/T5 record header, apps/desktop/src-tauri/src/review.rs
+three hunks, apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx three hunks,
+apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts, apps/desktop/src/reviews/ReviewPanel.dom.test.tsx
+three hunks, docs/docs/cli-reference.md). Code at HEAD read for context: src/review/desk-run-store.ts:98-224 and :300-312,
+:432-470 (store layout, history), src/review/review-advance.ts (via slice-03) to check the Desktop -> CLI boundary.
+
+### Summary
+The Desktop side of the change is a clean move of the update-round rule out of the view: `updateRoundOptions` leaves
+ReviewWorkspace.tsx (a component) and the decision moves behind the CLI (`keryx review advance`, src/review/review-advance.ts),
+so the webview sends only `{kind:"advance", id, baseSha, headSha}`. The Tauri layer stays a typed argument builder
+(`RunAction::Advance` -> `review advance --json ...`), with the same per-field validation as the other operations, and the
+`session` source is added to the shared `ReviewSource`/`SOURCE_LABEL` record (the Record type forces the label). No layer
+or dependency-direction violation is introduced in this slice; the skill text routes the session to the same command.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Layer Violations
+None detected. Moving `updateRoundOptions` from ReviewWorkspace.tsx into src/review/review-advance.ts removes business logic
+from a component (code-style-patterns Rule 2 direction is improved, not violated).
+
+### Dependency Direction
+None detected. apps/desktop keeps importing only types from ../../../../src/review (pre-existing pattern); the new
+`advance` action adds no runtime import.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for NestJS/MobX. React: the component sends an intent, the hook (`useReviewRuns`) maps the refusal to the start slot;
+no component-level orchestration added.
+
+Not run: tests (read-only review; Rust is verifiable only in CI per project memory).
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

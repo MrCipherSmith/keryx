@@ -1,0 +1,18 @@
+# managed review: 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302
+
+mode: ingest
+status: draft
+path: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302
+flow: 521
+layers: graph@2e01447 = head; wiki none; memory none
+head: 2e01447f96161913880e02db4394be6ad15e1335
+
+verification_mode: annotate
+verdicts: confirmed=0 refuted=0 unverifiable=0 unverified=14
+findings: in=14 removed_by_verifier=0 retained=14
+pre-filter: files_dropped=0 blocks_dropped=0 changed_lines_dropped=0 drop_rows=0
+filter_stats: total=14 prefilter=0 low_confidence=not-measured refuted=0 scope_b=1 findings_cap=0 merged_duplicates=0 dismissed_by_round=not-measured retained=13
+cross_family_review: not recorded (no --cross-family-review supplied to this ingest; this is NOT `single-family`)
+findings cap: limit=10/reviewer truncated=0 exempt=10 reviewers_truncated=0
+scope-B screen: source=input scope_b_findings=2 accepted=1 rejected=1 exempted=0 min_severity=major
+  rejected R14 [non-regression-severity]: severity `minor` is below the scope-B floor `major`. Under the canonical rubric `minor` states that the code behaves correctly and `info` names neither a trigger nor an outcome; neither can be a claim that the change broke an existing behaviour.

@@ -1,0 +1,84 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1302",
+    "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+    "head": "2e01447f96161913880e02db4394be6ad15e1335"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "a5d1ab236fe85dee62a758a19390049dde4eb7f9",
+      "head": "2e01447f96161913880e02db4394be6ad15e1335"
+    },
+    "fixHunks": 0,
+    "newHunks": 18,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+          ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/review-orchestrator-preflight.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices"
+  ],
+  "dispatches": 8,
+  "minutes": {
+    "min": 4,
+    "max": 10
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "6e25ad82bb6a1e57",
+  "warnings": [],
+  "next": "dispatch"
+}

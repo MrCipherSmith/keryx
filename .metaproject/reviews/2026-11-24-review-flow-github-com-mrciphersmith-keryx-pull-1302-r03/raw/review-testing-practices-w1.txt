@@ -1,0 +1,91 @@
+STATUS: DONE
+
+reviewer: review-testing-practices, wave 1 of 3, round 3 of PR #1302 (flow 521, stage 4)
+slice: slice-01 (read in full: lines 1-1981)
+
+## Scope read
+
+- slices/slice-01.diff in full. The flow docs, the flow.json/resolved JSON and both installed SKILL files are prose
+  or machine-written state; I read them for what the tests pin. The code and tests I read at HEAD (5957d1249):
+  - apps/desktop/src-tauri/src/review.rs (run_args Advance arm, desktop_action, the manual_review_exposes_only_typed_operations test)
+  - apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx (updateReview),
+    apps/desktop/src/review/useReviewRuns.ts (error mapping), apps/desktop/src/review/ReviewDetail.tsx:186,302 and
+    ReviewWorkspace.tsx:121 (the consumers of `staleRange`), apps/desktop/src/reviews/model.ts (SOURCE_LABEL)
+  - apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (every changed test and the headMovedFixture)
+- Context: acceptance-criteria.md (AC5, AC6), prior_findings.json (S1-S9; S3 and S7 are fixed at HEAD: the describe
+  block now reads "AC1-AC2" and the negative assertions S7 asked for are present), .metaproject/data/testing/context.md
+  conventions (bun test, colocated tests).
+
+## What I ran
+
+- Baseline: `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx` -> 49 pass, 0 fail.
+- Mutation pass. `keryx review mutate` cannot run the Desktop suite: its scratch copy skips every `node_modules` and
+  links only the root one, while react, react-dom and happy-dom live only in apps/desktop/node_modules. So I built my
+  own scratch copy outside the reviewed tree (scratchpad/desk: apps/desktop without node_modules or src-tauri, plus
+  root src/, with apps/desktop/node_modules and node_modules symlinked), confirmed the baseline there (49 pass), and
+  applied each mutant to that copy only, restoring it after each run. The reviewed tree was never written.
+
+| mutant | mutation | result |
+|---|---|---|
+| TP1-M1 | useReviewRuns.ts:68 `action.kind === "advance" ? "start" : action.kind` -> `action.kind` | **49/49 green (survived)** |
+| TP1-M2 | ReviewWorkspace.tsx:152 advance on `card.baseSha/headSha` instead of the dialog's `...revision` | killed (1 fail: "Update review from a board that has not seen the push starts on the dialog's head...") |
+| TP1-M3 | ReviewWorkspace.tsx:152 back to `{ kind: "start", ...revision }` | killed (6 fail) |
+
+Not run (stated cap): the Rust side. There is no local cargo/rustc, so `run_args`' Advance arm (review.rs:356,
+:742-746) and the `desktop_action` widening (review.rs:178-181, which now also sets KERYX_DESKTOP_REVIEW_ACTION for
+`review advance`) were not mutated. Candidates for CI: TP1-R1 drop `|| args.get(1)... == Some("advance")` in
+desktop_action; TP1-R2 build `advance` args under `desk-run`. The run_args test asserts the `review advance --json`
+prefix and the `--id/--base/--head` tail (review.rs:744-746), so TP1-R2 is expected to be caught; nothing asserts the
+env for `advance` (the CLI's review-advance.ts does not read that variable either, so TP1-R1 would survive with no
+behaviour change: a presentation-level observation, not filed). model.ts `session: "Session"` is a typed
+Record entry (compile-enforced) and copy: not mutated. 3 of 3 TS candidates run, 2 Rust candidates not reached.
+
+## Findings
+
+### TP-W1-1 (minor) An `advance` refusal's mapping to `start` is unpinned
+
+- File: apps/desktop/src/review/useReviewRuns.ts:68
+- Problem: the gate this change added, "an update round is a start of the next round: its refusal shows where a
+  start's does", survives deletion with the Desktop suite green (TP1-M1, 49/49). The mapping matters because
+  `staleRange` is `actionError?.kind === "start" && /^stale:/` (useReviewRuns.ts:112); it drives `revisionChanged`
+  (ReviewWorkspace.tsx:121, ReviewDetail.tsx:186) and hides the raw error banner (ReviewDetail.tsx:302). The only
+  failing-advance fixture ("a failed Update review start shows its error...", ReviewPanel.dom.test.tsx:745) throws
+  "The selected Keryx CLI refused the start." with no `stale:` prefix, so it cannot separate `advance` from `start`.
+  `keryx review advance` answers exactly with `stale:` in two of its refusals (src/review/review-advance.ts:41, :76:
+  "A later round of this Review already exists", "The pull request revision has changed").
+- Why it matters: the next edit to the error kind (or to `staleRange`) can turn a stale update round into a bare
+  error banner instead of the "revision changed / refresh the board" path, with no test going red.
+- Fix: add a fixture whose `advance` throws `stale: The pull request revision has changed. Refresh the board...` and
+  assert the panel shows the revision-changed state (the Refresh board offer) and not the raw banner text.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "review-testing-practices-w1-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/useReviewRuns.ts",
+      "line": 68,
+      "problem": "The new mapping of an `advance` refusal to kind `start` (so a `stale:` refusal sets `staleRange`) is unpinned: deleting it leaves ReviewPanel.dom.test.tsx 49/49 green. The only failing-advance fixture throws a message without the `stale:` prefix, so it cannot tell `advance` from `start`; `keryx review advance` refuses with `stale:` for a moved PR and for a later round (src/review/review-advance.ts:41,76).",
+      "evidence": "Mutation TP1-M1 (`action.kind === \"advance\" ? \"start\" : action.kind` -> `action.kind`) run in a scratch copy: `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx` -> 49 pass, 0 fail. Consumers: useReviewRuns.ts:112 (staleRange), ReviewWorkspace.tsx:121, ReviewDetail.tsx:186,302. Siblings TP1-M2 and TP1-M3 were killed (1 and 6 fails).",
+      "impact": "A later edit can turn a stale update round into a raw error banner instead of the revision-changed / refresh-board path with the suite green. Coverage gap only; the code at HEAD is correct.",
+      "suggested_fix": "Add a ReviewPanel.dom test where the `advance` command throws `stale: The pull request revision has changed. Refresh the board to review its current range.` and assert the revision-changed state (Refresh board offer) is shown and the raw banner is not.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```
+
+routing audit: graph_used: no (not-relevant: the slice names every file; tests located with `keryx ctx rg`), wiki_used: no (not-relevant: behaviour read from code), ctx_used: yes (`keryx ctx rg`, `keryx ctx run`), raw_rg_used: no

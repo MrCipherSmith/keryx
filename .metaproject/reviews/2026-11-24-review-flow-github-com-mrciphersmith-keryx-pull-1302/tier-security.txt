@@ -1,0 +1,41 @@
+# review tier
+
+tier: standard
+tier_reasons: base:standard, floor:security, resolve:ranking-refused
+session_source: environment (KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL)
+provider: anthropic
+model: claude-opus-5-5
+routed: true (routing decision 3c08ac31131dfedc6b0d901989f86603a34cc45b982132b413c6fbcdcc39cde1)
+routing_assignment: builtin
+routing_recommendation: none
+tier_resolution: session-fallback
+model_discovery: provider=anthropic candidates=0 ranked=0 session_rank=none
+fallback_reason: no discovered provider matches the session provider "anthropic"
+
+## model block
+
+Paste this verbatim as the dispatch document's `model` field.
+
+```json
+{
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "floor:security",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  }
+}
+```

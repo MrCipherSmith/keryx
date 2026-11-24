@@ -1,0 +1,35 @@
+STATUS: DONE
+
+Reviewer: review-layout, wave 1 of 1, slice-01. Round 3 of PR #1302 (flow 521, stage 4).
+Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..HEAD (stage 4 only).
+
+Scope read
+- Every Desktop file stage 4 changes: apps/desktop/src/reviews/model.ts, apps/desktop/src/review/ReviewWorkspace.tsx, apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src-tauri/src/review.rs, apps/desktop/src/reviews/ReviewPanel.dom.test.tsx. Also read at HEAD: the render sites of SOURCE_LABEL (ReviewsView.tsx:220 option, :279 meta-item span, :325 table cell; ReviewPanel.tsx:111 span) and ReviewWorkspace.tsx lines 192-228.
+- The remaining slice-01 changes (CLI, backend, docs, skill text) render no layout.
+
+Layout-relevant changes
+- None of this lens's scope triggers changed. Stage 4 adds or edits no sizing, spacing, overflow, position, logical-property or inline-style class or rule on a rendered element, and no stylesheet.
+- The only new rendered text is the source label "Session" (7 characters). It goes into the same option, span and table cell that already hold "Existing review" (15 characters), so the longest label in that column does not change. Desktop has no translation catalog for these labels; they are hard-coded English in apps/desktop/src/reviews/model.ts:23-28, so no locale geometry is affected.
+- The ReviewWorkspace.tsx change only swaps the request action (`start` for `advance`) and removes a helper; the JSX and its classes are unchanged.
+
+Measurements: none taken, and none needed. No changed element carries a sizing or overflow property, so there is no claim to measure. No real-CSS tier was run.
+
+Findings: none.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

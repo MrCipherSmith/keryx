@@ -1,0 +1,32 @@
+STATUS: DONE
+
+## High-Load Review — wave 2 (slice-02)
+
+Scope: range 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d1249 (stage 4 only), diff mode. Load profile: not provided; concrete triggers: concurrent `keryx review publish` / `keryx review complete` / the `review_publish` card on one package; Desktop and a session on one store.
+Read: full code diff of src/commands/operator-confirm-review.ts, src/commands/operator-confirm-review-tools.test.ts, src/commands/review-advance.ts, src/commands/review.ts, src/lib/group-subcommands.ts. Skimmed (text assertions / skill prose, no runtime concurrency): the bundled src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md and SKILL.detail.md, src/gdskills/review-orchestrator-preflight.test.ts. Code read at HEAD: src/commands/review.ts:5060-5080 (runPublish: confirm is an interactive promptYes), src/review/desk-run-service.ts:247-283, src/review/desk-run-store.ts:302-325 and 713-772.
+
+Summary: The command layer registers the package (`sessionPublication`) before `publishReview` takes its lock, and `review advance` reads history in one store handle and starts through requestDeskRun in another. The advance check-then-act (newerRoundOf outside any transaction) is backstopped by requestAttempt's same-revision reuse inside BEGIN IMMEDIATE, so a concurrent Desktop + session advance yields one round. The defects whose sites include these command files (registration and lock-directory choice outside the publication lock; the lock held across the terminal y/N prompt at review.ts:5069; the card execution path choosing its receipt directory from desk-attempt.json at operator-confirm-review.ts:259) are reported once, in wave 3 (review-highload-w3-2, review-highload-w3-4), whose class_scope lists these sites. Stats: blocker 0 | major 0 | minor 0 | info 0.
+
+Findings:
+- CLI / Multi-Session: reported in wave 3 (one finding per defect).
+- Concurrency & Races, Resources, Caching, Lock Contention, Async / Queues, Retry / Timeout / Circuit Breaker, Idempotency: None detected in this slice beyond the wave-3 classes.
+
+Clean Areas: Parts A (advance), B, C, D, E, F reviewed.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "wave": 2,
+  "slices": [
+    "slice-02"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

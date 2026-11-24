@@ -1,0 +1,87 @@
+STATUS: DONE
+
+## Logic Review — round 2, wave 1 (slice-01, FIX of R1–R12)
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00`
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `0c6ff2b7e6e4118287ef8abd531e7268980435e8`
+- Scope mode: delta, FIX slice (slice-01, read in full)
+- Spec compliance gate: ran against AC1–AC4 and D1/D2 as stated in the brief; AC5–AC7 blocked on stages 2/3 by design.
+- Code read at head: `src/review/complete-head-gate.ts` (whole), `src/review/round-record.ts:200-228` (completionOf, REVIEWED_STATUSES), `src/review/prior-round.ts` (trust rule header, :335, :378-414, :872-886), `src/review/managed.ts` (status writes: only `draft` :1371 and `closed` :1208), `src/review/autonomous-profile.ts:185-214`, `src/lib/trust-routine-command.ts:1-40, :377, :393`, SKILL.md :52-64, SKILL.detail.md :578-617, divergence-map.md §4–5.
+
+### Prior dispositions (checked against the code, not the commit message)
+- R1 closed. "Update after" is now the recommended option and reaches `complete`, which writes status `closed` (managed.ts:1208) and registers the round (managed.ts:1234 recordFinishedRound "complete"), so it is a trusted prior round. "Stop and start" no longer promises carry-over: a stopped, ingested-but-not-completed package stays `draft` (managed.ts writes no other pre-complete status), so completionOf marks it not eligible (round-record.ts:207-219) and prior-round.ts:414 skips it. The text's "findings reach it at most as context" and "per-finding answers do not carry over yet" match the code; the uncovered area is now named in the stopped round's report instead of promised to the new plan.
+- R2 closed. The Unattended bullet now defers to the dispatching run: autonomous-profile.ts:200 ("Open one more round only if the head moved…") maps to `follow`, :199 ("Keep this range") to `ignore`. A new test reads autonomous-profile.ts and asserts both texts. AC6 now names line 200. (plan.md step 3 still cites only `:199`; AC6 is the binding record, so not reopened.)
+- R3 partial. The per-wave `gh pr view` is gone, but its replacement `git ls-remote` is not a routine command either (see LOG-R2-01): in a `trust`/`auto` keryx shell turn the wave-boundary read still prompts the operator at every boundary, which is the cost R3 named.
+- R4 closed. "Desktop runs the same command" replaced by "the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)"; the test asserts the old clause is absent.
+- R5 closed. Step 1 compares with "the head they answered for" and asks again only when the PR moved past it; the Between-waves stop list says "once per head the PR moves to"; both asserted.
+- R6 closed. Step 3 now states that a round completing on a moved head (update after, follow, ignore) needs the report's first line naming the reviewed SHA before `complete`. Checked against complete-head-gate.ts:56-58: the example line "Reviewed `<sha>` — the PR has since moved on to `<new sha>`." contains the 7-char reviewed prefix and matches SAYS_SO ("PR … moved" within 40 chars), so the prescribed line passes the gate.
+- R7 partial. SKILL.detail.md step 5 now governs "every publish … however it moved (during or after the round, any `on_head_move`)", and step 3 says so. The SKILL.md entry point to the procedure still scopes it to "a head that moved after the round" (SKILL.md "PR Review Report Publication"); reported as a new finding on slice-03, where that line sits (review-logic-w2).
+- R8 closed. "Any other exit (128: object missing, fetch failed): stop and report the git error; never read it as rewritten history." (Wording nit only: the fetch is its own call, so its failure is not a merge-base exit; the instruction still stops correctly.)
+- R9 closed. divergence-map row 4 now allows a moved head only with `--event COMMENT` and a reviewed-SHA first line, refuses other events and a closed PR, with matching tests; §5's last bullet is resolved to D1.
+- R10 closed. Tests now assert "The body's first line is \"Reviewed `<reviewed sha>`…" and "the body names the commits it did not check (`<reviewed sha>..<new sha>`)".
+- R11 closed. on_head_move is "read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask`".
+- R12 closed. The duplicate test.each was removed with a comment pointing AC3 at review-orchestrator-skill-parity.test.ts.
+
+### Internal consistency of the new text
+- Step 1 / stop list / step 3 / step 5 agree on: one question per new head, step 3 for a running round, step 5 for every publish.
+- Step 3 "Stop and start" vs step 4: consistent (step 4's `review plan` fallback will not take a draft package as previous).
+- Step 3 paragraph vs complete-head-gate.ts: consistent (see R6).
+- Unattended vs autonomous-profile.ts:199-200: consistent in direction; one approximation noted as info (LOG-R2-02).
+- New defect: the "routine" claim for `git ls-remote` (LOG-R2-01).
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "FIX slice: R1, R2, R4, R5, R6, R8, R9, R10, R11, R12 closed against the code; R3 and R7 partial. New: the wave-boundary head read via `git ls-remote` is called routine but is not on the trust allowlist (minor); `follow` approximates the autonomous runner's 'one more round' (info).",
+  "slices": [{"id": "slice-01", "coverage": "read in full; checked against complete-head-gate.ts, round-record.ts, prior-round.ts, managed.ts status writes, autonomous-profile.ts:199-200, trust-routine-command.ts, SKILL.md"}],
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "partial"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "partial"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "LOG-R2-01",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "read the head with `git ls-remote origin refs/pull/<n>/head`, one call with the literal ref: read-only git, so it stays routine.",
+      "problem": "Head moved step 1 (the R3 fix) says the per-wave `git ls-remote` read 'stays routine'. It does not: the trust/review-auto routine allowlist for git is GIT_READ_SUBCOMMANDS = status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame (src/lib/trust-routine-command.ts:25-35, used only at :393), plus `cat-file -e/-t` (:377). `ls-remote` is not in it, so once untrusted content has entered the turn the call asks the operator like `gh` does. The same holds for step 2's `git fetch origin <new sha>`, which the text frames under the same 'Shell calls in a trust or auto session' rule.",
+      "impact": "In a keryx shell trust/auto session the operator is still prompted at every wave boundary, which is the cost R3 reported, now under an instruction that says it will not happen. In an unattended run a refused read leaves the agent without the between-wave head; the move then surfaces only at `complete` through complete-head-gate.",
+      "suggested_fix": "Either add `ls-remote` to GIT_READ_SUBCOMMANDS (it already rejects --upload-pack through EXEC_FLAGS/hasExecWord) with a trust-routine-command test, or reword step 1 to say the wave-boundary read asks once per boundary like `gh` and drop 'so it stays routine'. Do the same check for step 2's `git fetch`.",
+      "evidence": "src/lib/trust-routine-command.ts:25-35 (GIT_READ_SUBCOMMANDS has no ls-remote or fetch), :393 (the only use of that set); `keryx ctx rg GIT_READ_SUBCOMMANDS src` finds no other allowlist.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LOG-R2-02",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "the autonomous runner's \"open one more round only if the head moved\" is `follow`",
+      "problem": "`follow` (finish, then step 4 without asking) repeats on every further move until the 5-round ceiling; the autonomous prompt (autonomous-profile.ts:200) allows one more round. Since the bullet tells the agent to follow the dispatcher's instruction, the literal 'one more' should govern, but the equivalence 'is `follow`' reads as unbounded.",
+      "impact": "An unattended run on a busy PR may open more rounds than the runner intended, bounded by REVIEW_ROUND_CAP.",
+      "suggested_fix": "Say 'is `follow` for one update round' or 'its own limit applies'.",
+      "evidence": "src/review/autonomous-profile.ts:200; SKILL.detail.md Head moved step 3 `follow` bullet.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+Not verified: tests were not run by this reviewer (read-only; the package's verify-tests-to-run-1.txt records exit 0). Git history was not read.

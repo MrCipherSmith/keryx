@@ -23,6 +23,16 @@ const sameCommit = (a: string, b: string): boolean => {
 };
 
 /**
+ * Whether a report's first line (HTML comments skipped) names the reviewed commit and says the pull request moved on:
+ * what `keryx review complete` asks of a moved head, and what `keryx review publish` keeps instead of adding its own line.
+ */
+export function firstLineSaysMoved(report: string, reviewed: string | null): boolean {
+  const first = report.split(/\r?\n/).find((line) => line.trim() !== "" && !/^\s*<!--.*-->\s*$/.test(line)) ?? "";
+  const names = reviewed === null ? /\b[0-9a-f]{7,40}\b/i.test(first) : first.toLowerCase().includes(reviewed.slice(0, 7).toLowerCase());
+  return names && SAYS_SO.test(first);
+}
+
+/**
  * `keryx review complete` on a PR-bound package: has the PR moved on since the round?
  *
  * A merged PR or a moved head means the report describes code that is no longer
@@ -53,9 +63,7 @@ export async function completeHeadGate(input: {
   if (!merged && !moved) return { warnings: unusable };
 
   const what = [merged ? "the PR is merged" : undefined, moved ? `the PR head moved (reviewed ${reviewed!.slice(0, 7)}, now ${prHead!.slice(0, 7)})` : undefined].filter(Boolean).join(" and ");
-  const first = input.report.split(/\r?\n/).find((line) => line.trim() !== "" && !/^\s*<!--.*-->\s*$/.test(line)) ?? "";
-  const names = reviewed === null ? /\b[0-9a-f]{7,40}\b/i.test(first) : first.toLowerCase().includes(reviewed.slice(0, 7).toLowerCase());
-  if (names && SAYS_SO.test(first)) return { warnings: unusable };
+  if (firstLineSaysMoved(input.report, reviewed)) return { warnings: unusable };
   throw new Error(
     `Cannot complete managed review; ${what}. The report's first line must name the reviewed SHA${reviewed === null ? "" : ` (${reviewed.slice(0, 7)})`} and say the PR moved, for example: "Reviewed ${(reviewed ?? "<sha>").slice(0, 7)} — the PR has since ${merged ? "merged" : "moved on"}."`,
   );

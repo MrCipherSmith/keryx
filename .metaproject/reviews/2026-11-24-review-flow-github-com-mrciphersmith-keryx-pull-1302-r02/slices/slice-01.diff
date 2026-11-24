@@ -1,0 +1,252 @@
+--- .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md
+@@ 35,62 @@
+ | GitHub identity | ambient `gh` (`github.ts:144`) | project GitHub binding / named viewer env (`desk-publication.ts:288`, `:343-346`), `gh api POST .../reviews` with `commit_id` (`:334`, `:357-372`) |
+ | operator confirmation | terminal: body printed + `[y/N]` or `--yes` (TTY-only) (`review.ts:5036-5055`); shell: card shows whole body (`operator-confirm-review.ts:225-236`), `confirmedVia` recorded | Tauri native dialog (`review.rs:486-495`) then PTY answers `publish`; CLI requires `stdin.isTTY` for submit (`review-desk-publish.ts:153`) and the typed word `publish` (`:102-119`) |
+ | errors / exit codes | throws plain `Error` (exit via CLI error path); declined → prints "review not published", `exitCode = 1` (`review.ts:5066-5069`); GitHub refusal → `GitHub refused the review: <detail>` (`publish.ts:173`) | prefixed `configuration:`/`permission:`/`access:`/`stale:`/`unavailable:` errors (`desk-publication.ts:286`, `:303`, `:331-333`, `:377-385`); receipt removed only when the POST certainly did not land (`:374-375`); JSON state on stdout (`review-desk-publish.ts:156-158`) |
+ | written to disk | `<pkg>/published.json` {pr, reviewId, head, round, event, partial, failing, time, confirmedVia, card press} (`publish.ts:174-177`); local round registry `recordFinishedRound` (`:179`) | Attempt dir (mode 0600): `publication-draft.json` (`:325`), `publication-receipt.json` (`:353`, `:391`), `publication-skipped.json` (`:318`), `publication-preview-cache.json` (`:199`); no `published.json`, no round registry entry |
+ | outcome read by | — | `DeskRunStore.publication` derives published/skipped/pending from receipt/skipped files (`src/review/desk-run-store.ts:325-334`) |
+ | draft / skip / preview | none | kinds preview/save/skip/submit (`desk-publication-types.ts:17-21`); skip refused under tool-call/unattended env (`review-desk-publish.ts:150-152`) |
+ 
+ ## 3. Already shared
+ 
+ - `buildRoundBlock`, `PUBLISHED_BODY_LIMIT`, `ReviewEvent` from `publish.ts` (import `desk-publication.ts:17`); `renderRoundBlock` from `pr-comments`.
+ - `computeReadiness` / `failingItems` (`readiness.ts`), `computeVerdict` (`verdict.ts`), `readRoundNumber` (`round-record.ts`).
+ - Nothing else: receipt, marker, lock, subject verification, screening and the POST transport are Desktop-only.
+ 
+ ## 4. Extraction plan (smallest sequence)
+ 
+ | # | change | needs stage | tests |
+ |---|---|---|---|
+ | 1 | Extract a `publicationGuard` module from `desk-publication.ts`: `publicationMarker(id)`, `findPreviousPublication`, receipt write-intent/confirm/rollback (`:351-391`), lock. Pure move, Desktop behaviour unchanged. | none | existing `src/review/desk-publication.test.ts` (all), new unit tests for the module |
+ | 2 | Give a session package a stable publication id + directory: use `manifest.reviewId` (+ round) as the marker key and the package dir as the receipt dir (`<pkg>/publication-receipt.json`). Marker text must be one format both paths emit, e.g. `<!-- keryx-review <key> -->`; Desktop keeps also recognising the old `keryx-desktop-review <uuid>` marker. | none (current run model); final key choice depends on stage 2 Attempt ids | new: marker round-trip; old-marker recognition |
+ | 3 | In `publishReview` (`publish.ts:171-179`): take the lock, refuse when a receipt has a URL or an unknown result, else search PR reviews for the marker; append the marker; write `{}` before `options.post`, `{url}` after; on certain refusal remove it. `post` must return the review id/URL: `githubPostReview` (`gh pr review`) returns none, so switch the session POST to the `gh api .../reviews` port or look the review up by marker after posting. | none | extend `src/review/publish.test.ts`: second publish of same package refused; lost-response receipt blocks; refused POST leaves it retryable; `src/commands/operator-confirm-review-tools.test.ts`: card `buildCard` shows "already published" refusal |
+-| 4 | Shared acceptance: route session publish through the same head/closed check as Desktop (`verifyDeskSubject` equivalent keyed by `manifest.target`) and `screenCommentBody`. Keep `--partial` as the session's explicit opt-in (Desktop's coverage note stays). Keep D1 out: moved head refuses for now. | none for refusal; "publish as-is for `<sha>`" variant = stage 3 (D1) | `publish.test.ts`: moved head / closed PR refused; `src/commands/review-tty-refusal.test.ts` unchanged |
++| 4 | Shared acceptance: route session publish through the same head/closed check as Desktop (`verifyDeskSubject` equivalent keyed by `manifest.target`) and `screenCommentBody`. Keep `--partial` as the session's explicit opt-in (Desktop's coverage note stays). On a moved head allow only `--event COMMENT` with a first line naming the reviewed SHA (D1, the skill's "Publish as is for `<reviewed sha>`"); refuse every other event; refuse a closed PR. | none; Desktop's "publish as-is" variant in `desk-publish` = stage 3 | `publish.test.ts`: moved head + `REQUEST_CHANGES`/`APPROVE` refused, moved head + `COMMENT` with reviewed-SHA first line accepted, closed PR refused; `src/commands/review-tty-refusal.test.ts` unchanged |
+ | 5 | Confirmation stays per surface: terminal `[y/N]`/`--yes` (TTY), shell card (`confirmedVia`), Desktop native dialog + PTY. No change to `review.rs`. | none | existing TTY/card tests |
+ | 6 | Cross-path duplicate: session package registered as Attempt with source `session` so `desk-publish` can address it (`desk-publication.ts:296` now rejects anything not in `DeskRunStore`, and `existing`). | **stage 2** | new: publish package via `review publish`, then `desk-publish` submit of the same Attempt → refused "already published" (receipt or marker); and the reverse order |
+ | 7 | Moved-head options (`desk-publish` returns variants, `on_head_move`, `review advance`) applied to the shared guard. | **stage 3** | stage 3's own tests; re-run 1–6 |
+ 
+ Without stage 2, the cross-path test in row 6 can only be approximated: same PR, Desktop-posted review carrying the shared
+ marker, then `review publish` of a package with the same key finds it via the marker scan (`findPreviousPublication`).
+ 
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 594,632 @@
+ 
+ ## Head moved
+ 
+ A round is pinned to the head it planned (`head` in `<package>/round.json`, the same SHA in `plan.json`). Its result stays true for that commit, so a running round is never interrupted on its own when the pull request moves.
+ 
+-1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing. The same SHA as the round's `head`: carry on.
+-2. **Count.** `git fetch origin <new sha>`, then `git merge-base --is-ancestor <reviewed sha> <new sha>`, each in a shell call of its own with literal SHAs ("Shell calls in a `trust` or `auto` session"). Exit 0: N is `git rev-list --count <reviewed sha>..<new sha>`. Exit 1: history was rewritten (force-push or rebase), N is unknown, and the update round will be `fallback-first`.
+-3. **Decide by `on_head_move`:** the Review's own value when it has one, otherwise `ask` (the default for a manual review).
++1. **Check.** At every wave boundary (before each `keryx review next`) read the head with `git ls-remote origin refs/pull/<n>/head`, one call with the literal ref: read-only git, so it stays routine. Before `keryx review complete` and before publishing, read it once each with `gh pr view <n> --json headRefOid --jq .headRefOid`; these two are the expected `gh` calls of SKILL.md's "make it once" rule. Compare with the round's `head`, or, once the operator answered for a moved head, with the head they answered for: the same SHA, carry on; ask again only when the PR moved past it.
++2. **Count.** `git fetch origin <new sha>`, then `git merge-base --is-ancestor <reviewed sha> <new sha>`, each in a shell call of its own with literal SHAs ("Shell calls in a `trust` or `auto` session"). Exit 0: N is `git rev-list --count <reviewed sha>..<new sha>`. Exit 1: history was rewritten (force-push or rebase), N is unknown, and the update round will be `fallback-first`. Any other exit (128: object missing, fetch failed): stop and report the git error; never read it as rewritten history.
++3. **Decide by `on_head_move`**, read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask` (the default for a manual review). This step governs a running round; step 5 governs every publish.
+    - `ask`: tell the operator `head moved by N commits (<reviewed sha> → <new sha>)` (rewritten: `head rewritten`) and ask with the host question tool ("Hosts"; a Telegram operator: `send_poll`), two options, the first recommended:
+-     - **Update after this round finishes**: the round runs to `complete`, then step 4.
+-     - **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.
++     - **Update after this round finishes** (recommended): the round runs to `complete`, which makes it a trusted prior round, then step 4.
++     - **Stop and start on the new head**: dispatch nothing more and ingest what finished. Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`): step 4 plans as if it had not run, so the new head is reviewed in full (or as a delta from an earlier completed round), the stopped round's findings reach it at most as context, and per-finding answers do not carry over yet. The stopped round's report names the slices it did not cover.
+    - `follow`: finish the round, then step 4 without asking.
+-   - `ignore`: finish the round; the report says the review is behind (`<reviewed sha>` reviewed, `<new sha>` current).
+-   - **Unattended** (no operator): ask nothing. Finish the round on its pinned head, open no update round unless `on_head_move` is `follow`, never publish, and report the move (both SHAs, N or "history rewritten").
+-4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command. While `keryx review --help` does not list `advance`, open it with `keryx review plan --target <pr-url> --head <new sha> --host <host>`, exactly as "Round plan" 1 does: it picks `delta` (the old head is an ancestor) or `fallback-first` (history rewritten) and attaches the prior findings. A finding the round did not recheck is carried with its previous status; it becomes `closed` only after its code is rechecked, else it stays `open`.
+-5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:
+-   1. **Update the review to `<new sha>`** (primary): the update round of step 4. The operator's answers per finding carry over by finding id.
++   - `ignore`: finish the round; the report says the review is behind.
++   - **Unattended** (no operator): ask nothing and never publish. Follow the head-move instruction of the run that dispatched you: the autonomous runner's "open one more round only if the head moved" is `follow`, a fixed-range Desktop run's "keep this range" is `ignore`. With no such instruction, open no update round: finish on the pinned head. Either way, report the move (both SHAs, N or "history rewritten").
++
++   A round that completes on a moved head (update after, `follow`, `ignore`) needs the report's first line to name the reviewed SHA and say the PR moved on ("Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.") before `keryx review complete`, or `src/review/complete-head-gate.ts` refuses it.
++4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; it is the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs). While `keryx review --help` does not list `advance`, open it with `keryx review plan --target <pr-url> --head <new sha> --host <host>`, exactly as "Round plan" 1 does: it picks `delta` (the old head is an ancestor) or `fallback-first` (history rewritten) and attaches the prior findings. A finding the round did not recheck is carried with its previous status; it becomes `closed` only after its code is rechecked, else it stays `open`.
++5. **Before publishing, when the head at publish time differs from the round's head**, however it moved (during or after the round, any `on_head_move`). Offer these options, in this order, with the host question tool:
++   1. **Update the review to `<new sha>`** (primary): the update round of step 4. The operator's answers per finding carry over by finding id only with `advance`; before it they do not.
+    2. **Publish as is for `<reviewed sha>`**: only `keryx review publish <package> --event COMMENT`, never `REQUEST_CHANGES` or `APPROVE`. The body's first line is "Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`." (`templates/review-report.md`; the line `review complete` already demands for a moved head), and the body names the commits it did not check (`<reviewed sha>..<new sha>`).
+    3. **Save locally**: keep the package, publish nothing.
+    4. **Skip.**
+ 
+    Publishing stays the operator's act (SKILL.md "PR Review Report Publication"): never `--yes`, never `gh pr review` or `gh pr comment`.
+ 
+ ## Early verdict — the verdict is interim until `complete`
+ 
+ As soon as every reviewer result and the verifier's are on disk, save each verifier pass to `research-evidence/verifications.json` first (without it a refuted finding still counts), then run `keryx review verdict <id|path> [--json]`: it reads `<package>/raw` and writes `verdict-interim.md` into the package. Give the operator that verdict in the same message; do not hold it for the mutation pass, the ledger or `complete`.
+ 
+ The tail keeps running after it: the mutation pass (`keryx review mutate`), `ledger build`, `ingest`, `readiness` and the `review_complete` card (`keryx review complete` for a human at a terminal). Every managed round finishes them. The round is **not done** until `complete`: the verdict you gave is interim, and the report says so and names what the tail may still change (a surviving mutant, a verifier refutation, a late reviewer result). A light round has no mutation pass: its tail is `ledger build`, `ingest`, `readiness`, `complete`.
+ 
+ ## Early verifier — start on the first blocker or major
+ 
+ Do not wait for the last reviewer. When the first `blocker` or `major` finding arrives, dispatch `review-verifier` over the findings you hold, while the other reviewers keep running. Each later blocker or major starts another verifier pass over just the new findings (each pass is its own run; Step 9b's `verify_order` orders the later passes), so verification finishes within minutes of the last reviewer. The merge comes from `keryx review ingest --verifications <file>`, once per pass.
+ 
+ ## Recovery — collect, validate, ingest, dispatch only what is missing
+ 
+ After a timeout, a crash or a resumed session, in this order:
+ 
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 606,632 @@
+-   - `ignore`: finish the round; the report says the review is behind (`<reviewed sha>` reviewed, `<new sha>` current).
+-   - **Unattended** (no operator): ask nothing. Finish the round on its pinned head, open no update round unless `on_head_move` is `follow`, never publish, and report the move (both SHAs, N or "history rewritten").
+-4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; Desktop runs the same command. While `keryx review --help` does not list `advance`, open it with `keryx review plan --target <pr-url> --head <new sha> --host <host>`, exactly as "Round plan" 1 does: it picks `delta` (the old head is an ancestor) or `fallback-first` (history rewritten) and attaches the prior findings. A finding the round did not recheck is carried with its previous status; it becomes `closed` only after its code is rechecked, else it stays `open`.
+-5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:
+-   1. **Update the review to `<new sha>`** (primary): the update round of step 4. The operator's answers per finding carry over by finding id.
++   - `ignore`: finish the round; the report says the review is behind.
++   - **Unattended** (no operator): ask nothing and never publish. Follow the head-move instruction of the run that dispatched you: the autonomous runner's "open one more round only if the head moved" is `follow`, a fixed-range Desktop run's "keep this range" is `ignore`. With no such instruction, open no update round: finish on the pinned head. Either way, report the move (both SHAs, N or "history rewritten").
++
++   A round that completes on a moved head (update after, `follow`, `ignore`) needs the report's first line to name the reviewed SHA and say the PR moved on ("Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.") before `keryx review complete`, or `src/review/complete-head-gate.ts` refuses it.
++4. **Update round.** `keryx review advance` opens the next round of the same Review on the current head; it is the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs). While `keryx review --help` does not list `advance`, open it with `keryx review plan --target <pr-url> --head <new sha> --host <host>`, exactly as "Round plan" 1 does: it picks `delta` (the old head is an ancestor) or `fallback-first` (history rewritten) and attaches the prior findings. A finding the round did not recheck is carried with its previous status; it becomes `closed` only after its code is rechecked, else it stays `open`.
++5. **Before publishing, when the head at publish time differs from the round's head**, however it moved (during or after the round, any `on_head_move`). Offer these options, in this order, with the host question tool:
++   1. **Update the review to `<new sha>`** (primary): the update round of step 4. The operator's answers per finding carry over by finding id only with `advance`; before it they do not.
+    2. **Publish as is for `<reviewed sha>`**: only `keryx review publish <package> --event COMMENT`, never `REQUEST_CHANGES` or `APPROVE`. The body's first line is "Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`." (`templates/review-report.md`; the line `review complete` already demands for a moved head), and the body names the commits it did not check (`<reviewed sha>..<new sha>`).
+    3. **Save locally**: keep the package, publish nothing.
+    4. **Skip.**
+ 
+    Publishing stays the operator's act (SKILL.md "PR Review Report Publication"): never `--yes`, never `gh pr review` or `gh pr comment`.
+ 
+ ## Early verdict — the verdict is interim until `complete`
+ 
+ As soon as every reviewer result and the verifier's are on disk, save each verifier pass to `research-evidence/verifications.json` first (without it a refuted finding still counts), then run `keryx review verdict <id|path> [--json]`: it reads `<package>/raw` and writes `verdict-interim.md` into the package. Give the operator that verdict in the same message; do not hold it for the mutation pass, the ledger or `complete`.
+ 
+ The tail keeps running after it: the mutation pass (`keryx review mutate`), `ledger build`, `ingest`, `readiness` and the `review_complete` card (`keryx review complete` for a human at a terminal). Every managed round finishes them. The round is **not done** until `complete`: the verdict you gave is interim, and the report says so and names what the tail may still change (a surviving mutant, a verifier refutation, a late reviewer result). A light round has no mutation pass: its tail is `ledger build`, `ingest`, `readiness`, `complete`.
+ 
+ ## Early verifier — start on the first blocker or major
+ 
+ Do not wait for the last reviewer. When the first `blocker` or `major` finding arrives, dispatch `review-verifier` over the findings you hold, while the other reviewers keep running. Each later blocker or major starts another verifier pass over just the new findings (each pass is its own run; Step 9b's `verify_order` orders the later passes), so verification finishes within minutes of the last reviewer. The merge comes from `keryx review ingest --verifications <file>`, once per pass.
+ 
+ ## Recovery — collect, validate, ingest, dispatch only what is missing
+ 
+ After a timeout, a crash or a resumed session, in this order:
+ 
+
+--- src/gdskills/review-orchestrator-preflight.test.ts
+@@ 390,496 @@
+-    expect(text).toContain("`keryx review advance`");
+-    expect(text).toContain("`keryx review --help` does not list `advance`");
+-    expect(text).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
+-  });
+-
+-  test("D1: the old commit is published as is only with --event COMMENT and a reviewed-commit first line", () => {
+-    const text = headMoved();
+-    expect(text).toContain("Update the review to `<new sha>`");
+-    expect(text).toContain("Publish as is for `<reviewed sha>`");
+-    expect(text).toContain("`keryx review publish <package> --event COMMENT`");
+-    expect(text).toContain("never `REQUEST_CHANGES` or `APPROVE`");
+-    expect(text).toContain("Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.");
+-    expect(text).toContain("never `--yes`");
+-  });
+-
+-  test("unattended asks nothing, publishes nothing and reports the move", () => {
+-    const unattended = headMoved().split("\n").find((line) => line.includes("**Unattended**")) ?? "";
+-    expect(unattended).toContain("ask nothing");
+-    expect(unattended).toContain("never publish");
+-    expect(unattended).toContain("unless `on_head_move` is `follow`");
+-  });
+-
+-  test("a head-move question is on the closed stop list between waves", () => {
+-    expect(section(DETAIL, "## Between waves — an authorized plan keeps the round going")).toContain('§ "Head moved"');
++    const start = text.indexOf(`\n${n}. **`);
++    const end = text.indexOf(`\n${n + 1}. **`, start + 1);
++    return start < 0 ? "" : text.slice(start, end < 0 ? undefined : end);
++  };
++  const bullet = (label: string): string => headMoved().split("\n").find((line) => line.includes(label)) ?? "";
++
++  test("wave boundaries read the head with routine read-only git; gh is read once before complete and once before publish", () => {
++    const check = step(1);
++    expect(check).toContain("At every wave boundary (before each `keryx review next`) read the head with `git ls-remote origin refs/pull/<n>/head`");
++    expect(check).toContain("Before `keryx review complete` and before publishing, read it once each with `gh pr view <n> --json headRefOid --jq .headRefOid`");
++    expect(check).toContain('"make it once"');
++    expect(check.indexOf("git ls-remote")).toBeLessThan(check.indexOf("gh pr view"));
++    expect(headMoved()).toContain("never interrupted on its own");
++  });
++
++  test("after an answer, later boundaries compare with the head the operator answered for", () => {
++    const check = step(1);
++    expect(check).toContain("with the head they answered for");
++    expect(check).toContain("ask again only when the PR moved past it");
++    const stop = section(DETAIL, "## Between waves — an authorized plan keeps the round going").split("\n").find((line) => line.includes('§ "Head moved"')) ?? "";
++    expect(stop).toContain("while `on_head_move` is `ask`, once per head the PR moves to");
++  });
++
++  test("it counts the new commits, names the rewritten-history case and stops on any other git exit", () => {
++    const count = step(2);
++    expect(count).toContain("git merge-base --is-ancestor <reviewed sha> <new sha>");
++    expect(count).toContain("git rev-list --count <reviewed sha>..<new sha>");
++    expect(count).toContain("Exit 1: history was rewritten");
++    expect(count).toContain("`fallback-first`");
++    expect(count).toContain("Any other exit (128: object missing, fetch failed): stop and report the git error; never read it as rewritten history.");
++  });
++
++  test("on_head_move comes only from the stored Review, defaults to ask, and ask offers update-after first", () => {
++    const decide = step(3);
++    expect(decide).toContain("read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask`");
++    expect(decide).toContain("`send_poll`");
++    const update = decide.indexOf("**Update after this round finishes** (recommended)");
++    const stop = decide.indexOf("**Stop and start on the new head**");
++    expect(update).toBeGreaterThan(-1);
++    expect(stop).toBeGreaterThan(update);
++    expect(decide).toContain("which makes it a trusted prior round");
++    expect(bullet("- `follow`:")).toContain("then step 4 without asking");
++    expect(bullet("- `ignore`:")).toContain("finish the round; the report says the review is behind");
++    expect(bullet("- `ignore`:")).not.toContain("step 4");
++  });
++
++  test("stop-and-start says truthfully that nothing carries over until advance exists", () => {
++    const stop = bullet("**Stop and start on the new head**");
++    expect(stop).toContain("Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`)");
++    expect(stop).toContain("the stopped round's findings reach it at most as context");
++    expect(stop).toContain("per-finding answers do not carry over yet");
++    expect(stop).toContain("names the slices it did not cover");
++    expect(stop).not.toContain("enters the new plan as unchecked");
++    expect(bullet("**Update the review to `<new sha>`**")).toContain("carry over by finding id only with `advance`; before it they do not");
++  });
++
++  test("a round completed on a moved head names the reviewed SHA on the report's first line before complete", () => {
++    const decide = step(3);
++    expect(decide).toContain("A round that completes on a moved head (update after, `follow`, `ignore`) needs the report's first line to name the reviewed SHA and say the PR moved on");
++    expect(decide).toContain("before `keryx review complete`, or `src/review/complete-head-gate.ts` refuses it");
++  });
++
++  test("the update round is keryx review advance, stage 3's command, with review plan while advance is not listed", () => {
++    const update = step(4);
++    expect(update).toContain("`keryx review advance`");
++    expect(update).toContain("the command Desktop Review v2 stage 3 adds for both surfaces (today Desktop's prompt still differs)");
++    expect(update).not.toContain("Desktop runs the same command");
++    expect(update).toContain("`keryx review --help` does not list `advance`");
++    expect(update).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
++  });
++
++  test("D1: any publish on a moved head is COMMENT only, with the reviewed commit as the body's first line", () => {
++    const publish = step(5);
++    expect(publish).toContain("when the head at publish time differs from the round's head**, however it moved (during or after the round, any `on_head_move`)");
++    expect(step(3)).toContain("step 5 governs every publish");
++    expect(publish).toContain("Update the review to `<new sha>`");
++    expect(publish.indexOf("Update the review to `<new sha>`")).toBeLessThan(publish.indexOf("Publish as is for `<reviewed sha>`"));
++    expect(publish).toContain("only `keryx review publish <package> --event COMMENT`, never `REQUEST_CHANGES` or `APPROVE`");
++    expect(publish).toContain("The body's first line is \"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\"");
++    expect(publish).toContain("the body names the commits it did not check (`<reviewed sha>..<new sha>`)");
++    expect(publish).toContain("never `--yes`");
++  });
++
++  test("unattended asks nothing, publishes nothing, follows its dispatcher's instruction, else opens no update round, and reports the move", () => {
++    const unattended = bullet("**Unattended**");
++    expect(unattended).toContain("ask nothing and never publish");
++    expect(unattended).toContain("Follow the head-move instruction of the run that dispatched you");
++    expect(unattended).toContain("the autonomous runner's \"open one more round only if the head moved\" is `follow`");
++    expect(unattended).toContain("a fixed-range Desktop run's \"keep this range\" is `ignore`");
++    expect(unattended).toContain("With no such instruction, open no update round: finish on the pinned head.");
++    expect(unattended).toContain("report the move (both SHAs, N or \"history rewritten\")");
++  });
++
++  test("the autonomous prompt and the skill agree: an unattended run opens one more round on a moved head", () => {
++    const prompt = read(import.meta.dir, "..", "review", "autonomous-profile.ts");
++    expect(prompt).toContain("Open one more round only if the head moved while you worked, and review the new head.");
++    expect(prompt).toContain("Keep this range throughout the review.");
++    const unattended = bullet("**Unattended**");
++    expect(unattended.toLowerCase()).toContain("open one more round only if the head moved");
++    expect(unattended).toContain("is `follow`");
++    expect(unattended).toContain("\"keep this range\" is `ignore`");
+   });
+ 
+   test("SKILL.md points at the procedure in Round plan step 5 and in publication, and drops the old phrase", () => {
+     expect(SKILL).not.toContain("If head moved, re-check findings");
+     const step5 = section(SKILL, "## Round plan — the order on every host").split("\n").find((line) => line.startsWith("5. ")) ?? "";
+     expect(step5).toContain('`SKILL.detail.md` § "Head moved"');

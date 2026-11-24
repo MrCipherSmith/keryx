@@ -1,0 +1,65 @@
+STATUS: PARTIAL
+
+## Frontend Review — wave 3 (slice-03)
+
+### Scope
+- Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df
+- Read in full: slice-03 lines 1-1007: src/review/autonomous-profile.ts, desk-publication.ts (4 hunks), desk-run-store.ts, desk-run-types.ts, publication-guard.ts, publish.ts (2 hunks), review-advance.ts, review-entity.ts, session-attempt.ts, session-publish-github.ts.
+- NOT read line by line: slice-03 lines 1009-end (desk-publication.test.ts, publish.test.ts, review-advance.test.ts, session-publish-github.test.ts): backend tests, outside the frontend lens.
+- Read at HEAD for the Desktop consequences of the new `session` source: desk-run-types.ts canContinueDeskRun (104), desk-run-store.ts latestAdmission (302-309), publication (292-301) and continuationSource (327-337), every source branch in apps/desktop/src (keryx ctx rg `canContinueDeskRun|hasCoordinator|onOpenSession|run.source|\.source ===|\.source !==`), App.tsx openReviewWorkspace (527-539), SessionReviewActivity.tsx canResume (177).
+
+### Findings
+- F-001 (major): Desktop treats every non-`existing` attempt as Desktop-coordinated, so the new `session` attempts get coordinator UI and a "Continue review" the backend always refuses.
+- F-002 (minor): a session publish whose GitHub answer carries no URL writes `{posted:true}`, which the store reads as `pending`, so Desktop shows "Action required" on a published review.
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-frontend",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-frontend-w3-1",
+      "severity": "major",
+      "file": "src/review/desk-run-types.ts",
+      "line": 123,
+      "problem": "Stage 4 adds `source: \"session\"` attempts (registered from agent-session packages; no coordinator transcript, never admitted through the desk-run journal). Every Desktop branch that decides whether an attempt has a Desktop coordinator tests `source !== \"existing\"`, so session attempts get an \"Open review session\" button that creates a new blank Desktop session linked to the attempt (App.tsx openReviewWorkspace calls s.newSession()), a \"Coordinator\" header with an empty transcript and an activity follow, and, for a `partial` session attempt (registerSessionPackage sets state partial when readiness fails), a \"Continue review\" button because canContinueDeskRun only excludes `existing`. The backend always refuses that continue: continuationSource requires latestAdmission(key) === id, and latestAdmission selects only sources IN ('manual','scheduled').",
+      "evidence": "src/review/desk-run-types.ts:104-105 canContinueDeskRun `run.source !== \"existing\"`; apps/desktop/src/review/SessionReviewActivity.tsx:177 canResume and :226-227 Continue review button; src/review/desk-run-store.ts:305-307 latestAdmission `source IN ('manual','scheduled')`, :333 refusal `stale: Another review is active or this attempt is out of date`; src/review/session-attempt.ts source session / state partial (slice-03 lines 855,859); apps/desktop/src/review/ReviewRuns.tsx:117, ReviewWorkspace.tsx:100, ReviewWorkspace.tsx:213, ReviewRunDialog.tsx:55 gate on `!== \"existing\"`; apps/desktop/src/App.tsx:531 newSession",
+      "impact": "A reachable path (partial session package -> Reviews -> Open review session -> Continue review) offers an action that can never succeed and fails with a misleading 'another review is active' error; opening any session attempt spawns an unrelated empty Desktop session and shows an empty Coordinator transcript.",
+      "suggested_fix": "Add one predicate in desk-run-types.ts (e.g. `hasDeskCoordinator(run) = run.source === \"manual\" || run.source === \"scheduled\"`), use it in canContinueDeskRun and at every listed Desktop site; for session attempts hide the session/continue controls (an update goes through `keryx review advance`), and add a ReviewPanel dom test with a partial `session` run.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/desk-run-types.ts:104",
+          "apps/desktop/src/review/SessionReviewActivity.tsx:177",
+          "apps/desktop/src/review/ReviewRuns.tsx:117",
+          "apps/desktop/src/review/ReviewWorkspace.tsx:100",
+          "apps/desktop/src/review/ReviewWorkspace.tsx:213",
+          "apps/desktop/src/review/ReviewRunDialog.tsx:55"
+        ],
+        "enumeration_method": "keryx ctx rg --all `canContinueDeskRun|hasCoordinator|onOpenSession|run.source|\\.source ===|\\.source !==` over apps/desktop/src, src/review/desk-run-service.ts and src/review/desk-run-store.ts; the six coordinator-presence branches are listed. ReviewRuns.tsx:27/105 and ReviewWorkspace.tsx:139 (covering attempt, publish draft) rightly include session runs and are excluded; desk-run-service.ts:294 (coordinatorActivity for non-existing) is the backend side of ReviewRunDialog.tsx:55."
+      }
+    },
+    {
+      "id": "review-frontend-w3-2",
+      "severity": "minor",
+      "file": "src/review/publication-guard.ts",
+      "line": 63,
+      "problem": "confirmPublicationReceipt writes `{posted:true}` when GitHub's answer carried no URL (the session path's githubPostPullReview returns url only when html_url is present). DeskRunStore.publication, which drives Desktop's 'Action required' badge and the Review's published state, counts a receipt as published only when it has a string `url`.",
+      "evidence": "src/review/publication-guard.ts:63; src/review/desk-run-store.ts:297 `if (typeof JSON.parse(receipt.text)?.url === \"string\") return \"published\"`, otherwise pending/skipped; apps/desktop/src/review/ReviewRuns.tsx:107 publicationPending = run.publication === \"pending\"",
+      "impact": "A review posted through `keryx review publish` without a returned URL still shows in Desktop as needing a publication decision; the publish dialog resolves it by marker lookup, but the list badge and Review state stay wrong.",
+      "suggested_fix": "Count `posted: true` as published in DeskRunStore.publication (reuse receiptPublished from publication-guard.ts), or resolve the URL by marker before confirming the receipt on the session path.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1,
+    "info": 0
+  }
+}
+```

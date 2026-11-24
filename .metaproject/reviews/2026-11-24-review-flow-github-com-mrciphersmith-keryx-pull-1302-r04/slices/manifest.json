@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 130085,
+      "contentHash": "9f42e2d79f4a3d6eb08738785c3932a1b061fab68e79412e8861779232a8854e",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md",
+        "apps/desktop/src/review/ReviewRunDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/review/useReviewRuns.ts",
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+        "src/review/complete-head-gate.ts",
+        "src/review/desk-run-types.ts",
+        "src/review/publish.ts",
+        "src/review/review-advance.ts",
+        "src/review/session-attempt.ts",
+        "src/review/session-publish-github.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], apps +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: src/review/session-attempt.ts",
+          "risk class auth/permissions: src/review/session-publish-github.ts",
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "source code: apps/desktop/src/review/ReviewRunDialog.tsx, apps/desktop/src/review/ReviewRuns.tsx, apps/desktop/src/review/ReviewWorkspace.tsx (+9)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 22165,
+      "contentHash": "003f0d9adb2a195921320c19877363d4e6597b69f5959b5064cdba0a46f5fc0a",
+      "files": [
+        "src/review/desk-publication.test.ts",
+        "src/review/publish.test.ts",
+        "src/review/review-advance.test.ts",
+        "src/review/session-publish-github.test.ts"
+      ],
+      "domain": "src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 152250,
+    "files": 23,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

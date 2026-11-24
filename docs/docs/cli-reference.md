@@ -5223,6 +5223,21 @@ count and a warning. Without a local review store the list is empty and no store
 created. An existing store is opened for writing, so a store that predates Reviews is
 migrated (attempts placed into Reviews and rounds) by the first list read.
 
+`keryx review advance --json --repo owner/name --number N [--id UUID]` opens the update
+round of the pull request's Review on its current head: the next round of the same Review,
+with the reviewed attempt's settings except automatic publication. `--id` names the attempt
+to update from (the Review's latest round by default); `--base`/`--head` refuse the request
+when the pull request has moved again since the caller read it, and `--repository-id` and
+`--viewer` when the account or repository changed. Desktop's "Update review" and the
+review-orchestrator skill's "Head moved" procedure both call it. It refuses an attempt a
+later round already follows, a closed pull request, and a round already on the current head.
+
+A pull request review package a session finishes with `keryx review complete` or publishes
+with `keryx review publish` is registered as an attempt with source `session` of that
+pull request's Review, so `keryx review reviews` lists it and `desk-publish` can publish it.
+Both publish paths share the receipt and the hidden duplicate marker, so a review posted
+by one is refused by the other.
+
 `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
 `keryx review accounts project --json` shows the current project's selection.
 Use `keryx review accounts bind --login LOGIN --json` to verify and select an account

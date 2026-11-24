@@ -1,0 +1,234 @@
+[
+  {
+    "id": "review-logic-w1:F-001",
+    "status": "finding",
+    "finding": "R1",
+    "evidence": "consolidated into R1",
+    "reason": "representative"
+  },
+  {
+    "id": "review-architecture-w1:F-002",
+    "status": "finding",
+    "finding": "R1",
+    "evidence": "consolidated into R1",
+    "reason": "duplicate of review-logic-w1:F-001"
+  },
+  {
+    "id": "review-degradation-w1:DEG-S1",
+    "status": "finding",
+    "finding": "R1",
+    "evidence": "consolidated into R1",
+    "reason": "duplicate of review-logic-w1:F-001"
+  },
+  {
+    "id": "review-pr-contract-w1:PC-002",
+    "status": "finding",
+    "finding": "R1",
+    "evidence": "consolidated into R1",
+    "reason": "duplicate of review-logic-w1:F-001"
+  },
+  {
+    "id": "review-regression-w1:F-001",
+    "status": "finding",
+    "finding": "R2",
+    "evidence": "consolidated into R2",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:F-006",
+    "status": "finding",
+    "finding": "R2",
+    "evidence": "consolidated into R2",
+    "reason": "duplicate of review-regression-w1:F-001"
+  },
+  {
+    "id": "review-performance-w1:F-001",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "consolidated into R3",
+    "reason": "representative"
+  },
+  {
+    "id": "review-security-code-w1:F-001",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "consolidated into R3",
+    "reason": "duplicate of review-performance-w1:F-001"
+  },
+  {
+    "id": "review-architecture-w1:F-001",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "consolidated into R3",
+    "reason": "duplicate of review-performance-w1:F-001"
+  },
+  {
+    "id": "review-degradation-w1:DEG-1",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "consolidated into R3",
+    "reason": "duplicate of review-performance-w1:F-001"
+  },
+  {
+    "id": "review-highload-w1:F-002",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "consolidated into R3",
+    "reason": "duplicate of review-performance-w1:F-001"
+  },
+  {
+    "id": "review-pr-contract-w1:PC-001",
+    "status": "finding",
+    "finding": "R4",
+    "evidence": "consolidated into R4",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:F-002",
+    "status": "finding",
+    "finding": "R5",
+    "evidence": "consolidated into R5",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:F-003",
+    "status": "finding",
+    "finding": "R6",
+    "evidence": "consolidated into R6",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:F-004",
+    "status": "finding",
+    "finding": "R7",
+    "evidence": "consolidated into R7",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:DEG-S2",
+    "status": "finding",
+    "finding": "R7",
+    "evidence": "consolidated into R7",
+    "reason": "duplicate of review-logic-w1:F-004"
+  },
+  {
+    "id": "review-logic-w1:F-005",
+    "status": "finding",
+    "finding": "R8",
+    "evidence": "consolidated into R8",
+    "reason": "representative"
+  },
+  {
+    "id": "review-architecture-w1:F-003",
+    "status": "finding",
+    "finding": "R9",
+    "evidence": "consolidated into R9",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w1:F-001",
+    "status": "finding",
+    "finding": "R10",
+    "evidence": "consolidated into R10",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w1:F-002",
+    "status": "finding",
+    "finding": "R10",
+    "evidence": "consolidated into R10",
+    "reason": "duplicate of review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-testing-practices-w1:F-003",
+    "status": "finding",
+    "finding": "R10",
+    "evidence": "consolidated into R10",
+    "reason": "duplicate of review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-testing-practices-w1:F-004",
+    "status": "finding",
+    "finding": "R10",
+    "evidence": "consolidated into R10",
+    "reason": "duplicate of review-testing-practices-w1:F-001"
+  },
+  {
+    "id": "review-security-code-w1:F-003",
+    "status": "finding",
+    "finding": "R11",
+    "evidence": "consolidated into R11",
+    "reason": "representative"
+  },
+  {
+    "id": "review-architecture-w1:F-005",
+    "status": "finding",
+    "finding": "R12",
+    "evidence": "consolidated into R12",
+    "reason": "representative"
+  },
+  {
+    "id": "review-performance-w1:F-002",
+    "status": "finding",
+    "finding": "R13",
+    "evidence": "consolidated into R13",
+    "reason": "representative"
+  },
+  {
+    "id": "review-highload-w1:F-001",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Existing publish code (publish.ts/github.ts): no re-check after confirmation, no commit_id; deferred to flow 521 T7 (divergence-map §4 rows 3-4)"
+  },
+  {
+    "id": "review-security-code-w1:F-002",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Existing publish code enforces D1 only in skill text; deferred to flow 521 T7"
+  },
+  {
+    "id": "review-architecture-w1:F-004",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Same as security F-002: code enforcement of D1 is T7 work"
+  },
+  {
+    "id": "review-testing-practices-w1:F-005",
+    "status": "out-of-scope",
+    "evidence": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+    "reason": "Hazard note for a mutation pass, not a defect; mutation pass not run this round"
+  },
+  {
+    "id": "review-degradation-w1:fu1",
+    "status": "finding",
+    "finding": "R1",
+    "evidence": "research-evidence/verify-F-001-1.txt (round-record.ts:207)",
+    "reason": "Answered by R1: a partial package is never a previous round, whatever status ingest writes"
+  },
+  {
+    "id": "review-degradation-w1:fu2",
+    "status": "finding",
+    "finding": "R3",
+    "evidence": "R3 fix uses a read-only git head read at wave boundaries",
+    "reason": "Folded into R3"
+  },
+  {
+    "id": "review-regression-w1:fu1",
+    "status": "finding",
+    "finding": "R14",
+    "evidence": "SKILL.md frontmatter version 1.17.0 at head",
+    "reason": "Raised as R14"
+  },
+  {
+    "id": "review-regression-w1:fu2",
+    "status": "out-of-scope",
+    "evidence": "journal.md T5 entry",
+    "reason": "install.test.ts is outside the changed files; recorded as unverified on base"
+  },
+  {
+    "id": "review-testing-practices-w1:fu1",
+    "status": "out-of-scope",
+    "evidence": "report-draft.md How this review was run",
+    "reason": "Mutation pass not run this round (recorded Not run); the assertion gaps it targets are fixed under R10"
+  }
+]

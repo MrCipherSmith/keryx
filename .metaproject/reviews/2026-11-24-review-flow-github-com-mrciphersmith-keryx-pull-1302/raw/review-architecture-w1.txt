@@ -1,0 +1,128 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00` (PR #1302)
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `2e01447f96161913880e02db4394be6ad15e1335`
+- Scope mode: diff mode, slice-01 read in full (all 1211 lines)
+- Stack detected: generic-ts + skill/instruction text (no NestJS, React or MobX in the diff)
+
+### Summary
+The PR adds a "Head moved" procedure to `review-orchestrator/SKILL.detail.md` (both copies), turns two SKILL.md places into pointers to it without adding lines, adds preflight assertions, and records the flow 521 package with a divergence map of the session and Desktop publish paths. The placement is sound. SKILL.md stays at its 918-line ceiling, the procedure sits in the detail file next to "Between waves", and the bundled and installed copies are guarded byte-for-byte. Gating `keryx review advance` on `keryx review --help` is a reasonable way to depend on a command that does not exist yet. The extraction plan is sequenced correctly against stages 2 and 3: steps 1 to 5 use the current model, step 6 needs stage 2, step 7 needs stage 3, and the plan names the conflict with stage 3's rewrite of `desk-publication.ts`. The findings below are minor. The procedure depends on stage-3 behaviour in three places without the feature gate it uses for `advance`. The head check is prose `gh` per wave and not part of the engine. Row 4 of the map contradicts the procedure that lands in this same PR.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+[F-002] (minor) The procedure depends on stage-3 behaviour, and only one of those dependencies is feature-gated. See REVIEW_RESULT.
+
+### Module Boundary Violations
+[F-001] (minor) The head-move detection is placed in skill prose (`gh pr view` at every wave boundary). The engine already owns the PR lookup (`readiness.ts` prLookup, `desk-publication.ts:307`). See REVIEW_RESULT.
+
+### Design Pattern Misuse
+[F-003] (minor) Row 4 of the divergence map ("moved head refuses for now") contradicts the "Publish as is" option this PR ships.
+
+### Dependency Inversion
+None detected.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A: not in the stack.
+
+### Info
+[F-004] The D1 rule (old commit published with COMMENT only) is enforced by prose alone at this head. [F-005] The new AC3 copy-parity test duplicates the existing `review-orchestrator-skill-parity.test.ts`.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Placement in SKILL.detail.md is sound. SKILL.md holds its 918-line ceiling and both copies are parity-guarded. The `advance` --help gate is a sound way to depend on a future command. The extraction plan is correctly split into steps 1-5 (no stage needed), 6 (stage 2) and 7 (stage 3). Three minor findings: (1) per-wave head detection is prose `gh`, not engine, and conflicts with SKILL.md's 'make it once and reuse'; (2) three stage-3 dependencies are not gated, including partial-round-as-prior, which round-record.ts:207 currently refuses; (3) divergence-map row 4 contradicts the procedure's 'Publish as is' option.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+      "problem": "Head-move detection is put in the instruction layer as a raw `gh` call repeated at every wave boundary. The engine already has the boundary: `keryx review next` reads the package, which pins `head` in round.json. PR-head lookups exist in `src/review/readiness.ts` (item 7, `completeHeadGate` with `prLookup`) and in `desk-publication.ts:307`. The new step also contradicts SKILL.md's 'Shell calls in a `trust` or `auto` session' paragraph: 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.' In a trust/auto session, each wave boundary now raises a permission prompt. The step fixes the SHA comparison and counting (steps 1-2) in prose, so every host has to repeat them.",
+      "impact": "In trust/auto sessions, each wave boundary costs an operator permission prompt, which works against 'Between waves' rule 2 (no pause the plan did not authorise). The two surfaces detect the move in different places: the session in prose, Desktop in code (`verifyDeskSubject`). That is the divergence stage 4 is meant to remove.",
+      "suggested_fix": "For now, keep the prose and reconcile it with the 'make it once and reuse' sentence. For example, say the per-boundary `gh pr view` is the one sanctioned exception, or batch it with `next`. Record in divergence-map.md section 4 (or as a T8 follow-up) that `keryx review next` (and `complete`/`publish`) should compare round.json `head` with the PR head through the existing prLookup and report `headMoved {from,to,n|rewritten}`. Then the skill reacts to an engine signal and does not have to detect the move itself.",
+      "evidence": "slice-01 lines 979 (Check step) and 1028 (SKILL.md 'A `gh` call still asks ... make it once and reuse what it printed'); `keryx ctx rg headRefOid src/review`: lookups in readiness/desk-publication/desk-run-service. No keryx CLI exposes a session package's head-vs-PR comparison.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "**Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+      "problem": "Only one stage-3 dependency is feature-gated: `advance` is checked with `keryx review --help`. Three others are written as present-tense facts with no gate and no fallback. (a) 'Stop and start' relies on the partial round becoming the prior round of the update round. At head, `src/review/round-record.ts:207` says 'a draft or partial package is never a previous round' (REVIEWED_STATUSES = reviewed/decided/learned/closed). If the stopped package stays below `reviewed`, the fallback `keryx review plan` attaches the older round's findings, or none. 'Enters the new plan as unchecked' is then not something any code does. (b) 'the Review's own value when it has one': `on_head_move` has no source in session code (`keryx ctx rg on_head_move src apps` finds only the skill and its test), so `follow`/`ignore`, and the Unattended 'unless `on_head_move` is `follow`' clause, cannot be reached. (c) 'Desktop runs the same command' is false at head: `src/review/autonomous-profile.ts:199` still says 'New commits belong to a separate request.' The flow journal notes (a) as a T8 recheck, but the skill text does not.",
+      "impact": "An operator who picks 'Stop and start on the new head' gets an update round that may silently drop the stopped round's findings. The skill states contracts the engine does not honour, so a reader cannot tell which parts are live and which wait for stage 3.",
+      "suggested_fix": "Gate (a) the way `advance` is gated. Until `advance` is listed, 'Stop and start' finishes `ingest` for the stopped round and passes its package explicitly. Otherwise, say that the uncovered area and the stopped round's findings must be named in the new round's brief by hand. Mark (b) 'read from the Review once stage 3 stores it; until then always `ask`'. Mark (c) 'Desktop will run the same command (stage 3)'. Keep the AC1 assertions and add one for the interim wording.",
+      "evidence": "round-record.ts:207-208 read at head; `keryx ctx rg on_head_move src apps` has 6 matches, all in SKILL.detail.md and review-orchestrator-preflight.test.ts; `keryx ctx rg 'New commits belong to a separate request' src` has 1 match at autonomous-profile.ts:199; journal.md 'until stage 3 changes `round-record.ts:207`'. Not verified: which manifest status `keryx review ingest` writes for a round stopped mid-wave. If it writes `reviewed`, half (a) does not apply.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+      "line": null,
+      "quote": "Keep D1 out: moved head refuses for now.",
+      "problem": "Row 4 of the extraction plan sends the session publish through Desktop's head check and refuses a moved head. The 'Head moved' procedure in this same PR prescribes `keryx review publish <package> --event COMMENT` for a moved head (option 2, D1). The journal's T6 note already corrects this ('T7 must add the COMMENT restriction to the session path rather than refusing outright'), but the map, which T7 executes, was not updated. Section 5's last bullet describes the breakage without resolving it.",
+      "impact": "If T7 follows the map, the skill's 'Publish as is for <reviewed sha>' option fails at the CLI. The plan and the procedure shipped in the same PR then disagree on the D1 path.",
+      "suggested_fix": "Change row 4 to: moved head allowed only with `--event COMMENT` and the first line naming the reviewed SHA (D1), refused otherwise; closed PR refused. Change its tests to: moved head + REQUEST_CHANGES/APPROVE refused, moved head + COMMENT with reviewed-SHA first line accepted. Drop or resolve section 5's last bullet.",
+      "evidence": "slice-01 line 177 (row 4) vs lines 991 (procedure option 2) and 221 (journal T6 note).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "only `keryx review publish <package> --event COMMENT`, never `REQUEST_CHANGES` or `APPROVE`.",
+      "problem": "At head, the D1 COMMENT-only rule for a moved head is enforced by the skill text alone. The divergence map's 'head moved' row says the session path passes readiness item 7 with a warning when the report's first line names the reviewed SHA, whatever the `--event`. T7 (blocked) owns the code-side rule.",
+      "impact": "Until T7, an operator running `keryx review publish --event REQUEST_CHANGES` on a moved head is not stopped by keryx.",
+      "suggested_fix": "None in this PR beyond keeping it on T7's list; see F-003 for the map row.",
+      "evidence": "divergence-map.md 'head moved / PR closed' row (readiness.ts:362-371, per the map; not re-read by this reviewer).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "test.each([\"SKILL.md\", \"SKILL.detail.md\"])(\"the bundled and installed %s are identical\", (file) => {",
+      "problem": "The new copy-parity assertion repeats `src/gdskills/review-orchestrator-skill-parity.test.ts`, which already asserts both review-orchestrator files are byte-identical across the two copies and that SKILL.md equals its ceiling. The flow's AC3 uses `cmp` anyway.",
+      "impact": "Two guards for one invariant; harmless. Duplication belongs to review-clean-code's lane, noted here only for the two-copy layout question.",
+      "suggested_fix": "Optional: drop the test.each and point AC3 at review-orchestrator-skill-parity.test.ts.",
+      "evidence": "review-orchestrator-skill-parity.test.ts:30-45 read at head.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 },
+  "inputs_unreadable": []
+}
+```
+
+Notes:
+- The payload JSON and pr-context.md were not opened separately. The dispatch prompt, slice-01, the flow package (inside the slice) and the head files listed in the evidence fields were enough for the architecture lens. The spec sections "Поведение при смене head", O13 and O15 were not read in full; I checked D1, D2 and the stage-4 ordering in implementation-plan.md lines 14, 49-50, 68, 81-82.
+- Tests: I relied on the orchestrator's recorded run (exit 0) and ran no tests myself.
+
+Routing audit: graph_used: no (not-relevant: the diff is skill text, flow docs and one test; blast radius came from the slice and `ctx rg`); wiki_used: no (not-relevant: requirements docs were named in the brief); ctx_used: yes (`keryx ctx rg`/`read`); raw_rg_used: no (raw `sed` was used twice, with markers: round-record.ts:195-240 and the parity test head, for exact lines).

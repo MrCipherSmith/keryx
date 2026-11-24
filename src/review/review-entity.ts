@@ -6,7 +6,7 @@ import type { DeskResult, DeskReviewAction, DeskRevision, DeskRunState } from ".
 
 export type ReviewState = "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
 export type ReviewOnHeadMove = "ask" | "follow" | "ignore";
-export type ReviewSource = "manual" | "scheduled" | "existing";
+export type ReviewSource = "manual" | "scheduled" | "existing" | "session";
 /** `unknown`: the PR head could not be read (the PR card is unreadable or the PR is missing). */
 export type ReviewFreshness = { kind: "current" } | { kind: "unknown" } | { kind: "behind"; commits: number | null; rewritten: boolean };
 /** GitHub's comparison of the reviewed head (base) with the PR head. */

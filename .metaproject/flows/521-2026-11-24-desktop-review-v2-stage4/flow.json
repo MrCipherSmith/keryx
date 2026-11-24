@@ -1,0 +1,542 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "521",
+  "slug": "desktop-review-v2-stage4",
+  "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
+  "status": "in-progress",
+  "createdAt": "2026-11-24T07:28:14.584Z",
+  "updatedAt": "2026-11-24T12:20:33.826Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2980da572a248e1c25f5607a3725d25442f5ccfd36c89be8f902397dd81b3272",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T6 (divergence map) and the context recorded in plan.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5, T7, T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of T5, T7, T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "replaced by T9 (review round) and T10 (draft PR)"
+    },
+    {
+      "id": "T5",
+      "title": "Head moved procedure in review-orchestrator (both copies) + preflight test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:31:02.926Z",
+            "outcome": "started",
+            "detail": "521-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Divergence map of session and Desktop publish paths with extraction plan",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:31:03.359Z",
+            "outcome": "started",
+            "detail": "521-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.065Z",
+            "outcome": "blocked",
+            "detail": "stage 2 (rounds model, flow 519) and stage 3 not pushed to origin on 2026-11-24; extraction overlaps lines stage 3 rewrites (divergence-map.md §5)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Session and Desktop prompt use the same update command (needs stage 3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.306Z",
+            "outcome": "blocked",
+            "detail": "keryx review advance comes with stage 3, not pushed on 2026-11-24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Review round on the branch via review-orchestrator",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Rounds 1 and 2 ran via review-orchestrator on PR 1302; findings fixed in T11 and T12; next round deferred to after the rebase onto stages 2/3"
+    },
+    {
+      "id": "T10",
+      "title": "Real-PR scenario: session review published from Desktop",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:38:05.650Z",
+            "outcome": "blocked",
+            "detail": "needs T7 and T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Fix round 1 findings of PR 1302 (R1-R14)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:54:50.353Z",
+            "outcome": "started",
+            "detail": "521-T11 fix round 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix round 2 findings of PR 1302 (S1-S9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:11:24.813Z",
+            "outcome": "started",
+            "detail": "521-T12 fix round 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix round 3 findings of PR 1302 (T1-T16)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T11:44:33.648Z",
+            "outcome": "started",
+            "detail": "521-T13 fix round 3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 4 findings of PR 1302 (U1-U10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T12:20:33.001Z",
+            "outcome": "started",
+            "detail": "521-T14 fix round 4"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-24T07:28:14.584Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-24T07:30:22.584Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-24T07:30:22.817Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T07:30:23.058Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T07:30:23.286Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-24T07:30:23.494Z",
+      "event": "task-added",
+      "detail": "T5: Head moved procedure in review-orchestrator (both copies) + preflight test"
+    },
+    {
+      "at": "2026-11-24T07:30:23.682Z",
+      "event": "task-added",
+      "detail": "T6: Divergence map of session and Desktop publish paths with extraction plan"
+    },
+    {
+      "at": "2026-11-24T07:30:23.909Z",
+      "event": "task-added",
+      "detail": "T7: Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)"
+    },
+    {
+      "at": "2026-11-24T07:30:24.204Z",
+      "event": "task-added",
+      "detail": "T8: Session and Desktop prompt use the same update command (needs stage 3)"
+    },
+    {
+      "at": "2026-11-24T07:30:24.487Z",
+      "event": "task-added",
+      "detail": "T9: Review round on the branch via review-orchestrator"
+    },
+    {
+      "at": "2026-11-24T07:30:24.743Z",
+      "event": "task-added",
+      "detail": "T10: Real-PR scenario: session review published from Desktop"
+    },
+    {
+      "at": "2026-11-24T07:30:38.041Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-24T07:30:38.356Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-24T07:30:47.512Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"The user explicitly asked to start stage 4 now in its own worktree.\"; source: session local_4c9fedae-8b67-4970-82be-8662d726ed7d (Operator asked to start stage 4 now)"
+    },
+    {
+      "at": "2026-11-24T07:31:02.926Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 521-T5"
+    },
+    {
+      "at": "2026-11-24T07:31:03.359Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 521-T6"
+    },
+    {
+      "at": "2026-11-24T07:34:28.279Z",
+      "event": "task-done",
+      "detail": "T6: Divergence map of session and Desktop publish paths with extraction plan"
+    },
+    {
+      "at": "2026-11-24T07:37:52.239Z",
+      "event": "task-done",
+      "detail": "T5: Head moved procedure in review-orchestrator (both copies) + preflight test"
+    },
+    {
+      "at": "2026-11-24T07:38:05.065Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 1) — stage 2 (rounds model, flow 519) and stage 3 not pushed to origin on 2026-11-24; extraction overlaps lines stage 3 rewrites (divergence-map.md §5)"
+    },
+    {
+      "at": "2026-11-24T07:38:05.306Z",
+      "event": "task-attempt",
+      "detail": "T8: blocked (attempt 1) — keryx review advance comes with stage 3, not pushed on 2026-11-24"
+    },
+    {
+      "at": "2026-11-24T07:38:05.650Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 1) — needs T7 and T8"
+    },
+    {
+      "at": "2026-11-24T07:54:50.153Z",
+      "event": "task-added",
+      "detail": "T11: Fix round 1 findings of PR 1302 (R1-R14)"
+    },
+    {
+      "at": "2026-11-24T07:54:50.353Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 521-T11 fix round 1"
+    },
+    {
+      "at": "2026-11-24T08:00:43.963Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\". [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" -> \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule. [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" (Review round 1 of PR 1302 (review-regression F-001) found autonomous-profile.ts:200 also governs head moves and was untracked)"
+    },
+    {
+      "at": "2026-11-24T08:00:55.107Z",
+      "event": "task-done",
+      "detail": "T11: Fix round 1 findings of PR 1302 (R1-R14)"
+    },
+    {
+      "at": "2026-11-24T08:11:24.588Z",
+      "event": "task-added",
+      "detail": "T12: Fix round 2 findings of PR 1302 (S1-S9)"
+    },
+    {
+      "at": "2026-11-24T08:11:24.813Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 521-T12 fix round 2"
+    },
+    {
+      "at": "2026-11-24T08:11:51.086Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule. [verify: invariant `! git grep -q \"New commits belong to a separate request\" -- src/review`]\" -> \"The session procedure and the Desktop review prompt open the update round with the same command (`keryx review advance` or the name stage 3 gives it); `src/review/autonomous-profile.ts` no longer says \"New commits belong to a separate request\", and its unattended head-move line (line 200 at a5d1ab236) agrees with the skill's \"Head moved\" unattended rule (asserted by the preflight test). [verify: exec `bun test src/gdskills/review-orchestrator-preflight.test.ts && ! git grep -q \"New commits belong to a separate request\" -- src/review`]\" (Round 2 of PR 1302 (S6): AC6's verify did not check its line-200 clause)"
+    },
+    {
+      "at": "2026-11-24T08:16:03.283Z",
+      "event": "task-done",
+      "detail": "T12: Fix round 2 findings of PR 1302 (S1-S9)"
+    },
+    {
+      "at": "2026-11-24T08:18:00.971Z",
+      "event": "task-done",
+      "detail": "T9: Review round on the branch via review-orchestrator"
+    },
+    {
+      "at": "2026-11-24T10:50:30.559Z",
+      "event": "task-done",
+      "detail": "T7: Shared publish code: review publish uses desk-publication acceptance, receipt, duplicate marker (needs stages 2+3)"
+    },
+    {
+      "at": "2026-11-24T10:50:30.749Z",
+      "event": "task-done",
+      "detail": "T8: Session and Desktop prompt use the same update command (needs stage 3)"
+    },
+    {
+      "at": "2026-11-24T11:44:33.384Z",
+      "event": "task-added",
+      "detail": "T13: Fix round 3 findings of PR 1302 (T1-T16)"
+    },
+    {
+      "at": "2026-11-24T11:44:33.648Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 521-T13 fix round 3"
+    },
+    {
+      "at": "2026-11-24T11:45:15.144Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 3 findings of PR 1302 (T1-T16)"
+    },
+    {
+      "at": "2026-11-24T12:20:32.636Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 4 findings of PR 1302 (U1-U10)"
+    },
+    {
+      "at": "2026-11-24T12:20:33.001Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 521-T14 fix round 4"
+    },
+    {
+      "at": "2026-11-24T12:20:33.826Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 4 findings of PR 1302 (U1-U10)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-orchestrator-preflight.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-orchestrator-preflight.test.ts"
+    },
+    "AC3": {
+      "kind": "invariant",
+      "check": "cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md && cmp src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/publish.test.ts src/review/desk-publication.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-orchestrator-preflight.test.ts && ! git grep -q \"New commits belong to a separate request\" -- src/review"
+    },
+    "AC7": {
+      "kind": "judged"
+    }
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "The user explicitly asked to start stage 4 now in its own worktree.",
+    "source": "session local_4c9fedae-8b67-4970-82be-8662d726ed7d"
+  }
+}

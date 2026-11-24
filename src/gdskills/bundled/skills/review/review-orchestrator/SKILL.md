@@ -14,7 +14,7 @@ triggers:
   - "review --hierarchical"
 metadata:
   author: "MrCipherSmith"
-  version: "1.17.0"
+  version: "1.18.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -61,7 +61,7 @@ license: "MIT"
    - [ ] Hand the saved file's path to **every** reviewer (Reviewer brief, line T), not only the testing reviewer.
    - [ ] Only when they cannot run at all (no installable dependencies, no test command): every brief and the report carry `Not run: tests-to-run (<reason>)`. A silent skip is a gap.
 4. Show the operator depth, estimate and merge risk (Preflight 4). Over threshold, the operator confirms: in keryx shell call the card `review_confirm_plan` (never send them to a terminal); outside it, ask them with the host's question tool, the plan's numbers in the question, and record it with `keryx review confirm-plan --package <package> --answered-by … --answer-text … --question-text …` ("Hosts"). `dispatch-check` and `ledger build` refuse an unconfirmed plan. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
-5. Dispatch by slice roles from the drivers `slice` wrote: each role gets the slices that name it ("Slices, waves and results"). After each batch, `keryx review next --package <package>` decides what is left, an `escalated` core-role dispatch on a light slice included.
+5. Dispatch by slice roles from the drivers `slice` wrote: each role gets the slices that name it ("Slices, waves and results"). After each batch, read the pull request's head and act on a move (`SKILL.detail.md` § "Head moved"), then `keryx review next --package <package>` decides what is left, an `escalated` core-role dispatch on a light slice included.
 6. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
 7. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
 
@@ -905,13 +905,13 @@ Default is do not publish. No resolvable PR number means skip and say so.
 
 The review body is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Name the workflow and reviewers that actually ran, with models, tools, skills and subagents. Never identify the operator from `gh auth status`, git config or a credential; do not sign the review as a person, reviewer or model. A project overlay adds content only through the template's overlay slots. If a project skill under `.metaproject/project-skills/orchestration` provides `templates/report-overlay.md` extending this engine, read it and its required project rules. Compose its English slot text from the round's evidence. Put the evidence in a fenced `json keryx:report-slots` block with the overlay id and named `slots`. In a Vantage review, give every mandatory check its own `- Label — evidence or explicit status` line in `verified-clean`. A check without evidence is not verified. Write the input report to a separate draft file and pass it to `review ingest --report`; the planner already owns the package's `report.md`.
 
-The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. The body goes out as one formal review whose state follows *Where it is posted* in the template, through the one keryx path to GitHub, held by the readiness checklist: `keryx review publish <package> --event COMMENT|REQUEST_CHANGES|APPROVE` (`--partial` when the package is not ready; `--event COMMENT` on a merged or closed PR). Publishing is the operator's decision: the `review_publish` card in keryx shell, elsewhere they run it in their terminal, where it shows the body first. You never pass `--yes`, and never post around it with `gh pr review` or `gh pr comment`.
+The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. The body goes out as one formal review whose state follows *Where it is posted* in the template, through the one keryx path to GitHub, held by the readiness checklist: `keryx review publish <package> --event COMMENT|REQUEST_CHANGES|APPROVE` (`--partial` when the package is not ready; a merged or closed PR is refused, so its report stays local). Publishing is the operator's decision: the `review_publish` card in keryx shell, elsewhere they run it in their terminal, where it shows the body first. You never pass `--yes`, and never post around it with `gh pr review` or `gh pr comment`.
 
 **No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
 Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
-Re-read head and thread before posting. If head moved, re-check findings
-and name unchecked commits. Do not duplicate findings; cite extended ones.
+Re-read the thread before posting; a head that differs from the round's head, however it moved,
+follows `SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 

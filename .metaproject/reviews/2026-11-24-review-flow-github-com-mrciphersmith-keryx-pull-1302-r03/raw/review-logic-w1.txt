@@ -1,0 +1,87 @@
+STATUS: DONE
+
+## Logic Review — wave 1 (slice-01)
+
+### Review Scope
+- Range: 7a846bef1..5957d1249 (stage 4 only); slice-01.diff.
+- Read: slice-01 code hunks in full (apps/desktop/src-tauri/src/review.rs, apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx, apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts, ReviewPanel.dom.test.tsx), the flow docs (acceptance-criteria.md, description.md, divergence-map.md) and the HEAD "Head moved" section of SKILL.detail.md (:595-616).
+- Surrounding code read at HEAD: apps/desktop/src/review/ReviewRuns.tsx (:95-186), ReviewLifecycle.tsx (:25-40), ReviewWorkspace.tsx (:92-131), src/review/review-advance.ts, src/commands/review-advance.ts, src/commands/review-desk-run.ts (:1-90), src/review/desk-run-service.ts (:25-64, :245-294), src/review/desk-run-lifecycle.ts (:25-124), src/review/update-round.ts.
+- Not read: flow.json / resolved/T5.implement.json bodies (state records, no logic); Rust not compiled (no local toolchain).
+- Spec compliance gate: ran against acceptance-criteria.md AC1-AC7. AC5 cross-path test exists (desk-publication.test.ts:797, :822); AC6 text present in autonomous-profile.ts. No unimplemented criterion found in this slice.
+
+### Summary
+Desktop's "Update review" now runs `keryx review advance` (Rust `RunAction::Advance` -> `review advance --json ... --id --base --head`); argument order and flag validation match the CLI parser. Two consequences of the change are not handled: advance refuses an archived attempt with an `access:` error that Desktop treats as lost account access, and the new `session` source is rendered as "Existing review" / offered a coordinator session in the attempt card.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 2 | info: 0
+
+### Logic Bugs
+[LOG-W1-1] Update review from an archived attempt now fails as "access lost"
+- Severity: minor
+- File: apps/desktop/src/review/ReviewWorkspace.tsx:152 (the `local.request({ kind: "advance", id: reviewed.id, ...revision })` call)
+- Problem: `reviewedAttempt` (src/review/review-advance.ts:24-26) drops withdrawn attempts (archive/delete) and throws "access: This attempt is unavailable…" when the named id is one of them. Desktop still offers the publish dialog, and its "Update review" button, on an archived attempt: ReviewRuns.tsx:105 `draft` does not check the decision, and desk-publication.ts `publication()` does not refuse archived attempts, so `headMoved` is computed for them. useReviewRuns.ts then sees an `access:` message, clears the snapshot and calls `onAccessLost`.
+- Why it matters: before this change the same click started a new round (`kind: "start"`); now it reports lost GitHub access and empties the panel for a condition that has nothing to do with access.
+- Fix: in `reviewedAttempt`, use a `stale:`/`configuration:` prefix for a withdrawn or imported attempt ("This attempt was archived; restore it or update from the Review's latest round"), or have Desktop not offer Update review for `reviewIsArchived(run)`.
+
+[LOG-W1-2] The new `session` source is shown as "Existing review" and offered a coordinator session
+- Severity: minor
+- File: apps/desktop/src/review/ReviewRuns.tsx:131
+- Problem: the change adds `session` to `DeskRun.source` and to `SOURCE_LABEL` (model.ts), but the attempt card and the run dialog keep three-way switches that send every non-manual, non-scheduled source to "Existing review" (ReviewRuns.tsx:131, ReviewRunDialog.tsx:32). Sites that test `source !== "existing"` to decide that an attempt has a Desktop coordinator transcript now include session attempts too: ReviewRuns.tsx:117 (the "Open review session" button), ReviewWorkspace.tsx:100 and :213 (`onOpenReviewSession`), ReviewRunDialog.tsx:55 (`hasCoordinator`), desk-run-service.ts:294 (`coordinatorActivity`). A session attempt directory holds only `package/` (session-attempt.ts:116-122), with no coordinator transcript.
+- Why it matters: a session review is labelled as an imported review, and the card offers to open a review session that does not exist for it.
+- Fix: add a `session` branch to the two labels (or use `SOURCE_LABEL`), and gate coordinator UI on `source === "manual" || source === "scheduled"`.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+Covered by LOG-W1-1.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None beyond the above.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "review-logic-w1-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": 152,
+      "problem": "Desktop's Update review now calls `keryx review advance --id <reviewed>`. `reviewedAttempt` (src/review/review-advance.ts:24-26) excludes archived/deleted attempts and throws 'access: This attempt is unavailable…' for a named one. Desktop still offers the publish dialog and its Update review button on an archived attempt (ReviewRuns.tsx:105 `draft` ignores the decision; desk-publication.ts publication() does not refuse archived attempts). useReviewRuns.ts treats an `access:` message as lost access: it clears the snapshot and calls onAccessLost.",
+      "evidence": "src/review/review-advance.ts:24-26 (candidates filter + access: error); apps/desktop/src/review/ReviewRuns.tsx:105-108, :176-184 (dialog and onUpdateReview for any completed/partial run); apps/desktop/src/review/useReviewRuns.ts (slice-01 :1529-1533: access: -> setSnapshot(null), onAccessLost); src/review/desk-publication.ts:366-374 (no decision check outside automatic).",
+      "impact": "An operator updating from an archived attempt's head-moved dialog sees an account-access failure and an emptied panel; before stage 4 the same click started the update round.",
+      "suggested_fix": "Throw a `stale:` or `configuration:` error for a withdrawn/imported attempt in reviewedAttempt (e.g. 'This attempt was archived. Restore it or update from the latest round.'), or do not pass onUpdateReview for reviewIsArchived(run).",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-logic-w1-2",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": 131,
+      "problem": "`session` was added to DeskRun.source and SOURCE_LABEL, but the attempt card and run dialog still label every source other than manual/scheduled as 'Existing review' (ReviewRuns.tsx:131, ReviewRunDialog.tsx:32), and the `source !== \"existing\"` tests that mean 'has a Desktop coordinator' now admit session attempts: ReviewRuns.tsx:117 (Open review session button), ReviewWorkspace.tsx:100/:213, ReviewRunDialog.tsx:55, desk-run-service.ts:294. A session attempt directory holds only package/ (session-attempt.ts:116-122).",
+      "evidence": "keryx ctx rg 'source (===|!==) \"(existing|manual|scheduled)\"' apps/desktop/src src/review: 36 sites; the five listed treat non-existing as coordinator-backed; model.ts SOURCE_LABEL is the only site updated for session.",
+      "impact": "Session reviews are labelled as imported reviews and offered a coordinator session that does not exist.",
+      "suggested_fix": "Use SOURCE_LABEL (or add a session branch) at ReviewRuns.tsx:131 and ReviewRunDialog.tsx:32; gate coordinator UI on manual/scheduled sources.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 0
+  }
+}
+```

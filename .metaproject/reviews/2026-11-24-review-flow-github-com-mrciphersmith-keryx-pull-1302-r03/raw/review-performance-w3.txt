@@ -1,0 +1,76 @@
+STATUS: DONE
+
+## Performance Review — wave 3 (slice-03)
+
+### Scope
+- Range 7a846bef..5957d124 (stage 4 only), slice-03 read in full (1496 lines).
+- Code read at HEAD: src/review/session-attempt.ts (registerSessionPackage, register, sessionPublication), src/review/publish.ts (publishReview 185-275), src/review/publication-guard.ts, src/review/session-publish-github.ts, src/review/review-advance.ts, src/review/desk-run-store.ts (recordSession 382-434, assignReviews 160-200), src/review/desk-publication.ts hunks, src/review/autonomous-profile.ts hunk, src/review/readiness.ts (prLookup/prFiles use), desk-run-types.ts / review-entity.ts type changes, and the four test files.
+- Measured package sizes in this checkout: `du -sk .metaproject/reviews/*/` — the largest packages are 55–58 MB, of which `layers/` is 52.8 MB (graph + memory); the r03 package of this PR is 5.7 MB (layers 4.9 MB), 67 files.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [PERF-W3-1] Every registration deletes and re-copies the whole session package, `layers/` included, into the Desktop store
+- **Severity**: minor
+- **File**: src/review/session-attempt.ts:119
+- **Hot path**: once per `keryx review complete`, once per `keryx review publish`, and once per `review_publish` card build (buildCard calls `attemptOf` → register); a round that completes, shows a card and publishes copies the package 3 times. Not a loop.
+- **Problem**: `register` runs `rm(target, { recursive: true, force: true })` then `cp(own, target, { recursive: true, ... })` with a filter that drops only `desk-attempt.json`, `publication.lock` and `publication-receipt.json`. The copy therefore carries `layers/graph` (the PR-head graph) and `payloads/`, which are not what Desktop's publish reads (manifest, report.md, findings, verdict/premise/readiness inputs). Measured: layers is 52.8 of 55–58 MB in the largest packages here.
+- **Why it matters**: tens of MB of disk I/O per registration (sub-second on SSD, but repeated 2–3 times per round on an interactive path), and a second persistent copy of every PR round in the keryx data dir (`desktop-review/attempts/<id>/package`), in addition to the copy under `.metaproject/reviews`. Whether a Desktop delete decision reclaims that directory was not verified.
+- **Fix**: skip the copy when nothing changed (compare a cheap fingerprint such as manifest + report.md + findings.json mtimes/hash recorded in `desk-attempt.json`), and exclude bulk directories Desktop publication never reads (`layers/`, `payloads/`, `slices/`) from the filter; or copy only the files `desk-publication.ts` `prepare` reads.
+
+### [PERF-W3-2] info: `publishReview` reads the PR head before the readiness checklist, which reads it again
+- **Severity**: info
+- **File**: src/review/publish.ts:195
+- **Note**: `readPullRequest` (195) and the readiness head gate (`computeReadiness` at 202 → readiness.ts:367) each call `prLookup` for the same ref within the same call; the test "a push while the operator reads" pins three reads (`at(REVIEWED, REVIEWED, NEWER)`). One extra `gh` round trip per publish. The command-level duplication this belongs to is reported as review-performance-w2-1; this entry only records the in-function site so a fix that memoizes `prLookup` covers it.
+
+### Clean Areas
+- desk-run-store `recordSession`: one upsert plus `assignReviews`, which touches only unassigned rows (`WHERE review_id IS NULL`); no full-table rework.
+- `githubFindPublished`: `--paginate` over the PR's reviews runs only on the unknown-receipt path (after a lost response), not on every publish.
+- `withFileLock` around the receipt: one lock per publish, released after the post; no polling added.
+- publication-guard.ts: small file reads/writes; `readPublicationReceipt` over at most two directories via a `Set`.
+- review-advance.ts: one sort over one PR's attempts (bounded, small) per call.
+- `buildRoundBlock` loop and `minorSection` are unchanged by this stage.
+- autonomous-profile.ts: string change only.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-performance-w3-1",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 119,
+      "problem": "register() deletes and re-copies the entire session package (rm -r then cp -r) on every registration; the filter drops only desk-attempt.json, publication.lock and publication-receipt.json, so layers/ (graph + memory) and payloads/ are copied though Desktop publication does not read them. Registration runs on keryx review complete, keryx review publish and every review_publish card build.",
+      "evidence": "src/review/session-attempt.ts:119-122; callers src/commands/review.ts:5073,5175 and src/commands/operator-confirm-review.ts:215,928; du -sk .metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r05/* shows layers 52820 KB of ~58 MB",
+      "impact": "Tens of MB of disk I/O 2-3 times per round on interactive commands, and a second persistent copy of every PR round under the keryx data dir; reclamation on Desktop delete not verified.",
+      "suggested_fix": "Skip the copy when a fingerprint (manifest/report/findings hash stored in desk-attempt.json) is unchanged, and exclude layers/, payloads/ and slices/ from the copy, or copy only the files desk-publication prepare() reads.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-performance-w3-2",
+      "severity": "info",
+      "file": "src/review/publish.ts",
+      "line": 195,
+      "problem": "publishReview calls prLookup via readPullRequest and again via computeReadiness's head gate for the same ref in the same call (plus the needed post-confirm re-read).",
+      "evidence": "src/review/publish.ts:195,202,243; src/review/readiness.ts:367; src/review/publish.test.ts at(REVIEWED, REVIEWED, NEWER)",
+      "impact": "One extra gh round trip per publish; part of the command-level duplication in review-performance-w2-1.",
+      "suggested_fix": "Memoize prLookup per ref for the pre-confirm reads (or pass the snapshot into computeReadiness); keep the post-confirm read live.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 1
+  }
+}
+```

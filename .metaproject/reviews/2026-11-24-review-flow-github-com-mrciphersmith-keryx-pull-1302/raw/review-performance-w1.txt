@@ -1,0 +1,79 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- PR #1302, base a5d1ab236, head 2e01447f9, diff mode, round 1. slice-01 read in full (1211 lines): flow 521 folder (docs/JSON), review-orchestrator SKILL.md + SKILL.detail.md (both copies), src/gdskills/review-orchestrator-preflight.test.ts.
+- Test evidence: verify-tests-to-run-1.txt — `bun test src/gdskills/review-orchestrator-preflight.test.ts`, 83 pass, 0 fail, 241 ms for the whole file.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 1
+
+### Findings
+
+### [F-001] The per-wave head check is a `gh` call, which the same skill says asks the operator in a trust/auto session
+- **Severity**: minor
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (§ "Head moved", step 1); mirrored in SKILL.md Round plan step 5 and the bundled copies
+- **Hot path**: once per wave boundary (before each `keryx review next`), plus once before `complete` and once before publishing. A round has a few waves, so this is about 3–6 extra `gh pr view` calls per round. That is small in wall-clock time (one GitHub API round-trip each).
+- **Problem**: SKILL.md "Shell calls in a `trust` or `auto` session" (unchanged context line in the diff) says "A `gh` call still asks: that is expected, so make it once and reuse what it printed." The new step 1 instead requires a fresh `gh pr view <n> --json headRefOid` at every wave boundary. In those sessions, each check turns into a permission prompt between waves. "Between waves" rule 2 forbids exactly this kind of pause while the plan is authorized.
+- **Why it matters**: the cost is not the API call. It is operator latency: a round that is meant to run without stopping waits for an approval before each wave. The "make it once" guidance and the "check every wave" guidance now contradict each other.
+- **Fix**: either (a) name the per-wave head read as an allowed exception to "make it once" and say the prompt is expected, or (b) use a read-only git probe that the routine-command rule already admits, e.g. `git ls-remote origin refs/pull/<n>/head`, and keep `gh pr view` for the checks before `complete` and before publish.
+
+### [F-002] Context cost of the new section is bounded and on demand
+- **Severity**: info
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+- **Hot path**: an orchestrator load that reads SKILL.detail.md. SKILL.md points to it per section ("Look in this skill and `SKILL.detail.md` first"); it is not part of the always-loaded skill.
+- **Evidence**: SKILL.detail.md went from 662 lines / 50,022 bytes at base to 685 lines / 53,470 bytes at head: +3,448 bytes, about 850 tokens, about 7% of the file. SKILL.md's line count is unchanged (it stays at its 918-line ceiling). Step 5 grew by about 20 tokens inside an existing line, and the publication pointer is the same length as the two lines it replaces.
+- **Note**: no action needed. This is recorded so the per-load cost is stated, not assumed.
+
+### Clean Areas
+- Test-suite cost: `DETAIL`, `SKILL` and `ENGINE` are read once at module level (`const DETAIL = read(ENGINE, "SKILL.detail.md")`, test file line 29). Each of the 9 new tests calls `section(DETAIL, "## Head moved")` in memory, which is a string scan over ~53 KB, done 6 times. The `test.each` identity check reads 2 installed files once each (the bundled copies come from the module-level reads via `read(ENGINE, …)`, i.e. 2 more reads). The whole file runs in 241 ms. Nothing material here.
+- `git fetch` / `merge-base` / `rev-list`: these run only when the head actually moved (step 2 follows a non-matching step 1), with literal SHAs and one call each. There is no per-wave fetch when the head is unchanged.
+- The flow folder files (JSON/markdown), the divergence map and the plan are not executable paths. Out of perf scope.
+- N+1 / DB / React / memory leaks / bundle imports / pagination: not applicable (skill text and a test only).
+
+### Routing audit
+graph_used: no (not-relevant: a skill text + a single test file; blast radius is already in the slice). wiki_used: no (not-relevant). ctx_used: yes (keryx ctx rg/read). raw_rg_used: no. Raw `git show … | wc` was used once for base byte/line counts only (marked keryx:raw).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Skill text + preflight test. No material runtime or test-suite cost: the test reads files once at module level (83 tests, 241 ms), and the detail section adds ~850 tokens to an on-demand file. One minor: the per-wave head check is a gh call that the same skill says prompts the operator in trust/auto sessions, so it adds a pause between waves.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "1. **Check.** Read the head with `gh pr view <n> --json headRefOid --jq .headRefOid` at every wave boundary (before each `keryx review next`), before `keryx review complete`, and before publishing.",
+      "problem": "The per-wave head check is a `gh pr view` call. SKILL.md 'Shell calls in a trust or auto session' says 'A `gh` call still asks: that is expected, so make it once and reuse what it printed.' The new procedure requires a fresh gh call at every wave boundary.",
+      "impact": "In trust/auto sessions, each wave boundary becomes an operator permission prompt (about 3-6 per round). That adds operator latency to a round that 'Between waves' rule 2 says must not pause while the plan is authorized. The API cost itself is negligible.",
+      "suggested_fix": "Either state that the per-wave head read is an expected exception to 'make it once', or use a routine read-only git probe (e.g. `git ls-remote origin refs/pull/<n>/head`) at wave boundaries and keep `gh pr view` for the pre-complete and pre-publish checks.",
+      "evidence": "slice-01: SKILL.detail.md § Head moved step 1 (new); SKILL.md Round plan step 5 (new text 'After each batch, read the pull request's head'); SKILL.md 'Shell calls in a trust or auto session' (unchanged context line, 'A `gh` call still asks ... make it once and reuse what it printed'); SKILL.detail.md 'Between waves' rule 2.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "degradation_class": "performance"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "## Head moved",
+      "problem": "The new section adds context to SKILL.detail.md.",
+      "impact": "+23 lines / +3,448 bytes (about 850 tokens, ~7% of the file) on an on-demand file. SKILL.md's line count is unchanged at its 918 ceiling. No action needed.",
+      "suggested_fix": "None.",
+      "evidence": "wc on head: 685 lines / 53,470 bytes; on base a5d1ab236: 662 lines / 50,022 bytes.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-01"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

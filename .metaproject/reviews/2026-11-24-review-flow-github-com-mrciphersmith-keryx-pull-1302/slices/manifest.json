@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 108125,
+      "contentHash": "8cf66f129b4386fff6d1f15794e5c4b7b1e8d89ee49267514551f54a2187d3c8",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, src/gdskills [docs] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (+1)"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 1,
+    "bytes": 108125,
+    "files": 14,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

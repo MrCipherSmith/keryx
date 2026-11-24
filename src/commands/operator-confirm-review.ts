@@ -32,7 +32,9 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe, HIDDEN_IN_CARD, hiddenInCard } from "../lib/card-safe";
 import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
-import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
+import { githubAdapter, githubPrFiles } from "../flow/service";
+import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull } from "../review/session-publish-github";
+import { laterRoundOf, registerSessionPackageForProject, sessionPublication, type SessionAttemptRecord } from "../review/session-attempt";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";
@@ -42,7 +44,7 @@ import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../re
 import { evidenceLevelLine } from "../review/evidence-level";
 import { writeFileAtomic } from "../lib/fs";
 import { checkDispositions, resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
-import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+import { publishReview, reviewEvent, type HeadInPull, type PostResult, type ReviewEvent } from "../review/publish";
 import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
@@ -56,7 +58,11 @@ import type { CommentsReplyRun } from "./review";
 export interface ReviewConfirmSeams {
   prLookup?: PrLookup;
   prFiles?: (ref: string) => Promise<string[] | null>;
-  postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  postReview?: (ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>;
+  findPublished?: (ref: string, marker: string) => Promise<string | undefined | null>;
+  reviewedHeadInPull?: (ref: string, reviewed: string, current: string) => Promise<HeadInPull>;
+  /** Flow 521: registers a session package as a Desktop Attempt before it is shown and posted. Off unless set. */
+  registerSession?: (packageDir: string, projectRoot: string) => Promise<SessionAttemptRecord | undefined>;
   replyPass?: (args: string[], dryRun: boolean) => Promise<CommentsReplyRun>;
 }
 
@@ -182,7 +188,14 @@ type PublishPrepared = { dir: string; body: string; ref: string; event: ReviewEv
 
 function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrepared> {
   const readiness = (): ReadinessOptions => ({ prLookup: seams.prLookup ?? trackerPrLookup, prFiles: seams.prFiles ?? githubPrFiles });
-  const post = (): ((ref: string, event: ReviewEvent, body: string) => Promise<PostResult>) => seams.postReview ?? githubPostReview;
+  const post = (): ((ref: string, event: ReviewEvent, body: string, commitId?: string) => Promise<PostResult>) => seams.postReview ?? githubPostPullReview;
+  const attemptOf = (dir: string, projectRoot: string, warn: (text: string) => void = () => undefined) => sessionPublication(dir,
+    seams.registerSession && ((packageDir) => seams.registerSession!(packageDir, projectRoot)), warn);
+  // The same acceptance as `keryx review publish`: a superseded round and a commit the PR no longer holds are refused.
+  const acceptance = (publication: { id: string } | undefined) => ({
+    ...(publication !== undefined && { laterRound: async () => laterRoundOf(publication.id) }),
+    reviewedHeadInPull: seams.reviewedHeadInPull ?? ((ref: string, reviewed: string, current: string) => githubReviewedHeadInPull(ref, reviewed, current)),
+  });
   return {
     name: "review_publish",
     description:
@@ -205,12 +218,17 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         const event = reviewEvent(typeof input["event"] === "string" ? input["event"] : undefined);
         const partialAsked = input["partial"] === true;
         const dir = await resolvePackage(ref, ctx.projectRoot);
+        // A registration that failed is said on the card: the review then publishes with the package's own receipt.
+        const warnings: string[] = [];
+        const publication = await attemptOf(dir, ctx.projectRoot, (text) => warnings.push(text));
         let target = "";
         // A dry run of the real function: it checks readiness, builds the body and asks `confirm`, which declines.
         const result = await publishReview(dir, {
           event,
           partial: partialAsked,
           readiness: readiness(),
+          publication,
+          ...acceptance(publication),
           post: async () => ({ ok: false, detail: "dry run" }),
           confirm: async (_body, targetRef) => {
             target = targetRef;
@@ -230,6 +248,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
             result.partial ? `partial: yes — readiness is failing: ${cardSafe(failing.join(", "))}` : "partial: no — the readiness checklist passes",
             `body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,
             ...bodyLines,
+            ...warnings.map((text) => `warning: ${cardSafe(text)}`),
             "yes: the review is posted to GitHub and cannot be taken back from here",
           ],
           subject: `${cardSafe(target)} (package ${name})`,
@@ -246,7 +265,13 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         event: prepared.event,
         partial: prepared.partial,
         readiness: readiness(),
+        // The Attempt registered when the card was built: the body shown carries its marker.
+        ...await (async () => {
+          const publication = await sessionPublication(prepared.dir, undefined, () => undefined);
+          return { publication, ...acceptance(publication) };
+        })(),
         post: post(),
+        findPublished: seams.findPublished ?? githubFindPublished,
         now: () => new Date(confirmation.at),
         confirmedVia: confirmation.confirmedVia,
         ...cardPressFields(confirmation),
@@ -866,6 +891,14 @@ async function runCompletionGates(projectRoot: string, prepared: CompletePrepare
   } catch (error) {
     gateError = error;
   }
+  // Flow 521: like `keryx review complete` at a terminal, a closed PR round becomes an Attempt of its Desktop Review.
+  if (done !== undefined && seams.registerSession !== undefined) {
+    try {
+      await seams.registerSession(prepared.dir, projectRoot);
+    } catch (error) {
+      done.warnings.push(`not registered as a Desktop review attempt: ${errorText(error)}`);
+    }
+  }
   const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
   return { done, gateError, closed };
 }
@@ -912,5 +945,7 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
 }
 
 export function reviewConfirmSpecs(): readonly OperatorConfirmSpec[] {
-  return buildReviewConfirmSpecs();
+  return buildReviewConfirmSpecs({
+    registerSession: (packageDir, projectRoot) => registerSessionPackageForProject(projectRoot, packageDir, { prLookup: trackerPrLookup, prFiles: githubPrFiles }),
+  });
 }

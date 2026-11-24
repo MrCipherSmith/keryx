@@ -8,7 +8,7 @@ import { runActive } from "../../../../src/review/board-badges";
 export { runActive, sameRange } from "../../../../src/review/board-badges";
 
 type ActionError =
-  | { kind: "start" | "cancel"; message: string }
+  | { kind: "start" | "cancel" | "advance"; message: string }
   | { kind: "answer"; id: string; questionId: string; message: string };
 
 export type RunObserver = (key: DeskRunKey, revision: DeskRevision, snapshot: DeskRunSnapshot) => void;
@@ -64,6 +64,8 @@ export function useReviewRuns(
       const message = errMessage(cause);
       if (action.kind === "status") setReadError(message);
       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
+      // An update round's refusal shows where a start's does. Only its "revision has changed" refusal is a moved range;
+      // the others (a later round exists, the attempt was withdrawn, the PR closed) are not about the range.
       else setActionError({ kind: action.kind, message });
       if (/^(access|configuration):/i.test(message)) {
         setSnapshot(null);
@@ -108,5 +110,7 @@ export function useReviewRuns(
   }, [active, visible, request]);
 
   return { activity: { follow, loaded: activityLoaded, error: readError }, runs: snapshot?.runs ?? [], loaded: snapshot !== null, error: actionError?.message || readError,
-    staleRange: actionError?.kind === "start" && /^stale:/i.test(actionError.message), working, request };
+    // An update round refused because the pull request moved again is a moved range too: the board must be re-read.
+    staleRange: !!actionError && ((actionError.kind === "start" && /^stale:/i.test(actionError.message)) ||
+      (actionError.kind === "advance" && /^stale: The pull request revision has changed/i.test(actionError.message))), working, request };
 }

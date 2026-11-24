@@ -1,0 +1,19 @@
+range: a5d1ab236fe8...2e01447f9616 (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: blast-radius
+
+QUESTION: does the change break an existing behaviour at any of these sites? Nothing else. These files are under
+regression check, not under review — a finding about their style, naming or architecture is rejected by the
+orchestrator in code, whatever its merit, because this round did not ask that question.
+
+Anchor every finding to one of the 0 files below or to a changed file, at severity
+`major` or above, and name the change it breaks. A finding that cites none of the changed files is not a
+regression claim.
+
+CHANGED (14): .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json, .metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md, src/gdskills/review-orchestrator-preflight.test.ts
+
+UNDER REGRESSION CHECK (0, closest first, graph depth <= 2):
+
+NOT ANSWERABLE (13 changed files absent from the code graph). Their blast radius is unknown, not empty.
+tests to run: /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302/tests-to-run.json
+unresolved: 13 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

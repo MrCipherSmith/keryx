@@ -1,0 +1,145 @@
+STATUS: DONE
+
+## Logic Review — wave 3 (slice-03)
+
+### Review Scope
+- Range: 7a846bef1..5957d1249 (stage 4 only); slice-03.diff.
+- Read in full: src/review/publication-guard.ts, src/review/session-attempt.ts, src/review/session-publish-github.ts, src/review/review-advance.ts (all new); the diffs of src/review/publish.ts, desk-publication.ts, desk-run-store.ts (recordSession), desk-run-types.ts, review-entity.ts, autonomous-profile.ts.
+- Surrounding code read at HEAD: desk-publication.ts :90-475 (prepare + publication), desk-run-store.ts :418-430 (publication outcome), desk-run-lifecycle.ts :25-124 (decide/delete), update-round.ts (whole), complete-head-gate.ts (first-line rule :52-60), report-overlay.ts publicProjectReport (:188), templates/review-report.md skeleton (:35-41).
+- Tests read: publish.test.ts :293-415 (new describe), desk-publication.test.ts :774-850 (AC5). Ran `bun test src/review/publish.test.ts src/review/desk-publication.test.ts src/review/review-advance.test.ts src/review/session-publish-github.test.ts`: 73 pass, 0 fail.
+- Spec compliance gate: AC5 has its cross-path tests (desk-publication.test.ts:797, :822); AC6's autonomous-profile line is changed. No unimplemented criterion.
+
+### Summary
+The session path now writes the Desktop receipt and marker, takes the same lock in the Attempt directory, refuses non-COMMENT events on a moved head, pins `commit_id` and re-reads the head after the operator's yes. The cross-path guard holds in the tested order (registered first, then either path publishes). It can still be bypassed in two orders the tests do not cover: a receipt written before registration is invisible to Desktop, and deleting a session Attempt deletes its receipt while the next session publish recreates the Attempt. Smaller issues: the moved-head first-line test differs from the head gate's, a definite "not found" from the marker search never unlocks a retry, re-registration overwrites a decided Attempt's package copy, and a `{posted:true}` receipt is not read as published by Desktop.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 5 | info: 1
+
+### Logic Bugs
+
+[LOG-W3-1] A session receipt written before registration is invisible to Desktop: the Attempt registered later can be published again
+- Severity: minor
+- File: src/review/session-attempt.ts:120
+- Scenario: `keryx review publish` runs while registration fails (warning, publish.ts falls back to `receiptDir = packageDir`), posts, and leaves `{url}` in `<package>/publication-receipt.json` with marker `<reviewId>#r<n>`. A later `review publish` or `complete` registers the package: the copy filter excludes `publication-receipt.json`, and the Attempt directory gets no receipt. `DeskRunStore.publication` (desk-run-store.ts:421-429) and `desk-publication.ts prepare` (:145, :283) read only `<attempt>/publication-receipt.json`, and the Desktop marker is the Attempt id, so `findPreviousPublication` cannot find the session's marker either. Desktop shows "Publish to GitHub" and posts a second review. The same holds for a package published before flow 521 (it has only published.json).
+- Fix: at registration, if the package holds a receipt (or published.json) and the Attempt directory has none, write it to the Attempt directory (published receipt as is; `{}` as unknown).
+
+[LOG-W3-2] Deleting a session Attempt deletes its receipt; the next session publish recreates the Attempt and posts again
+- Severity: minor
+- File: src/review/session-attempt.ts:116
+- Scenario: a session package is published through its Attempt (receipt in `<attempt>/`). The operator deletes the Attempt in Desktop: desk-run-lifecycle.ts:115 `rm(directory)` for any source other than `existing`, and the row stays as a tombstone with `decision.action = "delete"`. `keryx review publish` on the package re-registers: `recordSession`'s WHERE leaves the row alone, but `register` still `mkdir`s the directory, copies the package and returns the record. publish.ts reads both receipt locations, finds none, and posts again; `findPublished` is only consulted when a receipt exists.
+- Fix: have `register` return `skipped` (and `sessionPublication` keep the package's own receipt directory) when the stored row for that id is withdrawn; or keep the receipt outside the deletable directory.
+
+[LOG-W3-3] Publish's "report already names the reviewed commit" test differs from the head gate's
+- Severity: minor
+- File: src/review/publish.ts:211
+- Problem: publish takes the first non-empty line, HTML comments included, and only checks that it contains the 7-char reviewed SHA. complete-head-gate.ts:56-58 skips `<!-- … -->` lines and also requires a moved word (SAYS_SO). Two inputs: (a) the template skeleton starts with `<!-- slot:pre-verdict -->` (templates/review-report.md:36), which `publicProjectReport` does not strip, so a report that carries the proper "Reviewed `<sha>` — the PR has since moved on…" line second gets Desktop's line prepended as well (two notices); (b) a report whose first line names the SHA without saying the PR moved (e.g. a title with the SHA, completed before the head moved) gets no moved notice at all, so a COMMENT on an outdated commit goes out without the D1 statement.
+- Fix: reuse the gate's predicate (skip comment lines, require SHA and SAYS_SO) — export it from complete-head-gate.ts and call it here.
+
+### Error Handling
+
+[LOG-W3-4] A definite "not found" from the marker search never unlocks a retry, and local gh failures count as uncertain
+- Severity: minor
+- File: src/review/publish.ts:233
+- Problem: `PublishOptions.findPublished` documents three answers (URL / undefined = none / null = cannot tell), but publish.ts:233-238 treats undefined exactly like null: the package stays refused. `githubPostPullReview` (session-publish-github.ts:40-44) marks every non-zero gh exit without an `(HTTP 4xx)` as `uncertain`, including failures before any request (not logged in, bad token, DNS), so such a failure leaves `{}` and every later publish is refused until the operator deletes the receipt by hand, even though the marker search can say nothing was posted. Desktop drops the receipt when the POST never started (desk-publication.ts:453).
+- Fix: when `findPublished` returns undefined, drop the receipt and continue (or say so in the doc and remove the three-way contract); classify gh exits whose stderr shows no HTTP status and no response as not started.
+
+### State consistency
+
+[LOG-W3-5] Re-registration overwrites the package copy of an Attempt the operator already decided on
+- Severity: minor
+- File: src/review/session-attempt.ts:119
+- Problem: `recordSession`'s WHERE (desk-run-store.ts:404-409) refreshes only an undecided session row, but `register` runs `rm(target)` + `cp` on `<attempt>/package` unconditionally. Desktop's "complete" decision closes and writes coverage into that copy (desk-run-lifecycle.ts:83-88) and records the result in the row; the next `review publish`/`complete` from the session replaces the closed copy with the session's package while the row keeps the decided result. The rm+cp also runs outside the publication lock that Desktop's publish holds while it reads `package/`.
+- Fix: skip the copy when the row was not updated (check `changes()` of the upsert, or read the row first), and do the copy under `<attempt>/publication.lock`.
+
+### Type Contract
+
+[LOG-W3-6] `{posted:true}` receipt is "published" to publish.ts but "pending"/"unknown" to Desktop
+- Severity: info
+- File: src/review/publication-guard.ts:189
+- Problem: `confirmPublicationReceipt(dir, undefined)` writes `{posted:true}`; `receiptPublished` accepts it, but DeskRunStore.publication (desk-run-store.ts:426) requires `url` and desk-publication.ts:283 falls back to a marker search, blocking with "unknown result" if it finds nothing. Reached only when GitHub's answer lacks `html_url`.
+- Fix: have the two Desktop readers use `readPublicationReceipt`/`receiptPublished`.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "wave": 3,
+  "slices": [
+    "slice-03"
+  ],
+  "findings": [
+    {
+      "id": "review-logic-w3-1",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 120,
+      "problem": "A session publish made while registration failed writes its receipt to <package>/publication-receipt.json with marker <reviewId>#r<n>. When the package is registered later, the copy filter excludes publication-receipt.json and nothing is written to the Attempt directory. Desktop reads only <attempt>/publication-receipt.json (desk-run-store.ts:424, desk-publication.ts:145/:283) and searches for the Attempt-id marker, so the Attempt shows as unpublished and Desktop can post a second review. A package published before flow 521 (published.json only) behaves the same.",
+      "evidence": "src/review/publish.ts:227-232 (receiptDir falls back to packageDir; both read only by the session path); src/review/session-attempt.ts:120-122 (copy filter drops the receipt), :149-160 (registration failure is a warning); src/review/desk-run-store.ts:421-429; src/review/desk-publication.ts:283 (marker = request.id = Attempt id).",
+      "impact": "The cross-path duplicate guard (AC5) is bypassed for a package that was published before it became an Attempt; Desktop offers and posts a duplicate review.",
+      "suggested_fix": "In register(), when the package has a receipt (or published.json) and <attempt>/publication-receipt.json is absent, write it into the Attempt directory (a url/posted receipt as published, {} as unknown).",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-logic-w3-2",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 116,
+      "problem": "Deleting a session Attempt in Desktop removes its directory, receipt included (desk-run-lifecycle.ts:115), leaving a tombstone row. The next `keryx review publish` re-registers: recordSession's WHERE skips the decided row, but register() still mkdirs the directory, copies the package and returns the record; publishReview then finds no receipt in either place and posts again (findPublished is consulted only when a receipt exists).",
+      "evidence": "src/review/desk-run-lifecycle.ts:114-121; src/review/desk-run-store.ts:404-409 (WHERE decision IS NULL); src/review/session-attempt.ts:116-126 (copy + record written regardless); src/review/publish.ts:229-239.",
+      "impact": "A review already posted from a session can be posted a second time after its Attempt is deleted.",
+      "suggested_fix": "Return { skipped } from register() when the stored row for the id is withdrawn (and keep receiptDir = packageDir in that case), or keep the receipt where a delete does not remove it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-logic-w3-3",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 211,
+      "problem": "The moved-head first-line test takes the first non-empty line, HTML comments included, and only checks that it contains the 7-char reviewed SHA. complete-head-gate.ts:56-58 skips comment lines and also requires a moved word. A template-shaped report starting with `<!-- slot:pre-verdict -->` (templates/review-report.md:36; not stripped by publicProjectReport, report-overlay.ts:188) gets a second moved notice above its own; a report whose first line names the SHA without saying the PR moved gets no D1 notice at all.",
+      "evidence": "src/review/publish.ts:211-214; src/review/complete-head-gate.ts:56-58; src/review/report-overlay.ts:188-190; templates/review-report.md:35-39.",
+      "impact": "Duplicate moved-head lines in the posted body, or a COMMENT on an outdated commit without the statement that the PR moved.",
+      "suggested_fix": "Export the gate's first-line predicate (skip <!-- --> lines, require SHA and SAYS_SO) and use it in publish.ts.",
+      "confidence": "high"
+    },
+    {
+      "id": "review-logic-w3-4",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": 233,
+      "problem": "findPublished's documented 'undefined = no review carries the marker' answer is handled like null: the package stays refused (publish.ts:233-238). githubPostPullReview classes every non-zero gh exit without '(HTTP 4xx)' as uncertain (session-publish-github.ts:40-44), including failures before any request (not logged in, invalid token, DNS). Such a failure leaves {} and refuses every later publish until the receipt file is deleted by hand; Desktop drops the receipt when the POST never started (desk-publication.ts:453).",
+      "evidence": "src/review/publish.ts:30-34 (doc), :233-238; src/review/session-publish-github.ts:40-44; publish.test.ts:349-350 asserts the refusal on undefined.",
+      "impact": "A purely local gh failure locks the package out of publishing; the operator must remove publication-receipt.json manually although the marker search can prove nothing was posted.",
+      "suggested_fix": "On findPublished === undefined drop the receipt and proceed to confirm/post, or state in the doc that undefined also refuses; treat gh exits with no HTTP status in stderr as not started where gh reports a local auth/config error.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-logic-w3-5",
+      "severity": "minor",
+      "file": "src/review/session-attempt.ts",
+      "line": 119,
+      "problem": "recordSession refreshes only an undecided session row, but register() always rm+cp's <attempt>/package. After Desktop 'complete' closed that copy and wrote coverage (desk-run-lifecycle.ts:83-88), a later session publish/complete replaces it with the session package while the row keeps the decided result. The rm+cp is also outside <attempt>/publication.lock, which Desktop's publish holds while reading package/.",
+      "evidence": "src/review/desk-run-store.ts:404-409; src/review/session-attempt.ts:116-123; src/review/desk-run-lifecycle.ts:83-88; src/review/desk-publication.ts:394 (lock), :135-147 (reads package/).",
+      "impact": "The Attempt's package and its row disagree after an operator decision; a concurrent Desktop publish can read a half-copied package.",
+      "suggested_fix": "Copy only when the upsert changed the row (or the row is undecided), and copy under <attempt>/publication.lock.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-logic-w3-6",
+      "severity": "info",
+      "file": "src/review/publication-guard.ts",
+      "line": 189,
+      "problem": "confirmPublicationReceipt(dir, undefined) writes {posted:true}, which receiptPublished treats as published, but DeskRunStore.publication requires `url` (desk-run-store.ts:426) and desk-publication.ts:283 falls back to a marker search, showing 'unknown result' if it finds nothing.",
+      "evidence": "src/review/publication-guard.ts:180-189; src/review/desk-run-store.ts:424-429; src/review/desk-publication.ts:283, :290-291.",
+      "impact": "Only when GitHub's answer has no html_url: Desktop shows a published review as pending / unknown.",
+      "suggested_fix": "Read the receipt through readPublicationReceipt/receiptPublished in both Desktop readers.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 5,
+    "info": 1
+  }
+}
+```

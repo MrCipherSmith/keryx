@@ -1,0 +1,59 @@
+STATUS: PARTIAL — not read: slice-01 lines 534-1136 (`flow.json` and `resolved/T5.implement.json`, machine-written flow state records with no runtime behaviour). Everything else in the slice was read in full.
+
+Reviewer: review-degradation, wave 1 of 3, slice-01 (PR 1302, base 7a846bef1..head 5957d1249).
+
+## Scope read
+
+- slice-01.diff lines 1-533 and 1137-1981 in full: flow records (acceptance-criteria, context, description, divergence-map, journal, plan, tasks), installed `review-orchestrator/SKILL.detail.md` § "Head moved" and the Between-waves stop list, installed `SKILL.md` (version, Round plan step 5, publication paragraph), `apps/desktop/src-tauri/src/review.rs` (RunAction::Advance, run_args, desktop_action env), `apps/desktop/src/platform/reviewRuns.ts`, `ReviewWorkspace.tsx` (updateReview now sends `advance`), `useReviewRuns.ts`, `reviews/model.ts`, `ReviewPanel.dom.test.tsx`, `docs/docs/cli-reference.md`.
+- Consumers at HEAD traced for the widened `DeskRun.source` / `ReviewSource` union (`"session"`): apps/desktop/src/review/ReviewRuns.tsx (27, 105, 117, 131, 168), ReviewRunDialog.tsx (32, 55), ReviewWorkspace.tsx (100, 139, 213), ReviewLifecycle.tsx (45, 112), ReviewProgress.tsx (12), SessionReviewActivity.tsx (177); src/review/desk-run-store.ts (latestAdmission 307, continuationSource 333, attachBadges 524, activeReviewNumbers 653, previousAttempt 680, history 471, reviewRows 636); desk-run-types.ts canContinueDeskRun 103; update-round.ts 48/67; desk-publication.ts 366-385. Enumeration: `keryx ctx rg` over `source` comparisons in src/review, src/commands and apps/desktop/src (search-derived; the graph was not used for this union).
+- Acceptance criteria: flow 521 acceptance-criteria.md (AC1-AC7) and the PR body.
+
+## Findings
+
+### F1 (minor, diff-vs-description / behaviour-delta, consumer-trace) Desktop calls a session Attempt "Existing review" while treating it as a worker run with a coordinator
+
+The PR body says a registered session package "appears in ... the Reviews tab ("Session")", and the flow journal (slice-01:277) records "Desktop's source label "Session"". Only `reviews/model.ts` SOURCE_LABEL learned the new value. The two other source labels are ternaries whose else-branch is "Existing review", the label of an imported review: `ReviewRuns.tsx:131` (attempt detail) and `ReviewRunDialog.tsx:32` (History menu). In the same components, every `source !== "existing"` branch now treats a session attempt as a Desktop worker run: `ReviewRuns.tsx:117` shows the "Open review session" chat button, `ReviewRunDialog.tsx:55` sets `hasCoordinator` and subscribes to coordinator activity, and `ReviewRuns.tsx:168` renders ReviewSessions. A session attempt has no coordinator transcript (session-attempt.ts writes only `package/`), so the operator sees it labelled as imported and offered a coordinator session that is empty.
+Refute: read model.ts:1568-1573 (only SOURCE_LABEL has "Session"); no other label map in apps/desktop/src handles `session` (search for `"Existing review"`). Base had no `session` source, so these branches were unreachable for it; the change makes them reachable.
+
+## Verified clean
+
+- Update review → `advance`: the publish dialog offers "Update review" only when `headMoved` is set, and desk-publication.ts:383 leaves `headMoved` undefined whenever a later round exists, so advance's new "a later round already exists" refusal (review-advance.ts:682) never blocks a button the base would have honoured.
+- Settings carried by Update: base sent `updateRoundOptions(reviewed.options)` (autoPublish dropped); advance applies the same function server-side (review-advance.ts:653-657, 688). Same options; Desktop no longer passes `--options`, so desk-run's autoPublish permission gate is not needed.
+- Range guard: base `desk-run start --base --head` refused a moved PR through verifyDeskSubject; advance refuses through its `revision` check (review-advance.ts:717-719). Same outcome.
+- review.rs: the boolean `a && (b && c || d)` keeps `KERYX_DESKTOP_REVIEW_ACTION=1` for start/continue/decide and adds advance; argument validation (`-` prefix, whitespace) applies to the new `--id/--base/--head` fields. Rust not compiled here (no toolchain); read only.
+- useReviewRuns.ts: an advance refusal is filed under `start`, where the base start refusal was shown.
+- SKILL.md publication paragraph and Round plan step 5 now point at § "Head moved"; the line ceiling is a test concern (AC2), not a behaviour change.
+- canContinueDeskRun accepts a `partial` session attempt, but `continuationSource` (desk-run-store.ts:333) refuses it because `latestAdmission` lists only manual/scheduled rows; and SessionReviewActivity's resume control is reached only from Desktop-session links, which never point at a session attempt. No reachable Resume on a session attempt found.
+- The unchanged SKILL.md publication line "`--event COMMENT` on a merged or closed PR" now contradicts `keryx review publish`; filed once, in wave 3 against publish.ts (the change that made it false).
+
+```json
+{
+  "status": "PARTIAL",
+  "reviewer": "review-degradation",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "review-degradation-w1-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": 131,
+      "problem": "A registered session Attempt (new source \"session\") is labelled \"Existing review\" (the imported-review label) in the attempt detail and the History menu, while the same components treat it as a Desktop worker run: they show the \"Open review session\" chat button and subscribe to a coordinator that a session attempt never has. Only reviews/model.ts learned the \"Session\" label the PR body promises.",
+      "evidence": "consumer-trace: ReviewRuns.tsx:131 and ReviewRunDialog.tsx:32 ternaries fall through to \"Existing review\"; ReviewRuns.tsx:117, :168 and ReviewRunDialog.tsx:55 branch on source !== \"existing\"; session-attempt.ts:116-123 writes only package/ into the attempt directory (no coordinator transcript); refute: model.ts:1568-1573 is the only map with \"Session\"",
+      "impact": "The operator sees a session review mislabelled as imported and is offered an empty coordinator session for it.",
+      "suggested_fix": "Use SOURCE_LABEL (or add a session branch) in ReviewRuns.tsx:131 and ReviewRunDialog.tsx:32, and gate the session button / coordinator subscription on source being manual or scheduled rather than on source !== \"existing\".",
+      "confidence": "high",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```

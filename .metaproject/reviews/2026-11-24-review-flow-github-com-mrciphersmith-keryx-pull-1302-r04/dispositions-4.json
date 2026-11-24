@@ -1,0 +1,276 @@
+[
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-1",
+    "status": "finding",
+    "finding": "U1",
+    "evidence": "consolidated into U1",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-1",
+    "status": "finding",
+    "finding": "U2",
+    "evidence": "consolidated into U2",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-2",
+    "status": "finding",
+    "finding": "U2",
+    "evidence": "consolidated into U2",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-1"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-4",
+    "status": "finding",
+    "finding": "U3",
+    "evidence": "consolidated into U3",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-1",
+    "status": "finding",
+    "finding": "U3",
+    "evidence": "consolidated into U3",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-4"
+  },
+  {
+    "id": "review-architecture-w1:review-architecture-w1-1",
+    "status": "finding",
+    "finding": "U4",
+    "evidence": "consolidated into U4",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-4",
+    "status": "finding",
+    "finding": "U4",
+    "evidence": "consolidated into U4",
+    "reason": "duplicate of review-architecture-w1:review-architecture-w1-1"
+  },
+  {
+    "id": "review-frontend-w1:review-frontend-w1-1",
+    "status": "finding",
+    "finding": "U5",
+    "evidence": "consolidated into U5",
+    "reason": "representative"
+  },
+  {
+    "id": "review-ui-ux-w1:review-ui-ux-w1-1",
+    "status": "finding",
+    "finding": "U5",
+    "evidence": "consolidated into U5",
+    "reason": "duplicate of review-frontend-w1:review-frontend-w1-1"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-3",
+    "status": "finding",
+    "finding": "U6",
+    "evidence": "consolidated into U6",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-2",
+    "status": "finding",
+    "finding": "U7",
+    "evidence": "consolidated into U7",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-3",
+    "status": "finding",
+    "finding": "U7",
+    "evidence": "consolidated into U7",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-2"
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-1",
+    "status": "finding",
+    "finding": "U7",
+    "evidence": "consolidated into U7",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-2"
+  },
+  {
+    "id": "review-highload-w1:review-highload-w1-1",
+    "status": "finding",
+    "finding": "U8",
+    "evidence": "consolidated into U8",
+    "reason": "representative"
+  },
+  {
+    "id": "review-highload-w1:review-highload-w1-2",
+    "status": "finding",
+    "finding": "U9",
+    "evidence": "consolidated into U9",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-3",
+    "status": "finding",
+    "finding": "U10",
+    "evidence": "consolidated into U10",
+    "reason": "representative"
+  },
+  {
+    "id": "review-architecture-w1:review-architecture-w1-2",
+    "status": "narrowed",
+    "evidence": "publish.ts acceptance",
+    "reason": "The rules match Desktop now (U3, U4) but live in two modules.",
+    "remains": "Acceptance is implemented in publish.ts and desk-publication.ts separately; extracting one function changes stage 3 code."
+  },
+  {
+    "id": "review-architecture-w1:review-architecture-w1-3",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts laterRoundOf",
+    "reason": "Runs only for a moved head now (U4); a placement-only read is an optimisation."
+  },
+  {
+    "id": "review-architecture-w1:review-architecture-w1-4",
+    "status": "out-of-scope",
+    "evidence": "session-publish-github.ts",
+    "reason": "Seam identity selects the real gh fallback; a design note."
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-5",
+    "status": "refuted",
+    "evidence": "session-attempt.ts registerSessionPackageForProject",
+    "reason": "Saying why a PR review was not registered is the round-3 fix T1; a ref that can never be registered says so once per command."
+  },
+  {
+    "id": "review-frontend-w1:review-frontend-w1-2",
+    "status": "out-of-scope",
+    "evidence": "ReviewPanel.dom.test.tsx",
+    "reason": "Test strength note; the Continue gate is pinned in review-advance.test.ts (canContinueDeskRun)."
+  },
+  {
+    "id": "review-highload-w1:review-highload-w1-3",
+    "status": "refuted",
+    "evidence": "publish.ts lock across confirm",
+    "reason": "Deliberate, as in round 3: the lock across the operator read is what prevents two posts; Desktop fails safe after 5 s."
+  },
+  {
+    "id": "review-highload-w1:review-highload-w1-4",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts receipt read",
+    "reason": "Only an unregistered publisher racing a registration of the same package; the receipt is copied again on the next registration."
+  },
+  {
+    "id": "review-logic-w2:review-logic-w2-1",
+    "status": "out-of-scope",
+    "evidence": "review-advance.test.ts",
+    "reason": "A positive vector would reach GitHub; the Rust test pins the vector review.rs emits."
+  },
+  {
+    "id": "review-logic-w2:review-logic-w2-2",
+    "status": "narrowed",
+    "evidence": "operator-confirm-review.ts complete card",
+    "reason": "Code path mirrors the terminal registration.",
+    "remains": "No test drives the complete card registration."
+  },
+  {
+    "id": "review-performance-w1:review-performance-w1-1",
+    "status": "narrowed",
+    "evidence": "session-attempt.ts laterRoundOf",
+    "reason": "Now runs only for a moved head (U4).",
+    "remains": "It still reads the UI history snapshot."
+  },
+  {
+    "id": "review-performance-w1:review-performance-w1-2",
+    "status": "out-of-scope",
+    "evidence": "operator-confirm-review.ts",
+    "reason": "One compare per card step for a moved head only."
+  },
+  {
+    "id": "review-performance-w1:review-performance-w1-3",
+    "status": "out-of-scope",
+    "evidence": "operator-confirm-review.ts complete card",
+    "reason": "Same cost as the terminal complete, by design of T13."
+  },
+  {
+    "id": "review-security-code-w1:review-security-code-w1-1",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts readSessionAttempt",
+    "reason": "The id is a validated UUID; a record for another repository or account only selects that Attempt's receipt, which the operator owns."
+  },
+  {
+    "id": "review-security-code-w1:review-security-code-w1-2",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts carried receipt",
+    "reason": "The receipt is the package's own; any URL means published, as for Desktop."
+  },
+  {
+    "id": "review-security-code-w1:review-security-code-w1-3",
+    "status": "out-of-scope",
+    "evidence": "session-publish-github.ts fallback",
+    "reason": "Restores the pre-flow behaviour; refs come from the manifest."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-2",
+    "status": "narrowed",
+    "evidence": "publish.ts receipt writes",
+    "reason": "Success, lost-response and unknown paths are pinned.",
+    "remains": "The found-on-GitHub confirm and the refusal drop are pinned in one place only."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-4",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts carried receipt",
+    "reason": "Test gap noted; behaviour unchanged."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-5",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts copy lock",
+    "reason": "Concurrency test gap noted."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-6",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts registerSessionPackageForProject",
+    "reason": "Needs a GitHub fake for resolveDeskSubject; noted."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-7",
+    "status": "narrowed",
+    "evidence": "operator-confirm-review.ts",
+    "reason": "Covered through publishReview.",
+    "remains": "The card execute wiring and the complete card registration have no test."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-8",
+    "status": "narrowed",
+    "evidence": "Desktop gating",
+    "reason": "The row button and canContinueDeskRun are pinned.",
+    "remains": "The workspace open path and dialog flag are not."
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-9",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts NOT_COPIED",
+    "reason": "payloads half unpinned; noted."
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-2",
+    "status": "out-of-scope",
+    "evidence": "ReviewPanel.dom.test.tsx",
+    "reason": "Selector robustness note."
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-3",
+    "status": "out-of-scope",
+    "evidence": "review-advance.test.ts",
+    "reason": "Each vector is refused; which rule refuses is not separated."
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-4",
+    "status": "out-of-scope",
+    "evidence": "session-publish-github.ts",
+    "reason": "The fallback is reachable only with the real gh; noted."
+  },
+  {
+    "id": "review-ui-ux-w1:review-ui-ux-w1-2",
+    "status": "out-of-scope",
+    "evidence": "reviews/model.ts",
+    "reason": "Label wording; product copy decision."
+  }
+]

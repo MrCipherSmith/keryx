@@ -1,5 +1,4 @@
-import type { DeskReviewOptions } from "../../../../src/review/desk-run-options";
-import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
+import { hasDeskWorker, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
@@ -49,11 +48,6 @@ export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defa
       await onStarted();
     }}
     onClose={onClose} />;
-}
-
-/** The reviewed attempt's settings for its update round. Posting to GitHub is decided again for every round. */
-export function updateRoundOptions({ autoPublish: _automatic, ...options }: DeskReviewOptions): DeskReviewOptions {
-  return options;
 }
 
 interface Props {
@@ -107,7 +101,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const syncRuns = local.request;
   function openManagedRun(id: string) {
     const run = local.runs.find(item => item.id === id);
-    if (!onOpenReviewSession || !run || run.source === "existing") {
+    if (!onOpenReviewSession || !run || !hasDeskWorker(run)) {
       setSessionId(id);
       return;
     }
@@ -157,7 +151,9 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       return;
     }
     setSessionId(null);
-    void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: updateRoundOptions(reviewed.options) }) })
+    // `keryx review advance` (flow 521): the same command an agent session runs; it keeps the reviewed attempt's settings
+    // without automatic publication (src/review/review-advance.ts) and refuses when a later round already exists.
+    void local.request({ kind: "advance", id: reviewed.id, ...revision })
       .then(outcome => {
         if (outcome === "done" && mounted.current) setFocusLatest(n => n + 1);
         if (outcome === "done" && boardBehind) onRefreshBoard?.();
@@ -220,7 +216,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })} />
     {session && <ReviewRunDialog
-      {...(onOpenReviewSession && session.source !== "existing" && {
+      {...(onOpenReviewSession && hasDeskWorker(session) && {
         onOpenWorkspace: async () => {
           await onOpenReviewSession(subject, session);
           setSessionId(null);

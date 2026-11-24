@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { boardGh, projectGithubConnection, verifyGithubBindingUnchanged, withCurrentGithubBinding, type GithubConnection } from "./board-github";
@@ -14,6 +13,7 @@ import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskRe
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
 import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
 import { premiseHoldState } from "./premise";
+import { beginPublicationReceipt, confirmPublicationReceipt, dropPublicationReceipt, headMovedLine, publicationMarker } from "./publication-guard";
 import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publish";
 import { computeReadiness, failingItems } from "./readiness";
 import { readRoundNumber } from "./round-record";
@@ -119,12 +119,6 @@ async function earlierAnswers(directories: readonly string[]): Promise<Record<st
     const earlier = await json<Draft>(directory, "publication-draft.json", draftLimit).catch(() => undefined);
     if (earlier) return object(object(object(earlier)?.settings)?.answers);
   }
-}
-
-/** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
-function headMovedLine(moved: HeadMoved): string {
-  return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
-    "this review does not cover the newer commits.";
 }
 
 async function prepare(input: {
@@ -284,7 +278,7 @@ async function prepare(input: {
   const round = buildRoundBlock({ body, round: roundNumber,
     reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
   body += `\n\n${renderRoundBlock(round)}`;
-  const marker = `<!-- keryx-desktop-review ${request.id} -->`;
+  const marker = publicationMarker(request.id);
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
   // A further push changes the current head, so it must make an earlier as-is preview stale.
@@ -434,9 +428,8 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
       throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
     }
     await save();
-    const receiptPath = path.join(directory, PUBLICATION_RECEIPT);
     // Persist the intent before the network call. A lost response must not cause a duplicate review.
-    await writeFileAtomic(receiptPath, "{}", { mode: 0o600 });
+    await beginPublicationReceipt(directory);
     const options = reviewCommandOptions(cwd, auth.env);
     let rejected: number | undefined;
     let postStarted = false;
@@ -458,7 +451,7 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
       posted = await callGitHub(port, { method: "POST", path: `repos/${key.repo}/pulls/${key.number}/reviews`, body: outbound });
     } catch (error) {
       if (rejected !== undefined || !postStarted) {
-        await unlink(receiptPath);
+        await dropPublicationReceipt(directory);
         // eslint-disable-next-line preserve-caught-error -- GitHub errors can contain private review bodies.
         if (rejected === 422) throw new Error("configuration: GitHub rejected this review. Check the verdict and inline comments. Authors cannot approve their own pull requests.");
         // eslint-disable-next-line preserve-caught-error -- GitHub errors can contain private review bodies.
@@ -474,7 +467,7 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     if (!publishedUrl) {
       throw new Error("unavailable: Submission could not be confirmed. Check the pull request before sending another review.");
     }
-    await writeFileAtomic(receiptPath, JSON.stringify({ url: publishedUrl }), { mode: 0o600 });
+    await confirmPublicationReceipt(directory, publishedUrl);
     const { skipped: _skipped, ...published } = state;
     return { ...published, savedAt, publishedUrl, canSubmit: false, blockedReason: "This review has already been published." };
   });

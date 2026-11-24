@@ -1,0 +1,128 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, PR #1302 round 1, diff mode, slice-01 read in full (1211 lines).
+
+Mutation pass: NOT RUN. The payload grants read-only tools with exec_budget_s 0 (no `run-tests`), so no mutant was executed. 13 `mutant_candidates` are listed below; 0 were run and 13 are left for the main session. Every expected result below is a prediction made by reading the code, not an observed run. That is why every finding is `info`: per this lens, a coverage gap reaches `minor` only once its mutant actually survives a run.
+
+Mutation-pass hazard (read this before running the list): the block ends with `test.each(["SKILL.md", "SKILL.detail.md"])("the bundled and installed %s are identical")`. `keryx review mutate` changes one file per mutant. A mutant applied only to the bundled copy therefore always turns that identity test red, so every mutant looks killed. Count a mutant as killed only when some test other than "… are identical" fails. Alternatively, exclude that test from the mutation command. One way is `-t` with a pattern that leaves it out (for example `-t "^(?!.*are identical)"`, if bun's `-t` accepts the lookahead; I did not check that).
+
+What the block pins, by reading (bundled DETAIL/SKILL read through `section()`):
+- `section()` (test.ts:38-45) matches the exact heading line and stops at the next heading of the same or a higher level. `## Head moved` therefore stops at `## Early verdict`, and `## Between waves …` stops at `## Head moved`. No section leaks into the next one. The stop-list assertion cannot be satisfied by the Head moved section's own references, because that section is outside the slice it checks.
+- The assertions read the right copy. DETAIL and SKILL come from `bundled/` (ENGINE). The installed copy is covered by the byte-identity test (AC3), which reads `.metaproject/skills/gdskills/review/review-orchestrator`, the correct path.
+- AC2: the old phrase is asserted absent (`not.toContain`). The step 5 pointer is asserted, along with its order against `keryx review next` (if `keryx review next` is missing, indexOf returns -1 and the assertion still fails, so there is no false pass). The publication pointer is asserted. The 918-line ceiling is pinned by the existing test at test.ts:362-363 (`lineCount(SKILL)).toBe(ceiling)`, with `review/review-orchestrator: 918` in skill-length-ceilings.ts:164).
+- AC1: the check points, the counting commands, the default `otherwise \`ask\``, both option labels, the `follow`/`ignore` list items, `send_poll`, `advance` with its `review plan` fallback, `--event COMMENT`, the never-REQUEST_CHANGES/APPROVE clause, the first-line sentence text and `never \`--yes\`` are each pinned by a distinct substring.
+- Recorded run: research-evidence/verify-tests-to-run-1.txt shows `bun test src/gdskills/review-orchestrator-preflight.test.ts` with 83 pass, 0 fail, exit 0. The worker reports the block was red before the skill edit. I did not verify that report.
+
+Where the assertions pin the presence of words but not the behaviour AC1 claims (each is a substring check that a wrong text also satisfies):
+1. D1 "first line": the test pins the sentence but not where it goes. Neither "first line" nor the "names the commits it did not check" clause is asserted.
+2. Unattended: the line is pinned on "ask nothing", "never publish" and "unless `on_head_move` is `follow`". Inverting "open no update round" to "open an update round" keeps all three substrings. "report the move" (which the test title claims) is not asserted.
+3. `ask`: the two option labels are pinned, but "the first recommended" (which option leads) is not. `follow` and `ignore` are pinned only as list-item prefixes, so their meaning (follow: no question; ignore: report says behind) is unpinned.
+4. Stop list: only `§ "Head moved"` is asserted, not that the stop applies while `on_head_move` is `ask`.
+5. Duplicated tokens: `fallback-first` appears in step 2 and step 4, so deleting it from the Count step stays green.
+
+AC3 is also checked independently by its own `cmp` invariant in acceptance-criteria.md. The test and the invariant agree.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "The new Flow 521 describe block is sound in structure. section() does not leak across headings, the assertions read the bundled copy, the installed copy is covered by byte identity, and the AC2 ceiling is pinned by the existing test at :362-363. Several AC1 behaviours are pinned only as substrings that a mis-written procedure also satisfies: the D1 first-line position, the unattended 'open no update round' and 'report the move', the order of the ask options and the follow/ignore semantics, and the ask condition on the stop list. The mutation pass was not run (read-only, exec_budget_s 0). 13 mutant_candidates are listed, so all findings are info until a run confirms survival. Hazard: the identity test kills every single-file mutant, so a red counts only when a non-identity test fails.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "expect(text).toContain(\"Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.\");",
+      "problem": "AC1's D1 rule says an old commit is published as is only with a FIRST line naming the reviewed commit. The test pins the sentence text but not its position: neither 'first line' nor 'The body's first line is' is asserted. The clause 'the body names the commits it did not check (`<reviewed sha>..<new sha>`)' is not asserted either.",
+      "impact": "If the procedure is rewritten to put the sentence anywhere else in the body ('last line', 'a line'), or the unchecked-commit range is dropped, the suite stays green. readiness item 7 (completeHeadGate) only accepts the moved-head report when the first line names the SHA, so a misplaced line would fail at publish time with no test catching the skill text. This is predicted, not run.",
+      "suggested_fix": "Assert the position as well: expect(text).toContain(\"The body's first line is \\\"Reviewed `<reviewed sha>`\") and expect(text).toContain(\"names the commits it did not check (`<reviewed sha>..<new sha>`)\").",
+      "evidence": "Read the D1 test in the new block (diff lines 1155-1163 of slice-01): none of its 6 assertions contains 'first line'. The template src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md:37 requires the line 'as the very first line'. Mutants M01 and M02 are not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "blind-test"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "expect(unattended).toContain(\"unless `on_head_move` is `follow`\");",
+      "problem": "The unattended test asserts 'ask nothing', 'never publish' and 'unless `on_head_move` is `follow`'. Inverting the behaviour ('open no update round unless …' -> 'open an update round unless …') keeps all three substrings. 'report the move', which the test title promises ('… and reports the move'), is not asserted at all.",
+      "impact": "An unattended run could be told to open update rounds by default, or to stay silent about the move, and the AC1 'unattended behaviour' check would stay green. This is predicted, not run.",
+      "suggested_fix": "Assert the full clauses: toContain(\"open no update round unless `on_head_move` is `follow`\") and toContain(\"report the move\").",
+      "evidence": "Read the new test 'unattended asks nothing, publishes nothing and reports the move' (slice-01 diff lines 1165-1170) against the Unattended bullet (diff line 987). Mutants M03 and M04 are not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "blind-test"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "expect(text).toMatch(/^\\s*- `follow`:/m);",
+      "problem": "The on_head_move test pins the two option labels and the existence of `follow`/`ignore` list items, but not (a) which `ask` option is recommended/first ('two options, the first recommended') nor (b) what `follow` and `ignore` do ('then step 4 without asking'; 'the report says the review is behind').",
+      "impact": "Swapping the recommended option, or rewriting `follow` to ask the operator, keeps the suite green. AC1 names these modes but the test only proves the words exist. This is predicted, not run.",
+      "suggested_fix": "Assert order with indexOf('Update after this round finishes') < indexOf('Stop and start on the new head') plus toContain('the first recommended'). Also assert toContain('then step 4 without asking') and toContain('the report says the review is behind').",
+      "evidence": "Read the new test 'on_head_move defaults to ask with two choices, plus follow and ignore' (slice-01 diff lines 1137-1146) against diff lines 982-986. Mutants M05 and M06 are not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "blind-test"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "expect(section(DETAIL, \"## Between waves — an authorized plan keeps the round going\")).toContain('§ \"Head moved\"');",
+      "problem": "The stop-list test asserts only that the Between-waves section references § \"Head moved\". It does not pin that the stop applies while `on_head_move` is `ask`, or that the reference sits in the closed stop list (item 3).",
+      "impact": "If the condition changes to `follow`, or the bullet moves out of the stop list into prose, the test stays green. That would reopen the contradiction the worker added the line to close ('The stop list is closed' versus the `ask` question). This is predicted, not run.",
+      "suggested_fix": "toContain('a moved pull request head while `on_head_move` is `ask` (§ \"Head moved\")').",
+      "evidence": "slice-01 diff lines 967 and 1172-1174. Mutant M07 is not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "degradation_class": "blind-test"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": null,
+      "quote": "test.each([\"SKILL.md\", \"SKILL.detail.md\"])(\"the bundled and installed %s are identical\", (file) => {",
+      "problem": "Not a defect in the test. It is a hazard for this round's mutation pass. `keryx review mutate` mutates one file per mutant (src/review/mutate.test.ts spec shape {id,file,anchor,replacement}), so any mutant of the bundled SKILL.md/SKILL.detail.md makes this identity test fail, whether or not a behaviour assertion catches it.",
+      "impact": "If the mutation results are read as plain red/green, every survivor reads as killed, and F-001..F-004 would be wrongly refuted.",
+      "suggested_fix": "When running the mutants, treat a mutant as killed only if a test other than '… are identical' fails, or exclude that test from the mutation command.",
+      "evidence": "slice-01 diff lines 1186-1188. src/review/mutate.test.ts:56 shows the single-file spec shape.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "publication": "omit"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M01", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "The body's first line is", "replacement": "The body's last line is", "kind": "behavior", "expected": "survives (predicted; F-001)"},
+    {"id": "M02", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": ", and the body names the commits it did not check (`<reviewed sha>..<new sha>`)", "replacement": "", "kind": "behavior", "expected": "survives (predicted; F-001)"},
+    {"id": "M03", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "open no update round unless", "replacement": "open an update round unless", "kind": "behavior", "expected": "survives (predicted; F-002)"},
+    {"id": "M04", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": ", and report the move (both SHAs, N or \"history rewritten\")", "replacement": "", "kind": "behavior", "expected": "survives (predicted; F-002)"},
+    {"id": "M05", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "two options, the first recommended:", "replacement": "two options, the second recommended:", "kind": "behavior", "expected": "survives (predicted; F-003)"},
+    {"id": "M06", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "then step 4 without asking", "replacement": "then ask the operator", "kind": "behavior", "expected": "survives (predicted; F-003)"},
+    {"id": "M07", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "while `on_head_move` is `ask` (§ \"Head moved\")", "replacement": "while `on_head_move` is `follow` (§ \"Head moved\")", "kind": "behavior", "expected": "survives (predicted; F-004)"},
+    {"id": "M08", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": ", N is unknown, and the update round will be `fallback-first`", "replacement": ", N is unknown", "kind": "behavior", "expected": "survives (predicted; `fallback-first` also in step 4)"},
+    {"id": "M09", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "it becomes `closed` only after its code is rechecked, else it stays `open`", "replacement": "it becomes `closed`", "kind": "behavior", "expected": "survives (predicted; carry-over rule not asserted, not named by AC1)"},
+    {"id": "M10", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "otherwise `ask` (the default", "replacement": "otherwise `follow` (the default", "kind": "behavior", "expected": "red (control)"},
+    {"id": "M11", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "never `REQUEST_CHANGES` or `APPROVE`", "replacement": "or `REQUEST_CHANGES`, never `APPROVE`", "kind": "behavior", "expected": "red (control)"},
+    {"id": "M12", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "at every wave boundary (before each `keryx review next`), ", "replacement": "", "kind": "behavior", "expected": "red (control)"},
+    {"id": "M13", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md", "anchor": "read the pull request's head and act on a move (`SKILL.detail.md` § \"Head moved\"), then ", "replacement": "", "kind": "behavior", "expected": "red (control; line count unchanged)"}
+  ],
+  "follow_ups": [
+    "Run mutant_candidates M01-M13 with `bun test src/gdskills/review-orchestrator-preflight.test.ts`. Count a mutant as killed only when a test other than 'the bundled and installed … are identical' fails (F-005). A confirmed survivor raises F-001..F-004 to minor."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 5}
+}
+```
+
+Not verified: I checked anchor uniqueness only by reading slice-01, not with a search (`keryx review mutate` marks an ambiguous or missing anchor as invalid and does not run it). I ran no tests and no mutations (read-only, exec_budget_s 0). I did not verify the worker's claim that the block was red before the skill edit.
+
+Routing audit: graph_used: no (not-relevant: a single test file and two skill files, all named in the slice). wiki_used: no (not-relevant: the procedure is defined by the flow AC). ctx_used: yes (keryx ctx rg). raw_rg_used: no.

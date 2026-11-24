@@ -1,0 +1,180 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat-/desktop-review-v2-stage4-7dce00` (PR #1302)
+- Merge-base: `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `2e01447f96161913880e02db4394be6ad15e1335`
+- Scope mode: diff (slice-01 read in full)
+- Spec compliance gate: ran (spec "Поведение при смене head", O13/O15, D1/D2, flow 521 AC1–AC3)
+
+### Summary
+The new `## Head moved` section is mostly faithful to the spec and to D1/D2. It is copied byte-for-byte into both trees, and the preflight tests assert every AC1–AC3 element by string. One path does not work today. "Stop and start on the new head" combined with the `keryx review plan` fallback does not carry the stopped round forward the way the text claims. The current prior-round rules drop a partial or uncompleted package, so its findings and its uncovered area are silently lost. Smaller issues: the question is asked again at every wave boundary, the procedure never mentions the `complete-head-gate` first-line requirement, step 3 and step 5 overlap at publish time (so the D1 restriction can be skipped), merge-base exit codes other than 0 and 1 are not handled, and the unattended default differs from the spec.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 4  |  info: 1
+
+### Spec Gaps (blocker)
+None detected. AC1–AC3 are addressed. Each element named in AC1 has a `toContain`/`toMatch` assertion in the new describe block. AC2's ceiling is asserted by the existing test at review-orchestrator-preflight.test.ts:362-363. AC3 is asserted by the `test.each` over SKILL.md and SKILL.detail.md. The assertions check wording only, not behaviour, and that is what AC1–AC3 claim.
+
+### Logic Bugs
+
+#### [F-001] major — "Stop and start on the new head" promises a carry-over that the fallback command cannot deliver today
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:604 and :608 (the same text in src/gdskills/bundled/.../SKILL.detail.md:604, :608)
+- Problem: Step 3 says to "ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked". Step 4's fallback (`keryx review plan --target <pr-url> --head <new sha>`) is said to "attach the prior findings" and pick `delta`. Today's prior-round selection does neither for a stopped round:
+  - `localPackageCandidates` drops any package that is not `eligible` (prior-round.ts:414). `REVIEWED_STATUSES` excludes draft and partial packages (round-record.ts:207, "a draft or partial package is never a previous round").
+  - A package that is eligible but has no completion evidence (no `review complete`, no published.json, no scopeReviewed ledger) is untrusted. It is used only when no trusted round exists, and then as `fallback-first` with "findings as context only" (prior-round.ts:880-886). When an older trusted round exists, the stopped round is ignored entirely.
+  - Nothing in `review plan` adds an earlier round's uncovered area as unchecked.
+
+  Spec "Раунд обновления" item 1 explicitly lists these three rules as changes stage 3 has to make. The skill states the stage-3 behaviour as if it were current. The PR body does not mention the limitation; only journal.md does. Step 5.1 has the same issue: it says "The operator's answers per finding carry over by finding id", which is also stage-3 behaviour with no current mechanism in the `review plan` fallback.
+- Why it matters: Take the input `on_head_move=ask`, operator picks "Stop and start". The agent tells the operator that the work done so far and the uncovered area carry into the new round. The fallback plan then starts from an older round, or from round 1 with no prior findings, and the stopped round's findings are never rechecked or closed. Nothing reports this.
+- Fix: Until `keryx review --help` lists `advance`, state the limitation in the procedure. Either (a) offer "Stop and start" only once `advance` exists, and otherwise recommend "Update after this round finishes", which reaches `complete` and so produces a trusted prior round; or (b) keep the option but tell the agent to say that the stopped round's findings reach the new round only as context, that its uncovered slices must be named in the new report, and that per-finding answers do not carry over yet.
+- class_scope: sites = [".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:604", ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:608", ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:610", "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:604", "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:608", "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:610"]. Method: read every sentence of the `## Head moved` section (lines 595-616, both copies), keeping those that claim stage-3 carry-over behaviour (partial round as prior, uncovered area as unchecked, answers by finding id). Checked each claim against prior-round.ts:410-420 and :872-890 and round-record.ts:207.
+
+#### [F-002] minor — the `ask` question repeats at every later wave boundary
+- File: SKILL.detail.md:599-605 (both copies)
+- Problem: Step 1 compares the PR head with the round's pinned `head` before each `keryx review next`. Once the operator answers "Update after this round finishes", the round continues on the old head. At the next boundary the head still differs, so step 3 asks again, and the Between-waves stop list (line 587) stops the round again. The procedure never says to remember the answer, or to ask again only when the head moves beyond the SHA the operator already answered for.
+- Why it matters: An agent that follows the text literally stops a three-wave round twice more with the same question, which is the pace-question pattern "Between waves" forbids. For a Telegram operator, each stop is another poll to wait on.
+- Fix: In step 1 or step 3, add: "Compare with the last head the operator answered for (or the round's `head` before any answer); ask again only when the PR moved past it."
+
+#### [F-003] minor — "the round runs to `complete`" after a move, but `complete` refuses unless the report's first line names the reviewed SHA
+- File: SKILL.detail.md:603, :605, :606 (both copies)
+- Problem: For "Update after this round finishes", `follow` and `ignore`, the round finishes on its pinned head. `completeHeadGate` (src/review/complete-head-gate.ts:52-61) throws on a moved head unless the report's first line names the reviewed SHA and says the PR moved. The section names that line only for step 5 ("Publish as is"), not for completing a round whose head moved.
+- Why it matters: The agent reaches `keryx review complete` and gets a refusal. The error text says what to write, so this costs an extra round-trip and is not lost data.
+- Fix: In step 3 (or step 1's "before `keryx review complete`"), add that the report's first line is the `templates/review-report.md` moved-head line before `complete`, as SKILL.md:235 already says.
+
+#### [F-004] minor — step 3 and step 5 overlap at publish time, so the D1 restriction can be skipped
+- File: SKILL.detail.md:599-609 (both copies)
+- Problem: Step 1 runs the check "before publishing" and the text flows into step 3, which decides by `on_head_move`. Step 5 holds the D1 options and applies only "when the head moved after the round completed". The text does not say which step applies at publish time. It also does not say what happens when the head moved during the round under `ignore`, which ends with the report "behind" and then a publish that step 5's wording does not cover. In that case nothing restricts the event to COMMENT, and the session `review publish` path does not enforce it either: readiness item 7 only warns when the first line names the SHA (divergence-map.md §2, "head moved"). Today, with no stored `on_head_move`, `ignore` cannot be reached in a session, so this is latent.
+- Why it matters: D1 says an old commit is published only as a Comment. Once `ignore` is stored (stage 3), `ignore` followed by publish can post REQUEST_CHANGES or APPROVE for an outdated commit.
+- Fix: Say that step 3 applies while a round runs and that any publish of a package whose `head` differs from the PR head goes through step 5, whatever `on_head_move` is.
+
+#### [F-005] minor — `git merge-base --is-ancestor` exit codes other than 0 and 1 are not handled
+- File: SKILL.detail.md:600 (both copies)
+- Problem: The text maps exit 0 to ancestor and exit 1 to rewritten history. If `git fetch origin <new sha>` failed or the reviewed SHA is not present locally, `--is-ancestor` exits 128. The procedure does not cover that case. An agent may treat any non-zero exit as "history was rewritten" and report a force-push that did not happen.
+- Fix: Add "any other exit: the count is unknown (fetch failed); report `head moved, count unavailable` and do not call it a rewrite."
+
+### Edge Cases
+
+#### [F-006] info — unattended default vs spec "Конфигурация"
+- File: SKILL.detail.md:601, :607 (both copies)
+- Problem: Step 3 defaults to `ask` when the Review has no value, and the unattended rule opens an update round only under `follow`. The spec (specification.md:84) makes `follow` the default for rule-triggered runs. An unattended session run started by a trigger rule therefore never opens an update round, where the spec's default would. D2 covers only manual reviews, so the procedure's reading is defensible while no stored value exists. Recording it so stage 3 aligns the two.
+
+### Async & Concurrency / Error Handling / Null Safety / Type Contracts
+None detected. The diff changes skill text and string-assertion tests. The new test helpers reuse the existing `section()` (test:38-45), and the `?? ""` fallbacks make a missing line fail the assertion instead of throwing.
+
+### Checked and found sound
+- The D1 first line matches `templates/review-report.md:37` and passes `completeHeadGate`'s `SAYS_SO` regex ("PR has since moved").
+- The `review plan --head <sha>` fallback does not hit the checkout refusal: that refusal applies only to a PR round started without `--head` (src/commands/review.ts:729-737).
+- Prior-round mode selection (`delta` when the old head is an ancestor, `fallback-first` when it is not) matches prior-round.ts:755-771 for a trusted, completed prior round.
+- In the slice, the bundled and installed SKILL.md / SKILL.detail.md hunks are identical. SKILL.md changes in place with the line count unchanged.
+- Test run: verify-tests-to-run-1.txt (preflight test, exit 0) was provided; I ran no tests myself.
+
+### Not verified
+- How `keryx review ingest` sets manifest status on a deliberately stopped round (`reviewed` or `draft`). F-001 holds in both cases (dropped, or untrusted and ignored when an older trusted round exists), but which of the two happens was not traced.
+- `keryx gdgraph`, `keryx test related` and `keryx wiki ask` were not used. The questions were settled by reading the code (complete-head-gate.ts, prior-round.ts, round-record.ts, review.ts).
+
+Routing audit: graph_used: no (not-relevant: skill-text diff, consumers read directly); wiki_used: no (spec read directly); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no (one raw `sed -n` range read of round-record.ts with keryx:raw marker).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Head moved procedure is mostly faithful to spec/D1/D2 and the tests assert AC1-AC3 by wording. One major: 'Stop and start on the new head' plus the `keryx review plan` fallback claims a partial round becomes the prior round with its uncovered area carried as unchecked (and answers carried by finding id), but today's prior-round rules drop or ignore such a package (round-record.ts:207, prior-round.ts:414, :880-886), so findings are silently lost. Minors: repeated ask at every wave boundary, complete-head-gate first line not mentioned for in-round moves, step 3/step 5 overlap can skip D1 under ignore, merge-base exit 128 unhandled.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "- **Stop and start on the new head**: dispatch nothing more, ingest what finished as a partial round, then step 4; the area it did not cover enters the new plan as unchecked.",
+      "problem": "The procedure states stage-3 carry-over behaviour as current. The `keryx review plan` fallback in step 4 cannot take a stopped or partial round as the prior round. A package that is not eligible is dropped (prior-round.ts:414; round-record.ts:207, 'a draft or partial package is never a previous round'). An eligible but uncompleted package is untrusted: it is used only when no trusted round exists, and then as fallback-first with findings as context only (prior-round.ts:880-886); otherwise it is ignored. Nothing adds the uncovered area as unchecked. Step 5.1's 'answers per finding carry over by finding id' has the same problem. Spec 'Раунд обновления' item 1 lists these rule changes as stage-3 work.",
+      "impact": "Silent wrong result. With on_head_move=ask, the operator picks 'Stop and start'. The agent says the work and uncovered area carry over, but the new round starts from an older round or from round 1, and the stopped round's findings are never rechecked or closed. Nothing reports this.",
+      "suggested_fix": "Until `keryx review --help` lists `advance`, either recommend only 'Update after this round finishes' (it reaches `complete`, which gives a trusted prior round), or keep 'Stop and start' with an explicit caveat: the stopped round's findings reach the new round only as context, its uncovered slices must be named in the new report, and per-finding answers do not carry over yet.",
+      "evidence": "SKILL.detail.md:604, :608, :610 (both copies); src/review/round-record.ts:207-209; src/review/prior-round.ts:410-420, :880-890; docs/requirements/keryx-desktop-review-v2/specification.md:108; journal.md T5 entry acknowledges it, PR body does not.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:604",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:608",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:610",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:604",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:608",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:610"
+        ],
+        "enumeration_method": "Read every sentence of the `## Head moved` section (lines 595-616, both copies), keeping each that claims stage-3 carry-over behaviour (partial round as prior, uncovered area as unchecked, answers carried by finding id). Checked each against prior-round.ts candidate selection (:410-420, :872-890) and round-record.ts:207."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "The same SHA as the round's `head`: carry on.",
+      "problem": "The check compares the PR head with the round's pinned head before every `keryx review next`. After the operator answers 'Update after this round finishes', the head still differs at the next boundary, so step 3 asks again and the stop list stops the round again. Nothing says to remember the answer.",
+      "impact": "Literal execution re-asks the same question at every wave boundary: a repeated pace-style stop, and a fresh Telegram poll each time.",
+      "suggested_fix": "Compare with the last head the operator answered for (or the round's head before any answer); ask again only when the PR moved past it.",
+      "evidence": "SKILL.detail.md:599-605 and the stop-list entry at :587 (both copies).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "- **Update after this round finishes**: the round runs to `complete`, then step 4.",
+      "problem": "For update-after, follow and ignore, the round completes on a moved head. completeHeadGate throws unless report.md's first line names the reviewed SHA and says the PR moved (complete-head-gate.ts:52-61). The section names that line only for step 5 publish-as-is.",
+      "impact": "`keryx review complete` refuses. The error says how to fix it, so the cost is an extra round-trip.",
+      "suggested_fix": "In step 3 or in step 1's 'before `keryx review complete`', say that the report's first line must be the templates/review-report.md moved-head line before `complete` (as SKILL.md:235 already says).",
+      "evidence": "src/review/complete-head-gate.ts:52-61; templates/review-report.md:37.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "5. **Before publishing, when the head moved after the round completed.** Offer these options, in this order, with the host question tool:",
+      "problem": "Step 1 checks 'before publishing' and then flows into step 3 (on_head_move). Step 5, which holds the D1 COMMENT-only rule, applies only when the head moved after completion. A head that moved during a round under `ignore` and is then published falls under neither step, and the session publish path does not enforce COMMENT (readiness item 7 only warns). Latent today, because no stored on_head_move exists in a session.",
+      "impact": "Once `ignore` is stored (stage 3), REQUEST_CHANGES or APPROVE can be posted for an outdated commit, against D1.",
+      "suggested_fix": "State that step 3 governs a running round, and that any publish of a package whose head differs from the PR head goes through step 5 regardless of on_head_move.",
+      "evidence": "SKILL.detail.md:599-609; implementation-plan.md:81 (D1); divergence-map.md section 2 'head moved' row.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "Exit 1: history was rewritten (force-push or rebase), N is unknown, and the update round will be `fallback-first`.",
+      "problem": "Only exits 0 and 1 are mapped. If the fetch failed or the reviewed SHA is missing locally, `git merge-base --is-ancestor` exits 128, and an agent may report it as rewritten history.",
+      "impact": "A false force-push report goes to the operator; no data is lost.",
+      "suggested_fix": "Add: any other exit means the count is unavailable (fetch or object missing); report 'head moved, count unavailable', not a rewrite.",
+      "evidence": "SKILL.detail.md:600; git merge-base --is-ancestor exits 128 on a bad object (standard git behaviour).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "3. **Decide by `on_head_move`:** the Review's own value when it has one, otherwise `ask` (the default for a manual review).",
+      "problem": "The spec (specification.md:84) makes `follow` the default for rule-triggered runs. The procedure defaults every session run to `ask`, and the unattended rule opens an update round only under `follow`, so a rule-triggered unattended session never opens one. D2 covers manual reviews only.",
+      "impact": "A divergence from the spec default for unattended or rule-triggered runs; defensible until stage 3 stores on_head_move.",
+      "suggested_fix": "Note that an unattended or rule-triggered run with no stored value defaults to `follow` per the spec, or record this as a deliberate deviation.",
+      "evidence": "specification.md:84; implementation-plan.md:82 (D2).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 4, "info": 1 },
+  "slices": ["slice-01"]
+}
+```

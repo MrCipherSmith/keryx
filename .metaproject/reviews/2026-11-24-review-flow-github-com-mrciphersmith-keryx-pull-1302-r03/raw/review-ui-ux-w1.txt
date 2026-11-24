@@ -1,0 +1,86 @@
+STATUS: DONE
+
+Reviewer: review-ui-ux, wave 1 of 1, slice-01. Round 3 of PR #1302 (flow 521, stage 4).
+Range: 7a846bef15e4424b94bbd8ebb4dea275b75581f5..HEAD (stage 4 only).
+Mode: code mode only. No URL or screenshots were supplied, so no live checks ran.
+
+Context
+- Product: Keryx Desktop (Tauri app) plus the keryx CLI. Audience: developers who review pull requests.
+- Primary task on the changed surface: once a PR's head has moved, update the review with "Update review to <sha>" from the publish dialog, then see the new round or the reason it was refused.
+- Surface type: app screen. The marketing rows of ui-anti-slop.mdc do not apply.
+
+Scope read
+- The user-facing stage 4 diffs: apps/desktop/src/reviews/model.ts (SOURCE_LABEL "Session"), apps/desktop/src/review/ReviewWorkspace.tsx (updateReview now sends `advance`), apps/desktop/src/review/useReviewRuns.ts (an advance refusal is stored as a start error), apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src-tauri/src/review.rs (`advance` argv), apps/desktop/src/reviews/ReviewPanel.dom.test.tsx, src/commands/review-advance.ts (usage and refusals), src/review/review-advance.ts (refusal copy), src/commands/review.ts (help, the publish and complete warnings, "desktop attempt:" line), src/commands/operator-confirm-review.ts, docs/docs/cli-reference.md.
+- The code these touch, read at HEAD: ReviewWorkspace.tsx lines 110-229 (stale banner, primary button), useReviewRuns.ts (all of it), ReviewRuns.tsx lines 195-214 (error banner), ReviewPanel.tsx:117 (workspace key), ReviewsView.tsx and ReviewPanel.tsx render sites of SOURCE_LABEL.
+- The rest of slice-01 (backend publication guard, session-attempt, and the tests outside the Desktop panel) has no rendered UI and is out of this lens.
+
+Findings
+
+[UX-1] minor: an "Update review" refusal that is not about a moved head shows "The PR revision changed" and disables the start button
+- Criterion: Nielsen #9 (help users recognize, diagnose and recover from errors) and #1 (visibility of system status). Error state: the cause shown is wrong, and the remedy offered does not clear it.
+- File: apps/desktop/src/review/useReviewRuns.ts:68 `else setActionError({ kind: action.kind === "advance" ? "start" : action.kind, message });` together with :112 `staleRange: actionError?.kind === "start" && /^stale:/i.test(actionError.message)`.
+- Evidence: src/review/review-advance.ts:39 and :41 refuse with `stale: This pull request is no longer open.` and `stale: A later round of this Review already exists. Refresh the Review and update from its latest round.` Neither means the range changed. Both match the staleRange test once the error is stored as kind "start". ReviewWorkspace.tsx:203-206 then renders "The PR revision changed. Refresh the board to load the latest range." (role=status), and ReviewRuns.tsx:211 renders the raw CLI text, `stale:` prefix included, in a second banner (role=alert). The primary button at ReviewWorkspace.tsx:195 is disabled by `(!action.open && revisionChanged)`. The "later round" case can be reached from the UI: the publish dialog of an earlier attempt opened from History offers Update review (ReviewPublishDialog.tsx:157, ReviewRuns.tsx:180), and ReviewWorkspace.tsx:139 only checks for attempts on the target range, not for a later round on another range. The workspace is keyed by base and head SHA (ReviewPanel.tsx:117), and actionError is cleared only by the next non-status action or by a remount (useReviewRuns.ts:44, :87). So "Refresh board" on an unmoved PR leaves both banners and the disabled button in place.
+- Impact: the user reads two contradictory messages, one of which is false ("revision changed"). They follow its remedy (Refresh board), nothing changes, and the primary action stays disabled until they leave the PR.
+- Fix: map only the range-moved refusal to staleRange. For example, store an advance refusal as kind "start" only when the message is the revision-changed one (review-advance.ts:76), or give advance its own error kind whose banner shows the CLI's cause without the machine prefix. Alternatively, change the CLI prefix for "later round exists" and "no longer open" (for example `conflict:` / `closed:`). Add a panel test where advance throws the "later round" refusal and check that no "PR revision changed" banner appears.
+- class_scope: not required (minor). The only site is the single advance call (ReviewWorkspace.tsx:152), enumerated with `keryx ctx rg '"advance"|onUpdateReview' apps/desktop/src`.
+- Confidence: medium. Read from code; no render was supplied to confirm the two banners on screen.
+
+[UX-2] info: `keryx review publish` writes its session-registration warning to stdout, while `keryx review complete` writes the same warning to stderr
+- File: src/commands/review.ts:5074 `(text) => console.log(\`warning: ${text}\`)` against :5178 `(text) => console.error(\`warning: ${text}\`)`.
+- Evidence: the same sessionPublication warning callback is wired to different streams in the two commands.
+- Impact: a script or agent that reads publish's stdout gets a warning line mixed into its output, and the two commands behave differently for the same condition.
+- Fix: send both warnings to stderr.
+- Confidence: high on the inconsistency; low on user impact, because publish's output is human-readable, not JSON.
+
+Checks not run
+- All live-mode checks: rendered focus ring after "Update review" (the focus code at ReviewWorkspace.tsx:125-129 is unchanged in stage 4), computed contrast of the two warn banners, and target sizes. A Desktop render, or screenshots of the Reviews panel after a refused "Update review", would close the gap.
+- The "Session" label: it is consistent with the labels next to it ("Manual", "Scheduled", "Existing review") and flows into the filter options automatically (ReviewsView.tsx:220). No finding.
+- CLI usage text: review-advance.ts throws ADVANCE_USAGE without naming the invalid flag. This matches the sibling desk-run commands, so it is not filed.
+
+Scores
+- Slop score: 0. No visual styling changed (T1 0, T2 0, T3 0).
+- WCAG 2.2 AA floor: nothing changed in the markup; not measured on a render.
+- Viewports checked: not run (no render supplied).
+
+What works: Update review keeps one code path shared with sessions; the toast for an attempt that already exists names the commit; and the docs describe every refusal.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "review-ui-ux-w1-1",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/useReviewRuns.ts",
+      "line": 68,
+      "problem": "An advance refusal is stored as a 'start' error, so the 'stale: A later round of this Review already exists' and 'stale: This pull request is no longer open' refusals set staleRange: the workspace shows 'The PR revision changed. Refresh the board' next to the real CLI message, and the primary button is disabled.",
+      "evidence": "apps/desktop/src/review/useReviewRuns.ts:68,112; src/review/review-advance.ts:39,41; apps/desktop/src/review/ReviewWorkspace.tsx:195,203-206; apps/desktop/src/review/ReviewRuns.tsx:211; apps/desktop/src/reviews/ReviewPanel.tsx:117",
+      "impact": "Contradictory banners with a false cause. Its remedy (Refresh board) does not clear the state while the PR head is unchanged, so the primary action stays disabled until the user leaves the PR.",
+      "suggested_fix": "Treat only the revision-changed refusal as staleRange (or give advance its own error kind and strip the machine prefix), or use different prefixes for 'later round exists' and 'closed' in review-advance.ts. Add a ReviewPanel test for the later-round refusal.",
+      "confidence": "medium"
+    },
+    {
+      "id": "review-ui-ux-w1-2",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": 5074,
+      "problem": "keryx review publish prints the session-registration warning to stdout, while keryx review complete prints the same warning to stderr.",
+      "evidence": "src/commands/review.ts:5074 console.log vs src/commands/review.ts:5178 console.error",
+      "impact": "The same condition goes to different streams; stdout readers of publish see a warning line in their output.",
+      "suggested_fix": "Use console.error for the publish warning as well.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 1
+  }
+}
+```

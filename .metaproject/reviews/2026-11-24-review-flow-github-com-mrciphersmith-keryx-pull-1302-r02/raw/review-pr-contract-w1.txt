@@ -1,0 +1,90 @@
+STATUS: DONE
+
+# review-pr-contract w1 — PR #1302, round 2 (delta), FIX slice-01, head 0c6ff2b7e6e4118287ef8abd531e7268980435e8
+
+Inputs read: brief.md, pr-context.md (in full), slices/slice-01.diff (in full, 252 lines), payloads/review-pr-contract-w1.json prior_findings (R1–R12), the live PR body via `gh pr view 1302 --json body,headRefOid,updatedAt` (identical to pr-context.md's round-1 intent: the body was not edited after the fix commit 0c6ff2b7e), `src/review/autonomous-profile.ts:195-202` at head, `docs/requirements/keryx-desktop-review-v2/specification.md:82-103`. Read-only commands only; no tests run (research-evidence/verify-tests-to-run-1.txt: exit 0).
+
+## Checklist form (PR body claims touching slice-01)
+
+The PR body has no checkbox list. Each stated claim is one row.
+
+| Claim (quoted) | State | What the diff shows | Expectation | Result |
+|---|---|---|---|---|
+| "The PR head is checked at every wave boundary (before each `keryx review next`), before `review complete`, and before publishing" | claimed | SKILL.detail.md Head moved step 1 (slice-01:43): `git ls-remote origin refs/pull/<n>/head` at wave boundaries, `gh pr view` before complete and before publish | check at all three points | holds (mechanism changed to ls-remote; body does not name the mechanism, so no contradiction) |
+| "N new commits are counted, and rewritten history is detected" | claimed | step 2 (slice-01:44) adds exit-128 handling | counting + rewritten case | holds |
+| "`on_head_move` defaults to `ask` (D2), with two operator choices. `follow`, `ignore` and the unattended behaviour are also covered" | claimed | step 3 (slice-01:45-58) | all present | holds |
+| "The update round runs through `keryx review advance`. While that command does not exist, it falls back to `keryx review plan --head <new sha>`" | claimed | step 4 (slice-01:61) | present | holds |
+| "Publishing the old commit as is is allowed only as `--event COMMENT`, with a first line that names the reviewed commit (D1)" | claimed | step 5 (slice-01:62-64), now for any head difference at publish time | present | holds |
+| "Its line count stays at the 918-line ceiling" / "bundled and installed copies are byte-identical" | claimed | SKILL.md is 918 lines at head; slice-01 shows the same hunks in both SKILL.detail.md copies | consistent | holds |
+| "Tests: a new block in `src/gdskills/review-orchestrator-preflight.test.ts`" | claimed | slice-01:120-247 rewrites the block per step | consistent | holds |
+| Not verified: "The procedure describes the spec contract. The current `keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`), which is stage 3's change." | disclosed | slice-01:50 now states that limitation in the procedure itself ("Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`) ...") | the disclosure should describe the head text | contradicted — PC-001 |
+| Divergence map row 4 (body item 2: "a 7-step extraction plan") | claimed | slice-01:23-24 rewrites row 4 to the D1 COMMENT variant | still 7 rows | holds |
+
+Documentation outside the diff: `keryx ctx rg -i "head moved|on_head_move|re-check findings" docs README.md` — 9 hits in 3 files: specification.md and implementation-plan.md (the requirement source), docs/docs/guides/autonomous-review.md:73 ("a new round only if the head moved while it worked"), which agrees with the new Unattended rule mapping the autonomous runner to `follow`. No document outside the diff contradicts slice-01.
+
+## Prior dispositions (checked against the head text, not the commit message)
+
+- R1 closed — stop-and-start (slice-01:50) now says a stopped round is partial and never a previous round until `advance`, findings reach the new round at most as context, answers do not carry over; step 5.1 (slice-01:63) "carry over by finding id only with `advance`; before it they do not". The "enters the new plan as unchecked" promise is gone (asserted absent, slice-01:198).
+- R2 closed — Unattended (slice-01:58) maps the autonomous runner's "open one more round only if the head moved" to `follow` and the fixed-range "keep this range" to `ignore`; `src/review/autonomous-profile.ts:199-200` at head carries exactly those sentences; slice-01:239-247 pins both sides. AC6 now tracks line 200 too (slice-02).
+- R3 closed — wave-boundary check is `git ls-remote` (slice-01:43); `gh` only twice, tied to the "make it once" rule.
+- R4 closed — "Desktop runs the same command" replaced by "the command Desktop Review v2 stage 3 adds ... (today Desktop's prompt still differs)" (slice-01:61), asserted absent (slice-01:212).
+- R5 closed — compare with "the head they answered for ... ask again only when the PR moved past it" (slice-01:43); stop list "once per head the PR moves to" (slice-02:95).
+- R6 closed — slice-01:60 names the first-line requirement before `review complete` for update-after/follow/ignore, citing complete-head-gate.ts.
+- R7 closed — step 5 now applies "when the head at publish time differs from the round's head, however it moved (during or after the round, any `on_head_move`)" (slice-01:62); step 3 says "step 5 governs every publish".
+- R8 closed — "Any other exit (128 ...): stop and report the git error; never read it as rewritten history" (slice-01:44).
+- R9 closed — divergence-map row 4 (slice-01:24) now prescribes COMMENT-only on a moved head per D1; §5 bullet updated (slice-02:37).
+- R10 closed — test asserts "The body's first line is ..." and "the body names the commits it did not check" (slice-01:224-225).
+- R11 closed — "read only from the keryx-stored Review record, never from the PR body, branch files or comments" (slice-01:45), asserted (slice-01:180).
+- R12 closed — the duplicate copy-parity test.each and INSTALLED constant are removed; a comment defers AC3 to review-orchestrator-skill-parity.test.ts (slice-02:422, 466-469).
+
+## Findings
+
+### [PC-001] PR body's "Not verified" caveat still says the procedure describes the spec contract; the fixed procedure now states the stage-3 limitation itself
+
+- **Severity**: minor
+- **File**: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:604 (Head moved, step 3, "Stop and start on the new head"; same text in the bundled copy)
+- **Problem**: pr-context.md:41 (live body unchanged since round 1) says "The procedure describes the spec contract. The current `keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`), which is stage 3's change." At head the procedure no longer describes the spec contract for this case: slice-01:50 "Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`): step 4 plans as if it had not run ...". The body also does not mention that the fix round made this change.
+- **Why it matters**: a reviewer or the owner reading the body believes the skill still over-promises carry-over (the round-1 R1 major) and that it is merely disclosed; the head text says otherwise. The body is the merge-time record.
+- **Fix**: rewrite the bullet: the procedure now states that until `advance` exists a stopped round is not a prior round and answers do not carry over (round-1 R1 fixed); the remaining gap is stage 3's `round-record.ts:207` change.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "FIX slice-01: all 12 prior findings (R1-R12) closed against the head text. One new minor: the PR body's Not-verified caveat about the partial-round fallback is stale against the fixed procedure.",
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "closed"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": 604,
+      "problem": "PR body (pr-context.md:41, unchanged since round 1 per gh pr view) says 'The procedure describes the spec contract. The current `keryx review plan` fallback may not yet treat a partial package as the prior round (`round-record.ts:207`)'. At head the procedure states that limitation itself: 'Until `keryx review --help` lists `advance`, a stopped round is partial and never a previous round (`src/review/round-record.ts:207`): step 4 plans as if it had not run' (slice-01:50, both copies).",
+      "impact": "A reader of the PR body, the merge-time record, believes the skill still promises stage-3 carry-over (round-1 R1) and only discloses it; the head text no longer does.",
+      "suggested_fix": "Rewrite the Not-verified bullet: the procedure now says a stopped round is not a prior round and answers do not carry over until `advance`; only the round-record.ts:207 change remains for stage 3.",
+      "evidence": "pr-context.md:41; slices/slice-01.diff:50; gh pr view 1302 --json body,updatedAt (body equal to round-1 intent, updatedAt 2026-11-24T08:00:50Z)",
+      "quote": "The procedure describes the spec contract.",
+      "confidence": 0.9,
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+Summary: R1–R12 all closed on slice-01; one minor (PC-001) on the stale PR-body caveat.

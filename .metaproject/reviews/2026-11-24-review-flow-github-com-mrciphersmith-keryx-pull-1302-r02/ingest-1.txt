@@ -1,0 +1,17 @@
+# managed review: 2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02
+
+mode: ingest
+status: draft
+path: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r02
+flow: 521
+layers: graph@0c6ff2b = head; wiki none; memory none
+head: 0c6ff2b7e6e4118287ef8abd531e7268980435e8
+
+verification_mode: annotate
+verdicts: confirmed=0 refuted=0 unverifiable=0 unverified=9
+findings: in=9 removed_by_verifier=0 retained=9
+pre-filter: files_dropped=0 blocks_dropped=0 changed_lines_dropped=0 drop_rows=0
+filter_stats: total=9 prefilter=0 low_confidence=not-measured refuted=0 scope_b=not-measured findings_cap=0 merged_duplicates=0 dismissed_by_round=not-measured retained=9
+cross_family_review: not recorded (no --cross-family-review supplied to this ingest; this is NOT `single-family`)
+findings cap: limit=10/reviewer truncated=0 exempt=4 reviewers_truncated=0
+degradation screen: screened=1 downgraded=0

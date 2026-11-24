@@ -181,8 +181,9 @@ async fn invoke_review_at(
 ) -> Result<Value, String> {
     invoke_review_at_with(app, read_only, root, move |mut cmd| {
         let desktop_action = args.first().map(String::as_str) == Some("review")
-            && args.get(1).map(String::as_str) == Some("desk-run")
-            && matches!(args.get(2).map(String::as_str), Some("start" | "continue" | "decide"));
+            && (args.get(1).map(String::as_str) == Some("desk-run")
+                && matches!(args.get(2).map(String::as_str), Some("start" | "continue" | "decide"))
+                || args.get(1).map(String::as_str) == Some("advance"));
         cmd.args(args);
         if desktop_action {
             cmd.env("KERYX_DESKTOP_REVIEW_ACTION", "1");
@@ -347,6 +348,14 @@ pub enum RunAction {
     Answer { id: String, #[serde(rename = "questionId")] question_id: String, answer: String },
     Readiness { id: String },
     Decide { id: String, decision: String, reason: String, waive: Option<Vec<String>> },
+    /// The update round of the attempt's Review on the range the dialog saw: `keryx review advance` (flow 521).
+    Advance {
+        id: String,
+        #[serde(rename = "baseSha")]
+        base_sha: String,
+        #[serde(rename = "headSha")]
+        head_sha: String,
+    },
 }
 
 fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String> {
@@ -378,6 +387,7 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
             }
             ("continue", vec![("--id", id)])
         },
+        RunAction::Advance { id, base_sha, head_sha } => ("advance", vec![("--id", id), ("--base", base_sha), ("--head", head_sha)]),
         RunAction::Cancel { id } => ("cancel", vec![("--id", id)]),
         RunAction::Readiness { id } => ("readiness", vec![("--id", id)]),
         RunAction::Decide { id, decision, reason, waive } => {
@@ -403,7 +413,12 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
             ("answer", vec![("--id", id), ("--question-id", question_id)])
         }
     };
-    let mut args = vec!["review".into(), "desk-run".into(), operation.into(), "--json".into()];
+    // `advance` is its own review command, shared with agent sessions; the others are `desk-run` operations.
+    let mut args: Vec<String> = if operation == "advance" {
+        vec!["review".into(), "advance".into(), "--json".into()]
+    } else {
+        vec!["review".into(), "desk-run".into(), operation.into(), "--json".into()]
+    };
     let fields = [
         ("--repo", target.repo),
         ("--repository-id", target.repository_id),
@@ -775,6 +790,11 @@ mod tests {
         let decoded: Value = serde_json::from_str(payload).unwrap();
         assert_eq!(decoded["mode"], "auto");
         assert!(serde_json::from_str::<RunAction>(r#"{"kind":"worker"}"#).is_err());
+        let advance = RunAction::Advance { id: "run".into(), base_sha: "a".repeat(40), head_sha: "d".repeat(40) };
+        let args = run_args(target(), advance).unwrap();
+        assert_eq!(&args[..4], ["review", "advance", "--json", "--repo"]);
+        assert_eq!(&args[11..], ["--id", "run", "--base", &"a".repeat(40), "--head", &"d".repeat(40)]);
+        assert!(run_args(target(), RunAction::Advance { id: "--x".into(), base_sha: "a".repeat(40), head_sha: "d".repeat(40) }).is_err());
         assert!(run_args(target(), RunAction::Cancel { id: "--worker".into() }).is_err());
         let answer = RunAction::Answer { id: "run".into(), question_id: "q".into(), answer: "--continue with this".into() };
         assert_eq!(&run_args(target(), answer).unwrap()[12..], ["--id", "run", "--question-id", "q", "--answer=--continue with this"]);

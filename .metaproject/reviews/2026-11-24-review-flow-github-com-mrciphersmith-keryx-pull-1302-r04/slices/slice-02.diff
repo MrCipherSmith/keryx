@@ -1,0 +1,360 @@
+--- src/review/desk-publication.test.ts
+@@ 829,916 @@
+   expect(posted().body).toContain(`<!-- keryx-desktop-review ${session.id} -->`);
+   const io = sessionPost();
+   await expect(publishReview(session.pkg, { partial: true, post: io.post, confirm: async () => true, publication: { directory: session.directory, id: session.id } }))
+     .rejects.toThrow(/already been published: .*pullrequestreview-23/);
+   expect(io.posts).toEqual([]);
+ });
+ 
+ test("flow 521: registering again refreshes the session Attempt and keeps Desktop's files; a store package is never a session's", async () => {
+   const first = await sessionAttempt("session-review-3");
+   writeFileSync(path.join(first.directory, "publication-draft.json"), "{}");
+   writeFileSync(path.join(first.pkg, "report.md"), "Updated session review.\n");
+   const again = await registerSessionPackage({ cwd: project, packageDir: first.pkg, resolveKey: async () => key });
+   expect(again).toEqual({ record: expect.objectContaining({ attemptId: first.id }) });
+   expect(readFileSync(path.join(first.directory, "package", "report.md"), "utf8")).toBe("Updated session review.\n");
+   expect(existsSync(path.join(first.directory, "publication-draft.json"))).toBe(true);
+   expect(existsSync(path.join(first.directory, "package", "desk-attempt.json"))).toBe(false);
+   // The Desktop attempt's own package lives in the store: it is not registered as a session review.
+   expect(await registerSessionPackage({ cwd: project, packageDir: path.join(directory, "package"), resolveKey: async () => key }))
+     .toEqual({ skipped: "the package belongs to a Desktop review attempt" });
+ });
++
++/** A session package as `review start --target <pr>` writes it: the base recorded as a branch name. */
++function symbolicSessionPackage(reviewId: string) {
++  const pkg = path.join(project, ".metaproject", "reviews", reviewId);
++  cpSync(path.join(directory, "package"), pkg, { recursive: true });
++  const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
++  json(path.join(pkg, "manifest.json"), { ...manifest, reviewId, target: { ...manifest.target, base: "origin/main" } });
++  return pkg;
++}
++
++test("flow 521 round 3: a package that recorded its base as a branch registers on the pull request's base commit", async () => {
++  const pkg = symbolicSessionPackage("session-symbolic");
++  const registered = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
++  if (!("record" in registered)) throw new Error(registered.skipped);
++  const store = new DeskRunStore();
++  try {
++    expect(store.byId(registered.record.attemptId)?.run).toMatchObject({ source: "session", baseSha: revision.baseSha, headSha: revision.headSha });
++  } finally {
++    store.close();
++  }
++  // Without a base commit from either side, the reason says so instead of a silent skip.
++  expect(await registerSessionPackage({ cwd: project, packageDir: symbolicSessionPackage("session-unknown"), resolveKey: async () => key }))
++    .toEqual({ skipped: "neither the package nor the pull request gives the full base commit it was reviewed against" });
++});
++
++test("flow 521 round 3: a package published before it was registered brings its receipt, so Desktop refuses a second review", async () => {
++  const pkg = symbolicSessionPackage("session-early");
++  writeFileSync(path.join(pkg, "publication-receipt.json"), JSON.stringify({ url: "https://github.com/example/project/pull/7#pullrequestreview-5" }));
++  const registered = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, baseRefOid: revision.baseSha }) });
++  if (!("record" in registered)) throw new Error(registered.skipped);
++  const preview = await requestDeskPublication(project, key, { kind: "preview", id: registered.record.attemptId });
++  expect(preview.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-5");
++  expect(preview.canSubmit).toBe(false);
++});
++
++test("flow 521 round 3: a decided session Attempt keeps its copy; layers and payloads are never copied", async () => {
++  const pkg = symbolicSessionPackage("session-decided");
++  mkdirSync(path.join(pkg, "layers"));
++  writeFileSync(path.join(pkg, "layers", "big.json"), "{}");
++  const resolveKey = async () => ({ ...key, baseRefOid: revision.baseSha });
++  const first = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey });
++  if (!("record" in first)) throw new Error(first.skipped);
++  const attemptDir = (() => { const store = new DeskRunStore(); try { return store.directory(first.record.attemptId); } finally { store.close(); } })();
++  expect(existsSync(path.join(attemptDir, "package", "layers"))).toBe(false);
++  expect(existsSync(path.join(attemptDir, "package", "report.md"))).toBe(true);
++  const store = new DeskRunStore();
++  try {
++    const attempt = store.byId(first.record.attemptId)!;
++    attempt.run.decision = { action: "close", reason: "done", at: "2026-11-24T00:00:00Z" };
++    store.save(attempt);
++  } finally {
++    store.close();
++  }
++  writeFileSync(path.join(pkg, "report.md"), "Rewritten after the decision.\n");
++  expect(await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey })).toEqual({ record: first.record });
++  expect(readFileSync(path.join(attemptDir, "package", "report.md"), "utf8")).not.toContain("Rewritten after the decision.");
++});
++
++test("flow 521 round 3: a desk-attempt.json is trusted only with a UUID for the package's own pull request", async () => {
++  const pkg = symbolicSessionPackage("session-record");
++  const record = { attemptId: "0b0c1d2e-0000-4000-8000-000000000001", repositoryId: key.repositoryId, viewer: key.viewer, number: key.number };
++  json(path.join(pkg, "desk-attempt.json"), record);
++  expect(await readSessionAttempt(pkg)).toEqual(record);
++  for (const bad of [{ ...record, attemptId: "../../escape" }, { ...record, attemptId: "x --> <!--" }, { ...record, number: 8 }]) {
++    json(path.join(pkg, "desk-attempt.json"), bad);
++    expect(await readSessionAttempt(pkg)).toBeUndefined();
++  }
++});
+
+--- src/review/publish.test.ts
+@@ 396,502 @@
+   test("a merged or closed pull request takes no review", async () => {
+     for (const state of ["MERGED", "CLOSED"]) {
+       withHead();
+       const io = posting();
+       await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at({ state }) } }))
+         .rejects.toThrow(new RegExp(`is ${state.toLowerCase()}`));
+       expect(io.posts).toEqual([]);
+     }
+   });
+ 
+   test("a push while the operator reads makes the confirmed body stale: nothing is posted and no receipt is left", async () => {
+     withHead();
+     // The head is read before the body is built, by the readiness checklist, and again after the operator's yes.
+     const io = posting();
+     await expect(publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED, REVIEWED, NEWER) } }))
+       .rejects.toThrow(/^stale: .*aaaaaaa → bbbbbbb/);
+     expect(io.posts).toEqual([]);
+     expect(existsSync(receipt())).toBe(false);
+   });
+ });
++
++// Flow 521 round 3 of PR 1302: the session path's acceptance matches Desktop's, and its receipt survives either place.
++describe("publishReview: round-3 fixes of the shared publication guard", () => {
++  const REVIEWED = "a".repeat(40);
++  const NEWER = "b".repeat(40);
++  const withHead = (report = "# Review\n\nRequest changes.\n"): void => {
++    makePackage({ ready: true });
++    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
++    write("manifest.json", { ...manifest, target: { ...manifest.target, head: REVIEWED } });
++    write("report.md", report);
++  };
++  const at = (...heads: Array<string | undefined>) => {
++    let call = 0;
++    return async (): Promise<PrSnapshot | null> => {
++      const next = heads[Math.min(call++, heads.length - 1)];
++      return next === undefined ? null : { exists: true, state: "OPEN", headSha: next };
++    };
++  };
++  const posting = (url?: string) => {
++    const posts: string[] = [];
++    return { posts, post: async (_ref: string, _event: ReviewEvent, body: string): Promise<PostResult> => {
++      posts.push(body);
++      return { ok: true, detail: "posted", ...(url === undefined ? {} : { url }) };
++    } };
++  };
++
++  test("a round a later round of its Review follows is refused, as Desktop refuses it", async () => {
++    withHead();
++    const io = posting("u");
++    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, laterRound: async () => 2 }))
++      .rejects.toThrow(/Round 2 of this Review already follows this one/);
++    expect(io.posts).toEqual([]);
++  });
++
++  test("a moved head whose reviewed commit left the PR's history is refused; one still in it is published as is", async () => {
++    withHead();
++    const io = posting("u");
++    const asked: string[] = [];
++    await expect(publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) },
++      reviewedHeadInPull: async (_ref, reviewed, current) => (asked.push(`${reviewed.slice(0, 1)}..${current.slice(0, 1)}`), false) }))
++      .rejects.toThrow(/no longer in the pull request's history/);
++    expect(asked).toEqual(["a..b"]);
++    expect(io.posts).toEqual([]);
++    await publishReview(pkg, { partial: true, post: io.post, confirm: async () => true, readiness: { prLookup: at(NEWER) }, reviewedHeadInPull: async () => true });
++    expect(io.posts).toHaveLength(1);
++  });
++
++  test("the moved-head first line follows the head gate: a comment line is skipped, and naming the commit is not enough", async () => {
++    withHead("<!-- keryx:slot -->\nReviewed aaaaaaa — the PR has since moved on to bbbbbbb.\n\n# Review\n");
++    const kept = posting("u");
++    await publishReview(pkg, { post: kept.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
++    expect(kept.posts[0]).not.toContain("The pull request has moved to");
++    rmSync(path.join(pkg, "publication-receipt.json"));
++    withHead("Notes on aaaaaaa.\n\n# Review\n");
++    const added = posting("u");
++    await publishReview(pkg, { partial: true, post: added.post, confirm: async () => true, readiness: { prLookup: at(NEWER) } });
++    expect(added.posts[0]!.split("\n")[0]).toBe(headMovedLine({ reviewedHead: REVIEWED, currentHead: NEWER }));
++  });
++
++  test("a head that cannot be read again after the operator's yes is not reported as a moved head", async () => {
++    withHead();
++    const io = posting("u");
++    await expect(publishReview(pkg, { post: io.post, confirm: async () => true, readiness: { prLookup: at(REVIEWED, REVIEWED, undefined) } }))
++      .rejects.toThrow(/^The pull request could not be read again after the review was confirmed/);
++    expect(io.posts).toEqual([]);
++  });
++
++  test("without GitHub's URL the receipt names the pull request, so Desktop counts the review as published", async () => {
++    withHead();
++    await publishReview(pkg, { post: posting().post, confirm: async () => true });
++    expect(JSON.parse(readFileSync(path.join(pkg, "publication-receipt.json"), "utf8"))).toEqual({ url: PR });
++  });
++
++  test("the receipt is written to the Attempt and to the package: losing the Attempt's copy does not allow a second post", async () => {
++    withHead();
++    const attempt = path.join(root, "attempt");
++    mkdirSync(attempt);
++    const publication = { directory: attempt, id: "0b0c1d2e-0000-4000-8000-000000000001" };
++    const url = "https://github.com/x/y/pull/1#pullrequestreview-7";
++    await publishReview(pkg, { post: posting(url).post, confirm: async () => true, publication });
++    for (const dir of [attempt, pkg]) expect(JSON.parse(readFileSync(path.join(dir, "publication-receipt.json"), "utf8"))).toEqual({ url });
++    rmSync(path.join(attempt, "publication-receipt.json"));
++    const again = posting("u");
++    await expect(publishReview(pkg, { post: again.post, confirm: async () => true, publication })).rejects.toThrow(/already been published/);
++    expect(again.posts).toEqual([]);
++  });
++});
+
+--- src/review/review-advance.test.ts
+@@ 1,88 @@
+ // Flow 521 T8: `keryx review advance`, the update round Desktop's "Update review" and the skill's "Head moved" both call.
+ import { describe, expect, test } from "bun:test";
+ import type { DeskRun, DeskRunKey } from "./desk-run-types";
+ import { advanceReview, reviewedAttempt, updateRoundOptions } from "./review-advance";
++import { runReviewAdvance } from "../commands/review-advance";
++import { canContinueDeskRun, hasDeskWorker } from "./desk-run-types";
+ 
+ const key: DeskRunKey = { repo: "org/repo", repositoryId: "R_1", viewer: "me", number: 7 };
+ const A = "a".repeat(40), B = "b".repeat(40), C = "c".repeat(40);
+ const run = (id: string, round: number, head: string, extra: Partial<DeskRun> = {}): DeskRun => ({
+   id, source: "manual", scope: "pr", baseSha: A, headSha: head, state: "completed", phase: "Done", reason: "",
+   createdAt: `2026-11-2${round}T00:00:00Z`, startedAt: null, finishedAt: null, result: null, reviewId: "rev", round, ...extra,
+ } as DeskRun);
+ 
+ function deps(runs: DeskRun[], pr = { state: "OPEN", baseRefOid: A, headRefOid: C }) {
+   const starts: unknown[] = [];
+   return {
+     starts,
+     deps: {
+       resolve: async () => ({ key, pr }),
+       history: () => runs,
+       start: async (_key: DeskRunKey, revision: unknown, options?: unknown) => {
+         starts.push({ revision, options });
+         return { version: 1 as const, runs: [] };
+       },
+     },
+   };
+ }
+ 
+ describe("keryx review advance", () => {
+   test("starts the next round on the PR's current range with the reviewed attempt's settings, minus automatic publication", async () => {
+     const reviewed = run("r1", 1, B, { options: { mode: "auto", autoPublish: true, flowId: "488" } as NonNullable<DeskRun["options"]> });
+     const { starts, deps: d } = deps([reviewed]);
+     await advanceReview({ repo: key.repo, number: 7 }, d);
+     expect(starts).toEqual([{ revision: { baseSha: A, headSha: C }, options: { mode: "auto", flowId: "488" } }]);
+     expect(updateRoundOptions(undefined)).toBeUndefined();
+   });
+ 
+   test("updates from the Review's latest round by default; an imported or withdrawn attempt is never one", () => {
+     const runs = [run("r1", 1, B), run("r2", 2, C), run("old", 3, C, { source: "existing" }), run("gone", 4, C, { decision: { action: "archive", reason: "x", at: "t" } })];
+     expect(reviewedAttempt(runs).id).toBe("r2");
+-    expect(() => reviewedAttempt(runs, "gone")).toThrow(/^access:/);
++    expect(() => reviewedAttempt(runs, "gone")).toThrow(/^stale: This attempt was archived, deleted or imported/);
+     expect(() => reviewedAttempt([])).toThrow(/no review to update/);
+   });
+ 
+   test("refuses a round a later round already follows, a round on the current head, and a closed pull request", async () => {
+     const runs = [run("r1", 1, B), run("r2", 2, C)];
+     await expect(advanceReview({ repo: key.repo, number: 7, id: "r1" }, deps(runs).deps)).rejects.toThrow(/^stale: A later round/);
+     await expect(advanceReview({ repo: key.repo, number: 7 }, deps(runs).deps)).rejects.toThrow(/already reviews the pull request's current head/);
+     await expect(advanceReview({ repo: key.repo, number: 7 }, deps([run("r1", 1, B)], { state: "CLOSED", baseRefOid: A, headRefOid: C }).deps))
+       .rejects.toThrow(/^stale: This pull request is no longer open/);
+   });
+ 
+   test("refuses when the account, the repository or the range the caller saw changed", async () => {
+     const runs = [run("r1", 1, B)];
+     await expect(advanceReview({ repo: key.repo, number: 7, viewer: "other" }, deps(runs).deps)).rejects.toThrow(/^access:/);
+     await expect(advanceReview({ repo: key.repo, number: 7, repositoryId: "R_2" }, deps(runs).deps)).rejects.toThrow(/^access:/);
+     await expect(advanceReview({ repo: key.repo, number: 7, revision: { baseSha: A, headSha: B } }, deps(runs).deps)).rejects.toThrow(/^stale:/);
+     const { starts, deps: d } = deps(runs);
+     await advanceReview({ repo: key.repo, number: 7, viewer: "ME", repositoryId: "R_1", revision: { baseSha: A, headSha: C } }, d);
+     expect(starts).toHaveLength(1);
+   });
+ 
+   test("a session Attempt is a round Desktop can update", async () => {
+     const { starts, deps: d } = deps([run("s1", 1, B, { source: "session" })]);
+     await advanceReview({ repo: key.repo, number: 7 }, d);
+     expect(starts).toEqual([{ revision: { baseSha: A, headSha: C }, options: undefined }]);
+   });
++
++  test("the command refuses malformed arguments before it reads GitHub or the store", async () => {
++    const sha = "a".repeat(40);
++    for (const args of [
++      ["--repo", "org/repo", "--number", "7"],
++      ["--json", "--repo", "org", "--number", "7"],
++      ["--json", "--repo", "org/repo", "--number", "0"],
++      ["--json", "--repo", "org/repo", "--number", "7", "--id", "../x"],
++      ["--json", "--repo", "org/repo", "--number", "7", "--base", sha],
++      ["--json", "--repo", "org/repo", "--number", "7", "--base", "main", "--head", sha],
++    ]) await expect(runReviewAdvance(args, "/nonexistent")).rejects.toThrow(/^keryx review advance --json/);
++  });
++
++  test("only a Desktop worker's attempt has a coordinator and can be continued; a session's or an imported one cannot", () => {
++    const partial = (source: DeskRun["source"]) => run("x", 1, B, { source, state: "partial", result: { reviewed: { baseSha: A, headSha: B }, verdict: null, coverage: "partial", findings: { blocker: 0, major: 0, minor: 0, info: 0 }, report: "" } });
++    expect(["manual", "scheduled", "existing", "session"].map((source) => hasDeskWorker({ source: source as DeskRun["source"] }))).toEqual([true, true, false, false]);
++    expect(canContinueDeskRun(partial("session"))).toBe(false);
++    expect(canContinueDeskRun(partial("existing"))).toBe(false);
++  });
+ });
+
+--- src/review/session-publish-github.test.ts
+@@ 1,23 @@
+ // Flow 521 T7: the session publish path's GitHub port, driven through a fake `gh`.
+ import { describe, expect, test } from "bun:test";
+-import { githubFindPublished, githubPostPullReview, pullRequestPath } from "./session-publish-github";
++import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull, pullRequestPath } from "./session-publish-github";
+ 
+ const PR = "https://github.com/org/repo/pull/12";
+ type Call = { args: string[]; stdin?: string | undefined };
+ 
+ function fakeGh(answers: Array<{ stdout?: string; stderr?: string; exitCode?: number } | Error>) {
+   const calls: Call[] = [];
+   let index = 0;
+   const gh = async (args: string[], stdin?: string) => {
+     calls.push({ args, stdin });
+     const answer = answers[Math.min(index++, answers.length - 1)]!;
+     if (answer instanceof Error) throw answer;
+     return { stdout: answer.stdout ?? "", stderr: answer.stderr ?? "", exitCode: answer.exitCode ?? 0 };
+   };
+   return { calls, gh };
+ }
+ 
+ describe("session publish GitHub port", () => {
+   test("a pull request URL gives its repository and number; anything else gives nothing", () => {
+     expect(pullRequestPath(PR)).toEqual({ repo: "org/repo", number: 12 });
+     expect(pullRequestPath(`${PR}/files`)).toEqual({ repo: "org/repo", number: 12 });
+
+--- src/review/session-publish-github.test.ts
+@@ 33,70 @@
+   });
+ 
+   test("a 4xx answer is a certain refusal; any other failure may have landed", async () => {
+     expect(await githubPostPullReview(PR, "APPROVE", "b", undefined, fakeGh([{ exitCode: 1, stderr: "gh: Unprocessable (HTTP 422)" }]).gh))
+       .toEqual({ ok: false, detail: "HTTP 422" });
+     expect(await githubPostPullReview(PR, "APPROVE", "b", undefined, fakeGh([{ exitCode: 1, stderr: "connection reset" }]).gh))
+       .toEqual({ ok: false, detail: "gh exited 1", uncertain: true });
+     expect((await githubPostPullReview(PR, "APPROVE", "b", undefined, fakeGh([new Error("spawn failed")]).gh)).uncertain).toBeUndefined();
+   });
+ 
+   test("the marker is found only in a review by the same viewer; an unreadable list says it cannot tell", async () => {
+     const marker = "<!-- keryx-desktop-review r#r1 -->";
+     const reviews = [
+       { user: { login: "someone" }, body: `x ${marker}`, html_url: `${PR}#pullrequestreview-1` },
+       { user: { login: "Me" }, body: `y ${marker}`, html_url: `${PR}#pullrequestreview-2` },
+     ];
+     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "me\n" }, { stdout: JSON.stringify(reviews) }]).gh)).toBe(`${PR}#pullrequestreview-2`);
+     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "other\n" }, { stdout: JSON.stringify(reviews.slice(1)) }]).gh)).toBeUndefined();
+     expect(await githubFindPublished(PR, marker, fakeGh([{ stdout: "me\n" }, { exitCode: 1 }]).gh)).toBeNull();
+   });
++
++  test("without html_url the review's URL is built from its id; without either there is none", async () => {
++    expect(await githubPostPullReview(PR, "COMMENT", "b", undefined, fakeGh([{ stdout: JSON.stringify({ id: 9 }) }]).gh))
++      .toEqual({ ok: true, detail: "posted", url: `${PR}#pullrequestreview-9` });
++    expect(await githubPostPullReview(PR, "COMMENT", "b", undefined, fakeGh([{ stdout: "{}" }]).gh)).toEqual({ ok: true, detail: "posted" });
++  });
++
++  test("the reviewed commit is in the pull request only when GitHub reports the current head ahead of it", async () => {
++    const a = "a".repeat(40), c = "c".repeat(40);
++    const ahead = fakeGh([{ stdout: "ahead\n" }]);
++    expect(await githubReviewedHeadInPull(PR, a, c, ahead.gh)).toBe(true);
++    expect(ahead.calls[0]!.args).toEqual(["api", "--hostname", "github.com", `repos/org/repo/compare/${a}...${c}?per_page=1`, "--jq", ".status"]);
++    for (const answer of [{ stdout: "diverged\n" }, { stdout: "behind\n" }, { exitCode: 1 }]) {
++      expect(await githubReviewedHeadInPull(PR, a, c, fakeGh([answer]).gh)).toBe(false);
++    }
++    expect(await githubReviewedHeadInPull(PR, "short", c, fakeGh([{ stdout: "ahead" }]).gh)).toBe(false);
++  });
+ });

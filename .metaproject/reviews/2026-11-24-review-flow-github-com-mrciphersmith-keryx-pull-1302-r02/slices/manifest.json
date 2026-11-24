@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 30021,
+      "contentHash": "e24f50d4213dbbf9565177ffc8b7d78b7ab6684fa303c0b1ef130b1226e56490",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "domain": ".metaproject [docs], src/gdskills [docs], src/gdskills [test]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "fix slice: answers 12 prior finding(s) R1, R10, R11, R12, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "R1",
+        "R10",
+        "R11",
+        "R12",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "R8",
+        "R9"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 44209,
+      "contentHash": "a6bd2f20113873af150c0b62d84cbe587740c83e9b27027799984efe822acce8",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, src/gdskills [docs] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (+1)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 93418,
+      "contentHash": "60acbe6c97aabe5779afb9723bb7122fb722fafa0a47b294dfe0aa98e541eb3a",
+      "files": [
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/acceptance-criteria.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/context.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/description.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/divergence-map.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/journal.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/plan.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/flow.json",
+        ".metaproject/flows/521-2026-11-24-desktop-review-v2-stage4/resolved/T5.implement.json",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/review-orchestrator-preflight.test.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, src/gdskills [docs] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (+1)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 3,
+    "bytes": 167648,
+    "files": 14,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

@@ -1,0 +1,39 @@
+STATUS: DONE
+
+## Performance Review — wave 1 (slice-01)
+
+### Scope
+- Range 7a846bef15e4424b94bbd8ebb4dea275b75581f5..5957d12494d3cc9df02d0542e30848de8be4d1df (stage 4 only), slice-01 read in full (1981 lines).
+- Code read at HEAD around the hunks: apps/desktop/src-tauri/src/review.rs (invoke_review_at, run_args), apps/desktop/src/platform/reviewRuns.ts, apps/desktop/src/review/ReviewWorkspace.tsx (updateReview), apps/desktop/src/review/useReviewRuns.ts, apps/desktop/src/reviews/model.ts, ReviewPanel.dom.test.tsx; prose/steering: review-orchestrator SKILL.md / SKILL.detail.md "Head moved", flow 521 folder, docs/docs/cli-reference.md.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- CLI/TUI hot paths: `run_args` gains one constant-time match arm; `advance` is a click-triggered mutation (bumps `mutationVersion` like other mutations, so the history read-lane cache is invalidated exactly as for `start`). No per-render or per-keystroke work added.
+- React re-renders: `updateReview` keeps its `useCallback` deps unchanged (`card, local.runs, local.request, onRefreshBoard, toast`); dropping `updateRoundOptions` removes an object spread, nothing added to render.
+- Redundant API calls: one `review_run` invoke per Update click, same as before (`start` replaced by `advance`). `onRefreshBoard` still fires only when the board is behind.
+- Memory leaks / subscriptions / timers: none introduced.
+- Skill "Head moved" step 1 adds one `git ls-remote` per wave boundary (a handful per round, network-bound but not a loop over files/findings); prompt cost is a known prior finding (S1), not a performance defect.
+- Bundle imports: one type-only import removed from ReviewWorkspace.tsx; nothing added.
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "wave": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```

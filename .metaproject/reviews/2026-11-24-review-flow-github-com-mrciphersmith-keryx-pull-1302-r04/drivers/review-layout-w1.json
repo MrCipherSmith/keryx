@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-layout",
+  "wave": 1,
+  "waves": 1,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/desktop-review-v2-stage4-7dce00/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1302-r04/slices/slice-01.diff",
+      "bytes": 130085
+    }
+  ],
+  "result": "raw/review-layout-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+}

@@ -1,0 +1,301 @@
+[
+  {
+    "id": "review-testing-practices-w3:review-testing-practices-w3-1",
+    "status": "finding",
+    "finding": "T1",
+    "evidence": "consolidated into T1",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w3:review-testing-practices-w3-2",
+    "status": "finding",
+    "finding": "T1",
+    "evidence": "consolidated into T1",
+    "reason": "duplicate of review-testing-practices-w3:review-testing-practices-w3-1"
+  },
+  {
+    "id": "review-highload-w3:review-highload-w3-1",
+    "status": "finding",
+    "finding": "T2",
+    "evidence": "consolidated into T2",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-5",
+    "status": "finding",
+    "finding": "T2",
+    "evidence": "consolidated into T2",
+    "reason": "duplicate of review-highload-w3:review-highload-w3-1"
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-1",
+    "status": "finding",
+    "finding": "T2",
+    "evidence": "consolidated into T2",
+    "reason": "duplicate of review-highload-w3:review-highload-w3-1"
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-2",
+    "status": "finding",
+    "finding": "T2",
+    "evidence": "consolidated into T2",
+    "reason": "duplicate of review-highload-w3:review-highload-w3-1"
+  },
+  {
+    "id": "review-highload-w3:review-highload-w3-2",
+    "status": "finding",
+    "finding": "T3",
+    "evidence": "consolidated into T3",
+    "reason": "representative"
+  },
+  {
+    "id": "review-architecture-w3:review-architecture-w3-1",
+    "status": "finding",
+    "finding": "T4",
+    "evidence": "consolidated into T4",
+    "reason": "representative"
+  },
+  {
+    "id": "review-frontend-w3:review-frontend-w3-1",
+    "status": "finding",
+    "finding": "T5",
+    "evidence": "consolidated into T5",
+    "reason": "representative"
+  },
+  {
+    "id": "review-frontend-w1:review-frontend-w1-1",
+    "status": "finding",
+    "finding": "T5",
+    "evidence": "consolidated into T5",
+    "reason": "duplicate of review-frontend-w3:review-frontend-w3-1"
+  },
+  {
+    "id": "review-degradation-w1:review-degradation-w1-1",
+    "status": "finding",
+    "finding": "T5",
+    "evidence": "consolidated into T5",
+    "reason": "duplicate of review-frontend-w3:review-frontend-w3-1"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-2",
+    "status": "finding",
+    "finding": "T5",
+    "evidence": "consolidated into T5",
+    "reason": "duplicate of review-frontend-w3:review-frontend-w3-1"
+  },
+  {
+    "id": "review-frontend-w3:review-frontend-w3-2",
+    "status": "finding",
+    "finding": "T6",
+    "evidence": "consolidated into T6",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-6",
+    "status": "finding",
+    "finding": "T6",
+    "evidence": "consolidated into T6",
+    "reason": "duplicate of review-frontend-w3:review-frontend-w3-2"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-6",
+    "status": "finding",
+    "finding": "T7",
+    "evidence": "consolidated into T7",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-5",
+    "status": "finding",
+    "finding": "T7",
+    "evidence": "consolidated into T7",
+    "reason": "duplicate of review-degradation-w3:review-degradation-w3-6"
+  },
+  {
+    "id": "review-highload-w3:review-highload-w3-3",
+    "status": "finding",
+    "finding": "T7",
+    "evidence": "consolidated into T7",
+    "reason": "duplicate of review-degradation-w3:review-degradation-w3-6"
+  },
+  {
+    "id": "review-performance-w3:review-performance-w3-1",
+    "status": "finding",
+    "finding": "T8",
+    "evidence": "consolidated into T8",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-3",
+    "status": "finding",
+    "finding": "T8",
+    "evidence": "consolidated into T8",
+    "reason": "duplicate of review-performance-w3:review-performance-w3-1"
+  },
+  {
+    "id": "review-security-code-w3:review-security-code-w3-1",
+    "status": "finding",
+    "finding": "T9",
+    "evidence": "consolidated into T9",
+    "reason": "representative"
+  },
+  {
+    "id": "review-logic-w1:review-logic-w1-1",
+    "status": "finding",
+    "finding": "T10",
+    "evidence": "consolidated into T10",
+    "reason": "representative"
+  },
+  {
+    "id": "review-ui-ux-w1:review-ui-ux-w1-1",
+    "status": "finding",
+    "finding": "T10",
+    "evidence": "consolidated into T10",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-1"
+  },
+  {
+    "id": "review-testing-practices-w1:review-testing-practices-w1-1",
+    "status": "finding",
+    "finding": "T10",
+    "evidence": "consolidated into T10",
+    "reason": "duplicate of review-logic-w1:review-logic-w1-1"
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-3",
+    "status": "finding",
+    "finding": "T11",
+    "evidence": "consolidated into T11",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-4",
+    "status": "finding",
+    "finding": "T12",
+    "evidence": "consolidated into T12",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w2:review-degradation-w2-1",
+    "status": "finding",
+    "finding": "T13",
+    "evidence": "consolidated into T13",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-1",
+    "status": "finding",
+    "finding": "T14",
+    "evidence": "consolidated into T14",
+    "reason": "representative"
+  },
+  {
+    "id": "review-degradation-w3:review-degradation-w3-2",
+    "status": "finding",
+    "finding": "T15",
+    "evidence": "consolidated into T15",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-2",
+    "status": "finding",
+    "finding": "T16",
+    "evidence": "consolidated into T16",
+    "reason": "representative"
+  },
+  {
+    "id": "review-testing-practices-w3:review-testing-practices-w3-3",
+    "status": "finding",
+    "finding": "T16",
+    "evidence": "consolidated into T16",
+    "reason": "duplicate of review-testing-practices-w2:review-testing-practices-w2-2"
+  },
+  {
+    "id": "review-testing-practices-w3:review-testing-practices-w3-4",
+    "status": "finding",
+    "finding": "T16",
+    "evidence": "consolidated into T16",
+    "reason": "duplicate of review-testing-practices-w2:review-testing-practices-w2-2"
+  },
+  {
+    "id": "review-ui-ux-w1:review-ui-ux-w1-2",
+    "status": "narrowed",
+    "evidence": "publish now warns on stderr like complete",
+    "reason": "fixed in review.ts runPublish",
+    "remains": "nothing"
+  },
+  {
+    "id": "review-architecture-w2:review-architecture-w2-1",
+    "status": "refuted",
+    "evidence": "operator-confirm-review.ts buildCard",
+    "reason": "Registering before the card is shown is deliberate: the body the operator reads must carry the Attempt marker that will be posted, or apply refuses it as changed."
+  },
+  {
+    "id": "review-security-code-w2:review-security-code-w2-1",
+    "status": "refuted",
+    "evidence": "operator-confirm-review.ts buildCard",
+    "reason": "Same as review-architecture-w2-1: the card must show the body that is posted, marker included."
+  },
+  {
+    "id": "review-architecture-w3:review-architecture-w3-2",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts sessionPublication",
+    "reason": "The path equals DeskRunStore.directory for the default root; opening a store only to join a path is not worth the side effect. Kept as a note."
+  },
+  {
+    "id": "review-architecture-w3:review-architecture-w3-3",
+    "status": "out-of-scope",
+    "evidence": "session-publish-github.ts runGh",
+    "reason": "Posting under the project-bound account needs the board-github connection in the session path; a separate change. Recorded as a known limitation in the PR body."
+  },
+  {
+    "id": "review-security-code-w3:review-security-code-w3-2",
+    "status": "out-of-scope",
+    "evidence": "session-publish-github.ts runGh",
+    "reason": "Same limitation as review-architecture-w3-3."
+  },
+  {
+    "id": "review-architecture-w3:review-architecture-w3-4",
+    "status": "out-of-scope",
+    "evidence": "session-attempt.ts imports",
+    "reason": "Module layout note; no behaviour change."
+  },
+  {
+    "id": "review-highload-w3:review-highload-w3-4",
+    "status": "refuted",
+    "evidence": "publish.ts lock across confirm",
+    "reason": "Holding the publication lock while the operator reads is what prevents two posts of the same Attempt; Desktop reports the lock timeout as before."
+  },
+  {
+    "id": "review-logic-w3:review-logic-w3-4",
+    "status": "refuted",
+    "evidence": "publish.ts findPublished handling",
+    "reason": "Same rule as Desktop (desk-publication blocks an unknown-result receipt until the operator checks the PR); a definite no is still not proof the POST did not land later."
+  },
+  {
+    "id": "review-performance-w2:review-performance-w2-1",
+    "status": "narrowed",
+    "evidence": "session-attempt.ts register",
+    "reason": "The copy cost is fixed (T8); the extra readiness pass during registration stays.",
+    "remains": "Registration still recomputes readiness (a few extra gh calls per command)."
+  },
+  {
+    "id": "review-performance-w3:review-performance-w3-2",
+    "status": "narrowed",
+    "evidence": "publish.ts readPullRequest",
+    "reason": "The head is read before readiness and again after the yes by design; readiness reads it once more.",
+    "remains": "One extra PR read before confirmation."
+  },
+  {
+    "id": "review-performance-w2:review-performance-w2-2",
+    "status": "refuted",
+    "evidence": "review-advance.ts",
+    "reason": "Reviewer recorded it as checked and clean."
+  },
+  {
+    "id": "review-testing-practices-w2:review-testing-practices-w2-1",
+    "status": "narrowed",
+    "evidence": "review.ts runPublish wiring",
+    "reason": "The complete card registration and advance argument parsing are now tested; runPublish publication/laterRound wiring is covered only through publishReview.",
+    "remains": "No test drives runPublish with a registered Attempt end to end."
+  }
+]

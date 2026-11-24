@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode, type Ref } from "react";
-import { DESK_RUN_SCOPE, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
+import { DESK_RUN_SCOPE, hasDeskWorker, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
+import { SOURCE_LABEL } from "../reviews/model";
 import { Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { absoluteTime, errMessage } from "../lib/format";
@@ -114,7 +115,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
         {publicationPending && <span className="badge review-publication-pending">Action required</span>}
       </div>
       <div className="review-action-row">
-        {onOpenSession && run.source !== "existing" && <button className="btn review-icon-action" type="button"
+        {onOpenSession && hasDeskWorker(run) && <button className="btn review-icon-action" type="button"
           aria-label={sessionLabel} title={sessionLabel} aria-haspopup="dialog" onClick={() => onOpenSession(run.id)}>
           <Icon name={question ? "comment" : "chat"} />
         </button>}
@@ -128,7 +129,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
       <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>Review publication</button>
     </div>}
     <div className="review-detail-meta">
-      <span>{run.source === "manual" ? "Manual" : run.source === "scheduled" ? "Scheduled" : "Existing review"}</span>
+      <span>{SOURCE_LABEL[run.source]}</span>
       <time dateTime={run.createdAt}>{absoluteTime(run.createdAt)}</time>
       <span className="mono" title={run.id}>Run {run.id.slice(0, 8)}</span>
     </div>
@@ -165,7 +166,7 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
     {active && run.reason && <p className="desk-run-reason">{run.reason}</p>}
     {result?.reviewed && !sameRange(result.reviewed, run) && <p className="inline-banner tone-warn">The recorded review covers a different range from the request.</p>}
     {run.usage ? <ReviewUsage usage={run.usage} /> : !active && <p className="review-detail-muted">Token usage was not recorded.</p>}
-    {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions onAnswer={onAnswer} working={working} answerError={answerError} run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
+    {hasDeskWorker(run) || run.reviewerProgress ? <ReviewSessions onAnswer={onAnswer} working={working} answerError={answerError} run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
     <ReviewReport run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />
     {draft && !publicationPending && <div className="review-publish-actions">
       <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>

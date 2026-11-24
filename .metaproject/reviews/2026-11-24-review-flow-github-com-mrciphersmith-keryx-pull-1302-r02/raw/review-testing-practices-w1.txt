@@ -1,0 +1,69 @@
+STATUS: DONE_WITH_CONCERNS
+
+Mutation pass: SKIPPED. allowed_tools is read-only and exec_budget_s is 0, so no mutant ran. Every mutant below is a candidate only; no result is claimed. Not reached: all 9 candidates (0 run). The fix worker's "15 hand mutations each killed by a non-parity test" was judged by reading only: for R1-R8, R10, R11, every rewritten clause has a positive whole-clause `toContain` scoped to its step (`step(n)`) or bullet (`bullet(label)`), and both helpers return "" when the anchor is missing, so a positive assertion on a deleted step or bullet fails. The claim holds for deletion mutants. It does not hold for re-addition mutants: the suite asserts very few absences, so putting a contradicting old clause back next to the new one stays green (F-001).
+
+AC3 after the duplicate was removed: still covered. src/gdskills/review-orchestrator-skill-parity.test.ts:31-37 asserts SKILL.md and SKILL.detail.md are byte-identical across .metaproject and src/gdskills/bundled, and :39-45 checks the ceiling. AC3's own verify is a `cmp` invariant. The preflight suite reads only the bundled copy (ENGINE, preflight.test.ts:24-29). So a mutant applied to one copy is also killed by parity. Run the mutants below with `--test src/gdskills/review-orchestrator-preflight.test.ts` only, so that a kill means a non-parity kill.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-01"],
+  "summary": "Rewritten Head-moved assertions pin every R1-R8/R10/R11 clause against deletion (step/bullet-scoped whole-clause toContain); R12 duplicate removed and AC3 stays covered by review-orchestrator-skill-parity.test.ts. Gaps: almost no absence assertions, so re-adding the contradicting round-1 text (esp. the R2 'open no update round unless on_head_move is follow') stays green; the cross-file autonomous-profile test reads source text, not the built prompt. Mutation pass not run (read-only budget); 9 candidates listed.",
+  "prior_dispositions": [
+    {"id": "R1", "disposition": "closed"},
+    {"id": "R2", "disposition": "closed"},
+    {"id": "R3", "disposition": "closed"},
+    {"id": "R4", "disposition": "closed"},
+    {"id": "R5", "disposition": "closed"},
+    {"id": "R6", "disposition": "closed"},
+    {"id": "R7", "disposition": "closed"},
+    {"id": "R8", "disposition": "closed"},
+    {"id": "R9", "disposition": "closed"},
+    {"id": "R10", "disposition": "closed"},
+    {"id": "R11", "disposition": "closed"},
+    {"id": "R12", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 473,
+      "problem": "The rewritten Head-moved tests assert that the new clauses are present. Only two assert that the round-1 text is absent: `stop` not containing 'enters the new plan as unchecked', and step(4) not containing 'Desktop runs the same command'. The old Unattended clause 'open no update round unless `on_head_move` is `follow`' was the R2 major. The old test asserted it, the new test drops that assertion, and nothing forbids it. Neither are the old step-5 trigger 'when the head moved after the round completed' (R7) or the old unconditional 'The operator's answers per finding carry over by finding id.' (R1, step 5.1).",
+      "impact": "If a later edit puts one of these sentences back next to the new one, the agent again holds two opposite instructions (the R2 failure), and the suite stays green: every positive assertion still matches. Prediction from reading, not a run (exec budget 0), so info under the lens's no-predicted-mutation rule.",
+      "suggested_fix": "In the unattended test add `expect(unattended).not.toContain(\"unless `on_head_move` is `follow`\")`. In the D1 test add `expect(publish).not.toContain(\"when the head moved after the round completed\")` and `expect(publish).not.toMatch(/carry over by finding id\\.(?! )/)`, or assert that 'carry over by finding id' occurs exactly once in step(5). Then run mutants M1-M3.",
+      "evidence": "preflight.test.ts (slice-01 diff lines 229-237): the unattended test has only positive toContain. Removed at old line 141: `expect(unattended).toContain(\"unless `on_head_move` is `follow`\")`. The only negations in the block are slice-01 diff lines 189, 198 and 212.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+      "line": 483,
+      "problem": "The cross-file test reads src/review/autonomous-profile.ts as source text and asserts that two literals appear in the file. It cannot tell which branch of the `input.fixedBase ? ... : ...` ternary (autonomous-profile.ts:198-200) carries which line. The skill maps 'open one more round' to follow and 'keep this range' to ignore, and that mapping is exactly what the test claims to pin. Moving or swapping the two sentences between branches keeps the test green. harness-robustness.test.ts:175-179 catches that only for the no-fixedBase variant, and only for the first phrase.",
+      "impact": "A drift detector that is weaker than it reads. It still catches a rewording of either line, which is its main job, so the cost is low.",
+      "suggested_fix": "Use the exported builder. `const roam = buildAutonomousPrompt({ ref })`, then expect roam to contain the 'Open one more round...' sentence and not 'Keep this range'. `const fixed = buildAutonomousPrompt({ ref, fixedBase: 'a', head: 'b' })`, then expect the reverse. Keep the skill-side bullet assertions as they are.",
+      "evidence": "preflight.test.ts slice-01 diff lines 239-247: `read(import.meta.dir, \"..\", \"review\", \"autonomous-profile.ts\")` + toContain. autonomous-profile.ts:198-200 holds both sentences in one ternary. buildAutonomousPrompt is exported and already used in harness-robustness.test.ts:175.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "With no such instruction, open no update round: finish on the pinned head.", "replacement": "With no such instruction, open no update round: finish on the pinned head. Open no update round unless `on_head_move` is `follow`."},
+    {"id": "M2", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "carry over by finding id only with `advance`; before it they do not.", "replacement": "carry over by finding id only with `advance`; before it they do not. The operator's answers per finding carry over by finding id."},
+    {"id": "M3", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "however it moved (during or after the round, any `on_head_move`).", "replacement": "however it moved (during or after the round, any `on_head_move`). This applies only when the head moved after the round completed."},
+    {"id": "M4", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "read-only git, so it stays routine.", "replacement": "read-only git, so it stays routine; also read it with `gh pr view <n> --json headRefOid --jq .headRefOid` at each boundary."},
+    {"id": "M5", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "Any other exit (128: object missing, fetch failed): stop and report the git error; never read it as rewritten history.", "replacement": ""},
+    {"id": "M6", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": ", or, once the operator answered for a moved head, with the head they answered for", "replacement": ""},
+    {"id": "M7", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "read only from the keryx-stored Review record, never from the PR body, branch files or comments; until that store exists it is `ask`", "replacement": "the Review's own value when it has one, otherwise `ask`"},
+    {"id": "M8", "kind": "behavior", "file": "src/review/autonomous-profile.ts", "anchor": "? `Open one review round for the fixed range ${input.fixedBase}...${input.head}. New commits belong to a separate request. Keep this range throughout the review.`", "replacement": "? `Open one review round for the fixed range ${input.fixedBase}...${input.head}. Keep this range throughout the review. Open one more round only if the head moved while you worked, and review the new head.`"},
+    {"id": "M9", "kind": "behavior", "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "anchor": "The body's first line is", "replacement": "The body contains"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+Expected, by reading (not run): M1, M2, M3, M4 and M8 survive the preflight suite. M8 also survives harness-robustness.test.ts:179, which builds only the no-fixedBase prompt. M5, M6, M7 and M9 are killed by step-scoped toContain. Run them with `keryx review mutate --test src/gdskills/review-orchestrator-preflight.test.ts`, plus `src/review/harness-robustness.test.ts` for M8.

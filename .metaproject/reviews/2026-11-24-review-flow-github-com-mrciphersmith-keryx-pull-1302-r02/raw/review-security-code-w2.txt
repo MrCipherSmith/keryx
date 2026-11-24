@@ -1,0 +1,38 @@
+STATUS: DONE
+
+## Security Review — round 2, wave 2 (slice-03, SECOND-LOOK)
+
+### Scope
+- Merge-base `a5d1ab236fe85dee62a758a19390049dde4eb7f9`, head `0c6ff2b7e6e4118287ef8abd531e7268980435e8`, explicit-hash-range.
+- Read in full: slice-03.diff, lines 1-1102. It covers the flow 521 files (acceptance-criteria, context, description, divergence-map, journal, plan, tasks, flow.json, resolved/T5.implement.json), the unchanged parts of § Head moved in both SKILL.detail.md copies, both SKILL.md copies (Hosts / "Shell calls in a trust or auto session", Round plan, PR Review Report Publication) and the unchanged preflight test context.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None new. One note, not a separate finding: SKILL.md "Shell calls in a `trust` or `auto` session" (unchanged) says "a short `&&` chain of keryx and read-only git commands is fine". The routine gate (src/lib/trust-routine-command.ts:25-35) is narrower: only status, diff, log, show, rev-parse, rev-list, ls-files, merge-base, blame and `cat-file -e/-t`. That phrase is where the slice-01 claim "ls-remote … stays routine" comes from. It is counted under review-security-code-w1 F-001, not here.
+
+### Clean Areas
+- Publish stays the operator's act. § Head moved option 2 is COMMENT-only and keeps "never `--yes`, never `gh pr review` or `gh pr comment`". The SKILL.md publication section keeps "No GitHub write without an approved draft" and "Unattended: do not publish". Nothing in this slice adds a GitHub write path.
+- Untrusted content cannot pick a stronger action: the `ask`/`follow` texts in this slice only open or skip an update round. Neither publishes.
+- Secrets and PII: no tokens, keys, passwords or e-mail addresses in the flow files or skill text. flow.json/journal.md record a local host session id (`local_…`) as the origin source. It is an opaque identifier, not a credential, and it is the flow tooling's normal provenance field.
+- resolved/T5.implement.json holds only rule paths, sha256 digests of bundled rules and byte counts. No environment data.
+- Divergence map: it describes the existing session/Desktop publish guards (TTY-only `--yes`, card body-equality check, `screenCommentBody`, receipt/marker). It proposes no relaxation, and row 4 (slice-01) keeps D1 COMMENT-only.
+- Injection, auth, crypto, path traversal and redirect checks do not apply: there is no executable code change in this slice beyond test assertions.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "SECOND-LOOK of slice-03 (flow 521 files, unchanged Head moved text, SKILL.md publication and shell-call rules, test context): no new security finding. Publish stays operator-only and COMMENT-only on a moved head; no secrets or PII beyond an opaque local session id used as flow provenance. The SKILL.md 'read-only git commands' phrase is broader than the routine gate and feeds w1 F-001.",
+  "slices": ["slice-03"],
+  "findings": [],
+  "needs_context": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: no (not-relevant); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.
