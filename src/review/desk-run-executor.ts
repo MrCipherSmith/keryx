@@ -19,7 +19,7 @@ import { computeVerdict, premiseRecords, renderVerdict } from "./verdict";
 import { boardGh, boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
 import { withoutGithubCredentials } from "./github-cli";
 import type { ManagedReviewManifest } from "./types";
-import { DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
+import { deskReviewMinutes, DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
 import { DESK_REPORT_OVERLAY_FILE, DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_RESUME_PACKAGE, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
@@ -34,8 +34,11 @@ import type { PreviousRunInput } from "./update-round";
 import { mainReviewRoot } from "./report-overlay";
 import { askDesktopOperator } from "./desk-questions";
 import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
-import { DEFAULT_MAX_PASSES } from "./chunks-estimate";
-import { REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
+import { autoConfirmPlan, readPlanConfirmation, roleDispatchWaves } from "./estimate";
+import { preflightDesktopPasses } from "./desktop-review-passes";
+import { intersectLocalPlanPolicy } from "./plan-policy";
+import type { SliceManifest } from "./slice";
+import { DEFAULT_REVIEW_PARALLEL, REVIEW_TURN_MAX_WAVES, REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
 
 interface DeskExecutionOptions {
@@ -179,6 +182,24 @@ async function installWorkspaceReviewControls(cwd: string, checkout: string, sig
   }
 }
 
+/** Merge only locally edited restrictions, never a PR's tracked routing or local widening, into trusted controls. */
+export async function installLocalPlanRestrictions(cwd: string, checkout: string, signal: AbortSignal): Promise<void> {
+  const local = await scopedFile(cwd, "routing.config.json", 128 * 1024);
+  if (local === undefined) return;
+  const head = await git(cwd, ["show", "HEAD:routing.config.json"], signal).catch(() => undefined);
+  if (local.trimEnd() === head?.trimEnd()) return;
+  const file = path.join(checkout, "routing.config.json");
+  const trusted = await scopedFile(checkout, "routing.config.json", 128 * 1024);
+  let base: unknown, previous: unknown, edited: unknown;
+  try {
+    base = trusted === undefined ? {} : JSON.parse(trusted);
+    previous = head === undefined ? {} : JSON.parse(head);
+    edited = JSON.parse(local);
+  } catch { return; } // Preserve malformed trusted controls; normal policy parsing will refuse/diagnose them.
+  const merged = intersectLocalPlanPolicy(base, previous, edited);
+  if (JSON.stringify(merged) !== JSON.stringify(base)) await writeFileAtomic(file, `${JSON.stringify(merged, null, 2)}\n`);
+}
+
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
   readRevision: () => Promise<Revision>, githubToken?: string) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
@@ -269,6 +290,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   await run(["update-ref", "--no-deref", "HEAD", headSha]);
   await run(["read-tree", headSha]);
   await installWorkspaceReviewControls(cwd, checkout, signal);
+  await installLocalPlanRestrictions(cwd, checkout, signal);
   return pull;
 }
 
@@ -331,24 +353,58 @@ async function regularPackage(dir: string) {
   return entries.every(entry => entry.isFile() || entry.isDirectory());
 }
 
-async function requestPlanApproval(
+export async function requestPlanApproval(
   dir: string, checkout: string, subject: string, options: DeskExecutionOptions, summary: AutonomousSummary,
-): Promise<{ approved: boolean; reason: string } | undefined> {
+  verifyRevision: () => Promise<boolean>,
+): Promise<{ approved: boolean; reason: string; planKey?: string } | undefined> {
   if (!isReviewPackageDir(dir, checkout) || !(await regularPackage(dir))) return undefined;
   const saved = await readJson<{ overThreshold?: boolean; next?: string; planKey?: string }>(path.join(dir, "plan.json"));
-  if (saved?.overThreshold !== true || typeof saved.next !== "string" || !saved.next.startsWith("confirm plan")) return undefined;
+  if (!saved || typeof saved.planKey !== "string") return undefined;
   const manifest = await readJson<ManagedReviewManifest>(path.join(dir, "manifest.json"));
   if (manifest?.status !== "draft" || manifest.reviewId !== path.basename(dir) ||
       manifest.target?.ref !== subject || manifest.target.base !== options.baseSha || manifest.target.head !== options.headSha) return undefined;
-  const estimate = await estimatePlan(dir);
-  if (!estimate.overThreshold || estimate.planKey !== saved.planKey) {
-    return { approved: false, reason: "The saved review plan changed. Prepare a new plan before confirming it." };
+  const estimate = await estimatePlan(dir, options.options?.maxParallel ?? DEFAULT_REVIEW_PARALLEL);
+  const slices = await readJson<SliceManifest>(path.join(dir, "slices", "manifest.json"));
+  if (!slices || !Array.isArray(slices.slices)) return { approved: false, reason: "The review slice manifest is unavailable; prepare the plan again." };
+  try {
+    const assignments = estimate.perRole.flatMap(({ role }) => roleDispatchWaves(slices, role).map((wave, index) =>
+      ({ reviewer: role, slices: wave.map(slice => slice.id), wave: index + 1 })));
+    preflightDesktopPasses(slices, assignments, options.options?.maxWaves);
+  } catch (error) {
+    return { approved: false, reason: error instanceof Error ? error.message : "The review cannot fit the native wave limits." };
   }
-  if (await planConfirmed(dir, estimate)) return { approved: true, reason: "" };
   const size = `${estimate.dispatches.toLocaleString("en-US")} reviewer assignments, estimated ${estimate.minutes.min}–${estimate.minutes.max} minutes`;
-  const ceiling = DEFAULT_MAX_PASSES * REVIEW_WAVE_MAX_CHILDREN;
+  const ceiling = REVIEW_TURN_MAX_WAVES * REVIEW_WAVE_MAX_CHILDREN;
   if (estimate.dispatches > ceiling) {
     return { approved: false, reason: `Review plan exceeds Desktop capacity (${size}; maximum ${ceiling} assignments). Split the review before continuing.` };
+  }
+  if (!estimate.overThreshold) return undefined;
+  if (estimate.planKey !== saved.planKey && estimate.escalated.length === 0) {
+    return { approved: false, reason: "The saved review plan changed. Prepare a new plan before confirming it." };
+  }
+  const launch = options.options?.maxMinutes;
+  const explicitMinutes = [options.budgetMinutes, launch].filter((value): value is number => value !== undefined);
+  const launchMinutes = explicitMinutes.length ? Math.min(...explicitMinutes) : undefined;
+  if (await planConfirmed(dir, estimate, options.options?.mode === "auto" ? "desktop-auto" : undefined)) {
+    if (readPlanConfirmation(dir)?.confirmedVia === "auto-policy" && launchMinutes !== undefined && estimate.minutes.max > launchMinutes) {
+      return { approved: false, reason: `The expanded plan exceeds the configured ${launchMinutes}-minute run budget.` };
+    }
+    await options.verifyBeforeExecution?.();
+    options.signal.throwIfAborted();
+    if (!await verifyRevision()) return { approved: false, reason: "The pull request base or head changed before plan authorization." };
+    return { approved: true, reason: "", planKey: estimate.planKey };
+  }
+  if (options.options?.mode === "auto") {
+    if (launchMinutes !== undefined && estimate.minutes.max > launchMinutes) {
+      return { approved: false, reason: `The expanded plan exceeds the configured ${launchMinutes}-minute run budget (${size}).` };
+    }
+    await options.verifyBeforeExecution?.();
+    options.signal.throwIfAborted();
+    if (!await verifyRevision()) return { approved: false, reason: "The pull request base or head changed before plan authorization." };
+    if (await autoConfirmPlan(dir, estimate, "desktop-auto", launchMinutes)) {
+      options.onProgress({ phase: "Expanded plan automatically authorized", rounds: summary.rounds, tokens: summary.tokens, packageId: manifest.reviewId });
+      return { approved: true, reason: "", planKey: estimate.planKey };
+    }
   }
   if (!options.operatorRunId) {
     return { approved: false, reason: `The review plan requires operator approval (${size}). Continue from a review session to decide.` };
@@ -364,12 +420,13 @@ async function requestPlanApproval(
   if (answer !== "approve") return { approved: false, reason: `The expanded review plan was left paused (${size}).` };
   await options.verifyBeforeExecution?.();
   options.signal.throwIfAborted();
+  if (!await verifyRevision()) return { approved: false, reason: "The pull request base or head changed before plan authorization." };
   const at = new Date().toISOString();
   await recordPlanConfirmation(dir, estimate, {
     confirmedVia: "host-question", quote: `${question} — ${approve}`, at,
     hostQuestion: { source: "keryx-shell", ref: options.operatorRunId, questionText: question, answerText: approve, time: at },
   });
-  return { approved: true, reason: "" };
+  return { approved: true, reason: "", planKey: estimate.planKey };
 }
 
 // Only expose known artifact names from a package created in this attempt.
@@ -561,7 +618,7 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       signal.throwIfAborted();
       const selection = await ports.selectModel(options.cwd);
       signal.throwIfAborted();
-      const maxMinutes = options.budgetMinutes ?? 30;
+      const maxMinutes = deskReviewMinutes(options.options, options.budgetMinutes);
       const maxTokens = options.options?.maxTokens ?? options.budgetTokens ?? undefined;
       const execute = (preservedPackage: string | undefined, budgetMinutes = maxMinutes, budgetTokens = maxTokens) => runAutonomousReview({
         ...selection,
@@ -599,23 +656,43 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
           }
         },
       });
+      const started = Date.now();
       let { summary } = await execute(resumePackage);
-      const packageDir = summary.package && path.resolve(checkout, summary.package.path);
-      const pending = !ports.spawn && !signal.aborted && summary.status === "incomplete" && summary.floorRefusals === 0 &&
-        summary.package?.status === "draft" && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews")
-        ? await requestPlanApproval(packageDir, checkout, subject, options, summary)
-        : undefined;
-      if (pending?.approved) {
-        const minutesLeft = maxMinutes - summary.durationSeconds / 60;
+      let packageDir = summary.package && path.resolve(checkout, summary.package.path);
+      let pending: Awaited<ReturnType<typeof requestPlanApproval>>;
+      const authorizedPlans = new Set<string>();
+      for (;;) {
+        const eligible = !ports.spawn && !signal.aborted && summary.status === "incomplete" && summary.floorRefusals === 0 &&
+          summary.package?.status === "draft" && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews");
+        const remainingMinutes = maxMinutes - (Date.now() - started) / 60_000;
+        const remainingTokens = maxTokens === undefined ? undefined : maxTokens - summary.tokens;
+        if (eligible && (remainingMinutes <= 0 || (remainingTokens !== undefined && remainingTokens <= 0))) {
+          summary = { ...summary, status: "budget", exitCode: exitCodeFor("budget"), reason: "The review budget was used while preparing the expanded plan." };
+          break;
+        }
+        pending = eligible && packageDir
+          ? await requestPlanApproval(packageDir, checkout, subject, { ...options, budgetMinutes: remainingMinutes }, summary, async () => {
+              const latest = await readRevision();
+              return latest.state === "OPEN" && latest.baseRefOid === options.baseSha && latest.headRefOid === options.headSha;
+            }) : undefined;
+        if (!pending?.approved) {
+          if (pending) summary = { ...summary, phase: "Review plan paused", reason: pending.reason };
+          break;
+        }
+        if (!pending.planKey || authorizedPlans.has(pending.planKey)) {
+          pending = { approved: false, reason: "The approved plan made no progress; the review is paused." };
+          summary = { ...summary, phase: "Review plan paused", reason: pending.reason };
+          break;
+        }
+        authorizedPlans.add(pending.planKey);
+        const minutesLeft = maxMinutes - (Date.now() - started) / 60_000;
         const tokensLeft = maxTokens === undefined ? undefined : maxTokens - summary.tokens;
         if (minutesLeft <= 0 || (tokensLeft !== undefined && tokensLeft <= 0)) {
-          summary = { ...summary, status: "budget", exitCode: exitCodeFor("budget"),
-            reason: "The review budget was used while preparing the expanded plan." };
-        } else {
-          ({ summary } = await execute(summary.package!.id, minutesLeft, tokensLeft));
+          summary = { ...summary, status: "budget", exitCode: exitCodeFor("budget"), reason: "The review budget was used while preparing the expanded plan." };
+          break;
         }
-      } else if (pending) {
-        summary = { ...summary, phase: "Review plan paused", reason: pending.reason };
+        ({ summary } = await execute(summary.package!.id, minutesLeft, tokensLeft));
+        packageDir = summary.package && path.resolve(checkout, summary.package.path);
       }
       if ((!pending || pending.approved) && !ports.spawn && options.options?.mode === "auto" && options.options.orchestrator !== false && !signal.aborted && summary.status === "incomplete" &&
           summary.floorRefusals === 0 && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews") &&

@@ -184,6 +184,7 @@ describe("an over-threshold plan is refused until the operator confirms it", () 
         await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
       }
       await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+      await writeFile(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 40 } }));
       const pkg = path.join(root, ".metaproject", "reviews", "r1");
       await mkdir(path.join(pkg, "slices"), { recursive: true });
       await mkdir(path.join(pkg, "raw"), { recursive: true });

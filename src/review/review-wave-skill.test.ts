@@ -25,7 +25,7 @@ describe("AC5: the orchestrator skill tells the dispatcher to pass review_wave",
       expect(line).toContain('"pass": "<chunk id>"');
       expect(line).toContain('"pass": "round"');
       expect(line).toMatch(/each wave counts its own 32 children/);
-      expect(line).toMatch(/at most 25 waves/);
+      expect(line).toMatch(/at most 100 distinct waves/);
       expect(line).toMatch(/ignored and counts against the turn/);
     });
 

@@ -2,8 +2,9 @@
 // set, and prints roles x slices = assignments, how many dispatches (waves) those need at the manifest's wave budget, and
 // an expected duration range. Nothing here dispatches or writes.
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
@@ -16,6 +17,10 @@ import { ROLES_RUN_WITHOUT_SLICES, isRoutedManifest } from "./slice-routing";
 import { hasSliceRoleRouting, requiredSlices, sliceGraph } from "./waves";
 import { splitCounts } from "./round-split";
 import { isHostQuestion, type HostQuestion } from "./types";
+import { deskReviewOptions } from "./autonomous-profile";
+import { DEFAULT_REVIEW_PARALLEL } from "./wave-limits";
+import { AUTO_MAX_DISPATCHES, AUTO_MAX_MINUTES, DEFAULT_MAX_DISPATCHES, DEFAULT_MAX_MINUTES } from "./plan-limits";
+export { AUTO_MAX_DISPATCHES, AUTO_MAX_MINUTES, DEFAULT_MAX_DISPATCHES, DEFAULT_MAX_MINUTES } from "./plan-limits";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
 export const CHILD_DEADLINE_MINUTES = 5;
@@ -25,9 +30,9 @@ export const TYPICAL_DISPATCH_MINUTES = 2;
 export const ASSUMED_PARALLEL_DISPATCHES = 4;
 
 /** Above this many dispatches the operator confirms the plan before it runs (`routing.config.json` `reviewPlan.maxDispatches`). */
-export const DEFAULT_MAX_DISPATCHES = 40;
+
 /** Above this upper duration, in minutes, the operator confirms the plan (`reviewPlan.maxMinutes`). */
-export const DEFAULT_MAX_MINUTES = 90;
+
 /** The card tool that records a plan confirmation inside keryx shell. */
 export const CONFIRM_PLAN_TOOL = "review_confirm_plan";
 export const PLAN_CONFIRMATION_FILE = "plan-confirmation.json";
@@ -51,6 +56,7 @@ export type RoundEstimate = {
   dispatches: number;
   /** Dispatch batches that run one after another: at least the longest role's waves, at most dispatches / parallelism rounded up. */
   sequentialBatches: number;
+  parallelism: number;
   minutes: { min: number; max: number };
   perRole: RoleEstimate[];
   assumptions: string;
@@ -81,10 +87,10 @@ export type RoundEstimate = {
  * owning roles and depth. A confirmation recorded for one plan does not carry over to a re-sliced, re-routed or
  * re-budgeted one (another `--host` or `--max-bytes` changes the waves, and so the cost; security review M4).
  */
-export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined }): string {
+export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined; parallelism?: number | undefined }): string {
   const roles = [...estimate.perRole].sort((a, b) => a.role.localeCompare(b.role)).map((entry) => ({ role: entry.role, waves: entry.waves }));
   const slices = [...estimate.slicePlan].sort((a, b) => a.id.localeCompare(b.id)).map((entry) => ({ id: entry.id, roles: [...entry.roles].sort(), depth: entry.depth ?? null }));
-  return createHash("sha256").update(JSON.stringify({ roles, slices, waveBytes: estimate.waveBytes ?? null })).digest("hex").slice(0, 16);
+  return createHash("sha256").update(JSON.stringify({ roles, slices, waveBytes: estimate.waveBytes ?? null, parallelism: estimate.parallelism ?? null })).digest("hex").slice(0, 16);
 }
 
 /**
@@ -105,7 +111,9 @@ export function estimateRound(
   manifest: SliceManifest | undefined,
   depth: RoundEstimate["depth"] = "unrecorded",
   thresholds: Pick<PlanThresholds, "maxDispatches" | "maxMinutes"> = { maxDispatches: DEFAULT_MAX_DISPATCHES, maxMinutes: DEFAULT_MAX_MINUTES },
+  parallelism = ASSUMED_PARALLEL_DISPATCHES,
 ): RoundEstimate {
+  if (!Number.isSafeInteger(parallelism) || parallelism < 1) throw new Error("Review parallelism must be a positive integer.");
   const problem = manifest === undefined ? undefined : manifestSizeProblem(manifest);
   if (problem !== undefined) throw new Error(problem);
   const routed = manifest !== undefined && isRoutedManifest(manifest);
@@ -128,7 +136,7 @@ export function estimateRound(
   const slicePlan: SlicePlanEntry[] = originals.map((s) => ({ id: s.id, roles: owners.get(s.id) ?? [], ...(s.depth === undefined ? {} : { depth: s.depth }) }));
   const dispatches = perRole.reduce((total, r) => total + r.waves, 0);
   const longest = perRole.reduce((m, r) => Math.max(m, r.waves), 0);
-  const sequentialBatches = Math.max(longest, Math.ceil(dispatches / ASSUMED_PARALLEL_DISPATCHES));
+  const sequentialBatches = Math.max(longest, Math.ceil(dispatches / parallelism));
   const assignments = manifest === undefined ? roles.length : perRole.reduce((total, r) => total + r.slices, 0);
   const minutes = { min: sequentialBatches * TYPICAL_DISPATCH_MINUTES, max: sequentialBatches * CHILD_DEADLINE_MINUTES };
   const waveBytes = manifest === undefined ? undefined : waveBytesOf(manifest);
@@ -145,9 +153,10 @@ export function estimateRound(
     waveBytes,
     dispatches,
     sequentialBatches,
+    parallelism,
     minutes,
     perRole,
-    assumptions: `${TYPICAL_DISPATCH_MINUTES}-${CHILD_DEADLINE_MINUTES} min per dispatch (a child is killed at ${CHILD_DEADLINE_MINUTES} min), ${ASSUMED_PARALLEL_DISPATCHES} dispatches in parallel; excludes the verifier, retries and the mutation pass`,
+    assumptions: `${TYPICAL_DISPATCH_MINUTES}-${CHILD_DEADLINE_MINUTES} min per dispatch (a child is killed at ${CHILD_DEADLINE_MINUTES} min), ${parallelism} dispatches in parallel; excludes the verifier, retries and the mutation pass`,
     slicePlan,
     routing: {
       deep: originals.filter((s) => s.depth === "deep").length,
@@ -158,7 +167,7 @@ export function estimateRound(
     thresholds: { maxDispatches: thresholds.maxDispatches, maxMinutes: thresholds.maxMinutes },
     overThreshold: overReasons.length > 0,
     overReasons,
-    planKey: planKeyOf({ perRole, slicePlan, waveBytes }),
+    planKey: planKeyOf({ perRole, slicePlan, waveBytes, parallelism }),
     escalated: originals.filter((s) => s.escalated !== undefined).map((s) => s.id),
     ...(counts === undefined ? {} : { split: { fix: { slices: counts.fix, dispatches: kindDispatches.fix }, new: { slices: counts.new, dispatches: kindDispatches.new }, ...(counts.secondLook === undefined ? {} : { secondLook: { slices: counts.secondLook, dispatches: kindDispatches["second-look"] } }) } }),
   };
@@ -188,8 +197,8 @@ export async function readPlanThresholds(projectRoot: string): Promise<PlanThres
 // `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
 // ---------------------------------------------------------------------------
 
-export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal" | "host-question";
-const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
+export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal" | "host-question" | "auto-policy";
+const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal", "host-question", "auto-policy"];
 
 export type PlanConfirmation = {
   planKey: string;
@@ -198,6 +207,10 @@ export type PlanConfirmation = {
   quote: string;
   confirmedVia: PlanConfirmedVia;
   at: string;
+  autoPolicy?: "desktop-auto" | "project-auto";
+  autoLimits?: { dispatches: number; minutes: number };
+  parallelism?: number;
+  target?: { ref: string; base: string; head: string };
   /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
   pressedBy?: number | undefined;
   pressedAt?: string | undefined;
@@ -214,6 +227,7 @@ function isPlanConfirmation(value: unknown): value is PlanConfirmation {
     && typeof v.quote === "string" && v.quote.trim() !== ""
     && typeof v.confirmedVia === "string" && (CONFIRMED_VIA as readonly string[]).includes(v.confirmedVia)
     && (v.confirmedVia !== "host-question" || isHostQuestion(v.hostQuestion))
+    && (v.confirmedVia !== "auto-policy" || ((v.autoPolicy === "desktop-auto" || v.autoPolicy === "project-auto") && validAutoTarget(v.target)))
     && typeof v.at === "string" && v.at !== "";
 }
 
@@ -227,9 +241,80 @@ export function readPlanConfirmation(packageDir: string): PlanConfirmation | und
   }
 }
 
-/** True when the package holds a confirmation recorded for exactly this plan. */
-export function planConfirmed(packageDir: string, estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined }): boolean {
-  return readPlanConfirmation(packageDir)?.planKey === planKeyOf(estimate);
+type AutoPolicy = "desktop-auto" | "project-auto";
+type AutoTarget = { ref: string; base: string; head: string };
+function validAutoTarget(value: unknown): value is AutoTarget {
+  if (!value || typeof value !== "object") return false;
+  const target = value as Partial<AutoTarget>;
+  return typeof target.ref === "string" && target.ref.length > 0 && typeof target.base === "string" && /^[a-f0-9]{40,64}$/i.test(target.base) &&
+    typeof target.head === "string" && /^[a-f0-9]{40,64}$/i.test(target.head);
+}
+function autoTarget(dir: string): AutoTarget | undefined {
+  try {
+    const target: unknown = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")).target;
+    return validAutoTarget(target) ? { ref: target.ref, base: target.base, head: target.head } : undefined;
+  } catch { return undefined; }
+}
+function autoLimits(dir: string, policy: AutoPolicy): { dispatches: number; minutes: number } | undefined {
+  const file = path.join(projectRootOfPackage(dir), "routing.config.json");
+  let fields: Record<string, unknown> = {};
+  if (existsSync(file)) {
+    try {
+      const config: unknown = JSON.parse(readFileSync(file, "utf8"));
+      if (!config || typeof config !== "object" || Array.isArray(config)) return undefined;
+      const own = (config as Record<string, unknown>).reviewPlan;
+      if (own !== undefined) {
+        if (!own || typeof own !== "object" || Array.isArray(own)) return undefined;
+        fields = own as Record<string, unknown>;
+      }
+    } catch { return undefined; }
+  }
+  if (fields.autoApprove !== undefined && typeof fields.autoApprove !== "boolean") return undefined;
+  if (policy === "project-auto" && fields.autoApprove !== true) return undefined;
+  if (policy === "desktop-auto" && fields.autoApprove === false) return undefined;
+  // A configured threshold remains a ceiling for automation; an explicit budget is never overridden.
+  for (const key of ["maxDispatches", "maxMinutes", "autoMaxDispatches", "autoMaxMinutes"]) {
+    if (fields[key] !== undefined && !positive(fields[key])) return undefined;
+  }
+  return {
+    dispatches: Math.min(AUTO_MAX_DISPATCHES, positive(fields.autoMaxDispatches) ? fields.autoMaxDispatches : AUTO_MAX_DISPATCHES,
+      positive(fields.maxDispatches) ? fields.maxDispatches : AUTO_MAX_DISPATCHES),
+    minutes: Math.min(AUTO_MAX_MINUTES, positive(fields.autoMaxMinutes) ? fields.autoMaxMinutes : AUTO_MAX_MINUTES,
+      positive(fields.maxMinutes) ? fields.maxMinutes : AUTO_MAX_MINUTES),
+  };
+}
+function autoEligible(dir: string, estimate: Pick<RoundEstimate, "dispatches" | "minutes">, policy: AutoPolicy): boolean {
+  const limits = autoLimits(dir, policy);
+  const desk = deskReviewOptions();
+  if (policy === "project-auto" && desk !== undefined) return false;
+  const launchMinutes = policy === "desktop-auto" ? desk?.maxMinutes : undefined;
+  return !!autoTarget(dir) && !!limits && estimate.dispatches <= limits.dispatches && estimate.minutes.max <= limits.minutes &&
+    (launchMinutes === undefined || estimate.minutes.max <= launchMinutes);
+}
+/** A policy approval binds to its exact plan and pinned target, and is usable only in its authorized mode. */
+export function planConfirmed(packageDir: string, estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined; parallelism?: number | undefined; dispatches?: number; minutes?: { min: number; max: number } }, policy?: AutoPolicy): boolean {
+  const record = readPlanConfirmation(packageDir);
+  if (!record || record.planKey !== planKeyOf(estimate)) return false;
+  if (record.confirmedVia !== "auto-policy") return true;
+  const active = policy ?? (deskReviewOptions()?.mode === "auto" ? "desktop-auto" : "project-auto");
+  return record.autoPolicy === active && JSON.stringify(record.target) === JSON.stringify(autoTarget(packageDir)) &&
+    typeof estimate.dispatches === "number" && !!estimate.minutes && autoEligible(packageDir, { dispatches: estimate.dispatches, minutes: estimate.minutes }, active);
+}
+/** Persist an explicit, bounded policy decision. No operator words or human approval are fabricated. */
+export async function autoConfirmPlan(packageDir: string, estimate: RoundEstimate, policy: AutoPolicy, launchMinutes?: number): Promise<boolean> {
+  if (!estimate.overThreshold || !autoEligible(packageDir, estimate, policy) || (launchMinutes !== undefined && estimate.minutes.max > launchMinutes)) return false;
+  const target = autoTarget(packageDir)!;
+  const limits = autoLimits(packageDir, policy)!;
+  if (launchMinutes !== undefined) limits.minutes = Math.min(limits.minutes, launchMinutes);
+  const record: PlanConfirmation = { planKey: estimate.planKey, dispatches: estimate.dispatches,
+    minutes: [estimate.minutes.min, estimate.minutes.max], confirmedVia: "auto-policy", autoPolicy: policy, target, autoLimits: limits, parallelism: estimate.parallelism,
+    quote: "Automatically authorized by the configured bounded review policy.", at: new Date().toISOString() };
+  const history = path.join(packageDir, "plan-confirmations");
+  await mkdir(history, { recursive: true });
+  const fingerprint = createHash("sha256").update(JSON.stringify({ plan: record.planKey, target, policy })).digest("hex").slice(0, 24);
+  await writeFileAtomic(path.join(history, `${fingerprint}-${randomUUID()}.json`), `${JSON.stringify(record, null, 2)}\n`);
+  await writePlanConfirmation(packageDir, record);
+  return true;
 }
 
 export function planConfirmationFor(estimate: RoundEstimate, quote: string, confirmedVia: PlanConfirmedVia, now: Date = new Date()): PlanConfirmation {
@@ -264,12 +349,14 @@ export function planGateRefusal(estimate: RoundEstimate, confirmed: boolean, pac
  * started before flow 457 (no operator-gate stamp, ./run-profile.ts) is not held to the gate: it never had a way to
  * record a confirmation (security review M9).
  */
-export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
+export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined; autoAuthorize?: boolean | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
   const estimate = await estimatePackage(packageDir, options);
   const profileMissing = runProfileRefusal(packageDir);
   if (profileMissing !== undefined) return { estimate, refusal: profileMissing };
   if (!operatorGateApplies(packageDir)) return { estimate, refusal: undefined };
-  return { estimate, refusal: planGateRefusal(estimate, planConfirmed(packageDir, estimate), packageDir, readPlanConfirmation(packageDir)) };
+  let confirmed = planConfirmed(packageDir, estimate);
+  if (!confirmed && options.autoAuthorize === true && estimate.overThreshold && await autoConfirmPlan(packageDir, estimate, "project-auto")) confirmed = true;
+  return { estimate, refusal: planGateRefusal(estimate, confirmed, packageDir, readPlanConfirmation(packageDir)) };
 }
 
 /** Where a round's slice manifest lives when `--manifest` is not given: the package's own, then the shell host's shared one. */
@@ -289,7 +376,7 @@ async function readManifest(candidates: readonly string[]): Promise<{ manifest: 
   return undefined;
 }
 
-export async function estimatePackage(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined } = {}): Promise<RoundEstimate> {
+export async function estimatePackage(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined; parallelism?: number | undefined } = {}): Promise<RoundEstimate> {
   if (!existsSync(packageDir)) throw new Error(`${packageDir} does not exist; pass --package <review-dir>`);
   const root = projectRootOfPackage(packageDir);
   const recorded = await packageRoundDepth(packageDir);
@@ -310,7 +397,9 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
   // A delta round's fix slices add the roles that authored the findings they answer (flow 458), and a slice routed to the
   // security reviewer adds it in a light round too (manifestRosterRoles).
   const roles = [...new Set([...set.required, ...(found === undefined ? [] : await installedRosterRoles(root, found.manifest))])].sort();
-  return { ...estimateRound(roles, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
+  const desk = deskReviewOptions();
+  const parallelism = options.parallelism ?? (desk ? desk.maxParallel ?? DEFAULT_REVIEW_PARALLEL : ASSUMED_PARALLEL_DISPATCHES);
+  return { ...estimateRound(roles, found?.manifest, recorded?.depth ?? "unrecorded", thresholds, parallelism), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 
 export function renderEstimate(estimate: RoundEstimate): string {

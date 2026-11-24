@@ -38,7 +38,7 @@ export type PlanConfirmation = {
 export const DEFAULT_PLAN_THRESHOLD = { dispatches: DEFAULT_MAX_DISPATCHES, minutes: DEFAULT_MAX_MINUTES } as const;
 
 /** What the plan confirmation needs from an estimate: the numbers the operator sees and what they bind to. */
-export type PlanNumbers = Pick<RoundEstimate, "dispatches" | "minutes" | "perRole" | "slicePlan" | "overThreshold">;
+export type PlanNumbers = Pick<RoundEstimate, "dispatches" | "minutes" | "perRole" | "slicePlan" | "overThreshold"> & { parallelism?: number | undefined; waveBytes?: number | undefined };
 
 /** Whether `estimate` needs the operator's confirmation: the estimate's own verdict. */
 export function planOverThreshold(estimate: PlanNumbers): boolean {
@@ -50,8 +50,8 @@ export function planKeyOf(estimate: PlanNumbers): string {
 }
 
 /** The package's plan estimate, the library call `keryx review estimate --json` prints. */
-export function estimatePlan(packageDir: string): Promise<RoundEstimate> {
-  return estimatePackage(packageDir);
+export function estimatePlan(packageDir: string, parallelism?: number): Promise<RoundEstimate> {
+  return estimatePackage(packageDir, { parallelism });
 }
 
 export async function readPlanConfirmation(packageDir: string): Promise<PlanConfirmation | undefined> {
@@ -59,8 +59,8 @@ export async function readPlanConfirmation(packageDir: string): Promise<PlanConf
 }
 
 /** Whether the operator confirmed exactly this plan. */
-export async function planConfirmed(packageDir: string, estimate: PlanNumbers): Promise<boolean> {
-  return estimatePlanConfirmed(packageDir, estimate);
+export async function planConfirmed(packageDir: string, estimate: PlanNumbers, policy?: "desktop-auto"): Promise<boolean> {
+  return estimatePlanConfirmed(packageDir, estimate, policy);
 }
 
 export async function recordPlanConfirmation(

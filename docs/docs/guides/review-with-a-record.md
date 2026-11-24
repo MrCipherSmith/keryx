@@ -896,8 +896,7 @@ keryx review readiness <review-id-or-path>   # NOT READY lists each failing item
 
 When the blast radius is cut, `keryx review blast-radius --package <ref>` writes
 the chunk plan next to it, so the waves are one command away. An unattended run
-(`keryx review run --autonomous`) runs every wave without asking, up to the
-25-pass ceiling; an interactive run asks you once before the waves start.
+(`keryx review run --autonomous`) can run up to 100 passes under the default ceiling. A project can preapprove additional passes for automatic runs using `reviewChunks.autoApprovePasses`. An interactive run requests approval when it exceeds its configured ceiling.
 
 Only you can waive an item, with your own words recorded beside the time. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. The terminal form is the fallback:
 
