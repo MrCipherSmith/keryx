@@ -41,6 +41,9 @@ export interface PublicationState {
   savedAt?: string;
   publishedUrl?: string;
   skipped?: true;
+  /** Present when the pull request moved past the reviewed commit on the same base: this draft is
+   * the as-is variant, a Comment for the reviewed commit only. */
+  headMoved?: { reviewedHead: string; currentHead: string };
 }
 
 export type PublicationOutcome = "pending" | "published" | "skipped";

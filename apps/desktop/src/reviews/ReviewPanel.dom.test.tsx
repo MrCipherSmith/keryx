@@ -592,6 +592,67 @@ test("updates automatic verdicts and only enables submission after the latest co
   await click("Close");
 });
 
+test("a moved head locks the dialog to the as-is Comment for the reviewed commit", async () => {
+  const requests: PublicationRequest[] = [];
+  const reviewedHead = "b".repeat(40);
+  const currentHead = "c".repeat(40);
+  const settings: PublicationSettings = { inline: false, general: true, keryxTemplate: true, overlay: false,
+    verdict: "comment", verdictOverride: "comment", answers: {} };
+  const command = async (_cwd: string, _target: unknown, request: PublicationRequest): Promise<PublicationState> => {
+    requests.push(request);
+    return { version: 1, settings, body: `Reviewed commit \`${reviewedHead}\`.`, inlineCount: 0, questions: [],
+      overlayAvailable: false, canSubmit: true, digest: "d".repeat(64), headMoved: { reviewedHead, currentHead } };
+  };
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 47 }, { publishCommand: command });
+  await click("View review result");
+  await click("Publish to GitHub");
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  const input = (name: string) => [...dialog.querySelectorAll("label")]
+    .find(node => node.textContent?.trim().startsWith(name))!.querySelector("input")!;
+  const status = dialog.querySelector(".review-publish-head-moved")!;
+  expect(status.textContent).toContain("bbbbbbb");
+  expect(status.textContent).toContain("ccccccc");
+  expect(input("Comment only").checked).toBe(true);
+  for (const name of ["Use recommendation", "Approve", "Request changes", "Comment only", "Inline comments"]) {
+    expect(input(name).matches(":disabled")).toBe(true);
+  }
+  expect(input("General comment").matches(":disabled")).toBe(false);
+  expect(() => btn("Submit review")).toThrow("Missing button");
+  expect([...dialog.querySelectorAll("button")].some(node => node.textContent?.startsWith("Update review to"))).toBe(false);
+  await click("Publish as is for bbbbbbb");
+  expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "d".repeat(64) });
+  await click("Close");
+
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("./ReviewPublishDialog");
+  let updates = 0;
+  await act(async () => root.render(React.createElement(ReviewPublishDialog, {
+    cwd: "/project", target: { repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 47 }, id: complete.id,
+    command, onUpdateReview: () => { updates++; }, onClose() {},
+  })));
+  const footer = document.querySelector(".review-publish-footer")!;
+  expect(footer.querySelector("button")?.textContent).toBe("Update review to ccccccc");
+  await click("Update review to ccccccc");
+  expect(updates).toBe(1);
+  await act(async () => root.render(null));
+});
+
+test("the current head keeps the dialog's verdict choice and Submit review", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 48 }, {
+    publishCommand: async () => ({ version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false,
+      verdict: "comment", verdictOverride: null, answers: {} }, body: "Draft", inlineCount: 0, questions: [],
+      overlayAvailable: false, canSubmit: true, digest: "e".repeat(64) }),
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  expect(dialog.querySelector(".review-publish-head-moved")).toBeNull();
+  expect([...dialog.querySelectorAll<HTMLInputElement>("input")].some(node => node.matches(":disabled"))).toBe(false);
+  expect(btn("Submit review").disabled).toBe(false);
+  expect([...dialog.querySelectorAll("button")].some(node => /^(Publish as is|Update review)/.test(node.textContent ?? ""))).toBe(false);
+  await click("Close");
+});
+
 test("suggests a supported executable when the selected CLI lacks review publishing", async () => {
   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 46 }, {
     publishCommand: async () => { throw new Error("Unknown review command: desk-publish"); },

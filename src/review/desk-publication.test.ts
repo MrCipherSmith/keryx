@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { publishCompletedDeskReview, requestDeskPublication } from "./desk-publication";
+import { DESK_TEMPLATE_SELECTION, projectReviewOverlay, reportTemplateFingerprint } from "./desk-review-report";
 import { DeskRunStore } from "./desk-run-store";
 import { isolateGitDiscovery } from "./test-git-fixture";
 
@@ -22,10 +23,19 @@ function json(file: string, value: unknown) {
   writeFileSync(file, JSON.stringify(value));
 }
 
-function setHead(headRefOid: string, viewer = key.viewer) {
+function setPull(fields: { state?: string; baseRefOid?: string; headRefOid?: string }, viewer = key.viewer) {
   json(path.join(root, "pr.json"), { data: { viewer: { login: viewer }, repository: { id: key.repositoryId,
-    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid } } } });
+    pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid: revision.headSha, ...fields } } } });
 }
+
+function setHead(headRefOid: string, viewer = key.viewer) {
+  setPull({ headRefOid }, viewer);
+}
+
+const posted = () => JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"));
+const movedHead = "c".repeat(40);
+const movedLine = `Reviewed commit \`${revision.headSha}\`. The pull request has moved to \`${movedHead}\` since; ` +
+  "this review does not cover the newer commits.";
 
 beforeEach(() => {
   restoreGit = isolateGitDiscovery();
@@ -108,6 +118,7 @@ afterEach(() => {
 test("draft questions, template and saved settings are local until one explicit submit", async () => {
   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
   expect(preview.settings.verdict).toBe("changes");
+  expect(preview.headMoved).toBeUndefined();
   expect(preview.questions).toMatchObject([{ id: "fixture#F-002", text: "Is this label intentional?", recommendation: "dismiss" }]);
   expect(preview.canSubmit).toBe(false);
   expect(preview.overlayAvailable).toBe(true);
@@ -135,7 +146,7 @@ test("draft questions, template and saved settings are local until one explicit 
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest })).rejects.toThrow("already been published");
 });
 
-test("partial approval and a moved revision cannot send a review", async () => {
+test("partial approval, a changed base and a closed pull request cannot send a review", async () => {
   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
   const settings = { ...preview.settings, verdictOverride: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
   const approval = await requestDeskPublication(project, key, { kind: "preview", id, settings });
@@ -143,13 +154,91 @@ test("partial approval and a moved revision cannot send a review", async () => {
   expect(approval.blockedReason).toContain("cannot approve");
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: approval.settings, digest: approval.digest }))
     .rejects.toThrow("cannot approve");
-  setHead("c".repeat(40));
-  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
-  expect(stale.savedAt).toBeDefined();
-  expect(stale.blockedReason).toContain("revision moved");
-  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
-    .rejects.toThrow("revision moved");
+  for (const pull of [{ baseRefOid: "e".repeat(40), headRefOid: movedHead }, { state: "CLOSED", headRefOid: movedHead }, { state: "CLOSED" }]) {
+    setPull(pull);
+    const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+    expect(stale.savedAt).toBeDefined();
+    expect(stale.headMoved).toBeUndefined();
+    expect(stale.blockedReason).toContain("revision moved");
+    await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }, confirmFixture))
+      .rejects.toThrow("revision moved");
+  }
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("a moved head publishes as is: a Comment on the reviewed commit whose first line names it", async () => {
+  setHead(movedHead);
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(preview.headMoved).toEqual({ reviewedHead: revision.headSha, currentHead: movedHead });
+  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
+  expect(preview.body.split("\n")[0]).toBe(movedLine);
+  expect(preview.blockedReason).toContain("Answer each finding question");
+  const answered = await requestDeskPublication(project, key, { kind: "preview", id,
+    settings: { ...preview.settings, answers: { "fixture#F-002": "dismiss" } } });
+  expect(answered.canSubmit).toBe(true);
+  expect(answered.blockedReason).toBeUndefined();
+  const published = await requestDeskPublication(project, key,
+    { kind: "submit", id, settings: answered.settings, digest: answered.digest }, confirmFixture);
+  expect(published.publishedUrl).toContain("#pullrequestreview-23");
+  const sent = posted();
+  expect(sent).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
+  expect(sent.body.split("\n")[0]).toBe(movedLine);
+});
+
+test("a moved head ignores a requested verdict and inline comments", async () => {
+  setHead(movedHead);
+  const settings = { inline: true, general: true, keryxTemplate: true, overlay: true, verdict: "changes" as const,
+    verdictOverride: "changes" as const, answers: { "fixture#F-002": "uphold" as const } };
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  expect(preview.settings).toMatchObject({ verdict: "comment", verdictOverride: "comment", inline: false });
+  expect(preview.inlineCount).toBe(0);
+  expect(existsSync(process.env.FIXTURE_DIFF_READS!)).toBe(false);
+  await requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture);
+  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha, comments: [] });
+});
+
+test("a head that moves again after the preview or before the write posts nothing", async () => {
+  setHead(movedHead);
+  const first = await requestDeskPublication(project, key, { kind: "preview", id });
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id,
+    settings: { ...first.settings, answers: { "fixture#F-002": "dismiss" } } });
+  expect(preview.canSubmit).toBe(true);
+  const submit = { kind: "submit" as const, id, settings: preview.settings, digest: preview.digest };
+  setHead("d".repeat(40));
+  await expect(requestDeskPublication(project, key, submit, confirmFixture)).rejects.toThrow(/^stale:/);
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  setHead(movedHead);
+  await expect(requestDeskPublication(project, key, submit, async () => setHead("d".repeat(40)))).rejects.toThrow(/^stale:/);
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
+});
+
+test("automatic publication posts at the reviewed head and never after the head moved", async () => {
+  const store = new DeskRunStore();
+  let auto: string;
+  let autoDirectory: string;
+  try {
+    auto = store.requestAttempt(project, key, revision, undefined, { mode: "auto", adaptive: false, autoPublish: true,
+      modelPools: { strong: [], middle: [], light: [] } })!.id;
+    store.end(store.byId(auto)!, { state: "completed", phase: "Complete", reason: "",
+      result: { reviewed: revision, coverage: "complete", verdict: "COMMENT", findings: { blocker: 0, major: 1, minor: 0, info: 0 },
+        report: "Fixture review." } });
+    autoDirectory = store.directory(auto);
+  } finally {
+    store.close();
+  }
+  cpSync(path.join(directory, "package"), path.join(autoDirectory, "package"), { recursive: true });
+  const findingsFile = path.join(autoDirectory, "package", "findings.json");
+  json(findingsFile, JSON.parse(readFileSync(findingsFile, "utf8")).slice(0, 1));
+  // A complete package needs coverage.md for readiness; without it automatic publication is refused at any head.
+  writeFileSync(path.join(autoDirectory, "package", "coverage.md"), "# Coverage\n");
+  json(path.join(autoDirectory, DESK_TEMPLATE_SELECTION), reportTemplateFingerprint((await projectReviewOverlay(project)).overlay));
+  setHead(movedHead);
+  await expect(publishCompletedDeskReview(project, key, auto)).rejects.toThrow("publication decision in Desktop");
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  setHead(revision.headSha);
+  await publishCompletedDeskReview(project, key, auto);
+  expect(posted()).toMatchObject({ event: "COMMENT", commit_id: revision.headSha });
 });
 
 test("uses the standard report when a project overlay is invalid", async () => {

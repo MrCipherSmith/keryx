@@ -30,6 +30,7 @@ type Operation = PublicationRequest | { kind: "automatic"; id: string; settings:
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string; discussion?: string };
 type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
+type HeadMoved = NonNullable<PublicationState["headMoved"]>;
 type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][]; discussion?: string };
 const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
 const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
@@ -84,11 +85,17 @@ async function publicationDiscussion(cwd: string, key: DeskRunKey, auth: GithubC
   return hash(pages);
 }
 
+/** The as-is variant's first body line: it names the reviewed commit and says the PR moved on. */
+function headMovedLine(moved: HeadMoved): string {
+  return `Reviewed commit \`${moved.reviewedHead}\`. The pull request has moved to \`${moved.currentHead}\` since; ` +
+    "this review does not cover the newer commits.";
+}
+
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
-  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; cache: PreviewCache;
+  key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current, cache } = input;
+  const { cwd, directory, run, key, auth, request, current, headMoved, cache } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -150,15 +157,17 @@ async function prepare(input: {
     item.id !== "premise-decisions" || !answered ||
     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
   const complete = run.result?.coverage === "complete" && failing.length === 0;
-  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && current &&
+  const discussion = overlay?.kind === "slots" && overlay.rereadDiscussion && (current || headMoved) &&
     (request.kind === "preview" || request.kind === "submit" || request.kind === "automatic")
     ? cache.discussion ?? await publicationDiscussion(cwd, key, auth) : undefined;
   if (discussion) cache.discussion = discussion;
   const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
-  const settings: PublicationSettings = {
-    inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
-    overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers,
-  };
+  const settings: PublicationSettings = headMoved
+    // The as-is variant is a Comment only, and the current diff cannot place lines on the reviewed commit.
+    ? { inline: false, general: saved?.general ?? true, keryxTemplate: true, overlay: !!overlay,
+      verdict: "comment", verdictOverride: "comment", answers }
+    : { inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: true,
+      overlay: !!overlay, verdict: verdictOverride ?? deskReportRecommendation(complete, publishable), verdictOverride, answers };
   const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
   const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
     kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
@@ -226,6 +235,7 @@ async function prepare(input: {
     howRun: `${solo ? "Single reviewer" : "Review orchestrator"} · ${run.options?.mode === "auto" ? "Auto" : "Manual"}.${reported}`,
   });
   let body = applyReviewOverlay(summary, overlay);
+  if (headMoved) body = `${headMovedLine(headMoved)}\n\n${body}`;
   const visibleBody = body;
   const round = buildRoundBlock({ body, round: roundNumber,
     reviewId: manifest.reviewId, reviewedHead: run.headSha, findings: settings.general ? inBody : [] });
@@ -233,17 +243,19 @@ async function prepare(input: {
   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
-  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion]);
+  // A further push changes the current head, so it must make an earlier as-is preview stale.
+  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions, discussion,
+    ...(headMoved ? [headMoved.currentHead] : [])]);
   const approval = eventFor[settings.verdict] === "APPROVE";
   const templateChanged = request.kind === "automatic" &&
     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
-    : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    : !current && !headMoved ? "The pull request is closed or its revision moved. You can still save this draft locally."
     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
     : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
-    : request.kind === "automatic" && (skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
+    : request.kind === "automatic" && (headMoved || skipped || !complete || overlayWarning || emptyOverlay || templateChanged || overlay?.requiresApproval)
       ? "This review needs a publication decision in Desktop."
     : !englishReviewText([visibleBody, ...comments.map(comment => comment.body)].join("\n"))
       ? "GitHub reviews must be written in English. This draft contains non-English prose."
@@ -257,7 +269,8 @@ async function prepare(input: {
     ...(overlay?.requiresApproval && { overlayRequiresApproval: true }),
     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
     ...(overlayWarning ? { overlayWarning } : emptyOverlay ? { overlayWarning: "This draft has no project overlay content. Only the Keryx template is shown." } : {}),
-    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}) },
+    ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}),
+    ...(headMoved && { headMoved }) },
     comments, publicationBody: body, ...(discussion && { discussion }) };
 }
 
@@ -304,8 +317,14 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
   }
   const cache = await previewSubject(cwd, directory, key, connection, request, run);
   const pr = cache.subject;
-  const current = pr.state === "OPEN" && pr.baseRefOid === run.baseSha && pr.headRefOid === run.headSha;
-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, cache });
+  const open = pr.state === "OPEN" && pr.baseRefOid === run.baseSha;
+  const current = open && pr.headRefOid === run.headSha;
+  // Same base, newer head: the draft becomes the as-is Comment for the reviewed commit.
+  const headMoved: HeadMoved | undefined = open && !current && sha.test(pr.headRefOid)
+    ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
+  // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
+  const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache });
   if (request.kind === "preview") {
     const { state } = await render();
     verifyGithubBindingUnchanged(connection);
@@ -338,12 +357,12 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
       }
     }
     if (request.kind === "submit") await confirmSubmit?.(state);
-    await verifyDeskSubject(cwd, key, run, connection);
+    await verifyDeskSubject(cwd, key, expected, connection);
     // Pin only after independently verifying the active viewer with the default connection.
     const auth: GithubConnection = connection.login ? connection : {
       ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
     };
-    if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
+    if (auth !== connection) await verifyDeskSubject(cwd, key, expected, auth);
     if (discussion && discussion !== await publicationDiscussion(cwd, key, auth)) {
       throw new Error("stale: The pull request discussion changed. Refresh the preview and check the draft before publishing.");
     }
