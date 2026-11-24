@@ -61,7 +61,7 @@ license: "MIT"
    - [ ] Hand the saved file's path to **every** reviewer (Reviewer brief, line T), not only the testing reviewer.
    - [ ] Only when they cannot run at all (no installable dependencies, no test command): every brief and the report carry `Not run: tests-to-run (<reason>)`. A silent skip is a gap.
 4. Show the operator depth, estimate and merge risk (Preflight 4). Over threshold, the operator confirms: in keryx shell call the card `review_confirm_plan` (never send them to a terminal); outside it, ask them with the host's question tool, the plan's numbers in the question, and record it with `keryx review confirm-plan --package <package> --answered-by … --answer-text … --question-text …` ("Hosts"). `dispatch-check` and `ledger build` refuse an unconfirmed plan. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
-5. Dispatch by slice roles from the drivers `slice` wrote: each role gets the slices that name it ("Slices, waves and results"). After each batch, `keryx review next --package <package>` decides what is left, an `escalated` core-role dispatch on a light slice included.
+5. Dispatch by slice roles from the drivers `slice` wrote: each role gets the slices that name it ("Slices, waves and results"). After each batch, read the pull request's head and act on a move (`SKILL.detail.md` § "Head moved"), then `keryx review next --package <package>` decides what is left, an `escalated` core-role dispatch on a light slice included.
 6. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
 7. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
 
@@ -910,8 +910,8 @@ The follow-up file path and the metadata rules (real model names, Run vs Not run
 **No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
 Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
-Re-read head and thread before posting. If head moved, re-check findings
-and name unchecked commits. Do not duplicate findings; cite extended ones.
+Re-read the thread before posting; a head that moved after the round follows
+`SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 

@@ -24,3 +24,11 @@
 - `githubPostReview` (`gh pr review`) returns no review id/URL; T7 must switch to `gh api .../reviews` or look up by marker after posting.
 - Head semantics: the session path allows a moved head when report.md line 1 names the reviewed SHA (readiness item 7), Desktop refuses. D1 allows this only with COMMENT; T7 must add the COMMENT restriction to the session path rather than refusing outright.
 - Not verified by the worker: completeHeadGate detail, review.rs after line 500, middle of ReviewPublishDialog.tsx; no tests run (read-only task).
+- 2026-11-24T07:34:28.279Z - task-done: T6: Divergence map of session and Desktop publish paths with extraction plan
+
+## 2026-11-24 T5 Head moved procedure (DONE_WITH_CONCERNS)
+
+- `## Head moved` in SKILL.detail.md (both copies); SKILL.md step 5 and the publication tail point to it; SKILL.md stays at its 918-line ceiling. Preflight test: 83 pass (10 new).
+- Worker added one line beyond the brief: the closed stop list in "Between waves" now names a moved head under `ask`; accepted, otherwise the `ask` question contradicts "The stop list is closed".
+- "Stop and start on the new head" ingests a partial round; until stage 3 changes `round-record.ts:207`, the `keryx review plan` fallback may not treat a partial package as the prior round. The skill states the contract; T8 rechecks after stage 3.
+- Environment: no node_modules in this worktree: eslint/tsc not run locally (health INCOMPLETE), clean-context/harness-robustness tests fail to load (zod). `bun test src/gdskills`: 8470 pass, 1 fail in install.test.ts (EACCES read-only rules/core), not in changed files, not confirmed on base. CI is the check.

@@ -382,6 +382,81 @@ describe("AC11: the skill is internally consistent", () => {
   });
 });
 
+describe("Flow 521 AC1-AC3: a moved head has one procedure, in SKILL.detail.md", () => {
+  const INSTALLED = path.join(import.meta.dir, "..", "..", ".metaproject", "skills", "gdskills", "review", "review-orchestrator");
+  const headMoved = (): string => section(DETAIL, "## Head moved");
+
+  test("the head is checked at every wave boundary, before complete and before publishing", () => {
+    const text = headMoved();
+    expect(text).toContain("gh pr view <n> --json headRefOid --jq .headRefOid");
+    expect(text).toContain("before each `keryx review next`");
+    expect(text).toContain("before `keryx review complete`");
+    expect(text).toContain("before publishing");
+    expect(text).toContain("never interrupted on its own");
+  });
+
+  test("it counts the new commits and names the rewritten-history case", () => {
+    const text = headMoved();
+    expect(text).toContain("git merge-base --is-ancestor <reviewed sha> <new sha>");
+    expect(text).toContain("git rev-list --count <reviewed sha>..<new sha>");
+    expect(text).toContain("history was rewritten");
+    expect(text).toContain("`fallback-first`");
+  });
+
+  test("on_head_move defaults to ask with two choices, plus follow and ignore", () => {
+    const text = headMoved();
+    expect(text).toContain("`on_head_move`");
+    expect(text).toMatch(/otherwise `ask`/);
+    expect(text).toContain("Update after this round finishes");
+    expect(text).toContain("Stop and start on the new head");
+    expect(text).toMatch(/^\s*- `follow`:/m);
+    expect(text).toMatch(/^\s*- `ignore`:/m);
+    expect(text).toContain("`send_poll`");
+  });
+
+  test("the update round is keryx review advance, with review plan while advance is not listed", () => {
+    const text = headMoved();
+    expect(text).toContain("`keryx review advance`");
+    expect(text).toContain("`keryx review --help` does not list `advance`");
+    expect(text).toContain("`keryx review plan --target <pr-url> --head <new sha> --host <host>`");
+  });
+
+  test("D1: the old commit is published as is only with --event COMMENT and a reviewed-commit first line", () => {
+    const text = headMoved();
+    expect(text).toContain("Update the review to `<new sha>`");
+    expect(text).toContain("Publish as is for `<reviewed sha>`");
+    expect(text).toContain("`keryx review publish <package> --event COMMENT`");
+    expect(text).toContain("never `REQUEST_CHANGES` or `APPROVE`");
+    expect(text).toContain("Reviewed `<reviewed sha>` — the PR has since moved on to `<new sha>`.");
+    expect(text).toContain("never `--yes`");
+  });
+
+  test("unattended asks nothing, publishes nothing and reports the move", () => {
+    const unattended = headMoved().split("\n").find((line) => line.includes("**Unattended**")) ?? "";
+    expect(unattended).toContain("ask nothing");
+    expect(unattended).toContain("never publish");
+    expect(unattended).toContain("unless `on_head_move` is `follow`");
+  });
+
+  test("a head-move question is on the closed stop list between waves", () => {
+    expect(section(DETAIL, "## Between waves — an authorized plan keeps the round going")).toContain('§ "Head moved"');
+  });
+
+  test("SKILL.md points at the procedure in Round plan step 5 and in publication, and drops the old phrase", () => {
+    expect(SKILL).not.toContain("If head moved, re-check findings");
+    const step5 = section(SKILL, "## Round plan — the order on every host").split("\n").find((line) => line.startsWith("5. ")) ?? "";
+    expect(step5).toContain('`SKILL.detail.md` § "Head moved"');
+    expect(step5.indexOf("Head moved")).toBeLessThan(step5.indexOf("`keryx review next"));
+    const publication = section(SKILL, "## PR Review Report Publication");
+    expect(publication).toContain('`SKILL.detail.md` § "Head moved"');
+    expect(publication).toContain("Do not duplicate findings; cite extended ones.");
+  });
+
+  test.each(["SKILL.md", "SKILL.detail.md"])("the bundled and installed %s are identical", (file) => {
+    expect(read(INSTALLED, file)).toBe(read(ENGINE, file));
+  });
+});
+
 describe("the retired nested model does not come back", () => {
   const ROOT = path.join(import.meta.dir, "..", "..");
   const FILES = [

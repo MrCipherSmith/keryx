@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T07:31:03.359Z",
+  "updatedAt": "2026-11-24T07:34:28.279Z",
   "source": {
     "type": "description",
     "ref": null
@@ -116,7 +116,7 @@
       "id": "T6",
       "title": "Divergence map of session and Desktop publish paths with extraction plan",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -130,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -277,6 +278,11 @@
       "at": "2026-11-24T07:31:03.359Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — 521-T6"
+    },
+    {
+      "at": "2026-11-24T07:34:28.279Z",
+      "event": "task-done",
+      "detail": "T6: Divergence map of session and Desktop publish paths with extraction plan"
     }
   ],
   "acKinds": {
