@@ -158,9 +158,22 @@ test("PRs that cannot be read leave cards empty with a warning; an access failur
     throw new Error(message);
   } });
   const result = await readReviews(source(failing("unavailable: GitHub is down"), comparing().compare));
-  expect(result.reviews[0]).toMatchObject({ card: null, state: "ready", freshness: { kind: "current" } });
+  expect(result.reviews[0]).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
   expect(result.warnings).toEqual(["Some pull requests could not be loaded. Refresh to retry."]);
   await expect(readReviews(source(failing("access: account changed"), comparing().compare))).rejects.toThrow("access:");
+});
+
+test("a PR GitHub does not return leaves its head unknown and is not compared", async () => {
+  withStore(store => {
+    attempt(store, key, first, done(first));
+    attempt(store, { ...key, number: 21 }, first, done(first));
+  });
+  const cmp = comparing();
+  const result = await readReviews(source(github({ 12: { head: sha("b") } }), cmp.compare));
+  const byNumber = new Map(result.reviews.map(r => [r.number, r]));
+  expect(byNumber.get(21)).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
+  expect(byNumber.get(12)).toMatchObject({ state: "ready", freshness: { kind: "current" } });
+  expect(cmp.calls).toHaveLength(0);
 });
 
 test("an unidentified account or repository is refused", async () => {

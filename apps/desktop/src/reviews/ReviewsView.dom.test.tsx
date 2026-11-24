@@ -152,6 +152,32 @@ test("AC6 search by title or number and the state, freshness and source filters 
   expect(document.body.querySelectorAll("tbody tr").length).toBeGreaterThan(1);
 });
 
+test("an unknown PR head reads head unknown on card and list, goes by state, and has its own freshness filter", async () => {
+  const unknown = { kind: "unknown" as const };
+  await render(async () => snapshot([
+    review(1, { state: "ready", freshness: unknown, card: null }),
+    review(2, { state: "published", publication: "published", freshness: unknown }),
+    review(3, { state: "ready", freshness: behind }),
+    review(4, { state: "ready" }),
+  ]));
+  expect(numbersIn(lane("Behind"))).toEqual(["#3"]);
+  expect(numbersIn(lane("Waiting on you"))).toEqual(["#1", "#4"]);
+  expect(numbersIn(lane("Published"))).toEqual(["#2"]);
+  const tile = lane("Waiting on you")!.querySelector(".review-summary-card")!;
+  expect(tile.textContent).toContain("Pull request #1");
+  expect(tile.textContent).toContain("· head unknown");
+  expect(tile.querySelector(".review-behind")).toBeNull();
+  await choose("Freshness", "unknown");
+  expect(numbersIn(document.body.querySelector(".board"))).toEqual(["#1", "#2"]);
+  await choose("Freshness", "current");
+  expect(numbersIn(document.body.querySelector(".board"))).toEqual(["#4"]);
+  await choose("Freshness", "unknown");
+  await click(button("List"));
+  const rows = [...document.body.querySelectorAll("tbody tr")];
+  expect(rows.map(r => r.querySelector(".flow-id")?.textContent)).toEqual(["#1", "#2"]);
+  for (const row of rows) expect(row.textContent).toContain("head unknown");
+});
+
 test("an empty list says so, and the Review rules moved to this toolbar", async () => {
   await render(async () => snapshot([]));
   expect(document.body.textContent).toContain("No Keryx reviews yet");

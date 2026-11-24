@@ -212,7 +212,7 @@ function RepositoryReviews({ cwd, expectedViewer, active, focus, onIndicatorChan
         </select>
         <select className="select-compact" aria-label="Freshness" value={filters.freshness} disabled={!snapshot}
           onChange={e => setFilter("freshness", e.target.value as ReviewFilters["freshness"])}>
-          <option value="">Any freshness</option><option value="current">Current</option><option value="behind">Behind</option>
+          <option value="">Any freshness</option><option value="current">Current</option><option value="behind">Behind</option><option value="unknown">Unknown</option>
         </select>
         <select className="select-compact" aria-label="Source" value={filters.source} disabled={!snapshot}
           onChange={e => setFilter("source", e.target.value as ReviewFilters["source"])}>

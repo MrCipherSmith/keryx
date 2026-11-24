@@ -26,12 +26,12 @@ export const SOURCE_LABEL: Record<ReviewSource, string> = {
   existing: "Existing review",
 };
 
-/** A freshness kind this build does not know reads as neither current nor behind. */
+/** Only `behind` is behind: `unknown` (PR head unread) and a kind this build does not know are not. */
 export function isBehind(freshness: ReviewFreshness | { kind: string }): freshness is Extract<ReviewFreshness, { kind: "behind" }> {
   return freshness.kind === "behind";
 }
 
-/** Column choice order: closed → running → needs_answer → behind → by state. */
+/** Column choice order: closed → running → needs_answer → behind → by state. An unknown PR head goes by state. */
 export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness">): ReviewColumn {
   const { state } = review;
   if (state === "closed") return "closed";
@@ -43,6 +43,7 @@ export function reviewColumn(review: Pick<ReviewSummary, "state" | "freshness">)
 
 export function freshnessLabel(freshness: ReviewFreshness | { kind: string }): string {
   if (freshness.kind === "current") return "current";
+  if (freshness.kind === "unknown") return "head unknown";
   if (!isBehind(freshness)) return "";
   const amount = freshness.commits === null ? "behind" : `behind ${freshness.commits}`;
   return freshness.rewritten ? `${amount} · history rewritten` : amount;
@@ -84,7 +85,7 @@ export function reviewTitle(review: Pick<ReviewSummary, "number" | "card">): str
 
 export interface ReviewFilters {
   state: ReviewState | "";
-  freshness: "current" | "behind" | "";
+  freshness: ReviewFreshness["kind"] | "";
   source: ReviewSource | "";
 }
 
@@ -107,7 +108,7 @@ export function filterReviewList(reviews: readonly ReviewSummary[], filters: Rev
   return reviews.filter(review =>
     (showClosed || review.state !== "closed") &&
     (!filters.state || review.state === filters.state) &&
-    (!filters.freshness || (filters.freshness === "behind" ? isBehind(review.freshness) : review.freshness.kind === "current")) &&
+    (!filters.freshness || review.freshness.kind === filters.freshness) &&
     (!filters.source || review.source === filters.source) &&
     matchesSearch(review, query));
 }

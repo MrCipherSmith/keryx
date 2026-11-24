@@ -7,7 +7,8 @@ import type { DeskResult, DeskReviewAction, DeskRevision, DeskRunState } from ".
 export type ReviewState = "queued" | "running" | "needs_answer" | "stopped" | "ready" | "published" | "closed";
 export type ReviewOnHeadMove = "ask" | "follow" | "ignore";
 export type ReviewSource = "manual" | "scheduled" | "existing";
-export type ReviewFreshness = { kind: "current" } | { kind: "behind"; commits: number | null; rewritten: boolean };
+/** `unknown`: the PR head could not be read (the PR card is unreadable or the PR is missing). */
+export type ReviewFreshness = { kind: "current" } | { kind: "unknown" } | { kind: "behind"; commits: number | null; rewritten: boolean };
 /** GitHub's comparison of the reviewed head (base) with the PR head. */
 export interface ReviewCompare { status: "ahead" | "behind" | "diverged" | "identical"; aheadBy: number }
 
@@ -99,9 +100,10 @@ export function reviewState(latest: ReviewAttemptSummary, closed: boolean): Revi
   return "stopped";
 }
 
-/** Whether the PR head moved past the reviewed head. An unknown PR head or reviewed head cannot be behind. */
+/** Whether the PR head moved past the reviewed head. An unknown PR head is `unknown`; an unknown reviewed head cannot be behind. */
 export function freshness(reviewedHead: string | null, prHead: string | null, compare?: ReviewCompare | null): ReviewFreshness {
-  if (!reviewedHead || !prHead || reviewedHead === prHead || compare?.status === "identical") return { kind: "current" };
+  if (!prHead) return { kind: "unknown" };
+  if (!reviewedHead || reviewedHead === prHead || compare?.status === "identical") return { kind: "current" };
   if (!compare) return { kind: "behind", commits: null, rewritten: false };
   return { kind: "behind", commits: compare.aheadBy, rewritten: compare.status !== "ahead" };
 }

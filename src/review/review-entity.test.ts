@@ -59,10 +59,14 @@ describe("reviewState follows the specification table", () => {
 });
 
 describe("freshness", () => {
-  test("current when the reviewed head is the PR head or the PR head is unknown", () => {
+  test("current when the reviewed head is the PR head or the reviewed head is unknown", () => {
     expect(freshness(sha("b"), sha("b"))).toEqual({ kind: "current" });
-    expect(freshness(sha("b"), null)).toEqual({ kind: "current" });
     expect(freshness(null, sha("b"))).toEqual({ kind: "current" });
+  });
+  test("unknown when the PR head is unknown, whatever the comparison says", () => {
+    expect(freshness(sha("b"), null)).toEqual({ kind: "unknown" });
+    expect(freshness(null, null)).toEqual({ kind: "unknown" });
+    expect(freshness(sha("b"), null, { status: "ahead", aheadBy: 3 })).toEqual({ kind: "unknown" });
   });
   test("behind with the commit count when the PR head descends from the reviewed head", () => {
     expect(freshness(sha("b"), sha("c"), { status: "ahead", aheadBy: 3 })).toEqual({ kind: "behind", commits: 3, rewritten: false });
@@ -114,7 +118,7 @@ describe("summarizeReview", () => {
     expect(summarizeReview(row([attempt()]), card({ state: "merged" })).state).toBe("closed");
     expect(summarizeReview(row([attempt()]), card({ state: "closed" })).state).toBe("closed");
     const unread = summarizeReview(row([attempt()]), null);
-    expect(unread).toMatchObject({ card: null, state: "ready", freshness: { kind: "current" } });
+    expect(unread).toMatchObject({ card: null, state: "ready", freshness: { kind: "unknown" } });
   });
 
   test("without a reviewed round freshness compares the requested head and findings stay unknown", () => {
