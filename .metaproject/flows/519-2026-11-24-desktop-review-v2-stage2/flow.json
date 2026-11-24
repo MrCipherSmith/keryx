@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:16:18.886Z",
-  "updatedAt": "2026-11-24T09:21:54.440Z",
+  "updatedAt": "2026-11-24T09:57:38.725Z",
   "source": {
     "type": "description",
     "ref": null
@@ -296,7 +296,7 @@
       "id": "T15",
       "title": "Fix round 1 backend (FA-1..FA-17)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -310,23 +310,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
       "title": "Fix round 1 Desktop (FB-1..FB-12)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:38:39.616Z",
+            "outcome": "started",
+            "detail": "519-T16"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -497,6 +505,21 @@
       "at": "2026-11-24T09:21:54.440Z",
       "event": "task-attempt",
       "detail": "T15: started (attempt 1) — 519-T15"
+    },
+    {
+      "at": "2026-11-24T09:38:39.412Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 1 backend (FA-1..FA-17)"
+    },
+    {
+      "at": "2026-11-24T09:38:39.616Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 519-T16"
+    },
+    {
+      "at": "2026-11-24T09:57:38.725Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 1 Desktop (FB-1..FB-12)"
     }
   ],
   "acKinds": {
