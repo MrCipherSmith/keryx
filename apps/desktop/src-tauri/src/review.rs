@@ -220,6 +220,35 @@ async fn invoke_review_at_with(
     .map_err(|e| e.to_string())?
 }
 
+/// `GH_TOKEN` of the GitHub account the project selected in Settings, so a terminal or agent started
+/// in it calls GitHub as that account whichever one `gh` has active. Empty when the project selected
+/// none or the reader cannot say; the terminal then starts as it did before.
+pub(crate) fn project_github_env(app: &AppHandle, root: &std::path::Path) -> std::collections::HashMap<String, String> {
+    let state = app.state::<AppState>();
+    let env = state.environment();
+    let prefs = settings::load_settings(app);
+    let Ok(exe) = std::env::current_exe() else { return Default::default() };
+    let Ok(reader) = locator::locate_for_app(
+        prefs.keryx_source,
+        prefs.custom_path.as_deref(),
+        exe.parent(),
+        env.get("PATH").map(OsStr::new),
+        true,
+    ) else {
+        return Default::default();
+    };
+    let mut cmd = Command::new(reader.path);
+    cmd.current_dir(root).env_clear().envs(env).args(["review", "accounts", "env", "--json"]);
+    run_reader(cmd).ok().map(|value| github_env_from(&value)).unwrap_or_default()
+}
+
+fn github_env_from(value: &Value) -> std::collections::HashMap<String, String> {
+    value.get("env").and_then(Value::as_object).into_iter().flatten()
+        .filter(|(name, _)| name.as_str() == "GH_TOKEN")
+        .filter_map(|(name, token)| token.as_str().map(|token| (name.clone(), token.to_owned())))
+        .collect()
+}
+
 fn github_accounts_args(action: &str, login: Option<&str>, skip: bool) -> Result<Vec<String>, String> {
     let mut args = vec!["review".into(), "accounts".into(), action.into(), "--json".into()];
     match (action, login, skip) {
@@ -613,6 +642,16 @@ pub async fn review_watcher(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn github_env_keeps_only_the_token() {
+        let value = serde_json::json!({"login": "bob", "env": {"GH_TOKEN": "t0ken", "PATH": "/evil", "GH_DEBUG": 1}});
+        let got = super::github_env_from(&value);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got.get("GH_TOKEN").map(String::as_str), Some("t0ken"));
+        assert!(super::github_env_from(&serde_json::json!({"login": null, "env": {}})).is_empty());
+        assert!(super::github_env_from(&serde_json::json!("nope")).is_empty());
+    }
+
     use super::*;
 
     #[test]

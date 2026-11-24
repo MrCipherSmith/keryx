@@ -57,6 +57,8 @@ fn sink(channel: Channel<PtyEvent>) -> crate::pty::Sink {
 pub fn open_tab(app: &AppHandle, window: &str, root: &Path, owner: Owner, cols: u16, rows: u16) -> Result<TabInfo, String> {
     let env = app.state::<AppState>().environment().clone();
     let env = if env.is_empty() { std::env::vars().collect() } else { env };
+    let mut env = env;
+    env.extend(crate::review::project_github_env(app, root));
     let pty = app.state::<PtyManager>().open(OpenSpec { window, owner, cwd: root, env: &env, cols, rows, program: None, title: None, on_exit: None })?;
     let info = pty.info();
     if owner == Owner::Agent {
@@ -96,6 +98,8 @@ pub fn open_run_tab(app: &AppHandle, window: &str, root: &Path, argv: &[String],
     let Some((program, rest)) = argv.split_first() else { return Err("Nothing to run".into()) };
     let env = app.state::<AppState>().environment().clone();
     let env = if env.is_empty() { std::env::vars().collect() } else { env };
+    let mut env = env;
+    env.extend(crate::review::project_github_env(app, root));
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     let (hook_app, hook_window) = (app.clone(), window.to_string());
     let pty = app.state::<PtyManager>().open(OpenSpec {

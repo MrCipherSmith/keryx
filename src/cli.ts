@@ -93,6 +93,7 @@ import {
   printCommandHelp,
   registerModelTurnPort,
   shouldInterceptHelp,
+  applyProjectGithubAccount,
 } from "./cli-registry";
 
 export {
@@ -177,6 +178,7 @@ export async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
+    await applyProjectGithubAccount(args);
     await route(args.slice(1));
     return;
   }

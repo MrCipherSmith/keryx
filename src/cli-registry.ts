@@ -106,6 +106,7 @@ registerBoardReader(readDigestBoard);
 // The native session `/product` inspection reads the open report the same way, through the product command's reader.
 registerOpenIntentReader(readOpenIntents);
 
+export { applyProjectGithubAccount } from "./review/project-github-env";
 export const VERSION = packageJson.version;
 
 /**
