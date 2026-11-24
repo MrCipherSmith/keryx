@@ -24,3 +24,22 @@ State × event matrix: not applicable — this flow changes skill text and, late
 
 - Stage 3 may name the update command or the publish variants differently from the spec; the procedure then needs a follow-up edit when T8 runs.
 - Stage 3 may also edit `review-orchestrator` or `desk-publication.ts`; expected overlap is recorded in the PR body.
+
+## PR scope and conversation parity (T15–T19)
+
+| Task | Behavior | Evidence |
+| --- | --- | --- |
+| T15 | Keep the base tip and head as PR identity. Compute paths, slices and reviewer inputs against the comparison base of the current round. | Divergent branches, previous round, live PR file counts |
+| T16 | Associate a manual launch with its originating ACP session before dispatch. Resolve the card through the repository and viewer's persisted attempt. Register a session-owned PR package during its lifecycle. | Chat → Reviews → same session, card → session → same attempt, ordinary follow-up |
+| T17 | Show the PR, changed files and line counts, planned checks and selection reasons, progress and next action. | Prepared/live plan and legacy records |
+| T18 | Stop the child when Desktop owns the next decision. Preserve one actionable question. | Coordinator pause and single-reviewer regression tests |
+| T19 | Exercise both entry points on the pinned integration PR and compare the plan with the remote PR. | Record the attempt and session identities and actual coverage |
+
+
+## Large reviews and model tiers
+
+| Task | Change | Evidence |
+| --- | --- | --- |
+| T20 | Raise confirmation thresholds, record bounded automatic expansion and respect the time budget on resume. | Large-plan and changed-revision regressions |
+| T21 | Resolve the tier and provider for each reviewer from its role, assigned work and launch choices. | Prepared plan, native dispatch and model selection tests |
+| T22 | Compare live routing with the pinned review plan and verify manual, automatic and over-budget cases. | Local run record and test summaries |
