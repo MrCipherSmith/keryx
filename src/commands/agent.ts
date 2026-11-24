@@ -1925,7 +1925,21 @@ export interface AgentInstructionContext {
    * and does not disturb the cached prompt prefix.
    */
   herdrCore?: string | undefined;
+  /**
+   * Flow 523: the ACP client runs terminals (Keryx Desktop advertised `_meta.keryx.terminal: true`), so a
+   * reply's single-command shell block gets a Run button there, and the run's result comes back as a
+   * terminal-result note that starts the next turn by itself (`src/acp/terminal-result.ts`). Absent or
+   * false, the instruction is byte-identical to what it was.
+   */
+  clientRunsTerminal?: boolean;
 }
+
+/** Flow 523: the bullet a session whose client runs terminals gets (see `AgentInstructionContext.clientRunsTerminal`). */
+const CLIENT_RUNS_TERMINAL_RULE =
+  "- In the Keryx desktop, a shell code block in your reply that holds exactly one command gets a Run button. " +
+  "When the user runs it, the command's exit code and output come back to you as an untrusted terminal-result note " +
+  "and your next turn starts by itself. So when you suggest a command for the user to run, put one command per block " +
+  "and end your turn; do not ask the user to paste the output.\n";
 
 /**
  * The system-prompt guidance for a session that joined the agent bus,
@@ -2056,6 +2070,7 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "same head hoping for more.\n" +
     "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
     "to run a known keryx workflow.\n" +
+    (ctx.clientRunsTerminal === true ? CLIENT_RUNS_TERMINAL_RULE : "") +
     "- Tool-call budget: shell_exec, file-mutating shell, workspace_create/workspace_propose, and spawn_subagent " +
     "all share ONE small per-turn pool (distinct non-read actions), separate from the much larger read-tool pool. " +
     (hasGraph

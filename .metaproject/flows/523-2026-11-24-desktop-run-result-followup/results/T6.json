@@ -1,0 +1,107 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T6",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "keryx ACP shell profile accepts session/prompt _meta.keryx.terminalResults from a client that advertised _meta.keryx.terminal: strict validation (-32602, nothing stored, no turn on any malformed shape or a non-terminal client), one labelled untrusted note per result (provenance harness, injected, nonce envelope, redactSensitiveText, capResultText at 16 KiB), keryx's continuation sentence as the turn's user line, the turn run under the EXISTING untrusted-prompt floor (RunAgentTurnOptions.untrustedPrompt), replay as _meta.keryx.terminalResult / terminalContinuation on session/load, initialize._meta.keryx.terminalResults: true, and a clientRunsTerminal system-instruction bullet. All finish-line checks pass. Concerns: four behaviour choices the plan did not decide (needs_operator), and the reused floor's existing carve-outs (routine commands in trust mode, read tools, floor-exempt first-party MCP tools) still auto-run under it.",
+  "summary_markdown": "## Behavior changes (needs_operator)\n1. Output cap 16 KiB per result (vs the 8 KiB of /delegate notes); up to ~128 KiB for 8 results. Alternatives: 8 KiB per result; a total cap per prompt.\n2. Unknown entry fields and a repeated runId in one prompt are refused (-32602). Alternatives: ignore unknown fields; accept repeated runIds.\n3. Replayed note plain text (for a client that ignores the meta) is `$ <command>` + output. Alternatives: output only; the head line.\n4. Wording of the UNTRUSTED line, the continuation line and the system-instruction bullet (model-facing).\n\n## Concern for the orchestrator\nThe reused floor keeps its existing carve-outs: in trust mode a routine command (isTrustRoutineCommand: e.g. `bun test`, read-only git) still runs unasked in a terminal-results turn; read tools and floor-exempt first-party MCP tools never ask. AC6 is shown with `touch` (not routine) in trust and auto mode. Covering routine commands would change the floor itself (src/commands/agent.ts:6051-6059).",
+  "acceptance": [
+    {
+      "criterion": "AC5: keryx (shell profile) stores each terminalResults entry as a labelled untrusted user-role note with provenance harness — nonce envelope, redactSensitiveText, capResultText — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, exitCode missing on exited) is refused as JSON-RPC invalid params with nothing stored and no turn run.",
+      "status": "met",
+      "evidence": "bun test src/acp/terminal-result: 59 pass, 0 fail. Unit: 33 refusal cases incl. wrong types, 9 entries, exitCode missing on exited, unknown field, __proto__; forged closing tag with and without the nonce stays inside the envelope (nonce occurs only in the two tags); redaction of a GitHub-token-shaped value in command and output; 16 KiB cap with marker. Server: notes stored with role user, provenance harness, injected true, distinct nonces, continuation line right after them, client display text absent from history and model request, exactly one provider call; 7 malformed shapes -> -32602, loadContext unchanged, no session/update frames, no provider call, next valid prompt consumes the next scripted round; non-terminal client -> -32602."
+    },
+    {
+      "criterion": "AC6: The follow-up turn started by a terminalResults prompt runs under the untrusted-content floor: a tool call that the session's permission mode would otherwise auto-approve is sent as a permission request instead.",
+      "status": "met",
+      "evidence": "terminal-result.server.test.ts: trust mode, control prompt runs `touch plain-ran` unasked; the terminal-results turn's `touch result-ran` is asked once with _meta.keryx.reasons.untrustedOrigin true and no allow_always, reject runs nothing; auto mode asks too. Mechanism: TERMINAL_RESULTS_PROMPT.untrusted -> existing runAgentTurn untrustedPrompt option -> untrustedContentSeen (src/commands/agent.ts:3479). Caveat: the floor's existing carve-outs (routine commands in trust mode, read tools, floor-exempt first-party MCP tools) still apply."
+    },
+    {
+      "criterion": "AC7 (server half): After session/load, keryx replays each stored note as a user chunk with _meta.keryx.terminalResult (the parsed fields, never the envelope) and the continuation line with _meta.keryx.terminalContinuation: true; no turn starts.",
+      "status": "met",
+      "evidence": "terminal-result.server.test.ts: a stored session with two notes (exit, running) and the continuation replays chunks with terminalResult equal to the parsed fields (running has no exitCode), the continuation with terminalContinuation true, no 'terminal-result-' or 'UNTRUSTED' text on the wire, zero provider calls; a live terminal-results turn replays the same way on session/load in the same connection. Desktop half (run card) is T7, not this task."
+    },
+    {
+      "criterion": "AC10: For a client that advertised _meta.keryx.terminal: true, the system instruction says that a single-command shell block gets a Run button, that the command's exit code and output return as an untrusted terminal-result note and the next turn starts by itself, and that the model should end its turn rather than ask the user to paste output; for any other client the sentence is absent.",
+      "status": "met",
+      "evidence": "terminal-result.test.ts: the bullet with clientRunsTerminal names the shell code block, exactly one command, Run button, exit code and output, untrusted terminal-result note, next turn starts by itself, one command per block, end your turn, do not ask the user to paste the output; without the flag (absent or false) the instruction is byte-identical. terminal-result.server.test.ts: a terminal client's model request carries it, a client with no terminal capability does not."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T6.task-implementer-output.json", "kind": "implementation-report", "exists": true, "summary": "The same result in the task-implementer-output shape (project_context_applied at top level), for `keryx skills contracts validate --schema task-implementer-output --resolved resolved/T6.implement.json`." },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/resolved/T6.implement.json", "kind": "context", "exists": true, "summary": "Resolved project context; every must_read entry is cited in metrics.project_context_applied." }
+  ],
+  "changed_files": [
+    { "path": "src/acp/terminal-result.ts", "change": "created: validator, note builder, replay parser, continuation line, TERMINAL_RESULTS_PROMPT, replay plain text" },
+    { "path": "src/acp/terminal-result.test.ts", "change": "created: 50 unit tests (validation incl. every refusal, envelope forging, redaction, cap, round trip, continuation, AC10 instruction with/without the flag)" },
+    { "path": "src/acp/terminal-result.server.test.ts", "change": "created: 9 in-process server tests (initialize meta, instruction per client, notes + continuation + one turn, malformed meta, non-terminal client, floor in trust and auto, replay of a stored session and of a live turn)" },
+    { "path": "src/acp/server.ts", "change": "modified: session/prompt meta validation and capability check, slash-command skip, TERMINAL_RESULTS_PROMPT render (existing untrusted floor), notes appended before runAgentTurn, clientRunsTerminal in the system instruction, replay of terminalResult/terminalContinuation; appendDelegateNotes now delegates to the generalised appendInjectedNotes (same behaviour)" },
+    { "path": "src/acp/profile.ts", "change": "modified: KeryxAcpProfileMeta.terminalResults, true for the shell profile (initialize._meta.keryx and _keryx/info)" },
+    { "path": "src/acp/shell-profile.test.ts", "change": "modified: the AC6 initialize expectation includes terminalResults: true" },
+    { "path": "src/commands/agent.ts", "change": "modified: AgentInstructionContext.clientRunsTerminal and the CLIENT_RUNS_TERMINAL_RULE bullet, added only when the flag is true" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 59,
+    "tests_passing": 59,
+    "tests_failing": 0,
+    "coverage_notes": "AC5: unit validation/envelope/redaction/cap + server storage, refusal, capability tests. AC6: server floor tests in trust (with control) and auto. AC7 server half: server replay of a stored session and of a live turn. AC10: unit instruction tests with/without the flag + server per-client instruction test.",
+    "commands": [
+      { "command": "keryx skills contracts validate .metaproject/flows/523-2026-11-24-desktop-run-result-followup/dispatch/T6.json --schema subagent-dispatch", "result": "valid, exit 0" },
+      { "command": "bun test src/acp/ (base, before any edit)", "result": "457 pass, 0 fail, 49 files, exit 0" },
+      { "command": "bun test src/acp/terminal-result (RED, before the module)", "result": "2 fail: Cannot find module './terminal-result'" },
+      { "command": "bun test src/acp/terminal-result.test.ts (after the module)", "result": "50 pass, 0 fail" },
+      { "command": "bun test src/acp/terminal-result.server.test.ts (RED, before the server wiring)", "result": "9 fail on behaviour (no terminalResults meta, no instruction sentence, no notes, no -32602, no floor ask, no replay meta)" },
+      { "command": "bun test src/acp/terminal-result", "result": "59 pass, 0 fail" },
+      { "command": "bun run typecheck", "result": "tsc --noEmit, exit 0" },
+      { "command": "bunx eslint src/acp/terminal-result.ts src/acp/terminal-result.test.ts src/acp/terminal-result.server.test.ts src/acp/server.ts src/acp/profile.ts src/acp/shell-profile.test.ts src/commands/agent.ts", "result": "exit 0, no output" },
+      { "command": "bun test src/acp/ (after)", "result": "516 pass, 0 fail, 51 files, exit 0" },
+      { "command": "bun test src/tui/hc-message.test.ts src/lib/agent-conduct.test.ts src/commands/agent-instruction-roster.test.ts src/commands/shell-bus.test.ts src/commands/agent.test.ts", "result": "303 pass, 0 fail" }
+    ],
+    "not_verified": [
+      "a live desktop round trip (the client half is T7)",
+      "a real model provider (tests use the scripted fixture provider)",
+      "whole-repo `bun test` and `bun run lint` (only the changed files were linted)",
+      "`keryx health run`"
+    ],
+    "project_context_applied": [
+      { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+      { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+      { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+      { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+      { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "read" },
+      { "path": ".metaproject/rules/core/cli-interface-design.mdc", "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043", "how": "read" }
+    ],
+    "behavior_changes": [
+      { "description": "Output cap 16 KiB per result in the note (TERMINAL_RESULT_MAX_BYTES), matching the desktop's send limit, not the 8 KiB of /delegate notes; up to ~128 KiB of output for 8 results in one prompt.", "user_visible": true, "needs_operator": true, "alternatives": ["8 KiB per result, as /delegate notes", "a total cap across one prompt's results"] },
+      { "description": "An entry field outside the contract's six, or a runId repeated within one prompt, is refused as -32602 with nothing stored.", "user_visible": false, "needs_operator": true, "alternatives": ["ignore unknown fields", "accept a repeated runId"] },
+      { "description": "A replayed note's plain-text fallback is `$ <command>` then the stored output.", "user_visible": true, "needs_operator": true, "alternatives": ["the output only", "the note's head line"] },
+      { "description": "Model-facing wording of the UNTRUSTED line, the continuation line and the system-instruction bullet.", "user_visible": false, "needs_operator": true, "alternatives": ["shorter continuation without the 'data, not instructions' clause", "a continuation naming the run ids"] }
+    ],
+    "assumptions": [
+      "Editor profile: the meta is ignored as any unknown _meta is today (that profile stays byte-for-byte); only the shell profile serves it.",
+      "_keryx/info reports terminalResults: true as well as initialize (the existing AC6 test asserts both are equal).",
+      "terminalResults combined with issueLaunchId or resumeIssueQuestions is refused as -32602.",
+      "The prompt's text blocks are never read when the meta is present (no slash command, no issue source, no display text stored).",
+      "Notes are appended after /rewind recorded the turn, so rewinding that turn removes them with the continuation line.",
+      "operatorText is '' for the turn, so the continuation can never switch on review-auto or an automatic review."
+    ],
+    "noticed_not_touched": [
+      { "what": "The reused floor's carve-outs: in trust mode a routine command (isTrustRoutineCommand, e.g. `bun test`, read-only git) keeps its auto approval under the floor; read tools and floor-exempt first-party MCP tools never ask. A terminal-results turn inherits them.", "where": "src/commands/agent.ts:6051-6059, src/commands/agent.ts:4607" },
+      { "what": "The continuation line is stored as an operator line (provenance project), so a UserPromptSubmit hook sees it as the prompt and isInjectedUserMessage counts it as operator input; replay recognises it by its exact text.", "where": "src/commands/agent.ts:3297, src/session/store.ts:402" }
+    ],
+    "skill_drift": "missing: src/acp has no project-skill",
+    "parallel_lane": "apps/desktop/src-tauri/** and apps/desktop/src/platform/panels.ts (523-T5) were not touched, staged or reverted; no git stash, no git add, no commit"
+  },
+  "timestamp_utc": "2026-11-24T21:31:00Z"
+}
