@@ -12,7 +12,7 @@ import type { reviewPublish } from "../review/ReviewPublishDialog";
 import type { ReviewCard } from "../review/types";
 import { ReviewWorkspace, type ReviewIntent } from "../review/ReviewWorkspace";
 import type { RunObserver } from "../review/useReviewRuns";
-import { findingsLabel, fixFindingsPrompt, fixFindingsTarget, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
+import { findingsLabel, fixFindingsPrompt, type FixFindingsFlow, fixFindingsTarget, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
 
 const ATTEMPT_STATE: Record<DeskRunState, string> = {
   queued: "Queued", running: "Running", cancelling: "Stopping", completed: "Completed", partial: "Partial",
@@ -66,8 +66,11 @@ interface Props {
   onAccessLost?: ((reason: string) => void) | undefined;
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
-  /** "Fix findings" on the viewer's own PR: the PR card and the prompt to prefill in its bound session (never sent). */
-  onFixFindings?: ((card: ReviewCard, prompt: string) => void) | undefined;
+  /**
+   * "Fix findings" on the viewer's own PR: the PR card, the prompt to prefill in its bound session (never sent) and the
+   * prompt for a fix round of the PR's Flow, for the caller that knows the PR has one.
+   */
+  onFixFindings?: ((card: ReviewCard, prompt: string, fixRoundPrompt: (flow: FixFindingsFlow) => string) => void) | undefined;
   onRefresh: () => void;
   /** The board action's intent was taken by the review interface. */
   onIntentConsumed?: (() => void) | undefined;
@@ -117,7 +120,7 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
         <span className="flow-id">{target.repo} #{review.number}</span>
         <span className="grow" />
         {fix && onFixFindings && <button type="button" className="btn btn-sm" aria-label={`Fix findings of pull request #${review.number}`}
-          onClick={() => onFixFindings(fix.card, fixFindingsPrompt(review, target, fix))}>Fix findings</button>}
+          onClick={() => onFixFindings(fix.card, fixFindingsPrompt(review, target, fix), flow => fixFindingsPrompt(review, target, fix, flow))}>Fix findings</button>}
         {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request" onOpen={openPullRequestLink}><Icon name="external" /></ReviewBrowserLink>}
         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close review"><Icon name="x" size={16} /></button>
       </div>

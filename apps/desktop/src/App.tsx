@@ -21,6 +21,7 @@ import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
 import type { ReviewIntent } from "./review/ReviewWorkspace";
+import type { FixFindingsFlow } from "./reviews/model";
 import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
@@ -430,7 +431,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   /**
    * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
    * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag. "Fix findings" on the Reviews
-   * tab takes the same path with its own prompt.
+   * tab takes the same path with its own prompt on a PR without a Flow.
    */
   const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => acp.current.linkFlow(id, dir));
   const flowLinkActions = flowLinks.actions;
@@ -455,8 +456,18 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const openPrFromBoard = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) =>
     void openPrSession(card, target, subject, card.url), [openPrSession]);
   const createFlowFromBoard = useCallback((card: ReviewCard, subject: SessionSubject) => void createPrFlow(card, subject), [createPrFlow]);
-  const fixFindingsFromReviews = useCallback((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string) =>
-    void createPrFlow(card, prSubject(card, repository.repo, repository.repositoryId), prompt), [createPrFlow]);
+  /**
+   * "Fix findings" on the Reviews tab. On a PR with a Flow (by the work row's rule: its prUrl, or a bound session's flow
+   * flag) the Flow's session gets a fix-round prompt for that Flow and no link is expected; otherwise Create Flow's path.
+   */
+  const fixFindingsFromReviews = useCallback((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string,
+    fixRoundPrompt: (flow: FixFindingsFlow) => string) => {
+    const subject = prSubject(card, repository.repo, repository.repositoryId);
+    const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
+    // openPrSession opens the bound session, else a new one working on this same Flow.
+    if (flow) void openPrSession(card, "latest", subject, fixRoundPrompt(flow), true);
+    else void createPrFlow(card, subject, prompt);
+  }, [createPrFlow, openPrSession]);
   const openFlowFromBoard = useCallback((dir: string) => {
     setLinkedFlow(dir);
     setView("flows");

@@ -119,13 +119,24 @@ export function fixFindingsTarget(review: Pick<ReviewSummary, "card" | "state" |
   return attempt ? { card, runId: attempt.id, round: attempt.round, reviewed: attempt.reviewed } : null;
 }
 
-/** The composer text "Fix findings" prefills (never sent): the PR, the reviewed round and range, the open counts and how to read the findings. */
-export function fixFindingsPrompt(review: Pick<ReviewSummary, "number" | "findings">, key: Omit<DeskRunKey, "number">, target: FixFindingsTarget): string {
+/** The PR's existing Flow a fix round goes to (a `FlowCard`'s id and package directory). */
+export interface FixFindingsFlow {
+  id: string;
+  dir: string;
+}
+
+/**
+ * The composer text "Fix findings" prefills (never sent): the PR, the reviewed round and range, the open counts and how to
+ * read the findings. Without `flow` it asks for a new fix flow; with the PR's Flow, for a fix round of that Flow.
+ */
+export function fixFindingsPrompt(review: Pick<ReviewSummary, "number" | "findings">, key: Omit<DeskRunKey, "number">, target: FixFindingsTarget, flow?: FixFindingsFlow): string {
   const counts = (["blocker", "major", "minor"] as const).map(severity => `${review.findings?.[severity] ?? 0} ${severity}`).join(", ");
   const range = `${target.reviewed.baseSha.slice(0, 7)}..${target.reviewed.headSha.slice(0, 7)}`;
   const command = `keryx review desk-run status --json --repo ${key.repo} --repository-id ${key.repositoryId} --viewer ${key.viewer} --number ${review.number} --id ${target.runId}`;
   return [
-    `Create a Keryx fix flow for ${target.card.url} with flow-orchestrator to fix the findings of its Keryx review, and land the fixes on the pull request's branch.`,
+    flow
+      ? `Fix the findings of the Keryx review of ${target.card.url} as a fix round of Keryx Flow #${flow.id} (${flow.dir}) with flow-orchestrator, and land the fixes on the pull request's branch.`
+      : `Create a Keryx fix flow for ${target.card.url} with flow-orchestrator to fix the findings of its Keryx review, and land the fixes on the pull request's branch.`,
     `The review round ${target.round} reviewed ${range} and left ${counts} findings open. Info findings are left out.`,
     `Read the findings with: ${command}`,
   ].join("\n");

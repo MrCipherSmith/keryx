@@ -5,7 +5,9 @@ import { registerDom, unregisterDom } from "./dom";
 // "Fix findings" over the App wiring: pressed in a Review panel of the Reviews tab, it opens the PR's bound
 // session (a new bound one when none exists) with the findings prompt in the composer, not sent, and the one
 // flow package that then appears is offered on the PR's work row as "Link Flow #<id>" and linked only on Link —
-// the Create Flow path. Runs in its own process like app-work-row.fixture.tsx: the production backend caches its
+// the Create Flow path. On a PR that already has a Flow (a bound session's flow flag, or the Flow's prUrl) it opens that
+// Flow's session (the bound one, else a new one working on the Flow) with a fix-round prompt for that Flow, not sent,
+// and expects no link. Runs in its own process like app-work-row.fixture.tsx: the production backend caches its
 // first host connection.
 registerDom();
 const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
@@ -13,7 +15,9 @@ const { emit } = await import("@tauri-apps/api/event");
 const cwd = "/dev/fix-findings";
 const pr = (number: number) => `https://github.com/org/project/pull/${number}`;
 const prSubjectOf = (number: number) => ({ kind: "pr", repo: "org/project", number, url: pr(number) });
-let flowDirs = ["500-existing"];
+let flowDirs = ["500-existing", "520-pr-sixteen"];
+/** Flow #520 names PR #16 by its prUrl; the others name no PR. */
+const flowPr: Record<string, string> = { "520-pr-sixteen": pr(16) };
 const flagWrites: Array<{ sessionId: string; flow?: string; subject?: number }> = [];
 const calls: string[] = [];
 let created = 0;
@@ -35,7 +39,7 @@ function review(number: number): ReviewSummary {
       createdAt: time, finishedAt: time }] }],
     latestRound: 1, reviewed, archived: false, findings, publication: null, source: "manual", flowId: null, tokens: null };
 }
-const reviews = [review(12), review(14)];
+const reviews = [review(12), review(14), review(16)];
 
 mockWindows("fix-findings");
 mockIPC(async (cmd, args) => {
@@ -43,7 +47,7 @@ mockIPC(async (cmd, args) => {
     case "window_initial_cwd": return cwd;
     case "settings_get": return { recentProjects: [] };
     case "projects_state": return [];
-    case "flows_list": return flowDirs.map(dir => ({ id: dir.slice(0, 3), idValid: true, dir, title: "Flow " + dir, status: "initializing", prUrl: null }));
+    case "flows_list": return flowDirs.map(dir => ({ id: dir.slice(0, 3), idValid: true, dir, title: "Flow " + dir, status: "initializing", prUrl: flowPr[dir] ?? null }));
     case "acp_start": return { keryxPath: "/fixture/keryx" };
     case "version_check": return { ok: true };
     case "github_accounts": {
@@ -75,7 +79,7 @@ mockIPC(async (cmd, args) => {
       if ((args as { reviewsOnly?: boolean }).reviewsOnly) return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID",
         viewer: "me", fetchedAt: time, reviews, warnings: [] };
       return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID", viewer: "me", fetchedAt: time,
-        warnings: [], cards: [card(12), card(14)] };
+        warnings: [], cards: [card(12), card(14), card(16)] };
     case "review_run": return { version: 1, runs: [] };
     case "review_watcher": return { version: 1, state: "disabled", events: [] };
     default: return null;
@@ -91,10 +95,10 @@ const host = document.createElement("div");
 document.body.append(host);
 const root = createRoot(host);
 const key = { repo: "org/project", repositoryId: "RID", viewer: "me" };
-const promptFor = (item: ReviewSummary) => {
+const promptFor = (item: ReviewSummary, flow?: { id: string; dir: string }) => {
   const target = fixFindingsTarget(item, key.viewer);
   assert.ok(target, `Review #${item.number} is eligible for Fix findings`);
-  return fixFindingsPrompt(item, key, target);
+  return fixFindingsPrompt(item, key, target, flow);
 };
 const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
 async function waitFor(what: string, ok: () => boolean, ms = 2000) {
@@ -165,6 +169,27 @@ try {
   await waitFor("#14's new session is bound", () => flagWrites.some(write => write.subject === 14));
   assert.equal(newSessions(), beforeNew + 1, "One new bound session");
   assert.ok(!calls.includes("session/prompt"), "The findings prompt is not sent");
+
+  // A PR whose bound session already works on a Flow (#12, linked to #511 above): that session opens with a prompt
+  // for a fix round of that Flow, not sent, and no pending link is registered.
+  const beforeFlow = newSessions();
+  const fixRound = promptFor(reviews[0]!, { id: "511", dir: "511-fix-twelve" });
+  assert.ok(fixRound.includes("fix round of Keryx Flow #511 (511-fix-twelve)"), "The fixture expects the fix-round prompt");
+  await fixFindings(12);
+  await waitFor("#12's session composer holds the fix-round prompt for Flow #511", () => shownComposer()?.value === fixRound);
+  assert.equal(newSessions(), beforeFlow, "The Flow's bound session is reused");
+  assert.ok(!calls.includes("session/prompt"), "The fix-round prompt is not sent");
+
+  // A PR whose Flow names it by prUrl and that has no bound session: a new session working on that Flow, bound to
+  // the PR, gets the fix-round prompt.
+  await fixFindings(16);
+  const fixRound16 = promptFor(reviews[2]!, { id: "520", dir: "520-pr-sixteen" });
+  await waitFor("#16's new session holds the fix-round prompt for Flow #520", () => shownComposer()?.value === fixRound16);
+  await waitFor("#16's new session is bound", () => flagWrites.some(write => write.subject === 16));
+  assert.equal(newSessions(), beforeFlow + 1, "One new session for #16");
+  const sixteen = flagWrites.find(write => write.subject === 16)!.sessionId;
+  assert.ok(flagWrites.some(write => write.sessionId === sixteen && write.flow === "520-pr-sixteen"), "The new session works on Flow #520");
+  assert.ok(!calls.includes("session/prompt"), "The fix-round prompt is not sent");
 } finally {
   await React.act(() => root.unmount());
   clearMocks();

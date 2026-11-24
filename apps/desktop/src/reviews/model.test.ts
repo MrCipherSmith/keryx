@@ -117,3 +117,21 @@ test("the Fix findings prompt names the PR, round, reviewed range and open count
   expect(prompt).toContain("flow-orchestrator");
   expect(prompt).toContain("keryx review desk-run status --json --repo org/repo --repository-id R_1 --viewer me --number 7 --id r2-new");
 });
+
+test("on a PR that has a Flow, the Fix findings prompt asks flow-orchestrator for a fix round of that Flow, not a new flow, and keeps the rest", () => {
+  const item = fixable();
+  const target = fixFindingsTarget(item, "me")!;
+  const key = { repo: "org/repo", repositoryId: "R_1", viewer: "me" };
+  const prompt = fixFindingsPrompt(item, key, target, { id: "511", dir: "511-fix-twelve" });
+  expect(prompt).toContain("fix round of Keryx Flow #511 (511-fix-twelve)");
+  expect(prompt).toContain("flow-orchestrator");
+  expect(prompt).not.toContain("Create a Keryx fix flow");
+  expect(prompt).toContain(own.url);
+  expect(prompt).toContain("round 2");
+  expect(prompt).toContain("dddddddd".slice(0, 7) + ".." + "bbbbbbb");
+  expect(prompt).toContain("1 blocker, 2 major, 0 minor");
+  expect(prompt).toContain("Info findings are left out");
+  expect(prompt).toContain("keryx review desk-run status --json --repo org/repo --repository-id R_1 --viewer me --number 7 --id r2-new");
+  // Without a Flow the prompt is the new-fix-flow one, unchanged.
+  expect(fixFindingsPrompt(item, key, target, undefined)).toBe(fixFindingsPrompt(item, key, target));
+});

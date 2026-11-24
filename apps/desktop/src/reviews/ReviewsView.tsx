@@ -16,7 +16,7 @@ import type { ReviewIntent } from "../review/ReviewWorkspace";
 import type { RunObserver } from "../review/useReviewRuns";
 import {
   COLUMNS, EMPTY_REVIEW_FILTERS, filterReviewList, filtersActive, findingsLabel, freshnessLabel, groupByColumn, isBehind, isClosedOrArchived,
-  publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL, STATE_LABEL, type ReviewColumn, type ReviewFilters,
+  publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL, STATE_LABEL, type FixFindingsFlow, type ReviewColumn, type ReviewFilters,
 } from "./model";
 import { ReviewPanel } from "./ReviewPanel";
 
@@ -46,7 +46,8 @@ interface Props {
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
   /** "Fix findings" in a Review panel: the PR card, the list's repository (to bind the PR's session) and the prompt to prefill. */
-  onFixFindings?: ((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string) => void) | undefined;
+  onFixFindings?: ((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string,
+    fixRoundPrompt: (flow: FixFindingsFlow) => string) => void) | undefined;
   load?: typeof fetchReviews;
   runCommand?: typeof reviewRun | undefined;
   publishCommand?: typeof reviewPublish | undefined;
@@ -272,7 +273,8 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
     [snapshot?.repo, snapshot?.repositoryId, snapshot?.viewer]);
   const review = selected && snapshot?.reviews.find(item => item.id === selected.id);
   const fixFindings = useMemo(() => onFixFindings && target
-    ? (card: ReviewCard, prompt: string) => onFixFindings(card, { repo: target.repo, repositoryId: target.repositoryId }, prompt) : undefined,
+    ? (card: ReviewCard, prompt: string, fixRoundPrompt: (flow: FixFindingsFlow) => string) =>
+      onFixFindings(card, { repo: target.repo, repositoryId: target.repositoryId }, prompt, fixRoundPrompt) : undefined,
   [onFixFindings, target]);
   const narrowed = filtersActive(filters) || !!q.trim();
   const closedCount = snapshot?.reviews.filter(isClosedOrArchived).length ?? 0;
