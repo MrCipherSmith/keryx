@@ -904,3 +904,20 @@ test("ended reviewer context explicitly addresses the current coordinator questi
   expect(commands.filter(a => a.kind === "answer")).toEqual([{ kind: "answer", id: running.id, questionId: q.id, answer: draft }]);
   await click("Close");
 });
+
+test("Open pull request opens the PR through the system browser instead of navigating the app", async () => {
+  const opened: string[] = [];
+  await act(() => root.render(null));
+  await renderComponent({ cwd: "/project", target, review: summary(pr), runCommand: async () => ({ version: 1, runs: [] }),
+    onRefresh: () => {}, onClose: () => {}, openBrowser: async url => { opened.push(url); } });
+  const link = document.querySelector<HTMLAnchorElement>(".review-pr-link")!;
+  expect(link.getAttribute("aria-label")).toBe("Open pull request");
+  const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+  await act(async () => { link.dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(true);
+  expect(opened).toEqual([pr.url]);
+  await renderComponent({ cwd: "/project", target, review: summary({ ...pr, url: "javascript:alert(1)" }), runCommand: async () => ({ version: 1, runs: [] }),
+    onRefresh: () => {}, onClose: () => {}, openBrowser: async url => { opened.push(url); } });
+  expect(document.querySelector(".review-pr-link")).toBeNull();
+  await act(() => root.render(null));
+});

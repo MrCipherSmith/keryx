@@ -1,11 +1,12 @@
 import type { DeskRun, DeskRunKey, DeskRunState } from "../../../../src/review/desk-run-types";
 import type { ReviewAttemptSummary, ReviewRound, ReviewSummary } from "../../../../src/review/review-entity";
-import { useId, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { Icon } from "../components/Icon";
-import { absoluteTime, relativeTime } from "../lib/format";
-import type { FlowCard } from "../platform/commands";
+import { useToast } from "../components/Toasts";
+import { absoluteTime, errMessage, relativeTime } from "../lib/format";
+import type { FlowCard, openExternal } from "../platform/commands";
 import type { reviewRun } from "../platform/reviewRuns";
-import { ReviewBrowserLink } from "../review/ReviewBrowserLink";
+import { openReviewLink, ReviewBrowserLink } from "../review/ReviewBrowserLink";
 import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 import type { reviewPublish } from "../review/ReviewPublishDialog";
 import { ReviewWorkspace, type ReviewIntent } from "../review/ReviewWorkspace";
@@ -68,20 +69,32 @@ interface Props {
   /** The board action's intent was taken by the review interface. */
   onIntentConsumed?: (() => void) | undefined;
   onClose: () => void;
+  /** Opens the PR outside the app; defaults to the system browser. */
+  openBrowser?: typeof openExternal | undefined;
 }
 
 /** One Review: its state, rounds timeline and the review interface of the PR's current range. */
-export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onIntentConsumed, onClose }: Props) {
+export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onIntentConsumed, onClose, openBrowser = openReviewLink }: Props) {
+  const toast = useToast();
   const panel = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const mounted = useRef(false);
   useLayoutEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     const pane = panel.current;
     closeButton.current?.focus();
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       if (pane?.contains(document.activeElement) && before?.isConnected) before.focus();
     };
   }, []);
+  // The app blocks navigation away from itself, so the link is handed to the system browser.
+  const openPullRequestLink = useCallback((url: string) => {
+    void openBrowser(url).catch(cause => {
+      if (mounted.current) toast({ level: "error", title: "Could not open link", detail: errMessage(cause) });
+    });
+  }, [openBrowser, toast]);
   const { card } = review;
   const subject = useMemo(() => ({ ...target, number: review.number }), [target, review.number]);
   const flow = card ? flows?.find(item => item.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase()) : undefined;
@@ -99,7 +112,7 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
       <div className="sheet-head-row">
         <span className="flow-id">{target.repo} #{review.number}</span>
         <span className="grow" />
-        {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request"><Icon name="external" /></ReviewBrowserLink>}
+        {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request" onOpen={openPullRequestLink}><Icon name="external" /></ReviewBrowserLink>}
         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close review"><Icon name="x" size={16} /></button>
       </div>
       <h2 className="sheet-title">{reviewTitle(review)}</h2>

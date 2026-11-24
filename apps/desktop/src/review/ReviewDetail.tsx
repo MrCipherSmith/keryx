@@ -3,7 +3,7 @@ import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import { Spinner } from "../components/ui";
 import { absoluteTime, errMessage, relativeTime } from "../lib/format";
-import { openExternal, openPullRequest, type FlowCard } from "../platform/commands";
+import type { openExternal, FlowCard } from "../platform/commands";
 import { reviewRun } from "../platform/reviewRuns";
 import { PullRequestAutomation } from "./PullRequestAutomation";
 import type { reviewRules } from "../platform/reviewRules";
@@ -14,8 +14,7 @@ import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
 import type { ReviewCard } from "./types";
 import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewReadState";
 import { DiscussionMarkdown } from "./DiscussionMarkdown";
-import { githubPrUrl } from "../lib/githubPr";
-import { ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
+import { openReviewLink, ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
 import { ReviewChecks } from "./ReviewChecks";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { RunLaunchDialog, type ReviewIntent } from "./ReviewWorkspace";
@@ -156,7 +155,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
     const url = reviewUrl(link.getAttribute("href"));
     if (!url || openingLink.current) return;
     openingLink.current = true;
-    const open = openBrowser ?? (githubPrUrl(url) ? openPullRequest : openExternal);
+    const open = openBrowser ?? openReviewLink;
     void open(url).catch(cause => {
       if (mounted.current) toast({ level: "error", title: "Could not open link", detail: errMessage(cause) });
     }).finally(() => { openingLink.current = false; });
