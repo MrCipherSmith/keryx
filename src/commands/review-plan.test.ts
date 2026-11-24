@@ -115,12 +115,12 @@ test("a delta round: the steps run in order, plan.json carries the round, both s
   expect(existsSync(path.join(pkg, "scope-files.json"))).toBe(true);
 });
 
-test("a first round: --ref is the base for scope and slice, no kinds, and the human summary is short", async () => {
+test("a first round: the resolved merge base drives scope and slice, and the human summary is short", async () => {
   await runPlan(["--target", "feature/x", "--ref", "origin/main"], deps({ round: deltaRound({ mode: "first", round: 1, previous: null, range: { base: "c".repeat(40), head: HEAD }, fixHunks: [], newHunks: [] }), slices: [entry("slice-01", ["src/a/a.ts"], { roles: ["review-logic"], depth: "deep" })] }));
   // --ref is also the base `review start` reads the merge-base from (a merged PR's merge-base with origin/main is its head).
   expect(calls[0]).toEqual(["start", "--target", "branch", "--target-ref", "feature/x", "--base", "origin/main"]);
-  expect(calls[1]).toEqual(["scope", "--json", "--ref", "origin/main"]);
-  expect(calls[3]).toEqual(["slice", "--package", pkg, "--ref", "origin/main", "--json"]);
+  expect(calls[1]).toEqual(["scope", "--json", "--ref", "c".repeat(40)]);
+  expect(calls[3]).toEqual(["slice", "--package", pkg, "--ref", "c".repeat(40), "--json"]);
   const plan = await readPlan();
   expect(plan.round.mode).toBe("first");
   expect(plan.slices.fix).toEqual([]);

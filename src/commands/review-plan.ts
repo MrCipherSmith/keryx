@@ -175,8 +175,8 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const delta = isDeltaRound(round) ? round : undefined;
   warnings.push(...(round?.warnings ?? []));
   if (round?.weakPrevious !== undefined) warnings.push(round.weakPrevious);
-  // A delta round is cut over the previous reviewed head; a first round over --ref, else the base start recorded.
-  const baseRef = delta !== undefined ? delta.range.base! : base ?? round?.range.base ?? undefined;
+  // Use the round’s resolved comparison base: the target base remains recorded separately for identity.
+  const baseRef = round?.range.base ?? base;
 
   // 2. scope: the changed files of the round, recorded as scope-files.json (what required and estimate read).
   const scoped = await deps.run(["scope", "--json", ...(baseRef === undefined ? [] : ["--ref", baseRef, ...(head === undefined ? [] : ["--head", head])])]);

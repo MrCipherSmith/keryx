@@ -58,14 +58,14 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   mkdirSync(path.dirname(path.join(root, definition)), { recursive: true });
   writeFileSync(path.join(root, definition), "---\nname: review-team\ndescription: test reviewer\nmodel_tier: light\n---\nReview");
   const plan: ReviewPlan = { v: 1, package: dir, target: { kind: "pr", ref, base, head },
-    round: { number: 2, mode: "delta", previous: "previous", source: "local-package", range: { base, head }, fixHunks: 1, newHunks: 1, priorFindings: 1, carried: 0, line: "" },
+    round: { number: 2, mode: "delta", previous: "previous", source: "local-package", range: { base: "3".repeat(40), head }, fixHunks: 1, newHunks: 1, priorFindings: 1, carried: 0, line: "" },
     slices: { fix: [], new: [] }, roster: [role, "review-style"], dispatches: 3, minutes: { min: 1, max: 2 },
     overThreshold: false, overReasons: [], planKey: "key", warnings: [], next: "dispatch" };
   const drivers = await writeWaveDrivers({ packageDir: dir, manifest, sliceDir: path.join(dir, "slices"), reviewers: plan.roster });
   const requirements: number[] = [];
   let maxContext = Infinity;
   const payloads: Array<{ is_fix_round: boolean; skill_path: string; prior_findings?: unknown[]; metaproject: { graph: unknown };
-    review_context: { scope: { pinned_sources?: Array<{ path: string; attachment: string }> }; token_policy: { omissions: string[] } } }> = [];
+    review_context: { git: { base: string }; pr: { base: string }; scope: { pinned_sources?: Array<{ path: string; attachment: string }> }; token_policy: { omissions: string[] } } }> = [];
   for (const s of slices) writeFileSync(path.join(dir, "slices", s.path), "x".repeat(s.bytes));
   const run: PlanDeps["run"] = async args => {
     if (args[0] === "tier") {
@@ -89,6 +89,8 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(queue.calls).toHaveLength(3);
   const fix = payloads.find(p => p.is_fix_round)!;
   expect(fix.skill_path).toBe(definition);
+  expect(fix.review_context.git.base).toBe("3".repeat(40));
+  expect(fix.review_context.pr.base).toBe(base);
   expect(fix.prior_findings).toEqual([{ round: 1, finding, claimed_disposition: "unreported" }]);
   expect(fix.metaproject.graph).toBeDefined();
   const source = fix.review_context.scope.pinned_sources?.find(file => file.path === "src/a.ts");

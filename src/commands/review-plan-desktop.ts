@@ -90,6 +90,7 @@ export async function prepareDesktopDispatch(
   const allocatePass = desktopPassAllocator(manifest);
   const admitted = new Set<string>();
   const prior = new Map(readPriorFindings(dir).map(entry => [entry.id, entry]));
+  const comparisonBase = plan.round.range.base ?? plan.target.base;
   const layersByFiles = new Map<string, Awaited<ReturnType<typeof buildLayersBlock>>>();
   const lineCounts = new Map<string, number>();
   const skills = new Map<string, { bytes: number; tier?: ModelTier | undefined }>();
@@ -201,7 +202,7 @@ export async function prepareDesktopDispatch(
     const payload = {
       review_context: {
         request: { mode: "source-only", target: plan.target.ref, round: plan.round.number },
-        git: { repo: context.repo, base: plan.target.base, head: plan.target.head }, pr,
+        git: { repo: context.repo, base: comparisonBase, head: plan.target.head }, pr,
         scope: { mode: driver.slices.length ? "diff" : "path", files, changed_lines: scope.changedLines,
           ...(pinned ? { pinned_sources: pinned.sources } : {}) },
         requirements: { project_snapshot: PR_CONTEXT_FILE, flows: snapshot.flows.map(flow => ({ id: flow.id, title: flow.title })) },
