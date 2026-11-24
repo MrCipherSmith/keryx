@@ -5175,9 +5175,10 @@ Use `viewer` with an empty request object to verify the account identity. List, 
 
 ```bash
 keryx issues list --login LOGIN --request '{"source":"assigned","state":"open"}' --json
+keryx issues list --login LOGIN --request '{"source":"repository","state":"open"}' --json
 ```
 
-Use `assigned`, `created`, `mentioned` or `subscribed` for the source. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
+Use `assigned`, `created`, `mentioned` or `subscribed` for the source. The `repository` source lists the issues of the project's GitHub repository instead, resolved from the current directory's GitHub.com fetch remotes with the origin repository first. Pull requests are left out. If a page holds only pull requests, Keryx reads up to three pages in one request. The request fails with a `configuration:` error when the directory has no GitHub.com remote or GitHub has Issues turned off for the repository. Pass an opaque `nextCursor` as `cursor` on the next call with the same account and filters. Use the returned issue `ref` in a `detail` or `comments` request. `project` reads a selected GitHub Project by owner and number or node ID. `move` explicitly updates the selected item’s Status after checking its current value and rereads it. Project reads and writes require matching Projects permissions.
 
 Use `origin` to resolve an existing Flow or session’s issue as the selected viewer. Use `workspace` to inspect an issue’s local checkout, session and Flow. `open-session` and `prepare-flow` resume or create the linked work in the matching checkout. A failed access check means the selected account or its permissions need attention. Reconnect the account and refresh. If the Desktop reports an incompatible CLI, choose the bundled Keryx CLI in Settings.
 
