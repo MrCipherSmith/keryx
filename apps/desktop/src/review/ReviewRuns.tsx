@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 import { DESK_RUN_SCOPE, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
 import { Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
@@ -192,6 +192,8 @@ interface Props extends ReportProps {
   activity: ActivitySubscription;
   card: ReviewCard; runs: DeskRun[]; error: string; working: boolean; loaded: boolean;
   onCancel: (id: string) => void; onRefresh: () => void; onOpenSession: (id: string) => void;
+  /** The Latest review heading, a focus target once the attempt that held focus is replaced. */
+  headingRef?: Ref<HTMLHeadingElement> | undefined;
 }
 
 /** The attempt the Latest review section shows for the card's range. */
@@ -200,10 +202,10 @@ export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
     runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
 }
 
-export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
+export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication, headingRef }: Props) {
   const latest = latestAttempt(runs, card);
   return <section className="desk-runs" aria-label="Latest Keryx review">
-    <header className="desk-run-head"><h3>Latest review</h3><button className="btn review-icon-action" type="button"
+    <header className="desk-run-head"><h3 ref={headingRef} tabIndex={-1}>Latest review</h3><button className="btn review-icon-action" type="button"
       disabled={working} aria-label="Refresh runs" title="Refresh runs" onClick={onRefresh}><Icon name="refresh" /></button></header>
     <p className="review-detail-muted">GitHub review decision · {card.decision ? DECISION_LABEL[card.decision] : "No decision"}</p>
     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}

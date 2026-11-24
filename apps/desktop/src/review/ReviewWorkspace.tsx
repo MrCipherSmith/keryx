@@ -129,24 +129,37 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
   const revisionChanged = local.staleRange;
+  // The control that opened the publish dialog belongs to an attempt the update may replace; focus then goes here.
+  const latestHeading = useRef<HTMLHeadingElement>(null);
+  const [focusLatest, setFocusLatest] = useState(0);
+  useEffect(() => {
+    const focused = document.activeElement;
+    // Only focus that was lost moves: a user who moved on while the start ran keeps their place.
+    if (focusLatest && (!focused || focused === document.body)) latestHeading.current?.focus();
+  }, [focusLatest]);
   /**
    * "Update review" in a head-moved publish dialog: the next round of the same Review on the PR's current range, with
    * the reviewed attempt's settings except automatic publication. The panel stays open and shows the new attempt; a
-   * board that has not seen the push is re-read once the start succeeded, so the panel follows the new range.
+   * board that has not seen the push is re-read once the start succeeded, or when the head already has an attempt,
+   * so the panel follows the new range.
    */
   const updateReview = useCallback((reviewed: DeskRun, revision: DeskRevision) => {
+    const boardBehind = !sameRange(card, revision);
     // Any attempt on the target range, in whatever state and whatever the board shows, is shown instead of a second one.
     const covering = local.runs.filter(run => run.source !== "existing" && !reviewIsArchived(run) && sameRange(run, revision));
     const existing = covering.find(runActive) ?? covering[0];
     if (existing) {
-      setSessionId(existing.id === latestAttempt(local.runs, card)?.id ? null : existing.id);
+      const latest = existing.id === latestAttempt(local.runs, card)?.id;
+      setSessionId(latest ? null : existing.id);
+      if (latest) setFocusLatest(n => n + 1);
       toast({ level: "info", title: `Commit ${revision.headSha.slice(0, 7)} already has a review attempt`, body: "Showing it instead of starting another." });
+      if (boardBehind) onRefreshBoard?.();
       return;
     }
     setSessionId(null);
-    const boardBehind = !sameRange(card, revision);
     void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: updateRoundOptions(reviewed.options) }) })
       .then(outcome => {
+        if (outcome === "done" && mounted.current) setFocusLatest(n => n + 1);
         if (outcome === "done" && boardBehind) onRefreshBoard?.();
         // The button is disabled while another action runs; this covers a click that raced it.
         if (outcome === "skipped") toast({ level: "info", title: "Update review did not start", body: "Another action of this review is still running. Try again when it finishes." });
@@ -202,7 +215,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
     </div>}
     {children}
-    <ReviewRuns publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
+    <ReviewRuns headingRef={latestHeading} publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
       onCancel={id => void local.request({ kind: "cancel", id })}
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })} />

@@ -147,6 +147,10 @@ review is a comment only, without inline comments, and its first line says
 which commit was reviewed and that the PR has moved on. If more commits arrive
 before you submit, refresh the preview. If the PR was closed, its base changed,
 or its history was rewritten, you can still save the draft locally.
+If a newer round of the same review exists, this round offers neither **Publish
+as is** nor **Update review to**: publish from the newer round once it finishes,
+or, if that round ended without a result, start a new round or save this draft
+locally.
 
 In the Review panel, the same dialog also offers **Update review to** the new
 commit. It starts the next round of the same Review on the PR's current head,

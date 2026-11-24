@@ -20,11 +20,14 @@ beforeAll(async () => {
   const React = await import("react");
   act = React.act as unknown as typeof act;
   const panel = (await import("./ReviewPanel")).ReviewPanel;
+  const { ToastProvider } = await import("../components/Toasts");
   const host = document.createElement("div");
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
-  renderComponent = props => act(async () => { root.render(React.createElement(panel, props)); });
+  // The app renders the panel under its toast provider; the tests read the toasts the panel raises.
+  renderComponent = props => act(async () => { root.render(React.createElement(ToastProvider, null, React.createElement(panel, props))); });
 });
+const toastTitles = () => [...document.querySelectorAll(".toast-title")].map(node => node.textContent);
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
 const time = "2026-11-19T12:00:00Z";
@@ -766,12 +769,81 @@ test("Update review does not start when the current head already has a failed at
     await publishFromHistory(reviewed.id, reviewedHead);
     await click("Update review to ccccccc");
     expect(actions.some(action => action.kind === "start")).toBe(false);
-    expect(refreshed).toBe(0);
+    // A board behind the push is re-read once, so the panel follows the head the attempt covers.
+    expect(refreshed).toBe(boardHead === currentHead ? 0 : 1);
     // The attempt that already covers the current head is shown instead.
     expect(document.querySelector(".review-publish-footer")).toBeNull();
     expect(document.querySelector('article[aria-label="Review attempt attempt-failed"]')).not.toBeNull();
+    expect(toastTitles()).toContain("Commit ccccccc already has a review attempt");
     await act(() => root.render(null));
   }
+});
+
+test("Update review starts a round when the only attempt on the current head is archived or imported", async () => {
+  const archive = { action: "archive" as const, reason: "Superseded by hand", at: time };
+  for (const [number, covering] of [[61, { decision: archive }], [62, { source: "existing" as const }]] as const) {
+    const { currentHead, reviewedHead, reviewed, next, publishCommand } = headMovedFixture(number);
+    const other: DeskRun = { ...complete, id: "attempt-other-on-head", headSha: currentHead, ...covering,
+      result: { ...complete.result!, reviewed: { baseSha: "base", headSha: currentHead } } };
+    const actions: ReviewRunAction[] = [];
+    let started = false;
+    await show(async (_cwd, _key, action) => {
+      actions.push(action);
+      if (action.kind === "start") started = true;
+      return { version: 1, runs: started ? [next, reviewed, other] : [reviewed, other], ...(action.kind === "start" && { startedRunId: next.id }) };
+    }, { ...pr, number, headSha: currentHead }, { publishCommand });
+    await publishFromHistory(reviewed.id, reviewedHead);
+    await click("Update review to ccccccc");
+    expect(actions.filter(action => action.kind === "start")).toHaveLength(1);
+    expect(toastTitles()).not.toContain("Commit ccccccc already has a review attempt");
+    await act(() => root.render(null));
+  }
+});
+
+test("Update review shows the running attempt on the current head rather than a failed one", async () => {
+  const { currentHead, reviewedHead, reviewed, publishCommand } = headMovedFixture(63);
+  const failed: DeskRun = { ...running, id: "attempt-failed", headSha: currentHead, state: "failed", phase: "Failed",
+    reason: "Reviewer crashed", finishedAt: time };
+  const live: DeskRun = { ...running, id: "attempt-live", headSha: currentHead };
+  const actions: ReviewRunAction[] = [];
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    return { version: 1, runs: [reviewed, failed, live] };
+  }, { ...pr, number: 63, headSha: currentHead }, { publishCommand });
+  await publishFromHistory(reviewed.id, reviewedHead);
+  await click("Update review to ccccccc");
+  expect(actions.some(action => action.kind === "start")).toBe(false);
+  // The running attempt is the panel's latest attempt: no dialog opens on the failed one.
+  expect(document.querySelector(".dialog")).toBeNull();
+  expect(document.querySelector('article[aria-label="Review attempt attempt-live"]')).not.toBeNull();
+  expect(document.querySelector('article[aria-label="Review attempt attempt-failed"]')).toBeNull();
+  await act(() => root.render(null));
+});
+
+test("an Update review that raced another action does not start, refresh the board or stay silent", async () => {
+  const { reviewedHead, reviewed, publishCommand } = headMovedFixture(64);
+  const other: DeskRun = { ...running, id: "attempt-other", headSha: "x".repeat(40) };
+  const actions: ReviewRunAction[] = [];
+  const cancel = deferred();
+  let refreshed = 0;
+  // The board has not seen the push: a start that was reported as done would re-read it.
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    if (action.kind === "cancel") await cancel.promise;
+    return { version: 1, runs: [other, reviewed] };
+  }, { ...pr, number: 64, headSha: reviewedHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  await publishFromHistory(reviewed.id, reviewedHead);
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  // Both clicks land before the panel re-renders, so the Update button is still enabled for the second one.
+  await act(async () => {
+    btn("Stop review").click();
+    btn("Update review to ccccccc").click();
+  });
+  expect(actions.filter(action => action.kind !== "status")).toEqual([{ kind: "cancel", id: other.id }]);
+  expect(refreshed).toBe(0);
+  expect(toastTitles()).toContain("Update review did not start");
+  await act(async () => cancel.resolve());
+  await act(() => root.render(null));
 });
 
 test("Update review does not carry automatic publication into the new round", async () => {
@@ -829,6 +901,44 @@ test("Update review is disabled while a publication write is in flight", async (
   await act(async () => root.render(null));
 });
 
+test("Update review waits for the latest preview, and a disabled Update review says why", async () => {
+  const React = await import("react");
+  const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
+  const { publishCommand } = headMovedFixture(65);
+  let preview = deferred();
+  let updates = 0;
+  const render = (updateDisabled: boolean) => act(async () => root.render(React.createElement(ReviewPublishDialog, {
+    cwd: "/project", target: { ...target, number: 65 }, id: complete.id,
+    command: async (_cwd, _key, request) => {
+      if (request.kind === "preview" && !request.refresh) await preview.promise;
+      return publishCommand();
+    },
+    onUpdateReview: () => { updates++; }, updateDisabled, onClose() {},
+  })));
+  await render(false);
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  expect(btn("Update review to ccccccc").getAttribute("aria-describedby")).toBeNull();
+  // A settings change sends a preview: the dialog's head is not confirmed until it answers.
+  const general = [...document.querySelectorAll("label")].find(node => node.textContent?.trim() === "General comment")!.querySelector("input")!;
+  await act(async () => general.click());
+  expect(btn("Update review to ccccccc").disabled).toBe(true);
+  await click("Update review to ccccccc");
+  expect(updates).toBe(0);
+  await act(async () => preview.resolve());
+  expect(btn("Update review to ccccccc").disabled).toBe(false);
+  await act(async () => root.render(null));
+
+  // Another action of the review is in flight: the reason is visible text the button points at.
+  preview = deferred();
+  await render(true);
+  const update = btn("Update review to ccccccc");
+  expect(update.disabled).toBe(true);
+  const reason = document.getElementById(update.getAttribute("aria-describedby") ?? "");
+  expect(reason?.textContent).toContain("Another action of this review is still running.");
+  expect(reason?.closest(".dialog")).not.toBeNull();
+  await act(async () => root.render(null));
+});
+
 test("the primary footer action follows the dialog state, and the head-moved alternatives sit together", async () => {
   const React = await import("react");
   const { ReviewPublishDialog } = await import("../review/ReviewPublishDialog");
@@ -879,8 +989,13 @@ test("Update review in a head-moved dialog starts the next round of the same Rev
   const { currentHead, options, next, actions, command, publishCommand } = headMovedFixture(49);
   let refreshed = 0;
   await show(command, { ...pr, number: 49, headSha: currentHead }, { publishCommand, onRefreshBoard: () => { refreshed++; } });
+  // A keyboard user opens the dialog from the reviewed attempt's button, which the new attempt replaces.
+  btn("Publish to GitHub").focus();
   await click("Publish to GitHub");
   await click("Update review to ccccccc");
+  // Focus moves to the Latest review heading instead of falling to the page body.
+  expect(document.activeElement?.matches(".desk-runs h3")).toBe(true);
+  expect(document.activeElement?.textContent).toBe("Latest review");
   // The same PR and account, the PR's current range, and the reviewed attempt's settings.
   expect(actions.filter(action => action.kind === "start")).toEqual([{ kind: "start", baseSha: "base", headSha: currentHead, options }]);
   expect(document.querySelector(".dialog")).toBeNull();
@@ -923,6 +1038,9 @@ test("Update review from an earlier attempt does not start a second attempt when
   expect(actions.some(action => action.kind === "start")).toBe(false);
   expect(document.querySelector(".dialog")).toBeNull();
   expect(document.querySelector('article[aria-label="Review attempt attempt-reviewed"]')).toBeNull();
+  // The attempt on the current head is the one shown, and the toast says why nothing started.
+  expect(document.querySelector('article[aria-label="Review attempt attempt-current"]')).not.toBeNull();
+  expect(toastTitles()).toContain("Commit ccccccc already has a review attempt");
   await act(() => root.render(null));
 });
 

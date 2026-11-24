@@ -65,6 +65,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const verdictName = useId();
   const answerName = useId();
   const headMovedNotice = useId();
+  const updateReasonId = useId();
 
   const send = useCallback(async (initialRequest: PublicationRequest) => {
     if (activeRequest.current) {
@@ -154,6 +155,9 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const headMoved = draft?.headMoved;
   // The update round is the primary action while it is offered; publishing as is becomes the alternative.
   const updateOffered = !!headMoved && !!onUpdateReview && !posted;
+  // The current head comes from the latest preview: a preview in flight or out of date may name an intermediate head.
+  const updateReason = updateDisabled ? "Another action of this review is still running. Update review is available when it finishes."
+    : busy ? "The preview is updating." : previewStale ? "Refresh the preview to update this review." : undefined;
   const publishButton = <button type="button" className={updateOffered ? "btn" : "btn btn-primary"}
     disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
     onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
@@ -164,9 +168,9 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
       <div className="review-publish-footer">
         {/* The two head-moved alternatives stay next to each other, so a wrapping footer keeps them on one row. */}
         {updateOffered && headMoved && onUpdateReview && <>
-          <button type="button" className="btn btn-primary" disabled={writing || updateDisabled}
-            title={updateDisabled ? "Another action of this review is still running." : undefined}
-            onClick={() => onUpdateReview(headMoved.currentHead)}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>
+          <button type="button" className="btn btn-primary" disabled={!!updateReason} title={updateReason}
+            aria-describedby={updateReason && !busy ? updateReasonId : undefined}
+            onClick={() => { if (!updateReason) onUpdateReview(headMoved.currentHead); }}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>
           {publishButton}
         </>}
         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
@@ -193,6 +197,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
           for the reviewed commit only. The verdict is Comment only, and inline comments are off because they cannot be
           placed on an earlier commit.
         </span></div>}
+        {/* While the preview updates, its progress line below already says so. */}
+        {updateOffered && updateReason && !busy && <p id={updateReasonId} className="review-detail-muted">{updateReason}</p>}
         <div className="review-publish-settings">
           <fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>
             <legend>Include in the review</legend>
