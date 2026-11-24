@@ -266,6 +266,18 @@ describe("choosing between sources", () => {
     expect(renderRoundLine(round)).toContain("fallback-first");
   });
 
+  test("flow 520 AC6: a round recorded under different review settings is still the previous round", async () => {
+    // The candidate path reads target, head, status and timestamps from the manifest, never the settings, so
+    // changing settings between rounds does not break the link (spec "Раунд обновления", item 4).
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")], round: 1 });
+    const manifestFile = path.join(root, ".metaproject/reviews/r1/manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+    writeFileSync(manifestFile, JSON.stringify({ ...manifest, mode: "review-fast", options: { orchestrator: false, maxTokens: 1 }, settings: { effectiveOptionsKey: "other-settings" } }));
+    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+    expect(round).toMatchObject({ round: 2, mode: "delta", source: "local-package", previous: { reviewId: "r1", reviewedHead: A } });
+    expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
+  });
+
   test("a head this clone has never fetched is not an ancestor", async () => {
     const candidate: RoundCandidate = { source: "github-block", reviewId: "x", reviewedHead: "f".repeat(40), round: 1, at: 1, findings: [] };
     const runner = async (args: string[]) => ({ stdout: "", exitCode: args[0] === "merge-base" ? 128 : 0 });
