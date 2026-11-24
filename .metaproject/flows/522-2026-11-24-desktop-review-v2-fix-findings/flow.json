@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "522",
+  "slug": "desktop-review-v2-fix-findings",
+  "title": "Desktop Review v2: Fix findings action launches a Flow from a Review",
+  "status": "in-progress",
+  "createdAt": "2026-11-24T16:19:57.525Z",
+  "updatedAt": "2026-11-24T16:48:31.330Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9cb91b3068429c5f3117e650a2b287c44c0c6b6fe2484ca97d6d5d2f78eca3fc",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T16:21:20.759Z",
+            "outcome": "started",
+            "detail": "522-T2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests were written test-first inside T2 (model, panel DOM, App fixture)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Update implementation-plan.md: Fix findings done, deferred variant, not verified",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Verify AC1-AC6 exec commands green",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T16:37:26.956Z",
+            "outcome": "started",
+            "detail": "522-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-24T16:19:57.525Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-24T16:21:09.768Z",
+      "event": "task-added",
+      "detail": "T5: Update implementation-plan.md: Fix findings done, deferred variant, not verified"
+    },
+    {
+      "at": "2026-11-24T16:21:09.941Z",
+      "event": "task-added",
+      "detail": "T6: Verify AC1-AC6 exec commands green"
+    },
+    {
+      "at": "2026-11-24T16:21:10.131Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-24T16:21:10.314Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-24T16:21:10.488Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-24T16:21:20.759Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 522-T2"
+    },
+    {
+      "at": "2026-11-24T16:22:22.009Z",
+      "event": "task-done",
+      "detail": "T5: Update implementation-plan.md: Fix findings done, deferred variant, not verified"
+    },
+    {
+      "at": "2026-11-24T16:28:07.304Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T16:28:07.505Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T16:28:07.692Z",
+      "event": "task-done",
+      "detail": "T6: Verify AC1-AC6 exec commands green"
+    },
+    {
+      "at": "2026-11-24T16:37:16.866Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"In the App, Fix findings from the Reviews tab opens the PR's bound session (a new bound one when none exists) with the findings prompt in the composer, not sent, and the one flow package that then appears is offered on the PR's work row as \"Link Flow #N\" and linked only on Link — the same path as Create Flow. Test through the App fixture or an equivalent App-level DOM test. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews/ReviewsView.dom.test.tsx`]\" -> \"In the App, Fix findings from the Reviews tab on a PR with no Flow opens the PR's bound session (a new bound one when none exists) with the findings prompt in the composer, not sent, and the one flow package that then appears is offered on the PR's work row as \"Link Flow #N\" and linked only on Link — the same path as Create Flow. On a PR that already has a Flow (by prUrl or a bound session's flow flag), it opens that Flow's session (the bound one, else a new session working on that Flow) with a prompt that asks flow-orchestrator to fix the findings as a fix round of Flow #N, not sent, and registers no pending link. Test through the App fixture, including a PR whose bound session already has a flow flag. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews/ReviewsView.dom.test.tsx`]\" (Review round 1 major (logic F-001 / degradation F-001): on a PR that already has a Flow the fix Flow was never offered for Link; operator chose 'Fix in existing Flow' in this session)"
+    },
+    {
+      "at": "2026-11-24T16:37:17.047Z",
+      "event": "task-added",
+      "detail": "T7: Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow"
+    },
+    {
+      "at": "2026-11-24T16:37:26.956Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 522-T7"
+    },
+    {
+      "at": "2026-11-24T16:42:14.726Z",
+      "event": "task-done",
+      "detail": "T7: Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow"
+    },
+    {
+      "at": "2026-11-24T16:48:31.330Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/reviews/model.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/reviews/model.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews/ReviewsView.dom.test.tsx"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/prWork.test.ts src/review/PrWorkRow.dom.test.tsx src/review/usePendingFlowLinks.dom.test.tsx"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit -p ."
+    },
+    "AC7": {
+      "kind": "judged"
+    }
+  }
+}

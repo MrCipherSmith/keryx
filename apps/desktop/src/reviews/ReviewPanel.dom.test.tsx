@@ -1431,3 +1431,37 @@ test("Open pull request opens the PR through the system browser instead of navig
   expect(document.querySelector(".review-pr-link")).toBeNull();
   await act(() => root.render(null));
 });
+
+test("Fix findings shows only on an eligible Review with a handler and hands the PR card and the prompt to it once", async () => {
+  const own: ReviewCard = { ...pr, number: 43, author: "Tester" };
+  const finished = { id: "run-reviewed", round: 1, previousRunId: null, state: "completed" as const, source: "manual" as const, baseSha: "base", headSha: "head",
+    reviewed: { baseSha: "base", headSha: "head" }, coverage: "complete" as const, findings: { blocker: 1, major: 0, minor: 2, info: 1 }, verdict: null,
+    publication: null, decision: null, flowId: null, tokens: null, awaitingAnswer: false, archived: false, createdAt: time, finishedAt: time };
+  const eligible = (card: ReviewCard, extra: Partial<ReviewSummary> = {}): ReviewSummary => ({ ...summary(card), reviewed: finished.reviewed,
+    findings: finished.findings, rounds: [{ number: 1, baseSha: "base", headSha: "head", previousRunId: null, attempts: [finished] }], ...extra });
+  const calls: Array<[ReviewCard, string]> = [];
+  const fixButton = () => [...document.querySelectorAll("button")].find(b => b.textContent === "Fix findings");
+  const render = (review: ReviewSummary, withHandler = true) => renderComponent({ cwd: "/project", target, review,
+    runCommand: async () => ({ version: 1, runs: [] }), onRefresh: () => {}, onClose: () => {},
+    onFixFindings: withHandler ? (card, prompt) => { calls.push([card, prompt]); } : undefined });
+  await act(() => root.render(null));
+  await render(eligible(own));
+  const button = fixButton();
+  expect(button?.getAttribute("aria-label")).toBe("Fix findings of pull request #43");
+  await act(async () => button!.click());
+  expect(calls).toHaveLength(1);
+  expect(calls[0]![0]).toBe(own);
+  expect(calls[0]![1]).toContain(own.url);
+  expect(calls[0]![1]).toContain("--repo owner/repo --repository-id node --viewer tester --number 43 --id run-reviewed");
+  // Ineligible: another author, only info findings, a running Review; and no handler.
+  await render(eligible({ ...own, author: "someone" }));
+  expect(fixButton()).toBeUndefined();
+  await render(eligible(own, { findings: { blocker: 0, major: 0, minor: 0, info: 3 } }));
+  expect(fixButton()).toBeUndefined();
+  await render(eligible(own, { state: "running" }));
+  expect(fixButton()).toBeUndefined();
+  await render(eligible(own), false);
+  expect(fixButton()).toBeUndefined();
+  expect(calls).toHaveLength(1);
+  await act(() => root.render(null));
+});

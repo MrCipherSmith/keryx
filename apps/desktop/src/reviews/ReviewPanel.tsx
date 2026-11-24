@@ -9,9 +9,10 @@ import type { reviewRun } from "../platform/reviewRuns";
 import { openReviewLink, ReviewBrowserLink } from "../review/ReviewBrowserLink";
 import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 import type { reviewPublish } from "../review/ReviewPublishDialog";
+import type { ReviewCard } from "../review/types";
 import { ReviewWorkspace, type ReviewIntent } from "../review/ReviewWorkspace";
 import type { RunObserver } from "../review/useReviewRuns";
-import { findingsLabel, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
+import { findingsLabel, fixFindingsPrompt, type FixFindingsFlow, fixFindingsTarget, freshnessLabel, publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL } from "./model";
 
 const ATTEMPT_STATE: Record<DeskRunState, string> = {
   queued: "Queued", running: "Running", cancelling: "Stopping", completed: "Completed", partial: "Partial",
@@ -65,6 +66,11 @@ interface Props {
   onAccessLost?: ((reason: string) => void) | undefined;
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
+  /**
+   * "Fix findings" on the viewer's own PR: the PR card, the prompt to prefill in its bound session (never sent) and the
+   * prompt for a fix round of the PR's Flow, for the caller that knows the PR has one.
+   */
+  onFixFindings?: ((card: ReviewCard, prompt: string, fixRoundPrompt: (flow: FixFindingsFlow) => string) => void) | undefined;
   onRefresh: () => void;
   /** The board action's intent was taken by the review interface. */
   onIntentConsumed?: (() => void) | undefined;
@@ -74,7 +80,7 @@ interface Props {
 }
 
 /** One Review: its state, rounds timeline and the review interface of the PR's current range. */
-export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onRefresh, onIntentConsumed, onClose, openBrowser = openReviewLink }: Props) {
+export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onFixFindings, onRefresh, onIntentConsumed, onClose, openBrowser = openReviewLink }: Props) {
   const toast = useToast();
   const panel = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -101,6 +107,7 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
   const findings = findingsLabel(review.findings);
   const publication = publicationLabel(review);
   const freshness = freshnessLabel(review.freshness);
+  const fix = onFixFindings ? fixFindingsTarget(review, target.viewer) : null;
   return <aside ref={panel} className="side-panel review-detail-panel review-panel" style={{ width: 560 }} aria-label={`Review of pull request #${review.number}`}
     onKeyDown={event => {
       if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing && !(event.target as Element).closest('[role="dialog"]')) {
@@ -112,6 +119,8 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
       <div className="sheet-head-row">
         <span className="flow-id">{target.repo} #{review.number}</span>
         <span className="grow" />
+        {fix && onFixFindings && <button type="button" className="btn btn-sm" aria-label={`Fix findings of pull request #${review.number}`}
+          onClick={() => onFixFindings(fix.card, fixFindingsPrompt(review, target, fix), flow => fixFindingsPrompt(review, target, fix, flow))}>Fix findings</button>}
         {card && <ReviewBrowserLink className="btn review-icon-action review-pr-link" url={card.url} label="Open pull request" onOpen={openPullRequestLink}><Icon name="external" /></ReviewBrowserLink>}
         <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close review"><Icon name="x" size={16} /></button>
       </div>

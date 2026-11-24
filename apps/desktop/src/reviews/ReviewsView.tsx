@@ -11,11 +11,12 @@ import { subscribeSessionReview, type reviewRun } from "../platform/reviewRuns";
 import { ProjectReviewRules } from "../review/ProjectReviewRules";
 import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 import type { reviewPublish } from "../review/ReviewPublishDialog";
+import type { ReviewCard } from "../review/types";
 import type { ReviewIntent } from "../review/ReviewWorkspace";
 import type { RunObserver } from "../review/useReviewRuns";
 import {
   COLUMNS, EMPTY_REVIEW_FILTERS, filterReviewList, filtersActive, findingsLabel, freshnessLabel, groupByColumn, isBehind, isClosedOrArchived,
-  publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL, STATE_LABEL, type ReviewColumn, type ReviewFilters,
+  publicationLabel, reviewedCommit, reviewStateLabel, reviewTitle, SOURCE_LABEL, STATE_LABEL, type FixFindingsFlow, type ReviewColumn, type ReviewFilters,
 } from "./model";
 import { ReviewPanel } from "./ReviewPanel";
 
@@ -44,6 +45,9 @@ interface Props {
   reviewModels?: readonly ReviewLaunchModel[] | undefined;
   onOpenReviewSession?: ((key: DeskRunKey, run: DeskRun) => Promise<void>) | undefined;
   onOpenFlow?: ((dir: string) => void) | undefined;
+  /** "Fix findings" in a Review panel: the PR card, the list's repository (to bind the PR's session) and the prompt to prefill. */
+  onFixFindings?: ((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string,
+    fixRoundPrompt: (flow: FixFindingsFlow) => string) => void) | undefined;
   load?: typeof fetchReviews;
   runCommand?: typeof reviewRun | undefined;
   publishCommand?: typeof reviewPublish | undefined;
@@ -111,7 +115,7 @@ export function ReviewsView(props: Props) {
     selectRepo={selectRepo} focusRepo={setRepo} pending={pending} settlePending={settlePending} />;
 }
 
-function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, reloadSignal, rulesTarget: boardRules, flows, reviewModels, onOpenReviewSession, onOpenFlow,
+function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, reloadSignal, rulesTarget: boardRules, flows, reviewModels, onOpenReviewSession, onOpenFlow, onFixFindings,
   load = fetchReviews, runCommand, publishCommand, rulesCommand = reviewRules, repo, selectRepo, focusRepo, pending, settlePending }: Props & RepositoryProps) {
   const [read, setRead] = useState<ReadState>({ snapshot: null, error: "", loading: true, request: 0 });
   const [attempt, setAttempt] = useState(0);
@@ -268,6 +272,10 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
   const target = useMemo(() => snapshot ? { repo: snapshot.repo, repositoryId: snapshot.repositoryId, viewer: snapshot.viewer } : null,
     [snapshot?.repo, snapshot?.repositoryId, snapshot?.viewer]);
   const review = selected && snapshot?.reviews.find(item => item.id === selected.id);
+  const fixFindings = useMemo(() => onFixFindings && target
+    ? (card: ReviewCard, prompt: string, fixRoundPrompt: (flow: FixFindingsFlow) => string) =>
+      onFixFindings(card, { repo: target.repo, repositoryId: target.repositoryId }, prompt, fixRoundPrompt) : undefined,
+  [onFixFindings, target]);
   const narrowed = filtersActive(filters) || !!q.trim();
   const closedCount = snapshot?.reviews.filter(isClosedOrArchived).length ?? 0;
   // Review rules from the Pull requests board when this list could not be read (an older CLI, GitHub unavailable).
@@ -348,7 +356,7 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
     </section>
     {active && review && target && <ReviewPanel key={review.id} cwd={cwd} target={target} review={review} reviewIntent={selected?.intent} onIntentConsumed={consumeIntent}
       flows={flows} reviewModels={reviewModels} runCommand={runCommand} publishCommand={publishCommand} onRunSnapshot={observeRuns}
-      onAccessLost={accessLost} onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onRefresh={refresh}
+      onAccessLost={accessLost} onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onFixFindings={fixFindings} onRefresh={refresh}
       onClose={() => setSelected(null)} />}
   </div>;
 }

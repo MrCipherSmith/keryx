@@ -117,6 +117,11 @@ test("AC9 Create Flow in the App: the bound session gets the flow prompt, the on
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });
 
+test("Fix findings in the App: the Reviews tab opens the PR's bound session (a new bound one when none exists) with the findings prompt, not sent, and the one new package is offered on the PR's work row and linked only on Link; on a PR with a Flow (bound session's flow flag or prUrl) the Flow's session gets a fix-round prompt", () => {
+  const fixture = fileURLToPath(new URL("../test/app-fix-findings.fixture.tsx", import.meta.url));
+  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+});
+
 test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
   const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });

@@ -21,6 +21,7 @@ import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
 import type { ReviewIntent } from "./review/ReviewWorkspace";
+import type { FixFindingsFlow } from "./reviews/model";
 import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
@@ -34,7 +35,7 @@ import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { boundSessions, sessionFlags, type SessionSubject } from "./acp/types";
-import { flowPrompt, prFlows, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
+import { flowPrompt, prFlows, prSubject, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
 import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
 import type { ReviewCard } from "./review/types";
 import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
@@ -429,13 +430,14 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   /**
    * "Create Flow": the PR's session with a flow prompt. The one package that then appears is offered on the
-   * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag.
+   * PR's work row ("Link Flow #<id>?"); only Link writes the session's `flow` flag. "Fix findings" on the Reviews
+   * tab takes the same path with its own prompt on a PR without a Flow.
    */
   const flowLinks = usePendingFlowLinks(flows.cards, flows.refreshedAt !== null, state.sessions, (id, dir) => acp.current.linkFlow(id, dir));
   const flowLinkActions = flowLinks.actions;
-  const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject) => {
+  const createPrFlow = useCallback(async (card: ReviewCard, subject: SessionSubject, prompt = flowPrompt(card.url)) => {
     const known = flowLinkActions.known();
-    const opened = await openPrSession(card, "latest", subject, flowPrompt(card.url), true);
+    const opened = await openPrSession(card, "latest", subject, prompt, true);
     // Only a prompt this press put into the shown session can make the package: a press coalesced into an open in
     // flight, or an open the user switched away from, registers nothing.
     if (opened?.filled) flowLinkActions.expect(opened.sessionId, known);
@@ -454,6 +456,18 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const openPrFromBoard = useCallback((card: ReviewCard, target: SubjectSessionTarget, subject: SessionSubject) =>
     void openPrSession(card, target, subject, card.url), [openPrSession]);
   const createFlowFromBoard = useCallback((card: ReviewCard, subject: SessionSubject) => void createPrFlow(card, subject), [createPrFlow]);
+  /**
+   * "Fix findings" on the Reviews tab. On a PR with a Flow (by the work row's rule: its prUrl, or a bound session's flow
+   * flag) the Flow's session gets a fix-round prompt for that Flow and no link is expected; otherwise Create Flow's path.
+   */
+  const fixFindingsFromReviews = useCallback((card: ReviewCard, repository: { repo: string; repositoryId: string }, prompt: string,
+    fixRoundPrompt: (flow: FixFindingsFlow) => string) => {
+    const subject = prSubject(card, repository.repo, repository.repositoryId);
+    const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
+    // openPrSession opens the bound session, else a new one working on this same Flow.
+    if (flow) void openPrSession(card, "latest", subject, fixRoundPrompt(flow), true);
+    else void createPrFlow(card, subject, prompt);
+  }, [createPrFlow, openPrSession]);
   const openFlowFromBoard = useCallback((dir: string) => {
     setLinkedFlow(dir);
     setView("flows");
@@ -719,7 +733,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           <ReviewsView key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} active={workView === "reviews"} cwd={cwd}
             focus={reviewsFocus} onFocusHandled={reviewsFocusHandled} reloadSignal={watcherPolls}
             rulesTarget={boardIdentity} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
-            onOpenReviewSession={openReviewWorkspace} onOpenFlow={(dir) => {
+            onOpenReviewSession={openReviewWorkspace} onFixFindings={fixFindingsFromReviews} onOpenFlow={(dir) => {
               setLinkedFlow(dir);
               setView("flows");
             }} />
