@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T08:26:00.635Z",
+  "updatedAt": "2026-11-24T08:46:49.192Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:e9c6cb2bb278695575c47909ebaf0bd7ef164b4da67e452ef293d164418c1192",
+  "acChecksum": "sha256:0c603d2bd79870cd7cbbb088ef6bdcb7bf75f3c32a2722a0509e1fb7ff4e35b1",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -164,7 +164,7 @@
       "id": "T8",
       "title": "Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -172,7 +172,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented by T12 (backend: prior selection, partial prior, trust vouch) and T13 (Update review, answers by finding id) after stage 2 landed; findingsKnown-undefined alignment and on_head_move default resolution remain info-level follow-ups recorded in journal"
     },
     {
       "id": "T9",
@@ -215,6 +217,48 @@
             "at": "2026-11-24T08:16:58.249Z",
             "outcome": "started",
             "detail": "520-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:28:37.754Z",
+            "outcome": "started",
+            "detail": "520-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Item 3 Desktop: Update review action and finding answers carried by id",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T08:28:38.153Z",
+            "outcome": "started",
+            "detail": "520-T13"
           }
         ]
       },
@@ -332,6 +376,56 @@
       "at": "2026-11-24T08:26:00.635Z",
       "event": "task-done",
       "detail": "T11: Fix round 1: review findings of round 1 on PR #1303"
+    },
+    {
+      "at": "2026-11-24T08:28:08.753Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"\"Review again\" on a card with an outdated review starts an update round of the same Review on the current head, with the previous round's findings attached. [verify: none — blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented]\" -> \"A new attempt on a newer head of the same Review (stage 2 round N+1, started by \"Review again\" / \"New review round\" or \"Update review\") builds on the previous round: after a partial previous round with accepted findings it runs in mode delta with a non-empty prior-findings list and the area the partial round did not cover planned as unreviewed; after a previous round run with different settings it still gets the previous findings; the previous-attempt rule exists once (selectPriorAttempt), the old options-key rule is gone. [verify: exec `bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts`]\" (Stage 2 rounds landed (origin/feat/desktop-review-v2-stage2 98bec5904); item 3 is now implementable, so AC7 gets its real criterion and test command.)"
+    },
+    {
+      "at": "2026-11-24T08:28:09.050Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"(new)\" -> \"In the publish dialog with a moved head, \"Update review to <sha>\" starts a new round of the same Review on the current head; the keep/dismiss answers given in the previous round's draft are pre-selected in the new round's publication draft for findings with the same finding id. [verify: exec `sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'`]\" (Spec 'Перед публикацией' and acceptance criterion 7: update action in the dialog and answers carried by finding id; implementable now that stage 2 rounds exist.)"
+    },
+    {
+      "at": "2026-11-24T08:28:26.551Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Backend review tests, the Desktop review suite, typecheck and lint pass on the branch; the attention-set code, `attachBadges`/`localBadge` and the toolbar container queries are unchanged by this flow. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'`]\" -> \"Backend review tests, the Desktop review suites, typecheck and lint pass on the branch; this flow leaves the attention-set code, attachBadges/localBadge and the toolbar container queries as stage 2 left them. [verify: invariant `sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'`]\" (Branch rebased onto stage 2 (98bec5904), which legitimately changes these files; the invariant now compares with the stage 2 tip, and covers the new src/reviews suite.)"
+    },
+    {
+      "at": "2026-11-24T08:28:36.136Z",
+      "event": "task-added",
+      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
+    },
+    {
+      "at": "2026-11-24T08:28:36.364Z",
+      "event": "task-added",
+      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
+    },
+    {
+      "at": "2026-11-24T08:28:37.754Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 520-T12"
+    },
+    {
+      "at": "2026-11-24T08:28:38.153Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 520-T13"
+    },
+    {
+      "at": "2026-11-24T08:38:11.386Z",
+      "event": "task-done",
+      "detail": "T13: Item 3 Desktop: Update review action and finding answers carried by id"
+    },
+    {
+      "at": "2026-11-24T08:46:48.935Z",
+      "event": "task-done",
+      "detail": "T12: Item 3 backend: update round builds on the previous round (prior selection, partial package, trust rule)"
+    },
+    {
+      "at": "2026-11-24T08:46:49.192Z",
+      "event": "task-done",
+      "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
     }
   ],
   "acKinds": {
@@ -360,15 +454,19 @@
       "check": "bun test src/review/prior-round.test.ts"
     },
     "AC7": {
-      "kind": "none",
-      "reason": "blocked on stage 2 rounds; criterion is rewritten with its test when item 3 is implemented"
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts src/review/update-round.test.ts src/review/desk-run-service.test.ts src/review/desk-run-executor.test.ts"
     },
     "AC8": {
       "kind": "invariant",
-      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet origin/main -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts apps/desktop/src/styles/review.css'"
+      "check": "sh -c 'bun test src/review && cd apps/desktop && bun test src/review src/reviews && cd ../.. && bun run typecheck && bunx eslint src/review apps/desktop/src/review && git diff --quiet 98bec59046d0ce30500b341e8c18ba5b767069bb -- apps/desktop/src/review/ReviewBoard.tsx src/review/board-badges.ts src/review/desk-run-store.ts apps/desktop/src/styles/review.css'"
     },
     "AC9": {
       "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'bun test src/review/desk-publication.test.ts && cd apps/desktop && bun test src/reviews src/review'"
     }
   }
 }
