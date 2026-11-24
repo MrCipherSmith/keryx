@@ -43,7 +43,8 @@ export type RequestTree = (cwd: string, request: MetaprojectTreeRequest) => Prom
 
 /**
  * The loaded children of one tree parent (the root, a graph folder or a wiki group). `stale` is a read
- * answered `stale-snapshot`: shown as loading, with no Retry, until the explorer loads its catalog again.
+ * answered `stale-snapshot`: shown as loading, with no Retry, until the explorer replaces its catalog
+ * (Refresh catalog, Rebuild or a new snapshot; the quiet re-read on returning to the view keeps it).
  */
 export interface TreeFolder {
   status: "loading" | "stale" | "ready" | "failed";
@@ -52,7 +53,7 @@ export interface TreeFolder {
   nextCursor?: string;
   /** The source behind the scope is missing or incomplete (a graph that is not built). */
   partial: boolean;
-  /** The next page: being read, waiting for the next catalog load after a stale-snapshot answer, or its read failed. */
+  /** The next page: being read, waiting for the next catalog replacement after a stale-snapshot answer, or its read failed. */
   more?: { status: "loading" } | { status: "stale" } | { status: "failed"; error: string };
 }
 
@@ -69,13 +70,13 @@ export interface MetaprojectTreeModel {
   get(scope: MetaprojectTreeScope): ScopeTree;
   /**
    * Reads `parent`'s first page unless it is loaded, being read, failed, or stale (answered
-   * `stale-snapshot`; the next catalog load reads it again).
+   * `stale-snapshot`; the next catalog replacement reads it again).
    */
   ensure(scope: MetaprojectTreeScope, parent: string): void;
   setExpanded(scope: MetaprojectTreeScope, key: string, expanded: boolean): void;
   /** Re-reads one failed parent, or its failed next page. */
   retry(scope: MetaprojectTreeScope, parent: string): void;
-  /** Appends `parent`'s next page; a page being read, or stale until the next catalog load, is not asked for again. */
+  /** Appends `parent`'s next page; a page being read, or stale until the next catalog replacement, is not asked for again. */
   more(scope: MetaprojectTreeScope, parent: string): void;
   setHandled(scope: MetaprojectTreeScope, selection: string): void;
 }
@@ -108,9 +109,10 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale, reload, wa
   request: RequestTree;
   onStale: () => void;
   /**
-   * Changes whenever the explorer loads its catalog (Refresh catalog included), whether or not the
-   * snapshot changed: parked stale reads are sent again then. Required: a change of it is the only way
-   * out of a stale read, which offers no Retry.
+   * Changes whenever the explorer replaces its catalog (Refresh catalog, Rebuild, a new snapshot), whether
+   * or not the snapshot id changed: parked stale reads are sent again then. The quiet re-read on returning
+   * to the view keeps the catalog when the snapshot is unchanged, so it does not change this. Required: a
+   * change of it is the only way out of a stale read, which offers no Retry.
    */
   reload: unknown;
   /** Waits before a permit retry; tests pass one that does not use the clock. */
@@ -179,7 +181,7 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale, reload, wa
   /** Records how a read of `parent` (its next page, with `cursor`) failed, as tree state. */
   const settleFailure = useCallback((scope: MetaprojectTreeScope, parent: string, cursor: string | undefined, cause: unknown) => {
     // Another snapshot answered: the explorer offers Refresh catalog. The row shows as loading with no
-    // Retry, which would only send the retired snapshot again; the next catalog load re-reads it.
+    // Retry, which would only send the retired snapshot again; the next catalog replacement re-reads it.
     if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") {
       setFolder(scope, parent, folder => cursor && folder
         ? { ...folder, more: { status: "stale" } }
@@ -257,7 +259,7 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale, reload, wa
 
   const retry = useCallback((scope: MetaprojectTreeScope, parent: string) => reread(scope, parent, "failed"), [reread]);
 
-  // A catalog load, even one that finds the same snapshot, re-reads what a stale-snapshot answer parked.
+  // A catalog replacement, even one that finds the same snapshot, re-reads what a stale-snapshot answer parked.
   // A new snapshot has already dropped every folder, so then there is nothing parked to re-read.
   const loadedCatalog = useRef(reload);
   useEffect(() => {

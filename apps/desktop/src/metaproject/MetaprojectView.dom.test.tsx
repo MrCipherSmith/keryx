@@ -693,9 +693,7 @@ test("the list header counts shown of total and the limited-catalog banner is go
 });
 
 test("the selected list row is scrolled into view when the selection changes from the panel", async () => {
-  const scrolled: Element[] = [];
-  const original = HTMLElement.prototype.scrollIntoView;
-  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  const { scrolled, restore } = captureScrolls();
   try {
     const createCytoscape = await headlessCytoscape();
     const read = (cwd: string, input: MetaprojectRequest): Promise<MetaprojectResponse> => input.action === "catalog" ? Promise.resolve(linkedCatalog) : request(cwd, input);
@@ -707,7 +705,7 @@ test("the selected list row is scrolled into view when the selection changes fro
     await act(async () => { serverRow.click(); });
     expect(panelTitle()).toBe("Server");
     expect(scrolled).toContain(listRow("Server"));
-  } finally { HTMLElement.prototype.scrollIntoView = original; }
+  } finally { restore(); }
 });
 
 test("the previous graph stays rendered and busy while the next selection's relationships load", async () => {
@@ -1999,6 +1997,13 @@ function manualTimer() {
   window.setTimeout = ((callback: TimerHandler) => { if (typeof callback === "function") run = () => callback(); return 1; }) as typeof window.setTimeout;
   return { run: () => run(), restore: () => { window.setTimeout = original; } };
 }
+/** Records the elements scrolled into view until `restore` puts the real `scrollIntoView` back. */
+function captureScrolls() {
+  const original = HTMLElement.prototype.scrollIntoView;
+  const scrolled: HTMLElement[] = [];
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  return { scrolled, restore: () => { HTMLElement.prototype.scrollIntoView = original; } };
+}
 
 test("a CLI without tree negotiates and keeps the flat list, with no error", async () => {
   const { negotiateMetaprojectExplorer, METAPROJECT_REQUIRED_ACTIONS } = await import("../platform/metaproject");
@@ -2077,9 +2082,8 @@ test("expanded folders and the selection survive switching Graph and Wiki and le
 
 test("a selection made elsewhere expands its ancestors and scrolls its row into view without moving focus", async () => {
   const timer = manualTimer();
-  const scrolled: HTMLElement[] = [];
-  const original = HTMLElement.prototype.scrollIntoView;
-  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  const scrolls = captureScrolls();
+  const { scrolled } = scrolls;
   try {
     const explorer = treeExplorer(STANDARD_TREES);
     const createCytoscape = await headlessCytoscape();
@@ -2097,7 +2101,7 @@ test("a selection made elsewhere expands its ancestors and scrolls its row into 
     expect(document.activeElement).toBe(search);
   } finally {
     timer.restore();
-    HTMLElement.prototype.scrollIntoView = original;
+    scrolls.restore();
   }
 });
 
@@ -2180,9 +2184,8 @@ test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the
 
 test("a selection made elsewhere whose folder read is parked stale is revealed once Refresh catalog reads it", async () => {
   const timer = manualTimer();
-  const scrolled: HTMLElement[] = [];
-  const original = HTMLElement.prototype.scrollIntoView;
-  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  const scrolls = captureScrolls();
+  const { scrolled } = scrolls;
   try {
     const trees: Record<string, TreeAnswer> = { ...STANDARD_TREES, "s1|graph|src|": { entries: [{ type: "node", node: file }], snapshotId: "s2" } };
     const explorer = treeExplorer(trees);
@@ -2204,7 +2207,7 @@ test("a selection made elsewhere whose folder read is parked stale is revealed o
     expect(scrolled.includes(treeRow("Client"))).toBe(true);
   } finally {
     timer.restore();
-    HTMLElement.prototype.scrollIntoView = original;
+    scrolls.restore();
   }
 });
 

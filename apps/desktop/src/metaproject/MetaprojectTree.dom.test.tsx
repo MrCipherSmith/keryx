@@ -489,6 +489,20 @@ test("a focused Show more whose page appends nothing hands focus back to its par
   expect(focused()).toBe("src");
 });
 
+test("a focused row that leaves with the row before it hands focus to the row now at its old index", async () => {
+  // Before: docs, src (expanded), client.ts, server.ts, README.md, zeta.md. Focus is on server.ts (index 3),
+  // whose hand-off anchor is client.ts. Collapsing src removes both in one commit, so the anchor is not shown.
+  const zeta = node("zeta", "zeta.md");
+  const tree = reader({ "|": { entries: [folder("docs", 1), folder("src", 2), leaf(readme), leaf(zeta)], partial: false }, "src|": SRC_PAGE });
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("server.ts").focus(); });
+  // A click does not focus in this DOM, so the collapse leaves focus on the removed row.
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["docs", "src", "README.md", "zeta.md"]);
+  expect(focused()).toBe("zeta.md");
+});
+
 test("focus that left the tree stays outside when the focused Show more row's page arrives", async () => {
   const tree = reader({
     "|": { entries: [leaf(readme)], nextCursor: "next", partial: false },

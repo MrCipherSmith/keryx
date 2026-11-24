@@ -107,7 +107,10 @@ Click a file or page to select it, as you would a search result. A folder
 loads its contents when you first expand it and shows **Loading…** until
 they arrive. A large folder shows its first entries and a **Show more** row
 that loads the next ones. If a folder fails to load, its row reads **Could
-not load.** with the reason and a **Retry** button.
+not load.** with the reason and a **Retry** button. If the project knowledge
+changed while a folder was loading, its row stays on **Loading…** with no
+**Retry**, and the explorer shows **Project knowledge changed while loading**:
+select **Refresh catalog** and the folder loads.
 
 Use the keyboard once the tree has focus:
 
