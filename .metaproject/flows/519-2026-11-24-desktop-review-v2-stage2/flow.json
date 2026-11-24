@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "519",
+  "slug": "desktop-review-v2-stage2",
+  "title": "Desktop Review v2 stage 2: Review entity, rounds and the Reviews tab",
+  "status": "in-progress",
+  "createdAt": "2026-11-24T07:16:18.886Z",
+  "updatedAt": "2026-11-24T07:19:31.820Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:99b919f89c204f3a50d7753f24d9def4083b08c743e5c70040a7efbe750a73b5",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T13"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T13"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T13"
+    },
+    {
+      "id": "T5",
+      "title": "Store: reviews table, rounds and attempts, migration and its test, badge round with parity",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Reviews read model, keryx review reviews --json, bridge arg and platform call",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Pull requests board: indicator without local review, New review round label, F-024",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Migration on a copy of the local working database",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Test suites, typecheck and lint",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Reviews toolbar measurement at 1100/760/560px",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "review-orchestrator on the PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Implementation plan stage 2 state, deviation b closed, CLI reference",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-24T07:16:18.886Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-24T07:19:14.810Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-24T07:19:15.191Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-24T07:19:15.510Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T07:19:15.823Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-24T07:19:16.212Z",
+      "event": "task-added",
+      "detail": "T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity"
+    },
+    {
+      "at": "2026-11-24T07:19:16.529Z",
+      "event": "task-added",
+      "detail": "T6: Reviews read model, keryx review reviews --json, bridge arg and platform call"
+    },
+    {
+      "at": "2026-11-24T07:19:16.834Z",
+      "event": "task-added",
+      "detail": "T7: Reviews tab: navigation, board/list/filters, Review panel with the moved review interface, indicator"
+    },
+    {
+      "at": "2026-11-24T07:19:17.196Z",
+      "event": "task-added",
+      "detail": "T8: Pull requests board: indicator without local review, New review round label, F-024"
+    },
+    {
+      "at": "2026-11-24T07:19:17.519Z",
+      "event": "task-added",
+      "detail": "T9: Migration on a copy of the local working database"
+    },
+    {
+      "at": "2026-11-24T07:19:17.861Z",
+      "event": "task-added",
+      "detail": "T10: Test suites, typecheck and lint"
+    },
+    {
+      "at": "2026-11-24T07:19:18.248Z",
+      "event": "task-added",
+      "detail": "T11: Reviews toolbar measurement at 1100/760/560px"
+    },
+    {
+      "at": "2026-11-24T07:19:18.561Z",
+      "event": "task-added",
+      "detail": "T12: review-orchestrator on the PR"
+    },
+    {
+      "at": "2026-11-24T07:19:18.913Z",
+      "event": "task-added",
+      "detail": "T13: Implementation plan stage 2 state, deviation b closed, CLI reference"
+    },
+    {
+      "at": "2026-11-24T07:19:31.529Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-24T07:19:31.820Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/desk-run-store.test.ts src/review/board-badges.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/review-entity.test.ts src/commands/review-reviews.test.ts"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/shell'"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/review'"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/reviews src/review'"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "sh -c 'cd apps/desktop && bun test src/review'"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "invariant",
+      "check": "sh -c 'bun run typecheck && cd apps/desktop && bun test src && bunx tsc --noEmit'"
+    }
+  }
+}
