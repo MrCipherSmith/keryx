@@ -1,5 +1,3 @@
-import { findSession } from "../session/store";
-import { resolveProjectRoot } from "../session/paths";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
 import { collectPrContext } from "./pr-context";
 import { spawn } from "node:child_process";
@@ -256,16 +254,17 @@ export async function requestDeskRun(
   key: DeskRunKey,
   input: DeskAction,
   resolveManualOptions?: (cwd: string, options?: DeskReviewOptions) => DeskReviewOptions | undefined,
+  resolveSessionProject?: (cwd: string, sessionId: string) => string | undefined,
 ): Promise<DeskRunSnapshot> {
+  const ownerRoot = input.action === "start" && input.sessionId !== undefined
+    ? resolveSessionProject?.(cwd, input.sessionId)
+    : cwd;
+  if (ownerRoot === undefined) throw new Error("access: The selected conversation is unavailable in this project.");
   const store = new DeskRunStore();
   try {
-    if (input.action === "start" && input.sessionId !== undefined && findSession(cwd, input.sessionId)?.id !== input.sessionId) {
-      throw new Error("access: The selected conversation is unavailable in this project.");
-    }
     const observedAdmission = input.action === "start" ? store.latestAdmission(key) : null;
     const revision = input.action === "start" ? input.revision :
       input.action === "continue" ? store.continuationSource(key, input.id).run : undefined;
-    const ownerRoot = input.action === "start" && input.sessionId ? resolveProjectRoot(cwd) : cwd;
     const selectedId = input.action === "status" ? input.id ?? input.activityId : undefined;
     const readScope = input.action === "start" || (input.action === "status" && input.activityBefore === undefined && selectedId !== undefined && !store.hasPullRequestScope(key, selectedId));
     const pr = await verifyDeskSubject(cwd, key, revision, undefined, readScope);

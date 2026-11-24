@@ -3,15 +3,10 @@ import { readConfigFile } from "../lib/config-dir";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { redactSensitiveText } from "../security/service";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { verifyVisiblePullNumbers } from "../review/board-badge-read";
-import { boardGraphql, projectGithubConnection, verifyGithubBindingUnchanged } from "../review/board-github";
-import { readDeskReviewerProgress } from "../review/desk-reviewer-progress";
-import { DeskRunStore } from "../review/desk-run-store";
-import type { DeskRun, DeskRunKey } from "../review/desk-run-types";
+import { readVisibleSessionReviews, reviewBelongsToSession, type SessionReviewAttempt } from "../review/session/service";
 import { SESSION_REVIEW_REQUEST_LIMIT, type SessionReviewSummary } from "./session-reviews-contract";
 
-type ReviewAttempt = { key: DeskRunKey; run: DeskRun };
-const MAX_ATTEMPTS = 10;
+export { readVisibleSessionReviews };
 const MAX_REPORT = 12_000;
 const MAX_REVIEWERS = 32;
 const ATTEMPT_ID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -25,13 +20,7 @@ export async function recordSessionReviewRequest(cwd: string, sessionId: string,
 ): Promise<string | null> {
   const receipt = receiptPath(sessionDir, attemptId);
   if (!receipt || !text.trim() || text.length > SESSION_REVIEW_REQUEST_LIMIT) return null;
-  const store = new DeskRunStore(storeRoot, true);
-  try {
-    const attempt = store.byId(attemptId);
-    if (!attempt || attempt.cwd !== cwd || attempt.run.sessionId !== sessionId) return null;
-  } finally {
-    store.close();
-  }
+  if (!reviewBelongsToSession(cwd, sessionId, attemptId, storeRoot)) return null;
   return withFileLock(receipt + ".lock", async () => {
     const previous = readConfigFile(receipt);
     if (previous.ok) return previous.text;
@@ -41,49 +30,7 @@ export async function recordSessionReviewRequest(cwd: string, sessionId: string,
   });
 }
 
-export async function readVisibleSessionReviews(cwd: string, sessionId: string, detailed = false): Promise<ReviewAttempt[]> {
-  let store: DeskRunStore;
-  try {
-    store = new DeskRunStore(undefined, true);
-  } catch {
-    return [];
-  }
-  try {
-    if (!store.hasSessionAttempts(cwd, sessionId)) return [];
-    const auth = await projectGithubConnection(cwd);
-    const read = <T>(query: string, vars: Record<string, string | number>) => boardGraphql<T>(cwd, query, vars, auth);
-    const viewer = auth.login ?? (await read<{ viewer?: { login?: string } }>("query { viewer { login } }", {})).viewer?.login;
-    if (!viewer) return [];
-    const attempts = store.sessionAttempts(cwd, sessionId, viewer, MAX_ATTEMPTS);
-    const repositories = new Map<string, ReviewAttempt[]>();
-    for (const attempt of attempts) {
-      const group = repositories.get(attempt.key.repositoryId) ?? [];
-      group.push(attempt);
-      repositories.set(attempt.key.repositoryId, group);
-    }
-    const visibleGroups = await Promise.all([...repositories.values()].map(async group => {
-      try {
-        const visible = await verifyVisiblePullNumbers(group[0]!.key, [...new Set(group.map(({ key }) => key.number))], read);
-        return group.filter(({ key }) => visible.has(key.number));
-      } catch {
-        return [];
-      }
-    }));
-    verifyGithubBindingUnchanged(auth);
-    const visible = new Set(visibleGroups.flat());
-    return attempts.filter(attempt => visible.has(attempt)).map(attempt => {
-      if (!detailed || attempt.run.source !== "manual") return attempt;
-      const { run, key } = attempt;
-      const pending = run.state === "running" ? store.pendingQuestions(run.id) : [];
-      const progress = readDeskReviewerProgress(store.directory(run.id), key, run, true);
-      return { key, run: { ...run, pendingQuestions: pending, ...(progress && { reviewerProgress: progress }) } };
-    });
-  } finally {
-    store.close();
-  }
-}
-
-export function sessionReviewSummaries(attempts: readonly ReviewAttempt[], sessionId: string, sessionDir?: string): SessionReviewSummary[] {
+export function sessionReviewSummaries(attempts: readonly SessionReviewAttempt[], sessionId: string, sessionDir?: string): SessionReviewSummary[] {
   return attempts.map(({ key, run }) => {
     const receipt = sessionDir && receiptPath(sessionDir, run.id);
     const stored = receipt ? readConfigFile(receipt) : undefined;
@@ -97,7 +44,7 @@ export function sessionReviewSummaries(attempts: readonly ReviewAttempt[], sessi
   });
 }
 
-export function sessionReviewsTool(read: () => Promise<ReviewAttempt[]>): InteractiveTool {
+export function sessionReviewsTool(read: () => Promise<SessionReviewAttempt[]>): InteractiveTool {
   return {
     definition: {
       name: "session_reviews",

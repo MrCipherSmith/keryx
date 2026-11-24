@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { requestDeskRun, runDeskWorker, type DeskAction } from "../review/desk-run-service";
 import { DESK_REVIEW_ACTIONS, type DeskReviewAction } from "../review/desk-run-types";
 import { isAutonomousEnv } from "../review/run-profile";
+import { findSession, resolveProjectRoot } from "../session";
 
 export const DESK_USAGE =
   "keryx review desk-run <start|status|cancel|answer|continue|readiness|decide> --json --repo owner/name --repository-id ID --viewer LOGIN --number N [--id UUID] [--guidance TEXT] [--decision complete|close|archive|restore|delete --reason TEXT [--waive item,item]]";
@@ -104,6 +105,10 @@ export async function runReviewDesk(args: string[]) {
     { repo: v.repo, repositoryId, viewer: v.viewer, number },
     input,
     resolveManualOptions,
+    (cwd, sessionId) => {
+      const project = resolveProjectRoot(cwd);
+      return findSession(project, sessionId)?.id === sessionId ? project : undefined;
+    },
   );
   await new Promise<void>((resolve, reject) =>
     process.stdout.write(JSON.stringify(snapshot) + "\n", (error) => (error ? reject(error) : resolve())),

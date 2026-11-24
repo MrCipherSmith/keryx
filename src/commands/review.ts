@@ -1305,7 +1305,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const sessionRoot = process.env.KERYX_REVIEW_SESSION_PROJECT_ROOT;
     if (mode === "review-flow" && targetKind === "pr" && sessionId && sessionRoot && process.env.KERYX_DESK_REVIEW_SHELL !== "1" &&
         await (await import("node:fs/promises")).realpath(sessionRoot).catch(() => "") === await (await import("node:fs/promises")).realpath(cwd).catch(() => "!") &&
-        (await import("../session/store")).findSession(sessionRoot, sessionId, process.env.KERYX_REVIEW_SESSION_DATA_DIR || undefined)?.id === sessionId) {
+        (await import("../session")).findSession(sessionRoot, sessionId, process.env.KERYX_REVIEW_SESSION_DATA_DIR || undefined)?.id === sessionId) {
       try {
         const ownerText = process.env.KERYX_REVIEW_SESSION_OWNER;
         const owner = ownerText ? JSON.parse(ownerText) as import("../lib/hub-machine/process-identity").ProcessIdentity : undefined;

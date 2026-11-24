@@ -1,5 +1,5 @@
 import { MODEL_TIERS, type ModelTier } from "../gdskills/model-tier";
-import { ROUTING_TIERS } from "../harness/routing/model-class";
+import { ROUTING_TIERS } from "../lib/model-class";
 import type { DeskReviewPool } from "./desk-run-options";
 import type { SliceEntry } from "./slice";
 

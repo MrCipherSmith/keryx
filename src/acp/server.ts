@@ -160,6 +160,7 @@ import { createTasksHandlers, taskEventSink } from "./shell-tasks";
 import { clientPreparesReview, type RequestReviewDraft } from "./prepare-review";
 import { PREPARE_REVIEW_METHOD } from "./review-draft";
 import { SESSION_REVIEW_REQUEST_METHOD, SESSION_REVIEWS_METHOD } from "./session-reviews-contract";
+import { settleSessionReviews } from "../review/session/service";
 import { recordSessionReviewRequest, readVisibleSessionReviews, sessionReviewSummaries, sessionReviewsTool } from "./session-reviews";
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
@@ -649,11 +650,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       created.registry = jobs;
       jobs.onCompletion(() => {
         if (activeTurns.has(sessionId)) return;
-        void import("../review/desk-run-store").then(async ({ DeskRunStore, deskRunRoot }) => {
-          if (!(await import("node:fs")).existsSync((await import("node:path")).join(deskRunRoot(), "runs.sqlite"))) return;
-          const store = new DeskRunStore();
-          try { store.settleSessionDrafts(root, sessionId, undefined, jobs?.activeTaskTokens?.()); } finally { store.close(); }
-        }).catch(() => undefined);
+        settleSessionReviews(root, sessionId, jobs?.activeTaskTokens?.());
       });
       sessionJobs.set(sessionId, jobs);
     }
@@ -2812,13 +2809,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // the busy guard above ever regressed, hand a later turn's slot away.
       if (activeTurns.get(sessionId) === turn) {
         // A session-owned draft is active only while this turn runs. Preserve it as a partial review if abandoned.
-        try {
-          const { DeskRunStore, deskRunRoot } = await import("../review/desk-run-store");
-          if ((await import("node:fs")).existsSync((await import("node:path")).join(deskRunRoot(), "runs.sqlite"))) {
-            const store = new DeskRunStore();
-            try { store.settleSessionDrafts(state.resolvedRoot, sessionId, undefined, sessionJobs.get(sessionId)?.activeTaskTokens?.()); } finally { store.close(); }
-          }
-        } catch { /* Review tracking must not prevent the session from ending. */ }
+        settleSessionReviews(state.resolvedRoot, sessionId, sessionJobs.get(sessionId)?.activeTaskTokens?.());
         activeTurns.delete(sessionId);
         if (telegram !== undefined) {
           sendUpdate(sessionId, { sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase: "finished", actorId: telegram.actorId, updateId: telegram.updateId, generation: telegram.generation });
