@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1301,
+  "headSha": "f43a13c3f35e488744bb8906c2c275d433f8d98b",
+  "collectedAt": "2026-11-24T07:10:02.392Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "feat(desktop): browse Metaproject files and wiki pages as a tree",
+    "body": "## Summary\n\nFlow 518. Without a search, the Metaproject sidebar is now a tree instead of a flat list of the catalog's first 200 nodes: in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module node); in **Wiki**, pages grouped by page type. Folders load on demand, so the whole project is reachable.\n\n- **Core:** new read-only v2 action `tree` (`scope: graph | wiki`, optional `parent`, paged with snapshot-bound cursors, `not-found` / `stale-snapshot` / `invalid-input` like the other actions). Listed in `capabilities`; v1 unchanged.\n- **Transport:** Rust `RequestV2::Tree` with validation and tests. The handshake still requires only the six existing actions, so an older CLI keeps working; Desktop learns `supportsTree` from the probe.\n- **Desktop:** `MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space), `useMetaprojectTree` (per-scope expanded set and pages, retry per folder, Show more, snapshot changes), mounted in `MetaprojectView` only with no query and a CLI that offers `tree`. A selection made elsewhere reveals its path; the item shown by default on first open does not.\n- **Docs:** the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour.\n\n## Verification\n\n- `bun test src/integrations` 443 pass; `bun run lint` and `bun run typecheck` exit 0.\n- Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.\n- `bun run docs:check` exit 0; `keryx health run` PASS.\n- **Not run locally:** the Rust tests (`cargo test --locked metaproject`) — no Rust toolchain on the authoring machine; this PR's CI is the first run.\n- No native walkthrough of the packaged app yet.\n\nFlow package: `.metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/`.\n"
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 remaining tests",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (1/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "desktop check",
+        "state": "passing"
+      },
+      {
+        "name": "Desktop Metaproject graph and wiki acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "Lint and typecheck",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (4/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (3/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "Issues board, Projects and session-to-Flow acceptance",
+        "state": "passing"
+      },
+      {
+        "name": "Core tests (2/4, offline)",
+        "state": "passing"
+      },
+      {
+        "name": "team-hub-distribution",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

@@ -1,0 +1,62 @@
+STATUS: DONE
+
+## Performance Review (wave 2, round 2 delta)
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, range 9f4ec475b..f43a13c3f (fix round 1), slices slice-02 (new) and slice-03 (new), both read in full. Context reads: apps/desktop/src/metaproject/useMetaprojectTree.ts (read/limit, lines 115-180) and apps/desktop/src/metaproject/MetaprojectTree.tsx (activate/moveTo/onKeyDown, lines 170-220) at head.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+### [performance-w2r2-F-001] The every-render layout effect queries and scans all tree rows twice; each arrow key queries them about four times
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx (`remember`, and the `useLayoutEffect` with no dependency array)
+- **Hot path**: every render of the tree: each keystroke (moveTo → focus → setFocusId), each page that arrives, each expand or collapse. n = the loaded visible rows: 100 per page, growing with Show more and expanded folders.
+- **Problem**: the layout effect runs after every render. It calls `rowElements()` (querySelectorAll over every `[data-row]`) and then `remember(document.activeElement)`, which calls `rowElements()` again and runs `indexOf` over the result. On ArrowDown, `moveTo` also calls `rowElements()` and the row's `onFocus` → `remember` calls it once more. That makes about four O(n) DOM queries plus scans per keystroke. Before the fix round, none of these ran unless a scroll or focus request was pending.
+- **Why it matters**: the cost is the same order as `flatten` and React's reconcile of n rows, which already run on each render. It is not a bottleneck at the 100-row page size. It is redundant work on a per-keystroke path and grows linearly with how far the user has paged. No timing was measured.
+- **Fix**: pass the `elements` array the layout effect already holds into `remember` (`remember(element, elements = rowElements())`). In `onFocus`, derive the index from `rows.findIndex(r => r.id === row.id)`, which is already in memory, rather than from the DOM.
+
+### Clean Areas
+- Tree read limiter (`limit`, MAX_TREE_READS = 3): a FIFO with one slot handoff per settle. A queued read whose generation has been retired returns `false` without sending, so no wasted CLI spawns. The queue is bounded by expanded folders plus pages. The slot count stays correct on failure (`.catch(() => undefined).finally`). This closes the round-1 fan-out concern (performance-w1-F-002 / highload-w1-F-001) by inspection. The test also asserts a peak of ≤ 3.
+- Stale-snapshot check moved from `matchesRequest` into `requestV2` after validation: O(1), no extra serialisation.
+- `onBlur` queueMicrotask: one per blur, O(1) unless focus left a connected row.
+- `metaprojectWikiGroupKey`: a constant-time helper, with no per-call allocation.
+- `loadMoreSearch` stale-snapshot branch, `aria-labelledby`/`useId`, the error-row live region and the Module label add no hot-path cost.
+- Tests and fixtures (core tree test reversed nodes.jsonl, Desktop DOM tests): not production paths.
+- Categories checked with nothing found: N+1/DB, indexes, pagination (tree pages stay ≤ 100), bundle imports (the only new import is `MetaprojectRequestError` from the existing contract module), sync blocking, memory leaks (the limiter queue drains, there are no new listeners or timers), redundant API calls.
+
+### Not verified
+- No timing was run (exec_budget_s = 0). The finding rests on a reasoned count, not a measurement.
+- Round-1 findings and the operator-dismissed performance-w1-F-001 (sequential reveal paging) were not re-reported.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Fix-round delta (slice-02, slice-03): the tree-read limiter bounds fan-out to 3 and never starts a retired-snapshot read; the stale-snapshot transport check is O(1). One minor: the focus-restore layout effect now runs about four O(n) DOM row queries per keystroke/render where the rows are already in memory.",
+  "findings": [
+    {
+      "id": "performance-w2r2-F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "focused.current = element instanceof HTMLElement && row ? { element, index: rowElements().indexOf(row) } : null;",
+      "problem": "The dependency-less useLayoutEffect runs after every render. It calls rowElements() (querySelectorAll over every [data-row]) and then remember(document.activeElement), which calls rowElements() again plus indexOf. On a keystroke, moveTo and the row's onFocus -> remember each call rowElements() too. That is about four O(n) DOM queries and scans per arrow key, where before the fix round there were none unless a request was pending.",
+      "impact": "This is redundant work on a per-keystroke and per-arriving-page path, linear in the loaded visible rows (100 per page, growing with Show more and expansion). It is the same order as flatten and the reconcile that already run, so it is not a bottleneck at current page sizes. No timing was measured.",
+      "suggested_fix": "Reuse the `elements` array the layout effect already computed: remember(element, elements = rowElements()). In onFocus, take the index from rows.findIndex(r => r.id === row.id) instead of querying the DOM.",
+      "evidence": "Slice-02 MetaprojectTree.tsx hunk @@ 35,173: `const elements = rowElements();` then `remember(document.activeElement);` inside a useLayoutEffect with no deps; remember() calls rowElements().indexOf(row). The head file (lines 183-186) shows moveTo calling rowElements().find(...). onFocus calls remember(event.target).",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":156880,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

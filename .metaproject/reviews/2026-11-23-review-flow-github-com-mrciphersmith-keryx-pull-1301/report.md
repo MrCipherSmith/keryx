@@ -1,4 +1,4 @@
-Reviewed SHA: 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a (head of https://github.com/MrCipherSmith/keryx/pull/1301; base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
+Reviewed SHA: 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a — the PR has since moved on (now f43a13c3f, fix round 1) (head of https://github.com/MrCipherSmith/keryx/pull/1301; base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
 
 # Managed Review Report — round 1
 
@@ -925,3 +925,18 @@ None.
   }
 ]
 ```
+
+## Token spend
+
+token spend: unknown (23 dispatch(es), none reported usage)
+
+## Review parity
+
+- **Not run: 52 candidates: T1, T2, T3, T4, T5, T6, ….** They stay pending; a pass that runs them can still change a severity.
+- **Not verified:** AC3 (Rust) remains unverified until CI runs cargo test. (review-architecture-w1:fu1, narrowed, remains: CI cargo test --locked metaproject result on the PR head)
+- **Not verified:** Measure LY-001 in a real layout engine (packaged app or Playwright Chromium) at the 720px window minimum with the details panel open: width of .metaproject-tree-name on a level-5 and level-6 graph row (review-layout-w1:fu1, narrowed, remains: measurement of LY-001 at the 720px window minimum)
+- **Not verified:** PR-body claims settled only in slice-02 (Core `tree` action listed in capabilities, v1 unchanged, Desktop Metaproject guide describes the tree, keyboard and older-CLI behaviour) were not checked by th (review-pr-contract-w1:fu1, narrowed, remains: a pr-contract pass over slice-02)
+- **Not verified:** Run the 52 mutant_candidates in this result through keryx review mutate (core suite for T*/C*, desktop suite for P*/U*/M*/W*; M2 can loop, so use --timeout-ms). Report each survivor as a minor 'gate u (review-testing-practices-w1:fu1, narrowed, remains: the mutation pass over the 52 candidates)
+- **Not verified:** slice-01, apps/desktop/src/metaproject/MetaprojectTree.tsx (outside this reviewer's slice, read for context): keyboard focus is lost when a status row a keyboard user activated is replaced. Enter on a (review-ui-ux-w2:fu1, narrowed, remains: a dedicated check of this note against MetaprojectTree.tsx)
+- **Not verified:** slice-01, MetaprojectTree.tsx container rows: the count badge `<span className="count-label">{entry.files | entry.pages}</span>` has no unit, so the treeitem's accessible name reads like 'src 4' with (review-ui-ux-w2:fu2, narrowed, remains: a dedicated check of the count badge wording)
+- **Not verified:** slice-01, MetaprojectTree.tsx empty state: 'The graph is not built yet. Rebuild the graph to browse its files.' names the remedy but offers no control in place; the Rebuild graph button lives in the h (review-ui-ux-w2:fu3, narrowed, remains: a dedicated check of the empty-state wording)

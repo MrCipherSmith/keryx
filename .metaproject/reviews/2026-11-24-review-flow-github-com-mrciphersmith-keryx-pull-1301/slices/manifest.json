@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 19368,
+      "contentHash": "0b33700233080512600b0d974712c278282eda9f00122ed9b6b352498957794f",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "apps/desktop/src/platform/metaproject.ts",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-tree.test.ts",
+        "src/integrations/metaproject-explorer-v2.ts"
+      ],
+      "domain": "apps [test], apps, docs [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/useMetaprojectTree.ts, apps/desktop/src/platform/metaproject.ts (+1)",
+          "fix slice: answers 15 prior finding(s) architecture-w2-F-001, degradation-w1-F-001, degradation-w1-F-002, frontend-w1-F-001, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "architecture-w2-F-001",
+        "degradation-w1-F-001",
+        "degradation-w1-F-002",
+        "frontend-w1-F-001",
+        "logic-w1-F-001",
+        "logic-w2-F-002",
+        "performance-w2-F-001",
+        "pr-contract-w1-PC-001",
+        "pr-contract-w2-PC-001",
+        "testing-practices-w1-F1",
+        "testing-practices-w1-F3",
+        "testing-practices-w1-F6",
+        "testing-practices-w1-I2",
+        "ui-ux-w1-UX-004",
+        "ui-ux-w1-UX-005"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 132049,
+      "contentHash": "3ff0b3c0a2b07a729d38fdffcaf03ad30173898c8191e76b6547e19a76d99826",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "apps/desktop/src/platform/metaproject.ts",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-contract.ts",
+        "src/integrations/metaproject-explorer-v2.ts",
+        "src/integrations/metaproject-explorer-tree.test.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], apps [test] +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/metaproject/useMetaprojectTree.ts (+2)",
+          "schema: src/integrations/metaproject-explorer-contract.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 7578,
+      "contentHash": "914d49bd10a54112413ad33694664f942f749e621bb34f25ac0a7e2b9778f1b1",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/platform/metaproject.ts",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-v2.ts"
+      ],
+      "domain": "apps, apps [test], docs [docs] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/metaproject/MetaprojectView.tsx, apps/desktop/src/platform/metaproject.ts, src/integrations/metaproject-explorer-v2.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 145562,
+      "contentHash": "39a434a28ef29dbe460b264bcdf63cade7e669ba6efcb1038490ef361025dec3",
+      "files": [
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+        ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+        "apps/desktop/src-tauri/src/metaproject.rs",
+        "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx",
+        "apps/desktop/src/metaproject/metaproject.css",
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+        "apps/desktop/src/platform/metaproject.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src-tauri/src/metaproject.rs, apps/desktop/src/metaproject/MetaprojectTree.tsx, apps/desktop/src/metaproject/MetaprojectView.tsx (+2)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 86599,
+      "contentHash": "a76c71049f03a2ebea8e78e4b126addfcea63bc6b37ac53af9906e4713d1a1c3",
+      "files": [
+        "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+        "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+        "apps/desktop/src/platform/metaproject.test.ts",
+        "docs/docs/guides/desktop-metaproject.md",
+        "src/integrations/metaproject-explorer-contract.ts",
+        "src/integrations/metaproject-explorer-v2.ts",
+        "src/integrations/metaproject-explorer-tree.test.ts"
+      ],
+      "domain": "apps [test], docs [docs], src/integrations +1 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "schema: src/integrations/metaproject-explorer-contract.ts",
+          "source code: src/integrations/metaproject-explorer-v2.ts",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 5,
+    "bytes": 391156,
+    "files": 31,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

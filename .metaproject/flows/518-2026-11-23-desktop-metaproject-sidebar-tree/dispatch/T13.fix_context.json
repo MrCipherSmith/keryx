@@ -1,0 +1,67 @@
+{
+ "review_feedback": [
+  {
+   "id": "r2-frontend-w1-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "Introduced by the fix for frontend-w1-F-001: the loading row and the Show more row of a parent share the key status:${parent}. If the Loading row has focus and the folder's first page arrives with a nextCursor, React reuses the keyed <li> and inserts up to 100 new entries before it, so focus stays on the same element, which is now 'Show more' after all the new children. The layout-effect restore does not run because the element is still connected. The last-page path (row removed) instead lands on the first child. The new tests only cover reads without a following nextCursor.",
+   "suggested_fix": "When a focused parent status row changes from loading to more, focus the first child row (remember the focused row's type with its index in the layout effect). Or give loading and more distinct ids again while keeping one id across error/loading and more/more-loading, so the index-based restore lands on the first child. Add a DOM test: focus a Loading row whose answer has nextCursor, release it, assert focus is on the first child. Operator decision: focus goes to the row now at the same place ('На то же место'); after a Loading row is replaced by children plus a Show more row, focus must land on the first child, consistent with the last-page path. Coordinate with r2-logic-w1-F-001 (anchor the hand-off to a surviving neighbour) and r2-performance-w2-F-001 (reuse the rows in memory instead of repeated querySelectorAll)."
+  },
+  {
+   "id": "r2-logic-w1-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "This is new code from the fix for frontend-w1-F-001. When the focused row is removed, the layout effect focuses the element at `lost.index`. That index was recorded at the previous commit or focus event. If rows above the focused row are added or removed in the same commit that removes it, the index no longer points at the removed row's place. Focus then lands on an unrelated row, possibly in another folder.\n\nRepro: expand folders A and B (A above B) with both reads pending. Arrow onto B's Loading row. Both answers then arrive before React flushes, so one batched DefaultLane commit inserts A's children above and replaces B's Loading row. Focus goes to one of A's children at B's old index, not to B's first child. The same happens when a reveal or a Show more above commits in the same batch as the focused row's removal.",
+   "suggested_fix": "Anchor the hand-off to a surviving neighbour instead of a raw index. In `remember`, also record the `data-row` id of the row just before the focused one; for a status row that is its parent folder row `d:<parent>`. In the layout effect, if that row is still rendered, focus the element after it; otherwise fall back to the clamped index. Add a DOM test that holds two folder reads, focuses the lower folder's Loading row, releases both in one `act`, and expects focus on the lower folder's first child."
+  },
+  {
+   "id": "r2-performance-w2-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "The dependency-less useLayoutEffect runs after every render. It calls rowElements() (querySelectorAll over every [data-row]) and then remember(document.activeElement), which calls rowElements() again plus indexOf. On a keystroke, moveTo and the row's onFocus -> remember each call rowElements() too. That is about four O(n) DOM queries and scans per arrow key, where before the fix round there were none unless a request was pending.",
+   "suggested_fix": "Reuse the `elements` array the layout effect already computed: remember(element, elements = rowElements()). In onFocus, take the index from rows.findIndex(r => r.id === row.id) instead of querying the DOM."
+  },
+  {
+   "id": "r2-clean-code-w2-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "The component's doc comment describes the rule this fix round replaced. The new useLayoutEffect moves focus when data arrives: if the focused row (a Loading or Show more row) disappears because its folder's children or last page arrived, focus goes to the row now at its index (`elements[Math.min(lost.index, elements.length - 1)]?.focus()`). The tests added in this round assert exactly that (`a keyboard Retry keeps focus ... then on the first row read`: after `tree.release(\"src|\")`, `focused()` is `client.ts`). The doc still says focus moves only with the keyboard or a click and that data arriving never takes it; the inline comment at the effect states the narrower, correct rule ('Focus that was outside the tree is never taken').",
+   "suggested_fix": "Reword the doc to the rule the code now follows, e.g. 'Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree; when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place.'"
+  },
+  {
+   "id": "r2-clean-code-w1-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "New in the fix round (the read limiter added with the stale-snapshot / concurrency changes). The comment misstates what the catch does: `.finally` releases the slot whether or not the chain rejects, so the catch is not what 'keeps the slot count right'. What it does is turn every rejection of the task into a silent success. read()'s task already ends in its own `.catch(cause => ...)`, so the only errors that reach this catch are ones thrown by that handler itself (latest.current.onStale() i.e. MetaprojectView's markStale, update(), setFolder(), errMessage()). Those are programming errors, and they are dropped with no log and no rethrow (error-handling.mdc Rule 3 / Iron Law 1 shape, but with no caller proceeding on a wrong result).",
+   "suggested_fix": "Reword the comment to what the catch is for, e.g. '// read() handles every request failure itself; this only stops an unexpected throw in that handling from becoming an unhandled rejection.' and report it rather than drop it: `.catch(error => console.error(\"Metaproject tree read failed unexpectedly\", error))`."
+  },
+  {
+   "id": "r2-highload-w2-F-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "The FIFO limiter added for highload-w1-F-001 lives in a `useRef` of `useMetaprojectTree`. That gives one pool per explorer, so one per project window. The resource it protects is the process-wide Rust read permit pool (metaproject.rs `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`), which every project window shares and which refuses a request instead of queueing it. The comment on MAX_TREE_READS assumes the 8 permits are one window's to split: \"the rest of Desktop's eight read permits stay free for the explorer\". The other half of the round-1 suggested_fix, a single retry with backoff on the permit's `unavailable` answer, was not done, so a refusal still becomes a terminal folder error.",
+   "suggested_fix": "Either make the limiter module-level (one pool shared by every useMetaprojectTree instance in the webview, with MAX_TREE_READS as the process budget), and correct the MAX_TREE_READS comment so it says the permits are shared by all windows. Or treat a permit refusal (`unavailable` whose message starts with 'Too many Metaproject reads') as retryable once or twice, with a short jittered backoff inside `read`, before the folder is marked failed. The second covers both the tree and cross-window pressure. Premise judge note: each Tauri window has its own JS context, so a module-level pool does not cover several windows; implement the retry option (retry an `unavailable` permit refusal once or twice with a short jittered delay before marking the folder failed) and correct the MAX_TREE_READS comment so it does not claim one window owns all 8 permits."
+  },
+  {
+   "id": "r2-ui-ux-w2-UX-001",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+   "problem": "Nielsen #9 (error recovery) and #5 (error prevention). When a tree read answers stale-snapshot, the catch calls onStale, which shows the explorer's 'Refresh catalog' banner, and then falls through to the generic failure branch. The folder (or its Show more row) becomes 'Could not load. Project knowledge changed while loading.' with a Retry button. Retry re-sends the same retired snapshot: `read` pins `expectedSnapshotId: state.current[scope].snapshot`, and a page Retry re-sends the old cursor. The CLI therefore answers stale-snapshot again. In this delta the transport (platform/metaproject.ts) newly turns any answer for another snapshot into this error, which makes the path reachable from a second source. The delta's own Load-more search fix (MetaprojectView.loadMoreSearch) handles the same error by showing only the banner, so the two paths disagree.",
+   "suggested_fix": "In the catch, after `latest.current.onStale()`, return without marking the folder failed. Leave the folder in its loading state (or drop it, as the not-found branch does), because Refresh catalog changes the snapshot and the tree then re-reads it anyway. This matches loadMoreSearch, which sets snapshotMismatch and no inline error. Extend the existing MetaprojectView test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' to assert that no treeitem reads 'Could not load.' while the banner shows. Operator decision (round 1 fix round): a stale snapshot shows the Refresh catalog banner. Make the tree read consistent with loadMoreSearch: after onStale(), do not mark the folder failed (no dead Retry row); assert in a view test that no 'Could not load.' row shows while the banner does."
+  },
+  {
+   "id": "r2-testing-practices-w2-F1",
+   "severity": "minor",
+   "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+   "problem": "Fix round 1 (frontend-w1-F-001 / ui-ux-w1-UX-001) added two mechanisms so that focus is never taken from outside the tree. The first is the `onBlur` microtask that forgets the focused row when focus moves out. The second is the `active` guard in the layout effect. No test drives the case they exist for: a tree row holds focus, focus then moves outside, and only after that does the focused row leave (Show more's last page arrives, or a loading or error row turns into children). Every test that focuses `outside` keeps it outside without ever focusing a row first, or leaves the focused row in place: 'data arriving never moves focus' (a mouse click on the chevron, so no row was ever focused), the reveal test and the Home/End test (the rows stay). The two keyboard tests (Retry, Show more) keep focus inside the tree.",
+   "suggested_fix": "In MetaprojectTree.dom.test.tsx, add a test. Hold `|next`. Focus the Show more row and press Enter, so the row is focused and loading. Focus an `outside` button inside act(). Release `|next`. Assert that `document.activeElement === outside`, that the appended rows are present (positive artifact) and that 'Show more' is gone. Add a twin with a held folder read, where the focused loading row is replaced by children."
+  },
+  {
+   "id": "r2-style-w2-F-002",
+   "severity": "minor",
+   "file": "apps/desktop/src/platform/metaproject.test.ts",
+   "problem": "In the new test \"an answer for another snapshot than the one pinned is refused as stale-snapshot\", `tree` and `search` hold the errors returned by `readError`, not a tree or a search answer; the assertions then read `tree instanceof MetaprojectRequestError && tree.code`.",
+   "suggested_fix": "Rename to `treeError` / `searchError` (or `staleTree` / `staleSearch`)."
+  }
+ ]
+}

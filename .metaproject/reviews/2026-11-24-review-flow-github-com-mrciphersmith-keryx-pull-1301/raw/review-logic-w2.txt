@@ -1,0 +1,78 @@
+STATUS: DONE
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `main` (merge-base `a5d1ab236fe85dee62a758a19390049dde4eb7f9`)
+- Delta: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b` (fix round 1)
+- Scope mode: `explicit-hash-range`, slice-04 only (second-look; read in full, lines 1-2546). Context: `git diff 9f4ec475b..f43a13c3f` of the slice's source files, to see exactly what the fix round changed.
+- Spec compliance gate: ran against AC3-AC7 (the criteria this slice's files carry). No gap found.
+
+### Summary
+The fix round's changes in this slice hold up. Focus restore replaces the deferred `focusRequest` with direct focus in `moveTo` and a lost-row handoff in the layout effect; this closes logic-w1-F-001, because Home/End leave nothing pending for a later commit. The handoff also covers frontend-w1-F-001: status rows now share one key per parent, so Retry and Show more update the focused `<li>` in place, and a removed row hands focus to the row now at its index, only when focus fell to `<body>`. The stale-snapshot check moved from `matchesRequest` to a post-validation `MetaprojectRequestError("stale-snapshot")` in `requestMetaprojectV2`. This makes the hook's `onStale` branch reachable (degradation-w1-F-002), and the search Show-more path now raises the stale banner. Tree reads are now capped at 3 by a FIFO queue, and a queued read from a retired generation never starts. The wiki group key is now one shared helper, and module folders carry the Module label. I traced blur/focus microtask ordering for both user-driven and programmatic focus moves, React key reconciliation for the shared status id, limiter slot accounting on success, failure and retired generations, and the callers of the moved stale check: OpenSpecView now shows "Project knowledge changed while loading." instead of "Choose the bundled CLI". I found no blocker, major or minor issue. One info observation.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+- [F-001] info: an in-flight tree read keeps its slot until the CLI answers, even after its snapshot is retired.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Fix-round changes in slice-04 (focus restore via direct focus and lost-row handoff, shared status-row key, stale-snapshot raised by the transport, 3-slot tree read queue, shared wiki group key, Module label) are logically sound and close logic-w1-F-001 and degradation-w1-F-002. One info: an in-flight read of a retired snapshot still holds one of the three slots until the CLI answers.",
+  "slices": [{ "id": "slice-04", "coverage": "read in full, lines 1-2546 (second-look)", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "export const MAX_TREE_READS = 3;",
+      "problem": "The limiter frees a slot only when the read's promise settles. A read already started under a snapshot that has since been retired is ignored on arrival (`current()` is false), but until then it still holds its slot. Each read is one CLI child, about 0.8 s, bounded by Rust `run_bounded(..., Duration::from_secs(150), ...)`. After a Refresh or Rebuild with three tree reads in flight, the new snapshot's root read waits behind them. If the CLI hangs, the wait is up to 150 s, and Retry rows queue behind the same slots.",
+      "impact": "Latency only. The re-read of the new root is delayed by the old reads' remaining time; nothing is lost or shown wrongly. There is no cancellation path for reads (out of scope per description.md), so this is the expected cost of the cap rather than a defect.",
+      "suggested_fix": "Optional: release the slot as soon as a read's generation is retired. For example, count active slots per generation and start queued reads when the generation changes, accepting a brief overshoot of MAX_TREE_READS against the Rust permit cap. Or leave it as is and note it under the cancellation stage.",
+      "evidence": "useMetaprojectTree.ts limit(): `pool.active--` runs only in `.finally` of the task promise; read(): `limit(() => current() && Promise.resolve().then(() => send(root, input))...)` checks the generation only at start and on arrival; apps/desktop/src-tauri/src/metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+### Suggested Patches
+None warranted.
+
+### Not verified / honesty notes
+- No tests were executed (exec_budget_s = 0). I relied on research-evidence/verify-tests-to-run-1.txt (31 + 133 pass, exit 0) and the reported CI at f43a13c3f. The fix round added DOM tests for Home/End, keyboard Retry, keyboard Show more, the 3-read cap and stale answers; I read their titles, not their bodies.
+- Blur-on-removal behaviour differs between engines (WKWebView in the macOS Tauri shell vs Chromium vs happy-dom). I traced both cases by reasoning: `onBlur` checks `isConnected` in a microtask, so a removed row is not forgotten. I did not observe it in a real webview.
+- Round-1 items that the fix round did not change and that I did not report again: logic-w1-F-002 (scroll request for a symbol) and logic-w1-F-003 (requestTree prop doc). Both are info and their text is unchanged at head.
+- The rules async-patterns.mdc, error-handling.mdc and activity/review.mdc were not opened in this run. The only new async construct is the bounded queue, which is the pattern those rules ask for.
+- src/integrations/** changes in the delta (the shared wiki group helper) belong to another slice. I read them only as context.
+KERYX_USAGE {"tokens_in":189763,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

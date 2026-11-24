@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 2 (delta 9f4ec475b..f43a13c3f, fix round 1). The PR body has no checkbox checklist; each stated claim was worked as a row against slice-02 and slice-03 (read in full). Round-1 pr-contract-w2-PC-001 is fixed: all three sites now say 'requires' and name `tree` as optional (desktop-metaproject.md:309-311, :333; cli-reference.md:8301). No document outside the diff describes behaviour the fix round changed: the stale-snapshot mapping in requestMetaprojectV2 and the search Load-more path land on the guide's existing 'Project knowledge changed while loading' / Refresh catalog row; the removed `negotiateMetaproject` export and the old 'Search results' landmark label are quoted nowhere in docs, wiki or Desktop code. One minor: the body's Verification section was not updated for the fix round and now states counts and a Rust disclosure that the diff and CI contradict.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301/pr-context.md",
+      "line": null,
+      "quote": "- Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.",
+      "problem": "PR body Verification claims \"Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.\" and \"`bun test src/integrations` 443 pass\", and discloses \"Not run locally: the Rust tests (`cargo test --locked metaproject`) ... this PR's CI is the first run.\" The fix-round diff adds Desktop tests (MetaprojectTree.dom.test.tsx: 'a built graph without files and a wiki without pages show their own empty-state lines', 'Home on the first row and End on the last ...', 'a keyboard Retry keeps focus ...', 'a keyboard Show more keeps focus ...', 'tree reads run at most three at a time ...'; MetaprojectView.dom.test.tsx: 2 new tests; platform/metaproject.test.ts: 1 new test), and its own journal line in the diff records \"Desktop tsc exit 0 and bun test src 1006 pass\" and \"core tree/explorer 31 pass\" (29 at T5). CI at f43a13c3f has now run and passed the Rust `cargo test`. The body still states the pre-fix numbers and says nothing of the fix round (bounded tree reads, stale-snapshot mapping for mismatched v2 answers, landmark naming, Module label).",
+      "impact": "A reviewer or merger who trusts the Verification section reads counts measured at 69f2c16b8, not at the head under review, and a Rust disclosure that CI has since settled. The code is correct; the cost is a body that no longer describes the head it would merge.",
+      "suggested_fix": "Update the Verification section to the head's numbers (Desktop `bun test src` 1006 pass; re-run and state the `bun test src/integrations` count), replace the Rust 'not run' line with the CI result, and add one line naming the fix-round behaviour changes (at most 3 tree reads in flight; a v2 answer for another snapshot now surfaces as stale-snapshot with the Refresh catalog banner, including search Load more).",
+      "evidence": "slice-02: journal.md hunk @@ 12,36 @@ added line '... Orchestrator re-run: core tree/explorer 31 pass, typecheck/lint/docs:check exit 0, Desktop tsc exit 0 and bun test src 1006 pass.'; new test blocks in MetaprojectTree.dom.test.tsx (@@ 262,298 @@, @@ 343,478 @@), MetaprojectView.dom.test.tsx (@@ 1376,1452 @@, @@ 2119,2174 @@), platform/metaproject.test.ts (@@ 189,219 @@). pr-context.md 'CI: passing' lists 'desktop check: passing'; dispatch brief states the Rust cargo test passed at f43a13c3f. The src/integrations whole-suite count at head was not re-run here (exec_budget_s 0); 443 -> likely 445 is inferred from 29 -> 31 in the two tree/explorer files.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "degradation_class": "diff-vs-description"
+    }
+  ],
+  "slices": [
+    {"id": "slice-02", "status": "DONE", "coverage": "read in full, lines 1-2271"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full, lines 1-154"}
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Checklist form (PR body claims; the body carries no checkbox checklist)
+
+| Box or claim (quoted) | State | What the delta shows | Verdict |
+|---|---|---|---|
+| "in **Graph**, indexed files by folder (folders first, with file counts; a module folder selects its module node); in **Wiki**, pages grouped by page type" | claim | metaproject-explorer-v2.ts now keys groups via `metaprojectWikiGroupKey` (contract.ts new export); tree test now sorts wiki pages by title with inverted fixtures and reversed nodes.jsonl | Agrees |
+| "Core: new read-only v2 action `tree` ... `not-found` / `stale-snapshot` / `invalid-input`" / "Listed in `capabilities`; v1 unchanged" | claim | contract.ts adds `METAPROJECT_WIKI_UNTYPED_GROUP` + helper only; tree tests unchanged in substance | Agrees |
+| "The handshake still requires only the six existing actions ... Desktop learns `supportsTree` from the probe." | claim | platform/metaproject.ts removes `negotiateMetaproject` wrapper; tests now assert `negotiateMetaprojectExplorer(...).protocol`; required-six test kept | Agrees. Removed export: `keryx ctx rg "negotiateMetaproject\b"` outside reviews: 0 matches, so no breaking-change claim to contradict |
+| "Desktop: `MetaprojectTree` (WAI-ARIA tree, roving focus, Up/Down/Left/Right/Home/End/Enter/Space), `useMetaprojectTree` (... retry per folder, Show more, snapshot changes)" | claim | focus hand-on via `focused` ref, stable `status:<parent>` row ids, `MAX_TREE_READS = 3` limiter, role="status" on error row | Agrees; fix-round additions not described in body -> folded into PC-001 |
+| "A selection made elsewhere reveals its path; the item shown by default on first open does not." | claim | View test now positively asserts the fallback is shown while folders stay collapsed | Agrees |
+| "Docs: the Desktop Metaproject guide describes the tree, keyboard and the older-CLI behaviour." | claim | guide :309-311 and :333, cli-reference :8301 reworded to "requires", optional `tree` named | Agrees; round-1 pr-contract-w2-PC-001 fixed at all three sites |
+| Verification: "`bun test src/integrations` 443 pass", "`bun test src` 998 pass", "Not run locally: the Rust tests ... CI is the first run" | claim | journal line in diff: "bun test src 1006 pass", "core tree/explorer 31 pass"; CI green incl. cargo test | Contradicted -> PC-001 (minor) |
+| "`bun run docs:check` exit 0; `keryx health run` PASS" | claim | docs changed in delta; journal records docs:check exit 0 at fix round; health not re-run | docs:check agrees per journal; health unverified, not filed |
+| "No native walkthrough of the packaged app yet." | disclosure | nothing in the delta changes it | Consistent |
+
+## Documentation outside the diff
+
+- Transport change (mismatched snapshot -> `stale-snapshot` "Project knowledge changed while loading."): guide troubleshooting row "**Project knowledge changed while loading** ... Select **Refresh catalog**" already describes the outcome. `keryx ctx rg "Incompatible Metaproject v2 response"` over docs, .metaproject/wiki, README.md: 0 matches.
+- Landmark rename (`aria-label="Search results"` -> `aria-labelledby` heading): `keryx ctx rg "Search results"` over docs, wiki, apps/desktop: no reference to the label.
+- Module label on module folders: guide :97-100 describes module-folder selection; it does not mention the label but nothing it says is contradicted. Not filed.
+- Round-1 pr-contract-w2-PC-002 (cli-reference does not document `tree`) still holds; not re-reported per round rules.
+
+Not verified: `bun test src/integrations` whole-suite count at head and `keryx health run` (exec_budget_s 0). Commands run: keryx ctx read/rg and git diff (read-only); no file written other than this one.
+KERYX_USAGE {"tokens_in":167900,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,68 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "Round 2 (delta 9f4ec475b..f43a13c3f), wave 2. I read slice-02 and slice-03 in full (both new). Code mode only: no URL or screenshots were supplied. Context: Keryx Desktop; the audience is developers browsing project knowledge. Primary task: find and select a file, module or wiki page in the Metaproject sidebar tree. Surface type: app screen. The delta's UX changes are sound: one status-row id per parent keeps focus in place across Retry and Show more; focus moves on to the row now at the same index only when focus fell to <body>; the error row reuses the loading row's role=status span; module folders carry the Module label; the list <nav> is named by its visible heading through aria-labelledby; a stale-snapshot on 'Load more results' now shows the Refresh catalog banner instead of an inline 'Search failed'. One minor: the delta makes a tree answer from another snapshot raise stale-snapshot, and the tree's error path then shows the Refresh catalog banner and also an inline 'Could not load.' row whose Retry re-sends the same retired snapshot and cannot succeed. The search page path in the same delta shows only the banner. Slop score: 0. On this app screen the delta adds no palette, font, radius, shadow or new surface; the Module label reuses .metaproject-meta. WCAG 2.2 AA floor: no regression found in code; nothing measured on a render. Checks not run: live render at 1440/768/390 px in light and dark, computed contrast, target sizes, a screen-reader pass over the error-row live region and the landmark name, and focus restore in WKWebView (Tauri macOS). Screenshots of the Graph tree with a failed folder row and the stale banner showing would close the visual part. The DOM tests ran under the test DOM, not in WKWebView. Routing audit: graph_used: no (not-relevant: the payload named the slices and files); wiki_used: no (not-relevant: delta UX review); ctx_used: yes (keryx ctx rg for expectedSnapshotId/stale-snapshot/onStale callers in apps/desktop/src and for the ui-anti-slop severities; keryx ctx read for OpenSpecView.tsx and the finding schema); raw_rg_used: no. I read git diff 9f4ec475b f43a13c3f -- MetaprojectTree.tsx metaproject.css raw, with a keryx:raw marker, because the slice omits the module-label hunk. I did not read .metaproject/index.md: the brief gave bounded, read-only inputs.",
+  "slices": ["slice-02", "slice-03"],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();",
+      "problem": "Nielsen #9 (error recovery) and #5 (error prevention). When a tree read answers stale-snapshot, the catch calls onStale, which shows the explorer's 'Refresh catalog' banner, and then falls through to the generic failure branch. The folder (or its Show more row) becomes 'Could not load. Project knowledge changed while loading.' with a Retry button. Retry re-sends the same retired snapshot: `read` pins `expectedSnapshotId: state.current[scope].snapshot`, and a page Retry re-sends the old cursor. The CLI therefore answers stale-snapshot again. In this delta the transport (platform/metaproject.ts) newly turns any answer for another snapshot into this error, which makes the path reachable from a second source. The delta's own Load-more search fix (MetaprojectView.loadMoreSearch) handles the same error by showing only the banner, so the two paths disagree.",
+      "impact": "After a rebuild or wiki edit elsewhere, the user sees two remedies for one cause: the banner's Refresh catalog, which works, and an inline Retry next to the folder, which fails the same way every time. A user who acts on the nearer control loops without progress, and each failed retry is announced again through the row's role=status region.",
+      "suggested_fix": "In the catch, after `latest.current.onStale()`, return without marking the folder failed. Leave the folder in its loading state (or drop it, as the not-found branch does), because Refresh catalog changes the snapshot and the tree then re-reads it anyway. This matches loadMoreSearch, which sets snapshotMismatch and no inline error. Extend the existing MetaprojectView test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' to assert that no treeitem reads 'Could not load.' while the banner shows.",
+      "evidence": "useMetaprojectTree.ts read(): `const input = { scope, expectedSnapshotId: pinned, ... }` with `pinned = state.current[scope].snapshot`. The catch runs `latest.current.onStale()`. The only early return is the not-found branch. The code then reaches `setFolder(scope, parent, folder => cursor && folder ? { ...folder, more: { status: \"failed\", error } } : { status: \"failed\", entries: [], partial: false, error })`. MetaprojectTree renders that as the error row with `<button ...>Retry</button>`, and retry() calls read(scope, parent) with the same pinned snapshot. The core refuses a mismatched expectedSnapshotId: metaproject-explorer-v2.ts checkSnapshot throws stale-snapshot, and metaproject-explorer-tree.test.ts asserts it. By contrast, MetaprojectView.loadMoreSearch in this delta does `if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") setSnapshotMismatch(true); else setSearchError(...)`. The new view test checks only that the banner shows and that `treeRow(\"Client\")` throws. It does not check for the error row. Verified by reading code only; not run.",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts (read catch: folder read and Show more page read both fall through to the failed state)",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx loadMoreSearch (already correct: banner only)",
+          "apps/desktop/src/metaproject/OpenSpecView.tsx (no stale branch; shows errMessage inline, outside this PR's tree surface)"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"expectedSnapshotId|stale-snapshot|setSnapshotMismatch|onStale\" apps/desktop/src --glob '!*.test.ts*': 32 matches in 4 files (MetaprojectView.tsx, useMetaprojectTree.ts, OpenSpecView.tsx, platform/metaproject.ts). I read each catch that receives a pinned-snapshot error."
+      }
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Verdict
+DONE. Of the 22 round-1 findings this fix round targeted, the UX ones hold in code. The delta adds one minor recovery defect on the stale-snapshot path of tree reads.
+
+## Context
+Keryx Desktop Metaproject explorer, app screen. Primary task: find and select a file, module or wiki page in the sidebar tree. Mode: code only.
+
+## Scores
+- Slop score: 0 (T1 0 / T2 0 / T3 0). The delta adds no visual system. The Module label reuses `.metaproject-meta`, as node rows do.
+- WCAG 2.2 AA floor: no regression found in code. Not measured on a render.
+- Viewports checked: not run.
+
+## Top 3 changes
+1. Do not mark a tree folder or page failed on stale-snapshot. The banner is the remedy, and a Retry pinned to the old snapshot cannot succeed (UX-001).
+2. Assert in the view test that no 'Could not load.' row appears next to the stale banner.
+3. When a render can be supplied, check focus restore in WKWebView and the error-row live region with VoiceOver.
+
+## Verified clean (sites read)
+- Focus continuity: in MetaprojectTree.tsx, `statusId(parent)` is shared by the loading, error and more rows. The layout effect re-focuses `elements[Math.min(lost.index, ...)]` only when `document.activeElement` is body or disconnected. `onBlur` forgets focus once it leaves the tree, so data that arrives never takes focus from elsewhere. Tests: "a keyboard Retry keeps focus...", "a keyboard Show more keeps focus...", "Home on the first row and End on the last...". Moving focus to the row at the same place matches the operator's fix-round answer ("На то же место"), so the jump after a snapshot reset is not a finding.
+- Live region: the error row's `<span role="status">` replaces the loading row's span in the same `<li key>`, so React updates the existing region in place.
+- Landmark: in MetaprojectView.tsx, `<nav aria-labelledby={listHeadingId}>` and `<h2 id={listHeadingId}>`. The name follows Files / Results / Catalog (test: landmarkName).
+- Module cue: `{module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}`. Name-selects / chevron-toggles is unchanged, per the operator's decision.
+- Load-more stale handling in MetaprojectView.loadMoreSearch: banner only, consistent with the other stale reads.
+- Copy: the guide row now says "lacks a read action this Desktop requires", which matches the handshake.
+- slice-03 contains only removed lines (the old `aria-label="Search results"`, the old snapshot check in matchesRequest, the `negotiateMetaproject` call sites, and the old guide wording). I found nothing UX-relevant left behind.
+
+## Checks not run
+- Live render at 1440/768/390 px in light and dark, computed contrast and target sizes: no URL or screenshots were supplied.
+- Screen-reader pass over the error-row announcement, the Module label inside the treeitem name, and the `Files · N` landmark name.
+- Focus restore in the real WKWebView. The DOM tests in verify-tests-to-run-1.txt ran under the test DOM.
+- Red-on-parent for the added tests: exec_budget_s = 0.
+KERYX_USAGE {"tokens_in":178947,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

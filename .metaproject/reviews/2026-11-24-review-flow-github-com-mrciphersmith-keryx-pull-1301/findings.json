@@ -1,0 +1,819 @@
+[
+  {
+    "id": "r2-architecture-w1-F-001",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The fix round added a client-side read limiter to useMetaprojectTree, with no prior finding behind it. Its budget is stated relative to a backend constant: 'the rest of Desktop's eight read permits'. That constant is `MAX_ACTIVE = 8` in apps/desktop/src-tauri/src/metaproject.rs:192, a process-global AtomicUsize. ReadPermit::acquire fails fast with 'unavailable: Too many Metaproject reads' rather than waiting. Only a comment links the two values. The limiter is per hook instance, while the permit pool is shared by every window and project in the process.",
+    "impact": "No defect today: 3 is below 8. If MAX_ACTIVE is lowered, or more tree hooks or windows run at once, the client budget can exceed the real pool. Tree reads would then fail with 'unavailable' on folder rows even though the limiter exists to prevent that, and nothing turns red.",
+    "suggested_fix": "Optional. Name the relation where both sides can see it: a comment at MAX_ACTIVE in metaproject.rs that points to MAX_TREE_READS, or a Rust test or constant check documenting that the UI reserves 3 of the permits. Alternatively, treat 'unavailable' from the transport as a retryable back-off in the limiter instead of a fixed budget.",
+    "evidence": "Fix-round hunk in useMetaprojectTree.ts adds MAX_TREE_READS and limit(). `keryx ctx rg 'READ_PERMITS|MAX_READS|struct ReadPermit|const .*: usize = 8' apps/desktop/src-tauri/src` finds metaproject.rs:186-189 (MAX_ACTIVE = 8, struct ReadPermit). In metaproject.rs, acquire() returns Err when ACTIVE >= MAX_ACTIVE, and ACTIVE is a static, so the pool is process-wide.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 14,
+    "quote": "/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */\nexport const MAX_TREE_READS = 3;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-read-budget-coupled-to-rust-permits",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-architecture-w1-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-architecture-w2-F-001",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The client tree-read bound is sized against the Tauri read-permit cap (`const MAX_ACTIVE: usize = 8;` in apps/desktop/src-tauri/src/metaproject.rs) only through the doc comment (\"the rest of Desktop's eight read permits stay free for the explorer\"). Nothing in code ties the two numbers together.",
+    "impact": "If MAX_ACTIVE is lowered, the comment and the headroom it promises go stale silently. Tree reads could then use the permits the explorer's own reads rely on, and those reads would fail with `unavailable: Too many Metaproject reads`. Today 3 of 8 holds.",
+    "suggested_fix": "Optional. Leave the comment as the record, or add a short note next to MAX_ACTIVE in metaproject.rs that the Desktop tree hook keeps MAX_TREE_READS below it.",
+    "evidence": "useMetaprojectTree.ts lines 14-15 (comment + constant); metaproject.rs: `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8;`, `ReadPermit::acquire` returns `unavailable: Too many Metaproject reads. Retry shortly.`",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 15,
+    "quote": "export const MAX_TREE_READS = 3;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-architecture-w2-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-clean-code-w1-F-001",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "New in the fix round (the read limiter added with the stale-snapshot / concurrency changes). The comment misstates what the catch does: `.finally` releases the slot whether or not the chain rejects, so the catch is not what 'keeps the slot count right'. What it does is turn every rejection of the task into a silent success. read()'s task already ends in its own `.catch(cause => ...)`, so the only errors that reach this catch are ones thrown by that handler itself (latest.current.onStale() i.e. MetaprojectView's markStale, update(), setFolder(), errMessage()). Those are programming errors, and they are dropped with no log and no rethrow (error-handling.mdc Rule 3 / Iron Law 1 shape, but with no caller proceeding on a wrong result).",
+    "impact": "A future defect in read()'s failure path (e.g. a throwing onStale or state updater) leaves the folder stuck on 'Loading…' with nothing in the console to explain it, and a reader trusting the comment will believe removing the catch is harmless when it would surface as an unhandled rejection (Rule 4).",
+    "suggested_fix": "Reword the comment to what the catch is for, e.g. '// read() handles every request failure itself; this only stops an unexpected throw in that handling from becoming an unhandled rejection.' and report it rather than drop it: `.catch(error => console.error(\"Metaproject tree read failed unexpectedly\", error))`.",
+    "evidence": "Read useMetaprojectTree.ts:119-175 at f43a13c3f. limit() start(): `Promise.resolve().then(task).catch(() => undefined).finally(...)`; the only caller is read() (:145), whose task is `current() && Promise.resolve().then(() => send(...)).then(...).catch(cause => {...})` (:145-174), so request failures never reach the limiter's catch. `.finally` runs on both fulfilment and rejection.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 126,
+    "quote": "      // A read reports its own failure on its folder's row; this catch only keeps the slot count right.\n      void Promise.resolve().then(task).catch(() => undefined).finally(() => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-limiter-silent-catch",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-clean-code-w1-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The comment at useMetaprojectTree.ts:126 says the catch keeps the slot count right, but `.finally` at :127 releases the slot whether or not the chain rejects. read()'s task already ends in its own catch (:157), so only a throw from that handler reaches the limiter's catch, and it is dropped without a trace. The limiter is new in this branch (6c83eb7fb), so no earlier choice explains it. Rewording the comment and logging the error is a sound, local fix."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-clean-code-w1-F-002",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "The comment hard-codes a number owned by another module in another language: 'eight read permits' is `MAX_ACTIVE: usize = 8` in apps/desktop/src-tauri/src/metaproject.rs:186. It is correct today, but nothing ties the two, and MAX_TREE_READS = 3 is sized against it.",
+    "impact": "If the Rust permit count changes, this comment (and the reasoning behind 3) goes stale silently. No runtime effect.",
+    "suggested_fix": "Name the source instead of the number: 'the rest of the read permits the Tauri command allows (MAX_ACTIVE in src-tauri/src/metaproject.rs) stay free for the explorer.'",
+    "evidence": "keryx ctx rg 'semaphore|concurren|in.flight|permit' apps/desktop/src-tauri/src: metaproject.rs:186 `const MAX_ACTIVE: usize = 8;` guarding ReadPermit::acquire.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 14,
+    "quote": "/** Tree reads in flight at once; the rest of Desktop's eight read permits stay free for the explorer. */",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-clean-code-w1-F-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-clean-code-w2-F-001",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The component's doc comment describes the rule this fix round replaced. The new useLayoutEffect moves focus when data arrives: if the focused row (a Loading or Show more row) disappears because its folder's children or last page arrived, focus goes to the row now at its index (`elements[Math.min(lost.index, elements.length - 1)]?.focus()`). The tests added in this round assert exactly that (`a keyboard Retry keeps focus ... then on the first row read`: after `tree.release(\"src|\")`, `focused()` is `client.ts`). The doc still says focus moves only with the keyboard or a click and that data arriving never takes it; the inline comment at the effect states the narrower, correct rule ('Focus that was outside the tree is never taken').",
+    "impact": "Two places document focus behaviour differently; the next maintainer reading the component's contract will believe a data-driven focus move is a bug and may remove the hand-on that fixed frontend-w1-F-001 / ui-ux-w1-UX-001.",
+    "suggested_fix": "Reword the doc to the rule the code now follows, e.g. 'Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree; when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place.'",
+    "evidence": "MetaprojectTree.tsx doc above `export function MetaprojectTree` vs the useLayoutEffect block `const lost = focused.current; ... if (lost && !lost.element.isConnected && (...)) { elements[Math.min(lost.index, elements.length - 1)]?.focus(); }` added in 6c83eb7fb; MetaprojectTree.dom.test.tsx tests 'a keyboard Retry keeps focus on the folder's status row, then on the first row read' and 'a keyboard Show more keeps focus in the tree'.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 84,
+    "quote": " * Focus moves only with the keyboard or a click; data arriving never takes it.",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-clean-code-w2-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The doc at MetaprojectTree.tsx:84 states the plan's original rule ('data arriving never takes it'). The operator replaced that rule in fix round 1: the journal records the answer 'На то же место' (focus goes to the row now at the same place). The layout effect at :142-148 and its inline comment follow the new rule. The component doc is stale against both the code and the operator's decision, and rewording it makes the file consistent."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-clean-code-w2-F-002",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "The fix round adds a second construction of the same stale-snapshot error with the same literal message (the other is useMetaprojectTree.ts `if (page.snapshotId !== pinned) throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\")`, kept for injected requests that do not check). The banner text in MetaprojectView.tsx repeats the sentence a third time as UI copy. Two thrown copies are under the 3-copy duplication threshold.",
+    "impact": "None today; if the wording changes, the two throws can drift.",
+    "suggested_fix": "Optional: a small `staleSnapshotError()` factory next to MetaprojectRequestError used by both throw sites.",
+    "evidence": "keryx ctx rg 'Project knowledge changed while loading' apps/desktop/src src (non-test): MetaprojectView.tsx:880 (banner), useMetaprojectTree.ts:147, metaproject.ts:306.",
+    "confidence": "high",
+    "file": "apps/desktop/src/platform/metaproject.ts",
+    "line": 306,
+    "quote": "throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-clean-code-w2-F-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-clean-code-w2-F-003",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "The new symbol test repeats the `tree()` helper's response-narrowing guard twice (for `top` and `src`), making three copies of it in the file, because it calls metaprojectExplorerV2 with a custom graph loader that the helper cannot take.",
+    "impact": "Test-only; a reader sees the same narrowing three times.",
+    "suggested_fix": "Optional: give the helper a narrowing function `asTree(response)` and use it in `tree()` and in the new test's `read`.",
+    "evidence": "Helper `tree()` guard plus the two copies in 'leaves symbols out of listings and folder counts even when the graph model holds them'.",
+    "confidence": "high",
+    "file": "src/integrations/metaproject-explorer-tree.test.ts",
+    "line": 128,
+    "quote": "if (!(\"entries\" in src) || !(\"scope\" in src)) throw new Error(\"Expected a tree response\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-clean-code-w2-F-003",
+    "source": "internal"
+  },
+  {
+    "id": "r2-degradation-w1-F-001",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "Answering frontend/performance concerns about re-reads exhausting Desktop's 8 read permits, the fix routes every tree read through one FIFO pool of 3 slots shared by both scopes. A folder the user expands, a Retry or a Show more now queues behind background re-reads (after a snapshot change every expanded folder is re-read) and behind reads of the other scope. On base each read started at once (failing only past the 8 Rust permits).",
+    "impact": "After a snapshot change with many expanded folders, or while 3 slow reads are in flight, a user's expand shows 'Loading…' until the queue drains; each CLI read is a process spawn bounded at 150 s. No wrong or lost result, only latency, and it replaces base's 'Too many Metaproject reads' error rows, so this is a trade-off rather than a defect.",
+    "suggested_fix": "Optional: give user-initiated reads (ensure from a click/key, retry, more) priority over re-reads, e.g. unshift them onto the queue, or let reads for a folder the user just expanded bypass the queue while active < MAX_TREE_READS + 1.",
+    "evidence": "consumer-trace: read() (useMetaprojectTree.ts:136-175) wraps every send in limit(); ensure/more/retry all call read(); the pool is one useRef per hook instance, shared by graph and wiki. Base read() called send directly (fix-commit hunk @@ -119,7 +141,8). Rust ReadPermit MAX_ACTIVE 8 and run_bounded 150 s read at apps/desktop/src-tauri/src/metaproject.rs:186-208. Refute: no priority or bypass path exists in limit(); the queue is shift()-ed in arrival order.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 132,
+    "quote": "    if (pool.active < MAX_TREE_READS) start();\n    else pool.queue.push(start);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "behaviour-delta",
+    "evidence_kind": "consumer-trace",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-degradation-w1-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-degradation-w2-F-001",
+    "reviewer": "review-degradation",
+    "severity": "info",
+    "problem": "Reads of a retired snapshot that are already in flight keep their slots until they settle, so after a snapshot change (Rebuild graph, Refresh catalog) the new snapshot's re-reads of the root and every expanded folder wait behind up to three answers that will be dropped. On 9f4ec475b the new reads started at once.",
+    "impact": "Slower tree refresh after a rebuild when old reads are slow; no wrong or lost result (old answers are discarded by the generation check, queued old reads never start).",
+    "suggested_fix": "None required: the bound is the intended fix of highload-w1-F-001, and the operator put read latency out of scope (performance-w1-F-001 dismissal). If it matters later, release a slot's accounting for a retired generation or give new-generation reads priority in the queue.",
+    "evidence": "base-diff: at 9f4ec475b useMetaprojectTree.read called send directly with no queue; at f43a13c3f read goes through limit(), whose slot is released only in the .finally of the task's promise, and the task for an in-flight retired read is the original send promise. refute: the generation check (current()) only prevents queued retired reads from starting and drops their answers; it does not free a slot early. Not run.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 132,
+    "quote": "    if (pool.active < MAX_TREE_READS) start();\n    else pool.queue.push(start);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "performance",
+    "evidence_kind": "base-diff",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-degradation-w2-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-frontend-w1-F-001",
+    "reviewer": "review-frontend",
+    "severity": "minor",
+    "problem": "Introduced by the fix for frontend-w1-F-001: the loading row and the Show more row of a parent share the key status:${parent}. If the Loading row has focus and the folder's first page arrives with a nextCursor, React reuses the keyed <li> and inserts up to 100 new entries before it, so focus stays on the same element, which is now 'Show more' after all the new children. The layout-effect restore does not run because the element is still connected. The last-page path (row removed) instead lands on the first child. The new tests only cover reads without a following nextCursor.",
+    "impact": "Focus is not lost, but it ends up on a row up to 100 rows below the viewport (focus did not move, so nothing scrolls). The next arrow key starts from the end of the page rather than the top of the opened folder, which is inconsistent with the Retry and last-page paths.",
+    "suggested_fix": "When a focused parent status row changes from loading to more, focus the first child row (remember the focused row's type with its index in the layout effect). Or give loading and more distinct ids again while keeping one id across error/loading and more/more-loading, so the index-based restore lands on the first child. Add a DOM test: focus a Loading row whose answer has nextCursor, release it, assert focus is on the first child.",
+    "evidence": "MetaprojectTree.tsx:41 and :55 push loading and more rows with the same id = statusId(parent); :146-147 restore only when lost.element is disconnected. React's keyed reconciliation keeps an existing keyed child whose old index is at or after lastPlacedIndex and inserts the new keys before it. MetaprojectTree.dom.test.tsx: 'a keyboard Retry keeps focus…' answers SRC_PAGE (no nextCursor); 'a keyboard Show more…' releases the last page. Not reproduced in a DOM run (exec_budget_s 0).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 41,
+    "quote": "rows.push({ type: \"loading\", id, level, parent });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-loading-to-more-focus-position",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-frontend-w1-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The loading and Show more rows share `statusId(parent)` (:38, :41, :55). The doc at :26-29 says the shared id is meant for Retry and Show more, where the focused row should update in place. It does not mention the loading-to-more transition, where the same <li> is pushed below up to 100 new children, and that comment was itself added in this branch. The operator's 'На то же место' answer points to the first child, the row now at the old index, which is where the last-page and Retry paths already land. The fix brings this path in line with those siblings."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-frontend-w1-F-002",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "When the root answers empty, the component renders the empty-state <p> and the <ul> unmounts. The layout effect returns early, so focused.current keeps the removed row. When a later snapshot restores rows while activeElement is <body>, the restore branch focuses a tree row: data arriving moves focus.",
+    "impact": "A narrow edge case: the tree must have held focus when it emptied, and focus must still be on <body> when data returns. Not observed in a render.",
+    "suggested_fix": "Clear focused.current before the early return (or in a cleanup when the list unmounts).",
+    "evidence": "MetaprojectTree.tsx:134-150 layout effect (early return at :136, restore at :146-147); :231-235 empty-state return replaces the <ul>.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 136,
+    "quote": "if (!root) return;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-frontend-w1-F-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-frontend-w2-F-001",
+    "reviewer": "review-frontend",
+    "severity": "info",
+    "problem": "After onStale() the catch falls through to setFolder(... status: \"failed\" ...). The folder shows 'Could not load. Project knowledge changed while loading.' with a Retry. retry -> read pins state.current[scope].snapshot, which stays the same until Refresh catalog loads a new catalog, so Retry re-sends the stale expectedSnapshotId and is refused again.",
+    "impact": "No data harm: the stale banner shows and no stale rows appear. The Retry control cannot succeed until Refresh catalog and repeats the banner's message.",
+    "suggested_fix": "Optional: return after onStale() and leave the folder in loading (the snapshot change re-reads it), or word the row to point at Refresh catalog. This is an operator UX decision.",
+    "evidence": "useMetaprojectTree.ts read(): `const pinned = state.current[scope].snapshot`, catch -> onStale() then setFolder failed; retry() -> setFolder loading + read(scope, parent) with the same pinned snapshot; the snapshot changes only when the hook's `snapshot` prop (catalog.snapshotId) changes.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 159,
+    "quote": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-frontend-w2-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-highload-w1-F-001",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "Introduced by the fix for the read-permit pressure (round-1 fix round, commit 6c83eb7fb, new limiter in useMetaprojectTree). A slot is released only when the read's promise settles. A read already sent under a snapshot that has since been retired keeps its slot until the CLI answers (generation changes skip only reads that have not started). The same holds for a hung CLI read. While three such reads are in flight, every new read waits: the new snapshot's re-reads of the expanded folders, Show more, and a user's Retry. Before the limiter, a slow or retired read only delayed its own folder.",
+    "impact": "Trigger: three tree reads in flight when the snapshot changes (for example, several expanded folders re-reading after a graph rebuild, then a second rebuild), or three reads to a CLI that stalls. The whole tree then shows Loading, and Retry shows Loading without sending. This lasts until those reads return, up to the 150 s child timeout in metaproject.rs cli_response. With a normal CLI the delay is about one read's latency. No data is lost or shown wrongly; this is a latency and stall cost only.",
+    "suggested_fix": "Release a retired read's slot early. When `read` starts a task, record the generation with the slot. On a snapshot change (the generation.current++ branch), free the slots of reads from older generations: decrement active for them and start queued tasks. The late answers are already ignored by current(). Alternatively, exempt retired in-flight reads from the count, for example with a per-generation active counter. Add a DOM test that holds three reads, changes the snapshot, and asserts the new root read is sent before the held ones are released.",
+    "evidence": "useMetaprojectTree.ts limit(): `pool.active++` then `Promise.resolve().then(task).catch(() => undefined).finally(() => { pool.active--; pool.queue.shift()?.(); })`, so a slot is freed only on settle. read(): `limit(() => current() && Promise.resolve().then(() => send(root, input))...)`, where current() is checked only before sending. The snapshot-change branch (`generation.current++`, around line 84) does not touch `slots`. Rust bound: apps/desktop/src-tauri/src/metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`. The JS `send` (requestMetaprojectTree -> requestMetaprojectV2) has no timeout of its own. Not executed, because exec_budget_s = 0. The behaviour is reasoned from the code.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 132,
+    "quote": "if (pool.active < MAX_TREE_READS) start();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-limiter-retired-slot",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-highload-w1-F-001",
+    "premise": {
+      "verdict": "challenged",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:308-310",
+          "says": "v2_request acquires a ReadPermit and moves it into the blocking task (`let _permit = permit;`), so the permit is held until the CLI child returns"
+        },
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:201-204",
+          "says": "the permit is released only by Drop, that is, when the request's blocking task ends"
+        },
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:208",
+          "says": "the child runs until it answers or the 150 s bound, whatever the webview thinks of the answer"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301 highload-w1-F-001 (major, upheld in round 1)",
+          "says": "asked for a client bound of 2-3 tree reads in flight so that tree reads leave permits for the explorer's own reads"
+        },
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md (round-1 entry)",
+          "says": "operator dismissed performance-w1-F-001: read latency is out of scope ('Отклонить, в этап задержек')"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": ".metaproject/rules/core/concurrency-patterns.mdc, Rule 4 (Child-process fan-out is bounded)",
+          "says": "child-process fan-out goes through a concurrency limit; the limit counts children that are actually running"
+        },
+        {
+          "name": "Bulkhead pattern (Microsoft Azure Architecture Center, Cloud design patterns: Bulkhead)",
+          "says": "a bulkhead caps the resources in use, so a slot is held while the call holds the downstream resource"
+        }
+      ],
+      "reasoning": "It is true that a retired read keeps its slot until it settles. But a retired read still holds a Rust permit and a running CLI child until it answers (metaproject.rs:308-310, :201-204, :208). The JS slot therefore tracks a real resource in use. Freeing it early, as the fix suggests, lets the tree run more than MAX_TREE_READS children and permits at once. That reopens the permit exhaustion that round-1 highload-w1-F-001 (major) asked to bound. What remains is a delay of about one read's latency, or a stall when the CLI hangs, and in that case every read to that CLI would hang anyway. The operator has already put read latency out of scope for this flow.",
+      "question": "A retired read keeps its slot because it still holds a Rust permit and a CLI child until it answers. Keep it that way, or free the slot early and accept more children in flight?",
+      "options": [
+        "dismiss — keep the slot until the read settles; it counts real children and permits",
+        "uphold — free retired reads' slots early, as the finding suggests"
+      ],
+      "operator": {
+        "answer": "dismiss",
+        "reason": "Keeping the slot until the read settles keeps CLI concurrency bounded at 3 (the round-1 major); the remaining latency belongs to the read-latency stage, already out of scope.",
+        "quote": "dismiss",
+        "at": "2026-11-24T07:30:28.962Z",
+        "actor": "operator",
+        "confirmedVia": "host-question",
+        "hostQuestion": {
+          "source": "claude-code",
+          "ref": "premise-r2-highload-w1-F-001",
+          "questionText": "r2-highload-w1-F-001: when the snapshot changes, a read already in flight keeps its slot in the tree read limiter (3 slots) until the CLI answers (up to 150 s). The premise judge challenged it: freeing the slot early would let more than 3 CLI children run, which is what the round-1 major asked to bound, and read latency is already out of scope. Uphold the finding (free the slot early) or dismiss it (keep the slot until the read settles)?",
+          "answerText": "dismiss",
+          "time": "2026-11-24T07:30:28.962Z"
+        }
+      }
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "operator (host-question claude-code:premise-r2-highload-w1-F-001, 2026-11-24T07:30:28.962Z) on the premise question: Keeping the slot until the read settles keeps CLI concurrency bounded at 3 (the round-1 major); the remaining latency belongs to the read-latency stage, already out of scope."
+    }
+  },
+  {
+    "id": "r2-highload-w2-F-001",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "The FIFO limiter added for highload-w1-F-001 lives in a `useRef` of `useMetaprojectTree`. That gives one pool per explorer, so one per project window. The resource it protects is the process-wide Rust read permit pool (metaproject.rs `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`), which every project window shares and which refuses a request instead of queueing it. The comment on MAX_TREE_READS assumes the 8 permits are one window's to split: \"the rest of Desktop's eight read permits stay free for the explorer\". The other half of the round-1 suggested_fix, a single retry with backoff on the permit's `unavailable` answer, was not done, so a refusal still becomes a terminal folder error.",
+    "impact": "Trigger: three or more project windows re-read their expanded folders at about the same time. Examples: returning to each window's explorer, which does the quiet catalog re-read, or Rebuild graph in one window while another is paging. Each window then holds up to 3 tree reads alongside its own catalog, detail and neighbors reads. Once those pass 8, the extra requests are refused with `unavailable: Too many Metaproject reads. Retry shortly.`. Those folders show 'Could not load.' until the user selects Retry on each one, and an explorer detail or neighbors read in any window can fail the same way. With two windows (6 tree reads plus explorer reads) the margin is about 2. The result is degraded reads the user can retry; no data is lost.",
+    "suggested_fix": "Either make the limiter module-level (one pool shared by every useMetaprojectTree instance in the webview, with MAX_TREE_READS as the process budget), and correct the MAX_TREE_READS comment so it says the permits are shared by all windows. Or treat a permit refusal (`unavailable` whose message starts with 'Too many Metaproject reads') as retryable once or twice, with a short jittered backoff inside `read`, before the folder is marked failed. The second covers both the tree and cross-window pressure.",
+    "evidence": "In useMetaprojectTree.ts the limiter is `const slots = useRef<...>({ active: 0, queue: [] })` and `if (pool.active < MAX_TREE_READS) start(); else pool.queue.push(start);`, with the comment 'the rest of Desktop's eight read permits stay free for the explorer'. In apps/desktop/src-tauri/src/metaproject.rs:184-200: `static ACTIVE: AtomicUsize`, `const MAX_ACTIVE: usize = 8`, and `ReadPermit::acquire` returns `Err(\"unavailable: Too many Metaproject reads. Retry shortly.\")` when the count reaches 8. `v2_request` acquires the permit on every request, and `cwd_for(view.label())` shows that several project windows exist. The `read` catch path turns any non-stale, non-not-found error into `{ status: \"failed\", ... }` with no retry. Round-1 highload-w1-F-001 impact already noted that 'the permit is shared by every project window'.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 121,
+    "quote": "const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts: `limit` (per-instance pool, the only client-side bound on tree reads)",
+        "apps/desktop/src-tauri/src/metaproject.rs:184-200 `ReadPermit` (process-wide pool of 8, refuses rather than queues)"
+      ],
+      "enumeration_method": "keryx ctx rg for `Semaphore|permit|MAX_ACTIVE|acquire` in apps/desktop/src-tauri/src: metaproject.rs has one ReadPermit pool used by v2_request; review.rs has its own unrelated MAX_READERS pool. Every tree read passes through useMetaprojectTree `read` -> `limit` (callers: ensure, more, retry)."
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-highload-w2-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The Rust permit pool is process-wide and refuses rather than queues (metaproject.rs:184-204). Every project window shares it, while the limiter is per hook instance (useMetaprojectTree.ts:121). The comment at :13 assumes that one window owns the eight permits. The round-1 finding's optional retry on `unavailable` was not done, so a refusal still ends as a folder error. No intent signal or practice source contradicts this. Note for the fixer: each Tauri window runs its own webview JS context, so a module-level pool would not span windows. Only the retry-with-backoff option, together with the comment correction, addresses the cross-window case."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-highload-w2-F-002",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "A read that has already started when the snapshot changes keeps its limiter slot until its CLI child exits, because the read cannot be cancelled. The new snapshot's reads queue behind it. The accounting is right, since the child still holds a Rust permit. It does mean that up to 3 slow reads for an old snapshot stall the new tree.",
+    "impact": "Trigger: Rebuild graph or Refresh while 3 tree reads are in flight against a slow CLI. The new snapshot's root and folders show Loading… until those children finish, which can take as long as the 150 s child timeout (child::run_bounded). This is degraded latency, not a failure.",
+    "suggested_fix": "Optional: pass an AbortSignal through RequestTree so the transport can stop waiting for a retired read. Or accept and document it: the slots mirror the Rust permits, which stay held until the child exits.",
+    "evidence": "The limiter releases a slot only in `.finally` after `task` settles. `current()` is checked before start and after the answer, never in between. metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 145,
+    "quote": "limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-highload-w2-F-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-layout-w1-LY-001",
+    "reviewer": "review-layout",
+    "severity": "info",
+    "problem": "Answering ui-ux-w1-UX-004, the fix adds a 'Module' label to module folder rows. In the row (display:flex, gap var(--sp-1)), the label is flex:none (metaproject.css: `.metaproject-tree-row > .metaproject-meta, .metaproject-tree-row > .count-label { flex: none; }`), so it, the 12px chevron, the count and one more 4px gap are a fixed floor. The name (`flex: 1 1 auto; min-inline-size: 0`, ellipsis) absorbs all the shrink. In the narrowest list column the CSS allows, a nested module folder's name has little or no room left. UNVERIFIED: the numbers below are reasoned from tokens, not measured.",
+    "impact": "Reasoned estimate, not measured. Host: container <=760px with the details panel docked, so the list column can reach 150px (`minmax(150px, 180px)`). Row content box = 150 - 2 (border) - padding-inline-start (12 + (level-1)*16) - padding-inline-end 12. The fixed floor with the label is about 12 chevron + ~40 'Module' at 12px + count (~7px for '4', ~29px for '1234') + 3 gaps of 4 = about 71-93px. Before the fix it was about 27-49px. Name width: level 1: 124px content, about 31-53px (before: 75-97). Level 2: 108px, about 15-37px. Level 3: 92px, about 0-21px; with a 4-digit count the name collapses to 0 and the row overflows by ~1px. In the default host (list column >= 180px), level 3 leaves about 29-51px. --text-scale above 1 widens the label and count and makes this worse. What a user would see: deeply nested module folders (src/lib/deep in the fixture shape) render as chevron + 'Module' + count with the folder name ellipsised to nothing.",
+    "suggested_fix": "Measure first. If confirmed, let the label yield before the name: give `.metaproject-tree-row > .metaproject-meta` `flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap` with a lower shrink priority than the name, or hide the label below a container width. Another option keeps the cue in a smaller box: the module icon instead of the word.",
+    "evidence": "Not measured. exec_budget_s = 0 (read-only dispatch), and `keryx ctx rg 'test:visual|playwright|test:e2e' apps/desktop/package.json` finds no real-CSS tier. Inputs: metaproject.css:62 (tree row flex, gap sp-1), :66 (chevron 12px flex:none), :67 (name flex 1 1 auto, min-inline-size 0, ellipsis), :68 (meta and count flex:none), :40-45 (row border 1px, padding sp-3), :141-142 (narrow container list column minmax(150px,190px), docked-details minmax(150px,180px)), :128 (default docked minmax(180px,220px)). MetaprojectTree.tsx:245 inline padding-inline-start calc(var(--sp-3) + (level-1)*var(--sp-4)). tokens.css: --sp-1 4px, --sp-3 12px, --sp-4 16px, --fs-sm calc(12px * var(--text-scale)). labels.ts:17 module: \"Module\" (no locale catalog, so English is the only and longest string). Label width (~40px) is an estimate for 6 glyphs at 12px. What would settle it: mount MetaprojectView in a real engine (Tauri webview or Playwright Chromium) at a 720px window with the details panel docked, expand to a level-3 module folder with a 4-digit count, and read getBoundingClientRect().width of `.metaproject-tree-name` with --text-scale 1 and 1.25.",
+    "confidence": "low",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 290,
+    "quote": "{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-module-label-squeezes-name",
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-layout-w1-LY-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-logic-w1-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "This is new code from the fix for frontend-w1-F-001. When the focused row is removed, the layout effect focuses the element at `lost.index`. That index was recorded at the previous commit or focus event. If rows above the focused row are added or removed in the same commit that removes it, the index no longer points at the removed row's place. Focus then lands on an unrelated row, possibly in another folder.\n\nRepro: expand folders A and B (A above B) with both reads pending. Arrow onto B's Loading row. Both answers then arrive before React flushes, so one batched DefaultLane commit inserts A's children above and replaces B's Loading row. Focus goes to one of A's children at B's old index, not to B's first child. The same happens when a reveal or a Show more above commits in the same batch as the focused row's removal.",
+    "impact": "Keyboard focus jumps to a row in another folder. The user loses their place and must arrow back. Focus stays inside the tree, so keyboard navigation keeps working; that is why this is minor. It needs two answers to land in one render batch, which is likely with MAX_TREE_READS = 3 concurrent reads.",
+    "suggested_fix": "Anchor the hand-off to a surviving neighbour instead of a raw index. In `remember`, also record the `data-row` id of the row just before the focused one; for a status row that is its parent folder row `d:<parent>`. In the layout effect, if that row is still rendered, focus the element after it; otherwise fall back to the clamped index. Add a DOM test that holds two folder reads, focuses the lower folder's Loading row, releases both in one `act`, and expects focus on the lower folder's first child.",
+    "evidence": "Code read at head f43a13c3f.\n- MetaprojectTree.tsx:153-156: `remember` stores `{ element, index: rowElements().indexOf(row) }`, refreshed only by `onFocus` and at the end of each layout effect.\n- :144-148: the hand-off focuses `elements[Math.min(lost.index, elements.length - 1)]` using the index from before the commit.\n- useMetaprojectTree.ts:91-96: each answer calls `render()` via `update`, so answers that arrive before the scheduled render are flushed in one commit.\n- :119-134: up to 3 tree reads are in flight at once.\n- Not executed: no test run is permitted for this reviewer, so the batched-arrival repro is reasoned from the code, not observed.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 147,
+    "quote": "elements[Math.min(lost.index, elements.length - 1)]?.focus();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "metaproject-tree-focus-handoff-stale-index",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-logic-w1-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The hand-off at MetaprojectTree.tsx:144-148 uses an index recorded before the commit (:153-156). If rows above the focused row change in the same commit, focus lands on an unrelated row. The operator's 'На то же место' asks for the focused row's place, not its raw index, so anchoring to a surviving neighbour serves that decision better. The code was added in this branch, and no intent signal or practice source favours the raw index. Whether two answers batch into one commit is the verifier's question."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-logic-w2-F-001",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The limiter frees a slot only when the read's promise settles. A read already started under a snapshot that has since been retired is ignored on arrival (`current()` is false), but until then it still holds its slot. Each read is one CLI child, about 0.8 s, bounded by Rust `run_bounded(..., Duration::from_secs(150), ...)`. After a Refresh or Rebuild with three tree reads in flight, the new snapshot's root read waits behind them. If the CLI hangs, the wait is up to 150 s, and Retry rows queue behind the same slots.",
+    "impact": "Latency only. The re-read of the new root is delayed by the old reads' remaining time; nothing is lost or shown wrongly. There is no cancellation path for reads (out of scope per description.md), so this is the expected cost of the cap rather than a defect.",
+    "suggested_fix": "Optional: release the slot as soon as a read's generation is retired. For example, count active slots per generation and start queued reads when the generation changes, accepting a brief overshoot of MAX_TREE_READS against the Rust permit cap. Or leave it as is and note it under the cancellation stage.",
+    "evidence": "useMetaprojectTree.ts limit(): `pool.active--` runs only in `.finally` of the task promise; read(): `limit(() => current() && Promise.resolve().then(() => send(root, input))...)` checks the generation only at start and on arrival; apps/desktop/src-tauri/src/metaproject.rs:208 `child::run_bounded(command, Duration::from_secs(150), limit + 1)`.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 15,
+    "quote": "export const MAX_TREE_READS = 3;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-logic-w2-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-logic-w4-F-001",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A snapshot change retires the reads in flight, but they keep their limiter slots until the transport settles them. The new generation's reads queue behind them, so up to MAX_TREE_READS slow or hung old-snapshot reads can hold back every new-snapshot tree read. The Rust run_bounded timeout is Duration::from_secs(150).",
+    "impact": "No wrong data: retired answers are still dropped by current(). The risk is latency only, and only when the CLI is slow or hangs on reads that were already in flight at a rebuild. Normally a retired read answers quickly, with data or stale-snapshot.",
+    "suggested_fix": "None required. If it is ever observed, release a slot early when its read's generation is retired (the slot is counted toward the cap only while current()), or note the head-of-line behaviour in the limiter comment.",
+    "evidence": "useMetaprojectTree.ts limit(): the slot is decremented only in .finally() after task() settles. read() checks current() only before send and after the answer. metaproject.rs: child::run_bounded(command, Duration::from_secs(150), ...).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 132,
+    "quote": "    if (pool.active < MAX_TREE_READS) start();\n    else pool.queue.push(start);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-logic-w4-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-performance-w1-F-001",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "The tree read limiter added in the fix round (MAX_TREE_READS = 3) is one FIFO queue shared by both scopes. After a snapshot change with N expanded folders, a read the user starts (expand, Show more, Retry) waits about ceil(N/3) read round-trips behind background re-reads.",
+    "impact": "Bounded extra latency on a user action after a refresh. No timing was supplied, and read latency was kept out of scope by the operator in round 1 (performance-w1-F-001 dismissed), so this is info.",
+    "suggested_fix": "None now. If a latency stage measures it, put user-started reads (ensure on expand, more, retry) ahead of background re-reads in the queue.",
+    "evidence": "useMetaprojectTree.ts:122-134 limit() with pool.queue.push/shift; :145 every read goes through limit(); retired-snapshot reads skip via current().",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 132,
+    "quote": "if (pool.active < MAX_TREE_READS) start();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 132
+    },
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-performance-w1-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-performance-w1-F-002",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "The focus-restore fix (for frontend-w1-F-001 and logic-w1-F-001) adds O(rows) querySelectorAll scans: moveTo, remember (on every focus) and the dependency-free layout effect (on every commit) each call rowElements(). That makes two or three full-row scans per arrow, Home or End keystroke, where the base version scanned only while a scroll request was pending.",
+    "impact": "Constant-factor cost on a path that already re-flattens and re-renders every row per keystroke. Row count is bounded by expanded folders × 100-entry pages. Not measurable at realistic sizes, and nothing was timed.",
+    "suggested_fix": "None needed. Optionally take elements once in the layout effect and pass the index into remember, and use a single querySelector with CSS.escape in moveTo.",
+    "evidence": "MetaprojectTree.tsx:104 rowElements; :137 layout effect; :155 remember -> rowElements().indexOf; :185 moveTo -> rowElements().find.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 185,
+    "quote": "if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 185
+    },
+    "blocking_merge": false,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-performance-w1-F-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-performance-w2-F-001",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "The dependency-less useLayoutEffect runs after every render. It calls rowElements() (querySelectorAll over every [data-row]) and then remember(document.activeElement), which calls rowElements() again plus indexOf. On a keystroke, moveTo and the row's onFocus -> remember each call rowElements() too. That is about four O(n) DOM queries and scans per arrow key, where before the fix round there were none unless a request was pending.",
+    "impact": "This is redundant work on a per-keystroke and per-arriving-page path, linear in the loaded visible rows (100 per page, growing with Show more and expansion). It is the same order as flatten and the reconcile that already run, so it is not a bottleneck at current page sizes. No timing was measured.",
+    "suggested_fix": "Reuse the `elements` array the layout effect already computed: remember(element, elements = rowElements()). In onFocus, take the index from rows.findIndex(r => r.id === row.id) instead of querying the DOM.",
+    "evidence": "Slice-02 MetaprojectTree.tsx hunk @@ 35,173: `const elements = rowElements();` then `remember(document.activeElement);` inside a useLayoutEffect with no deps; remember() calls rowElements().indexOf(row). The head file (lines 183-186) shows moveTo calling rowElements().find(...). onFocus calls remember(event.target).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 155,
+    "quote": "focused.current = element instanceof HTMLElement && row ? { element, index: rowElements().indexOf(row) } : null;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-performance-w2-F-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "The layout effect has no dependency list and runs on every render. Through `remember` it calls `rowElements()` (querySelectorAll) twice in that one run, and moveTo and onFocus add more calls on each arrow key. The reviewer rates it low impact and keeps it minor. The operator's latency dismissal covers CLI read latency, not redundant DOM work on the client. Reusing the `elements` array the effect already computed is a local fix that does not change behaviour. No intent signal or practice source argues against it."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-pr-contract-w1-PC-001",
+    "reviewer": "review-pr-contract",
+    "severity": "info",
+    "problem": "The PR body (pr-context.md, Intent round 1) was not updated for the fix round 6c83eb7fb. Its claims 'Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass' and '`bun test src/integrations` 443 pass' predate the tests the fix added (MetaprojectTree.dom.test.tsx +137 lines, MetaprojectView.dom.test.tsx +68, platform/metaproject.test.ts, metaproject-explorer-tree.test.ts two new tests), and 'Not run locally: the Rust tests ... this PR's CI is the first run' is now superseded (CI at f43a13c3f: 29 success, 1 skipped, Rust cargo test included). The Transport bullet also does not mention a behaviour change the fix made outside the tree: apps/desktop/src/platform/metaproject.ts requestMetaprojectV2 now throws `new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\")` for any v2 answer whose snapshotId differs from expectedSnapshotId (detail, search, neighbors, tree), where matchesRequest used to reject it as 'Incompatible Metaproject v2 response. Choose the bundled CLI in Desktop Settings.'; MetaprojectView.tsx search Show-more now shows the Refresh catalog banner for it.",
+    "impact": "A reader of the PR body sees stale verification numbers and no mention that the Incompatible-response error path for snapshot mismatches became a stale/Refresh path for every v2 read. The code and the guide ('asks to refresh if the underlying data changes') agree; the cost is only a reader trusting the body. Unverified: the current test counts were not run by this reviewer (exec budget 0).",
+    "suggested_fix": "Refresh the PR body: update or drop the test counts, replace 'this PR's CI is the first run' with the CI result, and add one line under Transport that a v2 answer for another snapshot now raises stale-snapshot (Refresh catalog) for every action.",
+    "evidence": "pr-context.md lines 14, 20-23 versus `git diff 9f4ec475b..f43a13c3f` of apps/desktop/src/platform/metaproject.ts (snapshot check moved out of matchesRequest into requestMetaprojectV2 as MetaprojectRequestError stale-snapshot) and MetaprojectView.tsx (stale-snapshot -> setSnapshotMismatch(true)); test file churn from `git diff --stat`; CI state from pr-context.md 'CI: passing'.",
+    "confidence": "high",
+    "file": null,
+    "line": null,
+    "quote": null,
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-pr-contract-w1-PC-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-pr-contract-w1-PC-002",
+    "reviewer": "review-pr-contract",
+    "severity": "info",
+    "problem": "The fix (answering ui-ux-w1-UX-004) adds a user-visible 'Module' kind label to module folder rows. The guide paragraph that explains module folders, docs/docs/guides/desktop-metaproject.md:97 'A folder that is also a module can be selected as that module: click its name or press **Enter** to select it', does not say how a reader recognises such a folder, and the diff does not touch it.",
+    "impact": "Low: a reader following the guide learns that some folders select a module on click but not that the 'Module' label marks them, which is the cue the fix added. Nothing in the guide is made wrong.",
+    "suggested_fix": "Optional: in desktop-metaproject.md, after 'A folder that is also a module', add 'shows a **Module** label and'.",
+    "evidence": "slice-01 MetaprojectTree.tsx hunk @@ 273,297 @@; `keryx ctx rg` over docs/docs/guides/desktop-metaproject.md for module-folder wording finds only lines 97-100, none mentioning the label.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 290,
+    "quote": "{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-pr-contract-w1-PC-002",
+    "source": "internal"
+  },
+  {
+    "id": "r2-pr-contract-w2-PC-001",
+    "reviewer": "review-pr-contract",
+    "severity": "minor",
+    "problem": "PR body Verification claims \"Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.\" and \"`bun test src/integrations` 443 pass\", and discloses \"Not run locally: the Rust tests (`cargo test --locked metaproject`) ... this PR's CI is the first run.\" The fix-round diff adds Desktop tests (MetaprojectTree.dom.test.tsx: 'a built graph without files and a wiki without pages show their own empty-state lines', 'Home on the first row and End on the last ...', 'a keyboard Retry keeps focus ...', 'a keyboard Show more keeps focus ...', 'tree reads run at most three at a time ...'; MetaprojectView.dom.test.tsx: 2 new tests; platform/metaproject.test.ts: 1 new test), and its own journal line in the diff records \"Desktop tsc exit 0 and bun test src 1006 pass\" and \"core tree/explorer 31 pass\" (29 at T5). CI at f43a13c3f has now run and passed the Rust `cargo test`. The body still states the pre-fix numbers and says nothing of the fix round (bounded tree reads, stale-snapshot mapping for mismatched v2 answers, landmark naming, Module label).",
+    "impact": "A reviewer or merger who trusts the Verification section reads counts measured at 69f2c16b8, not at the head under review, and a Rust disclosure that CI has since settled. The code is correct; the cost is a body that no longer describes the head it would merge.",
+    "suggested_fix": "Update the Verification section to the head's numbers (Desktop `bun test src` 1006 pass; re-run and state the `bun test src/integrations` count), replace the Rust 'not run' line with the CI result, and add one line naming the fix-round behaviour changes (at most 3 tree reads in flight; a v2 answer for another snapshot now surfaces as stale-snapshot with the Refresh catalog banner, including search Load more).",
+    "evidence": "slice-02: journal.md hunk @@ 12,36 @@ added line '... Orchestrator re-run: core tree/explorer 31 pass, typecheck/lint/docs:check exit 0, Desktop tsc exit 0 and bun test src 1006 pass.'; new test blocks in MetaprojectTree.dom.test.tsx (@@ 262,298 @@, @@ 343,478 @@), MetaprojectView.dom.test.tsx (@@ 1376,1452 @@, @@ 2119,2174 @@), platform/metaproject.test.ts (@@ 189,219 @@). pr-context.md 'CI: passing' lists 'desktop check: passing'; dispatch brief states the Rust cargo test passed at f43a13c3f. The src/integrations whole-suite count at head was not re-run here (exec_budget_s 0); 443 -> likely 445 is inferred from 29 -> 31 in the two tree/explorer files.",
+    "confidence": "high",
+    "file": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301/pr-context.md",
+    "line": null,
+    "quote": "- Desktop: `bunx tsc --noEmit` exit 0; `bun test src` 998 pass.",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: .metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301/pr-context.md",
+      "reported_line": null
+    },
+    "path_missing": true,
+    "degradation_class": "diff-vs-description",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-pr-contract-w2-PC-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "In pr-context.md, line 21 still states `bun test src` 998 pass and line 23 says the Rust tests were 'Not run locally' and that this PR's CI is the first run. The journal records 1006 pass after fix round 1, and CI has now run. The body does not describe the fix round's behaviour changes. It no longer describes the head under review, and no signal shows that was intended."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-style-w1-F-001",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "The fix for the read cap (answering the permit-pool concern of this round) wraps the whole read in `limit(() => current() && Promise...)`. The `&&` short-circuit is the guard that skips a read queued under a retired snapshot, so the task returns `false | Promise`, and the guard sits on the same line as the start of a 20-line promise chain. The comment above explains it, which is a sign the expression does not carry the intent by itself.",
+    "impact": "Readability only: a reader scanning `read` sees a promise chain and can miss that it may never start. No behaviour concern.",
+    "suggested_fix": "Optional: give the guard its own statement, e.g. `limit(() => { if (!current()) return; return Promise.resolve().then(() => send(root, input)).then(...); });`, and drop the explanatory comment.",
+    "evidence": "slice-01 hunk @@ 140,159 @@ of apps/desktop/src/metaproject/useMetaprojectTree.ts (added lines: the comment 'A read queued under a snapshot that has since been retired never starts.' and the `limit(() => current() && ...` call).",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 145,
+    "quote": "limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-style-w1-F-001",
+    "source": "internal"
+  },
+  {
+    "id": "r2-style-w2-F-001",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The new tree-read limiter names one thing twice: the ref is `slots` and its value is read into `pool` on the next line, while the function that queues and runs a task is called `limit`, a word that reads as a noun (the cap, which is MAX_TREE_READS) as easily as a verb. At the call site `limit(async () => ...)` inside `read` does not say that the task is queued and may start later.",
+    "impact": "Readability: one concept with two names (solid-principles.mdc Name row), and a reader of `read` must open the limiter to learn that the read is deferred behind a queue.",
+    "suggested_fix": "Use one name for the state and a verb for the function, e.g. `const readQueue = useRef({ active: 0, waiting: [] })` and `const enqueueRead = useCallback((task) => { const queue = readQueue.current; ... })`, or `runLimited` / `schedule`.",
+    "evidence": "useMetaprojectTree.ts lines ~121-136 in the delta: `slots` declared, aliased to `pool`, all later uses through `pool`; `read` wraps its body in `limit(...)`.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 121,
+    "quote": "const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });\n  const limit = useCallback((task: () => unknown) => {\n    const pool = slots.current;",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-style-w2-F-001",
+    "premise": {
+      "verdict": "challenged",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/useMetaprojectTree.ts:122",
+          "says": "`const limit = useCallback((task) => ...)` wraps a task under a concurrency cap and is called as `limit(() => ...)` at :145, the same shape as p-limit's call site"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "p-limit (sindresorhus/p-limit) README, Usage",
+          "says": "the widely used concurrency limiter names the returned function `limit` and calls it as `limit(() => fetchSomething())`, a recognised idiom for queue-and-run under a cap"
+        },
+        {
+          "name": "React docs — useRef, 'Referencing a value with a ref'",
+          "says": "reading `ref.current` into a local before use is the ordinary ref idiom"
+        }
+      ],
+      "reasoning": "The main complaint, that `limit` reads as a noun and hides the queueing, goes against the most common JS idiom for this construct: p-limit's `limit(() => task)`. A reader who knows that idiom reads it as 'run under the cap'. The ref-to-local alias `slots` → `pool` is a naming nit inside a 15-line block. Renaming would move the code away from a well-known convention for no behavioural gain. The intent signal is the branch's own code, so only the practice source carries weight here.",
+      "question": "`limit(() => …)` follows p-limit's well-known idiom. Keep the names, or rename to enqueueRead / readQueue?",
+      "options": [
+        "dismiss — keep `limit` (p-limit idiom) and the ref alias",
+        "uphold — rename to one state name and a verb, as suggested"
+      ],
+      "operator": {
+        "answer": "dismiss",
+        "reason": "limit(() => ...) is the established p-limit idiom and the ref-to-local copy is ordinary React; the names stay.",
+        "quote": "dismiss",
+        "at": "2026-11-24T07:30:29.242Z",
+        "actor": "operator",
+        "confirmedVia": "host-question",
+        "hostQuestion": {
+          "source": "claude-code",
+          "ref": "premise-r2-style-w2-F-001",
+          "questionText": "r2-style-w2-F-001: the limiter in useMetaprojectTree.ts is named `limit(() => ...)` and its state is `slots`/`pool`. The style reviewer asks for one name for the state and a verb for the function (`readQueue`/`enqueueRead`). The premise judge challenged it: `limit(() => …)` is the p-limit idiom, and copying ref.current into a local is ordinary React. Uphold (rename) or dismiss (keep the names)?",
+          "answerText": "dismiss",
+          "time": "2026-11-24T07:30:29.242Z"
+        }
+      }
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "operator (host-question claude-code:premise-r2-style-w2-F-001, 2026-11-24T07:30:29.242Z) on the premise question: limit(() => ...) is the established p-limit idiom and the ref-to-local copy is ordinary React; the names stay."
+    }
+  },
+  {
+    "id": "r2-style-w2-F-002",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "In the new test \"an answer for another snapshot than the one pinned is refused as stale-snapshot\", `tree` and `search` hold the errors returned by `readError`, not a tree or a search answer; the assertions then read `tree instanceof MetaprojectRequestError && tree.code`.",
+    "impact": "Readability: the name says the opposite of the value (an answer vs. its refusal), in a test whose whole point is that no answer comes back.",
+    "suggested_fix": "Rename to `treeError` / `searchError` (or `staleTree` / `staleSearch`).",
+    "evidence": "metaproject.test.ts:212 and :215 (keryx ctx rg 'const tree = await readError|const search = await readError').",
+    "confidence": "high",
+    "file": "apps/desktop/src/platform/metaproject.test.ts",
+    "line": 212,
+    "quote": "const tree = await readError(requestMetaprojectTree(\"/checkout\", { scope: \"graph\", parent: \"src\", expectedSnapshotId: digest },",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-style-w2-F-002",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "Every other `readError` result in apps/desktop/src/platform/metaproject.test.ts names the failure: `error` (:52, :95, :204), `lacking` (:71, :134), `failure` (:79), `invalid` (:86), `unrelated` (:109), `malformed` (:199). Only the new `tree` (:212) and `search` (:215) name the request instead. The rename suggested (`staleTree` / `staleSearch`) matches the siblings."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-testing-practices-w2-F1",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Fix round 1 (frontend-w1-F-001 / ui-ux-w1-UX-001) added two mechanisms so that focus is never taken from outside the tree. The first is the `onBlur` microtask that forgets the focused row when focus moves out. The second is the `active` guard in the layout effect. No test drives the case they exist for: a tree row holds focus, focus then moves outside, and only after that does the focused row leave (Show more's last page arrives, or a loading or error row turns into children). Every test that focuses `outside` keeps it outside without ever focusing a row first, or leaves the focused row in place: 'data arriving never moves focus' (a mouse click on the chevron, so no row was ever focused), the reveal test and the Home/End test (the rows stay). The two keyboard tests (Retry, Show more) keep focus inside the tree.",
+    "impact": "These two branches are the only code that stops a late page from pulling focus out of a field the user moved to. The plan forbids that (\"data arriving never takes it\"). Either branch can be deleted or broken with the suite staying green, so the next edit to this effect is unprotected. Coverage gap only: no defect is claimed.",
+    "suggested_fix": "In MetaprojectTree.dom.test.tsx, add a test. Hold `|next`. Focus the Show more row and press Enter, so the row is focused and loading. Focus an `outside` button inside act(). Release `|next`. Assert that `document.activeElement === outside`, that the appended rows are present (positive artifact) and that 'Show more' is gone. Add a twin with a held folder read, where the focused loading row is replaced by children.",
+    "evidence": "Read MetaprojectTree.tsx (the layout effect and onBlur) and MetaprojectTree.dom.test.tsx lines 243-258, 294-317 and 366-384: the only tests that move focus to `outside`. Searched with `keryx ctx rg \"outside|activeElement|\\.blur\\(\"` over both DOM test files. Mutants M7 and M8 (below) are the gates in question. They were NOT run, so this rests on reading, not on an observed green.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+    "line": 146,
+    "quote": "if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-testing-practices-w2-F1",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "In fix round 1 the operator kept the plan's rule that data arriving never takes focus from outside the tree. The onBlur microtask (MetaprojectTree.tsx:158-163) and the `active` guard (:146) are the only code that enforces it. The finding names a test gap for that exact path (a row is focused, focus moves outside, then the row leaves) and claims no defect. No intent or practice argues against covering it. Whether the existing tests miss it is the verifier's call."
+    },
+    "source": "internal"
+  },
+  {
+    "id": "r2-testing-practices-w2-F2",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The keyboard-Retry test asserts that the focused element is a treeitem reading 'Loading…'. The shared `statusId` exists so that Retry updates the focused row in place instead of replacing it (its doc comment says so). The index-based fallback in the layout effect gives the same observable result when the keys differ: the error row is removed and the loading row at the same index gets focus. So the assertion does not tell the two mechanisms apart.",
+    "impact": "If the per-parent status key regresses to per-type ids, focus is dropped and re-applied to a new element (a second focus event for assistive technology), and the test stays green. Low cost; no defect today.",
+    "suggested_fix": "Capture `const row = item(\"Could not load.\")` before Enter, then assert `document.activeElement === row` (the same element) while it reads 'Loading…'. Do the same for the Show more row while it loads.",
+    "evidence": "Read flatten() and statusId in MetaprojectTree.tsx, the layout-effect fallback `elements[Math.min(lost.index, elements.length - 1)]?.focus()`, and the test at MetaprojectTree.dom.test.tsx ~386-397. Mutant M6 targets this. It was not run.",
+    "confidence": "medium",
+    "file": "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+    "line": 394,
+    "quote": "await key(item(\"Could not load.\"), \"Enter\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-testing-practices-w2-F2",
+    "source": "internal"
+  },
+  {
+    "id": "r2-ui-ux-w2-UX-001",
+    "reviewer": "review-ui-ux",
+    "severity": "minor",
+    "problem": "Nielsen #9 (error recovery) and #5 (error prevention). When a tree read answers stale-snapshot, the catch calls onStale, which shows the explorer's 'Refresh catalog' banner, and then falls through to the generic failure branch. The folder (or its Show more row) becomes 'Could not load. Project knowledge changed while loading.' with a Retry button. Retry re-sends the same retired snapshot: `read` pins `expectedSnapshotId: state.current[scope].snapshot`, and a page Retry re-sends the old cursor. The CLI therefore answers stale-snapshot again. In this delta the transport (platform/metaproject.ts) newly turns any answer for another snapshot into this error, which makes the path reachable from a second source. The delta's own Load-more search fix (MetaprojectView.loadMoreSearch) handles the same error by showing only the banner, so the two paths disagree.",
+    "impact": "After a rebuild or wiki edit elsewhere, the user sees two remedies for one cause: the banner's Refresh catalog, which works, and an inline Retry next to the folder, which fails the same way every time. A user who acts on the nearer control loops without progress, and each failed retry is announced again through the row's role=status region.",
+    "suggested_fix": "In the catch, after `latest.current.onStale()`, return without marking the folder failed. Leave the folder in its loading state (or drop it, as the not-found branch does), because Refresh catalog changes the snapshot and the tree then re-reads it anyway. This matches loadMoreSearch, which sets snapshotMismatch and no inline error. Extend the existing MetaprojectView test 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' to assert that no treeitem reads 'Could not load.' while the banner shows.",
+    "evidence": "useMetaprojectTree.ts read(): `const input = { scope, expectedSnapshotId: pinned, ... }` with `pinned = state.current[scope].snapshot`. The catch runs `latest.current.onStale()`. The only early return is the not-found branch. The code then reaches `setFolder(scope, parent, folder => cursor && folder ? { ...folder, more: { status: \"failed\", error } } : { status: \"failed\", entries: [], partial: false, error })`. MetaprojectTree renders that as the error row with `<button ...>Retry</button>`, and retry() calls read(scope, parent) with the same pinned snapshot. The core refuses a mismatched expectedSnapshotId: metaproject-explorer-v2.ts checkSnapshot throws stale-snapshot, and metaproject-explorer-tree.test.ts asserts it. By contrast, MetaprojectView.loadMoreSearch in this delta does `if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") setSnapshotMismatch(true); else setSearchError(...)`. The new view test checks only that the banner shows and that `treeRow(\"Client\")` throws. It does not check for the error row. Verified by reading code only; not run.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 159,
+    "quote": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "apps/desktop/src/metaproject/useMetaprojectTree.ts (read catch: folder read and Show more page read both fall through to the failed state)",
+        "apps/desktop/src/metaproject/MetaprojectView.tsx loadMoreSearch (already correct: banner only)",
+        "apps/desktop/src/metaproject/OpenSpecView.tsx (no stale branch; shows errMessage inline, outside this PR's tree surface)"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"expectedSnapshotId|stale-snapshot|setSnapshotMismatch|onStale\" apps/desktop/src --glob '!*.test.ts*': 32 matches in 4 files (MetaprojectView.tsx, useMetaprojectTree.ts, OpenSpecView.tsx, platform/metaproject.ts). I read each catch that receives a pinned-snapshot error."
+    },
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301#r2-ui-ux-w2-UX-001",
+    "premise": {
+      "verdict": "upheld",
+      "judge": "review-premise",
+      "model": "claude-opus-5-5",
+      "reasoning": "After `onStale()` (useMetaprojectTree.ts:159), the catch falls through to the failure branch (:170-173). The inline Retry then re-sends the same pinned snapshot (:138, :142, :191-198), so it fails the same way until the user selects Refresh catalog. For the same cause on search Load more, the operator chose the banner only ('Баннер Refresh catalog'), and MetaprojectView.loadMoreSearch does just that. The suggested fix makes the tree consistent with that decision."
+    },
+    "source": "internal"
+  }
+]

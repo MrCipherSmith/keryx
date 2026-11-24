@@ -1,0 +1,115 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, PR 1301 (flow 518), round 2 delta 9f4ec475b..f43a13c3f (fix round, commit 6c83eb7fb), checkout at f43a13c3f; slice read in full: slice-01 (kind fix). For context and prior dispositions I also read the full fix hunks of MetaprojectTree.tsx, useMetaprojectTree.ts, platform/metaproject.ts, metaproject-explorer-contract.ts, MetaprojectView.tsx/.dom.test.tsx, platform/metaproject.test.ts and the guide (git diff 9f4ec475b f43a13c3f).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 2
+
+### Findings
+
+### [F-001] Tree read limiter is FIFO and shared, so a user's expand or Show more waits behind queued re-reads
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/useMetaprojectTree.ts:122-145
+- **Hot path**: once per tree read; worst case right after a new snapshot, when every expanded folder of both scopes is re-read.
+- **Problem**: `limit` (new in the fix round, MAX_TREE_READS = 3) runs reads in arrival order from one queue shared by the graph and wiki scopes. After a snapshot change with N expanded folders, a read the user starts (expand, Show more, Retry) waits about ceil(N/3) read round-trips. Reads queued under a retired snapshot are skipped cheaply (`current() &&`), so only reads for the current snapshot add to the wait.
+- **Why it matters**: The wait is bounded and the cap protects the read permits the tree shares with the explorer, which is the reason it was added. Read latency is a stage the operator has kept out of scope (the round-1 decision on performance-w1-F-001), and no timing was supplied, so this is info.
+- **Fix**: None needed now. If a later latency stage measures it, put user-started reads (ensure on an expand, more, retry) ahead of background re-reads in the queue.
+
+### [F-002] Each focus move now queries every rendered row two or three times
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx:104, 137, 155, 185
+- **Hot path**: per arrow, Home or End keystroke, and per commit. moveTo queries all rows (`rowElements().find`), onFocus → remember queries them again (`rowElements().indexOf`), and the dependency-free layout effect queries them on every commit (`const elements = rowElements()`) plus once more through remember. The base version queried only while a scroll request was pending.
+- **Problem**: These are O(rows) DOM scans added by the focus-restore fix for frontend-w1-F-001 and logic-w1-F-001. Each keystroke already re-flattens and re-renders the whole row list (`setFocusId`), which is also O(rows), so the scans change a constant factor and not the complexity. Row count is bounded by the expanded folders × pages of at most 100.
+- **Why it matters**: Not measurable at realistic sizes, and nothing was timed. Recorded so a later virtualisation pass knows the scans exist.
+- **Fix**: None needed. If one is ever wanted: in the layout effect, take `elements` once and pass the index into remember; in moveTo, use `list.current.querySelector('[data-row="…"]')` with CSS.escape.
+
+### Clean Areas
+- CLI/TUI hot paths: wikiTree grouping is now an in-place push (O(W), was O(W²)); the stale-snapshot check moved from matchesRequest to the end of requestMetaprojectV2 at the same cost.
+- Memory leaks: limiter slots are released in `finally` on success and on failure. Its queue holds at most one closure per issued read and is drained as slots free up. onBlur's queueMicrotask holds no lasting reference. The `focused` ref is replaced on every commit and focus change.
+- Re-renders: the Module label and status-row ids add no new props or objects per render. The shared `status:${parent}` id now keeps a status `<li>` mounted instead of unmounting and remounting it.
+- Redundant calls: a read queued under a retired snapshot never calls the CLI.
+- N+1, indexes, pagination, bundle imports, sync blocking, MobX: not relevant to this delta (no DB, no new imports beyond the contract helper, no sync I/O).
+
+### Prior dispositions (judged against code at f43a13c3f)
+- frontend-w1-F-001: closed. Loading, error and more rows now share `statusId(parent)` (MetaprojectTree.tsx flatten). When the focused element is disconnected and focus sits on body, the layout effect focuses the row now at the same index. Behaviour not executed by me; Desktop tree tests exit 0.
+- logic-w1-F-001: closed. focusRequest is removed and moveTo focuses the element directly, so nothing is left pending.
+- architecture-w2-F-001: closed. `metaprojectWikiGroupKey` and `METAPROJECT_WIKI_UNTYPED_GROUP` are exported from the contract and used in both wikiTree and revealSteps.
+- degradation-w1-F-001: closed. negotiateMetaproject is deleted and the tests call negotiateMetaprojectExplorer(...).protocol.
+- degradation-w1-F-002: closed. The snapshot mismatch now throws MetaprojectRequestError('stale-snapshot') in requestMetaprojectV2, and the hook comment is reworded.
+- performance-w2-F-001: closed. Group arrays are pushed in place.
+- pr-contract-w2-PC-001: closed. All three sites (guide :309, guide :333 troubleshooting row, cli-reference :8301) now say "requires".
+- testing-practices-w1-F1: closed. A new test injects symbol nodes into the loaded model, asserts they are present, and checks that listings, counts and not-found exclude them.
+- testing-practices-w1-F3: closed. MetaprojectView.dom.test adds a tree answer for another snapshot and a stale-snapshot refusal, asserting the banner and no rows. platform test adds the transport refusal.
+- testing-practices-w1-F6: closed. The test asserts the rows arrived and no Loading row remains before the focus check.
+- ui-ux-w1-UX-004: closed. Module folders render the NODE_KIND_LABELS.module label.
+- logic-w2-F-002: open. The guide still says "Pages without a page type are under **Other**" (desktop-metaproject.md:103). The finding's fix was optional; info.
+- pr-contract-w1-PC-001: closed. cli-reference :8301 now names `tree` as an optional action used only when listed.
+- testing-practices-w1-I2: closed. Both sides use the shared exported key function.
+- ui-ux-w1-UX-005: open. count-label is unchanged in the delta (no unit, aria-label or title). Info; it was not among the premise-upheld findings the fix round addressed.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "summary": { "blocker": 0, "major": 0, "minor": 0, "info": 2 },
+  "findings": [
+    {
+      "id": "performance-w1-F-001",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "problem": "The tree read limiter added in the fix round (MAX_TREE_READS = 3) is one FIFO queue shared by both scopes. After a snapshot change with N expanded folders, a read the user starts (expand, Show more, Retry) waits about ceil(N/3) read round-trips behind background re-reads.",
+      "impact": "Bounded extra latency on a user action after a refresh. No timing was supplied, and read latency was kept out of scope by the operator in round 1 (performance-w1-F-001 dismissed), so this is info.",
+      "suggested_fix": "None now. If a latency stage measures it, put user-started reads (ensure on expand, more, retry) ahead of background re-reads in the queue.",
+      "evidence": "useMetaprojectTree.ts:122-134 limit() with pool.queue.push/shift; :145 every read goes through limit(); retired-snapshot reads skip via current().",
+      "confidence": "medium",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 132,
+      "quote": "if (pool.active < MAX_TREE_READS) start();",
+      "blocking_merge": false
+    },
+    {
+      "id": "performance-w1-F-002",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "problem": "The focus-restore fix (for frontend-w1-F-001 and logic-w1-F-001) adds O(rows) querySelectorAll scans: moveTo, remember (on every focus) and the dependency-free layout effect (on every commit) each call rowElements(). That makes two or three full-row scans per arrow, Home or End keystroke, where the base version scanned only while a scroll request was pending.",
+      "impact": "Constant-factor cost on a path that already re-flattens and re-renders every row per keystroke. Row count is bounded by expanded folders × 100-entry pages. Not measurable at realistic sizes, and nothing was timed.",
+      "suggested_fix": "None needed. Optionally take elements once in the layout effect and pass the index into remember, and use a single querySelector with CSS.escape in moveTo.",
+      "evidence": "MetaprojectTree.tsx:104 rowElements; :137 layout effect; :155 remember -> rowElements().indexOf; :185 moveTo -> rowElements().find.",
+      "confidence": "high",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": 185,
+      "quote": "if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "not_verified": [
+    "Nothing was executed (exec_budget_s = 0). The focus-restore behaviour and the limiter's peak concurrency are judged from code. The Desktop test files that pin them (MetaprojectTree.dom.test.tsx :452/:458 peak <= MAX_TREE_READS) were not run by me; verify-tests-to-run-1.txt reports exit 0.",
+    "Not checked: the 'eight read permits' figure in the MAX_TREE_READS comment, against the Rust side."
+  ]
+}
+```
+
+Routing audit: graph_used: no (layers block in payload supplied affected files; delta is small and the touched files were read directly); wiki_used: not-relevant (no domain question beyond the plan/AC in the payload); ctx_used: yes (keryx ctx rg for rowElements/MAX_TREE_READS/guide sentences; raw git diff with an escape marker to read the exact fix hunks); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":138354,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,97 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 2 (delta 9f4ec475b..f43a13c3f), slices 02 and 03 read in full. The fix round is clean at function and class level: the wiki group key moved to one exported helper used by both sides, the read limiter is small and its swallowing catch is commented and correct (each task already reports its own failure), the stale-snapshot check moved from matchesRequest to an explicit typed throw, and the negotiateMetaproject wrapper is gone with every test pointed at negotiateMetaprojectExplorer. One minor: the MetaprojectTree component doc still says data arriving never moves focus, which the new focus hand-on contradicts. Two info notes.",
+  "slices": ["slice-02", "slice-03"],
+  "findings": [
+    {
+      "id": "clean-code-w2-F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": " * Focus moves only with the keyboard or a click; data arriving never takes it.",
+      "problem": "The component's doc comment describes the rule this fix round replaced. The new useLayoutEffect moves focus when data arrives: if the focused row (a Loading or Show more row) disappears because its folder's children or last page arrived, focus goes to the row now at its index (`elements[Math.min(lost.index, elements.length - 1)]?.focus()`). The tests added in this round assert exactly that (`a keyboard Retry keeps focus ... then on the first row read`: after `tree.release(\"src|\")`, `focused()` is `client.ts`). The doc still says focus moves only with the keyboard or a click and that data arriving never takes it; the inline comment at the effect states the narrower, correct rule ('Focus that was outside the tree is never taken').",
+      "impact": "Two places document focus behaviour differently; the next maintainer reading the component's contract will believe a data-driven focus move is a bug and may remove the hand-on that fixed frontend-w1-F-001 / ui-ux-w1-UX-001.",
+      "suggested_fix": "Reword the doc to the rule the code now follows, e.g. 'Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree; when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its place.'",
+      "evidence": "MetaprojectTree.tsx doc above `export function MetaprojectTree` vs the useLayoutEffect block `const lost = focused.current; ... if (lost && !lost.element.isConnected && (...)) { elements[Math.min(lost.index, elements.length - 1)]?.focus(); }` added in 6c83eb7fb; MetaprojectTree.dom.test.tsx tests 'a keyboard Retry keeps focus on the folder's status row, then on the first row read' and 'a keyboard Show more keeps focus in the tree'.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "clean-code-w2-F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": "throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");",
+      "problem": "The fix round adds a second construction of the same stale-snapshot error with the same literal message (the other is useMetaprojectTree.ts `if (page.snapshotId !== pinned) throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\")`, kept for injected requests that do not check). The banner text in MetaprojectView.tsx repeats the sentence a third time as UI copy. Two thrown copies are under the 3-copy duplication threshold.",
+      "impact": "None today; if the wording changes, the two throws can drift.",
+      "suggested_fix": "Optional: a small `staleSnapshotError()` factory next to MetaprojectRequestError used by both throw sites.",
+      "evidence": "keryx ctx rg 'Project knowledge changed while loading' apps/desktop/src src (non-test): MetaprojectView.tsx:880 (banner), useMetaprojectTree.ts:147, metaproject.ts:306.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "clean-code-w2-F-003",
+      "severity": "info",
+      "file": "src/integrations/metaproject-explorer-tree.test.ts",
+      "line": null,
+      "quote": "if (!(\"entries\" in src) || !(\"scope\" in src)) throw new Error(\"Expected a tree response\");",
+      "problem": "The new symbol test repeats the `tree()` helper's response-narrowing guard twice (for `top` and `src`), making three copies of it in the file, because it calls metaprojectExplorerV2 with a custom graph loader that the helper cannot take.",
+      "impact": "Test-only; a reader sees the same narrowing three times.",
+      "suggested_fix": "Optional: give the helper a narrowing function `asTree(response)` and use it in `tree()` and in the new test's `read`.",
+      "evidence": "Helper `tree()` guard plus the two copies in 'leaves symbols out of listings and folder counts even when the graph model holds them'.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 },
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `9f4ec475b` | Merge-base (round): `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`
+- Scope mode: `explicit-hash-range` (9f4ec475b..f43a13c3f) | Slices: slice-02 (new), slice-03 (new)
+
+### Summary
+The fix round's code is small and well separated: one exported wiki-group-key helper replaces the two private copies, the FIFO limiter is a dozen lines with a commented catch that is a correct fallback (each read's own `.catch` reports to its folder), the stale-snapshot rule is now an explicit typed throw rather than a hidden `false` in `matchesRequest`, and the dead `negotiateMetaproject` wrapper is deleted. One stale component doc about focus.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 2
+
+### Findings
+#### Functions
+No function issues found. `useMetaprojectTree.read` and the `MetaprojectTree` layout effect grew but stay under the 40-line threshold and do one job each.
+
+#### Comments
+- [clean-code-w2-F-001] minor — MetaprojectTree.tsx component doc ("data arriving never takes it") contradicts the new focus hand-on in the layout effect.
+
+#### Error Handling
+No issues. `limit`'s `.catch(() => undefined)` is a commented fallback (the task handles its own failure); the stale-snapshot throw in `requestMetaprojectV2` is typed and the callers (tree hook, `loadMoreSearch`) branch on its code.
+
+#### DRY
+- [clean-code-w2-F-002] info — stale-snapshot error built twice with the same literal.
+- [clean-code-w2-F-003] info — tree-response narrowing guard copied in the new test.
+
+#### SOLID
+No SOLID issues found.
+
+### Clean Areas
+Wiki group key helper (contract, v2 `wikiTree`, `revealSteps`); `statusId` shared status-row id and its doc (verified: `flatten` emits at most one status row per parent); `MAX_TREE_READS` doc (verified against `MAX_ACTIVE: usize = 8` in apps/desktop/src-tauri/src/metaproject.rs); `useMetaprojectTree` doc on `onStale` (matches both paths in `read`); `requestMetaprojectV2`/`matchesRequest` split; docs wording "requires"; test changes in slice-02.
+
+### Notes
+- slice-03.diff carries removal lines with little context; I read the same hunks in full via `git diff 9f4ec475b f43a13c3f` on the touched files.
+- Not read: `SKILL.detail.md` § Counterpart verification / Round obligations / Fix rounds, and the shared `review.mdc`; this is a NEW-slice round with no prior findings attached, so no dispositions are returned.
+- Routing audit: graph_used: no (payload layers supplied affected files), wiki_used: not-relevant, ctx_used: yes (keryx ctx rg/read), raw_rg_used: no. One raw `git diff` with a keryx:raw marker to read exact hunks.
+KERYX_USAGE {"tokens_in":175401,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

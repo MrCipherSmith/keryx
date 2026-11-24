@@ -1,6 +1,864 @@
 {
   "version": 1,
-  "scopeReviewed": false,
-  "rawReconciled": false,
-  "obligations": []
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The client re-derives the core's wiki tree grouping rule (untyped pages -> group key \"other\") instea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w1-F-001 (unique id given at consolidation)",
+      "finding": "architecture-w1-F-001"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The production prop type keeps the bare protocol number only for older test doubles, and initial tre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w1-F-002 (unique id given at consolidation)",
+      "finding": "architecture-w1-F-002"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (The reveal state machine (ensure/more/setExpanded/setHandled over ancestor steps) is orchestrated fr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w1-F-003 (unique id given at consolidation)",
+      "finding": "architecture-w1-F-003"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (The required capability set moved from the contract's METAPROJECT_CAPABILITIES to a Desktop-local li) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w1-F-004 (unique id given at consolidation)",
+      "finding": "architecture-w1-F-004"
+    },
+    {
+      "id": "review-architecture-w1:fu1",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is the parent follow-up from review-architecture done or ruled out, and where is that recorded? AC3 (Rust) remains unverified until CI runs cargo test.",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "AC3 Rust tests are verified by CI only (no local toolchain)",
+      "remains": "CI cargo test --locked metaproject result on the PR head"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (The wiki tree's grouping rule (a page's group key is its pageType, or the private constant `WIKI_UNT) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w2-F-001 (unique id given at consolidation)",
+      "finding": "architecture-w2-F-001"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (The core reader now produces a human-readable display label for wiki groups (`domain-model` -> `Doma) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding architecture-w2-F-002 (unique id given at consolidation)",
+      "finding": "architecture-w2-F-002"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (The handshake moved to negotiateMetaprojectExplorer and the old negotiateMetaproject survives as a o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding degradation-w1-F-001 (unique id given at consolidation)",
+      "finding": "degradation-w1-F-001"
+    },
+    {
+      "id": "review-degradation-w1:F-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-002 (This branch cannot run: every tree read sends expectedSnapshotId = pinned, and requestMetaprojectV2 ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding degradation-w1-F-002 (unique id given at consolidation)",
+      "finding": "degradation-w1-F-002"
+    },
+    {
+      "id": "review-degradation-w1:F-003",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-003 (The graph tree has no row for a root module (path \".\", which the Core accepts as a module node, meta) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding degradation-w1-F-003 (unique id given at consolidation)",
+      "finding": "degradation-w1-F-003"
+    },
+    {
+      "id": "review-degradation-w2:DEG-W2-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding DEG-W2-001 (On base, the Graph sidebar without a query listed the v2 catalog's interleaved nodes (wiki pages, mo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding degradation-w2-DEG-W2-001 (unique id given at consolidation)",
+      "finding": "degradation-w2-DEG-W2-001"
+    },
+    {
+      "id": "review-frontend-w1:F-001",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-001 (Status rows use a different key per state (loading:/error:/more: + parent). When the row holding DOM) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding frontend-w1-F-001 (unique id given at consolidation)",
+      "finding": "frontend-w1-F-001"
+    },
+    {
+      "id": "review-frontend-w1:F-002",
+      "source": "raw/review-frontend-w1.txt",
+      "question": "Is review-frontend finding F-002 (On a snapshot change the hook mutates generation.current and state.current during render. Idempotent) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding frontend-w1-F-002 (unique id given at consolidation)",
+      "finding": "frontend-w1-F-002"
+    },
+    {
+      "id": "review-frontend-w2:F-001",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-001 (No test dispatches ArrowUp; the keyboard test covers ArrowDown, ArrowRight, ArrowLeft, Home, End, En) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding frontend-w2-F-001 (unique id given at consolidation)",
+      "finding": "frontend-w2-F-001"
+    },
+    {
+      "id": "review-frontend-w2:F-002",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-002 (The 'Other' wiki group is unreachable today: every wiki node is built with pageType from the fixed W) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding frontend-w2-F-002 (unique id given at consolidation)",
+      "finding": "frontend-w2-F-002"
+    },
+    {
+      "id": "review-frontend-w2:F-003",
+      "source": "raw/review-frontend-w2.txt",
+      "question": "Is review-frontend finding F-003 (Folders and files are ordered with compareText (code-unit comparison), so upper-case names sort befo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding frontend-w2-F-003 (unique id given at consolidation)",
+      "finding": "frontend-w2-F-003"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (Child-process fan-out over a user-sized collection with no client bound. `flatten` collects every vi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding highload-w1-F-001 (unique id given at consolidation)",
+      "finding": "highload-w1-F-001"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (The reveal effect runs on every render with no attempt cap. If a parent it just found listed in its ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding highload-w1-F-002 (unique id given at consolidation)",
+      "finding": "highload-w1-F-002"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (A tree read needs only the graph's node list (or the wiki nodes), but it goes through the same pipel) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding highload-w2-F-001 (unique id given at consolidation)",
+      "finding": "highload-w2-F-001"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (Unverified (not measured). A tree row's name is the only shrinkable item (min-inline-size: 0) while ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding layout-w1-LY-001 (unique id given at consolidation)",
+      "finding": "layout-w1-LY-001"
+    },
+    {
+      "id": "review-layout-w1:LY-002",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-002 (Unverified (not measured). Loading and error rows do not carry .metaproject-row, so they get the inl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding layout-w1-LY-002 (unique id given at consolidation)",
+      "finding": "layout-w1-LY-002"
+    },
+    {
+      "id": "review-layout-w1:fu1",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Measure LY-001 in a real layout engine (packaged app or Playwright Chromium) at the 720px window minimum with the details panel open: width of .metaproject-tree-name on a level-5 and level-6 graph row",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "LY-001 was reported from CSS reading; no layout engine measurement was run",
+      "remains": "measurement of LY-001 at the 720px window minimum"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (moveTo sets focusRequest and relies on a commit for the layout effect to consume it. Home on the fir) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding logic-w1-F-001 (unique id given at consolidation)",
+      "finding": "logic-w1-F-001"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (For a symbol, or a wiki node in Graph mode, revealSteps yields no row, but a scroll request is still) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding logic-w1-F-002 (unique id given at consolidation)",
+      "finding": "logic-w1-F-002"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (The prop doc says that injecting requestTree without a negotiation turns the tree on. Without reques) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding logic-w1-F-003 (unique id given at consolidation)",
+      "finding": "logic-w1-F-003"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (graphTree treats every `graphPresent === false` as 'no graph'. loadExplorerGraph also sets graphPres) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding logic-w2-F-001 (unique id given at consolidation)",
+      "finding": "logic-w2-F-001"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (The fallback group `other` is never produced today: wikiPages (metaproject-explorer.ts:63-78) only r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding logic-w2-F-002 (unique id given at consolidation)",
+      "finding": "logic-w2-F-002"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (Reveal of an outside selection resolves one ancestor read or one next page per render step; each is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w1-F-001 (unique id given at consolidation)",
+      "finding": "performance-w1-F-001"
+    },
+    {
+      "id": "review-performance-w1:F-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-002 (After a snapshot change all loaded folders are dropped and the expanded set kept; every expanded fol) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w1-F-002 (unique id given at consolidation)",
+      "finding": "performance-w1-F-002"
+    },
+    {
+      "id": "review-performance-w1:F-003",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-003 (Tree state is published by forcing a render of the Explorer that owns the hook, so each expand/colla) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w1-F-003 (unique id given at consolidation)",
+      "finding": "performance-w1-F-003"
+    },
+    {
+      "id": "review-performance-w1:F-004",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-004 (For a symbol selection the tree never renders an `n:<symbolId>` row, so the scroll request stays set) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w1-F-004 (unique id given at consolidation)",
+      "finding": "performance-w1-F-004"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (wikiTree allocates a fresh copy of the group's array for every wiki page it adds, making grouping O() real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w2-F-001 (unique id given at consolidation)",
+      "finding": "performance-w2-F-001"
+    },
+    {
+      "id": "review-performance-w2:F-002",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-002 (Each tree page goes through metaprojectExplorerV2, which loads the whole graph (catalog-mode loadExp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding performance-w2-F-002 (unique id given at consolidation)",
+      "finding": "performance-w2-F-002"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (This diff makes `tree` an optional action. Desktop sends it only when the CLI lists it, and requires) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding pr-contract-w1-PC-001 (unique id given at consolidation)",
+      "finding": "pr-contract-w1-PC-001"
+    },
+    {
+      "id": "review-pr-contract-w1:fu1",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is the parent follow-up from review-pr-contract done or ruled out, and where is that recorded? PR-body claims settled only in slice-02 (Core `tree` action listed in capabilities, v1 unchanged, Desktop Metaproject guide describes the tree, keyboard and older-CLI behaviour) were not checked by th",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "PR-body claims for slice-02 were read by the slice-02 reviewers (logic, security, architecture)",
+      "remains": "a pr-contract pass over slice-02"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-001 (PR body claims: \"The handshake still requires only the six existing actions, so an older CLI keeps w) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding pr-contract-w2-PC-001 (unique id given at consolidation)",
+      "finding": "pr-contract-w2-PC-001"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-002 (PR body: \"Core: new read-only v2 action `tree` (`scope: graph | wiki`, optional `parent`, paged with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding pr-contract-w2-PC-002 (unique id given at consolidation)",
+      "finding": "pr-contract-w2-PC-002"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (validTreeEntry checks a folder path is checkout-relative and a group key is non-empty, but not that ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding security-code-w1-F-001 (unique id given at consolidation)",
+      "finding": "security-code-w1-F-001"
+    },
+    {
+      "id": "review-testing-practices-w1:F1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F1 (This test, and the 'never symbols' claim in the root test's name, assert only that no symbol node ap) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F1 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F1"
+    },
+    {
+      "id": "review-testing-practices-w1:F2",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F2 (AC1 requires sorted children, but the fixtures can't separate the sort graphTree/wikiTree add from t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F2 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F2"
+    },
+    {
+      "id": "review-testing-practices-w1:F3",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F3 (This PR adds the tree's stale-snapshot handling: an answer for another snapshot is refused, and a `s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F3 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F3"
+    },
+    {
+      "id": "review-testing-practices-w1:F4",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F4 (AC5 lists Up/Down/Left/Right/Home/End/Enter/Space. The keyboard test 'keys move, expand, collapse an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F4 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F4"
+    },
+    {
+      "id": "review-testing-practices-w1:F5",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F5 (Empty trees are tested only for a graph that is not built (partial: true). No test covers a built gr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F5 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F5"
+    },
+    {
+      "id": "review-testing-practices-w1:F6",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F6 ('data arriving never moves focus' asserts only that focus stayed outside. It never checks that the h) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F6 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F6"
+    },
+    {
+      "id": "review-testing-practices-w1:F7",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F7 ('the selection shown by default reveals nothing' asserts only negative state: folders collapsed, and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-F7 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-F7"
+    },
+    {
+      "id": "review-testing-practices-w1:I1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding I1 (The 'rejects malformed tree pages' table omits three validator gates added in apps/desktop/src/platf) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-I1 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-I1"
+    },
+    {
+      "id": "review-testing-practices-w1:I2",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding I2 (The producer always sets pageType from WIKI_PAGE_TYPES (src/integrations/metaproject-explorer.ts:78)) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding testing-practices-w1-I2 (unique id given at consolidation)",
+      "finding": "testing-practices-w1-I2"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run the 52 mutant_candidates in this result through keryx review mutate (core suite for T*/C*, desktop suite for P*/U*/M*/W*; M2 can loop, so use --timeout-ms). Report each survivor as a minor 'gate u",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "mutant candidates recorded in research-evidence/mutants.json; keryx review mutate not run",
+      "remains": "the mutation pass over the 52 candidates"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (Criterion WCAG 2.4.3 Focus Order / Nielsen #3. Status rows are focusable treeitems (operator choice:) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-001 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-001"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (Criterion WCAG 4.1.3 Status Messages / State: error. The Loading row carries role=\"status\", but when) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-002 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-002"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-003 (Criterion WCAG 2.4.6 Headings and Labels / 1.3.1. The landmark name is pre-existing, but this change) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-003 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-003"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-004",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-004 (Criterion Nielsen #4 Consistency and standards / #6 Recognition over recall. A module folder and a p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-004 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-004"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-005",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-005 (Folder and group counts are bare numbers. In the accessible name of the treeitem they read as e.g. \") real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-005 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-005"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-006",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-006 (Restraint. The tree's node rows are always files in Graph and always wiki pages in Wiki (validTreeEn) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w1-UX-006 (unique id given at consolidation)",
+      "finding": "ui-ux-w1-UX-006"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-001",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-001 (Wiki root groups are sorted purely by display name, so the catch-all 'Other' group (pages without a ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w2-UX-001 (unique id given at consolidation)",
+      "finding": "ui-ux-w2-UX-001"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-002",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-002 (The tree now labels a page type in human form ('Domain model', 'Business rule'), while the details p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "findings.json",
+      "reason": "consolidated into canonical finding ui-ux-w2-UX-002 (unique id given at consolidation)",
+      "finding": "ui-ux-w2-UX-002"
+    },
+    {
+      "id": "review-ui-ux-w2:fu1",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is the parent follow-up from review-ui-ux done or ruled out, and where is that recorded? slice-01, apps/desktop/src/metaproject/MetaprojectTree.tsx (outside this reviewer's slice, read for context): keyboard focus is lost when a status row a keyboard user activated is replaced. Enter on a",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "slice-01 is reviewed by review-ui-ux-w1 and review-frontend-w1; this reviewer read it only for context",
+      "remains": "a dedicated check of this note against MetaprojectTree.tsx"
+    },
+    {
+      "id": "review-ui-ux-w2:fu2",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is the parent follow-up from review-ui-ux done or ruled out, and where is that recorded? slice-01, MetaprojectTree.tsx container rows: the count badge `<span className=\"count-label\">{entry.files | entry.pages}</span>` has no unit, so the treeitem's accessible name reads like 'src 4' with ",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "slice-01 is reviewed by review-ui-ux-w1 and review-frontend-w1; this reviewer read it only for context",
+      "remains": "a dedicated check of the count badge wording"
+    },
+    {
+      "id": "review-ui-ux-w2:fu3",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is the parent follow-up from review-ui-ux done or ruled out, and where is that recorded? slice-01, MetaprojectTree.tsx empty state: 'The graph is not built yet. Rebuild the graph to browse its files.' names the remedy but offers no control in place; the Rebuild graph button lives in the h",
+      "status": "narrowed",
+      "evidence": "report.md",
+      "reason": "slice-01 is reviewed by review-ui-ux-w1 and review-frontend-w1; this reviewer read it only for context",
+      "remains": "a dedicated check of the empty-state wording"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "superseded": [
+      {
+        "reviewer": "review-frontend-conventions",
+        "reason": "overlap group frontend: review-frontend reads the same lines"
+      }
+    ],
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-frontend",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:963c8c9d3408",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:963c8c9d3408",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:4e8babbae47e",
+        "rawEvidence": "raw/review-degradation-w2.txt#sha256:4e8babbae47e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:2b7b92cb599a",
+        "rawEvidence": "raw/review-frontend-w2.txt#sha256:2b7b92cb599a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:f6d56c726fe9",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:f6d56c726fe9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:e286799168a5",
+        "rawEvidence": "raw/review-layout-w2.txt#sha256:e286799168a5",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:d2a40290662b",
+        "rawEvidence": "raw/review-logic-w2.txt#sha256:d2a40290662b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:a45396da502e",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:a45396da502e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:7645e671607e",
+        "rawEvidence": "raw/review-pr-contract-w2.txt#sha256:7645e671607e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:e1677d15307c",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:e1677d15307c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:76d28abd69f7",
+        "rawEvidence": "raw/review-security-code-w2.txt#sha256:76d28abd69f7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:4b27c8ebaf9a",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:4b27c8ebaf9a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:16d05357fd08",
+        "rawEvidence": "raw/review-ui-ux-w2.txt#sha256:16d05357fd08",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "anthropic/claude-opus-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 23,
+    "known": 0,
+    "unknown": 23,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
 }

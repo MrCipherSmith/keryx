@@ -1,0 +1,124 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r2-clean-code-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The comment at useMetaprojectTree.ts:126 says the catch keeps the slot count right, but `.finally` at :127 releases the slot whether or not the chain rejects. read()'s task already ends in its own catch (:157), so only a throw from that handler reaches the limiter's catch, and it is dropped without a trace. The limiter is new in this branch (6c83eb7fb), so no earlier choice explains it. Rewording the comment and logging the error is a sound, local fix."
+    },
+    {
+      "finding_id": "r2-clean-code-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "The doc at MetaprojectTree.tsx:84 states the plan's original rule ('data arriving never takes it'). The operator replaced that rule in fix round 1: the journal records the answer 'На то же место' (focus goes to the row now at the same place). The layout effect at :142-148 and its inline comment follow the new rule. The component doc is stale against both the code and the operator's decision, and rewording it makes the file consistent."
+    },
+    {
+      "finding_id": "r2-frontend-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The loading and Show more rows share `statusId(parent)` (:38, :41, :55). The doc at :26-29 says the shared id is meant for Retry and Show more, where the focused row should update in place. It does not mention the loading-to-more transition, where the same <li> is pushed below up to 100 new children, and that comment was itself added in this branch. The operator's 'На то же место' answer points to the first child, the row now at the old index, which is where the last-page and Retry paths already land. The fix brings this path in line with those siblings."
+    },
+    {
+      "finding_id": "r2-highload-w1-F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:308-310",
+          "says": "v2_request acquires a ReadPermit and moves it into the blocking task (`let _permit = permit;`), so the permit is held until the CLI child returns"
+        },
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:201-204",
+          "says": "the permit is released only by Drop, that is, when the request's blocking task ends"
+        },
+        {
+          "ref": "apps/desktop/src-tauri/src/metaproject.rs:208",
+          "says": "the child runs until it answers or the 150 s bound, whatever the webview thinks of the answer"
+        },
+        {
+          "ref": ".metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301 highload-w1-F-001 (major, upheld in round 1)",
+          "says": "asked for a client bound of 2-3 tree reads in flight so that tree reads leave permits for the explorer's own reads"
+        },
+        {
+          "ref": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md (round-1 entry)",
+          "says": "operator dismissed performance-w1-F-001: read latency is out of scope ('Отклонить, в этап задержек')"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": ".metaproject/rules/core/concurrency-patterns.mdc, Rule 4 (Child-process fan-out is bounded)",
+          "says": "child-process fan-out goes through a concurrency limit; the limit counts children that are actually running"
+        },
+        {
+          "name": "Bulkhead pattern (Microsoft Azure Architecture Center, Cloud design patterns: Bulkhead)",
+          "says": "a bulkhead caps the resources in use, so a slot is held while the call holds the downstream resource"
+        }
+      ],
+      "reasoning": "It is true that a retired read keeps its slot until it settles. But a retired read still holds a Rust permit and a running CLI child until it answers (metaproject.rs:308-310, :201-204, :208). The JS slot therefore tracks a real resource in use. Freeing it early, as the fix suggests, lets the tree run more than MAX_TREE_READS children and permits at once. That reopens the permit exhaustion that round-1 highload-w1-F-001 (major) asked to bound. What remains is a delay of about one read's latency, or a stall when the CLI hangs, and in that case every read to that CLI would hang anyway. The operator has already put read latency out of scope for this flow.",
+      "question": "A retired read keeps its slot because it still holds a Rust permit and a CLI child until it answers. Keep it that way, or free the slot early and accept more children in flight?",
+      "options": [
+        "dismiss — keep the slot until the read settles; it counts real children and permits",
+        "uphold — free retired reads' slots early, as the finding suggests"
+      ]
+    },
+    {
+      "finding_id": "r2-highload-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "The Rust permit pool is process-wide and refuses rather than queues (metaproject.rs:184-204). Every project window shares it, while the limiter is per hook instance (useMetaprojectTree.ts:121). The comment at :13 assumes that one window owns the eight permits. The round-1 finding's optional retry on `unavailable` was not done, so a refusal still ends as a folder error. No intent signal or practice source contradicts this. Note for the fixer: each Tauri window runs its own webview JS context, so a module-level pool would not span windows. Only the retry-with-backoff option, together with the comment correction, addresses the cross-window case."
+    },
+    {
+      "finding_id": "r2-logic-w1-F-001",
+      "verdict": "upheld",
+      "reasoning": "The hand-off at MetaprojectTree.tsx:144-148 uses an index recorded before the commit (:153-156). If rows above the focused row change in the same commit, focus lands on an unrelated row. The operator's 'На то же место' asks for the focused row's place, not its raw index, so anchoring to a surviving neighbour serves that decision better. The code was added in this branch, and no intent signal or practice source favours the raw index. Whether two answers batch into one commit is the verifier's question."
+    },
+    {
+      "finding_id": "r2-performance-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "The layout effect has no dependency list and runs on every render. Through `remember` it calls `rowElements()` (querySelectorAll) twice in that one run, and moveTo and onFocus add more calls on each arrow key. The reviewer rates it low impact and keeps it minor. The operator's latency dismissal covers CLI read latency, not redundant DOM work on the client. Reusing the `elements` array the effect already computed is a local fix that does not change behaviour. No intent signal or practice source argues against it."
+    },
+    {
+      "finding_id": "r2-pr-contract-w2-PC-001",
+      "verdict": "upheld",
+      "reasoning": "In pr-context.md, line 21 still states `bun test src` 998 pass and line 23 says the Rust tests were 'Not run locally' and that this PR's CI is the first run. The journal records 1006 pass after fix round 1, and CI has now run. The body does not describe the fix round's behaviour changes. It no longer describes the head under review, and no signal shows that was intended."
+    },
+    {
+      "finding_id": "r2-style-w2-F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "apps/desktop/src/metaproject/useMetaprojectTree.ts:122",
+          "says": "`const limit = useCallback((task) => ...)` wraps a task under a concurrency cap and is called as `limit(() => ...)` at :145, the same shape as p-limit's call site"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "p-limit (sindresorhus/p-limit) README, Usage",
+          "says": "the widely used concurrency limiter names the returned function `limit` and calls it as `limit(() => fetchSomething())`, a recognised idiom for queue-and-run under a cap"
+        },
+        {
+          "name": "React docs — useRef, 'Referencing a value with a ref'",
+          "says": "reading `ref.current` into a local before use is the ordinary ref idiom"
+        }
+      ],
+      "reasoning": "The main complaint, that `limit` reads as a noun and hides the queueing, goes against the most common JS idiom for this construct: p-limit's `limit(() => task)`. A reader who knows that idiom reads it as 'run under the cap'. The ref-to-local alias `slots` → `pool` is a naming nit inside a 15-line block. Renaming would move the code away from a well-known convention for no behavioural gain. The intent signal is the branch's own code, so only the practice source carries weight here.",
+      "question": "`limit(() => …)` follows p-limit's well-known idiom. Keep the names, or rename to enqueueRead / readQueue?",
+      "options": [
+        "dismiss — keep `limit` (p-limit idiom) and the ref alias",
+        "uphold — rename to one state name and a verb, as suggested"
+      ]
+    },
+    {
+      "finding_id": "r2-style-w2-F-002",
+      "verdict": "upheld",
+      "reasoning": "Every other `readError` result in apps/desktop/src/platform/metaproject.test.ts names the failure: `error` (:52, :95, :204), `lacking` (:71, :134), `failure` (:79), `invalid` (:86), `unrelated` (:109), `malformed` (:199). Only the new `tree` (:212) and `search` (:215) name the request instead. The rename suggested (`staleTree` / `staleSearch`) matches the siblings."
+    },
+    {
+      "finding_id": "r2-testing-practices-w2-F1",
+      "verdict": "upheld",
+      "reasoning": "In fix round 1 the operator kept the plan's rule that data arriving never takes focus from outside the tree. The onBlur microtask (MetaprojectTree.tsx:158-163) and the `active` guard (:146) are the only code that enforces it. The finding names a test gap for that exact path (a row is focused, focus moves outside, then the row leaves) and claims no defect. No intent or practice argues against covering it. Whether the existing tests miss it is the verifier's call."
+    },
+    {
+      "finding_id": "r2-ui-ux-w2-UX-001",
+      "verdict": "upheld",
+      "reasoning": "After `onStale()` (useMetaprojectTree.ts:159), the catch falls through to the failure branch (:170-173). The inline Retry then re-sends the same pinned snapshot (:138, :142, :191-198), so it fails the same way until the user selects Refresh catalog. For the same cause on search Load more, the operator chose the banner only ('Баннер Refresh catalog'), and MetaprojectView.loadMoreSearch does just that. The suggested fix makes the tree consistent with that decision."
+    }
+  ]
+}

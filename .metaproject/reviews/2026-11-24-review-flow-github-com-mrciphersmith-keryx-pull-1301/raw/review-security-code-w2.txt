@@ -1,0 +1,51 @@
+STATUS: DONE
+
+## Security Review (round 2, delta 9f4ec475b..f43a13c3f, slice-05 second-look)
+
+### Scope
+- Branch: feat/desktop-metaproject-sidebar-tree, head f43a13c3f
+- Range: 9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a..f43a13c3f35e488744bb8906c2c275d433f8d98b
+- Slice read in full: slice-05 (second-look), 7 files
+- What changed in the delta for these files (from `git diff 9f4ec475b..f43a13c3f`): production code changed only in `src/integrations/metaproject-explorer-contract.ts` (new exported `METAPROJECT_WIKI_UNTYPED_GROUP` and `metaprojectWikiGroupKey`) and `src/integrations/metaproject-explorer-v2.ts` (`wikiTree` uses the helper, groups pushed in place). Everything else is tests (`metaproject-explorer-tree.test.ts`, `platform/metaproject.test.ts`) and docs wording (`desktop-metaproject.md`).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### What was checked
+- `metaprojectWikiGroupKey` switches `pageType ?? "other"` to `pageType || "other"`. An empty-string page type now falls into the "other" group instead of producing a group key `""` that the request parser (`validId`, length > 0) could never address. This removes an unreachable group; it opens no new input path. Group keys still flow back only as `parent` values validated by `validTreeParent` (wiki: `validId`, length 1..4096) and are looked up in a `Map`, so no prototype-key or path concern applies.
+- `wikiTree` now mutates the per-key array in place instead of copying it on each insert; arrays are local to the call, no shared state or aliasing reaches a response.
+- `wikiGroupName(key)` output is plain text rendered by React (no `dangerouslySetInnerHTML` in the slice); untrusted page-type text cannot inject markup.
+- Graph `parent` validation (`isMetaprojectRelativePath`: no absolute, drive-letter, backslash, control chars, empty/./.. segments) and cursor binding (`cursorValue`: base64url round-trip, 64-hex snapshot, key match, safe positive integer) are unchanged in the delta; the tree tests still assert invalid-input for `/src`, `../outside`, `src/../outside`, `C:/src`, and foreign cursors.
+- New test asserting a tree/search answer with a different snapshot than the pinned one is refused as `stale-snapshot` covers client-side code in `apps/desktop/src/platform/metaproject.ts` (not in this slice); the assertion itself introduces nothing security-relevant.
+- Docs change only rewords "uses" to "requires" and explains optional actions; no security-relevant guidance.
+
+### Clean Areas
+Injection (SQL/XSS/command/eval): none in delta. Auth/authz/IDOR: not applicable (local read-only CLI reader). Input validation: unchanged and still covered. Secrets/crypto/CSRF/open redirect: not applicable. Path traversal: graph parent validation unchanged; no filesystem path built from the new helper.
+
+### Not verified
+- No tests run by this reviewer (exec_budget_s = 0); relied on the supplied verify output (exit 0) and CI at f43a13c3f.
+- Did not re-read `.metaproject/rules/core/security-baseline.mdc` or the review activity rule this round; no finding depends on their severity tables since there are no findings.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Delta 9f4ec475b..f43a13c3f in slice-05 changes production code only in the wiki group key helper (pageType || \"other\") and in-place group building in wikiTree; both are security-neutral. Tree parent/cursor validation is unchanged and still tested. No findings.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-05", "coverage": "second-look; full slice read plus git diff 9f4ec475b..f43a13c3f for its files", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: delta is two small functions, payload layers supplied the affected set); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read for the schema); raw_rg_used: no. One raw `git diff` of the delta range was run with an explicit keryx:raw marker to read exact changed lines.
+KERYX_USAGE {"tokens_in":135379,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

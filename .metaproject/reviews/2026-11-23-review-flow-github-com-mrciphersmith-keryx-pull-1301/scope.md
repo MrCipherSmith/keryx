@@ -1,10 +1,10 @@
 # Review Scope
 
-target: pr
+target: report
 ref: https://github.com/MrCipherSmith/keryx/pull/1301
 mode: ingest
 flow: 518 (explicit-flow-id)
-created_at: 2026-11-23T21:30:57.553Z
+created_at: 2026-11-24T06:54:16.372Z
 context_mode: light
 
 ## Stage counts

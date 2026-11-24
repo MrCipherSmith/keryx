@@ -1,0 +1,80 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Round 2 (delta 9f4ec475b..f43a13c3f), slice-01 (fix). The only hunk in this lane's scope is the new 'Module' kind label on module folder rows (the ui-ux-w1-UX-004 fix): a flex:none span between the truncating name and the count. Nothing could be measured: exec_budget_s is 0 and apps/desktop/package.json has no real-CSS tier (no playwright/visual script), so the one layout observation is filed as info, unverified, with the reasoned arithmetic and the probe that would settle it. No blocker, major or minor. The other fix hunks (status-row ids, focus restore, read limiter, stale-snapshot routing, docs, core grouping) change no rendered sizing. Prior dispositions: 13 closed by code reading; ui-ux-w1-UX-005 and logic-w2-F-002 are open: their code/doc sites are unchanged at head, and round-1 decisions.md routed both to a follow-up rather than this fix round, so the 'fixed' claim does not hold for them.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "reviewer": "review-layout",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}",
+      "problem": "Answering ui-ux-w1-UX-004, the fix adds a 'Module' label to module folder rows. In the row (display:flex, gap var(--sp-1)), the label is flex:none (metaproject.css: `.metaproject-tree-row > .metaproject-meta, .metaproject-tree-row > .count-label { flex: none; }`), so it, the 12px chevron, the count and one more 4px gap are a fixed floor. The name (`flex: 1 1 auto; min-inline-size: 0`, ellipsis) absorbs all the shrink. In the narrowest list column the CSS allows, a nested module folder's name has little or no room left. UNVERIFIED: the numbers below are reasoned from tokens, not measured.",
+      "impact": "Reasoned estimate, not measured. Host: container <=760px with the details panel docked, so the list column can reach 150px (`minmax(150px, 180px)`). Row content box = 150 - 2 (border) - padding-inline-start (12 + (level-1)*16) - padding-inline-end 12. The fixed floor with the label is about 12 chevron + ~40 'Module' at 12px + count (~7px for '4', ~29px for '1234') + 3 gaps of 4 = about 71-93px. Before the fix it was about 27-49px. Name width: level 1: 124px content, about 31-53px (before: 75-97). Level 2: 108px, about 15-37px. Level 3: 92px, about 0-21px; with a 4-digit count the name collapses to 0 and the row overflows by ~1px. In the default host (list column >= 180px), level 3 leaves about 29-51px. --text-scale above 1 widens the label and count and makes this worse. What a user would see: deeply nested module folders (src/lib/deep in the fixture shape) render as chevron + 'Module' + count with the folder name ellipsised to nothing.",
+      "suggested_fix": "Measure first. If confirmed, let the label yield before the name: give `.metaproject-tree-row > .metaproject-meta` `flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap` with a lower shrink priority than the name, or hide the label below a container width. Another option keeps the cue in a smaller box: the module icon instead of the word.",
+      "evidence": "Not measured. exec_budget_s = 0 (read-only dispatch), and `keryx ctx rg 'test:visual|playwright|test:e2e' apps/desktop/package.json` finds no real-CSS tier. Inputs: metaproject.css:62 (tree row flex, gap sp-1), :66 (chevron 12px flex:none), :67 (name flex 1 1 auto, min-inline-size 0, ellipsis), :68 (meta and count flex:none), :40-45 (row border 1px, padding sp-3), :141-142 (narrow container list column minmax(150px,190px), docked-details minmax(150px,180px)), :128 (default docked minmax(180px,220px)). MetaprojectTree.tsx:245 inline padding-inline-start calc(var(--sp-3) + (level-1)*var(--sp-4)). tokens.css: --sp-1 4px, --sp-3 12px, --sp-4 16px, --fs-sm calc(12px * var(--text-scale)). labels.ts:17 module: \"Module\" (no locale catalog, so English is the only and longest string). Label width (~40px) is an estimate for 6 glyphs at 12px. What would settle it: mount MetaprojectView in a real engine (Tauri webview or Playwright Chromium) at a 720px window with the details panel docked, expand to a level-3 module folder with a 4-digit count, and read getBoundingClientRect().width of `.metaproject-tree-name` with --text-scale 1 and 1.25.",
+      "confidence": "low",
+      "dedupe_key": "metaproject-tree-module-label-squeezes-name",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "slices": [ { "id": "slice-01", "coverage": "read in full (fix slice); context: MetaprojectTree.tsx at head, metaproject.css, tokens.css, labels.ts, commit 6c83eb7fb hunks", "status": "DONE" } ],
+  "follow_ups": [
+    "Measure LY-001 in a real engine: at a 720px window with the details panel docked (list column 150px), the width of `.metaproject-tree-name` on a level-3 module folder row with a 4-digit count, at --text-scale 1 and 1.25. Not possible in this read-only, zero-exec dispatch."
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+### Summary
+
+**Layout of the fix round:** the only sizing change is the new `Module` label on module folder rows. It is `flex: none`, so in the narrowest list column (150px, a narrow host with the details panel docked), a nested module folder's name ellipsises to about 0-21px at level 3, or collapses to 0. **This was not measured.** The dispatch allows no execution and Desktop has no real-CSS test tier, so it is filed as `info`, unverified, with the probe that would settle it (LY-001).
+
+**Prior dispositions, judged against the code at f43a13c3f** (code shape only; I ran no tests):
+- **Closed (13 findings):**
+  - frontend-w1-F-001: one `status:${parent}` key per parent, and the layout effect refocuses the row at the lost index only when focus fell to body.
+  - logic-w1-F-001: `moveTo` focuses directly, with no pending request.
+  - architecture-w2-F-001 and testing-practices-w1-I2: `metaprojectWikiGroupKey` is exported from the contract and used in both places.
+  - degradation-w1-F-001: the wrapper is removed and no callers remain.
+  - degradation-w1-F-002: the transport throws `stale-snapshot` on a mismatch, and the hook comment is reworded.
+  - performance-w2-F-001: grouping now pushes in place.
+  - pr-contract-w2-PC-001 and pr-contract-w1-PC-001: all three doc sites are reworded, and `tree` is named as optional.
+  - testing-practices-w1-F1: a test with a symbol-injected model.
+  - testing-practices-w1-F3: MetaprojectView.dom.test.tsx has a tree stale test with s2 and a `stale-snapshot` rejection.
+  - testing-practices-w1-F6: the test now asserts the data arrived.
+  - ui-ux-w1-UX-004: the Module label is added.
+- **Open (2 findings):**
+  - ui-ux-w1-UX-005: the count is still a bare number (MetaprojectTree.tsx `count-label` span unchanged).
+  - logic-w2-F-002: the guide still says "Pages without a page type are under **Other**" (desktop-metaproject.md:103).
+  - Round-1 decisions.md routed both to a follow-up, so they were not fixed in 6c83eb7fb despite the blanket "fixed" claim.
+
+**Routing audit:**
+- graph_used: no. Not relevant: the changed files were named by the slice.
+- wiki_used: no. Not relevant to a CSS-geometry delta.
+- ctx_used: yes (`keryx ctx rg`, `keryx ctx read`).
+- raw_rg_used: no. A raw `sed` of 30 CSS lines and a raw `git show` of the fix commit were used under `keryx:raw` markers.
+KERYX_USAGE {"tokens_in":139393,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

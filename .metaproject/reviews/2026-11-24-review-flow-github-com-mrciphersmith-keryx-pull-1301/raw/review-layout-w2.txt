@@ -1,0 +1,32 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-layout",
+  "summary": "Round 2 (delta 9f4ec475b..f43a13c3f), slices 02 and 03, both NEW. No layout findings. The delta has only two changes to rendered markup in these slices: (1) the tree's error row wraps its text in <span role=\"status\"> instead of a plain <span> (MetaprojectTree.tsx); (2) the list landmark <nav class=\"metaproject-list\"> moves from aria-label to aria-labelledby, and its <h2> gains a useId id (MetaprojectView.tsx). Neither changes any sizing, spacing, overflow or position. No CSS file changed in the delta (git diff --stat over apps/desktop lists no .css), and metaproject.css has no rule keyed on [role=\"status\"], aria-label, aria-labelledby or an id, so the boxes are the ones round 1 reviewed. The error row keeps .metaproject-tree-status (display:flex; flex-wrap:wrap; gap; min-block-size:28px), so a long error message still wraps beside its Retry button exactly as before. Everything else in slices 02/03 is non-rendered: focus handling and a read limiter (MetaprojectTree.tsx, useMetaprojectTree.ts), stale-snapshot transport (platform/metaproject.ts), contract helper and core tests (src/integrations), flow/dispatch JSON, journal, tests and one guide sentence. Nothing was measured in a real engine, because no change in scope alters geometry; there is no claim to measure.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read in full (2271 lines); rendered-markup changes: error-row span role=status, nav aria-labelledby + h2 id; no sizing/spacing/overflow change" },
+    { "id": "slice-03", "status": "DONE", "coverage": "read in full; removed lines only (old nav aria-label/h2, old matchesRequest snapshot check, negotiateMetaproject test calls, a guide sentence, a contract import); no layout content" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Out of my slices, not reviewed here: the Module kind label added to module folder rows (MetaprojectTree.tsx, `{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}`, hunk @@ -258 +286 in the delta) adds a flex:none text item next to the truncating .metaproject-tree-name in a 190-260px sidebar column. If the orchestrator wants that geometry checked, it belongs to whichever slice carries that hunk; a measurement would be the name's inline size at the 190px column floor with a deep (level 6+) module folder."
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+- Slices read in full: slice-02 (new), slice-03 (new).
+- Findings: none (0 blocker, 0 major, 0 minor, 0 info).
+- Rendered-markup changes in scope: `<span role="status">` around the tree error text, and the sidebar `<nav>` named by `aria-labelledby` from its `<h2 id>`. No CSS changed in the delta, and no stylesheet rule keys on those attributes, so geometry is unchanged from round 1.
+- Not measured: no real-engine run was needed or done (read-only, exec budget 0), because no in-scope change alters a box.
+- Handed back: the new Module label on module folder rows sits in a hunk outside my slices; see follow_ups.
+
+Routing audit: graph_used: no (not-relevant: the slices name every file; payload `layers.affected` already supplied the graph's answer); wiki_used: no (not-relevant: pure rendering check); ctx_used: yes (`keryx ctx rg` over CSS, `keryx ctx read` of metaproject.css and the finding schema); raw_rg_used: no. Two raw `git diff` calls with a `keryx:raw` marker, to see the exact MetaprojectTree.tsx hunks and confirm no CSS file is in the delta.
+KERYX_USAGE {"tokens_in":152559,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,84 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 2 delta (9f4ec475b..f43a13c3f), slices 02 and 03 read in full. The fix round reads cleanly: the new wiki group helper is well named and documented, the status row id helper (statusId) replaces three ad-hoc prefixes, the nav landmark now takes its name from the visible heading, and the transport's stale-snapshot check has a comment that says why. No readability threshold is crossed: MetaprojectTree.tsx is 297 lines, useMetaprojectTree.ts 220, and MetaprojectView.tsx (1026, already past 800) gains only a few lines. The one boolean condition the delta adds (the focus hand-off in the layout effect) is grouped. Two minor naming findings: the concurrency limiter in useMetaprojectTree.ts gives one concept two names (slots / pool) behind an ambiguous noun-or-verb function name (limit), and a test binds an Error to a variable named `tree`.",
+  "findings": [
+    {
+      "id": "style-w2-F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const slots = useRef<{ active: number; queue: (() => void)[] }>({ active: 0, queue: [] });\n  const limit = useCallback((task: () => unknown) => {\n    const pool = slots.current;",
+      "problem": "The new tree-read limiter names one thing twice: the ref is `slots` and its value is read into `pool` on the next line, while the function that queues and runs a task is called `limit`, a word that reads as a noun (the cap, which is MAX_TREE_READS) as easily as a verb. At the call site `limit(async () => ...)` inside `read` does not say that the task is queued and may start later.",
+      "impact": "Readability: one concept with two names (solid-principles.mdc Name row), and a reader of `read` must open the limiter to learn that the read is deferred behind a queue.",
+      "suggested_fix": "Use one name for the state and a verb for the function, e.g. `const readQueue = useRef({ active: 0, waiting: [] })` and `const enqueueRead = useCallback((task) => { const queue = readQueue.current; ... })`, or `runLimited` / `schedule`.",
+      "evidence": "useMetaprojectTree.ts lines ~121-136 in the delta: `slots` declared, aliased to `pool`, all later uses through `pool`; `read` wraps its body in `limit(...)`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "style-w2-F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/platform/metaproject.test.ts",
+      "line": null,
+      "quote": "const tree = await readError(requestMetaprojectTree(\"/checkout\", { scope: \"graph\", parent: \"src\", expectedSnapshotId: digest },",
+      "problem": "In the new test \"an answer for another snapshot than the one pinned is refused as stale-snapshot\", `tree` and `search` hold the errors returned by `readError`, not a tree or a search answer; the assertions then read `tree instanceof MetaprojectRequestError && tree.code`.",
+      "impact": "Readability: the name says the opposite of the value (an answer vs. its refusal), in a test whose whole point is that no answer comes back.",
+      "suggested_fix": "Rename to `treeError` / `searchError` (or `staleTree` / `staleSearch`).",
+      "evidence": "metaproject.test.ts:212 and :215 (keryx ctx rg 'const tree = await readError|const search = await readError').",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (2271 lines, three pages)" },
+    { "id": "slice-03", "coverage": "read in full" }
+  ],
+  "inputs_unreadable": [],
+  "needs_context": [],
+  "follow_ups": []
+}
+```
+
+# Style Review Report
+
+## Summary
+The fix-round delta is readable and consistently named; it removes three ad-hoc status-row id prefixes in favour of one helper and moves the wiki group rule behind a documented, well-named export. Two minor naming issues remain, one in production code (the read limiter) and one in a test.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `9f4ec475b` (round 1 head)
+- Merge-base: `9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a`
+- Scope mode: `explicit-hash-range` (9f4ec475b..f43a13c3f), slices 02 and 03 only
+- Changed files in slices: 13 (flow records, Desktop tree/view/platform code and tests, core contract/v2/tree test, guide)
+
+## Stats
+- major: 0
+- minor: 2
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+- [style-w2-F-001] useMetaprojectTree.ts: limiter state named `slots` and `pool`, function named `limit` (noun or verb). Rename to one name and a verb (`readQueue` / `enqueueRead`).
+- [style-w2-F-002] metaproject.test.ts:212/215: `tree` and `search` hold Errors. Rename to `treeError` / `searchError`.
+
+## Positive Notes
+- `metaprojectWikiGroupKey` / `METAPROJECT_WIKI_UNTYPED_GROUP` carry JSDoc and take `Pick<MetaprojectNode, "pageType">`, so both sides share one named rule.
+- `statusId(parent)` gives loading, error and more rows one id, readable at all three sites.
+- `aria-labelledby={listHeadingId}` replaces a hard-coded label that was wrong without a query.
+- The transport's snapshot check has a one-line comment that says why it throws stale-snapshot.
+
+## Not checked / limits
+- Thresholds were checked against solid-principles.mdc; test files are exempt from them, and naming in tests was still rated.
+- `.metaproject/index.md` was not read: this was a bounded dispatch whose brief named every input.
+- The routing audit: graph_used no (not-relevant, the slices were supplied), wiki_used no (not-relevant), ctx_used yes (`keryx ctx rg`), raw_rg_used no.
+KERYX_USAGE {"tokens_in":152491,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

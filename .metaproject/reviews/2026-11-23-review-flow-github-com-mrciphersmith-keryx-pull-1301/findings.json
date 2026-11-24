@@ -298,26 +298,7 @@
       "options": [
         "dismiss - track in the read-latency stage",
         "uphold - change reveal in this PR"
-      ],
-      "operator": {
-        "answer": "dismiss",
-        "reason": "Sequential reveal paging is specified by plan.md (reveal pages until the row is found); read latency is out of scope in description.md; tracked for the read-latency stage.",
-        "quote": "Отклонить, в этап задержек (Recommended)",
-        "at": "2026-11-23T21:31:17.270Z",
-        "actor": "operator",
-        "confirmedVia": "host-question",
-        "hostQuestion": {
-          "source": "claude-code",
-          "ref": "premise-performance-w1-F-001",
-          "questionText": "Находка performance-w1-F-001: чтобы раскрыть путь к файлу в большой папке (например, в src/commands около 480 файлов), дерево читает страницы по 100 записей по очереди. Это примерно 5–6 секунд. Так сделано по плану, а задержка чтений официально вне рамок флоу 518. Что делать с находкой?",
-          "answerText": "Отклонить, в этап задержек (Recommended)",
-          "time": "2026-11-23T21:31:17.270Z"
-        }
-      }
-    },
-    "disposition": {
-      "state": "dismissed-incorrect",
-      "evidence": "operator (host-question claude-code:premise-performance-w1-F-001, 2026-11-23T21:31:17.270Z) on the premise question: Sequential reveal paging is specified by plan.md (reveal pages until the row is found); read latency is out of scope in description.md; tracked for the read-latency stage."
+      ]
     }
   },
   {

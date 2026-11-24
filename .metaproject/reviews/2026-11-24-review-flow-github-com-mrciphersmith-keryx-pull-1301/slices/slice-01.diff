@@ -1,0 +1,353 @@
+--- apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx
+@@ 237,261 @@
+   expect(item("src").getAttribute("aria-expanded")).toBe("true");
+   await key(document.activeElement!, "Enter");
+   expect(chosen).toEqual([server.id, srcModule.id]);
+   expect(items().filter(row => row.tabIndex === 0)).toHaveLength(1);
+ });
+ 
+ test("data arriving never moves focus", async () => {
+   const tree = reader({ "|": ROOT_PAGE, "src|": SRC_PAGE });
+   tree.hold.add("src|");
+   await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+   const outside = document.createElement("button");
+   document.body.append(outside);
+   try {
+     await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+     outside.focus();
+     await act(async () => { tree.release("src|"); });
+-    expect(document.activeElement).toBe(outside);
++    // The data did arrive, and focus stayed where it was.
++    expect(item("client.ts")).not.toBeNull();
++    expect(items().some(row => row.textContent === "Loading…")).toBe(false);
++    expect(document.activeElement === outside).toBe(true);
+   } finally { outside.remove(); }
+ });
+ 
+ test("a graph that is not built shows an empty-state line", async () => {
+   const tree = reader({ "|": { entries: [], partial: true } });
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 17,34 @@
+   | { type: "loading"; id: string; level: number; parent: string }
+   | { type: "error"; id: string; level: number; parent: string; message: string }
+   | { type: "more"; id: string; level: number; parent: string; loading: boolean };
+ 
+ const isContainer = (entry: MetaprojectTreeEntry): entry is ContainerEntry => entry.type !== "node";
+ const rowId = (entry: MetaprojectTreeEntry) => `${isContainer(entry) ? "d" : "n"}:${entryKey(entry)}`;
+ const nodeOf = (entry: MetaprojectTreeEntry): MetaprojectNode | undefined =>
+   entry.type === "node" ? entry.node : entry.type === "folder" ? entry.module : undefined;
+ 
++/**
++ * A parent shows at most one status row at a time (loading, error or more). They share one id, so a
++ * Retry or Show more updates the focused row in place instead of replacing it.
++ */
++const statusId = (parent: string) => `status:${parent}`;
++
+ /** The visible rows, depth first, and the parents shown as loading that nobody has asked for yet. */
+ function flatten(tree: ScopeTree): { rows: Row[]; unread: string[] } {
+   const rows: Row[] = [];
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 174,205 @@
+     if (row.type === "error") model.retry(scope, row.parent);
+     else if (row.type === "more") model.more(scope, row.parent);
+     else if (row.type === "entry") {
+       const { entry } = row;
+       if (entry.type === "node") choose(entry.node);
+       else if (entry.type === "folder" && entry.module && key !== " ") choose(entry.module);
+       else toggle(entryKey(entry));
+     }
+   };
++  // Focus moves now, to a row already shown; nothing is left pending for a later render.
+   const moveTo = (row: Row | undefined) => {
+-    if (!row) return;
+-    setFocusId(row.id);
+-    focusRequest.current = true;
++    if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();
+   };
+ 
+   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+     const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-row]")?.dataset.row : undefined;
+     const current = rows.find(row => row.id === target) ?? tabbable;
+     if (!current) return;
+     const index = rows.indexOf(current);
+     const container = current.type === "entry" && isContainer(current.entry) ? entryKey(current.entry) : null;
+     const open = container !== null && tree.expanded.has(container);
+     switch (event.key) {
+       case "ArrowDown": moveTo(rows[index + 1]); break;
+       case "ArrowUp": moveTo(rows[index - 1]); break;
+       case "Home": moveTo(rows[0]); break;
+       case "End": moveTo(rows.at(-1)); break;
+       case "ArrowRight":
+         if (container === null) break;
+         if (!open) model.setExpanded(scope, container, true);
+         else if (rows[index + 1]?.level === current.level + 1) moveTo(rows[index + 1]);
+         break;
+       case "ArrowLeft":
+
+--- apps/desktop/src/metaproject/MetaprojectTree.tsx
+@@ 273,297 @@
+               <span className="metaproject-tree-chevron" aria-hidden="true" />
+               <span className="metaproject-tree-name">{entry.node.title}</span>
+               <span className="metaproject-meta">{NODE_KIND_LABELS[entry.node.kind]}</span>
+             </li>
+           );
+         }
+         const key = entryKey(entry);
+         const open = tree.expanded.has(key);
+         const module = entry.type === "folder" ? entry.module : undefined;
+         return (
+           <li key={row.id} {...common} {...position} aria-expanded={open} {...(module && { "aria-selected": module.id === selection })}
+             className="metaproject-row metaproject-tree-row" onClick={module ? onChevron(row, key) : onRowClick(row)}>
+             <span className="metaproject-tree-chevron" aria-hidden="true" onClick={onChevron(row, key)}>
+               <Icon name={open ? "chevronDown" : "chevronRight"} size={12} />
+             </span>
+             <span className="metaproject-tree-name" {...(module && { onClick: onRowClick(row) })}>{entry.name}</span>
++            {/* A module folder's name selects the module, so it carries the kind label node rows show. */}
++            {module && <span className="metaproject-meta">{NODE_KIND_LABELS.module}</span>}
+             <span className="count-label">{entry.type === "folder" ? entry.files : entry.pages}</span>
+           </li>
+         );
+       })}
+     </ul>
+   );
+ }
+
+--- apps/desktop/src/metaproject/useMetaprojectTree.ts
+@@ 140,159 @@
+     const { cwd: root, request: send } = latest.current;
+     const input: MetaprojectTreeRequest = {
+       scope, expectedSnapshotId: pinned, ...(parent !== TREE_ROOT && { parent }), ...(cursor && { cursor }),
+     };
+-    void Promise.resolve().then(() => send(root, input)).then(page => {
++    // A read queued under a snapshot that has since been retired never starts.
++    limit(() => current() && Promise.resolve().then(() => send(root, input)).then(page => {
+       if (!current()) return;
+       if (page.snapshotId !== pinned) throw new MetaprojectRequestError("stale-snapshot", "Project knowledge changed while loading.");
+       setFolder(scope, parent, folder => {
+         if (!cursor) return { status: "ready", entries: page.entries, partial: page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
+         // A page appends to the one that asked for it, in order, without repeating a row.
+         const base = folder ?? { status: "ready" as const, entries: [], partial: page.partial };
+         const seen = new Set(base.entries.map(entryKey));
+         const entries = [...base.entries, ...page.entries.filter(entry => !seen.has(entryKey(entry)))];
+         return { status: "ready", entries, partial: base.partial || page.partial, ...(page.nextCursor && { nextCursor: page.nextCursor }) };
+       });
+       forgetVanished(scope, parent);
+     }).catch(cause => {
+       if (!current()) return;
+       if (cause instanceof MetaprojectRequestError && cause.code === "stale-snapshot") latest.current.onStale();
+
+--- apps/desktop/src/platform/metaproject.ts
+@@ 257,289 @@
+ export async function negotiateMetaprojectExplorer(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<MetaprojectNegotiation> {
+   let response: unknown;
+   try {
+     response = await call({ version: 2, action: "capabilities" });
+   } catch (error) {
+     const reason = errMessage(error);
+     if (reason !== "Invalid request" && !/^unsupported-version: .+$/.test(reason)) throw error;
+     const legacy = await call({ action: "catalog" });
+     if (!isMetaprojectResponse(legacy, "catalog")) throw new Error("The selected CLI returned an incompatible legacy Metaproject catalog.");
+     return { protocol: 1, supportsTree: false };
+   }
+   if (isMetaprojectV2Response(response, "capabilities") && "actions" in response) {
+     return { protocol: 2, supportsTree: response.actions.includes("tree") };
+   }
+   // Tauri validates and caches the handshake against the authorized checkout and actual executable.
+   if (isTauri() && object(response) && Object.keys(response).length === 2 && response.schemaVersion === 1
+     && response.legacyHandshake === true) return { protocol: 1, supportsTree: false };
+   throw new Error("The selected CLI returned invalid Metaproject capabilities.");
+ }
+ 
+-export async function negotiateMetaproject(cwd: string, call: InvokeExplorer = invokeFor(cwd)): Promise<1 | 2> {
+-  return (await negotiateMetaprojectExplorer(cwd, call)).protocol;
+-}
+-
+ export type MetaprojectTreeRequest = Omit<Extract<MetaprojectRequestV2, { action: "tree" }>, "version" | "action">;
+ 
+ /** One page of one tree parent; call only when the negotiation reported `supportsTree`. */
+ export function requestMetaprojectTree(
+   cwd: string, request: MetaprojectTreeRequest, call: InvokeExplorer = invokeFor(cwd),
+ ): Promise<MetaprojectTreeV2> {
+   return requestMetaprojectV2<MetaprojectTreeV2>(cwd, { ...request, version: 2, action: "tree" }, call);
+ }
+ 
+ export async function requestMetaprojectV2<T extends MetaprojectV2Response = MetaprojectV2Response>(
+   cwd: string, request: MetaprojectRequestV2, call: InvokeExplorer = invokeFor(cwd),
+ ): Promise<T> {
+   let response: unknown;
+
+--- docs/docs/cli-reference.md
+@@ 8281,8301 @@
+ ```
+ 
+ Use a repository-relative entry path returned by `list` or `search`. For a section, pass its ID and source digest from the search result. Use the returned cursor to continue a list or search against the same snapshot. JSON output carries `schemaVersion: 2`. Exit code 1 indicates invalid input, a missing entry, or a stale section or snapshot. Exit code 2 indicates the source could not be read.
+ 
+ ## metaproject-explorer
+ 
+ Read a bounded catalog, node detail, search results, or a neighborhood from the current project for Desktop. The command returns a versioned JSON object and does not rebuild the graph. Its snapshot ID is a change detector, not an atomic snapshot while graph or wiki files are being written.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"action":"catalog"}'
+ ```
+ 
+ The snapshot ID covers the graph, wiki and OpenSpec data a response is read from. Graph freshness is separate. Only a `catalog` response checks it and reports it as `graph` and `graphReason`; `detail`, `search` and `neighbors` skip the check. An untracked or edited file can therefore turn `graph` to `stale` while the snapshot ID, pinned requests and cursors stay valid.
+ 
+ A version 2 client starts with the `capabilities` probe, which lists the actions this CLI serves without reading the checkout.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"version":2,"action":"capabilities"}'
+ ```
+ 
+-Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the ones it uses.
++Require the actions you send and ignore the others. A later CLI can list more actions, and Desktop accepts any CLI whose list includes the actions it requires, and uses an optional action such as `tree` only when the CLI lists it.
+
+--- docs/docs/guides/desktop-metaproject.md
+@@ 289,322 @@
+ 
+ ## Inspect the module from the CLI
+ 
+ Run the same read command the app uses from the open checkout to isolate a
+ graph or wiki problem from a rendering problem.
+ 
+ ```bash
+ keryx metaproject-explorer --request '{"action":"search","query":"Agent Bus"}'
+ keryx metaproject-explorer --request '{"action":"detail","id":"wiki:architecture/agent-bus.md"}'
+ ```
+ 
+ Copy the `node.id` from a search or catalog result when requesting detail or
+ neighbors. IDs identify a node in the current checkout. Each response carries
+ a `schemaVersion` and `snapshotId`. Desktop compares them before mixing
+ results from separate reads and asks to refresh if the underlying data changes.
+ The snapshot covers the graph, wiki and OpenSpec data. Graph freshness is not
+ part of it: creating or editing another file in the checkout can mark the
+ graph stale, and the results already loaded stay valid.
+ 
+ Before its first read, Desktop asks the selected CLI which read actions it
+-serves. Desktop accepts a CLI that lists every action it uses, so a CLI newer
+-than Desktop keeps working when it adds actions.
++serves. Desktop accepts a CLI that lists every action it requires, so a CLI newer
++than Desktop keeps working when it adds actions. Desktop uses an optional action,
++such as `tree`, only when the CLI lists it; without it, the list stays flat.
+ 
+ Desktop can calculate a file or wiki neighborhood from a complete catalog.
+ It asks the CLI for a neighborhood when the catalog is limited or the
+ selection or filters require symbol relationships. Modules represent
+ directories. A module-level import groups the imports between their files
+ and can carry example file pairs. See the
+ [CLI response contract](../cli-reference.md#metaproject-explorer).
+ 
+ ## Recover from common problems
+ 
+ | What you see | What to do |
+
+--- src/integrations/metaproject-explorer-tree.test.ts
+@@ 101,155 @@
+     expect(lib.entries.map(label)).toEqual(["folder:src/lib/deep:2:module:src/lib/deep", "node:file:src/lib/b.ts"]);
+     const deep = await tree(root, { scope: "graph", parent: "src/lib/deep" });
+     expect(deep.entries.map(label)).toEqual(["node:file:src/lib/deep/c.ts", "node:file:src/lib/deep/d.ts"]);
+     const pkg = await tree(root, { scope: "graph", parent: "pkg" });
+     expect(pkg.entries.map(label)).toEqual(["folder:pkg/inner:1:module:pkg/inner"]);
+-    for (const result of [src, lib, deep, pkg]) {
+-      expect(result.entries.some((entry) => entry.type === "node" && entry.node.kind === "symbol")).toBe(false);
+-    }
++  });
++
++  test("leaves symbols out of listings and folder counts even when the graph model holds them", async () => {
++    const root = await builtGraph();
++    const symbols: MetaprojectNode[] = [
++      { id: "symbol:src/a.ts#run", kind: "symbol", title: "run", path: "src/a.ts" },
++      { id: "symbol:only/x.ts#y", kind: "symbol", title: "y", path: "only/x.ts" },
++      { id: "symbol:top.ts#z", kind: "symbol", title: "z", path: "top.ts" },
++    ];
++    let loaded: MetaprojectNode[] = [];
++    const read = (request: TreeRequest) => metaprojectExplorerV2(root, request, async (checkout, graphRequest) => {
++      const graph = await loadExplorerGraph(checkout, graphRequest);
++      loaded = [...graph.nodes, ...symbols];
++      return { graph: { ...graph, nodes: loaded }, freshness: () => explorerGraphFreshness(checkout, graph), confirm: async () => {}, track: async () => {} };
++    });
++    const top = await read({ version: 2, action: "tree", scope: "graph" });
++    expect(loaded.filter((node) => node.kind === "symbol")).toHaveLength(symbols.length);
++    if (!("entries" in top) || !("scope" in top)) throw new Error("Expected a tree response");
++    expect(top.entries.map(label)).toEqual([
++      "folder:docs:1:module:docs", `folder:many:${MANY_FOLDERS + MANY_FILES}:module:many`, "folder:pkg:1", "folder:src:4:module:src", "node:file:root.ts",
++    ]);
++    const src = await read({ version: 2, action: "tree", scope: "graph", parent: "src" });
++    if (!("entries" in src) || !("scope" in src)) throw new Error("Expected a tree response");
++    expect(src.entries.map(label)).toEqual(["folder:src/lib:3:module:src/lib", "node:file:src/a.ts"]);
++    await expect(read({ version: 2, action: "tree", scope: "graph", parent: "only" })).rejects.toMatchObject({ code: "not-found" });
++  });
++
++  test("answers an empty, complete root for a built graph without files", async () => {
++    const root = await wikiOnly();
++    await writeSource(root, `${storage}/nodes.jsonl`, "");
++    await writeSource(root, `${storage}/edges.jsonl`, "");
++    expect(await tree(root, { scope: "graph" })).toMatchObject({ entries: [], partial: false, parent: null });
++    await expect(tree(root, { scope: "graph", parent: "src" })).rejects.toMatchObject({ code: "not-found" });
+   });
+ 
+   test("chains pages of at most the page size to the full child list", async () => {
+     const root = await builtGraph();
+     const seen: string[] = [];
+     let page = await tree(root, { scope: "graph", parent: "many" });
+     let pages = 1;
+     expect(page.entries).toHaveLength(METAPROJECT_PAGE_SIZE_V2);
+     while (page.nextCursor) {
+       page = await tree(root, { scope: "graph", parent: "many", cursor: page.nextCursor, expectedSnapshotId: page.snapshotId });
+       pages++;
+       seen.push(...page.entries.map(label));
+     }
+     const first = await tree(root, { scope: "graph", parent: "many" });
+     const all = [...first.entries.map(label), ...seen];
+     expect(pages).toBe(2);
+     expect(all).toHaveLength(MANY_FOLDERS + MANY_FILES);
+
+--- src/integrations/metaproject-explorer-v2.ts
+@@ 123,166 @@
+   if (parent !== undefined && !folders.size && !files.length) throw notFoundParent();
+   const folderEntries = [...folders].sort(([a], [b]) => compareText(a, b)).map(([name, count]): MetaprojectTreeEntry => {
+     const folderPath = `${prefix}${name}`;
+     const module = modules.get(folderPath);
+     return { type: "folder", path: folderPath, name, files: count, ...(module && { module }) };
+   });
+   const fileEntries = files.sort((a, b) => compareText(a.path, b.path)).map((node): MetaprojectTreeEntry => ({ type: "node", node }));
+   return { entries: [...folderEntries, ...fileEntries], partial: false };
+ }
+ 
+ function wikiGroupName(key: string): string {
+   const words = key.replaceAll("-", " ");
+   return words.charAt(0).toUpperCase() + words.slice(1);
+ }
+ 
+ /** Page-type groups at the root; a group's pages under it. */
+ function wikiTree(nodes: readonly MetaprojectNode[], parent?: string): MetaprojectTreeEntry[] {
+   const groups = new Map<string, MetaprojectNode[]>();
+   for (const node of nodes) {
+     if (node.kind !== "wiki") continue;
+-    const key = node.pageType ?? WIKI_UNTYPED_GROUP;
+-    groups.set(key, [...groups.get(key) ?? [], node]);
++    const key = metaprojectWikiGroupKey(node);
++    const group = groups.get(key);
++    if (group) group.push(node);
++    else groups.set(key, [node]);
+   }
+   if (parent === undefined) {
+     return [...groups].map(([key, pages]) => ({ type: "group" as const, key, name: wikiGroupName(key), pages: pages.length }))
+       .sort((a, b) => compareText(a.name, b.name) || compareText(a.key, b.key));
+   }
+   const pages = groups.get(parent);
+   if (!pages) throw notFoundParent();
+   return pages.sort((a, b) => compareText(a.title, b.title) || compareText(a.path, b.path))
+     .map((node) => ({ type: "node", node }));
+ }
+ 
+ function graphRequest(request: DataRequest): MetaprojectRequest {
+   switch (request.action) {
+     case "detail": return { action: request.action, id: request.id };
+     case "neighbors": return { action: request.action, id: request.id, depth: request.depth, direction: request.direction, kinds: request.kinds };
+     case "search": return request.scopes?.every(isOpenSpecKind)
+       ? { action: "catalog" }
+       : { action: request.action, query: request.query.normalize("NFC") };
+     default: return { action: "catalog" };
+   }

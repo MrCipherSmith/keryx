@@ -1,0 +1,120 @@
+STATUS: DONE
+
+## Frontend Review (round 2, fix delta)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: 9f4ec475b..f43a13c3f (fix commit 6c83eb7fb), merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, slice-01 (kind: fix) read in full
+- Context read (not reviewed as slices): full post-fix MetaprojectTree.tsx, the 9f4ec475b..f43a13c3f diff of useMetaprojectTree.ts, platform/metaproject.ts, metaproject-explorer-contract.ts, MetaprojectView.tsx, MetaprojectTree.dom.test.tsx and MetaprojectView.dom.test.tsx, so each prior finding could be judged against the code.
+- The project uses React hooks, not MobX, in these files. No store, observable or `observer()` patterns are involved, so laws 1, 2 and 5 have nothing to check.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 1
+
+### Prior findings (judged against the code at f43a13c3f)
+- frontend-w1-F-001: **closed.** In `flatten()`, every status row of a parent now uses `statusId(parent)`, so Retry (error to loading) and Show more (more to more-loading, or failed-more to more) update the same `<li>` in place. When the focused row leaves (last page, children arriving, snapshot reset), the layout effect focuses the row now at its old index, but only when focus fell to `<body>` or to a disconnected element, so focus outside the tree is never taken. `onBlur` forgets focus that leaves the tree for `<body>`. The new DOM tests press Enter on the error row and on Show more and assert where focus lands. One residual case, a shape this fix introduced, is finding F-001 below.
+- logic-w1-F-001: **closed.** `moveTo` now focuses the row element directly, and `focusRequest` is gone, so nothing is left pending for a later commit. The new test "Home on the first row and End on the last…" pins it.
+- architecture-w2-F-001: **closed.** The contract exports `METAPROJECT_WIKI_UNTYPED_GROUP` and `metaprojectWikiGroupKey`. Both `wikiTree` (metaproject-explorer-v2.ts) and `revealSteps` (MetaprojectTree.tsx) call it, with the same `||`.
+- degradation-w1-F-001: **closed.** `negotiateMetaproject` was deleted. `keryx ctx rg` finds no remaining reference under apps/desktop or src.
+- degradation-w1-F-002: **closed.** The snapshot check moved out of `matchesRequest`. `requestMetaprojectV2` now throws `MetaprojectRequestError("stale-snapshot")`, so the hook's `onStale` path and `loadMoreSearch` are reachable, and the hook's doc comment was reworded to match.
+- performance-w2-F-001: **closed.** `wikiTree` now pushes into the group's array in place.
+- pr-contract-w2-PC-001: **closed.** All three sites now say "requires": desktop-metaproject.md:309 and :333, and cli-reference.md:8301.
+- testing-practices-w1-F1: **closed.** A new test injects symbol nodes into the graph model and asserts that they are loaded, then that the listings, the folder counts (src:4) and a symbol-only parent (`only`, not-found) exclude them.
+- testing-practices-w1-F3: **closed.** A new MetaprojectView DOM test covers two cases: a tree answer with snapshotId s2, and a `stale-snapshot` rejection. Each must show the Refresh catalog banner and none of the answer's rows.
+- testing-practices-w1-F6: **closed.** The test now asserts that client.ts rendered and that no Loading row remains before it checks focus.
+- ui-ux-w1-UX-004: **closed.** A module folder row now shows the `Module` kind label (`NODE_KIND_LABELS.module`), and a test asserts that a plain folder has no label.
+- logic-w2-F-002: **open** (info). The fallback stays, as suggested. The guide still says "Pages without a page type are under **Other**" (desktop-metaproject.md:103), a group the CLI cannot emit. The fix was optional.
+- pr-contract-w1-PC-001: **closed.** cli-reference.md:8301 now says Desktop "uses an optional action such as `tree` only when the CLI lists it".
+- testing-practices-w1-I2: **closed.** Both sides derive the key from the one exported helper, so they cannot drift.
+- ui-ux-w1-UX-005: **open** (info). The `count-label` is still a bare number (MetaprojectTree.tsx:291). It was not in the fix round's upheld list.
+
+### Findings
+
+### [F-001] A Loading row that resolves to a partial page keeps focus, but on the Show more row past the new children
+- **Severity**: minor
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx:41 (and :55)
+- **Rule**: `code-style-patterns` accessibility (roving focus); canonical rubric, since no table row covers it
+- **Problem**: This is a defect introduced by the fix for frontend-w1-F-001. The loading row and the Show more row of a parent now share the key `status:${parent}`. Suppose a keyboard user arrows onto a folder's Loading row, and the folder's first page then arrives with a `nextCursor` (a folder with more than 100 children). React keeps the keyed `<li>` and inserts the up to 100 new entries before it, so DOM focus stays on that element, which now reads "Show more" and sits after every new child. The restore path in the layout effect never runs, because the element stays connected. The sibling case (the last page arriving without a cursor, where the row is removed) moves focus to the first new row. So the two outcomes differ, and the first one is never tested: both new tests hold a read that has no `nextCursor` after it.
+- **Why it matters**: Focus stays in the tree, which closes F-001's loss to `<body>`. But a browser does not scroll a focused element that did not move, so the focused row ends up up to 100 rows below the viewport. The user's next ArrowUp/ArrowDown starts from the end of the page, not from the top of the folder they opened. That is inconsistent with the Retry and last-page paths, which land on the first child.
+- **Fix**: When a parent's status row changes from `loading` to `more`, move focus to the first child row if that row held focus. For example, the layout effect can remember the type of the focused row next to its index, and focus `elements[lost.index]` when a loading row became a more row. Alternatively, give the loading row and the more row distinct ids again, while keeping one id across error/loading on Retry and more/more-loading on Show more. Then the existing index-based restore lands on the first child. Add a DOM test: arrow onto a Loading row whose answer carries `nextCursor`, release it, and assert that focus is on the first child.
+
+### [F-002] A tree that drops to its empty state keeps a stale focus record that can pull focus back later
+- **Severity**: info
+- **File**: apps/desktop/src/metaproject/MetaprojectTree.tsx:136
+- **Problem**: When the root answers empty, the component returns the `<p>` empty state, so the `<ul>` unmounts. The layout effect returns early at `if (!root) return;`, so `focused.current` keeps the removed row. If a later snapshot brings files back while `document.activeElement` is still `<body>`, the condition `lost && !lost.element.isConnected && active === body` holds, and the first commit focuses a tree row. That is data arriving and moving focus. It requires the tree to have held focus when it emptied, and focus to be on `<body>` afterwards (for example after a click on a non-focusable area, which fires no blur on the unmounted list).
+- **Impact**: This is a narrow edge case. Nothing was observed in a render.
+- **Suggested fix**: Clear `focused.current` before the early return, or in a cleanup when the list unmounts.
+
+### Clean areas
+- Hooks: `limit` is a stable `useCallback` over a ref. Queued reads re-check `current()` before they start, and the slot count is released in `finally`. Effect dependencies were updated (`limit` was added to `read`'s dependencies).
+- `moveTo` and the arrow, Home and End keys run synchronously on rendered rows. `onFocus` keeps `focusId`/`tabbable` in sync, and the change leaves exactly one tabbable row (asserted in tests).
+- Keys: entry rows keep stable `d:`/`n:` ids, and status rows have one id per parent.
+- MetaprojectView: `aria-labelledby` now points to the visible list heading. A `stale-snapshot` failure from `loadMoreSearch` now goes to the stale banner and is no longer shown as a search error.
+- TypeScript: there is no `any` and no new non-null assertion in the source. The `!` on `document.activeElement` appears only in tests.
+
+### Not verified
+- No test was run; per the payload, `exec_budget_s` is 0. The focus behaviour in F-001 comes from React keyed-list reconciliation: the reused `<li>` is not moved, and the new entries are inserted before it. It was not reproduced in a DOM run. The supplied verify-tests-to-run-1.txt reports exit 0 for the Desktop tree and view tests.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Fix round 6c83eb7fb closes 13 of the 15 attached findings against the code; logic-w2-F-002 and ui-ux-w1-UX-005 (both info) remain open. One new minor: the shared status-row key makes a Loading row that resolves to a partial page keep focus on the Show more row past the new children. Plus one info edge case on a stale focus record when the tree empties.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-frontend",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "rows.push({ type: \"loading\", id, level, parent });",
+      "problem": "Introduced by the fix for frontend-w1-F-001: the loading row and the Show more row of a parent share the key status:${parent}. If the Loading row has focus and the folder's first page arrives with a nextCursor, React reuses the keyed <li> and inserts up to 100 new entries before it, so focus stays on the same element, which is now 'Show more' after all the new children. The layout-effect restore does not run because the element is still connected. The last-page path (row removed) instead lands on the first child. The new tests only cover reads without a following nextCursor.",
+      "impact": "Focus is not lost, but it ends up on a row up to 100 rows below the viewport (focus did not move, so nothing scrolls). The next arrow key starts from the end of the page rather than the top of the opened folder, which is inconsistent with the Retry and last-page paths.",
+      "suggested_fix": "When a focused parent status row changes from loading to more, focus the first child row (remember the focused row's type with its index in the layout effect). Or give loading and more distinct ids again while keeping one id across error/loading and more/more-loading, so the index-based restore lands on the first child. Add a DOM test: focus a Loading row whose answer has nextCursor, release it, assert focus is on the first child.",
+      "evidence": "MetaprojectTree.tsx:41 and :55 push loading and more rows with the same id = statusId(parent); :146-147 restore only when lost.element is disconnected. React's keyed reconciliation keeps an existing keyed child whose old index is at or after lastPlacedIndex and inserts the new keys before it. MetaprojectTree.dom.test.tsx: 'a keyboard Retry keeps focus…' answers SRC_PAGE (no nextCursor); 'a keyboard Show more…' releases the last page. Not reproduced in a DOM run (exec_budget_s 0).",
+      "confidence": "medium",
+      "dedupe_key": "metaproject-tree-loading-to-more-focus-position"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-frontend",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (!root) return;",
+      "problem": "When the root answers empty, the component renders the empty-state <p> and the <ul> unmounts. The layout effect returns early, so focused.current keeps the removed row. When a later snapshot restores rows while activeElement is <body>, the restore branch focuses a tree row: data arriving moves focus.",
+      "impact": "A narrow edge case: the tree must have held focus when it emptied, and focus must still be on <body> when data returns. Not observed in a render.",
+      "suggested_fix": "Clear focused.current before the early return (or in a cleanup when the list unmounts).",
+      "evidence": "MetaprojectTree.tsx:134-150 layout effect (early return at :136, restore at :146-147); :231-235 empty-state return replaces the <ul>.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "frontend-w1-F-001", "disposition": "closed"},
+    {"id": "logic-w1-F-001", "disposition": "closed"},
+    {"id": "architecture-w2-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-001", "disposition": "closed"},
+    {"id": "degradation-w1-F-002", "disposition": "closed"},
+    {"id": "performance-w2-F-001", "disposition": "closed"},
+    {"id": "pr-contract-w2-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-F1", "disposition": "closed"},
+    {"id": "testing-practices-w1-F3", "disposition": "closed"},
+    {"id": "testing-practices-w1-F6", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-004", "disposition": "closed"},
+    {"id": "logic-w2-F-002", "disposition": "open"},
+    {"id": "pr-contract-w1-PC-001", "disposition": "closed"},
+    {"id": "testing-practices-w1-I2", "disposition": "closed"},
+    {"id": "ui-ux-w1-UX-005", "disposition": "open"}
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```
+
+Routing audit: graph_used: no (the payload's layers block supplied the affected files and related tests; no graph query needed), wiki_used: not-relevant (delta fix review against prior findings), ctx_used: yes (keryx ctx rg for every search), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":149765,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

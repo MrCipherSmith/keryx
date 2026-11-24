@@ -1,0 +1,91 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 2 (fix delta 9f4ec475b..f43a13c3f), slice-01 read in full. No new testing-practices finding at any severity. 13 of 15 attached prior findings are closed when checked against the code: the three testing-practices minors (F1, F3, F6) now carry positive artifacts and reach the gates they named. Two stay open: logic-w2-F-002 (the guide still promises an 'Other' group the CLI cannot emit) and ui-ux-w1-UX-005 (the count span still has no unit). The concern is that the mutation pass was NOT executed. The brief limits commands to git, keryx gdgraph/test/wiki/memory/ctx and bun test, and forbids writing files. `keryx review mutate` is not on that list and needs a spec file, so I list the candidates and ran none. The nearest suites are green at the head: Desktop MetaprojectTree.dom + platform/metaproject + MetaprojectView.dom 133 pass, 0 fail; core metaproject-explorer-tree 12 pass, 0 fail.",
+  "slices": [{ "id": "slice-01", "coverage": "read in full (fix slice); remaining fix hunks of the touched files (MetaprojectTree.tsx layout effect, platform stale check, contract helper, test hunks) were read for context and dispositions only", "status": "DONE" }],
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "frontend-w1-F-001", "disposition": "closed" },
+    { "id": "logic-w1-F-001", "disposition": "closed" },
+    { "id": "architecture-w2-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-001", "disposition": "closed" },
+    { "id": "degradation-w1-F-002", "disposition": "closed" },
+    { "id": "performance-w2-F-001", "disposition": "closed" },
+    { "id": "pr-contract-w2-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-F1", "disposition": "closed" },
+    { "id": "testing-practices-w1-F3", "disposition": "closed" },
+    { "id": "testing-practices-w1-F6", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-004", "disposition": "closed" },
+    { "id": "logic-w2-F-002", "disposition": "open" },
+    { "id": "pr-contract-w1-PC-001", "disposition": "closed" },
+    { "id": "testing-practices-w1-I2", "disposition": "closed" },
+    { "id": "ui-ux-w1-UX-005", "disposition": "open" }
+  ],
+  "mutant_candidates": [
+    { "id": "TP2-M1", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "const statusId = (parent: string) => `status:${parent}`;", "replacement": "restore per-state ids: loading row `loading:${parent}`, error rows `error:${parent}`, more row `more:${parent}` (keyed by row type in flatten)", "kind": "behavior", "expect": "red: 'a keyboard Retry keeps focus on the folder's status row…' and 'a keyboard Show more keeps focus in the tree…' (activeElement textContent 'Loading…')" },
+    { "id": "TP2-M2", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "limit(() => current() && Promise.resolve().then(() => send(root, input))", "replacement": "limit(() => Promise.resolve().then(() => send(root, input))", "kind": "behavior", "expect": "red: 'tree reads run at most three at a time, and queued reads of a retired snapshot never start' (second-snapshot calls toHaveLength(3))" },
+    { "id": "TP2-M3", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (pool.active < MAX_TREE_READS) start();\n    else pool.queue.push(start);", "replacement": "start();", "kind": "behavior", "expect": "red: same test (peak <= MAX_TREE_READS)" },
+    { "id": "TP2-M4", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (page.snapshotId !== pinned) throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");", "replacement": "(deleted)", "kind": "behavior", "expect": "red: MetaprojectView.dom 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' (prior F3 gate; the view test's fake requestTree bypasses the transport, so it drives this hook check)" },
+    { "id": "TP2-M5", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") latest.current.onStale();", "replacement": "(deleted)", "kind": "behavior", "expect": "red: same MetaprojectView.dom test (banner assertion)" },
+    { "id": "TP2-M6", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "if (\"expectedSnapshotId\" in request && request.expectedSnapshotId !== undefined\n    && (!(\"snapshotId\" in response) || response.snapshotId !== request.expectedSnapshotId)) {\n    throw new MetaprojectRequestError(\"stale-snapshot\", \"Project knowledge changed while loading.\");\n  }", "replacement": "(deleted)", "kind": "behavior", "expect": "red: platform/metaproject.test.ts 'an answer for another snapshot than the one pinned is refused as stale-snapshot'" },
+    { "id": "TP2-M7", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "if (cause instanceof MetaprojectRequestError && cause.code === \"stale-snapshot\") setSnapshotMismatch(true);\n      else setSearchError", "replacement": "setSearchError", "kind": "behavior", "expect": "red: MetaprojectView.dom 'a next page refused as stale-snapshot shows the Refresh catalog banner…'" },
+    { "id": "TP2-M8", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (row) rowElements().find(element => element.dataset.row === row.id)?.focus();", "replacement": "if (row) setFocusId(row.id);", "kind": "behavior", "expect": "red: 'keys move, expand, collapse and select as a WAI-ARIA tree' (focused() after ArrowDown)" },
+    { "id": "TP2-M9", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "{module && <span className=\"metaproject-meta\">{NODE_KIND_LABELS.module}</span>}", "replacement": "(deleted)", "kind": "presentation", "expect": "red: 'selecting a node row calls the selection callback; a module folder selects…' (.metaproject-meta textContent 'Module')" },
+    { "id": "TP2-M10", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {", "replacement": "if (lost && !lost.element.isConnected) {", "kind": "behavior", "expect": "unknown, likely green: the 'focus outside is never taken' conjunct. onBlur clears `focused` before any test re-renders with focus outside, so no fixture separates it (downstream of slice-01's statusId change; not in slice-01's hunks)" },
+    { "id": "TP2-M11", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (group) group.push(node);\n    else groups.set(key, [node]);", "replacement": "groups.set(key, [node]);", "kind": "behavior", "expect": "red if a core wiki fixture holds two pages of one type (group page counts / group listing)" },
+    { "id": "TP2-M12", "file": "src/integrations/metaproject-explorer-v2.ts", "anchor": "if (node.kind !== \"file\" || !node.path.startsWith(prefix)) continue;", "replacement": "if ((node.kind !== \"file\" && node.kind !== \"symbol\") || !node.path.startsWith(prefix)) continue;", "kind": "behavior", "expect": "red: 'leaves symbols out of listings and folder counts even when the graph model holds them' (src count 4, `only` not-found) — the prior F1 gate" }
+  ],
+  "stats": { "findings": 0, "blocker": 0, "major": 0, "minor": 0, "info": 0, "prior_closed": 13, "prior_open": 2, "mutants_proposed": 12, "mutants_run": 0, "mutants_not_reached": 12 },
+  "follow_ups": [
+    "Run mutant_candidates TP2-M1..TP2-M12 through `keryx review mutate` (nearest suites: apps/desktop `bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts`; root `bun test src/integrations/metaproject-explorer-tree.test.ts`). Run the prior-round gates TP2-M4, TP2-M5, TP2-M6 and TP2-M12 first. This reviewer ran none: the brief's command allowlist excludes `keryx review mutate`, and the brief forbids writing the spec file. The journal records a 'review waive-mutation' decision (d-mwuc8rcy-6141ed). This reviewer did not establish whether that waiver covers this round."
+  ]
+}
+```
+
+## Summary
+
+**Scope.** I read slice-01 (the fix slice) in full. I also read the other fix hunks in the touched files, but only for context and to judge the prior findings.
+
+**Tests at head f43a13c3f (run by this reviewer).**
+- `apps/desktop`: `bun test src/metaproject/MetaprojectTree.dom.test.tsx src/platform/metaproject.test.ts src/metaproject/MetaprojectView.dom.test.tsx` gave 133 pass, 0 fail.
+- Root: `bun test src/integrations/metaproject-explorer-tree.test.ts` gave 12 pass, 0 fail.
+
+**Mutation pass: not executed.** `keryx review mutate` is not among the commands this brief allows, and it needs a spec file that I am not permitted to write. I proposed 12 mutants (see `mutant_candidates`), ran 0 and left 12 unreached. The `expect` fields hold predictions only, not results. I report no mutation outcome.
+
+### Prior dispositions, checked against the code
+
+**Closed (13):**
+- **frontend-w1-F-001: closed.** `statusId(parent)` gives the loading, error and more rows one shared id. The layout effect moves focus to the row now at the vanished row's index. New tests cover a keyboard Retry and a keyboard Show more: focus stays on the status row while it loads, then moves to the first row read.
+- **logic-w1-F-001: closed.** `moveTo` now focuses the row element directly, and `focusRequest` is gone. A new test presses Home on the first row and End on the last, then makes a selection elsewhere and asserts that focus stays outside.
+- **architecture-w2-F-001 and testing-practices-w1-I2: closed.** `metaprojectWikiGroupKey` and `METAPROJECT_WIKI_UNTYPED_GROUP` are exported from the contract. Both `wikiTree` and `revealSteps` call them, so the two sides can no longer drift apart.
+- **degradation-w1-F-001: closed.** The wrapper is deleted, and the platform tests now call `negotiateMetaprojectExplorer(...).protocol`.
+- **degradation-w1-F-002: closed.** `matchesRequest` no longer rejects a snapshot mismatch. `requestMetaprojectV2` throws `MetaprojectRequestError("stale-snapshot")` instead, the hook comment is reworded, and a platform test pins the change.
+- **performance-w2-F-001: closed.** The array is pushed in place.
+- **pr-contract-w2-PC-001 and pr-contract-w1-PC-001: closed.**
+  - The guide now says "action it requires" at line 309 and in the troubleshooting row at line 333.
+  - cli-reference names `tree` as optional.
+- **testing-practices-w1-F1: closed.** The new test adds three symbol nodes to the loaded graph model. It proves they are loaded, which is the positive artifact. It then asserts the root and `src` listings, the src count of 4, and `not-found` for a folder that holds only a symbol.
+- **testing-practices-w1-F3: closed.**
+  - The view test's fake `requestTree` bypasses the transport, so it drives the hook's own snapshot check. Its scenarios are an answer for snapshot s2, and a `stale-snapshot` rejection on the wiki `other` group.
+  - It asserts the Refresh catalog banner appears and no rows from that answer are shown.
+  - A platform test pins the transport-side check.
+- **testing-practices-w1-F6: closed.** The test now asserts `client.ts` is present and no row reads "Loading…" before it checks focus.
+- **ui-ux-w1-UX-004: closed.** Module folders show the Module kind label. A test pins it, including that a plain folder has no label.
+
+**Open (2):**
+- **logic-w2-F-002: open (info).** The fallback is kept, which the finding allowed. But `docs/docs/guides/desktop-metaproject.md:103` still says "Pages without a page type are under **Other**", and the producer cannot emit that state. The guide sentence was the finding's only actionable part.
+- **ui-ux-w1-UX-005: open (info).** `MetaprojectTree.tsx:291` still renders `<span className="count-label">{...}</span>` with no unit, aria-label or title.
+
+### New findings
+None. The fix-round tests assert the positive outcome of each path they cover. The only gate I suspect is unpinned is TP2-M10, the "focus outside the tree is never taken" conjunct of the focus-restore effect. It is not in slice-01's hunks and I did not run it, so it is listed as a candidate, not reported as a finding.
+
+### Routing audit
+- **graph_used:** payload layers only (affected files and related tests used to pick the nearest suites).
+- **wiki_used:** not-relevant (the fix-round intent is recorded in journal.md and the prior findings).
+- **ctx_used:** yes (`keryx ctx rg`, `keryx ctx read`).
+- **raw_rg_used:** no. Raw `git diff` was used, with an escape marker, to read the exact fix hunks.
+KERYX_USAGE {"tokens_in":145794,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

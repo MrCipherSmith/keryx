@@ -1,0 +1,233 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1301",
+    "base": "9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a",
+    "head": "f43a13c3f35e488744bb8906c2c275d433f8d98b"
+  },
+  "round": {
+    "number": 2,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301",
+    "range": {
+      "base": "9f4ec475bd93ff0a9d64c648ebc3c247cfd73a3a",
+      "head": "f43a13c3f35e488744bb8906c2c275d433f8d98b"
+    },
+    "fixHunks": 11,
+    "newHunks": 75,
+    "priorFindings": 52,
+    "carried": 37,
+    "line": "round 2 (source: local-package; previous 2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1301 at 9f4ec475bd93; delta 9f4ec475bd93..f43a13c3f35e)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "apps/desktop/src/platform/metaproject.ts",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-tree.test.ts",
+          "src/integrations/metaproject-explorer-v2.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-pr-contract",
+          "review-regression",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ],
+        "findingIds": [
+          "architecture-w2-F-001",
+          "degradation-w1-F-001",
+          "degradation-w1-F-002",
+          "frontend-w1-F-001",
+          "logic-w1-F-001",
+          "logic-w2-F-002",
+          "performance-w2-F-001",
+          "pr-contract-w1-PC-001",
+          "pr-contract-w2-PC-001",
+          "testing-practices-w1-F1",
+          "testing-practices-w1-F3",
+          "testing-practices-w1-F6",
+          "testing-practices-w1-I2",
+          "ui-ux-w1-UX-004",
+          "ui-ux-w1-UX-005"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.fix_context.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T12.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T12.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "apps/desktop/src/platform/metaproject.ts",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-contract.ts",
+          "src/integrations/metaproject-explorer-v2.ts",
+          "src/integrations/metaproject-explorer-tree.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/platform/metaproject.ts",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-v2.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices",
+          "review-ui-ux"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-04",
+        "files": [
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/acceptance-criteria.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/context.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/description.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/journal.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/plan.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/tasks.md",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T5.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T6.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T7.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/dispatch/T8.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/flow.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T5.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T6.implement.json",
+          ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree/resolved/T7.implement.json",
+          "apps/desktop/src-tauri/src/metaproject.rs",
+          "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.tsx",
+          "apps/desktop/src/metaproject/metaproject.css",
+          "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+          "apps/desktop/src/platform/metaproject.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          "apps/desktop/src/metaproject/MetaprojectTree.dom.test.tsx",
+          "apps/desktop/src/metaproject/MetaprojectView.dom.test.tsx",
+          "apps/desktop/src/platform/metaproject.test.ts",
+          "docs/docs/guides/desktop-metaproject.md",
+          "src/integrations/metaproject-explorer-contract.ts",
+          "src/integrations/metaproject-explorer-v2.ts",
+          "src/integrations/metaproject-explorer-tree.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-clean-code",
+    "review-degradation",
+    "review-frontend",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-pr-contract",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 31,
+  "minutes": {
+    "min": 16,
+    "max": 40
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 13
+    },
+    "new": {
+      "slices": 2,
+      "dispatches": 14
+    },
+    "secondLook": {
+      "slices": 2,
+      "dispatches": 4
+    }
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "1da739070173d41a",
+  "warnings": [
+    "blast radius not computed (recount refused: this base gives 124 changed file(s) but the package's recorded scope holds 17 (more than 3x), which a recount against the wrong base produces. The recorded scope is kept and nothing was written. Recount from the PR's own file list: keryx review blast-radius --package /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301 --changed <the PR's files, comma-separated>)"
+  ],
+  "next": "dispatch"
+}

@@ -11,7 +11,7 @@
   "title": "Desktop Metaproject: tree navigation in the sidebar",
   "status": "in-progress",
   "createdAt": "2026-11-23T20:02:01.811Z",
-  "updatedAt": "2026-11-24T05:09:34.959Z",
+  "updatedAt": "2026-11-24T07:38:01.554Z",
   "source": {
     "type": "description",
     "ref": null
@@ -264,6 +264,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix round 2: review round 2 findings of PR 1301 (9 minor in code)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:31:46.127Z",
+            "outcome": "started",
+            "detail": "518-T13 fix round 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -394,6 +415,21 @@
       "at": "2026-11-24T05:09:34.959Z",
       "event": "task-done",
       "detail": "T12: Fix round 1: review findings of PR 1301 (3 major, 19 minor)"
+    },
+    {
+      "at": "2026-11-24T07:31:25.961Z",
+      "event": "task-added",
+      "detail": "T13: Fix round 2: review round 2 findings of PR 1301 (9 minor in code)"
+    },
+    {
+      "at": "2026-11-24T07:31:46.127Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 518-T13 fix round 2"
+    },
+    {
+      "at": "2026-11-24T07:38:01.554Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 2: review round 2 findings of PR 1301 (9 minor in code)"
     }
   ],
   "acKinds": {
