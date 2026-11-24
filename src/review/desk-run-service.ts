@@ -1,3 +1,5 @@
+import { findSession } from "../session/store";
+import { resolveProjectRoot } from "../session/paths";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
 import { collectPrContext } from "./pr-context";
 import { spawn } from "node:child_process";
@@ -8,12 +10,13 @@ import { isCompiledBinaryEntry } from "../lib/self-invocation";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { verifyVisiblePullNumbers } from "./board-badge-read";
 import { resolveWatcherCheckout } from "./watcher-project";
-import { verifyScheduledSubject } from "./board";
+import type { ReviewFile } from "./board-detail-types";
+import { changeStats, verifyScheduledSubject } from "./board";
 import { withScheduledPermission } from "./review-automation-guard";
 import { readExistingReviews } from "./desk-run-legacy";
 import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, type GithubConnection } from "./board-github";
 import { createWorkerRoster } from "./desk-worker-roster";
-import { coordinatorActivity } from "./desk-coordinator";
+import { coordinatorActivityPage } from "./desk-coordinator";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
@@ -22,10 +25,12 @@ import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedul
 import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
 import { applyDeskLifecycle, type DeskLifecycleAction } from "./desk-run-lifecycle";
 
-const query = `query($owner:String!, $name:String!, $number:Int!) {
-  viewer { login } repository(owner:$owner,name:$name) { id pullRequest(number:$number) { title state baseRefOid headRefOid } }
+const query = (scope: boolean) => `query($owner:String!, $name:String!, $number:Int!) {
+  viewer { login } repository(owner:$owner,name:$name) { id pullRequest(number:$number) { title state baseRefOid headRefOid
+      ${scope ? "changedFiles additions deletions files(first:25) { nodes { path additions deletions } }" : ""}
+    } }
 }`;
-export async function resolveDeskSubject(cwd: string, requested: string, number: number, auth?: GithubConnection) {
+export async function resolveDeskSubject(cwd: string, requested: string, number: number, auth?: GithubConnection, scope = false) {
   const repo = selectRepository(await reviewRepositories(cwd), requested);
   const [owner, name] = repo.split("/");
   const data = await boardGraphql<{
@@ -37,9 +42,11 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
         state: string;
         baseRefOid: string;
         headRefOid: string;
+        changedFiles?: number; additions?: number; deletions?: number;
+        files?: { nodes: ReviewFile[] } | null;
       } | null;
     } | null;
-  }>(cwd, query, { owner: owner!, name: name!, number }, auth);
+  }>(cwd, query(scope), { owner: owner!, name: name!, number }, auth);
   const pr = data.repository?.pullRequest;
   if (!data.viewer?.login || !data.repository?.id || !pr) {
     throw new Error("access: The pull request is unavailable to the current GitHub account.");
@@ -47,8 +54,8 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
   return { key: { repo, number, viewer: data.viewer.login, repositoryId: data.repository.id }, pr };
 }
 
-export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision, auth?: GithubConnection) {
-  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number, auth);
+export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision, auth?: GithubConnection, scope = false) {
+  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number, auth, scope);
   if (actual.viewer.toLowerCase() !== key.viewer.toLowerCase() || actual.repositoryId !== key.repositoryId) {
     throw new Error("access: GitHub account or repository changed. Refresh the board.");
   }
@@ -239,9 +246,9 @@ export async function scheduleDeskReview(
 
 export type DeskAction =
   | DeskLifecycleAction
-  | { action: "status"; id?: string; activityId?: string }
+  | { action: "status"; id?: string; activityId?: string; activityBefore?: number }
   | { action: "answer"; id: string; questionId: string; answer: string }
-  | { action: "start"; revision: DeskRevision; options?: DeskReviewOptions }
+  | { action: "start"; revision: DeskRevision; options?: DeskReviewOptions; sessionId?: string }
   | { action: "continue"; id: string; guidance?: string }
   | { action: "cancel"; id: string };
 export async function requestDeskRun(
@@ -252,10 +259,19 @@ export async function requestDeskRun(
 ): Promise<DeskRunSnapshot> {
   const store = new DeskRunStore();
   try {
+    if (input.action === "start" && input.sessionId !== undefined && findSession(cwd, input.sessionId)?.id !== input.sessionId) {
+      throw new Error("access: The selected conversation is unavailable in this project.");
+    }
     const observedAdmission = input.action === "start" ? store.latestAdmission(key) : null;
     const revision = input.action === "start" ? input.revision :
       input.action === "continue" ? store.continuationSource(key, input.id).run : undefined;
-    await verifyDeskSubject(cwd, key, revision);
+    const ownerRoot = input.action === "start" && input.sessionId ? resolveProjectRoot(cwd) : cwd;
+    const selectedId = input.action === "status" ? input.id ?? input.activityId : undefined;
+    const readScope = input.action === "start" || (input.action === "status" && input.activityBefore === undefined && selectedId !== undefined && !store.hasPullRequestScope(key, selectedId));
+    const pr = await verifyDeskSubject(cwd, key, revision, undefined, readScope);
+    const stats = changeStats(pr);
+    const files = pr.files?.nodes ?? [];
+    const scope = stats && { changeStats: stats, files, filesComplete: files.length === stats.files };
     if (input.action === "status" && !input.id && store.atomic(() => store.claimHistoryScan(cwd, key))) {
       const existing = readExistingReviews(cwd, key);
       store.atomic(() => store.recordExisting(cwd, key, existing));
@@ -274,14 +290,16 @@ export async function requestDeskRun(
       ? deskOptionsKey(resolveManualOptions(cwd, options))
       : undefined;
     store.atomic(() => {
-      if (input.action === "start") startedRunId = store.requestManual(cwd, key, input.revision, observedAdmission, options, effectiveKey);
+      if (input.action === "start") startedRunId = store.requestManual(ownerRoot, key, { ...input.revision, ...(scope && { pullRequestScope: scope }) }, observedAdmission, options, effectiveKey, input.sessionId);
       if (input.action === "continue") startedRunId = store.requestContinuation(cwd, key, input.id, input.guidance);
       if (input.action === "answer") store.answerQuestion(key, input.id, input.questionId, input.answer);
       if (input.action === "cancel") store.cancel(key, input.id);
       dispatchNext(store, key);
     });
-    const snapshot = store.history(key, input.action === "status" ? input.id : undefined);
+    const snapshot = store.history(key, input.action === "status" ? input.id ?? (input.activityBefore !== undefined ? input.activityId : undefined) : undefined);
     for (const run of snapshot.runs) {
+      run.pullRequestTitle = pr.title;
+      if (scope && run.baseSha === pr.baseRefOid && run.headSha === pr.headRefOid) run.pullRequestScope = scope;
       const detailed = (input.action === "status" && (input.id === run.id || input.activityId === run.id)) ||
         (input.action === "answer" && input.id === run.id);
       if (run.source === "manual" && run.state === "running") {
@@ -291,7 +309,11 @@ export async function requestDeskRun(
           run.pendingQuestion = pending[0];
         }
       }
-      if (detailed && run.source !== "existing") run.coordinatorActivity = coordinatorActivity(store.directory(run.id));
+      if (detailed && run.source !== "existing") {
+        const page = coordinatorActivityPage(store.directory(run.id), input.action === "status" ? input.activityBefore : undefined);
+        run.coordinatorActivity = page.events;
+        if (page.before !== undefined) run.coordinatorActivityBefore = page.before;
+      }
       if (detailed || (!run.reviewerProgress && (run.state === "running" || run.state === "cancelling"))) {
         const progress = readDeskReviewerProgress(store.directory(run.id), key, run, detailed);
         if (progress) run.reviewerProgress = progress;

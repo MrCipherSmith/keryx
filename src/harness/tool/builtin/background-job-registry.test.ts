@@ -1586,3 +1586,33 @@ describe("exit is reported only after the process's output has drained", () => {
     }
   }, 60_000);
 });
+
+test("per-session child context stays scoped to its supervisor", async () => {
+  const a = createJobRegistry({ childEnv: { KERYX_REVIEW_SESSION_ID: "session-a" }, initialBufferMs: 0 });
+  const b = createJobRegistry({ childEnv: { KERYX_REVIEW_SESSION_ID: "session-b" }, initialBufferMs: 0 });
+  try {
+    const first = await a.start('printf "%s" "$KERYX_REVIEW_SESSION_ID"');
+    const second = await b.start('printf "%s" "$KERYX_REVIEW_SESSION_ID"');
+    if (!first.ok || !second.ok) throw new Error("failed to start fixture");
+    await Promise.all([a.waitForExit(first.jobId, 5000), b.waitForExit(second.jobId, 5000)]);
+    const outA = a.readOutput(first.jobId), outB = b.readOutput(second.jobId);
+    if (!outA.ok || !outB.ok) throw new Error("fixture output unavailable");
+    expect(outA.output).toContain("session-a");
+    expect(outB.output).toContain("session-b");
+  } finally { await a.sweepAll(); await b.sweepAll(); }
+});
+
+test("each live shell task carries its own private lifecycle token", async () => {
+  const registry = createJobRegistry({ initialBufferMs: 0 });
+  try {
+    const first = await registry.start('printf "%s" "$KERYX_REVIEW_TASK_TOKEN"; sleep 1');
+    const second = await registry.start('printf "%s" "$KERYX_REVIEW_TASK_TOKEN"; sleep 1');
+    if (!first.ok || !second.ok) throw new Error("failed to start fixture");
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const a = registry.readOutput(first.jobId), b = registry.readOutput(second.jobId);
+    if (!a.ok || !b.ok) throw new Error("fixture output unavailable");
+    expect(a.output).not.toBe(b.output);
+    expect(registry.activeTaskTokens?.()).toEqual(expect.arrayContaining([a.output, b.output]));
+    expect(registry.list().every(task => !("taskToken" in task))).toBe(true);
+  } finally { await registry.sweepAll(); }
+});

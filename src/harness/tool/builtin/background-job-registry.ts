@@ -25,6 +25,7 @@
 // a `sh -c 'cmd &'` backgrounds and forgets about, closing the exact
 // process-ownership bug class hit live by opencode/Codex (see context.md).
 
+import { randomUUID } from "node:crypto";
 import { TranscriptRecorder, type ShellTranscript } from "./shell-transcript";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 import { resolveShellEnv, resolveShellSpawn } from "../../process/shell-spawn";
@@ -51,6 +52,7 @@ export interface BackgroundProcessHandle {
 export type BackgroundSpawner = (
   command: string,
   cwd: string,
+  taskToken?: string,
 ) => BackgroundProcessHandle | Promise<BackgroundProcessHandle>;
 
 /**
@@ -265,6 +267,8 @@ export interface JobRegistry {
   ): Promise<{ ok: true; jobId: string; pid: number; output: string } | { ok: false; error: string }>;
   get(jobId: string, access?: JobAccess): BackgroundJobInfo | undefined;
   list(access?: JobAccess): BackgroundJobInfo[];
+  /** Opaque tokens for live shell tasks, for session review lifecycle only. */
+  activeTaskTokens?(): string[];
   readOutput(jobId: string, access?: JobAccess): { ok: true; output: string } | { ok: false; error: string };
   /**
    * Read from an EXPLICIT, absolute cursor instead of the registry's own
@@ -428,6 +432,7 @@ export function clampTaskIdleTimeoutMs(ms: number): number {
 }
 
 interface InternalJob {
+  taskToken: string;
   info: BackgroundJobInfo;
   handle: BackgroundProcessHandle;
   outputBuffer: string;
@@ -509,10 +514,10 @@ function nowIso(): string {
  * {@link JobRegistry.kill}/`sweepAll` to be able to reach a grandchild the
  * direct child backgrounded and forgot about.
  */
-function realSpawner(): BackgroundSpawner {
-  return async (command, cwd) => {
+function realSpawner(childEnv?: Readonly<Record<string, string>>): BackgroundSpawner {
+  return async (command, cwd, taskToken) => {
     const baseEnv = await resolveShellEnv();
-    const resolved = await resolveShellSpawn(cwd, command, baseEnv);
+    const resolved = await resolveShellSpawn(cwd, command, { ...baseEnv, ...childEnv, ...(taskToken ? { KERYX_REVIEW_TASK_TOKEN: taskToken } : {}) });
     if (!resolved.ok) {
       throw new Error(resolved.error);
     }
@@ -664,6 +669,8 @@ export function superviseSpawnedProcess(
 
 export function createJobRegistry(options?: {
   cwd?: string;
+  /** Trusted context bound to this supervisor, passed only to its child processes. */
+  childEnv?: Readonly<Record<string, string>>;
   maxConcurrent?: number;
   spawn?: BackgroundSpawner;
   owner?: () => JobOwner | undefined;
@@ -677,7 +684,7 @@ export function createJobRegistry(options?: {
 }): JobRegistry {
   const cwd = options?.cwd ?? process.cwd();
   const maxConcurrent = options?.maxConcurrent ?? resolveMaxConcurrentBackgroundJobs();
-  const spawn = options?.spawn ?? realSpawner();
+  const spawn = options?.spawn ?? realSpawner(options?.childEnv);
   const killGraceMs = options?.killGraceMs ?? BACKGROUND_KILL_GRACE_MS;
   const initialBufferMs = options?.initialBufferMs ?? DEFAULT_INITIAL_BUFFER_MS;
   const onEvent = options?.onEvent;
@@ -862,8 +869,9 @@ export function createJobRegistry(options?: {
 
       const owner = opts?.owner ?? options?.owner?.();
       let handle: BackgroundProcessHandle;
+      const taskToken = randomUUID();
       try {
-        handle = await (opts?.localSpawn ?? spawn)(command, cwd);
+        handle = await (opts?.localSpawn ?? spawn)(command, cwd, taskToken);
       } catch (cause) {
         return {
           ok: false,
@@ -877,6 +885,7 @@ export function createJobRegistry(options?: {
         resolveExited = resolve;
       });
       const job: InternalJob = {
+        taskToken,
         info: {
           jobId,
           pid: handle.pid,
@@ -982,6 +991,8 @@ export function createJobRegistry(options?: {
       job.readCursor = job.outputBuffer.length;
       return { ok: true, jobId, pid: handle.pid, output };
     },
+
+    activeTaskTokens() { return runningJobs().map(job => job.taskToken); },
 
     get(jobId, access) {
       return reachable(jobs.get(jobId), access)?.info;

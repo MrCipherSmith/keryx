@@ -35,7 +35,9 @@ export async function runReviewDesk(args: string[]) {
       "question-id": { type: "string" },
       answer: { type: "string" },
       guidance: { type: "string" },
+      "session-id": { type: "string" },
       "activity-id": { type: "string" },
+      "activity-before": { type: "string" },
       decision: { type: "string" },
       reason: { type: "string" },
       waive: { type: "string" },
@@ -59,8 +61,13 @@ export async function runReviewDesk(args: string[]) {
   )
     throw new Error(DESK_USAGE);
   if (v.options !== undefined && action !== "start") throw new Error(DESK_USAGE);
+  const sessionId = v["session-id"];
+  if (sessionId !== undefined && (action !== "start" || !uuid.test(sessionId))) throw new Error(DESK_USAGE);
   const activityId = v["activity-id"];
   if (activityId !== undefined && (action !== "status" || v.id !== undefined || !uuid.test(activityId))) throw new Error(DESK_USAGE);
+  const before = v["activity-before"];
+  const activityBefore = before === undefined ? undefined : Number(before);
+  if (before !== undefined && (!activityId || !/^[1-9]\d*$/.test(before) || !Number.isSafeInteger(activityBefore))) throw new Error(DESK_USAGE);
   const questionId = v["question-id"];
   if (action !== "answer" && (questionId !== undefined || v.answer !== undefined)) throw new Error(DESK_USAGE);
   if (action !== "decide" && (v.decision !== undefined || v.reason !== undefined || v.waive !== undefined)) throw new Error(DESK_USAGE);
@@ -72,7 +79,7 @@ export async function runReviewDesk(args: string[]) {
         isAutonomousEnv(process.env) || !(process.env.KERYX_DESKTOP_REVIEW_ACTION === "1" || (process.stdin.isTTY && process.stdout.isTTY)))) {
       throw new Error("permission: Automatic GitHub publication must be enabled by the operator.");
     }
-    input = { action, revision: { baseSha: v.base, headSha: v.head }, ...(options && { options }) };
+    input = { action, revision: { baseSha: v.base, headSha: v.head }, ...(sessionId && { sessionId }), ...(options && { options }) };
   } else if (action === "answer" && v.id && uuid.test(v.id) && questionId && uuid.test(questionId) &&
       v.answer?.trim() && v.answer.length <= 2000 && !v.base && !v.head) {
     input = { action, id: v.id, questionId, answer: v.answer };
@@ -89,7 +96,7 @@ export async function runReviewDesk(args: string[]) {
     input = { action, id: v.id, decision: v.decision as DeskReviewAction, reason: v.reason,
       ...(v.waive ? { waive: v.waive.split(",") } : {}) };
   } else if (action === "status" && !v.base && !v.head && (v.id === undefined || uuid.test(v.id))) {
-    input = { action, ...(v.id ? { id: v.id } : {}), ...(activityId ? { activityId } : {}) };
+    input = { action, ...(v.id ? { id: v.id } : {}), ...(activityId ? { activityId } : {}), ...(activityBefore !== undefined && { activityBefore }) };
   } else throw new Error(DESK_USAGE);
   const resolveManualOptions = input.action === "start" ? (await import("./review-desk-provider")).resolveDeskReviewOptions : undefined;
   const snapshot = await requestDeskRun(

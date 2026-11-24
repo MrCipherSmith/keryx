@@ -41,6 +41,7 @@ export interface Attempt {
   run: DeskRun;
   pid: number | null;
   workerIdentity?: ProcessIdentity | undefined;
+  taskToken?: string | undefined;
 }
 // An attempt's Review placement lives in these columns only; `details` never carries it.
 const reviewColumns = [["review_id", "TEXT"], ["round", "INTEGER"], ["previous_run_id", "TEXT"]] as const;
@@ -64,9 +65,9 @@ interface Row {
   previous_run_id?: string | null;
 }
 const decode = (row: Row): Attempt => {
-  const { workerIdentity, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity };
+  const { workerIdentity, taskToken, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity; taskToken?: string };
   place(run, { reviewId: row.review_id, round: row.round, previousRunId: row.previous_run_id });
-  return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity };
+  return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity, taskToken };
 };
 const alive = (pid: number) => {
   try {
@@ -148,14 +149,18 @@ export class DeskRunStore {
       scanned INTEGER NOT NULL, PRIMARY KEY(cwd,repo,pr,viewer)
     );
     CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
+    CREATE INDEX IF NOT EXISTS session_attempts ON runs(cwd,json_extract(details,'$.sessionId'),viewer)
+      WHERE json_extract(details,'$.sessionId') IS NOT NULL;
     CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE ${scheduledReservation};
-    CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ${liveStates};
+    CREATE UNIQUE INDEX IF NOT EXISTS active_pr_worker ON runs(repo, pr) WHERE state IN ${liveStates} AND json_extract(details,'$.source') != 'session';
     CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY, repo TEXT NOT NULL, pr INTEGER NOT NULL, viewer TEXT COLLATE NOCASE NOT NULL,
       closed_at TEXT, on_head_move TEXT NOT NULL DEFAULT 'ask' CHECK (on_head_move IN ('ask','follow','ignore')),
       UNIQUE (repo, pr, viewer)
     );`);
+    // Session-owned reviews do not reserve the single Desktop worker slot.
+    this.db.exec("DROP INDEX IF EXISTS active_pr");
     // One immediate transaction, so two windows opening an older database cannot both add the columns.
     this.atomic(() => {
       const present = this.runColumns();
@@ -304,7 +309,7 @@ export class DeskRunStore {
     return row ? decode(row) : undefined;
   }
   active(key: DeskRunKey) {
-    return this.forPr(key, `state IN ${liveStates}`);
+    return this.forPr(key, `state IN ${liveStates} AND json_extract(details,'$.source') != 'session'`);
   }
   queued(key: DeskRunKey) {
     const row = this.db
@@ -313,6 +318,28 @@ export class DeskRunStore {
       )
       .get(key.repositoryId, key.number, key.viewer);
     return row ? decode(row) : undefined;
+  }
+
+  hasPullRequestScope(key: DeskRunKey, id: string): boolean {
+    return !!this.db.query(
+      "SELECT 1 FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=? AND json_type(details,'$.pullRequestScope')='object'",
+    ).get(id, key.repositoryId, key.number, key.viewer);
+  }
+
+  hasSessionAttempts(cwd: string, sessionId: string): boolean {
+    return !!this.db.query("SELECT 1 FROM runs WHERE cwd=? AND json_extract(details,'$.sessionId')=? LIMIT 1").get(cwd, sessionId);
+  }
+
+  sessionAttempts(cwd: string, sessionId: string, viewer: string, limit = 10): { key: DeskRunKey; run: DeskRun }[] {
+    const rows = this.db.query<{ request: string; id: string }, [string, string, string, number]>(
+      `SELECT request,id FROM runs WHERE cwd=? AND viewer=? AND json_extract(details,'$.sessionId')=?
+       AND coalesce(json_extract(details,'$.decision.action'),'')!='delete' ORDER BY rowid DESC LIMIT ?`,
+    ).all(cwd, viewer, sessionId, limit);
+    return rows.flatMap(row => {
+      const key = JSON.parse(row.request) as DeskRunKey;
+      const run = this.history(key, row.id).runs[0];
+      return run ? [{ key, run }] : [];
+    });
   }
 
   latestAdmission(key: DeskRunKey): string | null {
@@ -325,7 +352,7 @@ export class DeskRunStore {
   }
 
   /** Hold the dispatch transaction while comparing the admission journal. */
-  requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision, observedAdmission: string | null, options?: DeskReviewOptions, effectiveOptionsKey?: string) {
+  requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision & Pick<DeskRun, "pullRequestScope">, observedAdmission: string | null, options?: DeskReviewOptions, effectiveOptionsKey?: string, sessionId?: string) {
     const latest = this.latestAdmission(key);
     if (latest !== observedAdmission) {
       const existing = [this.active(key), this.queued(key)].find(attempt => attempt &&
@@ -337,7 +364,7 @@ export class DeskRunStore {
       if (previous?.id === latest && previous.state === "completed" && previous.complete) return previous.id;
       throw new Error("stale: Another review was requested during validation. Refresh the board and try again.");
     }
-    return this.requestAttempt(cwd, key, revision, undefined, options, undefined, effectiveOptionsKey)?.id ?? null;
+    return this.requestAttempt(cwd, key, revision, undefined, options, undefined, effectiveOptionsKey, sessionId)?.id ?? null;
   }
 
   continuationSource(key: DeskRunKey, id: string) {
@@ -353,9 +380,10 @@ export class DeskRunStore {
   }
 
   requestContinuation(cwd: string, key: DeskRunKey, id: string, guidance?: string) {
-    const { run } = this.continuationSource(key, id);
-    const result = this.requestAttempt(cwd, key, { baseSha: run.baseSha, headSha: run.headSha }, undefined, run.options,
-      { previousId: id, ...(guidance && { guidance }) });
+    const original = this.continuationSource(key, id);
+    const { run } = original;
+    const result = this.requestAttempt(run.sessionId ? original.cwd : cwd, key, { baseSha: run.baseSha, headSha: run.headSha }, undefined, run.options,
+      { previousId: id, ...(guidance && { guidance }) }, undefined, run.sessionId);
     return result?.id ?? null;
   }
 
@@ -415,15 +443,24 @@ export class DeskRunStore {
     });
   }
 
+  /** A session turn ended before ingest: the draft remains resumable, but no longer runs. */
+  settleSessionDrafts(cwd: string, sessionId: string, onlyId?: string, activeTokens: readonly string[] = []): void {
+    this.db.run(`UPDATE runs SET state='partial', details=json_set(details, '$.state', 'partial', '$.phase', 'Session review paused',
+      '$.reason', 'The session turn ended before review ingest.', '$.finishedAt', ?) WHERE cwd=? AND state='running'
+      AND json_extract(details,'$.source')='session' AND json_extract(details,'$.sessionId')=? AND (? IS NULL OR id=?)
+      AND NOT EXISTS (SELECT 1 FROM json_each(?) WHERE value=json_extract(details,'$.taskToken'))`,
+    [new Date().toISOString(), cwd, sessionId, onlyId ?? null, onlyId ?? null, JSON.stringify(activeTokens)]);
+  }
+
   /** Flow 521: a session review package registered as an Attempt (./session-attempt.ts). Re-registering refreshes only
    * a `session` row the operator has not decided on; any other row with that id is left alone. */
-  recordSession(cwd: string, key: DeskRunKey, run: DeskRun) {
+  recordSession(cwd: string, key: DeskRunKey, run: DeskRun, owner?: ProcessIdentity, taskToken?: string) {
     if (run.source !== "session") throw new Error("configuration: Only a session review can be recorded as a session attempt.");
     this.db.run(
       `INSERT INTO runs (id,repo,pr,viewer,state,cwd,request,details) VALUES (?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET state=excluded.state, details=excluded.details
       WHERE json_extract(runs.details,'$.source')='session' AND json_extract(runs.details,'$.decision') IS NULL`,
-      [run.id, key.repositoryId, key.number, key.viewer, run.state, cwd, JSON.stringify(key), storedDetails(run)],
+      [run.id, key.repositoryId, key.number, key.viewer, run.state, cwd, JSON.stringify(key), storedDetails(run, { workerIdentity: owner, taskToken })],
     );
     this.assignReviews();
   }
@@ -457,7 +494,7 @@ export class DeskRunStore {
     const selected = id === undefined ? "" : " AND id=?";
     const placement = this.placement();
     const sql = `WITH scoped AS (
-        SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.continuation.guidance') AS metadata,
+        SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity','$.taskToken','$.continuation.guidance') AS metadata,
           ${placement.reviewId} AS reviewId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?
@@ -529,7 +566,7 @@ export class DeskRunStore {
   }
 
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
-    type Row = { id: string; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
+    type Row = { id: string; sessionId: string | null; pr: number; awaitingAnswer: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null; coverage: string | null;
       head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; completed: number | null; wave: number | null;
       round: number | null };
     // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs never
@@ -540,7 +577,7 @@ export class DeskRunStore {
       "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('review_questions','reviewer_questions')",
     ).all();
     const pending = tables.map(({ name }) => `EXISTS(SELECT 1 FROM ${name} q WHERE q.run_id=r.id AND q.answer IS NULL)`).join(" OR ") || "0";
-    const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled')
+    const visible = (r: string) => `json_extract(${r}.details,'$.source') IN ('manual','scheduled','session')
         AND coalesce(json_extract(${r}.details,'$.decision.action'),'') NOT IN ('archive','delete')`;
     // Each run of a requested PR is parsed once in `scoped`: `details` embeds the report, so a second
     // pass for the outdated lookup doubled the cost. Only the kept rows are read again for progress.
@@ -568,7 +605,7 @@ export class DeskRunStore {
           row_number() OVER (PARTITION BY card,finished ORDER BY created DESC,seq DESC)=1) AS wanted
         FROM picked
       )
-      SELECT r.id, r.pr, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
+      SELECT r.id,r.pr,json_extract(r.details,'$.sessionId') AS sessionId, CASE WHEN r.state='running' THEN ${pending} ELSE 0 END AS awaitingAnswer,
         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
         json_extract(r.details,'$.source') AS source,
         json_extract(r.details,'$.result.coverage') AS coverage,
@@ -622,7 +659,7 @@ export class DeskRunStore {
   reviewRows(repositoryId: string, viewer: string): ReviewRow[] {
     type Item = {
       reviewId: string; number: number; viewer: string; closedAt: string | null; onHeadMove: ReviewOnHeadMove;
-      id: string; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
+      id: string; sessionId: string | null; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
       baseSha: string; headSha: string; reviewedBase: string | null; reviewedHead: string | null;
       coverage: ReviewAttemptSummary["coverage"]; findings: string | null; verdict: string | null; decision: ReviewAttemptSummary["decision"];
       flowId: string | null; tokens: number | null; awaitingAnswer: number; createdAt: string; finishedAt: string | null;
@@ -630,7 +667,7 @@ export class DeskRunStore {
     const placement = this.placement("r.");
     const rows = this.db.query<Item, [string, string]>(`
       SELECT v.id AS reviewId, v.pr AS number, v.viewer AS viewer, v.closed_at AS closedAt, v.on_head_move AS onHeadMove,
-        r.id, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+        r.id,json_extract(r.details,'$.sessionId') AS sessionId, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
         CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
         json_extract(r.details,'$.source') AS source,
         json_extract(r.details,'$.baseSha') AS baseSha, json_extract(r.details,'$.headSha') AS headSha,
@@ -657,7 +694,7 @@ export class DeskRunStore {
       // An imported package and an archived attempt are never offered for publication.
       const publication = reviewed && item.source !== "existing" && !archived ? this.publication(item.id, item.state, item.coverage) : undefined;
       review.attempts.push({
-        id: item.id, round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
+        id: item.id, ...(item.sessionId && { sessionId: item.sessionId }), round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
         baseSha: item.baseSha, headSha: item.headSha, reviewed, coverage: item.coverage,
         findings: item.findings === null ? null : JSON.parse(item.findings) as ReviewAttemptSummary["findings"],
         verdict: item.verdict, publication: publication ?? null, decision: item.decision, flowId: item.flowId,
@@ -672,7 +709,7 @@ export class DeskRunStore {
     return this.db.query<{ pr: number }, [string, string]>(`
       SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
         AND state IN ('queued','running','cancelling')
-        AND json_extract(details,'$.source') IN ('manual','scheduled')
+        AND json_extract(details,'$.source') IN ('manual','scheduled','session')
         AND coalesce(json_extract(details,'$.decision.action'),'') NOT IN ('archive','delete')
       ORDER BY pr DESC
     `).all(repositoryId, viewer).map(({ pr }) => pr);
@@ -738,6 +775,7 @@ export class DeskRunStore {
     options?: DeskReviewOptions,
     continuation?: DeskRun["continuation"],
     effectiveOptionsKey?: string,
+    sessionId?: string,
   ): { id: string; reused: boolean } | null {
     const match = (a: Attempt) =>
       a.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
@@ -772,6 +810,7 @@ export class DeskRunStore {
     const run: DeskRun = {
       id: randomUUID(),
       source: schedule ? "scheduled" : "manual",
+      ...(sessionId && { sessionId }),
       ...(schedule ? { schedule, preflightAttempt: (previous?.attempt ?? 0) + 1 } : {}),
       ...(options ? { options: parseDeskReviewOptions(options) } : {}),
       ...(effectiveOptionsKey === undefined ? {} : { effectiveOptionsKey }),
@@ -867,7 +906,7 @@ export class DeskRunStore {
       `SELECT request,details,pid,cwd ${linkedUnsettledRow}`,
     ).all(...linkParams(key, link)) : this.db.query<Row, [string, number, string, string | null, string | null]>(
       `SELECT request,details,pid,cwd FROM runs WHERE repo=? AND pr=? AND viewer=?
-       AND state IN ${unsettledStates} AND (? IS NULL OR id=?) ORDER BY rowid`,
+       AND state IN ${unsettledStates} AND json_extract(details,'$.source') != 'session' AND (? IS NULL OR id=?) ORDER BY rowid`,
     ).all(key.repositoryId, key.number, key.viewer, expected ?? null, expected ?? null);
     // Every candidate is owner-matched before reading its process marker.
     return candidates.map(decode).find(attempt => this.processExited(attempt));
@@ -886,6 +925,17 @@ export class DeskRunStore {
   }
 
   async reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null | Promise<DeskFinish | null>, link?: ScheduledLink) {
+    if (!link) {
+      const rows = this.db.query<Row, [string, number, string]>(
+        `SELECT * FROM runs WHERE repo=? AND pr=? AND viewer=? AND state='running' AND json_extract(details,'$.source')='session'`,
+      ).all(key.repositoryId, key.number, key.viewer);
+      for (const row of rows) {
+        const attempt = decode(row);
+        if (attempt.run.sessionId && attempt.workerIdentity && processPresence(attempt.workerIdentity) === "absent") {
+          this.settleSessionDrafts(attempt.cwd, attempt.run.sessionId, attempt.run.id);
+        }
+      }
+    }
     const orphan = this.orphan(key, link);
     if (!orphan) return;
     const directory = this.directory(orphan.run.id);

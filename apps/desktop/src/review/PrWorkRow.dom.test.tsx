@@ -626,7 +626,7 @@ test("the warn tone marks a review waiting on the viewer only on an open PR, as 
 
 test("the review slot title carries the progress without the running label, and nothing for an answer without progress", async () => {
   await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", progress: { wave: 2, planned: 4, finished: 1, completed: 1 } } });
-  expect(reviewLink().getAttribute("title")).toBe("Review · running — Wave 2 · 27% · 1 of 4 assignments completed");
+  expect(reviewLink().getAttribute("title")).toBe("Review · running — Wave 2 · 25% · 1 of 4 assignments completed");
   await renderRow({ ...pr, localReview: { active: true, ready: false, runState: "running", awaitingAnswer: true } });
   expect(reviewLink().getAttribute("title")).toBe("Review · needs your answer");
   await renderRow({ ...pr, localReview: { active: false, ready: false, runState: "partial" } });

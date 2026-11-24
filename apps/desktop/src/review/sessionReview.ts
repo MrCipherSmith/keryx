@@ -53,21 +53,6 @@ export function readSessionReviewLinks(cwd: string): SessionReviewLink[] {
   return [];
 }
 
-export function rememberSessionReview(cwd: string, link: SessionReviewLink): SessionReviewLink[] {
-  const links = [link, ...readSessionReviewLinks(cwd).filter(item => item.id !== link.id || item.sessionId !== link.sessionId)]
-    .slice(0, 100);
-  try { localStorage.setItem(storageKey(cwd), JSON.stringify(links)); } catch { /* The caller still keeps this link in memory. */ }
-  return links;
-}
-
 export function reviewSessionTitle(title: string | null | undefined, link?: SessionReviewLink) {
   return link && (!title || title === "New session") ? "Review #" + link.key.number : title;
-}
-
-export interface ReviewComposerTarget {
-  sessionId: string;
-  placeholder: string;
-  draftKey: string;
-  disabledReason?: string;
-  send: (text: string) => Promise<boolean>;
 }

@@ -380,12 +380,12 @@ test("a reviewer session follows its own wave through completion and Escape retu
   expect(document.activeElement).toBe(row);
 });
 
-test("a starting attempt shows five percent while preparing the plan", async () => {
+test("a starting attempt shows pending assignment totals while preparing the plan", async () => {
   await show(async () => ({ version: 1, runs: [running] }), { ...pr, number: 92 });
   await click("View active review");
   const progress = document.querySelector('[role="progressbar"]');
-  expect(progress).not.toBeNull();
-  expect(progress!.getAttribute("aria-valuenow")).toBe("5");
+  expect(progress).toBeNull();
+  expect(document.querySelector(".review-progress-caption")?.textContent).toContain("Assignment totals pending");
 });
 
 test("expanding a historical session recovers its recorded failure without assigning a duration or token estimate", async () => {
@@ -794,6 +794,18 @@ test("a session attempt is labelled Session and offers no Desktop coordinator se
   expect(document.body.textContent).toContain("Session");
   expect(document.body.textContent).not.toContain("Existing review");
   expect(sessionButtons()).toBe(workerButtons - 1);
+  await act(() => root.render(null));
+});
+
+test("an inline review attempt opens its originating session from the panel", async () => {
+  const { reviewedHead, reviewed } = headMovedFixture(66);
+  const session = { ...reviewed, id: "attempt-session", source: "session" as const, sessionId: "originating-session" };
+  const opened: string[] = [];
+  await show(async () => ({ version: 1, runs: [session] }), { ...pr, number: 66, headSha: reviewedHead }, {
+    onOpenReviewSession: async (_key, run) => { opened.push(run.id); },
+  });
+  await click("Open review session");
+  expect(opened).toEqual([session.id]);
   await act(() => root.render(null));
 });
 
@@ -1224,10 +1236,10 @@ test("a failed freeform answer keeps its draft and retries the same scoped quest
   await click("Close");
 });
 
-test("review assignments stop at 95% until the run completes and a partial run retains only measured progress", async () => {
+test("review shows the measured fraction of finished assignments even while the coordinator continues", async () => {
   const roster = { wave: 2, planned: 4, finished: 4, completed: 4, sessions: [] };
   const values: Array<[DeskRun, string | null]> = [
-    [{ ...running, reviewerProgress: roster }, "95"],
+    [{ ...running, reviewerProgress: roster }, "100"],
     [{ ...complete, reviewerProgress: roster }, "100"],
     [{ ...running, state: "partial", reviewerProgress: { ...roster, completed: 2 } }, "50"],
     [{ ...running, state: "cancelled" }, null],

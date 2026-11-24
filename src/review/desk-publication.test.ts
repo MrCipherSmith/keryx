@@ -786,6 +786,48 @@ async function sessionAttempt(reviewId: string) {
   }
 }
 
+test("a session draft is visible while running, releases the worker slot, and reconciles after ingest", async () => {
+  const pkg = path.join(project, ".metaproject", "reviews", "session-draft");
+  cpSync(path.join(directory, "package"), pkg, { recursive: true });
+  const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+  json(path.join(pkg, "manifest.json"), { ...manifest, reviewId: "session-draft" });
+  const report = readFileSync(path.join(pkg, "report.md"), "utf8");
+  writeFileSync(path.join(pkg, "report.md"), "# Managed Review Report\n\nNo reviewer findings recorded yet.\n");
+  const sessionId = "11111111-1111-4111-8111-111111111111";
+  const result = await registerSessionPackage({ cwd: project, packageDir: pkg, sessionId, resolveKey: async () => key });
+  if (!("record" in result)) throw new Error(result.skipped);
+  const store = new DeskRunStore();
+  try {
+    expect(store.byId(result.record.attemptId)?.run).toMatchObject({ source: "session", sessionId, state: "running", finishedAt: null });
+    expect(store.active(key)?.run.id).not.toBe(result.record.attemptId);
+    expect(store.sessionAttempts(project, sessionId, key.viewer).map(row => row.run.id)).toContain(result.record.attemptId);
+    expect(store.sessionAttempts(project, sessionId, "other-viewer")).toEqual([]);
+    expect(store.sessionAttempts(project + "-other", sessionId, key.viewer)).toEqual([]);
+    // The review's task remains active despite another task; once it ends, that unrelated task must not keep it running.
+    store.recordSession(project, key, store.byId(result.record.attemptId)!.run, undefined, "review-task");
+    store.settleSessionDrafts(project, sessionId, undefined, ["review-task", "unrelated-task"]);
+    expect(store.byId(result.record.attemptId)?.run.state).toBe("running");
+    expect(store.history(key).runs.find(entry => entry.id === result.record.attemptId)).not.toHaveProperty("taskToken");
+    store.settleSessionDrafts(project, sessionId, undefined, ["unrelated-task"]);
+    expect(store.byId(result.record.attemptId)?.run.state).toBe("partial");
+    store.recordSession(project, key, { ...store.byId(result.record.attemptId)!.run, state: "running" });
+    // An absent owner is reconciled without treating the session as a Desktop worker.
+    const run = store.byId(result.record.attemptId)!.run;
+    store.recordSession(project, key, run, { pid: 99999999, pgid: 99999999, startedAt: "gone" });
+    expect(store.history(key).runs.find(entry => entry.id === run.id)).not.toHaveProperty("workerIdentity");
+    await store.reconcile(key, async () => null);
+    expect(store.byId(result.record.attemptId)?.run.state).toBe("partial");
+  } finally { store.close(); }
+  writeFileSync(path.join(pkg, "report.md"), report);
+  const wrongViewer = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => ({ ...key, viewer: "different-account" }) });
+  expect(wrongViewer).toEqual({ skipped: "the package belongs to a different GitHub account or repository" });
+  const finished = await registerSessionPackage({ cwd: project, packageDir: pkg, resolveKey: async () => key });
+  expect(finished).toEqual(result);
+  const refreshed = new DeskRunStore();
+  try { expect(refreshed.byId(result.record.attemptId)?.run).toMatchObject({ sessionId, result: { report } }); }
+  finally { refreshed.close(); }
+});
+
 const sessionPost = () => {
   const posts: string[] = [];
   return { posts, post: async (_ref: string, _event: string, body: string) => {

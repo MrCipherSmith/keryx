@@ -75,6 +75,18 @@ export interface DeskReviewerProgress {
   /** Successful wave assignments, counting the latest retry once. Absent in legacy checkpoints. */
   completed?: number;
   wave: number | null;
+  /** Bounded summary of the verified plan for this attempt's pinned range. */
+  planSummary?: {
+    baseSha: string;
+    headSha: string;
+    files: string[];
+    filesComplete: boolean;
+    checks: { name: string; category: "baseline" | "project"; slices: string[] }[];
+    sliceReasons: { id: string; depth?: string; reasons: string[] }[];
+    checksComplete: boolean;
+    depth?: "light" | "full";
+    depthReason?: string;
+  };
   sessions: DeskReviewerSession[];
 }
 export interface DeskQuestionReviewer {
@@ -115,12 +127,22 @@ export function canContinueDeskRun(run: DeskRun): boolean {
 }
 
 export interface DeskRun extends DeskRevision {
+  pullRequestTitle?: string;
+  pullRequestScope?: {
+    changeStats: { files: number; additions: number; deletions: number };
+    files: import("./board-detail-types").ReviewFile[];
+    filesComplete: boolean;
+  };
+  /** Durable ACP conversation that owns this attempt. Older attempts may have no binding. */
+  sessionId?: string;
   continuation?: { previousId: string; guidance?: string };
   publication?: import("./desk-publication-types").PublicationOutcome;
   decision?: DeskReviewDecision;
   closure?: "completed" | "closed";
   /** Public events are projected on demand for the selected attempt. */
   coordinatorActivity?: CoordinatorEvent[];
+  /** Earlier sanitized activity is available before this exclusive byte offset. */
+  coordinatorActivityBefore?: number;
   /** Compatibility projection: coordinator first, otherwise the first pending reviewer question. */
   pendingQuestion?: DeskQuestion;
   pendingQuestions?: DeskQuestion[];

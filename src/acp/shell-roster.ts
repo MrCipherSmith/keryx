@@ -67,6 +67,7 @@ export interface AcpShellRosterInput {
   /** Present only when the client advertised `_meta.keryx.askUser`; absent → `ask_user` is denied. */
   readonly askUser?: AskUserFn;
   readonly requestReviewDraft?: RequestReviewDraft;
+  readonly sessionReviews?: InteractiveTool;
   /** keryx's configured servers merged with the client's, or none at all. */
   readonly mcp?: McpToolBinding;
   /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
@@ -99,6 +100,7 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     denyTools: acpShellDeniedTools(input.askUser !== undefined),
   });
   if (input.requestReviewDraft) tools.push(prepareReviewTool(input.requestReviewDraft));
+  if (input.sessionReviews) tools.push(input.sessionReviews);
   return tools.map((tool) =>
     tool.definition.name === "read_file"
       ? acpAwareReadFileTool(tool, root, input.clientCapabilities, input.readViaClient)

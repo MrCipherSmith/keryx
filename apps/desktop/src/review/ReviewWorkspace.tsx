@@ -1,4 +1,4 @@
-import { hasDeskWorker, type DeskRevision, type DeskRun, type DeskRunKey } from "../../../../src/review/desk-run-types";
+import type { DeskRevision, DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "../components/Toasts";
 import { errMessage } from "../lib/format";
@@ -11,6 +11,7 @@ import type { reviewPublish } from "./ReviewPublishDialog";
 import { ReviewRunDialog, ReviewRunHistory } from "./ReviewRunDialog";
 import type { ReviewLifecycleCommand } from "./ReviewLifecycle";
 import { runActive, sameRange, useReviewRuns, type RunObserver } from "./useReviewRuns";
+import { ReviewPlanSummary, reviewPlanEvidence } from "./ReviewPlanSummary";
 import { ReviewLaunchDialog, type ReviewLaunchModel } from "./ReviewLaunchDialog";
 import type { ReviewCard } from "./types";
 import "./ReviewDetail.css";
@@ -101,7 +102,7 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   const syncRuns = local.request;
   function openManagedRun(id: string) {
     const run = local.runs.find(item => item.id === id);
-    if (!onOpenReviewSession || !run || !hasDeskWorker(run)) {
+    if (!onOpenReviewSession || !run?.sessionId) {
       setSessionId(id);
       return;
     }
@@ -120,6 +121,8 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   }, [cwd, subject, runCommand, onRunSnapshot, card.baseSha, card.headSha, syncRuns]);
   const session = sessionId && local.runs.find(run => run.id === sessionId);
   const action = launchAction(local.runs, card);
+  const active = local.runs.find(run => runActive(run) && sameRange(run, card));
+  const questions = active ? pendingManualQuestions(active) : [];
   const associatedFlowId = local.runs.find(run => sameRange(run, card))?.options?.flowId;
   const associatedFlow = associatedFlowId ? projectFlows?.find(candidate => candidate.id === associatedFlowId) : flow;
   const revisionChanged = local.staleRange;
@@ -210,13 +213,24 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       <span>The PR revision changed. Refresh to load the latest range.</span>
       {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh</button>}
     </div>}
+    {active && <ReviewPlanSummary data={{
+      title: card.title,
+      headSha: active.headSha,
+      ...(card.changeStats && { changeStats: card.changeStats }),
+      ...reviewPlanEvidence(active.reviewerProgress?.planSummary, active.pullRequestScope),
+      ...(active.options?.orchestrator === false && { singleReviewer: true }),
+      stage: active.phase,
+      runState: active.state,
+      ...(active.reviewerProgress && { assignmentProgress: active.reviewerProgress }),
+      ...(questions.length > 0 && { operatorStep: active.reason || "Reply to the requested review context." }),
+    }} />}
     {children}
     <ReviewRuns headingRef={latestHeading} publication={publication} onAnswer={answerQuestion} onOpenSession={openManagedRun} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
       onCancel={id => void local.request({ kind: "cancel", id })}
       onLifecycle={lifecycle}
       onRefresh={() => void local.request({ kind: "status" })} />
     {session && <ReviewRunDialog
-      {...(onOpenReviewSession && hasDeskWorker(session) && {
+      {...(onOpenReviewSession && session.sessionId && {
         onOpenWorkspace: async () => {
           await onOpenReviewSession(subject, session);
           setSessionId(null);

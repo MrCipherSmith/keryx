@@ -99,16 +99,22 @@ work is shown on each card, list row and PR panel in a work row:
 - **Review.** Once the pull request has a Review, the row links to it with its
   round and how far the pull request has moved past the reviewed commit.
 
-A review started with `/review` in the PR's session appears on the card as
-soon as the session finishes or publishes its review package.
+Start a PR review in a project chat by naming the PR number or URL. The launch
+dialog shows the title, changed file count and line totals. After you apply the
+settings, the review appears on the **Reviews** board. Open its card to return
+to the same conversation and ask a follow-up while reviewers work. **Details**
+opens the attempt history and publication controls. Older attempts without a
+linked conversation open their saved details.
 
 ### Run a review from a card
 
 Open a PR and choose **Start review** to review the base and head commits recorded when
 the card was fetched. **Review orchestrator** is on by default. Turn it off to run
 one source reviewer with single-reviewer coverage. Once a PR has a Review, its panel offers **Open in Reviews**: the
-Review's panel in the **Reviews** tab holds the review interface and shows the current phase, the revision and
-the reason the run stopped. You can return to the card later, cancel an
+review card opens the conversation created at launch. Its activity shows the
+revision, changed files, checks, reasons for the plan and current stage. The
+initial round compares the PR head with its merge base. An update round uses
+the comparison range recorded for that round. You can return to the card later, cancel an
 active review or retry an interrupted one. Windows and worktrees share an active
 run when the verified GitHub account, PR, and base and head commits match.
 Manual reviews have a 30-minute time limit and

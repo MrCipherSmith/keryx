@@ -11,3 +11,9 @@ test("TP-R3-005: ReviewProgress names a labelled run state only when asked to sh
   expect(caption(false)).not.toContain("Partial");
   expect(caption(true)).toContain("Partial · ");
 });
+
+test("a running review reports an unknown assignment total without a fabricated percentage", () => {
+  const html = renderToStaticMarkup(createElement(ReviewProgress, { state: "running" }));
+  expect(html).toContain("Assignment totals pending");
+  expect(html).not.toContain("progressbar");
+});

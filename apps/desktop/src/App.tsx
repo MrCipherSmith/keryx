@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+import type { DeskRevision, DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
+import { SESSION_REVIEW_REQUEST_LIMIT, SESSION_REVIEW_REQUEST_METHOD, SESSION_REVIEWS_METHOD, type SessionReviewSummary } from "../../../src/acp/session-reviews-contract";
+import type { DeskReviewOptions } from "../../../src/review/desk-run-options";
 import { isTauri } from "./platform/backend";
 import {
   acpStop,
@@ -26,7 +28,7 @@ import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./revi
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
-import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
+import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
 import { modelChoices, providerOf } from "./session/Composer";
 import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
@@ -419,7 +421,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     const flow = prFlows(card, flowCards.current, boundSessions(subjectSessionsRef.current, subject))[0];
     return openSubject({
       sessions: () => subjectSessionsRef.current,
-      loadSession: s.loadSession,
+      loadSession: async id => { await s.loadSession(id); },
       // The PR's Flow (one naming it, or one a bound session works on) is linked to the new session.
       newSession: () => flow ? s.workOnFlow(flow.dir, "new") : s.newSession(),
       bind: (id, value) => void s.bindSubject(id, value),
@@ -606,24 +608,57 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
   const reviewsIndicator = !reviewDisconnected && reviewsNotice?.binding === reviewViewer ? reviewsNotice?.indicator ?? null : null;
-  const [reviewComposer, setReviewComposer] = useState<ReviewComposerTarget>();
   const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
   const linkReviewContinuation = useCallback((link: SessionReviewLink) => {
-    setReviewLinks(rememberSessionReview(cwd, link));
-  }, [cwd]);
-  const openReviewWorkspace = useCallback(async (key: DeskRunKey, run: DeskRun) => {
-    const prior = readSessionReviewLinks(cwd).find(link => link.id === run.id && link.key.repositoryId === key.repositoryId &&
-      link.key.viewer.toLowerCase() === key.viewer.toLowerCase() && state.sessions.some(session =>
-        session.sessionId === link.sessionId && !sessionFlags(session).archivedAt));
-    const id = prior ? prior.sessionId : await s.newSession();
-    if (!id) throw new Error("Could not create the review session.");
-    if (prior) await s.loadSession(id);
-    else setReviewLinks(rememberSessionReview(cwd, {
-      id: run.id, sessionId: id, key, revision: { baseSha: run.baseSha, headSha: run.headSha },
-      prompt: `Review https://github.com/${key.repo}/pull/${key.number}`,
-    }));
+    setReviewLinks(previous => [link, ...previous.filter(item => item.id !== link.id || item.sessionId !== link.sessionId)].slice(0, 100));
+  }, []);
+  const openOriginReviewSession = useCallback(async (sessionId: string) => {
+    if (!(await s.loadSession(sessionId))) {
+      throw new Error("The originating session could not be opened in this project.");
+    }
     setView("session");
-  }, [cwd, s, state.sessions]);
+  }, [s.loadSession]);
+  const openReviewWorkspace = useCallback(async (_key: DeskRunKey, run: DeskRun) => {
+    if (!run.sessionId) throw new Error("This review has no originating session.");
+    await openOriginReviewSession(run.sessionId);
+  }, [openOriginReviewSession]);
+  const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string) => {
+    const sessionId = owner ?? await s.newSession();
+    if (!sessionId) throw new Error("Could not create the review session.");
+    const { baseSha, headSha } = revision;
+    const snapshot = await reviewRun(cwd, key, { kind: "start", baseSha, headSha, ...(options && { options }), sessionId });
+    const run = snapshot.runs.find(attempt => attempt.id === snapshot.startedRunId);
+    if (!run) throw new Error("The selected Keryx CLI did not confirm the review attempt.");
+    publishSessionReview(cwd, key, snapshot);
+    if (run.sessionId !== sessionId) {
+      const remembered = !run.sessionId ? readSessionReviewLinks(cwd).find(link =>
+        link.id === run.id && link.key.repositoryId === key.repositoryId &&
+        link.key.viewer.toLowerCase() === key.viewer.toLowerCase()) : undefined;
+      const origin = run.sessionId ?? remembered?.sessionId;
+      s.notify("info", origin ? "Opening the review already recorded for this revision." : "This revision already has a review. Opening its details.");
+      if (origin) {
+        void openOriginReviewSession(origin).catch(() => openInReviews(key));
+      } else {
+        openInReviews(key);
+      }
+      return snapshot;
+    }
+    const request = (prompt || `Review https://github.com/${key.repo}/pull/${key.number}`).slice(0, SESSION_REVIEW_REQUEST_LIMIT);
+    let savedRequest: string | undefined;
+    if (s.extensions.includes(SESSION_REVIEW_REQUEST_METHOD)) {
+      const persisted = await s.rpc<string | null>(SESSION_REVIEW_REQUEST_METHOD, { sessionId, attemptId: run.id, text: request }).catch(() => null);
+      if (typeof persisted === "string") savedRequest = persisted;
+      else s.notify("warn", "The review started, but its original request could not be saved.");
+    }
+    linkReviewContinuation({ id: run.id, sessionId, key, ...(savedRequest && { prompt: savedRequest }),
+      revision: { baseSha: run.baseSha, headSha: run.headSha } });
+    if (!owner) setView("session");
+    return snapshot;
+  }, [cwd, linkReviewContinuation, s.newSession, s.notify, s.extensions, s.rpc, openOriginReviewSession, openInReviews]);
+  const boardReviewRun = useCallback<typeof reviewRun>((project, key, action) => {
+    return action.kind === "start" ? startSessionReview(key, action, action.options) : reviewRun(project, key, action);
+  }, [startSessionReview]);
+
   const draftReview = s.reviewDraftRequest;
   const [routingSession, setRoutingSession] = useState<string | null>(null);
   useEffect(() => {
@@ -635,8 +670,33 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const shownFlow = shownFlowDir ? flows.cards.find(card => card.dir === shownFlowDir) : undefined;
   const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
   const viewer = reviewViewer ?? currentNotice?.viewer;
-  const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
-    (!viewer || viewer.toLowerCase() === link.key.viewer.toLowerCase())), [reviewLinks, state.sessionId, viewer]);
+  const [durableReviewLinks, setDurableReviewLinks] = useState<{ sessionId: string; viewer: string | undefined; links: SessionReviewSummary[] }>();
+  const reviewSessionId = state.sessionId;
+  const canReadSessionReviews = state.held && s.extensions.includes(SESSION_REVIEWS_METHOD);
+  useEffect(() => {
+    if (!reviewSessionId || !canReadSessionReviews || reviewDisconnected || view !== "session") return;
+    let active = true;
+    const read = () => {
+      void s.rpc<SessionReviewSummary[]>(SESSION_REVIEWS_METHOD, { sessionId: reviewSessionId }).then(links => {
+        if (active) setDurableReviewLinks({ sessionId: reviewSessionId, viewer, links });
+      }).catch(() => {
+        if (active) setDurableReviewLinks(undefined);
+      });
+    };
+    read();
+    const timer = state.busy ? window.setInterval(read, 6000) : undefined;
+    return () => { active = false; window.clearInterval(timer); };
+  }, [reviewSessionId, canReadSessionReviews, reviewDisconnected, view, viewer, state.busy, s.rpc]);
+  const sessionReviews = useMemo(() => {
+    const durable = durableReviewLinks?.sessionId === reviewSessionId && durableReviewLinks?.viewer === viewer
+      ? durableReviewLinks.links : [];
+    const remembered = reviewLinks.filter(link => link.sessionId === reviewSessionId &&
+      (!viewer || viewer.toLowerCase() === link.key.viewer.toLowerCase()));
+    return [...remembered.filter(link => !durable.some(item => link.id === item.id)), ...durable.map(link => ({
+      ...link,
+      ...(link.prompt === undefined && { prompt: remembered.find(item => item.id === link.id)?.prompt }),
+    }))];
+  }, [durableReviewLinks, reviewLinks, reviewSessionId, viewer]);
   const sessionTitle = reviewSessionTitle(state.title?.trim(), sessionReviews.at(-1)) || "New session";
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -700,9 +760,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
-          reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
+          reviewLinks={reviewLinks}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
-            onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
             onContinuation={linkReviewContinuation} /> : undefined}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
@@ -733,7 +792,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           <ReviewsView key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} active={workView === "reviews"} cwd={cwd}
             focus={reviewsFocus} onFocusHandled={reviewsFocusHandled} reloadSignal={watcherPolls}
             rulesTarget={boardIdentity} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
-            onOpenReviewSession={openReviewWorkspace} onFixFindings={fixFindingsFromReviews} onOpenFlow={(dir) => {
+            runCommand={boardReviewRun} onOpenOriginSession={openOriginReviewSession} onOpenReviewSession={openReviewWorkspace} onFixFindings={fixFindingsFromReviews} onOpenFlow={(dir) => {
               setLinkedFlow(dir);
               setView("flows");
             }} />
@@ -745,7 +804,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenInReviews={openInReviews} onWatcherPoll={noteWatcherPoll} onIdentityChange={setBoardIdentity}
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} runCommand={boardReviewRun} onOpenReviewSession={openOriginReviewSession} onOpenInReviews={openInReviews} onWatcherPoll={noteWatcherPoll} onIdentityChange={setBoardIdentity}
             sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
             onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
             flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />
@@ -766,12 +825,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
           initialTarget={reviewLaunchTarget(draftReview.target, shownSubject)} models={reviewModels} loadTargets={loadReviewTargets}
           onApply={async (key, revision, options) => {
-            const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
-            const id = result.startedRunId;
-            if (!id || !result.runs.some(run => run.id === id)) throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
-            setReviewLinks(rememberSessionReview(cwd, { id, sessionId: draftReview.sessionId, key, revision,
-              ...(draftReview.prompt && { prompt: draftReview.prompt }) }));
-            publishSessionReview(cwd, key, result);
+            await startSessionReview(key, revision, options, draftReview.sessionId, draftReview.prompt);
           }}
           onClose={() => s.dismissReviewDraftRequest(draftReview.nonce)} />}
 

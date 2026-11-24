@@ -1,3 +1,4 @@
+import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 // The ACP agent server loop (flow 285, T7/T8): wires the framer + dispatcher
 // + keryx session/turn handlers over one stdio connection.
 //
@@ -158,6 +159,8 @@ import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
 import { clientPreparesReview, type RequestReviewDraft } from "./prepare-review";
 import { PREPARE_REVIEW_METHOD } from "./review-draft";
+import { SESSION_REVIEW_REQUEST_METHOD, SESSION_REVIEWS_METHOD } from "./session-reviews-contract";
+import { recordSessionReviewRequest, readVisibleSessionReviews, sessionReviewSummaries, sessionReviewsTool } from "./session-reviews";
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
@@ -629,6 +632,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const created: { registry?: JobRegistry } = {};
       jobs = createJobRegistry({
         cwd: root,
+        childEnv: { KERYX_REVIEW_SESSION_ID: sessionId, KERYX_REVIEW_SESSION_OWNER: JSON.stringify(readProcessIdentity(process.pid)),
+          KERYX_REVIEW_SESSION_DATA_DIR: options.dataDir ?? "", KERYX_REVIEW_SESSION_PROJECT_ROOT: root },
         ...(shellProfile
           ? {
               onEvent: taskEventSink(
@@ -642,6 +647,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           : {}),
       });
       created.registry = jobs;
+      jobs.onCompletion(() => {
+        if (activeTurns.has(sessionId)) return;
+        void import("../review/desk-run-store").then(async ({ DeskRunStore, deskRunRoot }) => {
+          if (!(await import("node:fs")).existsSync((await import("node:path")).join(deskRunRoot(), "runs.sqlite"))) return;
+          const store = new DeskRunStore();
+          try { store.settleSessionDrafts(root, sessionId, undefined, jobs?.activeTaskTokens?.()); } finally { store.close(); }
+        }).catch(() => undefined);
+      });
       sessionJobs.set(sessionId, jobs);
     }
     return jobs;
@@ -2104,7 +2117,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
       ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
-      ...(clientPreparesReview(state.clientCapabilities) ? { requestReviewDraft: reviewDraftFor(sessionId) } : {}),
+      ...(clientPreparesReview(state.clientCapabilities) ? {
+        requestReviewDraft: reviewDraftFor(sessionId),
+        sessionReviews: sessionReviewsTool(() => readVisibleSessionReviews(root, sessionId, true)),
+      } : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
   }
@@ -2795,6 +2811,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // Only THIS turn's own slot is released: deleting by id alone would, if
       // the busy guard above ever regressed, hand a later turn's slot away.
       if (activeTurns.get(sessionId) === turn) {
+        // A session-owned draft is active only while this turn runs. Preserve it as a partial review if abandoned.
+        try {
+          const { DeskRunStore, deskRunRoot } = await import("../review/desk-run-store");
+          if ((await import("node:fs")).existsSync((await import("node:path")).join(deskRunRoot(), "runs.sqlite"))) {
+            const store = new DeskRunStore();
+            try { store.settleSessionDrafts(state.resolvedRoot, sessionId, undefined, sessionJobs.get(sessionId)?.activeTaskTokens?.()); } finally { store.close(); }
+          }
+        } catch { /* Review tracking must not prevent the session from ending. */ }
         activeTurns.delete(sessionId);
         if (telegram !== undefined) {
           sendUpdate(sessionId, { sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase: "finished", actorId: telegram.actorId, updateId: telegram.updateId, generation: telegram.generation });
@@ -2933,6 +2957,31 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       refuse(invalidParams(`${method}: cwd must be a string, null or omitted`, { received: rawCwd }));
     }
     return { obj, sessionId, cwd: typeof rawCwd === "string" && rawCwd.length > 0 ? rawCwd : process.cwd() };
+  }
+
+  async function handleSessionReviews(params: unknown) {
+    requireInitialized(SESSION_REVIEWS_METHOD);
+    const request = requireObjectParams(params, SESSION_REVIEWS_METHOD);
+    const sessionId = requireStringField(request, "sessionId", SESSION_REVIEWS_METHOD);
+    const state = registry.get(sessionId);
+    if (!state) return [];
+    try {
+      return sessionReviewSummaries(await readVisibleSessionReviews(state.resolvedRoot, sessionId), sessionId, state.handle.dir);
+    } catch {
+      return [];
+    }
+  }
+
+  async function handleSessionReviewRequest(params: unknown) {
+    const method = SESSION_REVIEW_REQUEST_METHOD;
+    requireInitialized(method);
+    const request = requireObjectParams(params, method);
+    const sessionId = requireStringField(request, "sessionId", method);
+    const attemptId = requireStringField(request, "attemptId", method);
+    const text = requireStringField(request, "text", method);
+    const state = registry.get(sessionId);
+    if (!state || !registry.canPersist(sessionId)) return null;
+    return withSessionWork(sessionId, () => recordSessionReviewRequest(state.resolvedRoot, sessionId, state.handle.dir, attemptId, text));
   }
 
   function refuseStore(method: string, sessionId: string, error: unknown): never {
@@ -3308,6 +3357,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
                   return state === undefined ? undefined : jobsFor(sessionId, state.resolvedRoot);
                 },
               }).requests,
+              [SESSION_REVIEWS_METHOD]: handleSessionReviews,
+              [SESSION_REVIEW_REQUEST_METHOD]: handleSessionReviewRequest,
               [KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params: unknown) => handleSessionFlags(params),
               [KERYX_ACP_EXTENSION_METHODS.sessionTrash]: (params: unknown) => handleSessionTrash(params),
             }

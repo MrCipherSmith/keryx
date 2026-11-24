@@ -29,6 +29,20 @@ afterEach(() => {
   store.close();
   rmSync(directory, { recursive: true, force: true });
 });
+test("reopening a PR keeps its original conversation and respects project and viewer boundaries", () => {
+  const sessionId = "7e3d06ec-76b0-4a08-8110-188a51944032";
+  const id = store.atomic(() => store.requestManual("/project", key, revision, null, undefined, undefined, sessionId));
+  const retry = store.atomic(() => store.requestManual("/project", key, revision, id, undefined, undefined, "another-session"));
+  expect(retry).toBe(id);
+  expect(store.sessionAttempts("/project", sessionId, key.viewer.toUpperCase()).map(({ run }) => run.id)).toEqual([id!]);
+  expect(store.sessionAttempts("/other", sessionId, key.viewer)).toEqual([]);
+  expect(store.sessionAttempts("/project", sessionId, other.viewer)).toEqual([]);
+  expect(store.sessionAttempts("/project", "another-session", key.viewer)).toEqual([]);
+  const snapshot = { repositoryId: key.repositoryId, viewer: key.viewer, cards: [{ number: key.number, ...revision }] };
+  store.attachBadges(snapshot);
+  expect(snapshot.cards[0]).toMatchObject({ localReview: { runId: id, sessionId } });
+});
+
 function started(pid = process.pid) {
   store.request("/project", key, revision);
   const a = store.queued(key)!;

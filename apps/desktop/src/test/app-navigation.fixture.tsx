@@ -20,6 +20,12 @@ const prUrl = "https://github.com/org/project/pull/12";
 const bareRunId = "0f3c2a51-7d4e-4b8a-9c61-2e5f0a7b9d13";
 const barePrUrl = "https://github.com/org/project/pull/13";
 const bareStarts: unknown[] = [];
+const boardRunId = "9c8a02c5-1d65-4faa-a407-8f263f83ac53";
+let boardOrigin = "";
+const originalRequests = new Map<string, string>();
+const boardPrUrl = "https://github.com/org/project/pull/14";
+let origin = "";
+let bareOrigin = "";
 const question = (id: string, reviewer: string, text: string) => ({
   id, reviewer, question: text, options: [], allowFreeform: true,
 });
@@ -32,6 +38,7 @@ const run = {
   baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
   startedAt: "2026-11-20T00:00:01Z", finishedAt: null, result: null, coordinatorActivity: [{ kind: "status", text: "Wave 1 started" }],
 };
+const boardRun = { ...run, id: boardRunId, headSha: "e".repeat(40) };
 const bareRun = { ...run, id: bareRunId, baseSha: "d".repeat(40), headSha: "c".repeat(40), coordinatorActivity: [] };
 let account: string | null = null;
 let accountConfigured = false;
@@ -45,6 +52,7 @@ let storesSubject = false;
 const saved = new Set<string>();
 /** The session ids `session/prompt` was sent for. */
 const prompted: string[] = [];
+const transcript = new Map<string, string>();
 /** The session ids whose flags write the older keryx has refused (the refusal sent to the app). */
 const refusedFlags: string[] = [];
 let newSessions = 0;
@@ -83,11 +91,31 @@ mockIPC(async (cmd, args) => {
       calls.push(method);
       if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
       let result: unknown;
-      if (method === "session/prompt") {
-        const { sessionId } = params as { sessionId: string };
+      if (method === "_keryx/session_review_request") {
+        const { attemptId, text } = params as { attemptId: string; text: string };
+        originalRequests.set(attemptId, text);
+        result = text;
+      } else if (method === "_keryx/session_reviews") {
+        const sessionId = (params as { sessionId: string }).sessionId;
+        const candidates = [{ id: runId, number: 12, sessionId: origin, revision: { baseSha: run.baseSha, headSha: run.headSha } },
+          { id: bareRunId, number: 13, sessionId: bareOrigin, revision: { baseSha: bareRun.baseSha, headSha: bareRun.headSha } },
+          { id: boardRunId, number: 14, sessionId: boardOrigin, revision: { baseSha: boardRun.baseSha, headSha: boardRun.headSha } }];
+        result = account === "me" ? candidates.filter(candidate => candidate.sessionId === sessionId).map(candidate => ({
+          ...candidate, prompt: originalRequests.get(candidate.id), key: { repo: "org/project", repositoryId: "RID", viewer: "me", number: candidate.number },
+        })) : [];
+      } else if (method === "session/prompt") {
+        const { sessionId, prompt } = params as { sessionId: string; prompt: { text: string }[] };
         prompted.push(sessionId);
         saved.add(sessionId);
+        transcript.set(sessionId, prompt[0]?.text ?? "");
         result = { stopReason: "end_turn" };
+      } else if (method === "session/load") {
+        const { sessionId } = params as { sessionId: string };
+        const text = transcript.get(sessionId);
+        if (text) await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: {
+          sessionId, update: { sessionUpdate: "user_message_chunk", content: { type: "text", text } },
+        } }));
+        result = {};
       } else if (method === "_keryx/session_flags") {
         const { sessionId, subject } = params as { sessionId: string; subject?: Record<string, unknown> };
         if (!storesSubject && !saved.has(sessionId)) {
@@ -99,7 +127,7 @@ mockIPC(async (cmd, args) => {
         if (storesSubject) stored.set(sessionId, { sessionId, cwd, title: "PR session " + sessionId, updatedAt: new Date(Date.now() + stored.size).toISOString(), _meta: { keryx: flags } });
         result = flags;
       } else {
-        result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
+        result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true, extensions: ["_keryx/session_reviews", "_keryx/session_review_request"] } } }
           : method === "session/new" ? { sessionId: newSessions++ ? "nav-session-" + newSessions : "nav-session" }
           : method === "session/list" ? { sessions: [...stored.values()].reverse() } : { sessions: [] };
       }
@@ -108,8 +136,9 @@ mockIPC(async (cmd, args) => {
     }
     case "review_board":
       // The PR panel's detail read (the session header link opens it).
-      if ((args as { number?: number }).number === 12) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: 12,
-        headSha: run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
+      const detailNumber = (args as { number?: number }).number;
+      if (detailNumber === 12 || detailNumber === 14) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: detailNumber,
+        headSha: detailNumber === 14 ? boardRun.headSha : run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
       // The Reviews tab reads its own list; the board reads counted below are the Pull requests tab's.
       if ((args as {reviewsOnly?: boolean}).reviewsOnly) {
         reviewReads.push(String((args as {cwd:string}).cwd));
@@ -125,20 +154,35 @@ mockIPC(async (cmd, args) => {
       if (offline) throw new Error("unavailable: connection lost");
       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
         warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
-          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" }] };
+          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" },
+          { number:14,title:"Board proof",url:boardPrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:boardRun.headSha,baseSha:boardRun.baseSha, ...(boardOrigin && account === "me" && { localReview: { active: true, ready: false, runState: "running", sessionId: boardOrigin, runId: boardRunId } }),updatedAt:"2026-11-17T00:00:00Z" }] };
     case "review_run": {
-      const { action, target } = args as { action: { kind: string; activityId?: string }; target: { number: number } };
+      const { action, target } = args as { action: { kind: string; activityId?: string; activityBefore?: number; sessionId?: string }; target: { number: number } };
+      if (target.number === 14) {
+        if (action.kind === "start") {
+          boardOrigin = action.sessionId ?? "";
+          stored.set(boardOrigin, { sessionId: boardOrigin, cwd, title: "New session", updatedAt: "2026-11-20T00:00:00Z", _meta: { keryx: {} } });
+          return { version: 1, runs: [{ ...boardRun, sessionId: boardOrigin }], startedRunId: boardRunId };
+        }
+        return { version: 1, runs: boardOrigin ? [{ ...boardRun, sessionId: boardOrigin }] : [] };
+      }
       if (target.number === 13) {
         if (action.kind === "start") {
           bareStarts.push(action);
-          return { version: 1, runs: [bareRun], startedRunId: bareRunId };
+          bareOrigin = action.sessionId ?? "";
+          return { version: 1, runs: [{ ...bareRun, sessionId: bareOrigin }], startedRunId: bareRunId };
         }
-        return { version: 1, runs: bareStarts.length && action.activityId === bareRunId ? [bareRun] : [] };
+        return { version: 1, runs: bareStarts.length && action.activityId === bareRunId ? [{ ...bareRun, sessionId: bareOrigin }] : [] };
       }
       assert.equal(target.number, 12);
+      if (action.activityBefore !== undefined) {
+        assert.deepEqual(action, { kind: "status", activityId: runId, activityBefore: 88 });
+        return { version: 1, runs: [{ ...run, coordinatorActivity: [{ kind: "status", text: "Earlier scope validated" }] }] };
+      }
       if (action.kind === "start") {
         starts.push(action);
-        return { version: 1, runs: [run], startedRunId: runId };
+        origin = action.sessionId ?? "";
+        return { version: 1, runs: [{ ...run, sessionId: origin }], startedRunId: runId };
       }
       if (action.kind === "answer") {
         replies.push(action);
@@ -149,7 +193,7 @@ mockIPC(async (cmd, args) => {
         questions = questions.filter(q => q.id !== (action as { questionId?: string }).questionId);
       }
       return { version: 1, runs: starts.length && (action.activityId === runId || action.kind === "answer")
-        ? [{ ...run, pendingQuestions: questions }] : [] };
+        ? [{ ...run, sessionId: origin, pendingQuestions: questions, coordinatorActivityBefore: 88 }] : [] };
     }
     case "review_watcher": return { version: 1, state:"disabled", events:[] };
     default: return null;
@@ -307,7 +351,7 @@ try {
   assert.equal(current.value, "Keep this unsent draft");
   offline = false;
   await React.act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, `Запусти адаптивное ревью ${prUrl} с review-orchestrator`);
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, `Сделай адаптивное ревью ${prUrl} с review-orchestrator`);
     current.dispatchEvent(new Event("input", { bubbles:true }));
   });
   const send = host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
@@ -319,44 +363,50 @@ try {
   const apply = [...dialog.querySelectorAll("button")].find(button => button.textContent === "Apply");
   assert.ok(apply && !apply.disabled);
   await React.act(() => apply.click());
-  assert.deepEqual(starts, [{ kind: "start", baseSha: run.baseSha, headSha: run.headSha,
+  assert.deepEqual(starts, [{ kind: "start", baseSha: run.baseSha, headSha: run.headSha, sessionId: "nav-session",
     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] }, flowId: "505" } }]);
   assert.match(host.textContent ?? "", /2 questions are waiting for a reply/);
-  assert.equal(host.querySelectorAll(".session-review-activity textarea").length, 0);
-  assert.equal(current.placeholder, "Reply to review-logic");
-  const contractReply = host.querySelector<HTMLButtonElement>('[aria-label="Respond to review-pr-contract"] button');
-  assert.ok(contractReply);
-  await React.act(() => contractReply.click());
-  assert.equal(current.placeholder, "Reply to review-pr-contract");
+  assert.equal(originalRequests.get(runId), `Сделай адаптивное ревью ${prUrl} с review-orchestrator`);
+  const activity = [...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity");
+  assert.ok(activity);
+  await React.act(() => activity.click());
+  await React.act(() => namedButton("Load earlier activity").click());
+  assert.match(host.querySelector('[aria-label="Coordinator activity"]')?.textContent ?? "", /Earlier scope validated.*Wave 1 started/);
+  assert.equal(findButton("Load earlier activity"), undefined);
+  await React.act(() => namedButton("Back to latest activity").click());
+  assert.doesNotMatch(host.querySelector('[aria-label="Coordinator activity"]')?.textContent ?? "", /Earlier scope validated/);
+  const contract = [...host.querySelectorAll<HTMLFieldSetElement>(".session-review-activity fieldset")]
+    .find(field => field.querySelector("legend")?.textContent === "review-pr-contract");
+  assert.ok(contract);
+  const replyField = contract.querySelector<HTMLTextAreaElement>("textarea");
+  const replyButton = contract.querySelector<HTMLButtonElement>('button[type="submit"]');
+  assert.ok(replyField && replyButton);
+  assert.ok(!current.disabled, "An active review leaves the regular chat composer available");
   const note = "Read the pinned contract in the backend checkout.";
   await React.act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, note);
-    current.dispatchEvent(new Event("input", { bubbles:true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(replyField, note);
+    replyField.dispatchEvent(new Event("input", { bubbles:true }));
   });
-  await React.act(() => send.click());
-  assert.equal(current.value, note, "A failed send keeps the draft for the same review question");
+  await React.act(() => replyButton.click());
+  assert.equal(replyField.value, note, "A failed send keeps the draft for the same review question");
   assert.match(host.textContent ?? "", /Review reply could not be sent/);
-  await React.act(() => send.click());
+  await React.act(() => replyButton.click());
   const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
   assert.deepEqual(replies, [reply, reply]);
   assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
-  assert.ok([...host.querySelectorAll(".session-review-activity .turn-user")].some(row => row.textContent?.includes(note)));
-  assert.equal(current.placeholder, "Reply to review-logic");
-  assert.equal(current.value, "");
   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
   await go("Pull requests");
   // The review started from the session is the card's review link, without a manual refresh.
   assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
-  // The card's review action hands the PR to the Reviews tab, which opens its Review; a second request opens it again.
+  // The card opens the exact ACP conversation that started this review.
+  const countBeforeReopen = newSessions;
   for (let attempt = 0; attempt < 2; attempt++) {
     const reviewAction = [...host.querySelectorAll<HTMLButtonElement>("button[aria-label]")]
       .find(b => /^Review · (running|needs your answer) for #12$/.test(b.getAttribute("aria-label") ?? ""));
     assert.ok(reviewAction, "The PR card offers its review");
     await React.act(async () => { reviewAction.click(); });
-    await waitFor("the Reviews tab opens the PR's Review", () => !!host.querySelector('aside[aria-label="Review of pull request #12"]'));
-    assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent, "Reviews");
-    assert.ok(host.querySelector('aside[aria-label="Review of pull request #12"]'), "The Reviews tab opens the PR's Review");
-    await React.act(() => namedButton("Close review").click());
+    await waitFor("the originating review session opens", () => host.querySelector('main nav button[aria-current="page"]')?.textContent === "Sessions");
+    assert.equal(newSessions, countBeforeReopen, "Reopening the review creates no new session");
     await go("Pull requests");
   }
 
@@ -493,7 +543,7 @@ try {
   assert.ok(bareApply && !bareApply.disabled);
   await React.act(() => bareApply.click());
   await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
-  assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha,
+  assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha, sessionId: bareSession,
     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
   assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
   // The started run is the card's review link, without a manual refresh.
@@ -502,6 +552,38 @@ try {
   assert.equal(bareSlot("flow"), "Create Flow");
   assert.equal(bareSlot("session"), "Session");
   assert.deepEqual(prompted, olderTurns, "Neither the PR URL nor /review is sent as a prompt");
+  const openBeforeBoardLaunch = newSessions;
+  await React.act(() => namedButton("Run review for #14").click());
+  await waitFor("the board launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+  await React.act(() => namedButton("Apply").click());
+  await waitFor("the board launch creates its owning conversation", () =>
+    !!boardOrigin && host.querySelector(".titlebar")?.textContent?.includes("Review #14") === true);
+  assert.equal(newSessions, openBeforeBoardLaunch + 1);
+  assert.deepEqual(prompted, olderTurns, "Board launch does not submit an artificial prompt");
+  const boardComposer = host.querySelector<HTMLTextAreaElement>(".composer textarea");
+  assert.ok(boardComposer && !boardComposer.disabled);
+  await React.act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(boardComposer, "How is the review going?");
+    boardComposer.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
+  assert.equal(prompted.at(-1), boardOrigin, "Ordinary follow-up is sent to the board review's conversation");
+  await React.act(() => root.render(null));
+  localStorage.removeItem("keryx.session-reviews.v1:" + cwd);
+  await React.act(async () => root.render(<ToastProvider><App /></ToastProvider>));
+  await waitFor("the reopened Desktop is connected", () => !!host.querySelector<HTMLTextAreaElement>(".composer textarea:not([disabled])"));
+  await go("Pull requests");
+  await waitFor("the board has the persisted review origin", () => !!findButton("Review · running for #14"));
+  const beforeColdOpen = newSessions;
+  const beforeColdLoad = loaded.length;
+  await React.act(() => namedButton("Review · running for #14").click());
+  await waitFor("the original session is restored without Desktop review storage", () =>
+    host.querySelector(".titlebar")?.textContent?.includes("Review #14") === true);
+  assert.equal(newSessions, beforeColdOpen);
+  assert.deepEqual(loaded.slice(beforeColdLoad), [boardOrigin]);
+  assert.match(host.textContent ?? "", /How is the review going\?/);
+  assert.equal(localStorage.getItem("keryx.session-reviews.v1:" + cwd), null);
+  assert.equal(host.querySelector(".session-review-request")?.textContent, `Review ${boardPrUrl}`);
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
@@ -514,6 +596,7 @@ try {
   assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
   await go("Sessions");
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
+  assert.equal(host.querySelector(".session-review-request"), null, "Another account cannot see the previous account's launch receipt");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
