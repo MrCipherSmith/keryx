@@ -28,3 +28,12 @@
 - 2026-11-24T16:37:17.047Z - task-added: T7: Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow
 - 2026-11-24T16:37:26.956Z - task-attempt: T7: started (attempt 1) — 522-T7
 - 2026-11-24T16:42:14.726Z - task-done: T7: Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow
+
+## 2026-11-24 Review round 2 (PR #1311 @ d09e780be) — last round (brief cap: 2)
+
+- 11 reviewers, slice-01 read in full by each; tests-to-run at head 185 pass / 0 fail over 10 files (incl. the AC5 suites). Round 1 package was not ingested, so `keryx review plan` treated round 2 as a fresh full round (`-r02` package).
+- 0 blocker, 0 major. Round-1 major closed by both reviewers that raised it (logic, degradation).
+- Deferred minors (brief: fix only blockers and majors): logic F-001 = degradation F-001 (with a Flow, "latest" bound session may not be the one carrying that Flow's flag; AC4 says "that Flow's session (the bound one …)" — the prompt still names the right Flow); architecture F-001 = frontend FE-001 info (Flow resolved twice: fixFindingsFromReviews and openPrSession); ui-ux UX-003 (prompt names raw flow id/dir instead of flowRef/commandRef); highload HL-001 (a second press while a "Link Flow #N" offer is pending re-runs the new-Flow path).
+- Deferred infos: architecture F-002 (prompt + builder both passed), ui-ux UX-004 (no hint which Flow gets the fix round), testing F-001/F-002 (no "no offer" assertion for the Flow branch; tautological undefined check), logic F-002 / degradation F-002 (stale docs — fixed: plan.md, description.md, PR body).
+- Not run in either round: review tail (ledger dispositions, verifier, premise wave, review-pr-contract wave, ingest/readiness/complete), mutation pass (round 1: 21 candidates, round 2: 9).
+- 2026-11-24T16:48:31.330Z - task-done: T4: Self-review and prepare draft PR

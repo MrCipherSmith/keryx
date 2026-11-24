@@ -11,7 +11,7 @@ Desktop Review v2 stages 0–4 are merged, but the plan's stage-4 item «Дей�
 
 - The Review panel in the Reviews tab offers a labelled "Fix findings" action on a Review of the viewer's own open pull request whose latest reviewed result has open findings (blocker, major or minor).
 - Pressing it uses the existing "Create Flow" path of stage 1: the PR's bound session (newest, else a new session bound to the PR) opens with a prepared, unsent prompt that asks flow-orchestrator to create a fix Flow for the PR seeded with those findings, naming the Review round, the reviewed range, the counts and the exact `keryx review desk-run status` command that returns the findings of the reference attempt.
-- The one new flow package that then appears is offered on the PR's work row ("Link Flow #N?") exactly as for Create Flow, so the Flow is bound to the PR only on the user's Link.
+- On a PR without a Flow, the one new flow package that then appears is offered on the PR's work row ("Link Flow #N?") exactly as for Create Flow, so the Flow is bound to the PR only on the user's Link. On a PR that already has a Flow, the findings are fixed as a fix round of that Flow (owner decision after review round 1); no new package is expected.
 - The plan records the item as done.
 
 ## Outcome criteria

@@ -11,6 +11,7 @@ Reuse stage 1's Create Flow end to end; add only what is specific to findings.
 2. `ReviewPanel.tsx`: a text-labelled button "Fix findings" (aria-label "Fix findings of pull request #N") in the panel header facts row area, rendered only when `fixFindingsTarget` is non-null and an `onFixFindings` prop is given; it calls `onFixFindings(card, prompt)`.
 3. `ReviewsView.tsx`: pass an `onFixFindings` prop through to the panel, with the snapshot's repo and repositoryId so App can build the PR subject.
 4. `App.tsx`: generalise `createPrFlow(card, subject, prompt = flowPrompt(card.url))`; the Reviews tab handler builds `prSubject(card, repo, repositoryId)` and calls it with the findings prompt. Same session choice, same unsent prefill, same pending link and Link offer on the PR row.
+4a. Review round 1 owner decision ("Fix in existing Flow"): on a PR that already has a Flow (prUrl or a bound session's `flow` flag), Fix findings opens the PR's session (newest bound, else a new session working on that Flow) with a fix-round prompt naming Flow #N and registers no pending link; steps 4 and the matrix's "pending link registered" apply to a PR without a Flow only.
 5. Plan doc: stage-4 row and a short «Состояние» note record the action as done (Reviews panel variant), the PR-card CHANGES_REQUESTED variant as deferred.
 
 Trade-off: a Review-panel action (brief) rather than a PR-card action keyed on GitHub review state (spec). The Review is where the findings live; the ownership rule ("own PR") from the spec is kept.

@@ -11,7 +11,7 @@
   "title": "Desktop Review v2: Fix findings action launches a Flow from a Review",
   "status": "in-progress",
   "createdAt": "2026-11-24T16:19:57.525Z",
-  "updatedAt": "2026-11-24T16:42:14.726Z",
+  "updatedAt": "2026-11-24T16:48:31.330Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,7 +92,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -219,6 +220,11 @@
       "at": "2026-11-24T16:42:14.726Z",
       "event": "task-done",
       "detail": "T7: Fix round R1: Fix findings on a PR that already has a Flow fixes in that Flow"
+    },
+    {
+      "at": "2026-11-24T16:48:31.330Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
