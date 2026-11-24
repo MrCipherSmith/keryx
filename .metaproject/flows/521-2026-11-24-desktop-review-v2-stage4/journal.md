@@ -14,3 +14,13 @@
 - 2026-11-24T07:30:38.041Z - frozen: 7 criteria; checksum recorded
 - 2026-11-24T07:30:38.356Z - started
 - 2026-11-24T07:30:47.512Z - origin-set: unknown -> human-request; quote: "The user explicitly asked to start stage 4 now in its own worktree."; source: session local_4c9fedae-8b67-4970-82be-8662d726ed7d (Operator asked to start stage 4 now)
+- 2026-11-24T07:31:02.926Z - task-attempt: T5: started (attempt 1) — 521-T5
+- 2026-11-24T07:31:03.359Z - task-attempt: T6: started (attempt 1) — 521-T6
+
+## 2026-11-24 T6 divergence map (DONE_WITH_CONCERNS)
+
+- Map: `divergence-map.md`. Steps 1–5 of its plan work on the current run model, but step 1 (extracting a guard module from desk-publication.ts:240-254, 307, 341) overlaps lines stage 3 rewrites, so T7 waits for stage 3 to avoid a guaranteed conflict.
+- Step 6 (cross-path duplicate test) needs stage 2 (session packages as Attempts with source `session`); step 7 needs stage 3.
+- `githubPostReview` (`gh pr review`) returns no review id/URL; T7 must switch to `gh api .../reviews` or look up by marker after posting.
+- Head semantics: the session path allows a moved head when report.md line 1 names the reviewed SHA (readiness item 7), Desktop refuses. D1 allows this only with COMMENT; T7 must add the COMMENT restriction to the session path rather than refusing outright.
+- Not verified by the worker: completeHeadGate detail, review.rs after line 500, middle of ReviewPublishDialog.tsx; no tests run (read-only task).

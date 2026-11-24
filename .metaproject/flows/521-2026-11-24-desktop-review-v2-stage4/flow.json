@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 4: shared registry — Head moved procedure, shared publish code, session uses the update command",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:14.584Z",
-  "updatedAt": "2026-11-24T07:30:47.512Z",
+  "updatedAt": "2026-11-24T07:31:03.359Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,8 +99,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:31:02.926Z",
+            "outcome": "started",
+            "detail": "521-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -113,8 +119,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:31:03.359Z",
+            "outcome": "started",
+            "detail": "521-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -255,6 +267,16 @@
       "at": "2026-11-24T07:30:47.512Z",
       "event": "origin-set",
       "detail": "unknown -> human-request; quote: \"The user explicitly asked to start stage 4 now in its own worktree.\"; source: session local_4c9fedae-8b67-4970-82be-8662d726ed7d (Operator asked to start stage 4 now)"
+    },
+    {
+      "at": "2026-11-24T07:31:02.926Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 521-T5"
+    },
+    {
+      "at": "2026-11-24T07:31:03.359Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 521-T6"
     }
   ],
   "acKinds": {
