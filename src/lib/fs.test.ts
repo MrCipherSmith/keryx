@@ -23,10 +23,10 @@
 //     dead pid -> false.
 
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_LOCK_STALE_MS, isLockHeld, withFileLock } from "./fs";
+import { DEFAULT_LOCK_STALE_MS, isLockHeld, withFileLock, writeFileAtomicIfAbsent } from "./fs";
 
 async function tempDir(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), "keryx-fs-lock-"));
@@ -154,4 +154,26 @@ test("isLockHeld integration: a lock genuinely held by withFileLock is reported 
   });
   expect(observedDuringHold).toBe(true);
   await expect(isLockHeld(lockPath)).resolves.toBe(false);
+});
+
+test("writeFileAtomicIfAbsent publishes once, keeps the same inode on an identical rewrite, and refuses different bytes", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-fs-if-absent-"));
+  const file = path.join(dir, "nested", "evidence.txt");
+  expect(await writeFileAtomicIfAbsent(file, "same bytes\n")).toBe("written");
+  const firstIno = (await stat(file)).ino;
+  expect(await writeFileAtomicIfAbsent(file, "same bytes\n")).toBe("exists");
+  // Not replaced: a concurrent reader of this path never sees the inode swap.
+  expect((await stat(file)).ino).toBe(firstIno);
+  await expect(writeFileAtomicIfAbsent(file, "different bytes\n")).rejects.toThrow("different content");
+  expect(await readFile(file, "utf8")).toBe("same bytes\n");
+  // No temp files left behind on either path.
+  expect((await readdir(path.dirname(file))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+});
+
+test("writeFileAtomicIfAbsent: concurrent identical writers both succeed and exactly one writes", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-fs-if-absent-race-"));
+  const file = path.join(dir, "evidence.txt");
+  const results = await Promise.all(Array.from({ length: 8 }, () => writeFileAtomicIfAbsent(file, "x\n")));
+  expect(results.filter((result) => result === "written")).toHaveLength(1);
+  expect(await readFile(file, "utf8")).toBe("x\n");
 });

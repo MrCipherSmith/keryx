@@ -48,7 +48,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "../lib/fs";
+import { writeFileAtomic, writeFileAtomicIfAbsent } from "../lib/fs";
 import { type Slate, type SlateSeedKind, writeSlate } from "../session/slate";
 import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
@@ -338,9 +338,15 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const diffFile = `${input.kind}.${shortHash}.diff.txt`;
   const flowFile = `${input.kind}.${shortHash}.flow.json`;
   const seedsFile = `${input.kind}.${shortHash}.seeds.json`;
-  await writeFileAtomic(path.join(evidenceDir, diffFile), safeDiff.content);
-  await writeFileAtomic(path.join(evidenceDir, flowFile), safeFlow.content);
-  await writeFileAtomic(path.join(evidenceDir, seedsFile), safeSeeds.content);
+  // Write-once, never replace: the names are content-addressed, so a second
+  // racer (AC4) holding identical evidence finds the files already there and
+  // leaves them alone. Replacing them via `writeFileAtomic`'s rename swapped
+  // the inode under the OTHER racer's `validateEvidence` realpath, which on
+  // Linux CI failed ~3% of races with "workspace reference is not resolvable"
+  // — an `"error"` outcome where AC4 expects `"conflict"`.
+  await writeFileAtomicIfAbsent(path.join(evidenceDir, diffFile), safeDiff.content);
+  await writeFileAtomicIfAbsent(path.join(evidenceDir, flowFile), safeFlow.content);
+  await writeFileAtomicIfAbsent(path.join(evidenceDir, seedsFile), safeSeeds.content);
 
   const observedAt = now().toISOString();
   const relBase = `./.metaproject/workspaces/${input.workspaceId}/machine-evidence`;
@@ -359,7 +365,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   // proposal instead of sitting beside it as a strippable footnote.
   if (floor.notice !== undefined) {
     const noticeFile = `${input.kind}.${shortHash}.redaction.md`;
-    await writeFileAtomic(path.join(evidenceDir, noticeFile), floor.notice);
+    await writeFileAtomicIfAbsent(path.join(evidenceDir, noticeFile), floor.notice);
     evidence.push({ kind: REDACTION_NOTICE_KIND, uri: `${relBase}/${noticeFile}`, revision: sha256(floor.notice), observedAt });
   }
 

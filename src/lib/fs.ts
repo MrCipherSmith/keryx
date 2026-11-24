@@ -10,7 +10,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { access, chmod, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { access, chmod, link, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import path from "node:path";
 
@@ -68,6 +68,39 @@ export async function writeFileAtomic(
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
     throw error;
+  }
+}
+
+/**
+ * Publish `content` at `filePath` only if nothing is there yet, and never
+ * replace what is. For content-addressed files (the name is derived from the
+ * bytes), where a second writer has nothing new to say: `writeFileAtomic`'s
+ * rename would swap the inode under a concurrent reader of the SAME path for no
+ * gain — on Linux a `realpath` caught mid-swap fails — while `link()` either
+ * creates the name atomically or fails with EEXIST and leaves it untouched.
+ *
+ * An existing file with the same bytes is the expected collision and returns
+ * `"exists"`. One with DIFFERENT bytes is refused rather than overwritten: the
+ * caller's naming promised they would match, and replacing evidence a reader
+ * may already have hashed is exactly what this helper exists to prevent.
+ */
+export async function writeFileAtomicIfAbsent(filePath: string, content: string): Promise<"written" | "exists"> {
+  const dir = path.dirname(filePath);
+  await mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(tmp, content, "utf8");
+    try {
+      await link(tmp, filePath);
+      return "written";
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) throw error;
+    }
+    const existing = await readFile(filePath, "utf8");
+    if (existing !== content) throw new Error(`refusing to replace ${path.basename(filePath)}: it exists with different content`);
+    return "exists";
+  } finally {
+    await rm(tmp, { force: true }).catch(() => {});
   }
 }
 
