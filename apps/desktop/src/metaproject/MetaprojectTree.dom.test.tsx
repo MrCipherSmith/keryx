@@ -62,11 +62,13 @@ function Harness(props: {
   selected?: MetaprojectNode;
   onSelect?: (node: MetaprojectNode) => void;
   onStale?: () => void;
+  /** Stands for the explorer's catalog: a new value re-reads the reads parked stale. */
+  reload?: number;
   wait?: (ms: number) => Promise<void>;
 }) {
   const model = useTree({
     cwd: "/project", snapshot: props.snapshot ?? SNAPSHOT, request: props.request, onStale: props.onStale ?? (() => {}),
-    ...(props.wait && { wait: props.wait }),
+    reload: props.reload ?? 0, ...(props.wait && { wait: props.wait }),
   });
   return createElement(Tree, {
     scope: props.scope ?? "graph", label: "Project files", model,
@@ -467,6 +469,24 @@ test("a focused Show more whose page lands with the children of the folder above
   await act(async () => { tree.release("src|"); tree.release("|next"); });
   expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["src", "client.ts", "server.ts", "README.md"]);
   expect(focused()).toBe("README.md");
+});
+
+test("a focused Show more whose page appends nothing hands focus back to its parent's last entry, not to a row of another folder", async () => {
+  // Before the page: src (expanded), its two files, the root's Show more. The page adds no root entry.
+  const tree = reader({
+    "|": { entries: [folder("src", 2)], nextCursor: "next", partial: false },
+    "src|": SRC_PAGE,
+    "|next": { entries: [], partial: false },
+  });
+  tree.hold.add("|next");
+  await act(async () => { root.render(createElement(Harness, { request: tree.request })); });
+  await act(async () => { item("src").querySelector<HTMLElement>(".metaproject-tree-chevron")?.click(); });
+  await act(async () => { item("Show more").focus(); });
+  await key(item("Show more"), "Enter");
+  expect(document.activeElement?.textContent).toBe("Loading…");
+  await act(async () => { tree.release("|next"); });
+  expect(items().map(row => row.querySelector(".metaproject-tree-name")?.textContent)).toEqual(["src", "client.ts", "server.ts"]);
+  expect(focused()).toBe("src");
 });
 
 test("focus that left the tree stays outside when the focused Show more row's page arrives", async () => {

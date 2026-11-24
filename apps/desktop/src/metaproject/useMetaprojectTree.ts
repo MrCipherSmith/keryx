@@ -109,9 +109,10 @@ export function useMetaprojectTree({ cwd, snapshot, request, onStale, reload, wa
   onStale: () => void;
   /**
    * Changes whenever the explorer loads its catalog (Refresh catalog included), whether or not the
-   * snapshot changed: parked stale reads are sent again then.
+   * snapshot changed: parked stale reads are sent again then. Required: a change of it is the only way
+   * out of a stale read, which offers no Retry.
    */
-  reload?: unknown;
+  reload: unknown;
   /** Waits before a permit retry; tests pass one that does not use the clock. */
   wait?: (ms: number) => Promise<void>;
 }): MetaprojectTreeModel {

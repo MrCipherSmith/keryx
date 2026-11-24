@@ -2153,6 +2153,8 @@ test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the
   expect(staleBanner()).toBe(true);
   expect(deadRetry()).toBe(false);
   expect(() => treeRow("Client")).toThrow();
+  // The parked read shows as loading under src until the banner's Refresh catalog.
+  expect(treeRows().map(row => row.textContent)).toEqual(["src1", "Loading…"]);
   // The CLI answers for the pinned snapshot again; Refresh catalog finds the same snapshot and re-reads src.
   trees["s1|graph|src|"] = SRC_CHILDREN;
   await act(async () => { button("Refresh catalog").click(); });
@@ -2166,6 +2168,44 @@ test("a tree answer for another snapshot, or a stale-snapshot refusal, shows the
   expect(staleBanner()).toBe(true);
   expect(deadRetry()).toBe(false);
   expect(() => treeRow("Guide")).toThrow();
+  // Refresh catalog re-reads a parked Wiki read as it does a Graph one.
+  trees["s1|wiki|other|"] = WIKI_OTHER;
+  await act(async () => { button("Refresh catalog").click(); });
+  await act(async () => {});
+  expect(staleBanner()).toBe(false);
+  expect(treeRow("Guide")).not.toBeNull();
+  expect(treeRows().some(row => row.textContent === "Loading…")).toBe(false);
+  expect(explorer.treeCalls.filter(call => call.parent === "other").map(call => call.expectedSnapshotId)).toEqual(["s1", "s1"]);
+});
+
+test("a selection made elsewhere whose folder read is parked stale is revealed once Refresh catalog reads it", async () => {
+  const timer = manualTimer();
+  const scrolled: HTMLElement[] = [];
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) { scrolled.push(this); };
+  try {
+    const trees: Record<string, TreeAnswer> = { ...STANDARD_TREES, "s1|graph|src|": { entries: [{ type: "node", node: file }], snapshotId: "s2" } };
+    const explorer = treeExplorer(trees);
+    const createCytoscape = await headlessCytoscape();
+    await act(async () => { root.render(createElement(View, { cwd: "/project", ...explorer.props, createCytoscape, onRebuild: async () => false })); });
+    await typeTreeQuery("client");
+    await act(async () => { timer.run(); });
+    await act(async () => { listRow("Client").click(); });
+    await typeTreeQuery("");
+    await act(async () => {});
+    // The reveal expanded src, whose read is parked stale: it waits instead of giving up.
+    expect(treeRow("src").getAttribute("aria-expanded")).toBe("true");
+    expect(() => treeRow("Client")).toThrow();
+    trees["s1|graph|src|"] = SRC_CHILDREN;
+    await act(async () => { button("Refresh catalog").click(); });
+    await act(async () => {});
+    // No second selection: the same reveal finishes and scrolls the row into view.
+    expect(treeRow("Client").getAttribute("aria-selected")).toBe("true");
+    expect(scrolled.includes(treeRow("Client"))).toBe(true);
+  } finally {
+    timer.restore();
+    HTMLElement.prototype.scrollIntoView = original;
+  }
 });
 
 test("a next tree page answered for another snapshot is read again after Refresh catalog finds the same snapshot", async () => {
@@ -2181,6 +2221,12 @@ test("a next tree page answered for another snapshot is read again after Refresh
   await act(async () => { treeRows().find(row => row.textContent === "Show more")?.click(); });
   expect(staleBanner()).toBe(true);
   expect(() => treeRow("Late")).toThrow();
+  // The parked page shows as loading, and activating it asks for nothing until Refresh catalog.
+  const parked = treeRows().at(-1);
+  expect(parked?.textContent).toBe("Loading…");
+  await act(async () => { parked?.click(); });
+  await act(async () => { parked?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+  expect(explorer.treeCalls.filter(call => call.cursor === "page-2")).toHaveLength(1);
   trees["s1|graph||page-2"] = { entries: [{ type: "node", node: late }] };
   await act(async () => { button("Refresh catalog").click(); });
   await act(async () => {});

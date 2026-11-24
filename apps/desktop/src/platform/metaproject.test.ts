@@ -219,6 +219,8 @@ describe("Metaproject tree responses", () => {
     }));
     expect(isMetaprojectPermitRefusal(other)).toBe(false);
     expect(isMetaprojectPermitRefusal(new MetaprojectRequestError("not-found", "Too many Metaproject reads."))).toBe(false);
+    // A typed answer is the CLI's, never Desktop's permit refusal, even when its text reads like one.
+    expect(isMetaprojectPermitRefusal(new MetaprojectRequestError("not-found", METAPROJECT_PERMIT_REFUSAL))).toBe(false);
   });
 
   test("an answer for another snapshot than the one pinned is refused as stale-snapshot", async () => {

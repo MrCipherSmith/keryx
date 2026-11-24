@@ -78,6 +78,19 @@ function handOff(rows: readonly Row[], index: number): { anchor?: string; parent
   return { anchor: last?.id ?? own, parent: row.parent };
 }
 
+/**
+ * The row that takes focus from a row that left, given its hand-off (`handOff`): with no anchor shown,
+ * none (the caller falls back to the old index); with no parent, the row after the anchor; with a
+ * parent, that parent's first row after the anchor, or the anchor itself when the parent gained none.
+ */
+function handOffTarget(rows: readonly Row[], anchor?: string, parent?: string): Row | undefined {
+  const at = anchor === undefined ? -1 : rows.findIndex(row => row.id === anchor);
+  if (at < 0) return undefined;
+  const after = rows.slice(at + 1);
+  const next = parent === undefined ? after[0] : after.find(row => row.parent === parent);
+  return next ?? rows[at];
+}
+
 /** The tree steps from the root to `node`: each names the parent to read and the child to find in it. */
 type Step = { parent: string; container: string } | { parent: string; node: string };
 function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[] {
@@ -103,7 +116,8 @@ function revealSteps(scope: MetaprojectTreeScope, node: MetaprojectNode): Step[]
  * pages. Data lives in `model` (the explorer's), so this component can come and go with the search.
  * Focus moves with the keyboard or a click. Data arriving never takes focus from outside the tree;
  * when the focused row is replaced (its folder or next page loaded), focus goes to the row now at its
- * place: the one after the row that preceded it, when that row is still shown.
+ * place (`handOff`): a status row hands it to its own parent's next row, any other row to the row
+ * after the one that preceded it.
  */
 export function MetaprojectTree({ scope, label, model, selection, selected, onSelect }: {
   scope: MetaprojectTreeScope;
@@ -174,10 +188,7 @@ export function MetaprojectTree({ scope, label, model, selection, selected, onSe
     const lost = focused.current;
     const active = document.activeElement;
     if (lost && !lost.element.isConnected && (!active || active === document.body || !active.isConnected)) {
-      const at = lost.anchor === undefined ? -1 : rows.findIndex(row => row.id === lost.anchor);
-      const after = rows.slice(at + 1);
-      const target = at < 0 ? undefined
-        : (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];
+      const target = handOffTarget(rows, lost.anchor, lost.parent);
       const next = target ? elements.find(element => element.dataset.row === target.id) : elements[Math.min(lost.index, elements.length - 1)];
       next?.focus();
     }
