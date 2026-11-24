@@ -619,7 +619,8 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       const selection = await ports.selectModel(options.cwd);
       signal.throwIfAborted();
       const maxMinutes = deskReviewMinutes(options.options, options.budgetMinutes);
-      const maxTokens = options.options?.maxTokens ?? options.budgetTokens ?? undefined;
+      const launchTokens = options.options?.maxTokens;
+      const maxTokens = options.budgetTokens == null ? launchTokens : Math.min(options.budgetTokens, launchTokens ?? options.budgetTokens);
       const execute = (preservedPackage: string | undefined, budgetMinutes = maxMinutes, budgetTokens = maxTokens) => runAutonomousReview({
         ...selection,
         ...(options.options ? { deskOptions: options.options } : {}),

@@ -665,7 +665,8 @@ test("preserves recovered package evidence after an exception in the guarded lau
 
 test("the scheduled token budget reaches the autonomous executor", async () => {
   const result = await executeDeskReview(
-    { ...options(), budgetTokens: 9, budgetMinutes: 1 },
+    { ...options(), budgetTokens: 9, budgetMinutes: 1,
+      options: { mode: "auto", adaptive: true, maxTokens: 100, modelPools: { strong: [], middle: [], light: [] } } },
     {
       selectModel, remoteUrl: cwd,
       revision,
