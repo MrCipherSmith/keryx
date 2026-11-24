@@ -67,9 +67,9 @@ A GitHub login does not change the model provider or Git commit author.
 If Desktop reports that the selected CLI does not support GitHub accounts,
 choose **Settings → Desktop → Bundled keryx**, then retry.
 
-## Find a pull request in Review
+## Find a pull request
 
-Select a project in the left sidebar, then choose **Review** in its **Sessions / Flows / Review** navigation. Switching sections preserves the session draft. **Settings** at the bottom of the sidebar opens app-wide preferences. Review starts
+Select a project in the left sidebar, then choose **Pull requests** in its navigation (**Sessions**, **Flows**, **Reviews**, **Pull requests**, **Issues**, **Metaproject**). Switching sections preserves the session draft. **Settings** at the bottom of the sidebar opens app-wide preferences. Pull requests starts
 with all open pull requests, including drafts and contributions from forks.
 When the project has several GitHub.com remotes, select the base repository
 whose pull requests you want to see.
@@ -84,6 +84,23 @@ Open a card to read discussion, submitted reviews, inline replies and checks
 for its head commit. Follow a link to continue the conversation on GitHub.
 Use **Refresh** to read the latest data. The view identifies partial results
 and shows the time of the last successful read when an update fails.
+
+The board's columns follow the GitHub state of the pull request only. Keryx
+work is shown on each card, list row and PR panel in a work row:
+
+- **Flow.** **Flow #N · stage** opens the Flow linked to the pull request.
+  Without one, the slot reads **Create Flow**: it opens the PR's session with
+  an unsent prompt to create a Flow for this pull request. When a new Flow
+  package appears within 15 minutes, the work row asks **Link Flow #N** or
+  **Dismiss**; only **Link** records the Flow on the session.
+- **Session.** **Session** or **N sessions** opens the session bound to the
+  pull request. Without one, the slot reads **Open in session**, which binds a
+  new session to the pull request and names it after it.
+- **Review.** Once the pull request has a Review, the row links to it with its
+  round and how far the pull request has moved past the reviewed commit.
+
+A review started with `/review` in the PR's session appears on the card as
+soon as the session finishes or publishes its review package.
 
 ### Run a review from a card
 
@@ -158,6 +175,63 @@ with the previous round's settings except automatic publication, which you
 decide again for the new round. Your answers to findings carry over by finding
 id. If the current head already has a review attempt, Desktop shows that
 attempt instead of starting another.
+
+### Follow Reviews and their rounds
+
+Open **Reviews** (**⌘3**) to see one Review per pull request. Every run on
+that pull request is a round of the same Review: the first review, each
+**Update review** and each scheduled re-review. A round keeps its attempts,
+such as a retry after an interruption. Reviews started from Desktop, by a
+review rule, or by an agent session with `keryx review complete` or
+`keryx review publish` all appear here; the panel names the source as
+**Manual**, **Scheduled**, **Existing review** or **Session**. A review a
+session finished can be published from Desktop, and a review published by
+one path is refused by the other, so the same review is never posted twice.
+
+The board groups Reviews in **Running**, **Waiting on you**, **Behind**,
+**Published** and **Closed**. **Behind** means new commits were pushed after
+the reviewed commit; the card shows how many, or that the history was
+rewritten. The list shows the same Reviews with their state, freshness,
+latest findings and total tokens. Filter by state or freshness (**Current**,
+**Behind**, **Unknown** when the PR head could not be read). Reviews of closed
+pull requests and archived reviews are hidden until you select **Show
+closed**. The panel lists the rounds newest first, with the report, findings
+and publication of the selected round.
+
+The command line reads the same Reviews: `keryx review reviews --json` lists
+them, and `keryx review advance --json` opens an update round, as
+[CLI reference](cli-reference.md) describes.
+
+### When the pull request moves during a review
+
+A round reviews the commit it started on and is never interrupted when new
+commits arrive; its result stays true for that commit. After the round, the
+Review shows as **Behind**, and the publication dialog offers **Update review
+to** the new commit or **Publish as is for** the reviewed commit, as described
+above.
+
+Each Review stores an `on_head_move` choice that tells an agent session what
+to do when the head moves during a round: `ask` (the default), `follow`
+(finish the round, then open an update round) or `ignore` (finish the round
+and leave the Review behind). The review-orchestrator skill reads it in its
+**Head moved** procedure: with `ask` it offers **Update after this round
+finishes** or **Stop and start on the new head**. Desktop has no control to
+change the value yet, so every Review uses `ask`, and a round Desktop runs
+keeps its range; start the update from the publication dialog.
+
+### Fix findings
+
+On your own open pull request, a Review whose reviewed round has blocker,
+major or minor findings offers **Fix findings** in its panel, unless a round
+is still running or the Review is closed or archived. It opens the PR's
+session with an unsent prompt that names the reviewed round and commits, the
+number of open blocker, major and minor findings, and the command that reads
+them. Info findings are left out. Read and edit the prompt, then send it.
+
+- Without a linked Flow, the prompt asks the agent to create a fix Flow, and
+  the work row then offers **Link Flow #N**, as with **Create Flow**.
+- With a linked Flow, the prompt asks for a fix round in that Flow, and no
+  new Flow is linked.
 
 ### Watch PRs while Desktop is closed
 

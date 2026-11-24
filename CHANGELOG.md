@@ -5,9 +5,38 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.55] - 2026-11-24
+
+**Keryx Desktop 0.2.18** bundles Keryx 0.4.55 and supports Keryx 0.4.50 or newer. The Reviews tab, **Update review** and **Fix findings** read commands added in Keryx 0.4.55: use the bundled Keryx or 0.4.55 or newer for them.
+
+This release ships Desktop Review v2.
+
+### Added
+
+- Follow every review of a pull request as one Review in the new **Reviews** tab (⌘3): a board with **Running**, **Waiting on you**, **Behind**, **Published** and **Closed**, a list with state and freshness filters, **Show closed**, and a panel with the rounds newest first. Existing review runs are migrated into Reviews and rounds on first read. (#1304)
+- See the Keryx work on every pull request card, list row and panel: the linked Flow or **Create Flow**, the bound session or **Open in session**, and the Review with its round and how far the pull request has moved. **Create Flow** prefills the PR's session and then offers **Link Flow #N** for the new package. (#1300)
+- **Update review to** a new commit from the publication dialog starts the next round of the same Review on the current head, with the previous round's settings except automatic publication; your answers to findings carry over by finding id. (#1303, #1302)
+- **Publish as is for** the reviewed commit when the pull request moved on: a comment-only review whose first line names the reviewed commit and says the PR has moved on. (#1303)
+- **Fix findings** on your own pull request opens its session with an unsent prompt to fix the open blocker, major and minor findings, in a new fix Flow or as a fix round of the PR's linked Flow. (#1311)
+- `keryx review reviews --json` lists a repository's Reviews with rounds, freshness, findings and publication; `keryx review advance --json` opens the update round of a Review on the current head. (#1304, #1302)
+- A review package a session finishes with `keryx review complete` or publishes with `keryx review publish` becomes an attempt of the PR's Review with source **Session**, so Desktop lists it and can publish it. Both publish paths share one receipt and duplicate marker, so a review posted by one is refused by the other. (#1302)
+- The review-orchestrator skill checks the pull request head at every wave boundary and follows a **Head moved** procedure: by the Review's `on_head_move` (`ask` by default, `follow`, `ignore`) it offers to update after the round or stop and restart, and before publishing on a moved head it offers update, publish as is, save locally or skip. (#1302, #1303)
+
+### Changed
+
+- The Pull requests and Issues boards group cards by GitHub state only; Keryx stages appear in the work row instead of columns. Issues opens on the project's repository by default. Navigation shortcuts are now ⌘3 Reviews, ⌘4 Pull requests, ⌘5 Issues and ⌘6 Metaproject. (#1300, #1304)
+- Review rules, review history and publication moved from the PR panel to the Review's panel in **Reviews**; the PR panel offers **Open in Reviews**. (#1304)
+
 ### Fixed
 
-- A project's selected GitHub account now applies to everything started in it, not only the review board: `keryx review`, `flow`, `shell`, `ci` and `conform` commands, and Desktop terminals and agents, call GitHub as that account even when another one is active in `gh`. A token you export yourself still wins. `keryx review accounts env --json` prints the token for Desktop.
+- A project's selected GitHub account now applies to everything started in it, not only the review board: `keryx review`, `flow`, `shell`, `ci` and `conform` commands, and Desktop terminals and agents, call GitHub as that account even when another one is active in `gh`. A token you export yourself still wins. `keryx review accounts env --json` prints the token for Desktop. (#1309)
+- A stale file lock is reclaimed only when it is still the same stale lock, so a fresh lock that reuses its inode is never removed. (#1303)
+
+### Not verified
+
+- The live end-to-end scenarios on a real pull request were not run in the app: a review from an agent session published from Desktop, **Update review** after a new commit, and a commit pushed during a running round. They are covered by automated tests only.
+- Desktop's `on_head_move` has no control yet: every Review uses `ask`, and `follow` and `ignore` are read only by the review-orchestrator skill.
+- Keryx Desktop's Rust code is built and tested in CI only.
 
 ## [0.4.54] - 2026-11-24
 
