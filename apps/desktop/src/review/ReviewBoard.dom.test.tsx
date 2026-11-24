@@ -691,7 +691,7 @@ test("an outdated review's work-row link starts a new review in board and list",
   const outdated = { ...pr, localReview: { active: false, ready: false, outdated: { headSha: "abcdef0123456", state: "completed" as const } } };
   for (const mode of ["Board", "List"]) {
     const calls: string[] = [];
-    await render(async () => snapshot([card]), "/project", ++renderKey,
+    await render(async () => snapshot([outdated]), "/project", ++renderKey,
       undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
         headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
@@ -770,7 +770,7 @@ test("with Reviews wired, a start action stays in the PR panel; without it, a vi
     await render(async () => snapshot([card]), "/project", ++renderKey, undefined, detail,
       async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; }, watcherDisabled, undefined,
       { onOpenInReviews: (target, intent) => { opened.push([target, intent]); } });
-    await click(button((card.localReview ? "New review round" : "Run review") + " for #101"));
+    await click(button((card.localReview ? "Review · outdated" : "Run review") + " for #101"));
     expect(opened).toEqual([]);
     expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
     expect(calls).toContain("start");
@@ -778,7 +778,7 @@ test("with Reviews wired, a start action stays in the PR panel; without it, a vi
   const calls: string[] = [];
   await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey, undefined, detail,
     async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
-  await click(button("View review for #101"));
+  await click(button("Review · running for #101"));
   expect(document.body.querySelector(".review-detail-panel")).not.toBeNull();
   expect(calls).not.toContain("start");
 });

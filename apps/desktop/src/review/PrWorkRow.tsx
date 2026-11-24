@@ -39,7 +39,10 @@ export function PrWorkRow({ card, work, onReview }: { card: ReviewCard; work: Pr
   const canReview = !!state || card.state === "open";
   const reviewText = state ? `Review · ${state}` : "Run review";
   const progress = reviewProgressText(card.localReview);
-  const reviewTitle = [state === "outdated" ? reviewNote(card) ?? reviewText : canReview ? reviewText : "Only an open pull request can be reviewed", progress]
+  // An outdated review names the round it follows (decision d): pressing the slot starts a new review round.
+  const outdatedRound = card.localReview?.outdated?.round;
+  const outdatedTitle = `${outdatedRound ? `Round ${outdatedRound} · ` : ""}${reviewNote(card) ?? reviewText} — New review round`;
+  const reviewTitle = [state === "outdated" ? outdatedTitle : canReview ? reviewText : "Only an open pull request can be reviewed", progress]
     .filter(Boolean).join(" — ");
   const flowText = flow ? `Flow #${flow.id} · ${flowStage(flow)}` : "Create Flow";
   const sessionText = sessions.length > 1 ? `${sessions.length} sessions` : sessions.length ? "Session" : "Open in session";

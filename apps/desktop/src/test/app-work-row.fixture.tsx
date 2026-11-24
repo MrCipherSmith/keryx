@@ -90,6 +90,9 @@ mockIPC(async (cmd, args) => {
       return;
     }
     case "review_board":
+      // The Reviews tab reads its own list (stage 2); this fixture has no Reviews.
+      if ((args as { reviewsOnly?: boolean }).reviewsOnly) return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID",
+        viewer: "me", fetchedAt: "2026-11-19T00:00:00Z", reviews: [], warnings: [] };
       return { version: 1, repo: "org/project", repositories: ["org/project"], repositoryId: "RID", viewer: "me", fetchedAt: "2026-11-19T00:00:00Z",
         warnings: [], cards: [card(12, "2026-11-19T00:00:00Z"), card(13, "2026-11-18T00:00:00Z"), card(14, "2026-11-17T00:00:00Z"),
           card(15, "2026-11-16T00:00:00Z"), card(16, "2026-11-15T00:00:00Z")] };
