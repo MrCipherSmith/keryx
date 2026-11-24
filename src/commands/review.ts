@@ -7,6 +7,7 @@ import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
 import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
 import { DESK_PUBLISH_USAGE, runReviewDeskPublish } from "./review-desk-publish";
 import { BOARD_USAGE, runReviewBoard } from "./review-board";
+import { REVIEWS_USAGE, runReviewReviews } from "./review-reviews";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -809,6 +810,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "board") {
       await runReviewBoard(args.slice(1));
+      return;
+    }
+    if (command === "reviews") {
+      await runReviewReviews(args.slice(1));
       return;
     }
     if (command === "attach") {
@@ -5368,6 +5373,7 @@ run-scoped bridge grant and cannot combine it with the root environment.
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["accounts", () => console.log(ACCOUNTS_USAGE)],
   ["board", () => console.log(BOARD_USAGE)],
+  ["reviews", () => console.log(REVIEWS_USAGE)],
   ["rules", () => console.log(RULES_USAGE)],
   ["watch", () => console.log(WATCH_USAGE)],
   ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
@@ -5536,6 +5542,8 @@ Usage:
                         Chooses the local project GitHub account.
   ${BOARD_USAGE}
                         Reads pull requests and discussions of a connected GitHub repository.
+  ${REVIEWS_USAGE}
+                        Lists this account's local Reviews of a connected repository with state, freshness and rounds.
   ${WATCH_USAGE}
   ${RULES_USAGE}
                         Manages the local macOS pull request watcher.

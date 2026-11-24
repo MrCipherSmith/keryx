@@ -11,6 +11,7 @@ import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "
 import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
 import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
+import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
 import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
 export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
@@ -557,6 +558,55 @@ export class DeskRunStore {
     }
   }
 
+  /** Every Review of one account in one repository with its visible attempts, oldest first. Archived and deleted
+   * attempts are left out, and so is a Review with no other attempt. No reports or reviewer sessions are read. */
+  reviewRows(repositoryId: string, viewer: string): ReviewRow[] {
+    type Item = {
+      reviewId: string; number: number; viewer: string; closedAt: string | null; onHeadMove: ReviewOnHeadMove;
+      id: string; round: number; previousRunId: string | null; state: DeskRun["state"]; source: ReviewSource;
+      baseSha: string; headSha: string; reviewedBase: string | null; reviewedHead: string | null;
+      coverage: ReviewAttemptSummary["coverage"]; findings: string | null; verdict: string | null; decision: ReviewAttemptSummary["decision"];
+      flowId: string | null; tokens: number | null; awaitingAnswer: number; createdAt: string; finishedAt: string | null;
+    };
+    const placement = this.placement("r.");
+    const rows = this.db.query<Item, [string, string]>(`
+      SELECT v.id AS reviewId, v.pr AS number, v.viewer AS viewer, v.closed_at AS closedAt, v.on_head_move AS onHeadMove,
+        r.id, ${placement.round} AS round, ${placement.previousRunId} AS previousRunId,
+        CASE WHEN r.state='recoverable' THEN 'failed' ELSE r.state END AS state,
+        json_extract(r.details,'$.source') AS source,
+        json_extract(r.details,'$.baseSha') AS baseSha, json_extract(r.details,'$.headSha') AS headSha,
+        json_extract(r.details,'$.result.reviewed.baseSha') AS reviewedBase, json_extract(r.details,'$.result.reviewed.headSha') AS reviewedHead,
+        json_extract(r.details,'$.result.coverage') AS coverage, json_extract(r.details,'$.result.findings') AS findings,
+        json_extract(r.details,'$.result.verdict') AS verdict, json_extract(r.details,'$.decision.action') AS decision,
+        json_extract(r.details,'$.options.flowId') AS flowId, json_extract(r.details,'$.usage.total.totalTokens') AS tokens,
+        CASE WHEN r.state='running' AND json_extract(r.details,'$.source')='manual'
+          THEN EXISTS(SELECT 1 FROM (${questionRows}) q WHERE q.run_id=r.id AND q.answer IS NULL) ELSE 0 END AS awaitingAnswer,
+        json_extract(r.details,'$.createdAt') AS createdAt, json_extract(r.details,'$.finishedAt') AS finishedAt
+      FROM reviews v JOIN runs r ON ${placement.reviewId}=v.id
+      WHERE v.repo=? AND v.viewer=? AND coalesce(json_extract(r.details,'$.decision.action'),'') NOT IN ('archive','delete')
+      ORDER BY v.pr DESC, v.id, json_extract(r.details,'$.createdAt'), r.rowid`).all(repositoryId, viewer);
+    const reviews = new Map<string, ReviewRow>();
+    for (const item of rows) {
+      let review = reviews.get(item.reviewId);
+      if (!review) {
+        review = { id: item.reviewId, repositoryId, number: item.number, viewer: item.viewer, closedAt: item.closedAt,
+          onHeadMove: item.onHeadMove, attempts: [] };
+        reviews.set(item.reviewId, review);
+      }
+      const reviewed = item.reviewedBase && item.reviewedHead ? { baseSha: item.reviewedBase, headSha: item.reviewedHead } : null;
+      const publication = reviewed && item.source !== "existing" ? this.publication(item.id, item.state, item.coverage) : undefined;
+      review.attempts.push({
+        id: item.id, round: item.round, previousRunId: item.previousRunId, state: item.state, source: item.source,
+        baseSha: item.baseSha, headSha: item.headSha, reviewed, coverage: item.coverage,
+        findings: item.findings === null ? null : JSON.parse(item.findings) as ReviewAttemptSummary["findings"],
+        verdict: item.verdict, publication: publication ?? null, decision: item.decision, flowId: item.flowId,
+        tokens: Number.isSafeInteger(item.tokens) ? item.tokens : null, awaitingAnswer: !!item.awaitingAnswer,
+        createdAt: item.createdAt, finishedAt: item.finishedAt,
+      });
+    }
+    return [...reviews.values()];
+  }
+
   activeReviewNumbers({ repositoryId, viewer }: Pick<DeskRunKey, "repositoryId" | "viewer">): number[] {
     return this.db.query<{ pr: number }, [string, string]>(`
       SELECT DISTINCT pr FROM runs WHERE repo=? AND viewer=?
@@ -846,6 +896,14 @@ export function readLocalActiveReviewNumbers(key: Pick<DeskRunKey, "repositoryId
   if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return [];
   const store = new DeskRunStore(deskRunRoot(), true);
   try { return store.activeReviewNumbers(key); } finally { store.close(); }
+}
+
+/** A missing store has no Reviews and is not created. An existing store is opened writable, so a database
+ * that predates Reviews is migrated before it is read. */
+export function readReviewRows(repositoryId: string, viewer: string, root = deskRunRoot()): ReviewRow[] {
+  if (!existsSync(path.join(root, "runs.sqlite"))) return [];
+  const store = new DeskRunStore(root);
+  try { return store.reviewRows(repositoryId, viewer); } finally { store.close(); }
 }
 
 export function attachDeskRunBadges(snapshot: ReviewBoardSnapshot) {

@@ -47,8 +47,22 @@ pub struct BadgeTarget {
     revisions: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn board_read_args(pr_state: Option<&str>, repo: Option<&str>, number: Option<u32>, repositories_only: bool,
-    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>) -> Result<Vec<String>, String> {
+    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>, reviews_only: bool) -> Result<Vec<String>, String> {
+    if reviews_only {
+        if pr_state.is_some() || number.is_some() || repositories_only || paged || cursor.is_some() || badges.is_some() {
+            return Err("configuration: The Reviews list cannot be combined with a board query".into());
+        }
+        let mut args = vec!["review".into(), "reviews".into(), "--json".into()];
+        if let Some(repo) = repo {
+            if repo.is_empty() || repo.starts_with('-') || repo.contains(char::is_whitespace) {
+                return Err("configuration: Invalid repository".into());
+            }
+            args.extend(["--repo".into(), repo.into()]);
+        }
+        return Ok(args);
+    }
     if let Some(target) = badges {
         if paged || cursor.is_some() || repositories_only || pr_state.is_some() || number.is_some() || target.revisions.is_empty()
             || target.revisions.len() > 50000 || !target.revisions.bytes().all(|b| b.is_ascii_hexdigit() || b == b':' || b == b',') {
@@ -131,10 +145,12 @@ pub async fn review_board(
     cursor: Option<String>,
     updated_since: Option<String>,
     badge_target: Option<BadgeTarget>,
+    reviews_only: Option<bool>,
 ) -> Result<Value, String> {
-    let mut args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target)?;
+    let reviews_only = reviews_only.unwrap_or(false);
+    let mut args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target, reviews_only)?;
     if let Some(value) = updated_since {
-        if pr_state.is_none() || value.len() > 24 {
+        if reviews_only || pr_state.is_none() || value.len() > 24 {
             return Err("configuration: Invalid pull request period".into());
         }
         args.push(format!("--updated-since={value}"));
@@ -655,11 +671,27 @@ mod tests {
     fn badge_batches_and_page_cursors_are_read_only_board_queries() {
         let r = format!("1:{}:{}", "a".repeat(40), "b".repeat(40));
         let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: r.clone() };
-        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target)).unwrap(),
+        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), false).unwrap(),
             ["review","board","--json","--repo","org/repo","--viewer","me","--repository-id","R","--badge-revisions",&r]);
-        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None).unwrap(),
+        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None,false).unwrap(),
             ["review","board","--json","--state","open","--page","--cards-only","--cursor=-abc"]);
-        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None).is_err());
+        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None,false).is_err());
+    }
+
+    #[test]
+    fn reviews_list_is_a_separate_read_only_query() {
+        assert_eq!(board_read_args(None, None, None, false, false, None, None, true).unwrap(), ["review","reviews","--json"]);
+        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, None, true).unwrap(),
+            ["review","reviews","--json","--repo","org/repo"]);
+        assert!(board_read_args(None, Some("--other"), None, false, false, None, None, true).is_err());
+        assert!(board_read_args(None, Some(""), None, false, false, None, None, true).is_err());
+        assert!(board_read_args(Some("open"), None, None, false, false, None, None, true).is_err());
+        assert!(board_read_args(None, Some("org/repo"), Some(4), false, false, None, None, true).is_err());
+        assert!(board_read_args(None, None, None, true, false, None, None, true).is_err());
+        assert!(board_read_args(None, None, None, false, true, None, None, true).is_err());
+        assert!(board_read_args(None, None, None, false, false, Some("c"), None, true).is_err());
+        let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: format!("1:{}:{}", "a".repeat(40), "b".repeat(40)) };
+        assert!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target), true).is_err());
     }
 
     #[test]

@@ -33,3 +33,14 @@
 `sqlite3 .backup` copy of `~/.local/share/keryx/desktop-review/runs.sqlite` into the session scratchpad (not committed), opened twice with the new writable store:
 attempts before 17 / after 17; unassigned 0; reviews 13 = distinct (repo, pr, lower(viewer)) keys 13; dangling review ids 0; rounds: round 1 x 13, round 2 x 4. The second open changed nothing.
 - 2026-11-24T07:37:04.175Z - task-attempt: T6: started (attempt 1) — 519-T6
+- 2026-11-24T07:37:09.335Z - task-done: T5: Store: reviews table, rounds and attempts, migration and its test, badge round with parity
+- 2026-11-24T07:37:09.572Z - task-done: T9: Migration on a copy of the local working database
+
+## 2026-11-24 · T6 accepted (DONE_WITH_CONCERNS)
+
+- Orchestrator re-ran the review-entity, review-reviews, store and badge tests (69 pass, 0 fail), plus root and Desktop typecheck (clean). Rust `review.rs` is unverified locally; CI only.
+- Spec/plan disagreement on `budget`: the plan wins. A finished attempt with a reviewed range (completed, partial or budget) is `ready`/`published`.
+- Response keeps `version: 1`, the same key the board uses, so Desktop's `assertProtocol` is shared. The spec's "raise the protocol version" is not done; new command, own payload.
+- Comparisons run only for 40-char hex heads; `gh` returns only `status`/`ahead_by`; at most 25 per call, four at a time.
+- Operator question raised: what freshness to show when the PR head is unknown (card unreadable or PR missing). The worker returns `current`. See the answer below.
+- Rounds are listed newest first; state, source and latestRound come from the newest attempt; findings and publication from the newest finished, reviewed attempt.

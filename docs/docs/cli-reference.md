@@ -5200,6 +5200,18 @@ discussion and checks with `--number N`. A partial list includes warnings.
 `keryx review board --json --repositories` lists the configured GitHub.com fetch
 remotes without contacting GitHub, with the origin repository first.
 
+`keryx review reviews --json [--repo owner/name]` lists the selected account's local
+Reviews of a connected repository: one per pull request, newest activity first. Each
+Review carries its pull request card, its state (`queued`, `running`, `needs_answer`,
+`stopped`, `ready`, `published` or `closed`), its freshness (`current`, or `behind` with
+the number of new commits, `null` when unknown, and whether the branch was rewritten),
+its rounds newest first with their attempts, the findings of the latest reviewed round,
+the publication outcome, the source, the linked Flow and the total tokens. Reports and
+reviewer sessions are not included. Archived and deleted attempts are left out. Commit
+counts are read for up to 25 Reviews per call; the rest, and any comparison GitHub
+refuses, show an unknown count and a warning. Without a local review store the list is
+empty and no store is created.
+
 `keryx review accounts list --json` lists local GitHub CLI accounts and their status.
 `keryx review accounts project --json` shows the current project's selection.
 Use `keryx review accounts bind --login LOGIN --json` to verify and select an account

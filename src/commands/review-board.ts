@@ -107,7 +107,7 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
   }
 }
 
-function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
+export function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
 
 async function writeSerialized(json: string, auth: GithubConnection) {
   // The desktop hosts read through a pipe. Wait until even a large history or
