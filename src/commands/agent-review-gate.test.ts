@@ -250,3 +250,19 @@ test("an unattended run is not held: there is no one to re-prompt", async () => 
   expect(history.some((m) => m.content.includes("The managed review"))).toBe(false);
   expect(finishReason).toBe("no-progress");
 });
+
+test("a Desktop single-reviewer run is not redirected into managed-review completion", async () => {
+  const keys = ["KERYX_DESK_REVIEW_SHELL", "KERYX_DESK_REVIEW_PROJECT_ROOT", "KERYX_DESK_REVIEW_OPTIONS"] as const;
+  const saved = keys.map(key => process.env[key]);
+  process.env.KERYX_DESK_REVIEW_SHELL = "1";
+  process.env.KERYX_DESK_REVIEW_PROJECT_ROOT = root;
+  process.env.KERYX_DESK_REVIEW_OPTIONS = JSON.stringify({ mode: "manual", orchestrator: false, adaptive: false, modelPools: { strong: [], middle: [], light: [] } });
+  try {
+    const provider = scriptedProvider([[{ kind: "text_delta", text: "Ingest completed." }, { kind: "model_end" }]]);
+    const { history, system } = await run({ provider, reviewGateState: async () => openReview() });
+    expect(history.some(message => message.provenance === "harness" && message.content.includes("The managed review"))).toBe(false);
+    expect(system.join("")).not.toContain("[review-gate]");
+  } finally {
+    keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
+  }
+});

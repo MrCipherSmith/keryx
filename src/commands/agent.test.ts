@@ -5066,15 +5066,17 @@ test("REGRESSION: a plan published FOR APPROVAL ends the turn — the continuati
     tools: [],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    reviewGateState: async () => ({ reviewId: "review", packageDir: cwd, blockers: ["missing report"], signature: "open" }),
   };
 
-  await runAgentTurn(io, deps, [], "hello", { slateSession: { dir, cwd, opened: true } });
+  await runAgentTurn(io, deps, [{ role: "assistant", content: "", toolCalls: [{ id: "review", name: "skill_load", arguments: JSON.stringify({ name: "review-orchestrator" }) }] }], "hello", { slateSession: { dir, cwd, opened: true } });
 
   // ONE request: `proposed` is not actionable, so nothing forced a follow-up.
   expect(requests).toHaveLength(1);
   const said = system.join("");
   expect(said).toContain("Published for your approval");
   expect(said).not.toContain("still has actionable items");
+  expect(said).not.toContain("[review-gate]");
 });
 
 // Flow 387 T5: every request of a live session carries the session id as the

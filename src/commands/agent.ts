@@ -1,5 +1,6 @@
 import { AGENT_CONDUCT_PROMPT_BLOCK, containsAgentConduct } from "../lib/agent-conduct";
 import { DEFAULT_REVIEW_PARALLEL } from "../review/wave-limits";
+import { deskReviewOptions } from "../review/autonomous-profile";
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
 import { decideReviewGate, findReviewGateState, sessionReviewNames, sessionStartedAt } from "../review/completion-gate";
@@ -3610,7 +3611,8 @@ async function runAgentTurnCore(
   let lastReviewGateSignature: string | undefined;
   /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
   const holdReviewGate = async (): Promise<boolean> => {
-    if (subagentBudget !== undefined || deps.unattended === true) return false;
+    // Single-reviewer Desktop runs finish at ingest; the Desktop executor validates the result.
+    if (subagentBudget !== undefined || deps.unattended === true || deskReviewOptions()?.orchestrator === false) return false;
     // One tracker answers both: whether this session ran a review, and what its executed `keryx review` commands named.
     // It keeps both, and the session's start, across a compaction that rewrites the history in place.
     const named = sessionReviewNames(history, deps.cwd ?? process.cwd());
@@ -4370,7 +4372,7 @@ async function runAgentTurnCore(
       // Flow 421: a managed review run is finished when `keryx review complete`
       // accepts the package, not when the model stops. Independent of the plan
       // (a blocked plan item must not end it); unattended children are excluded.
-      if (await holdReviewGate()) continue;
+      if (!(approvalItems.length > 0 && !hasActionableExecutionPlanItems(currentPlan)) && await holdReviewGate()) continue;
       // The gate returns false for an aborted turn too: the operator took the turn back, so it ends like the other abort sites.
       if (isAborted()) {
         system(TURN_INTERRUPTED_LINE);
