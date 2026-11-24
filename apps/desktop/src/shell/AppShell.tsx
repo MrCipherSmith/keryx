@@ -13,15 +13,25 @@ import { projectHue, projectInitials, type ProjectActivity } from "./projectRail
 import type { LiveProject } from "../platform/projects";
 import type { ReviewTabIndicator } from "../review/ReviewBoard";
 
-export type View = "session" | "flows" | "review" | "issues" | "metaproject" | "settings";
+export type View = "session" | "flows" | "reviews" | "review" | "issues" | "metaproject" | "settings";
 
+/** The project tabs in order (D4): Keryx work (Flows, Reviews) before the GitHub slices; `MOD`+digit follows the order. */
 export const PROJECT_VIEWS = [
   { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
   { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
-  { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}3` },
-  { id: "issues", label: "Issues", icon: "circleDot", shortcut: `${MOD}4` },
-  { id: "metaproject", label: "Metaproject", icon: "branch", shortcut: `${MOD}5` },
+  { id: "reviews", label: "Reviews", icon: "checklist", shortcut: `${MOD}3` },
+  { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}4` },
+  { id: "issues", label: "Issues", icon: "circleDot", shortcut: `${MOD}5` },
+  { id: "metaproject", label: "Metaproject", icon: "branch", shortcut: `${MOD}6` },
 ] as const;
+
+/** The project tab a `MOD`+digit key opens: the digit is the tab's position in `PROJECT_VIEWS`. */
+export function projectViewForKey(key: string): (typeof PROJECT_VIEWS)[number]["id"] | undefined {
+  return /^[1-9]$/.test(key) ? PROJECT_VIEWS[Number(key) - 1]?.id : undefined;
+}
+
+/** The Reviews tab lights when a Review waits on the viewer: an answer, a publication decision or a stopped round. */
+export type ReviewsTabIndicator = "attention" | null;
 
 /**
  * With `titleBarStyle: "Overlay"` the web view runs under the traffic lights and
@@ -54,6 +64,7 @@ interface ShellProps {
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
   reviewIndicator?: ReviewTabIndicator;
+  reviewsIndicator?: ReviewsTabIndicator;
   /** The projects on the rail, in the user's order; `cwd` is one of them. */
   projects: string[];
   /** This window's project's live state. */
@@ -145,6 +156,7 @@ export function AppShell(p: ShellProps) {
   const sideWidth = fitSidePanelWidth(prefs.sidePanelWidth, windowWidth, sidebar);
   const reviewNotice = p.reviewIndicator === "attention" ? "Review or changes requested" :
     p.reviewIndicator === "watching" ? "PR watcher is on" : "";
+  const reviewsNotice = p.reviewsIndicator === "attention" ? "Review waiting on you" : "";
   return (
     <div
       className={`app-shell${overlay ? " titlebar-overlay" : ""}${side ? " with-side" : ""}`}
@@ -155,18 +167,20 @@ export function AppShell(p: ShellProps) {
       <main className="app-main" id="main">
         {p.view !== "settings" && (
           <nav className="project-views" aria-label={`Project views for ${basename(p.cwd)}`}>
-            {PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => (
-              <button key={id} aria-current={p.view === id ? "page" : undefined}
-                title={`${label} (${shortcut})${id === "review" && reviewNotice ? " · " + reviewNotice : ""}`} onClick={() => p.onView(id)}>
+            {PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => {
+              const notice = id === "review" ? reviewNotice : id === "reviews" ? reviewsNotice : "";
+              return <button key={id} aria-current={p.view === id ? "page" : undefined}
+                title={`${label} (${shortcut})${notice ? " · " + notice : ""}`} onClick={() => p.onView(id)}>
                 <Icon name={icon} size={15} />
                 {label}
-                {id === "review" && reviewNotice && <>
-                  <span className="review-tab-dot" data-indicator={p.reviewIndicator} aria-hidden="true" />
-                  <span className="sr-only">, {reviewNotice}</span>
+                {notice && <>
+                  <span className={id === "reviews" ? "review-tab-dot reviews-tab-dot" : "review-tab-dot"}
+                    data-indicator={id === "reviews" ? p.reviewsIndicator : p.reviewIndicator} aria-hidden="true" />
+                  <span className="sr-only">, {notice}</span>
                 </>}
                 {id === "flows" && p.flowsActive > 0 && <span className="sr-only">, {p.flowsActive} active flows</span>}
-              </button>
-            ))}
+              </button>;
+            })}
           </nav>
         )}
         <div className="project-content">{p.children}</div>

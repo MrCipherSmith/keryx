@@ -9,7 +9,6 @@ import { localBadge, type LocalBadge } from "../../../../src/review/board-badges
 import { sameRange, type RunObserver } from "./useReviewRuns";
 import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
 import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
-import { ProjectReviewRules } from "./ProjectReviewRules";
 import { reviewRules } from "../platform/reviewRules";
 import { PrSubscriptionDialog } from "./PrSubscriptionDialog";
 import { ReviewWatcher } from "./ReviewWatcher";
@@ -59,6 +58,8 @@ interface Props {
    */
   focus?: { repo: string; number: number; nonce: number } | null;
   onFocusHandled?: (nonce: number) => void;
+  /** Shows the PR's Review in the Reviews tab: the card's view and answer actions, and the panel's "Open in Reviews". */
+  onOpenInReviews?: ((number: number, intent?: ReviewIntent) => void) | undefined;
   load?: typeof fetchReviewBoard;
   loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
@@ -115,7 +116,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, reviewModels, currentRepairModel, onOpenFlow, onOpenInReviews, sessions = NO_SESSIONS, onOpenSubjectSession, onCreateFlow, flowOffers = NO_OFFERS, onLinkFlowOffer, onDismissFlowOffer, focus, onFocusHandled, onOpenReviewSession, loadDetail, watcherCommand, rulesCommand = reviewRules, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
@@ -486,8 +487,10 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
   const [detailWidth, setDetailWidth] = useState(560);
   const openReview = useCallback((card: ReviewCard) => {
     const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
-    setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
-  }, []);
+    const reviewIntent: ReviewIntent = { kind, baseSha: card.baseSha, headSha: card.headSha };
+    if (kind !== "start" && onOpenInReviews) onOpenInReviews(card.number, reviewIntent);
+    else setSelected({ number: card.number, reviewIntent });
+  }, [onOpenInReviews]);
   // A focus request waits for a snapshot of its repository, then opens the PR's panel once per nonce.
   // Another repository of this board is selected first (the board remounts on it). A repository it cannot
   // show, or a PR missing from the settled list of its repository (its state filtered out, say), is refused
@@ -551,7 +554,6 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
         <Icon name="checklist" size={14} /> <span className="toolbar-label">Filters</span>{active.length > 0 && <span className="filter-count">({active.length})</span>}
       </button>
       <div className="grow" />
-      {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
       <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
       <div className="segmented" role="group" aria-label="Review view">
         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
@@ -637,6 +639,7 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
       width={detailWidth} onResize={setDetailWidth}
       reviewModels={reviewModels} {...(onOpenReviewSession && { onOpenReviewSession })} onOpenSession={openPanelSession(card)}
+      onOpenInReviews={onOpenInReviews && (() => onOpenInReviews(card.number))}
       projectFlows={flows} flow={panelFlow(card)}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </div>;

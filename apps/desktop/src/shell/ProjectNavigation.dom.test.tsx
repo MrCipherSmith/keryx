@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "../test/dom";
-import type { View } from "./AppShell";
+import { MOD } from "../lib/prefs";
+import type { ReviewsTabIndicator, View } from "./AppShell";
 
 let root: Root;
 let host: HTMLElement;
@@ -58,12 +59,12 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   const click = (b: HTMLButtonElement) => React.act(() => b.click());
 
   expect(project().getAttribute("aria-label")).toBe("Project views for alpha");
-  expect(project().querySelectorAll("button")).toHaveLength(5);
+  expect(project().querySelectorAll("button")).toHaveLength(6);
   const globalButtons = [...global.querySelectorAll("button")];
-  for (const section of ["Metaproject", "Issues", "Pull requests", "Flows"]) {
+  for (const section of ["Metaproject", "Issues", "Pull requests", "Reviews", "Flows"]) {
     expect(globalButtons.some(b => b.getAttribute("aria-label") === section || b.textContent?.trim().startsWith(section))).toBe(false);
   }
-  for (const section of ["Metaproject", "Issues", "Pull requests", "Flows", "Sessions"]) {
+  for (const section of ["Metaproject", "Issues", "Pull requests", "Reviews", "Flows", "Sessions"]) {
     const target = Array.from(project().querySelectorAll("button")).find((b) => b.textContent?.startsWith(section))!;
     await click(target);
     expect(target.getAttribute("aria-current")).toBe("page");
@@ -79,6 +80,31 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   expect(global.querySelector('[aria-label="beta"]')!.getAttribute("aria-current")).toBe("true");
 });
 
+
+test("AC6 project tabs read Sessions, Flows, Reviews, Pull requests, Issues, Metaproject with shortcuts in that order", async () => {
+  const { PROJECT_VIEWS, projectViewForKey } = await import("./AppShell");
+  const noop = () => {};
+  function Shell({ reviewsIndicator }: { reviewsIndicator: ReviewsTabIndicator }) {
+    return <AppShell cwd="/dev/alpha" projects={["/dev/alpha"]} view="session" onView={noop} title="t" status={{ tone: "ok", label: "Ready" }}
+      flowsActive={0} activity="idle" recents={[]} live={[]} onRemoveProject={noop} onOpenFolder={noop} onSwitchProject={noop}
+      onNewWindow={noop} onCloseProject={noop} onPalette={noop} reviewsIndicator={reviewsIndicator}><span /></AppShell>;
+  }
+  await React.act(() => root.render(<Shell reviewsIndicator={null} />));
+  const labels = ["Sessions", "Flows", "Reviews", "Pull requests", "Issues", "Metaproject"];
+  const tabs = [...host.querySelectorAll<HTMLButtonElement>("main nav button")];
+  expect(tabs.map(tab => tab.textContent)).toEqual(labels);
+  expect(tabs.map(tab => tab.title)).toEqual(labels.map((label, i) => `${label} (${MOD}${i + 1})`));
+  expect(PROJECT_VIEWS.map(item => item.id)).toEqual(["session", "flows", "reviews", "review", "issues", "metaproject"]);
+  expect(["1", "2", "3", "4", "5", "6", "7", "0", "k"].map(projectViewForKey))
+    .toEqual(["session", "flows", "reviews", "review", "issues", "metaproject", undefined, undefined, undefined]);
+  expect(host.querySelector(".reviews-tab-dot")).toBeNull();
+  await React.act(() => root.render(<Shell reviewsIndicator="attention" />));
+  const reviews = [...host.querySelectorAll<HTMLButtonElement>("main nav button")][2]!;
+  expect(reviews.querySelector(".reviews-tab-dot")?.getAttribute("data-indicator")).toBe("attention");
+  expect(reviews.textContent).toBe("Reviews, Review waiting on you");
+  expect(reviews.title).toBe(`Reviews (${MOD}3) · Review waiting on you`);
+  expect(host.querySelectorAll(".review-tab-dot")).toHaveLength(1);
+});
 
 test("App preserves tab state and starts a background review from the originating session; AC16 a PR without Flow and review opens one bound session whose /review run shows on the card", () => {
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));

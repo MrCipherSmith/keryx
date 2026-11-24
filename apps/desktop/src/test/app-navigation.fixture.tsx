@@ -8,6 +8,7 @@ const { emit } = await import("@tauri-apps/api/event");
 const cwd = "/dev/project-navigation";
 let offline = false;
 const reads: string[] = [];
+const reviewReads: string[] = [];
 const starts: unknown[] = [];
 const replies: unknown[] = [];
 let refuseReply = true;
@@ -109,6 +110,12 @@ mockIPC(async (cmd, args) => {
       // The PR panel's detail read (the session header link opens it).
       if ((args as { number?: number }).number === 12) return { version: 1, viewer: account ?? "me", repositoryId: "RID", number: 12,
         headSha: run.headSha, fetchedAt: "2026-11-19T00:00:00Z", comments: [], reviews: [], threads: [], checks: [], warnings: [] };
+      // The Reviews tab reads its own list; the board reads counted below are the Pull requests tab's.
+      if ((args as {reviewsOnly?: boolean}).reviewsOnly) {
+        reviewReads.push(String((args as {cwd:string}).cwd));
+        return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me",
+          fetchedAt:"2026-11-19T00:00:00Z", reviews: [], warnings: [] };
+      }
       reads.push(String((args as {cwd:string}).cwd));
       if (offline) throw new Error("unavailable: connection lost");
       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
@@ -254,6 +261,13 @@ try {
   assert.deepEqual(reads, accountReads);
   const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
   assert.equal(reviewDot(), "attention", "Review requests reach the navigation on Sessions");
+  assert.ok(reviewReads.length > 0, "The Reviews list is read while its tab is hidden");
+  assert.equal(host.querySelector("nav .reviews-tab-dot"), null, "No Review waits on the viewer");
+  const hiddenReviewReads = reviewReads.length;
+  await React.act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "3", metaKey: true, bubbles: true })); });
+  assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent, "Reviews");
+  assert.ok(host.textContent?.includes("No Keryx reviews yet"));
+  assert.ok(reviewReads.length > hiddenReviewReads, "Showing the Reviews tab reads the list again");
   await go("Pull requests");
   assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
   assert.ok(host.textContent?.includes("Navigation proof"));

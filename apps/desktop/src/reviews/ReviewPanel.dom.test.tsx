@@ -2,24 +2,27 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { ComponentProps } from "react";
 import type { Root } from "react-dom/client";
 import { DESK_RUN_SCOPE, type DeskRun, type DeskRunSnapshot } from "../../../../src/review/desk-run-types";
+import type { ReviewSummary } from "../../../../src/review/review-entity";
 import type { ReviewRunAction, reviewRun } from "../platform/reviewRuns";
 import { registerDom, unregisterDom } from "../test/dom";
-import type { ReviewDetail } from "./ReviewDetail";
+import type { ReviewPanel } from "./ReviewPanel";
 import type { PublicationRequest, PublicationSettings, PublicationState } from "../../../../src/review/desk-publication-types";
-import type { ReviewCard } from "./types";
+import type { ReviewCard } from "../review/types";
 
+// The review interface moved here from the Pull requests panel ("Keryx review" tab): these are its tests,
+// run against the Review panel of the Reviews tab.
 let root: Root;
-let renderComponent: (props: ComponentProps<typeof ReviewDetail>) => Promise<void>;
+let renderComponent: (props: ComponentProps<typeof ReviewPanel>) => Promise<void>;
 let act: (task: () => void | Promise<void>) => Promise<void>;
 beforeAll(async () => {
   registerDom();
   const React = await import("react");
   act = React.act as unknown as typeof act;
-  const detail = (await import("./ReviewDetail")).ReviewDetail;
+  const panel = (await import("./ReviewPanel")).ReviewPanel;
   const host = document.createElement("div");
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
-  renderComponent = props => act(async () => { root.render(React.createElement(detail, props)); });
+  renderComponent = props => act(async () => { root.render(React.createElement(panel, props)); });
 });
 afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });
 
@@ -37,13 +40,15 @@ const complete: DeskRun = { ...running, state: "completed", phase: "Consolidated
   result: { reviewed: { baseSha: "base", headSha: "head" }, verdict: "REQUEST_CHANGES", coverage: "complete",
     findings: { blocker: 1, major: 0, minor: 0, info: 0 }, report: "Incorrect owner on rename <script>alert(1)</script>" } };
 
-async function show(command: typeof reviewRun, card: ReviewCard, extra?: Partial<ComponentProps<typeof ReviewDetail>>) {
-  await renderComponent({
-    card, cwd: "/project", repo: "owner/repo", viewer: "tester", repositoryId: "node", runCommand: command,
-    load: async () => ({ version: 1, number: card.number, fetchedAt: time, viewer: "tester", repositoryId: "node",
-      headSha: card.headSha, threads: [], comments: [], reviews: [], checks: [], warnings: [] }),
-    onClose() {}, ...extra,
-  });
+const target = { repo: "owner/repo", viewer: "tester", repositoryId: "node" };
+function summary(card: ReviewCard): ReviewSummary {
+  return { id: "review-" + card.number, number: card.number, card, state: "ready", freshness: { kind: "current" }, onHeadMove: "ask",
+    closedAt: null, rounds: [{ number: 1, baseSha: card.baseSha, headSha: card.headSha, previousRunId: null, attempts: [] }],
+    latestRound: 1, findings: null, publication: null, source: "manual", flowId: null, tokens: null };
+}
+type Extra = Partial<Pick<ComponentProps<typeof ReviewPanel>, "reviewIntent" | "publishCommand" | "onAccessLost" | "onClose">> & { onRefreshBoard?: () => void };
+async function show(command: typeof reviewRun, card: ReviewCard, { onRefreshBoard = () => {}, onClose = () => {}, ...extra }: Extra = {}) {
+  await renderComponent({ cwd: "/project", target, review: summary(card), runCommand: command, onRefresh: onRefreshBoard, onClose, ...extra });
 }
 function btn(text: string) {
   const b = [...document.querySelectorAll("button")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === text);
@@ -68,7 +73,6 @@ test("completion pre-fills the coordinator reason and requires an explicit excep
       decision: { action: action.decision, reason: action.reason, at: time } };
     return { version: 1, runs: [attempt] };
   }, pr);
-  await click("Keryx review");
   await click("Complete review");
   const dialog = document.querySelector('[role="dialog"][aria-modal="true"]:has(textarea)')!;
   expect(dialog.querySelector("textarea")?.value).toBe("Retain the explicitly limited result.");
@@ -109,8 +113,7 @@ test("starts the pinned range, ignores an older read and polls through to a dist
     await show(command, pr);
     expect(btn("Checking review…").disabled).toBe(true);
     await act(async () => old({ version: 1, runs: [] }));
-    await click("Keryx review");
-    await click("Refresh runs");
+      await click("Refresh runs");
     await click("Start review");
     expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "head" });
     expect(document.body.textContent).toContain("Reviewing diff");
@@ -165,7 +168,6 @@ test("a late status from another PR cannot reveal its report and a closed PR can
   const waiting: typeof reviewRun = () => new Promise(resolve => { finish = resolve; });
   await show(waiting, { ...pr, number: 44 });
   await show(async () => ({ version: 1, runs: [] }), { ...pr, number: 45, state: "merged" });
-  await click("Keryx review");
   await act(async () => finish({ version: 1, runs: [complete] }));
   expect(document.body.textContent).toContain("No Keryx reviews");
   expect(document.body.textContent).not.toContain("Start review");
@@ -231,7 +233,6 @@ test("a closed result from an earlier review scope stays readable and allows a n
     requests.push(action);
     return { version: 1, runs: action.kind === "start" ? [running, archived] : [archived] };
   }, pr);
-  await click("Keryx review");
   expect(document.body.textContent).toContain("Open review report");
   await click("Retry review");
   expect(requests.at(-1)).toEqual({ kind: "start", baseSha: pr.baseSha, headSha: pr.headSha });
@@ -721,8 +722,7 @@ test("review assignments stop at 95% until the run completes and a partial run r
   ];
   for (const [index, [run, percent]] of values.entries()) {
     await show(async () => ({ version: 1, runs: [run] }), { ...pr, number: 140 + index });
-    await click("Keryx review");
-    expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow") ?? null).toBe(percent);
+      expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow") ?? null).toBe(percent);
     expect(document.querySelector(".review-progress-caption")!.textContent).toContain(percent ? percent + "%" : "Progress unavailable");
   }
 });
@@ -769,7 +769,6 @@ test("coordinator separates progress and replies from compact tool records and s
       { kind: "status", text: "Wave 2 started" }, { kind: "answer", text: "Review the rename" },
     ] };
   await show(async () => ({ version: 1, runs: [run] }), { ...pr, number: 189 });
-  await click("Keryx review");
   await click("Open review session");
   const dialog = document.querySelector(".dialog")!;
   expect(dialog.querySelector('[aria-label="Review result"]')?.textContent).toContain(run.reason);
@@ -784,7 +783,6 @@ test("status distinguishes missing, quiet and recent transcripts, an outstanding
   const question = { id: "waiting", question: "Continue this wave?", options: [], allowFreeform: true };
   let observed: DeskRun = running;
   await show(async () => ({ version: 1, runs: [observed] }), { ...pr, number: 225 });
-  await click("Keryx review");
   const article = () => document.querySelector("article.desk-run")!;
   expect(article().textContent).toContain("No transcript activity recorded yet");
   observed = { ...running, lastActivityAt: time };
@@ -881,7 +879,6 @@ test("ended reviewer context explicitly addresses the current coordinator questi
         state: "partial", needsContext: true, outcomeReason: "The migration version is missing." }],
     } }] };
   }, { ...pr, number: 192 });
-  await click("Keryx review");
   const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
   await act(async () => list.querySelector("summary")!.click());
   await act(async () => list.querySelector<HTMLButtonElement>(".review-session-row")!.click());

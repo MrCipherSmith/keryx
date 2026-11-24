@@ -44,3 +44,16 @@ attempts before 17 / after 17; unassigned 0; reviews 13 = distinct (repo, pr, lo
 - Comparisons run only for 40-char hex heads; `gh` returns only `status`/`ahead_by`; at most 25 per call, four at a time.
 - Operator question raised: what freshness to show when the PR head is unknown (card unreadable or PR missing). The worker returns `current`. See the answer below.
 - Rounds are listed newest first; state, source and latestRound come from the newest attempt; findings and publication from the newest finished, reviewed attempt.
+- 2026-11-24T07:51:43.210Z - task-done: T6: Reviews read model, keryx review reviews --json, bridge arg and platform call
+- 2026-11-24T07:51:43.524Z - task-attempt: T7: started (attempt 1) — 519-T7
+
+## 2026-11-24 · Operator answer: freshness when the PR head is unknown
+
+Answer (operator, AskUserQuestion in this session): add a freshness kind `unknown`. The card shows "head unknown" and the Review is not placed in Behind. This is a small spec change; it will be recorded in the plan's stage 2 state. It is implemented as a fix task on T6 output, together with T8.
+
+## 2026-11-24 · T7 accepted (DONE_WITH_CONCERNS)
+
+- Orchestrator re-ran `cd apps/desktop && bun test src` (987 pass, 0 fail) and `bunx tsc --noEmit` (clean). It checked that the `ReviewBoard.tsx` diff (13 lines) touches no attention-set identifier.
+- `ReviewRuns.dom.test.tsx` moved to `src/reviews/ReviewPanel.dom.test.tsx`; only the 8 tab-click lines were dropped. The Review rules tests moved to `ReviewsView.dom.test.tsx`.
+- Concerns: tests were not written red-first (the worker reported 8 mutations, each caught); `ReviewBoard.dom.test.tsx` will conflict with PR #1300; `ReviewDetail` still accepts the unused `onOpenReviewSession`; the toolbar is not re-measured (T11); the app makes one extra `review reviews` read at start; the spec's publication/author/Flow/period filters are not implemented (the plan narrows them to state/freshness/source plus search).
+- Operator questions raised for the worker's behaviour choices; answers below.

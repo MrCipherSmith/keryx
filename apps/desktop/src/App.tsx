@@ -14,12 +14,14 @@ import {
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename, errMessage } from "./lib/format";
 import { Dialog, EmptyState, overlayOpen } from "./components/ui";
-import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
+import { AppShell, PROJECT_VIEWS, projectViewForKey, type ReviewsTabIndicator, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+import type { ReviewIntent } from "./review/ReviewWorkspace";
+import { ReviewsView, type ReviewsFocus } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
@@ -209,6 +211,15 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const updateReviewNotice = useCallback((indicator: ReviewTabIndicator, viewer?: string) => {
     setReviewNotice({ binding: reviewViewer, viewer, indicator });
   }, [reviewViewer]);
+  const [reviewsNotice, setReviewsNotice] = useState<{ binding?: string; indicator: ReviewsTabIndicator }>();
+  const updateReviewsNotice = useCallback((indicator: ReviewsTabIndicator) => {
+    setReviewsNotice({ binding: reviewViewer, indicator });
+  }, [reviewViewer]);
+  const [reviewsFocus, setReviewsFocus] = useState<ReviewsFocus | null>(null);
+  const openInReviews = useCallback((number: number, intent?: ReviewIntent) => {
+    setReviewsFocus(old => ({ number, intent, nonce: (old?.nonce ?? 0) + 1 }));
+    setView("reviews");
+  }, []);
   const [githubAccountError, setGitHubAccountError] = useState("");
   const [projectSettings, setProjectSettings] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -452,24 +463,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         }
         return;
       }
+      const projectView = projectViewForKey(k);
       if (k === "k") {
         e.preventDefault();
         setPalette("");
-      } else if (k === "1") {
+      } else if (projectView) {
         e.preventDefault();
-        go("session");
-      } else if (k === "2") {
-        e.preventDefault();
-        go("flows");
-      } else if (k === "3") {
-        e.preventDefault();
-        go("review");
-      } else if (k === "4") {
-        e.preventDefault();
-        go("issues");
-      } else if (k === "5") {
-        e.preventDefault();
-        go("metaproject");
+        go(projectView);
       } else if (k === ",") {
         e.preventDefault();
         go("settings");
@@ -582,6 +582,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   });
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
+  const reviewsIndicator = !reviewDisconnected && reviewsNotice?.binding === reviewViewer ? reviewsNotice?.indicator ?? null : null;
   const [reviewComposer, setReviewComposer] = useState<ReviewComposerTarget>();
   const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
   const linkReviewContinuation = useCallback((link: SessionReviewLink) => {
@@ -661,6 +662,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       status={status}
       flowsActive={flowsActive}
       reviewIndicator={currentNotice?.indicator}
+      reviewsIndicator={reviewsIndicator}
       projects={projects}
       activity={activity}
       live={live}
@@ -697,13 +699,28 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         if (!(await openSessionWith(task))) throw new Error("Could not open a draft session.");
         setView("session");
       }} />
+      {/* Mounted like the PR board, so the Reviews indicator stays current on every tab. */}
+      <div className="view" hidden={view !== "reviews"}>
+        {reviewDisconnected ? (
+          <EmptyState title="GitHub is not connected" icon="checklist">
+            <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+          </EmptyState>
+        ) : (
+          <ReviewsView key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} active={workView === "reviews"} cwd={cwd}
+            focus={reviewsFocus} onIndicatorChange={updateReviewsNotice} flows={flows.cards} reviewModels={reviewModels}
+            onOpenReviewSession={openReviewWorkspace} onOpenFlow={(dir) => {
+              setLinkedFlow(dir);
+              setView("flows");
+            }} />
+        )}
+      </div>
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (
           <EmptyState title="GitHub is not connected" icon="pr">
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace}
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} reviewModels={reviewModels} currentRepairModel={currentReviewModel} onOpenReviewSession={openReviewWorkspace} onOpenInReviews={openInReviews}
             sessions={subjectSessions} focus={reviewFocus} onFocusHandled={reviewFocusHandled}
             onOpenSubjectSession={openPrFromBoard} onCreateFlow={createFlowFromBoard} onOpenFlow={openFlowFromBoard}
             flowOffers={flowOffers} onLinkFlowOffer={linkFlowOffer} onDismissFlowOffer={dismissFlowOffer} />
