@@ -175,6 +175,8 @@ export function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccess
     </div>}
     {draft && publishOpen && <ReviewPublishDialog cwd={draft.cwd} target={draft.target} id={run.id} command={draft.publishCommand}
       onAccessLost={onAccessLost} onDecision={onPublicationDecision} onClose={() => setPublishOpen(false)}
+      // Another action of this review is in flight: an update round could not start until it answers.
+      updateDisabled={working}
       {...(updateReview && { onUpdateReview: (currentHead: string) => {
         setPublishOpen(false);
         // The as-is variant exists only while the base is unchanged, so the current range keeps this attempt's base.
@@ -192,9 +194,14 @@ interface Props extends ReportProps {
   onCancel: (id: string) => void; onRefresh: () => void; onOpenSession: (id: string) => void;
 }
 
-export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
-  const latest = runs.find(run => runActive(run) && sameRange(run, card)) ??
+/** The attempt the Latest review section shows for the card's range. */
+export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
+  return runs.find(run => runActive(run) && sameRange(run, card)) ??
     runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
+}
+
+export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication }: Props) {
+  const latest = latestAttempt(runs, card);
   return <section className="desk-runs" aria-label="Latest Keryx review">
     <header className="desk-run-head"><h3>Latest review</h3><button className="btn review-icon-action" type="button"
       disabled={working} aria-label="Refresh runs" title="Refresh runs" onClick={onRefresh}><Icon name="refresh" /></button></header>

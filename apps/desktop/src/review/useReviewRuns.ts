@@ -13,6 +13,12 @@ type ActionError =
 
 export type RunObserver = (key: DeskRunKey, revision: DeskRevision, snapshot: DeskRunSnapshot) => void;
 
+/**
+ * What became of one `request`: `done` once the CLI answered; `skipped` when it was not sent, because another action
+ * was in flight or the read was skipped; `failed` when the CLI refused it (the hook's `error` carries the reason).
+ */
+export type RunRequestOutcome = "done" | "skipped" | "failed";
+
 export function useReviewRuns(
   cwd: string, key: DeskRunKey, baseSha: string, headSha: string, visible: boolean,
   invoke: typeof reviewRun, onSnapshot?: RunObserver, onAccessLost?: (reason: string) => void,
@@ -27,9 +33,9 @@ export function useReviewRuns(
   const [activityLoaded, setActivityLoaded] = useState<string>();
   type PollAction = Exclude<Parameters<typeof reviewRun>[2], { kind: "continue" | "decide" | "readiness" }>;
   const pending = useRef<PollAction["kind"] | null>(null);
-  const request = useCallback(async function request(action: PollAction, automatic = false): Promise<void> {
+  const request = useCallback(async function request(action: PollAction, automatic = false): Promise<RunRequestOutcome> {
     // A mutation can overtake a status read. A stale read must never roll it back.
-    if (pending.current && (action.kind === "status" || pending.current !== "status")) return;
+    if (pending.current && (action.kind === "status" || pending.current !== "status")) return "skipped";
     const activityId = followedId();
     if (action.kind === "status" && activityId && !action.id) action = { ...action, activityId };
     const id = ++generation.current;
@@ -38,11 +44,11 @@ export function useReviewRuns(
     if (action.kind !== "status") setActionError(null);
     try {
       const next = action.kind === "status" ? await readRunStatus(invoke, cwd, key, action, automatic) : await invoke(cwd, key, action);
-      if (!next) return;
+      if (!next) return "skipped";
       // Mutations belong to the PR even if its drawer closed while the CLI was working.
       // The board observer checks viewer, repository and revision before updating a badge.
       if (action.kind !== "status") onSnapshot?.(key, { baseSha, headSha }, next);
-      if (id !== generation.current) return;
+      if (id !== generation.current) return "done";
       setSnapshot(next);
       setActivityLoaded(action.kind === "status" ? action.activityId : undefined);
       setReadError("");
@@ -52,8 +58,9 @@ export function useReviewRuns(
             run.pendingQuestions?.some(question => question.id === error.questionId))) ? null : error);
         onSnapshot?.(key, { baseSha, headSha }, next);
       }
+      return "done";
     } catch (cause) {
-      if (id !== generation.current) return;
+      if (id !== generation.current) return "failed";
       const message = errMessage(cause);
       if (action.kind === "status") setReadError(message);
       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
@@ -63,6 +70,7 @@ export function useReviewRuns(
         if (action.kind === "status") setActionError(null);
       }
       if (/^access:/i.test(message)) onAccessLost?.(message);
+      return "failed";
     } finally {
       if (id === generation.current) {
         pending.current = null;

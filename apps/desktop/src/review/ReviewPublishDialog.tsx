@@ -36,7 +36,7 @@ function Preview({ text, label = "Review comment preview" }: { text: string; lab
 
 const shortSha = (sha: string) => sha.slice(0, 7);
 
-export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onUpdateReview, onClose }: {
+export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onDecision, onUpdateReview, updateDisabled = false, onClose }: {
   cwd: string;
   target: DeskRunKey;
   id: string;
@@ -45,6 +45,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   onDecision?: (() => void) | undefined;
   /** Starts an update round on the current head it is given; offered only while the head has moved. */
   onUpdateReview?: ((currentHead: string) => void) | undefined;
+  /** The update round cannot start now, because another action of the same review is in flight. */
+  updateDisabled?: boolean | undefined;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<PublicationState>();
@@ -152,21 +154,28 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const headMoved = draft?.headMoved;
   // The update round is the primary action while it is offered; publishing as is becomes the alternative.
   const updateOffered = !!headMoved && !!onUpdateReview && !posted;
+  const publishButton = <button type="button" className={updateOffered ? "btn" : "btn btn-primary"}
+    disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
+    onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
+    {headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : "Submit review"}</button>;
 
   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
     onClose={writing ? null : onClose} footer={
       <div className="review-publish-footer">
-        {updateOffered && headMoved && onUpdateReview && <button type="button" className="btn btn-primary" disabled={writing}
-          onClick={() => onUpdateReview(headMoved.currentHead)}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>}
+        {/* The two head-moved alternatives stay next to each other, so a wrapping footer keeps them on one row. */}
+        {updateOffered && headMoved && onUpdateReview && <>
+          <button type="button" className="btn btn-primary" disabled={writing || updateDisabled}
+            title={updateDisabled ? "Another action of this review is still running." : undefined}
+            onClick={() => onUpdateReview(headMoved.currentHead)}>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>
+          {publishButton}
+        </>}
         <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
         {!posted && <>
           {!draft?.skipped && <button type="button" className="btn" disabled={busy || !draft}
             onClick={() => void send({ kind: "skip", id })}>Skip publication</button>}
           <button type="button" className="btn" disabled={!canUsePreview}
             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
-          <button type="button" className={updateOffered ? "btn" : "btn btn-primary"} disabled={!canUsePreview || !draft.canSubmit || unanswered > 0}
-            onClick={() => { if (canUsePreview && draft.canSubmit && !unanswered) void send({ kind: "submit", id, settings, digest: draft.digest }); }}>
-            {headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : "Submit review"}</button>
+          {!updateOffered && publishButton}
         </>}
       </div>
     }>

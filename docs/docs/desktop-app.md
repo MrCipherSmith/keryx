@@ -148,6 +148,13 @@ which commit was reviewed and that the PR has moved on. If more commits arrive
 before you submit, refresh the preview. If the PR was closed, its base changed,
 or its history was rewritten, you can still save the draft locally.
 
+In the Review panel, the same dialog also offers **Update review to** the new
+commit. It starts the next round of the same Review on the PR's current head,
+with the previous round's settings except automatic publication, which you
+decide again for the new round. Your answers to findings carry over by finding
+id. If the current head already has a review attempt, Desktop shows that
+attempt instead of starting another.
+
 ### Watch PRs while Desktop is closed
 
 From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**. The default is five minutes. The first successful poll records which PRs are open, their revisions, requested reviewers and CI. The history shows the 50 latest changes with the time Keryx observed them.

@@ -18,6 +18,14 @@ import "./SessionReviewActivity.css";
 
 const PASSIVE_FOLLOW = () => () => {};
 
+/**
+ * Publication from Sessions offers no "Update review": this view follows one attempt on its recorded range and
+ * cannot see the PR's other attempts, so the next round starts from the Review panel.
+ */
+export function sessionReviewPublication(cwd: string, key: SessionReviewLink["key"]) {
+  return { cwd, target: key, url: `https://github.com/${key.repo}/pull/${key.number}` };
+}
+
 export function SessionReviewActivity({ cwd, links, visible, onContinuation, onComposerTarget, focusComposer }: {
   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
   onContinuation: (link: SessionReviewLink) => void;
@@ -241,7 +249,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinuation, onCom
       </div>
     </AgentMessage>)}
     {visible && open && run && <ReviewRunDialog run={run} card={{ number: link.key.number, ...link.revision }}
-      publication={{ cwd, target: link.key, url: `https://github.com/${link.key.repo}/pull/${link.key.number}` }}
+      publication={sessionReviewPublication(cwd, link.key)}
       working={working} activity={{ follow: PASSIVE_FOLLOW, loaded: run.id, error }}
       error={error} onClose={() => setOpen(false)} onRefresh={() => void refresh()}
       loadAttempt={async id => {
