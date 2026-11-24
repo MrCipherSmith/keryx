@@ -1,9 +1,10 @@
 // What a chunk run will cost, said before it starts. A run at or under the ceiling goes through; a run over it needs a yes.
-// The ceiling is 25 passes of 40 files (1,000 files) unless `routing.config.json` carries `reviewChunks.maxPasses`.
+// Automatic runs can use a separately configured allowance for additional passes.
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { deskReviewOptions } from "./autonomous-profile";
 import { shellWord } from "../lib/shell-quote";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, readChunkPlan, withChunkStateLock } from "./chunks";
@@ -14,8 +15,8 @@ import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
 export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
 /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
 export const AUTOMATIC_REVIEW_DISCLOSURE_FILE = "automatic-run-inputs.json";
-export const DEFAULT_MAX_PASSES = 25;
-const MAX_PASSES_LIMIT = 100;
+export const DEFAULT_MAX_PASSES = 100;
+const MAX_PASSES_LIMIT = 400;
 /** Tokens a pass spends on the reviewer's own prompt and the answer, beyond the chunk text. */
 const PASS_PROMPT_TOKENS = 3_000;
 const PASS_OUTPUT_TOKENS = 1_500;
@@ -23,6 +24,7 @@ const BYTES_PER_TOKEN = 4;
 
 export type ChunkLimits = {
   maxPasses: number;
+  autoApprovePasses?: number;
   inputUsdPerMTok: number;
   outputUsdPerMTok: number;
   secondsPerPass: number;
@@ -37,7 +39,7 @@ const positive = (value: unknown): value is number => typeof value === "number" 
 
 /**
  * `reviewChunks` in the project's `routing.config.json`. A field it leaves out, or sets to something that is not a positive
- * number, keeps its default. `maxPasses` is rounded down and capped at 100; a value that rounds to 0 keeps the default.
+ * number, keeps its default. `maxPasses` is rounded down and capped at 400; a value that rounds to 0 keeps the default.
  * A file that exists but is not a JSON object leaves the defaults in force and a `warning` that says so.
  */
 export async function readChunkLimits(projectRoot: string): Promise<ChunkLimits> {
@@ -50,6 +52,9 @@ export async function readChunkLimits(projectRoot: string): Promise<ChunkLimits>
   const fields = own as Record<string, unknown>;
   const limits: ChunkLimits = { ...DEFAULT_CHUNK_LIMITS, source: "routing.config.json" };
   if (positive(fields.maxPasses) && Math.floor(fields.maxPasses) >= 1) limits.maxPasses = Math.min(Math.floor(fields.maxPasses), MAX_PASSES_LIMIT);
+  if (Number.isSafeInteger(fields.autoApprovePasses) && positive(fields.autoApprovePasses)) {
+    limits.autoApprovePasses = Math.min(fields.autoApprovePasses, MAX_PASSES_LIMIT);
+  }
   if (positive(fields.inputUsdPerMTok)) limits.inputUsdPerMTok = fields.inputUsdPerMTok;
   if (positive(fields.outputUsdPerMTok)) limits.outputUsdPerMTok = fields.outputUsdPerMTok;
   if (positive(fields.secondsPerPass)) limits.secondsPerPass = fields.secondsPerPass;
@@ -69,6 +74,7 @@ export type ChunkEstimate = {
   maxPasses: number;
   /** maxPasses × the per-pass file cap. */
   ceilingFiles: number;
+  autoApprovePasses?: number;
   overCeiling: boolean;
   limitsSource: ChunkLimits["source"];
   /** Identifies the chunk plan this estimate belongs to; an answer given to another plan does not carry over. */
@@ -85,6 +91,9 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
   const open = new Set((pass?.chunks ?? []).filter((chunk) => chunk.state !== "done").map((chunk) => chunk.id));
   const remaining = plan.chunks.filter((chunk) => open.has(chunk.id));
   const effective = limits ?? (await readChunkLimits(projectRoot));
+  const manifest = await readJsonFileOr<{ target?: { ref?: string; base?: string; head?: string } } | null>(path.join(packageDir, "manifest.json"), null);
+  const target = manifest?.target;
+  const scopeKey = JSON.stringify([target?.ref, target?.base, target?.head, plan.chunks.map(chunk => [chunk.id, chunk.files, chunk.bytes])]);
   const bytes = remaining.reduce((sum, chunk) => sum + chunk.bytes, 0);
   const input = remaining.reduce((sum, chunk) => sum + Math.ceil(Math.max(chunk.bytes, 0) / BYTES_PER_TOKEN) + PASS_PROMPT_TOKENS, 0);
   const output = remaining.length * PASS_OUTPUT_TOKENS;
@@ -102,14 +111,15 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
     ceilingFiles: effective.maxPasses * DEFAULT_BLAST_RADIUS_MAX_FILES,
     overCeiling: remaining.length > effective.maxPasses,
     limitsSource: effective.source,
+    ...(effective.autoApprovePasses !== undefined && { autoApprovePasses: effective.autoApprovePasses }),
     ...(effective.warning === undefined ? {} : { limitsWarning: effective.warning }),
     // The whole plan, not what is left of it: recording a chunk DONE must not take the operator's answer with it.
-    planKey: createHash("sha256").update(plan.chunks.map((chunk) => `${chunk.id}:${chunk.files.join(",")}`).join("|")).digest("hex").slice(0, 16),
+    planKey: createHash("sha256").update(scopeKey).digest("hex").slice(0, 16),
   };
 }
 
 export type ChunkMode = "automatic" | "interactive";
-export type ChunkDecision = "proceed" | "ask-once" | "wait-for-yes";
+export type ChunkDecision = "proceed" | "auto-approved" | "ask-once" | "wait-for-yes";
 
 export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
@@ -126,11 +136,14 @@ export type ChunkEstimateRecord = {
 /** Automatic review mode (flow 429) leaves its disclosure file in the package; any other run is interactive. */
 export function chunkModeOf(packageDir: string, override?: string): ChunkMode {
   if (override === "automatic" || override === "interactive") return override;
+  const launch = deskReviewOptions(process.env);
+  if (launch) return launch.mode === "auto" ? "automatic" : "interactive";
   return existsSync(path.join(packageDir, AUTOMATIC_REVIEW_DISCLOSURE_FILE)) ? "automatic" : "interactive";
 }
 
-export function decisionFor(estimate: Pick<ChunkEstimate, "overCeiling">, mode: ChunkMode): ChunkDecision {
+export function decisionFor(estimate: Pick<ChunkEstimate, "overCeiling" | "autoApprovePasses"> & { chunks?: number }, mode: ChunkMode): ChunkDecision {
   if (!estimate.overCeiling) return "proceed";
+  if (mode === "automatic" && estimate.chunks !== undefined && estimate.autoApprovePasses !== undefined && estimate.chunks <= estimate.autoApprovePasses) return "auto-approved";
   return mode === "automatic" ? "ask-once" : "wait-for-yes";
 }
 
@@ -149,7 +162,7 @@ export function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate,
       estimate,
       mode,
       decision,
-      asked: decision !== "proceed",
+      asked: decision === "ask-once" || decision === "wait-for-yes" || (same && previous.answer !== undefined),
       ...(same && previous?.answer !== undefined ? { answer: previous.answer } : {}),
     };
     await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
@@ -171,13 +184,22 @@ export async function answerChunkEstimate(packageDir: string, value: "yes" | "no
 /** Why `chunks next` may not hand out a chunk yet: empty when the run is under the ceiling or the operator said yes. */
 export async function chunkRunBlocker(packageDir: string, projectRoot: string, known?: ChunkEstimate | null): Promise<string | undefined> {
   const estimate = known === undefined ? await estimateChunkRun(packageDir, projectRoot) : known;
-  if (estimate === null || !estimate.overCeiling) return undefined;
+  if (estimate === null) return undefined;
   const record = await readChunkEstimate(packageDir);
   const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;
-  if (answered?.value === "yes") return undefined;
+  if (answered?.value !== "no" && (!estimate.overCeiling || answered?.value === "yes")) return undefined;
   const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
   const size = `${estimate.chunks} passes of at most ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${estimate.files} files) exceed the ceiling of ${estimate.maxPasses} passes (${estimate.ceilingFiles} files)`;
-  if (answered?.value === "no") return `${size}, and the operator answered no. Nothing runs.`;
+  if (answered?.value === "no") return `The operator answered no for this chunk plan. Nothing runs.`;
+  const launch = deskReviewOptions(process.env);
+  const mode = launch || record?.estimate.planKey !== estimate.planKey ? chunkModeOf(packageDir) : record.mode;
+  if (decisionFor(estimate, mode) === "auto-approved") {
+    // Recheck the current project allowance. A saved policy decision cannot raise a later, lower ceiling.
+    if (record?.decision !== "auto-approved" || record.estimate.autoApprovePasses !== estimate.autoApprovePasses) {
+      await recordChunkEstimate(packageDir, estimate, mode);
+    }
+    return undefined;
+  }
   return `${size}. In keryx shell, call the \`review_chunks_answer\` tool: the operator answers a card. Outside the shell, run \`keryx review chunks estimate --package ${dir}\` to record the estimate, then \`keryx review chunks estimate --package ${dir} --answer yes --quote "<operator quote>"\` in a terminal once the operator agrees.`;
 }
 
@@ -192,6 +214,7 @@ export function renderChunkEstimate(record: ChunkEstimateRecord): string[] {
     `ceiling: ${estimate.maxPasses} passes of ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${estimate.ceilingFiles} files), from ${estimate.limitsSource === "default" ? "the default" : "routing.config.json reviewChunks.maxPasses"}`,
   ];
   if (decision === "proceed") lines.push(`${mode}: at or under the ceiling; the run goes ahead without a question`);
+  else if (decision === "auto-approved") lines.push(`automatic: approved by reviewChunks.autoApprovePasses (up to ${estimate.autoApprovePasses} passes)`);
   else if (decision === "ask-once") lines.push("automatic: over the ceiling; the operator is asked once before any chunk runs");
   else lines.push("interactive: over the ceiling; the run waits for the operator's yes");
   if (estimate.limitsWarning !== undefined) lines.push(`warning: ${estimate.limitsWarning}`);
