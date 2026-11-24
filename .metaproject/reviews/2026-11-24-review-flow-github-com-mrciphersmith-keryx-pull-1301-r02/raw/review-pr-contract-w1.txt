@@ -1,0 +1,59 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 3 (delta f43a13c3f..b2043b98d, fix round 2), code read at b2043b98d via git show, PR body as in pr-context.md (head b2043b98d). The body has no checkbox checklist; each stated claim was worked as a row. The round-2 PR-body finding (r2-pr-contract-w2-PC-001) is addressed: Verification now states 1014 pass, which matches research-evidence/verify-tests-to-run-1.txt (Desktop 1014 pass, core tree/explorer 31 pass, exit 0), and a 'Review fixes' section names both rounds. Two of the three round-2 fix claims agree with the diff (focus hand-off on a page or two folders answering together; permit refusal retried twice with jittered wait: PERMIT_RETRIES = 2, PERMIT_WAIT_MS 150 plus Math.random). One minor: 'a stale-snapshot tree read shows only the banner' overstates it; the code leaves the folder's or page's status row reading 'Loading…'. No document outside the diff is contradicted: the guide's 'Could not load.' / Retry row and 'Project knowledge changed while loading' / Refresh catalog row still describe what the user sees. Slice anomaly: slice-03 shows two removed blocks in apps/desktop/src/platform/metaproject.ts, but that file is not in the f43a13c3f..b2043b98d range (git diff --stat lists no change to it) and the lines at 268 and 304-305 are identical at f43a13c3f and b2043b98d; nothing in slice-03 is a change of this round, so nothing is filed on it.",
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "// stays loading; a Retry here would only send the retired snapshot again.",
+      "problem": "PR body, Review fixes, round 2: \"a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)\". The diff (useMetaprojectTree.ts, catch of read(): \"Another snapshot answered: the explorer offers Refresh catalog, which re-reads the tree. The row stays loading; a Retry here would only send the retired snapshot again.\" followed by `latest.current.onStale(); return;`) does not clear the folder: it stays in status 'loading', so MetaprojectTree.flatten keeps rendering its `{ type: \"loading\" }` row (`<span role=\"status\">Loading…</span>`), and for a next page the Show more row keeps `loading: true` and reads 'Loading…' with aria-busy. The new tests assert only the absence of 'Could not load.' (MetaprojectView.dom.test.tsx deadRetry(); MetaprojectTree.dom.test.tsx 'a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row'), not that only the banner shows. The current body (head 3ad918b66) still carries the same sentence.",
+      "impact": "A reviewer or tester trusting the body expects the folder to show nothing but the Refresh catalog banner; the app shows the banner plus a 'Loading…' status row that never resolves until a catalog load re-reads it, and the guide says a folder shows 'Loading…' only 'until they arrive'. The code is the intended design (operator decision: no dead Retry); the cost is a reader who misjudges what the stale state looks like.",
+      "suggested_fix": "Reword the round-2 line, e.g. 'a stale-snapshot tree read shows the Refresh catalog banner and leaves the row loading (no Retry that cannot succeed)'.",
+      "evidence": "pr-context.md 'Review fixes' round 2 bullet; slice-02 useMetaprojectTree.ts hunk @@ 171,210 @@ (catch: stale-snapshot -> onStale(); return; comment 'The row stays loading'); slice-02 MetaprojectTree.tsx hunk @@ 7,130 @@ flatten(): `if (!folder || folder.status === \"loading\") { ... rows.push({ type: \"loading\", ... }) }` and `rows.push({ type: \"more\", ..., loading: folder.more?.status === \"loading\" })`; slice-02 test hunks MetaprojectView.dom.test.tsx @@ 2129,2178 @@ and MetaprojectTree.dom.test.tsx @@ 403,579 @@; guide docs/docs/guides/desktop-metaproject.md:106-107 at b2043b98d ('shows **Loading…** until they arrive'). PR body at 3ad918b66 from the payload's review_context.pr.body.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "degradation_class": "diff-vs-description"
+    }
+  ],
+  "slices": [
+    {"id": "slice-02", "status": "DONE", "coverage": "read in full, lines 1-1180"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full, lines 1-14; its hunks are not part of f43a13c3f..b2043b98d (file unchanged in range)"}
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Orchestrator: slice-03 holds removed lines of apps/desktop/src/platform/metaproject.ts that are not in the reviewed range (git diff --stat f43a13c3f b2043b98d lists no change to that file; lines 268 and 304-305 identical at both SHAs). The slicer likely diffed against another base for this file."
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Checklist form (PR body claims; the body carries no checkbox checklist)
+
+| Box or claim (quoted) | State | What the delta shows | Verdict |
+|---|---|---|---|
+| "Two managed review rounds; their fixes are in this PR." | claim | delta adds T13 (fix round 2) to flow.json/journal; body lists round 1 and round 2 fixes | Agrees |
+| "Round 2 fixes: focus moves to the right row when a page or two folders' answers land together" | claim | MetaprojectTree.tsx: distinct `status:` / `more:` ids; `focused` records `before` row id; tests 'a focused Loading row replaced by children and a Show more row hands focus to the first child', 'two folders answering in one commit keep focus in the folder whose Loading row had it' | Agrees |
+| "a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)" | claim | useMetaprojectTree.ts catch returns after onStale(); row stays 'Loading…' | Partly contradicted -> PC-001 (minor) |
+| "a read refused because every permit is busy is retried twice with a short jittered wait before the folder shows the error" | claim | `PERMIT_RETRIES = 2`, `isPermitRefusal` on "unavailable: Too many Metaproject reads", wait `150 * n + Math.random() * 150`; tests 'retried after a short wait' (3 calls, 2 waits) and 'outlasts the retries ... marks the folder failed' | Agrees |
+| Verification: "`bunx tsc --noEmit && bun test src` exit 0, 1014 pass. Core tree and explorer tests pass" | claim | verify-tests-to-run-1.txt at b2043b98d: exit 0, 31 pass, 1014 pass, 0 fail; journal T13 line '1014 pass' | Agrees |
+| "`bun run lint`, `bun run typecheck`, `bun run docs:check` exit 0 (re-run after round 1; round 2 touched only Desktop)" | claim | delta code files are all under apps/desktop/src; no src/ or docs/ file changed | Agrees (lint/typecheck/docs not re-run here: exec budget 0) |
+| "CI on the round-1 head ran the Rust `cargo test --locked metaproject` and passed." | claim | delta changes no Rust | Consistent (CI not re-checked by this reviewer) |
+| "Not run: no native walkthrough ...; focus behaviour is checked in the DOM test environment only." | disclosure | new focus tests are DOM tests | Consistent |
+| Summary / Core / Transport / Desktop / Docs bullets | claim | unchanged since round 2, where they were worked; the delta does not touch core, transport or docs | No new disagreement |
+
+## Documentation outside the diff
+
+- Stale-snapshot tree read no longer produces a 'Could not load.' row: guide desktop-metaproject.md:329 ('A tree row reads **Could not load.** | Select **Retry**') remains true for the failures that still produce it; :327 ('Project knowledge changed while loading' -> Refresh catalog) describes the stale path. Not contradicted.
+- Permit retry: no document quotes "Too many Metaproject reads" (guide grep at b2043b98d for Retry/Could not load/Too many/permit/stale found only lines 44, 108-110, 120, 157, 306, 325-329). Not filed.
+- Round-2 info r2-pr-contract-w1-PC-002 (Module label not in guide) is round-2 context; not re-reported.
+
+Not verified: lint, typecheck, docs:check and CI at b2043b98d (exec_budget_s 0; relied on the body and the supplied test evidence). Commands run: keryx ctx read/rg, git show/diff (read-only). The only file written is this one.
+KERYX_USAGE {"tokens_in":141924,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

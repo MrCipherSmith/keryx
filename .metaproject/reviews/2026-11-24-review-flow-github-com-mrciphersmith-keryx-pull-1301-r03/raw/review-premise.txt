@@ -1,0 +1,71 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r4-clean-code-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "The component doc at MetaprojectTree.tsx:104-106 states one hand-off rule ('the one after the row that preceded it'). handOff() at :65-79 and the layout effect at :177-180, both changed in this delta, now anchor a status row to its own parent. The two texts in one file describe one behaviour differently, and the doc's version is the one the round-3 fix replaced. No intent signal keeps the old wording: the T14 journal entry says the docs were reworded but names only the limiter and TreeFolder/ensure/more docs. Deferring the doc to handOff is a sound, local fix."
+    },
+    {
+      "finding_id": "r4-frontend-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "`reload?: unknown` (useMetaprojectTree.ts:114) was added by this delta, so its optionality is not a prior deliberate choice. The hook doc at :103 says a stale read is parked 'until `reload` changes', and the effect at :261-268 is the only re-read of a stale park. A caller that omits the input leaves no way out of the parked state, which is the dead state of the round-3 major. Making a contract-bearing input required is ordinary TypeScript practice. Of the two fixes offered, only the first is consistent with the operator's T12/T14 decision (stale shows the Refresh catalog banner only, no Retry, per the journal). The second fix (treat stale like failed and offer Retry when reload is undefined) would contradict that decision. The fixer should take the first."
+    },
+    {
+      "finding_id": "r4-logic-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "plan.md:49 says 'Focus is never moved by data arriving'. Its matrix (:58-67) has no stale-snapshot state. plan.md has one commit (709c993fa, the initial plan), and both behaviours were changed after it under operator answers recorded in journal.md:35 ('На то же место', 'Баннер Refresh catalog') and :47 (stale parking). flow-orchestrator SKILL.md:144 has workers and fix rounds check behaviour against the matrix. So a stale plan can steer a later fix or the flow-complete verifier against an operator decision. The finding records a real contradiction, not a missing nicety. Amending the plan and citing the journal decisions is sound and does not touch acceptance-criteria.md, which is frozen."
+    },
+    {
+      "finding_id": "r4-style-w2-F-001",
+      "verdict": "upheld",
+      "reasoning": "MetaprojectTree.tsx:179-180 nests a ternary inside a ternary with a `??` between the branches, and :181 adds a third conditional. The delta introduced all of it, so it is not an older deliberate form, and no lint exemption or comment marks it as one. The project's ts-js-node rules say nothing either way. Extracting a helper with early returns is common clean-code practice. The suggested helper preserves all three fallbacks, and the effect still uses lost.index when there is no target, so the fix is sound. Readability, minor as reported."
+    },
+    {
+      "finding_id": "r4-style-w2-F-002",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02/operator-decisions.json:29-48", "says": "operator dismissed r2-style-w2-F-001 (state named `slots`/`pool`, function `limit`) in this same hook file: 'the names stay'" },
+        { "ref": ".metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r03/operator-decisions.json:4-25", "says": "operator dismissed r3-style-w1-F-001 (one wait function with three names: sleep/wait/pause) in this same hook, as 'the same kind of naming choice the operator kept in round 2'" },
+        { "ref": "apps/desktop/src/metaproject/useMetaprojectTree.ts:110-114", "says": "the input's doc states exactly what the value is: it changes on every catalog load, Refresh catalog included" },
+        { "ref": "apps/desktop/src/components/RoutingDialog.tsx:38", "says": "Desktop already uses a non-function `reload` as a change counter/dependency (cited in the finding's own evidence)" }
+      ],
+      "reasoning": "The fact holds: the API name `reload` and the ref name `loadedCatalog` refer to one value. But the operator has twice dismissed this kind of finding in this same file, once for two names for one thing and once for three names for one function. The input carries a doc that says what it is, and Desktop already uses `reload` for a non-function change token (RoutingDialog.tsx:38). The reviewer rates the precedent 'mixed'. Renaming would make this hook less consistent with the operator's standing choice on naming in this file, not more. The finding names no defect beyond readability.",
+      "question": "r4-style-w2-F-002: the hook input `reload` (a change token, passed `catalog`) is remembered in a ref named `loadedCatalog`. You kept similar two-name choices in this file twice (slots/pool; sleep/wait/pause), and the input has a doc saying what it is. Uphold (rename to one name, e.g. catalogLoad/seenCatalogLoad) or dismiss (keep the names)?",
+      "options": ["dismiss — keep `reload` and `loadedCatalog`, as with slots/pool and sleep/wait/pause", "uphold — use one change-token name at the API and in the ref"]
+    },
+    {
+      "finding_id": "r4-testing-practices-w1-F1",
+      "verdict": "upheld",
+      "reasoning": "The `stale` status and its three render/refuse branches (MetaprojectTree.tsx:42-43 and :59, the more() guard) are new in this delta, and they carry an operator decision: a stale read shows as Loading, banner only, no Retry (journal.md:35, :47). As the finding describes them, the existing stale tests assert only absences before Refresh catalog. No intent signal or project practice exempts a new state branch from a test, so the gap is real. The suggested assertions reuse existing fixtures and pin the operator's decision. The fix is sound."
+    },
+    {
+      "finding_id": "r4-testing-practices-w1-F2",
+      "verdict": "upheld",
+      "reasoning": "The `|| folder.status === \"stale\"` in the reveal effect (MetaprojectTree.tsx:144) decides between waiting and setHandled (:145). Removing it would silently end a cross-tree reveal after a stale step, and the finding says no reveal test uses a stale fixture. The branch is new in this delta and has no exemption. The matrix row 'selection changes elsewhere' (plan.md:64-65) makes reveal behaviour part of the spec. One composed DOM test is a proportionate fix."
+    },
+    {
+      "finding_id": "r4-testing-practices-w1-F3",
+      "verdict": "upheld",
+      "reasoning": "The recovery loop at useMetaprojectTree.ts:265 re-reads parked reads in both scopes. It is the fix for the round-3 major, and the operator decision on stale parking applies to Wiki groups as much as to graph folders. A test that parks a Wiki read but never runs Refresh catalog leaves the Wiki half unprotected. No intent signal limits recovery to the graph scope. Extending the existing :2139 test is the minimal sound fix."
+    }
+  ]
+}
+```
+
+Summary: 7 upheld, 1 challenged, 0 downgraded, 0 owner-decision.
+
+Held for the operator:
+- r4-style-w2-F-002 (challenged). Question: rename the `reload` input and the `loadedCatalog` ref to one change-token name (uphold), or keep both names (dismiss)? Signals: the operator already dismissed the same kind of naming finding twice in useMetaprojectTree.ts (r2-style-w2-F-001 slots/pool, r3-style-w1-F-001 sleep/wait/pause). The input's doc at useMetaprojectTree.ts:110-114 says what the value is. RoutingDialog.tsx:38 is an existing non-function `reload`.
+
+Notes:
+- r4-frontend-w2-F-001 is upheld for its first suggested fix only: make `reload` required. Its alternative, to offer Retry on a stale park when `reload` is undefined, would contradict the operator's decision of a banner only, with no Retry.
+- History read: `git log` on plan.md (one commit, 709c993fa). git blame was not run. The intent questions turned on whether the delta introduced each site, and the finding evidence plus the journal settled that.
+- Not verified: I did not re-read the test bodies the testing findings cite (MetaprojectView.dom.test.tsx:2139/:2171, MetaprojectTree.dom.test.tsx:511). Their factual accuracy is the verifier's job; I judged only whether each is a defect. The task points to `.metaproject/rules/process/tdd-workflow.mdc`, which does not exist at that path; the tdd rules live under .metaproject/rules/activity/ and rules/core/definition-of-done.mdc, and I did not read them.
+
+Routing audit: graph_used: no (not-relevant: each finding names its file); wiki_used: no (not-relevant: the judgement rests on operator decisions and the flow journal); ctx_used: yes (keryx ctx rg/run); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":101815,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

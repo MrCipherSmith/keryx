@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 1, round 4, delta)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98d..3ad918b66 (fix round 3); head 3ad918b66
+- Scope mode: explicit-hash-range, supplied slice only
+- Slice read in full: slice-04 (second-look), 2016 lines
+- Files in the slice: flow 518 metadata only — acceptance-criteria.md, context.md, description.md, journal.md, plan.md, tasks.md, flow.json, dispatch/T5-T8/T12/T13 (+ fix_context), resolved/T5-T7/T12/T13.implement.json. No executable code is in this slice.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas (checked)
+- Secrets and credentials: no tokens, keys, passwords or credential-bearing URLs in any file of the slice. The sha256 values in resolved/*.implement.json are content digests of rule files, and `acChecksum` in flow.json is the frozen-criteria digest; neither is a secret.
+- Personal data: the dispatch files carry the operator's local checkout path (`/Users/<user>/work/sandbox/keryx/...`) and flow.json carries the GitHub handle as `owner`. Both are the repository's established pattern (`keryx ctx rg -l --hidden "/Users/tsaitler" .metaproject/flows` lists 49 flow files across flows), not introduced by this delta, and are not credentials; not reported.
+- Injection / command construction: the dispatch `constraints` contain shell instructions for workers (`cd <root> && pwd && git branch --show-current`, `git -C <root>`) built from a fixed literal path, with no interpolated untrusted input. They are instructions to agents, not code the app executes.
+- Security posture described by the plan (context for the code slices, not reviewed here): the `tree` request keeps exact-key parsing, a relative-path check on the graph `parent` (`isMetaprojectRelativePath`, absolute and `..` refused per AC2), Rust `deny_unknown_fields` and `valid_v2` validation, and snapshot-bound cursors. Nothing in the slice weakens any of these.
+- Auth/IDOR, crypto, CSRF, open redirect, React sinks: not applicable to metadata files.
+
+### Not verified
+- No code file is in this slice; the code changes of fix round 3 sit in other slices and were not reviewed by this reviewer (not assigned).
+- No command was executed beyond read-only `keryx ctx rg` / `keryx ctx read`; `exec_budget_s` = 0.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second-look read of slice-04 (flow 518 metadata: plan, criteria, journal, flow.json, dispatch and resolved-context JSON). No secrets, no injectable command construction, nothing that weakens the tree action's input validation; the local checkout path and GitHub handle are the repository's existing pattern, not credentials. No findings.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": [
+    { "id": "slice-04", "coverage": "read in full (2016 lines); metadata only, no code", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":151282,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

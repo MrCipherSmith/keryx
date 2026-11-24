@@ -385,28 +385,9 @@
       "options": [
         "dismiss — keep sleep/wait/pause, as the slots/pool names were kept in round 2",
         "uphold — use one name (destructure wait without an alias)"
-      ],
-      "operator": {
-        "answer": "dismiss",
-        "reason": "Same kind of naming choice the operator kept in round 2 (slots/pool); the neighbouring destructured fields are aliased too.",
-        "quote": "dismiss",
-        "at": "2026-11-24T08:19:59.123Z",
-        "actor": "operator",
-        "confirmedVia": "host-question",
-        "hostQuestion": {
-          "source": "claude-code",
-          "ref": "premise-r3-style-w1-F-001",
-          "questionText": "r3-style-w1-F-001: in the permit retry, one wait function has three names: `sleep` (module default), `wait` (hook option) and `pause` (the destructured alias in read()). The premise judge challenged it: in round 2 you kept two names for one thing in this same file (slots/pool), and the neighbouring fields are aliased too (`cwd: root`, `request: send`). Uphold (use `wait` without an alias) or dismiss (keep the names)?",
-          "answerText": "dismiss",
-          "time": "2026-11-24T08:19:59.123Z"
-        }
-      }
+      ]
     },
-    "source": "internal",
-    "disposition": {
-      "state": "dismissed-incorrect",
-      "evidence": "operator (host-question claude-code:premise-r3-style-w1-F-001, 2026-11-24T08:19:59.123Z) on the premise question: Same kind of naming choice the operator kept in round 2 (slots/pool); the neighbouring destructured fields are aliased too."
-    }
+    "source": "internal"
   },
   {
     "id": "r3-style-w1-F-002",
@@ -533,6 +514,27 @@
       "reported_line": null
     },
     "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02#r3-testing-practices-w2-F2",
+    "source": "internal"
+  },
+  {
+    "id": "r3-pr-contract-w1-PC-001",
+    "reviewer": "review-pr-contract",
+    "severity": "minor",
+    "problem": "PR body, Review fixes, round 2: \"a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)\". The diff (useMetaprojectTree.ts, catch of read(): \"Another snapshot answered: the explorer offers Refresh catalog, which re-reads the tree. The row stays loading; a Retry here would only send the retired snapshot again.\" followed by `latest.current.onStale(); return;`) does not clear the folder: it stays in status 'loading', so MetaprojectTree.flatten keeps rendering its `{ type: \"loading\" }` row (`<span role=\"status\">Loading…</span>`), and for a next page the Show more row keeps `loading: true` and reads 'Loading…' with aria-busy. The new tests assert only the absence of 'Could not load.' (MetaprojectView.dom.test.tsx deadRetry(); MetaprojectTree.dom.test.tsx 'a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row'), not that only the banner shows. The current body (head 3ad918b66) still carries the same sentence.",
+    "impact": "A reviewer or tester trusting the body expects the folder to show nothing but the Refresh catalog banner; the app shows the banner plus a 'Loading…' status row that never resolves until a catalog load re-reads it, and the guide says a folder shows 'Loading…' only 'until they arrive'. The code is the intended design (operator decision: no dead Retry); the cost is a reader who misjudges what the stale state looks like.",
+    "suggested_fix": "Reword the round-2 line, e.g. 'a stale-snapshot tree read shows the Refresh catalog banner and leaves the row loading (no Retry that cannot succeed)'.",
+    "evidence": "pr-context.md 'Review fixes' round 2 bullet; slice-02 useMetaprojectTree.ts hunk @@ 171,210 @@ (catch: stale-snapshot -> onStale(); return; comment 'The row stays loading'); slice-02 MetaprojectTree.tsx hunk @@ 7,130 @@ flatten(): `if (!folder || folder.status === \"loading\") { ... rows.push({ type: \"loading\", ... }) }` and `rows.push({ type: \"more\", ..., loading: folder.more?.status === \"loading\" })`; slice-02 test hunks MetaprojectView.dom.test.tsx @@ 2129,2178 @@ and MetaprojectTree.dom.test.tsx @@ 403,579 @@; guide docs/docs/guides/desktop-metaproject.md:106-107 at b2043b98d ('shows **Loading…** until they arrive'). PR body at 3ad918b66 from the payload's review_context.pr.body.",
+    "confidence": "high",
+    "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+    "line": 186,
+    "quote": "// stays loading; a Retry here would only send the retired snapshot again.",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "degradation_class": "diff-vs-description",
+    "global_id": "2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1301-r02#r3-pr-contract-w1-PC-001",
     "source": "internal"
   }
 ]

@@ -1,0 +1,96 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Round 4 fix delta, slice-01 (useMetaprojectTree.ts): the permit back-off is lifted out of read() into module-scope withPermitRetry, the refusal is classified in the platform transport, and failure handling moves to settleFailure with an explicit 'stale' state whose docs now match. Both new functions are under the thresholds. One info finding: withPermitRetry's delay formula reads the module constant PERMIT_RETRIES instead of its own starting count. Of the 10 prior findings, 4 are closed, 3 info string-coupling findings are partial (the TS side has one copy, the Rust side is still unannotated), and 3 are open (the unused PERMIT_RETRIES export x2, and the PR-body wording).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": 36,
+      "quote": "    await wait(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);",
+      "problem": "This is new code from the fix for r3-clean-code-w1-F-002. withPermitRetry takes `retries` as a parameter (default PERMIT_RETRIES), but it finds the attempt number from the module constant: `PERMIT_RETRIES - retries + 1`. The function therefore assumes the parameter always starts at the default. A caller passing another count would get the wrong delay. With retries = 5, the first wait is 150*(2-5+1) = -300 ms plus jitter, so in practice there is no back-off.",
+      "impact": "No defect today: the only caller (read(), :214) leaves `retries` at its default. The cost is a latent trap. The parameter looks configurable but isn't, because the delay is tied to a constant it doesn't name.",
+      "suggested_fix": "Optional. Pass the attempt number down instead: add a recursion-only `attempt = 1` argument with `retries` counting down, and wait `PERMIT_WAIT_MS * attempt + jitter`. Or drop the `retries` parameter and keep the count internal.",
+      "evidence": "useMetaprojectTree.ts:29-40 at 3ad918b66 (slice-01 hunk @@ 17,42 @@). The only call site is :214 `withPermitRetry(() => send(root, input), { wait: pause, live: current })`, found with `keryx ctx rg -n \"PERMIT_RETRIES|isMetaprojectPermitRefusal\" apps/desktop --all`.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree` | Parent ref: `b2043b98d` | Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a`
+- Scope mode: `explicit-hash-range` (b2043b98d..3ad918b66), slice-01 (fix) only | Changed files reviewed: 1 (apps/desktop/src/metaproject/useMetaprojectTree.ts; head file read in full for context, platform/metaproject.ts helper checked for dispositions)
+
+### Summary
+The fix round answers the round-3 SRP finding the way it was suggested. The back-off is now a 12-line module-scope `withPermitRetry`, and `read()` has shrunk to about 25 lines. The new `settleFailure` (25 lines) holds the failure-classification branches, and the new `"stale"` status makes the type and field docs agree with the behaviour. One info-level coupling remains inside the new helper.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Findings
+
+#### Functions
+- [F-001] info — useMetaprojectTree.ts:36. withPermitRetry's delay uses `PERMIT_RETRIES - retries + 1`, so its own `retries` parameter only works at its default value. No defect with the single caller.
+
+#### Comments
+No comment issues found. The updated docs match the code: the TreeFolder doc (:44-56), the ensure/more docs (:70-78), the hook doc (:96-104), the limiter comment (:158-159) and the settleFailure stale comment (:180-181). They describe `"stale"` as shown as loading, with no Retry, and re-read on the next catalog load. That matches `reread(..., "stale")` in the reload effect (:259-268), and MetaprojectTree.tsx:43/:144 treats stale like loading.
+
+#### Error Handling
+No error-handling issues found. withPermitRetry rethrows the original `cause` untouched. settleFailure maps every failure to tree state, and nothing is swallowed.
+
+#### DRY
+No DRY issues found. The `cursor && folder ? {...more} : {status...}` shape appears twice in settleFailure (stale and failed), under the 3-copy threshold.
+
+#### SOLID
+No SOLID issues found. r3-clean-code-w1-F-002 is resolved: read() no longer holds the retry policy.
+
+### Prior dispositions
+- r3-architecture-w1-F-001: **closed**. platform/metaproject.ts:281-287 now exports METAPROJECT_PERMIT_REFUSAL and isMetaprojectPermitRefusal (it excludes MetaprojectRequestError). The hook imports the helper (:9, :35), and the DOM test imports the constant (MetaprojectTree.dom.test.tsx:82). The suggested Rust-side comment was not added; that part is tracked under the info findings below.
+- r3-clean-code-w1-F-002: **closed**. The back-off is lifted to module-scope withPermitRetry (:29-40), and read() calls it at :214.
+- r3-clean-code-w1-F-003: **partial**. The TS side now has one source, and the test imports it. metaproject.rs:199 is unchanged, with no comment and no Rust test pinning the text, so a Rust rewording still silently disables the retry. The platform test (metaproject.test.ts:213) hard-codes the Rust text, which catches a TS-side drift only.
+- r3-clean-code-w2-F-001: **closed**. A distinct `"stale"` status for the folder and for `more` is added, and the TreeFolder.more, ensure and more docs name it.
+- r3-clean-code-w2-F-002: **partial**. Same as r3-clean-code-w1-F-003: TS consolidated, Rust comment absent.
+- r3-highload-w2-F-001: **partial**. TS shares one constant, but no Rust-side assertion of the prefix was added.
+- r3-regression-w1-F-001: **closed** (by code reading). A stale read is parked as `"stale"` (:182-185), and the `reload` effect (:259-268) re-reads every parked parent or page on each catalog load. MetaprojectView passes `reload: catalog` (MetaprojectView.tsx:761), so a Refresh catalog that returns the same snapshotId still re-reads. I did not execute this myself (exec budget 0). The supplied verify-tests run at the head is exit 0.
+- r3-style-w1-F-002 / r3-style-w2-F-001: **open**. `export const PERMIT_RETRIES = 2` (:21) is still exported. `keryx ctx rg` over apps/desktop finds no importer outside useMetaprojectTree.ts.
+- r3-pr-contract-w1-PC-001: **open**. The PR body at 3ad918b66 still says round 2 "shows only the banner". The row actually shows as loading (`"stale"` rendered as Loading…). The brief notes the PR body was not edited this round.
+
+### Clean Areas
+- Function length and argument count for withPermitRetry, settleFailure, read, reread, and the reload effect.
+- Failure signalling and preservation of `cause`.
+- Magic literals: PERMIT_WAIT_MS and PERMIT_RETRIES are named.
+
+### Not verified
+- No tests executed (exec budget 0). I relied on the supplied research-evidence run for test status.
+- The other slices (02-06) were not reviewed, as assigned.
+
+### Routing audit
+- graph_used: no (not-relevant: a single assigned file, with the layers block supplied in the payload)
+- wiki_used: no (not-relevant: a function-level clean-code delta)
+- ctx_used: yes (keryx ctx rg, keryx ctx read/show)
+- raw_rg_used: no
+KERYX_USAGE {"tokens_in":113599,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

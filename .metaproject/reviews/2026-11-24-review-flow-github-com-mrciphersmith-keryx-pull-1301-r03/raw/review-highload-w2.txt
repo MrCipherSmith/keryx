@@ -1,0 +1,38 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "REVIEW_RESULT": {
+    "status": "DONE_WITH_CONCERNS",
+    "reviewer": "review-highload",
+    "summary": "Round 4 delta b2043b98d..3ad918b66 (fix round 3), slices slice-02 and slice-03, read in full. No high-load defect found. The new stale-park and reload path (useMetaprojectTree reload effect, reread(..., 'stale')) is triggered only by a non-quiet catalog load: a quiet re-read with an unchanged snapshot returns before setCatalog (MetaprojectView.tsx:410-413), so there is no automatic poll that could re-send stale reads in a loop; each Refresh catalog re-sends only parents whose status or more.status is 'stale', once each, through the existing 3-slot limiter, and a parent already 'loading' is not re-sent, so no duplicate reads. withPermitRetry is bounded (PERMIT_RETRIES = 2, linear back-off plus jitter) and checks the snapshot generation before and after its wait; the two new DOM tests cover both guards. isMetaprojectPermitRefusal classifies once in the transport, with no shared mutable state. Concern (tooling, not code): slice-03 shows two removed hunks in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` line and the expectedSnapshotId check in matchesRequest) that are not in this range: `keryx ctx diff b2043b98d..3ad918b66 -- apps/desktop/src/platform/metaproject.ts` reports +12 -0 (only the permit-refusal export), and the expectedSnapshotId check is still at metaproject.ts:316-317 at the head. I reviewed the file's real delta (in slice-02) and treated slice-03's removals as a slicer artifact.",
+    "findings": [],
+    "slices": ["slice-02", "slice-03"],
+    "follow_ups": [
+      "slice-03.diff in the r03 package renders removals from apps/desktop/src/platform/metaproject.ts that do not exist in b2043b98d..3ad918b66 (git diff shows +12 -0 for that file); the orchestrator may want to check the slicer for this range."
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+  }
+}
+```
+
+## High-Load Review
+Scope: branch feat/desktop-metaproject-sidebar-tree, delta b2043b98d..3ad918b66 (round 4, fix round 3), diff mode; load profile not provided. Concrete triggers checked: catalog loads (Refresh catalog, quiet re-read on return), parked stale reads across both scopes, concurrent tree reads against Desktop's shared read permits, snapshot retirement during a permit wait. Files reviewed: useMetaprojectTree.ts, MetaprojectTree.tsx, MetaprojectView.tsx, platform/metaproject.ts and their tests (slice-02), slice-03.
+Summary: No blocker, major, minor or info finding. The stale-snapshot recovery re-reads are bounded by user catalog loads and the existing limiter; the permit retry is capped, jittered and snapshot-guarded. Stats: 0 | 0 | 0 | 0.
+
+Findings:
+- CLI / Multi-Session: None detected.
+- Concurrency & Races: None detected (reread acts only on 'stale' entries, so no in-flight read is duplicated; a stale answer arriving after a refresh re-parks the row and re-raises the banner).
+- Resources: None detected.
+- Caching: None detected.
+- Lock Contention: Not relevant.
+- Async / Queues: None detected (limiter queue is bounded by parked/visible parents; quiet re-reads with an unchanged snapshot never trigger `reload`).
+- Retry / Timeout / Circuit Breaker: None detected (2 retries, 150 ms linear + jitter, generation check before and after the wait).
+- Idempotency & Distributed Invariants: None detected (tree reads are read-only).
+
+Clean Areas: Parts 0, A, B, C, E, F, G reviewed; Part D not relevant (no transactions or locks).
+
+Concern: slice-03 does not match the range (see follow_ups). Not verified: runtime behaviour beyond the supplied test log (no execution budget).
+
+Routing audit: graph_used: no (payload layers supplied the affected set); wiki_used: not-relevant; ctx_used: yes (keryx ctx diff, keryx ctx rg, keryx ctx read); raw_rg_used: no.
+KERYX_USAGE {"tokens_in":140607,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

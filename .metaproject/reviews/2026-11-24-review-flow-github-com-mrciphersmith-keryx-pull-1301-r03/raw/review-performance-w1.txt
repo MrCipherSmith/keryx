@@ -1,0 +1,39 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-metaproject-sidebar-tree`, PR 1301 (flow 518), round 4 delta b2043b98d..3ad918b66 (fix round 3), mode explicit-hash-range. Slices read in full: slice-02 (new), slice-03 (new). Code files in the delta: apps/desktop/src/metaproject/{MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectView.tsx} and apps/desktop/src/platform/metaproject.ts, with their tests; the rest of slice-02 is flow bookkeeping (dispatch/T14*, flow.json, resolved/T14, journal.md) with no runtime cost.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+No new performance problem in this delta. What was checked, with the execution frequency of each:
+
+- **Stale re-read on catalog load** (useMetaprojectTree.ts, the `reload` effect): runs once per change of the `catalog` object. MetaprojectView sets a new catalog only on a user-driven non-quiet load (Refresh catalog, Rebuild, project change) or a quiet read that finds a new snapshot (MetaprojectView.tsx:390-421; a quiet read with the same snapshot returns before `setCatalog`). There is no polling. Each run walks the folder keys of both scopes once (O(folders loaded)), re-reads only `stale` ones, and those reads go through the existing 3-slot limiter. It does not run on mount (`loadedCatalog` starts at `reload`), and after a new snapshot the folders are already empty. Each catalog load re-reads a stale parent at most once, so it cannot loop.
+- **Focus hand-off** (MetaprojectTree.tsx `handOff`, `remember`, the layout effect, `onFocus`): this work runs on every render and every focus move, including keyboard repeat through a long tree. `remember` now does `shown.current.findIndex` (O(rows)) where it used to do `elements.indexOf` (O(rows)), so the cost has the same order. `handOff` is O(1) for entry rows. For a status row it scans back with `rows.slice(0, index).reverse().find(...)`, O(index) plus one array, and only for Loading or Show more rows, which are few. `flatten` already costs O(rows) every render. The layout effect's extra `rows.slice(at + 1)` runs only when the focused row has gone. The `rowElements()` query on every render is unchanged from before the delta.
+- **withPermitRetry** (useMetaprojectTree.ts:29-40): this lifts the round-2 retry out of `read()` without changing its behaviour: same count (2), same jittered linear wait, the same liveness check before and after the wait. The slot held during the wait was in the code before this delta (operator decision: a retired in-flight read keeps its limiter slot). Nothing new to report.
+- **isMetaprojectPermitRefusal** (platform/metaproject.ts): one `instanceof` and one `startsWith` per failed read. Negligible.
+- **MetaprojectView `reload: catalog`**: passes the same object reference between renders, so the effect does not run on every render.
+- Bundle, N+1, indexes, pagination, leaks (no new listener, timer or subscription; `sleep`'s setTimeout is one-shot and awaited), synchronous blocking: nothing in the delta applies.
+
+Note on slice-03: it shows two hunks removing lines from apps/desktop/src/platform/metaproject.ts (`if (isMetaprojectV2Response(response, "capabilities")) return 2;` and the `expectedSnapshotId` check in `matchesRequest`). `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` shows only the 12 added lines (the permit-refusal constant and classifier). So those removals are not part of this delta; they look like a slicing artifact, probably from earlier PR history. I reviewed no code for them and report nothing on them.
+
+### Clean Areas
+CLI/TUI-style hot paths (render, focus moves, keyboard repeat), N+1, React re-renders, expensive computation in render, indexes, memory leaks, bundle imports, sync blocking, pagination, redundant calls (the stale re-read sends one request per parked parent per catalog load), MobX (not used).
+
+Routing audit: graph_used: payload layers (affected set at the PR head); wiki_used: not-relevant (perf review of a 7-file Desktop delta, intent stated in the plan and in the code docs); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no. One raw `git diff` of a single file, with a keryx:raw marker, to check what slice-03 contains.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Round 4 delta (fix round 3): no performance findings. The reload-driven re-read of stale tree reads runs once per user-driven catalog load, walks the loaded folders once and goes through the existing 3-slot limiter. The focus hand-off and remember changes keep per-render and per-focus cost linear in rows, the same order as before. withPermitRetry is a refactor that does not change behaviour. Slice-03's removal hunks are not in git diff b2043b98d..3ad918b66 for platform/metaproject.ts (only 12 added lines), so they look like a slicing artifact; no finding was made on them.",
+  "findings": [],
+  "slices": ["slice-02", "slice-03"],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":142555,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

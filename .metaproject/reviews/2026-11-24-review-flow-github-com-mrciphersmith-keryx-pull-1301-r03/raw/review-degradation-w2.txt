@@ -1,0 +1,52 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02", "slice-03"],
+  "summary": "Round 4 delta b2043b98d..3ad918b66 (fix round 3), slices 02 and 03 read in full, compared with the base b2043b98d. Nothing in the delta is worse than the base in behaviour, defaults or speed. Two low findings: a component doc that the new focus hand-off made inaccurate (minor, debt) and a wording overclaim about 'every catalog load' (info). Slice-03 anomaly: its two hunks show removed lines in apps/desktop/src/platform/metaproject.ts (the capabilities `return 2` and the snapshot check inside matchesRequest). `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts` shows neither removal. The real delta to that file is only the added METAPROJECT_PERMIT_REFUSAL and isMetaprojectPermitRefusal. At head, requestMetaprojectV2 still refuses another snapshot as stale-snapshot (metaproject.ts:316-318), and the capabilities path returns `{ protocol: 2, supportsTree }` (:268-269). Those slice lines are earlier-round history, not this delta, so they are not filed. Verified clean: (1) the r3 dead 'Loading' state. settleFailure parks a stale-snapshot read as status/more 'stale'. MetaprojectView passes `reload: catalog`, and setCatalog runs together with setSnapshotMismatch(false) (MetaprojectView.tsx:414-416), so the banner never clears without a reload change. A new snapshot bumps the generation first and clears folders. A quiet re-read with the same snapshot neither sets the catalog nor clears the banner (:410-412), so the Refresh catalog banner stays the way out. No dead state remains. (2) The more() guard changed from `more?.status === 'loading'` to `more && status !== 'failed'`. It refuses loading and stale and still lets failed through, the same as the base for every reachable state. The reveal effect at MetaprojectTree.tsx `folder.more?.status !== 'failed'` waits on stale as it waited on loading. (3) flatten renders `loading: Boolean(folder.more)`; failed is handled first, so only loading or stale reach it, and both show as Loading, the same as the base. (4) The focus hand-off. For an entry row, the anchor is the previous row and the target is after[0], else the anchor: identical to the base's `elements[anchor + 1] ?? elements[anchor]`. Status rows now anchor to their own parent. In the cases compared (first read lands, page lands, not-found, collapse), focus stays in the same folder or moves to the parent, never into another folder. The root's status row falls back to the index as before. The extra slice/reverse/find per focus is O(rows) beside the existing findIndex: not a measurable change. (5) isMetaprojectPermitRefusal against the base isPermitRefusal: same prefix. It now also excludes MetaprojectRequestError. 'unavailable' is not in METAPROJECT_ERROR_CODES (contract.ts:329), so the Rust text (metaproject.rs:199) still reaches the hook as a plain Error, and the platform test pins that. (6) withPermitRetry against the base attempt(): same delays, retry count and live() checks before and after the wait. (7) Tests as regression detectors. The view stale test now asserts that Client shows, that no Loading row remains, and that src was read twice under s1; the Show more twin asserts Late shows. Both would fail without the reload effect. The two retry-guard tests would fail with either live() guard removed: an extra SNAPSHOT call in one, waits > 0 in the other. The new focus test pins the r3-logic case. Consumers traced: the payload's graph list is MetaprojectView.tsx (sole caller of useMetaprojectTree with reload), MetaprojectTree.tsx, useExplorerNavigation.ts, OpenSpecView.tsx and App.tsx, the last three by importing platform/metaproject.ts. The new exports are used only by the hook and the tests. Search-derived with keryx ctx rg: isMetaprojectPermitRefusal and METAPROJECT_PERMIT_REFUSAL have no other users. The graph cap dropped nothing ('truncated': []). Acceptance criteria were read from the payload (AC1-AC9). Not run: no code executed (read-only, exec_budget_s 0); I relied on the orchestrator's test output at the head (exit 0) without re-running it.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": " * place: the one after the row that preceded it, when that row is still shown.",
+      "problem": "The delta replaced the 'row before it' anchor with handOff(). A parent's Loading row now hands focus to the parent's first child after d:<parent>. A Show more row now hands it to the first row of the same parent after that parent's last entry. With no such row, focus goes to the anchor itself (the parent row or its last entry), not to the row after the one that preceded it. The component's top-level doc (MetaprojectTree.tsx:104-106) was not updated and still describes the base rule. The delta did update the doc on the `focused` ref and the layout-effect comment, so the component now carries two descriptions of one behaviour.",
+      "impact": "A maintainer who reads the component doc expects the base rule and would 'fix' handOff back to it, which would reintroduce r3-logic-w5-F-002. Users are not affected.",
+      "suggested_fix": "Reword :104-106, for example: 'when the focused row is replaced, focus goes to the row now at its place (handOff): an entry row's successor; a status row's first row of its own parent after the parent row or the parent's last entry.'",
+      "evidence": "base-diff: at b2043b98d the doc matched `before: rows[index - 1]?.id` and `elements[anchor + 1] ?? elements[anchor]`. At 3ad918b66, handOff (MetaprojectTree.tsx:958-965 in slice-02) and the layout effect use `after.find(row => row.parent === lost.parent) ?? rows[at]`, while :105-106 is unchanged context in slice-02. Refute attempt: reread the doc block. It names only the 'row that preceded it' rule, and the delta did not edit it.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "   * Changes whenever the explorer loads its catalog (Refresh catalog included), whether or not the",
+      "problem": "The `reload` doc, the MetaprojectView comment ('Every catalog load (a new catalog object) re-reads…') and the PR body ('every catalog load re-reads it') all say that any catalog load re-reads parked stale reads. The quiet re-read that runs when the explorer is shown again does not. When it finds the same snapshot, it returns before setCatalog (MetaprojectView.tsx:410-412), so `reload` does not change and the parked rows stay Loading.",
+      "impact": "Users are not affected. Neither does that quiet path clear snapshotMismatch, so the Refresh catalog banner is still on screen and still recovers the rows. The wording claims more than the code does.",
+      "suggested_fix": "Say 'every catalog load that replaces the catalog (Refresh catalog, Rebuild, a new snapshot)', or 'every user-started catalog load'.",
+      "evidence": "consumer-trace: MetaprojectView.tsx passes `reload: catalog` to useMetaprojectTree. The catalog effect at :410-416 calls setCatalog and setSnapshotMismatch(false) only on a non-quiet read or a changed snapshot. The reload effect in useMetaprojectTree.ts fires only on `loadedCatalog.current !== reload`.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "findings": 2, "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+Summary: Fix round 3 introduces no degradation against b2043b98d. The parked-stale/reload mechanism removes the r3 dead Loading state, and the banner stays reachable on every path. The more() guard, the row rendering, the permit classifier and withPermitRetry behave like the base. The focus hand-off changes only status rows, toward the same folder. The new tests would fail on the regressions they target. One minor doc drift (MetaprojectTree.tsx:104-106) and one info wording overclaim. The removed lines slice-03 shows in platform/metaproject.ts are not in the b2043b98d..3ad918b66 delta (checked with git diff); the head still refuses an answer for another snapshot as stale-snapshot. Nothing was executed (read-only).
+
+Routing audit: graph_used: payload layers (graph at 3ad918b66) | wiki_used: not-relevant (delta-only fix round, behaviour read from code) | ctx_used: yes (keryx ctx rg/read) | raw_rg_used: no
+KERYX_USAGE {"tokens_in":150248,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

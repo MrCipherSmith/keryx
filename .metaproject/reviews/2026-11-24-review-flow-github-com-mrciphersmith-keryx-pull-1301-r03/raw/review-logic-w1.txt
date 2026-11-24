@@ -1,0 +1,90 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Fix round 3 (b2043b98d..3ad918b66), slice-01 (useMetaprojectTree.ts). The stale-snapshot dead end (r3-regression-w1-F-001) is closed: a stale answer now parks the folder or its next page as `stale`, and every catalog load (the `reload: catalog` prop, a new object on each successful non-quiet or new-snapshot load) re-reads what is parked, under the same snapshot when it came back unchanged. The only place the stale banner is cleared (MetaprojectView.tsx:414-416) is the same branch that calls setCatalog, so a parked row can no longer outlive its banner. The permit back-off moved unchanged in behaviour into module-scope withPermitRetry, and the refusal is classified in the platform transport. No blocker, major or minor logic defect found; one info note on withPermitRetry's delay formula.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "    await wait(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);",
+      "problem": "Introduced while answering r3-clean-code-w1-F-002 (lift the retry out of read()). withPermitRetry takes `retries` as a parameter, but the back-off step is computed from the module constant: `PERMIT_RETRIES - retries + 1`. That is the attempt number only when the first call passes `retries = PERMIT_RETRIES`. A caller passing more (e.g. 5) gets a negative base delay on the first retry (150 * -2 = -300 ms plus jitter, a 0 ms timeout), and one passing fewer skips the shorter steps.",
+      "impact": "No defect today: the only caller (read(), useMetaprojectTree.ts:214) uses the default, and the function is not exported. The signature invites a second caller that would get a wrong back-off silently.",
+      "suggested_fix": "Optional. Either drop the `retries` parameter and keep the count internal, or carry the attempt number instead (e.g. `attempt = 1` and `if (attempt > PERMIT_RETRIES ...)`, delay `PERMIT_WAIT_MS * attempt + jitter`).",
+      "evidence": "useMetaprojectTree.ts:29-40 at 3ad918b66; `keryx ctx rg -n --all PERMIT_RETRIES apps/desktop/src` gives 3 matches, all in this file (21, 30, 36); withPermitRetry has one call site (:214).",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: b2043b98d (fix-round delta base)
+- Merge-base: b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a
+- Scope mode: explicit-hash-range (b2043b98d..3ad918b66), slice-01 only
+- Spec compliance gate: ran against AC5/AC6 for the touched behaviour (stale/failed folder rows, snapshot changes); no gap in this delta.
+
+### Summary
+The fix replaces the stuck `loading` state with an explicit `stale` status (folder or `more`), rendered as loading with no Retry, and re-reads every parked read when `reload` (the catalog object) changes. I traced every exit from `stale`: the reload effect (useMetaprojectTree.ts:261-268) and the snapshot-change reset (:122-126). Every path that clears the banner (MetaprojectView.tsx:416) also calls setCatalog (:414), so reload changes in the same commit; a failed Refresh keeps the banner, and a quiet read with the same snapshotId keeps it too. So a parked row always has a visible way out. Races checked: a stale answer landing after a same-snapshot reload re-parks and re-raises the banner (not stuck); a new snapshot clears folders in render before the effect, so the effect finds nothing stale; `reread` and its deps are stable callbacks, so the effect fires only on reload changes. more() now refuses while `more` is loading or stale, and the reveal path (MetaprojectTree.tsx:144, :150) waits on stale, with no loop, because more() is a no-op there. withPermitRetry keeps the old attempt closure's semantics (same live checks, same delays). isMetaprojectPermitRefusal excludes coded MetaprojectRequestErrors, and 'unavailable' is not a mapped code, so the plain Error from Rust still matches.
+
+### Prior dispositions (judged against code at 3ad918b66)
+- r3-regression-w1-F-001 closed: stale parked + re-read on each catalog load; tests at MetaprojectView.dom.test.tsx cover the folder and the Show more variant with an unchanged snapshot.
+- r3-clean-code-w2-F-001 closed: TreeFolder, ensure, more docs now name the stale state, which has its own status.
+- r3-clean-code-w1-F-002 closed: retry policy lifted to module-scope withPermitRetry.
+- r3-architecture-w1-F-001 closed: classification is in platform/metaproject.ts (isMetaprojectPermitRefusal, METAPROJECT_PERMIT_REFUSAL); hook and the DOM test import it.
+- r3-clean-code-w1-F-003, r3-clean-code-w2-F-002, r3-highload-w2-F-001 partial: TypeScript now holds the literal in one module (plus a second, underived prefix const and one copy in metaproject.test.ts:213), but metaproject.rs:199 is unchanged, with no comment or test naming the Desktop consumer. Rewording the Rust message would still disable the retry with every test green.
+- r3-style-w1-F-002, r3-style-w2-F-001 open: PERMIT_RETRIES is still exported, and nothing imports it (3 matches, all in useMetaprojectTree.ts).
+- r3-pr-contract-w1-PC-001 open: the round-2 bullet in the PR body still says "shows only the banner"; per the brief the body was not edited.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+[F-001] (info) withPermitRetry's delay assumes the first call passes retries = PERMIT_RETRIES.
+
+### Not verified
+Nothing was executed (exec budget 0). The test results come from verify-tests-to-run-1.txt as supplied, which I did not open. MetaprojectTree.tsx handOff changes were read only as context; they are outside slice-01 and not reviewed.
+
+Routing audit: graph_used: no (payload layers block supplied affected files and related tests), wiki_used: not-relevant (narrow fix delta), ctx_used: yes (keryx ctx rg), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":138335,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-testing-practices, wave 1, round 4 (delta b2043b98d..3ad918b66, fix round 3). Slice read in full: slice-02 (new). Production context read at the head: useMetaprojectTree.ts lines 14-43 and 134-213 (withPermitRetry, limiter, settleFailure, read), apps/desktop/src-tauri/src/metaproject.rs:199 (permit refusal text).
+
+Concern: the mutation pass was NOT run. `keryx review mutate` writes its results into the review package's research-evidence/, and this dispatch lets me write only this result file and does not list `keryx review mutate` among the allowed commands (same constraint as round 3). Every changed gate is listed in `mutant_candidates` below: 15 mutants, 0 run, 15 not reached. The main session can run them unchanged. This report claims no mutation result. The three findings below come from reading the tests (no test drives the branch), not from mutations.
+
+What did run: `cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts` at 3ad918b66 gave 146 pass, 0 fail, 644 expect() calls (via `keryx ctx run`, which wrote its own raw log under .metaproject/data/gdctx/; I wrote no other file).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Fix round 3's tests are well shaped. They use the red-first pattern. The clock is injected through held `wait` promises, with no sleeps. Each negative assertion is paired with a positive artifact: client.ts or Late present, and call lists keyed by expectedSnapshotId. The new platform test feeds the exact metaproject.rs:199 text through requestMetaprojectTree. Round 3's r3-testing-practices-w2-F1 is answered by two tests, one per guard. The major's recovery path is pinned for a graph folder and a graph Show more page. Three branches added this round have no test: (1) how a parked `stale` read is presented, and more() refusing a stale page; (2) the reveal effect waiting at a stale step folder; (3) the reload loop re-reading the Wiki scope. All three are minor. Mutation pass not run (not permitted to this lane); 15 candidates are listed.",
+  "slices": [{ "id": "slice-02", "coverage": "read in full; production context read from useMetaprojectTree.ts lines 14-43 and 134-213 at the head, and metaproject.rs:199" }],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (!folder || folder.status === \"loading\" || folder.status === \"stale\") {",
+      "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). This round adds the `stale` state and three branches that decide what a parked read looks like and whether it can be asked for again. (a) flatten renders a stale folder as a Loading row (`|| folder.status === \"stale\"`). (b) flatten renders a stale next page as loading (`loading: Boolean(folder.more)`, which replaces `folder.more?.status === \"loading\"`). (c) more() refuses a stale page (`(folder.more && folder.more.status !== \"failed\")`). None of the stale tests asserts the row while it is parked. 'a tree answer for another snapshot, or a stale-snapshot refusal, shows the stale banner and none of its rows' (MetaprojectView.dom.test.tsx:2139) and 'a next tree page answered for another snapshot is read again after Refresh catalog finds the same snapshot' (:2171) check, before Refresh catalog, only the banner, the absence of a 'Could not load.' row and the absence of Client/Late. Neither asserts a 'Loading…' row (or a busy Show more) under src or the root, and neither activates the parked Show more row. MetaprojectTree.dom.test.tsx:511 ('a next page refused as stale-snapshot…') also asserts only the onStale count, the absent Retry and README.",
+      "impact": "Suppose (a) is dropped and the stale folder renders as an empty ready folder (no row at all). Or suppose (b) is reverted, so a parked page shows an actionable 'Show more' that more() then silently refuses. Or suppose (c) is reverted, so Enter on the parked row re-sends the cursor while the banner is up. In each case the listed tests stay green: each asserts only what is absent before the refresh and what is present after it. The operator's decision that a stale row 'shows as loading, banner only' has no test.",
+      "suggested_fix": "In the MetaprojectView stale test, before clicking Refresh catalog, assert that the row under src is 'Loading…' (`treeRows().some(row => row.textContent === \"Loading…\")`). In the page twin, assert that the root's next-page row reads 'Loading…'. Then press Enter or click it, and assert that `explorer.treeCalls.filter(call => call.cursor === \"page-2\")` still has length 1 before Refresh catalog. That pins (a), (b) and (c) with the existing fixtures.",
+      "evidence": "Test bodies in slice-02 (MetaprojectView.dom.test.tsx hunk @@ 2121,2207 @@; MetaprojectTree.dom.test.tsx :511 context). Test-title enumeration via `keryx ctx rg --all -n '^test\\(\"[^\"]*(stale|snapshot|reveal|elsewhere|Loading|wiki|Wiki)'` over both DOM suites: three stale-tree tests, none asserting a parked row. Mutants M4, M5, M6 would settle it; not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "if (folder.status === \"loading\" || folder.status === \"stale\") return;",
+      "problem": "tdd-workflow.mdc Rule 3 (new branch with no test). In the reveal effect, a step folder parked as `stale` makes the reveal wait instead of giving up. Without `|| folder.status === \"stale\"`, the stale folder has empty entries and no nextCursor, so the effect reaches `model.setHandled(scope, selection)`. That marks the selection handled, so after Refresh catalog re-reads the folder, the selection made elsewhere is never revealed. No test combines reveal with a stale answer. The three reveal tests (MetaprojectTree.dom.test.tsx:302, :327, :336; MetaprojectView.dom.test.tsx:2078) drive ready, paged and failed step folders only.",
+      "impact": "The branch exists so that the reveal survives a stale step and Refresh catalog, and that is the case the round's major is about. If the branch is deleted, a graph-to-tree reveal that crosses a stale folder ends with the folder loaded and collapsed and the row not scrolled into view, and every test stays green.",
+      "suggested_fix": "Add one MetaprojectView test. Make the first read of `src` answer for snapshot s2 (stale), as in the :2139 fixture. Select the src file from elsewhere (as at :2078). Then set the src answer to SRC_CHILDREN and click Refresh catalog. Assert that src is aria-expanded=\"true\" and that the file's row is present (scrolled). Assert that a second elsewhere selection is not needed.",
+      "evidence": "Test-title enumeration as in F1. The reveal tests' fixtures contain no stale-snapshot answer; the effect's handled path is visible in slice-02 MetaprojectTree.tsx hunk @@ 104,217 @@. Mutant M7 would settle it; not run.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "for (const scope of [\"graph\", \"wiki\"] as const) {",
+      "problem": "Mandatory under the lens's mutation rule: this gate was added in answer to the earlier round's major (r3-regression-w1-F-001). The reload effect re-reads parked reads in both scopes, but both recovery tests park a read in the graph scope only. The :2139 test does park a Wiki read: it expands 'Other' under a stale-snapshot refusal and asserts the banner. It then ends without Refresh catalog, so the Wiki half of the loop is never exercised. Cutting the list to `[\"graph\"]`, or to the scope on screen, leaves nothing to notice.",
+      "impact": "A Wiki group answered stale-snapshot would stay 'Loading…' with no banner after Refresh catalog finds the same snapshot. That is exactly the dead state the round-3 major described, now only for Wiki, and it can come back unprotected.",
+      "suggested_fix": "Extend :2139 after its final assertions. Set `trees[\"s1|wiki|other|\"]` to a ready answer with Guide, click Refresh catalog, flush, and assert that the banner is gone, Guide is present and no 'Loading…' row remains. Optionally park the Wiki read while Graph is on screen, to pin that the scope not shown is re-read too.",
+      "evidence": "slice-02 MetaprojectView.dom.test.tsx hunk @@ 2121,2207 @@: the Wiki part of the test stops at `expect(() => treeRow(\"Guide\")).toThrow();` with no Refresh catalog after it. Mutant M3 would settle it; not run.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "M1", "file": "apps/desktop/src/metaproject/MetaprojectView.tsx", "anchor": "onStale: markStale, reload: catalog,", "replacement": "onStale: markStale,", "kind": "behavior" },
+    { "id": "M2", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"stale\");", "replacement": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"failed\");", "kind": "behavior" },
+    { "id": "M3", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "for (const scope of [\"graph\", \"wiki\"] as const) {", "replacement": "for (const scope of [\"graph\"] as const) {", "kind": "behavior" },
+    { "id": "M4", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (!folder || folder.status === \"loading\" || folder.status === \"stale\") {", "replacement": "if (!folder || folder.status === \"loading\") {", "kind": "presentation" },
+    { "id": "M5", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "loading: Boolean(folder.more) });", "replacement": "loading: folder.more?.status === \"loading\" });", "kind": "presentation" },
+    { "id": "M6", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "|| (folder.more && folder.more.status !== \"failed\")) return;", "replacement": "|| folder.more?.status === \"loading\") return;", "kind": "behavior" },
+    { "id": "M7", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "if (folder.status === \"loading\" || folder.status === \"stale\") return;", "replacement": "if (folder.status === \"loading\") return;", "kind": "behavior" },
+    { "id": "M8", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "        ? { ...folder, more: { status: \"stale\" } }\n        : { status: \"stale\", entries: [], partial: false });", "replacement": "        ? { ...folder, more: { status: \"loading\" } }\n        : { status: \"loading\", entries: [], partial: false });", "kind": "behavior" },
+    { "id": "M9", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (loadedCatalog.current === reload) return;", "replacement": "", "kind": "behavior" },
+    { "id": "M10", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause) || !live()) throw cause;", "replacement": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause)) throw cause;", "kind": "behavior" },
+    { "id": "M11", "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts", "anchor": "    if (!live()) throw cause;\n    return withPermitRetry(", "replacement": "    return withPermitRetry(", "kind": "behavior" },
+    { "id": "M12", "file": "apps/desktop/src/platform/metaproject.ts", "anchor": "return !(error instanceof MetaprojectRequestError) && errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);", "replacement": "return errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);", "kind": "behavior" },
+    { "id": "M13", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": "return { anchor: last?.id ?? own, parent: row.parent };", "replacement": "return { anchor: own, parent: row.parent };", "kind": "behavior" },
+    { "id": "M14", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];", "replacement": ": after[0] ?? rows[at];", "kind": "behavior" },
+    { "id": "M15", "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx", "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];", "replacement": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent));", "kind": "behavior" }
+  ],
+  "mutation_pass": {
+    "run": false,
+    "reason": "keryx review mutate writes into <package>/research-evidence/; this lane may write only its result file and the dispatch does not list keryx review mutate",
+    "nearest_suite": "cd apps/desktop && bun test src/metaproject/MetaprojectTree.dom.test.tsx src/metaproject/MetaprojectView.dom.test.tsx src/platform/metaproject.test.ts",
+    "mutated": 0,
+    "not_reached": 15,
+    "notes": "Run the previous-round gates first: M1, M2, M8 (the round-3 major's recovery), M10/M11 (r3-testing-practices-w2-F1's guards; the journal says each was shown red with its guard removed, which this lane did not observe), M12 (r3-architecture-w1-F-001), and M13/M14 (r3-logic-w5-F-002). M9 is probably equivalent: on mount no read is parked, and the effect's deps change only with reload. The handOff status-row branch (`if (row.id === statusId(row.parent)) return { anchor: own, ... }`) is left out as a mutant on purpose: a parent's status row is never preceded by an entry of that parent, so the generic path already yields `own`, which makes the mutant equivalent. M15 covers the `?? rows[at]` fallback (a page that appends nothing), which no test appears to drive. These are leads for the run, not results."
+  },
+  "prior_dispositions": [],
+  "inputs_unreadable": [],
+  "follow_ups": ["Run mutant_candidates M1-M15 with keryx review mutate against the nearest suite in apps/desktop. Any green mutant other than M9 is a minor 'gate unpinned' finding for this lane; M4/M5/M6, M7 and M3 are expected green per F1, F2 and F3."],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+Summary
+- Round-3 asks checked in the tests. r3-testing-practices-w2-F1: two new tests, one per guard. One holds the `wait` and retires the snapshot mid-wait; the other retires it before the refusal arrives and asserts that the wait never runs. Each has a positive artifact (the s2 read lands, client.ts is present). r3-regression-w1-F-001: the folder test and the page twin each recover after Refresh catalog with the catalog still at s1, and the call lists keyed by expectedSnapshotId (`["s1","s1"]`) show the re-read happened. r3-logic-w5-F-002: a focused Show more whose page lands with the folder above's children goes to README.md, with the row order asserted before and after. r3-architecture-w1-F-001: the platform test uses the literal from metaproject.rs:199 (checked: identical text) and negative cases (another unavailable message, a typed MetaprojectRequestError). The DOM test now imports METAPROJECT_PERMIT_REFUSAL instead of keeping a private copy. No clock, no sleep, no real network (Rules 5/6 hold).
+- F1 (minor): how a parked stale read is presented, and more() refusing a stale page, have no test. The stale tests assert only absences before Refresh catalog.
+- F2 (minor): the reveal effect's new wait on a stale step folder has no test.
+- F3 (minor): the reload loop's Wiki scope is never refreshed in a test. The :2139 test parks a Wiki read but stops before Refresh catalog.
+- Not verified: no mutation ran (0 of 15). The journal's claim that both retry-guard tests fail with their guard removed was not observed here. Rust is untouched this round and was not run. The r3 info F2 (dead `instanceof Error` line in `refusing`) is still present and is not re-reported.
+
+Routing audit: graph_used: no (the payload layers block supplied the affected files and related tests), wiki_used: not-relevant (test-practice lens on a bounded delta), ctx_used: yes (keryx ctx run, ctx rg), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":163915,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

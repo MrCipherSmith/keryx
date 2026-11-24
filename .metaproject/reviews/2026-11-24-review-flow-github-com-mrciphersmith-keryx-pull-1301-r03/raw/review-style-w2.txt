@@ -1,0 +1,84 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 4 delta b2043b98d..3ad918b66 (fix round 3), slices 02 and 03 read in full. The fix round's names are clear: withPermitRetry, settleFailure, reread, handOff, isMetaprojectPermitRefusal, and the new `stale` status. They make read() and the focus hand-off easier to follow than in round 3. Two minor findings, both in code this delta added: a nested ternary in the focus hand-off layout effect, and the hook's new `reload` input, which the same hook also calls `loadedCatalog`. No file crosses a length threshold: useMetaprojectTree.ts went from 251 to 288 lines, MetaprojectTree.tsx from 314 to 338, platform/metaproject.ts is 334. No new console calls. Names the operator already dismissed (limit/slots/pool, sleep/wait/pause) are not reported again.",
+  "slices": [
+    {"id": "slice-02", "status": "DONE", "coverage": "read in full (1511 lines): T14 dispatch/fix_context, flow.json, resolved/T14, journal, MetaprojectTree.dom.test.tsx, MetaprojectView.dom.test.tsx, platform/metaproject.test.ts, MetaprojectTree.tsx, MetaprojectView.tsx, useMetaprojectTree.ts, platform/metaproject.ts"},
+    {"id": "slice-03", "status": "DONE", "coverage": "read in full (2 hunks of apps/desktop/src/platform/metaproject.ts). Its two '-' hunks (the old `capabilities` return at :271 and the snapshot check in matchesRequest at :322) are not part of `git diff b2043b98d 3ad918b66`, which adds only METAPROJECT_PERMIT_REFUSAL / isMetaprojectPermitRefusal (already in slice-02). The head already has the replacement code (:268-270, :315-319); nothing style-relevant in it."}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "line": null,
+      "quote": "(lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];",
+      "problem": "Ternary chain (a ternary inside a ternary) added by this delta. The layout effect that restores focus now picks the focus target with `const target = at < 0 ? undefined : (lost.parent === undefined ? after[0] : after.find(...)) ?? rows[at];`. The next line adds a third conditional (`target ? ... : elements[Math.min(...)]`). The three fallbacks are: no anchor, then the old index; an anchor without a parent, then the next row; an anchor with a parent, then the parent's next row, else the anchor itself. A reader has to unpack all three from one expression with a `??` between the branches.",
+      "impact": "Readability. This is the code the round-3 focus finding (r3-logic-w5-F-002) was about, and the next reader checking a focus hand-off has to work through two nested conditionals and a nullish fallback in one statement.",
+      "suggested_fix": "Move the target choice into a small named helper next to handOff, with early returns. For example: `function handOffTarget(rows: readonly Row[], anchor?: string, parent?: string): Row | undefined { const at = anchor === undefined ? -1 : rows.findIndex(row => row.id === anchor); if (at < 0) return undefined; const after = rows.slice(at + 1); const next = parent === undefined ? after[0] : after.find(row => row.parent === parent); return next ?? rows[at]; }`. The effect then reads `const target = handOffTarget(rows, lost.anchor, lost.parent);`.",
+      "evidence": "slice-02 hunk @@ 104,217 of MetaprojectTree.tsx: the '+' lines `const at = ...`, `const after = rows.slice(at + 1);`, `const target = at < 0 ? undefined` / `: (lost.parent === undefined ? after[0] : after.find(...)) ?? rows[at];`, `const next = target ? elements.find(...) : elements[Math.min(lost.index, elements.length - 1)];`. The review-style checklist §3 rates a ternary chain as minor.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "const loadedCatalog = useRef(reload);",
+      "problem": "One concept has two names in the code this delta added. The hook's new input is called `reload` and typed `unknown`. Its doc says it 'Changes whenever the explorer loads its catalog'. The ref that remembers it in the same hook is `loadedCatalog`, and the effect compares `loadedCatalog.current === reload`. The caller passes `reload: catalog`. So the hook's public API names the value as an action, `reload`, while its body names it as a catalog. Neither name says what the value is: a token whose identity change triggers the re-read of parked stale reads. `reload` also reads like a callback here; Desktop's own `reload` in GitHubSettings.tsx:38 is a function.",
+      "impact": "Readability. The input's purpose is only clear from its doc comment. A caller may expect to pass a function, and someone reading the effect has to match `loadedCatalog` to `reload` to see that they are the same value.",
+      "suggested_fix": "Use one name that says it is a change token, both at the API and inside the hook. For example, `catalogLoad` (doc: 'a new value on every catalog load, same snapshot included') with ref `seenCatalogLoad`, or keep a generic `reloadToken` with ref `lastReloadToken`. Then the caller reads `catalogLoad: catalog`.",
+      "evidence": "slice-02 hunk @@ 43,134 of useMetaprojectTree.ts: `reload?: unknown;` with doc 'Changes whenever the explorer loads its catalog (Refresh catalog included)'; hunk @@ 209,288: `const loadedCatalog = useRef(reload);` / `if (loadedCatalog.current === reload) return;` / `loadedCatalog.current = reload;`; MetaprojectView.tsx hunk @@ 738,782: `onStale: markStale, reload: catalog,`. keryx ctx rg -n '\\breload\\b' apps/desktop/src --all: 38 matches. Desktop uses `reload` both as a function (GitHubSettings.tsx:38 `const reload = () => {`) and as a counter dependency (RoutingDialog.tsx:38 `const [reload, setReload] = useState(0);`). The precedent is mixed, which is why this is minor and not higher.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0},
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+# Style Review Report
+
+## Summary
+The fix-round-3 delta is readable, and its new names are clear (withPermitRetry, settleFailure, reread, handOff, isMetaprojectPermitRefusal, the `stale` status). Two minor findings: a nested ternary in the focus hand-off effect, and a new hook input that the same hook calls both `reload` and `loadedCatalog`.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a` (round-4 delta base)
+- Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a` (main merge-base a5d1ab236)
+- Scope mode: `explicit-hash-range` (b2043b98d..3ad918b66), slices 02 and 03
+- Changed files reviewed: 11 (slice-02) + 1 (slice-03, overlaps slice-02)
+
+## Stats
+- major: 0
+- minor: 2
+- info: 0
+
+## Major Issues
+None.
+
+## Minor & Info
+- [F-001] minor: MetaprojectTree.tsx layout effect. The focus target is picked by a nested ternary with a `??` fallback; extract a `handOffTarget` helper with early returns.
+- [F-002] minor: useMetaprojectTree.ts. The new input `reload: unknown` is also called `loadedCatalog` inside the hook; give it one name that says it is a change token, e.g. `catalogLoad`.
+
+## Positive Notes
+- Lifting the back-off to `withPermitRetry` and failure handling to `settleFailure` brings read() under the function-length threshold. The names say what each piece does.
+- `isMetaprojectPermitRefusal` / `METAPROJECT_PERMIT_REFUSAL` follow the platform module's `METAPROJECT_*` / `isMetaproject*` naming.
+- The new test names state behaviour rather than mechanics.
+
+## Notes and limits
+- Slice-03's two '-' hunks are not in `git diff b2043b98d 3ad918b66 -- apps/desktop/src/platform/metaproject.ts`. That diff adds only the permit-refusal classifier, which slice-02 also covers. The head already has the replacement code. Read and recorded; no finding.
+- Test files are exempt from the readability thresholds and were checked only for names.
+- Not re-reported: r2-style-w2-F-001 and r3-style-w1-F-001 (names limit/slots/pool, sleep/wait/pause), both dismissed by the operator.
+
+Routing audit: graph_used: no (not-relevant; the slices and payload layers gave the scope). wiki_used: no (not-relevant; style lens). ctx_used: yes (keryx ctx rg). raw_rg_used: no. One raw `git diff` of a single file, marked keryx:raw, to check slice-03's hunks against the delta.
+KERYX_USAGE {"tokens_in":151121,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

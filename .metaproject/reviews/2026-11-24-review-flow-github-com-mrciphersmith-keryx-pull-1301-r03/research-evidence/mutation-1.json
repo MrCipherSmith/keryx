@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree",
+  "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1033
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "apps/desktop/src/metaproject/MetaprojectView.tsx",
+      "anchor": "onStale: markStale, reload: catalog,",
+      "replacement": "onStale: markStale,",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 761,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1220
+    },
+    {
+      "id": "M2",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"stale\");",
+      "replacement": "for (const parent of state.current[scope].folders.keys()) reread(scope, parent, \"failed\");",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 266,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1095
+    },
+    {
+      "id": "M3",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "for (const scope of [\"graph\", \"wiki\"] as const) {",
+      "replacement": "for (const scope of [\"graph\"] as const) {",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 265,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 877
+    },
+    {
+      "id": "M4",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "if (!folder || folder.status === \"loading\" || folder.status === \"stale\") {",
+      "replacement": "if (!folder || folder.status === \"loading\") {",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "presentation",
+      "line": 43,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 869
+    },
+    {
+      "id": "M5",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "loading: Boolean(folder.more) });",
+      "replacement": "loading: folder.more?.status === \"loading\" });",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "presentation",
+      "line": 59,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 851
+    },
+    {
+      "id": "M6",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "|| (folder.more && folder.more.status !== \"failed\")) return;",
+      "replacement": "|| folder.more?.status === \"loading\") return;",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 239,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 863
+    },
+    {
+      "id": "M7",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "if (folder.status === \"loading\" || folder.status === \"stale\") return;",
+      "replacement": "if (folder.status === \"loading\") return;",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 144,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1119
+    },
+    {
+      "id": "M8",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "        ? { ...folder, more: { status: \"stale\" } }\n        : { status: \"stale\", entries: [], partial: false });",
+      "replacement": "        ? { ...folder, more: { status: \"loading\" } }\n        : { status: \"loading\", entries: [], partial: false });",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 184,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 906
+    },
+    {
+      "id": "M9",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "if (loadedCatalog.current === reload) return;",
+      "replacement": "",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 263,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 948
+    },
+    {
+      "id": "M10",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause) || !live()) throw cause;",
+      "replacement": "if (retries <= 0 || !isMetaprojectPermitRefusal(cause)) throw cause;",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 35,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1069
+    },
+    {
+      "id": "M11",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "anchor": "    if (!live()) throw cause;\n    return withPermitRetry(",
+      "replacement": "    return withPermitRetry(",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 37,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 929
+    },
+    {
+      "id": "M12",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "anchor": "return !(error instanceof MetaprojectRequestError) && errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);",
+      "replacement": "return errMessage(error).startsWith(PERMIT_REFUSAL_PREFIX);",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 286,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1015
+    },
+    {
+      "id": "M13",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": "return { anchor: last?.id ?? own, parent: row.parent };",
+      "replacement": "return { anchor: own, parent: row.parent };",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 78,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1023
+    },
+    {
+      "id": "M14",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];",
+      "replacement": ": after[0] ?? rows[at];",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 180,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1041
+    },
+    {
+      "id": "M15",
+      "file": "apps/desktop/src/metaproject/MetaprojectTree.tsx",
+      "anchor": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent)) ?? rows[at];",
+      "replacement": ": (lost.parent === undefined ? after[0] : after.find(row => row.parent === lost.parent));",
+      "command": "sh -c 'cd apps/desktop && { test -e node_modules || ln -s /Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules node_modules; } && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+      "kind": "behavior",
+      "line": 180,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 978
+    }
+  ],
+  "totals": {
+    "killed": 7,
+    "survived": 8,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-24T09:15:24.801Z",
+  "head": "3ad918b66a990c7f0b04180e17d9fb74fb82713a",
+  "treeHash": "aa558232587eefb5e3ac4ff01b6f7fe309b37eba16dbacc147576b17265f46c8",
+  "loadavg": [
+    10.90087890625,
+    16.55322265625,
+    18.42529296875
+  ],
+  "provenanceMs": 449,
+  "copyMs": 32357,
+  "mutantsMs": 14803
+}

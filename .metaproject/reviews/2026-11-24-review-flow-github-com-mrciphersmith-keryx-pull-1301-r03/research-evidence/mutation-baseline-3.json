@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop",
+  "command": "bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts",
+  "baseline": {
+    "exitCode": 1,
+    "ms": 334,
+    "timedOut": false,
+    "cwd": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree",
+    "tail": "bun test v1.4.4 (38afee6c8)\n\nsrc/metaproject/MetaprojectTree.dom.test.tsx:\nerror: Cannot find module '../../../../src/integrations/metaproject-explorer-contract' from '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/metaproject/MetaprojectTree.tsx'\n(fail) (unnamed) [9.38ms]\n81 |   ({ useMetaprojectTree: useTree, MAX_TREE_READS } = await import(\"./useMetaprojectTree\"));\n82 |   ({ METAPROJECT_PERMIT_REFUSAL: PERMIT_REFUSAL } = await import(\"../platform/metaproject\"));\n83 |   host = document.createElement(\"div\"); document.body.append(host); root = (await import(\"react-dom/client\")).createRoot(host);\n84 | });\n85 | beforeEach(async () => { await act(() => root.render(null)); });\n86 | afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });\n                                            ^\nTypeError: undefined is not an object (evaluating 'root.unmount')\n      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/metaproject/MetaprojectTree.dom.test.tsx:86:40)\n      at act (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules/react/cjs/react.development.js:2512:16)\n      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/metaproject/MetaprojectTree.dom.test.tsx:86:30)\n(fail) (unnamed) [0.44ms]\n\nsrc/metaproject/MetaprojectView.dom.test.tsx:\n22 |      * @param [options.url] URL.\n23 |      * @param [options.settings] Settings.\n24 |      */\n25 |     static register(options) {\n26 |         if (this.#registered !== null) {\n27 |             throw new Error('Failed to register. Happy DOM has already been globally registered.');\n                           ^\nerror: Failed to register. Happy DOM has already been globally registered.\n      at register (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/node_modules/@happy-dom/global-registrator/lib/GlobalRegistrator.js:27:23)\n      at registerDom (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/test/dom.ts:8:21)\n      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/metaproject/MetaprojectView.dom.test.tsx:19:3)\n(fail) (unnamed) [8.75ms]\n21 |   View = (await import(\"./MetaprojectView\")).MetaprojectView;\n22 |   overlayOpen = (await import(\"../components/ui\")).overlayOpen;\n23 |   host = document.createElement(\"div\"); document.body.append(host); root = (await import(\"react-dom/client\")).createRoot(host);\n24 | });\n25 | beforeEach(async () => { await act(() => root.render(null)); });\n26 | afterAll(async () => { await act(() => root.unmount()); await unregisterDom(); });\n                                  ^\nTypeError: act is not a function. (In 'act(() => root.unmount())', 'act' is undefined)\n      at <anonymous> (/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/metaproject/MetaprojectView.dom.test.tsx:26:30)\n(fail) (unnamed) [0.61ms]\n\nsrc/platform/metaproject.test.ts:\n\n# Unhandled error between tests\n-------------------------------\nerror: Cannot find module '../../../../src/integrations/metaproject-explorer-contract' from '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/apps/desktop/.metaproject/data/review/mutate-scratch/keryx-mutate-1IJOah/tree/src/platform/metaproject.test.ts'\n-------------------------------\n\n\n 0 pass\n 5 fail\n 1 error\nRan 5 tests across 3 files. [250.00ms]"
+  },
+  "mutants": [],
+  "totals": {
+    "killed": 0,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-24T09:14:36.547Z",
+  "loadavg": [
+    12.671875,
+    17.79638671875,
+    18.95068359375
+  ],
+  "provenanceMs": 17,
+  "copyMs": 492
+}

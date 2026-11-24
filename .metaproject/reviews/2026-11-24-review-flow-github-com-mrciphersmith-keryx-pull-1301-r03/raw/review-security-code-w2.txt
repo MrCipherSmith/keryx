@@ -1,0 +1,47 @@
+STATUS: DONE
+
+## Security Review (review-security-code, wave 2, round 4 delta)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98d..3ad918b66 (fix round 3); merge-base with main a5d1ab236
+- Scope mode: explicit-hash-range, slice-05 (second-look), read in full (2678 lines)
+- Context read: the actual delta hunks of `apps/desktop/src/metaproject/useMetaprojectTree.ts`, `apps/desktop/src/platform/metaproject.ts` and `apps/desktop/src/metaproject/MetaprojectView.tsx` (`git diff b2043b98d..3ad918b66`), to see the permit-retry and stale-parking code the slice context elides.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+No security finding in the round-3 fix. What changed security-wise and why it is clean:
+
+- **Permit refusal classification** (`isMetaprojectPermitRefusal`, platform/metaproject.ts): a prefix match on Desktop's own refusal text, excluding typed `MetaprojectRequestError`s. A CLI cannot turn its typed errors into retries; a CLI that prints the same prefix as an untyped error only buys at most `PERMIT_RETRIES` (2) extra reads per folder, bounded by `MAX_TREE_READS` (3) in flight. No amplification path.
+- **`withPermitRetry` jitter** uses `Math.random()` for a back-off delay only, not for a token, nonce or identifier: not a crypto concern.
+- **Stale-snapshot parking and `reload: catalog`**: parked reads are re-sent only after a catalog load; a snapshot change still resets every folder (state rebuilt from `emptyScope`), so a cursor issued under a retired snapshot is never sent to a different snapshot, and the transport still refuses any answer whose `snapshotId` differs from the pinned `expectedSnapshotId`.
+- **Request boundary unchanged**: the Tauri `RequestV2::Tree` validation (`relative_path` for a graph parent: no `..`, `.`, empty, backslash, control chars, drive letter or leading `/`; `valid_text` for a wiki key and cursor; `deny_unknown_fields`; null values refused; 16 KiB cap) and the argv-array spawn (`metaproject-explorer --request <json>`, no shell) are untouched by this round.
+- **Response boundary unchanged**: `validTree` / `validTreeEntry` check scope, parent, page size (100), relative folder paths, module/path agreement and node kinds; `matchesRequest` ties scope and parent to the request.
+- **Rendering**: CLI-supplied error messages, folder names, node titles and kind labels are rendered as React text children; no `dangerouslySetInnerHTML`, `eval`, `postMessage` handler or storage of sensitive data in the changed code. The `console.error` in `limit` logs an internal exception object, no secrets.
+
+### Clean Areas
+Injection (command/SQL/XSS/SSTI/eval), auth/authz and IDOR (local desktop, no multi-user boundary in this change), input validation at both the Rust and TS boundaries, secrets and logging, cryptography (Math.random jitter is non-security), CSRF (no HTTP surface), path traversal (graph parent validated, CLI re-validates per AC2), open redirect, React-specific patterns.
+
+### Not verified / honesty notes
+- `.metaproject/rules/core/security-baseline.mdc` and the shared review activity rule were not re-read this round; no finding depended on a severity call.
+- No tests were run (exec_budget_s = 0); the supplied verify-tests output at 3ad918b66 (exit 0) was not re-checked by me.
+- Round-3 findings (r02/findings.json) were not re-reported, per instructions.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round-4 delta (fix round 3) adds a shared permit-refusal classifier, a withPermitRetry helper, and parking of stale-snapshot tree reads re-sent on the next catalog load. None introduces an injection, traversal, auth, secret, crypto or XSS issue: request validation (Rust relative_path/valid_text, argv spawn without a shell) and response validation (validTree, matchesRequest, pinned snapshot check) are unchanged; Math.random is only back-off jitter; CLI text renders as escaped React text. No findings.",
+  "findings": [],
+  "slices": [{ "id": "slice-05", "coverage": "read in full (lines 1-2678), plus the real b2043b98d..3ad918b66 hunks of useMetaprojectTree.ts, platform/metaproject.ts and MetaprojectView.tsx for elided context", "status": "DONE" }],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+KERYX_USAGE {"tokens_in":161724,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

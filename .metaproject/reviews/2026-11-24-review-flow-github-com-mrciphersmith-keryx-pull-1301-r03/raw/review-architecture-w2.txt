@@ -1,0 +1,89 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Round 4 delta b2043b98d..3ad918b66 (fix round 3). The permit-refusal classification now lives in the platform transport (isMetaprojectPermitRefusal and METAPROJECT_PERMIT_REFUSAL in apps/desktop/src/platform/metaproject.ts) and the view-model hook and DOM test import it. That puts the classification at the layer that already maps Rust error strings, and the dependency points the right way (metaproject/ -> platform/). The permit back-off moved out of read() into a module-level withPermitRetry, and failure handling into settleFailure. A stale-snapshot answer is now its own `stale` state, re-read when a new `reload` input changes; MetaprojectView passes the catalog object. No layer, dependency-direction or module-boundary violation found. Two info items: the `reload` contract is an untyped identity token tied to where MetaprojectView calls setCatalog, and slice-03 does not match the real delta for metaproject.ts.",
+  "findings": [
+    {
+      "id": "r4-architecture-w2-F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "  reload?: unknown;",
+      "problem": "The hook re-reads parked stale reads when `reload` changes by reference. The input is untyped and optional. MetaprojectView passes the whole `catalog` object (`reload: catalog`). The contract therefore depends on an implicit invariant in MetaprojectView's catalog effect: setCatalog(result) and setSnapshotMismatch(false) run in the same branch (MetaprojectView.tsx:414-416), and a quiet read with the same snapshotId returns before both (:410-412). Today the invariant holds, so a banner is never cleared without the tree re-reading. But nothing in either type states it. A caller that omits `reload` (for example the DOM-test Harness) gets stale rows that never recover.",
+      "impact": "No defect at this head. The cost falls on a later editor. If the catalog effect starts memoising the catalog, calls setCatalog on a quiet same-snapshot read, or clears the mismatch in another path, the hook and the banner drift apart silently. That is the same dead-Loading-row shape as r3-regression-w1-F-001.",
+      "suggested_fix": "Optional. Make the signal explicit: give the hook a numeric `catalogRevision` that MetaprojectView increments next to setSnapshotMismatch(false), or expose model.reloadStale() and call it there. Either way, the banner clearing and the tree re-read are coupled in one statement rather than through object identity.",
+      "evidence": "useMetaprojectTree.ts:110-114 (reload?: unknown) and its effect `if (loadedCatalog.current === reload) return;`; MetaprojectView.tsx:785-790 `reload: catalog`; MetaprojectView.tsx:410-416 (quiet same-snapshot early return; setCatalog and setSnapshotMismatch(false) together). Covered by the MetaprojectView stale tests for a folder and a Show more page (slice-02).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "r4-architecture-w2-F-002",
+      "severity": "info",
+      "file": "apps/desktop/src/platform/metaproject.ts",
+      "line": null,
+      "quote": null,
+      "problem": "slice-03.diff does not match the delta under review. It shows two removed lines in metaproject.ts: `if (isMetaprojectV2Response(response, \"capabilities\")) return 2;` and the `expectedSnapshotId` guard in matchesRequest. In b2043b98d..3ad918b66 the file only gains the permit classifier (12 added lines, nothing removed). The capabilities line was already gone at the base b2043b98d (it exists only at main a5d1ab236:224). The expectedSnapshotId guard is still present at head (:316).",
+      "impact": "Process only. Another reviewer could read slice-03 as the transport dropping its stale-snapshot guard and report a false regression. The classifier hunk that actually changed reached this lane through slice-02, not slice-03.",
+      "suggested_fix": "Check the slicer's base for this file. It appears to diff against main for part of the hunk. Disregard any slice-03 finding that claims the snapshot guard was removed.",
+      "evidence": "git diff b2043b98d..3ad918b66 -- apps/desktop/src/platform/metaproject.ts: one hunk, +12 lines. git show of each ref piped to grep: a5d1ab236:224 has the capabilities line; b2043b98d has only :304 (guard); 3ad918b66 has only :316 (guard).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "pr-process",
+      "publication": "omit"
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full (1511 lines)" },
+    { "id": "slice-03", "coverage": "read in full; content cross-checked against git diff of the real range" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: `b2043b98d..3ad918b66` (round 4, delta of fix round 3); PR merge-base with main `a5d1ab236`
+- Scope mode: explicit-hash-range (slices 02, 03)
+- Stack detected: React (hooks, no MobX) + TS platform transport
+
+### Summary
+Fix round 3 resolves the architecture concern from round 3 (r3-architecture-w1-F-001). The permit refusal is now classified once in the transport, platform/metaproject.ts, which already maps Rust error strings. The hook and the DOM test import that classifier and no longer each keep their own copy of the string. The retry and the failure classification now sit in their own module-level function and callback, so read() stays focused on tree state. Dependencies still run metaproject/ -> platform/ -> contract. No cycle, layer break or boundary reach-through was found. The Rust-side comment at metaproject.rs:199 was deliberately not added (no Rust toolchain). This lane does not report it again.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected. (Info F-001: the `reload` input is an untyped identity token whose meaning depends on where MetaprojectView calls setCatalog.)
+
+### Dependency Inversion
+None detected. `request` and `wait` are already injected into the hook.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A for MobX. The React hook's previous-value ref compare in an effect (`loadedCatalog`) is a correct, standard pattern.
+
+### Process
+Info F-002: slice-03 does not match the real delta for platform/metaproject.ts.
+
+### Not verified
+- No tests were run (exec_budget_s = 0). I relied on the supplied verify-tests-to-run-1.txt (exit 0 at 3ad918b66).
+- I did not run `keryx gdgraph affected`. The payload's layers block (graph at 3ad918b66) lists the affected files, and none of them is a new importer of the classifier outside metaproject/ and platform/.
+
+Routing audit: graph_used: payload layers block (built at head); wiki_used: not-relevant (narrow delta, no domain question); ctx_used: yes (keryx ctx rg, keryx ctx read); raw_rg_used: no. Raw git diff and git show + grep were used once each, with keryx:raw markers, to check slice-03 against the real range.
+KERYX_USAGE {"tokens_in":144033,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

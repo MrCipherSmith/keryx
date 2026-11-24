@@ -1,0 +1,45 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "summary": "Round 4 (delta b2043b98d..3ad918b66), FIX slice slice-01 (useMetaprojectTree.ts: withPermitRetry lift, permit-refusal classification moved to the transport, settleFailure with a new 'stale' folder/page state). I read slice-01 in full, plus the full head diff of useMetaprojectTree.ts, platform/metaproject.ts, MetaprojectView.tsx, MetaprojectTree.tsx and both DOM test files for context. Nothing in the slice is worse than the base b2043b98d; one info (debt) on the new withPermitRetry signature. The r3 major (stale row stuck 'Loading…') is closed: a stale answer now parks the folder or page as status 'stale', and the new `reload: catalog` effect re-reads parked entries on every catalog load, including a Refresh catalog that returns the same snapshotId. Consumers traced: the graph's affected list (MetaprojectTree.tsx, MetaprojectView.tsx, App.tsx at depth 2, and the two DOM tests); it reported no cap drop. Every TreeFolder.status and more.status reader in apps/desktop/src/metaproject, from `keryx ctx rg --all` (search-derived; 12 sites in 2 non-test files), handles the new 'stale' value. Acceptance criteria were the frozen AC1-AC9 in the payload; AC5 and AC6 are the relevant ones, and the reviewed head keeps them. Verified clean:\n- withPermitRetry vs the removed attempt closure: same predicate order (retries, refusal, live), same delay formula, same post-wait live check, same retry count. Base-diff of slice-01 @@17,42@@ against the removed b2043b98d lines.\n- isMetaprojectPermitRefusal (platform/metaproject.ts:285): the new `!(error instanceof MetaprojectRequestError)` guard changes nothing on this path. requestMetaprojectV2 (:298-307) wraps an error only when it carries a METAPROJECT_ERROR_CODES prefix, and 'unavailable' carries none, so the refusal still arrives as the raw error.\n- settleFailure vs the removed catch body: the not-found and failed branches match the old ones line for line. The `current()` guard moved to the call site (`if (current()) settleFailure(...)`), with the same order. The stale branch now writes status 'stale' (first page) or more 'stale' (page). Before, it left the entry 'loading'.\n- The new 'stale' state in the consumers: flatten (MetaprojectTree.tsx:43) renders it as the loading row, as before. Show more `loading: Boolean(folder.more)` (:59) is true for loading and stale, and failed is caught on :58. Reveal (:144) waits on stale. Reveal :150 calls more(), which refuses stale (useMetaprojectTree.ts:239). ensure skips any existing entry. retry() (reread 'failed') ignores stale, so no dead Retry comes back.\n- more() guard (:239): `folder.more && status !== 'failed'` refuses loading and stale and still lets failed through, as the base did.\n- reload effect: the snapshot reset runs during render (useMetaprojectTree.ts:122-126), before the effect. So a catalog load with a new snapshot has already emptied the folders, and nothing parked is re-read under the retired snapshot. reread iterates the old Map's keys while setFolder builds a new Map, so the walk is not mutated mid-way. The initial ref equals the first `reload`, so mounting re-reads nothing. MetaprojectView.tsx:410-416: the quiet same-snapshot path returns before setCatalog, so `reload` changes only on a real catalog load. No re-read loop: a parked read is sent again once per catalog load.\n- Tests leaned on: MetaprojectView.dom.test.tsx's stale test now asserts that after Refresh catalog with an unchanged 's1', Client shows, no Loading row remains, and src was read twice under s1. The new next-page test asserts the same for a cursor read. Both would fail if the park/re-read were missing, so neither is blind. MetaprojectTree.dom.test.tsx imports METAPROJECT_PERMIT_REFUSAL from the transport, and the two retired-snapshot retry tests pin the live() checks before and after the wait.\n- Test run at head: research-evidence/verify-tests-to-run-1.txt, 1019 pass, 0 fail. I ran nothing (exec_budget_s 0).\nPrior dispositions are judged against the code, not the commit message. r3-architecture-w1-F-001 is closed: the transport classifies the refusal, and the hook and the test import it. The three drift infos (r3-clean-code-w1-F-003, r3-clean-code-w2-F-002, r3-highload-w2-F-001) are partial: the TS side now has one copy, but metaproject.rs:199 is unchanged, with no comment or test naming the Desktop consumer. A Rust rewording would still silently disable the retry while every test stays green, because the test uses the TS constant. The two style infos are open: PERMIT_RETRIES is still exported and still has no importer. r3-pr-contract-w1-PC-001 is open: the round-2 line 'shows only the banner' is unchanged, and the stale row still renders 'Loading…'. The round-3 line added below it describes the parking accurately. Not verified: no execution of my own; no Rust read beyond metaproject.rs:189-199; slices 02-06 were not reviewed (not assigned).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+      "line": null,
+      "quote": "await wait(PERMIT_WAIT_MS * (PERMIT_RETRIES - retries + 1) + Math.random() * PERMIT_WAIT_MS);",
+      "problem": "This answers r3-clean-code-w1-F-002 (lift the retry out of read()). The lifted withPermitRetry exposes `retries` as a parameter, but the back-off still counts its step from the module constant (`PERMIT_RETRIES - retries + 1`), not from the count the caller passed. In the old closure the count could not differ from PERMIT_RETRIES. Now a caller passing `retries` greater than PERMIT_RETRIES gets a zero or negative base wait. For example, `retries = 4` gives 150 * (2 - 4 + 1) = -150 ms plus jitter, so the first retry fires with almost no wait. A caller passing fewer retries skips the short first step.",
+      "impact": "No defect today: the only caller (read()) uses the default. It is a trap in a helper whose signature invites tuning, which was the stated reason for the lift.",
+      "suggested_fix": "Count the step independently of the constant, for example by passing an `attempt` index (`attempt = 1`, wait `PERMIT_WAIT_MS * attempt + jitter`, recurse with `attempt + 1` while `attempt <= retries`). Or drop the `retries` parameter and keep PERMIT_RETRIES module-private.",
+      "evidence": "base-diff: at b2043b98d the closure was `const attempt = async (retries: number)`, called only as `attempt(PERMIT_RETRIES)`, so `PERMIT_RETRIES - retries + 1` ran 1, 2. At 3ad918b66, `withPermitRetry<T>(run, { wait, live }, retries = PERMIT_RETRIES)` uses the same formula over a caller-chosen `retries`. Refute: `keryx ctx rg --all PERMIT_RETRIES apps/desktop/src` finds only useMetaprojectTree.ts:21, :30 and :36. The function is not exported and its one caller passes no count, so the outcome is unreachable today: info.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Short summary: In slice-01, nothing is worse than base b2043b98d. The withPermitRetry lift and the move of the permit-refusal match into the transport behave as before. The new 'stale' state is handled by every consumer of TreeFolder status. The r3 stuck 'Loading…' major is closed: parked stale reads are re-read on every catalog load, and the new view tests would catch a regression. One info finding (debt): withPermitRetry's back-off formula ignores a non-default `retries` count. Prior dispositions: 4 closed, 3 partial (Rust message still not tied to the TS constant), 3 open (the two PERMIT_RETRIES export notes, and the PR body round-2 wording).
+KERYX_USAGE {"tokens_in":134076,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

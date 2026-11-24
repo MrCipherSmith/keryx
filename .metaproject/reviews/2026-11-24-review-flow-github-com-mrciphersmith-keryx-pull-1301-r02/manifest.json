@@ -21,21 +21,86 @@
   },
   "coverage": [
     {
-      "reviewer": "review-orchestrator",
+      "reviewer": "review-architecture",
       "status": "run",
-      "reason": "selected for managed review package"
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-clean-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-degradation",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-frontend",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-highload",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-layout",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-performance",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-pr-contract",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-style",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-ui-ux",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
     }
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 20,
+    "total": 21,
     "dropped_prefilter": 0,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": 0,
     "dropped_findings_cap": 0,
     "merged_duplicates": 0,
-    "retained": 20,
+    "retained": 21,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -52,8 +117,8 @@
   "report_fields": [
     "evidence-level"
   ],
-  "createdAt": "2026-11-24T07:56:42.017Z",
-  "updatedAt": "2026-11-24T07:56:42.017Z",
+  "createdAt": "2026-11-24T08:53:17.083Z",
+  "updatedAt": "2026-11-24T08:53:17.083Z",
   "flow": {
     "id": "518",
     "path": ".metaproject/flows/518-2026-11-23-desktop-metaproject-sidebar-tree"

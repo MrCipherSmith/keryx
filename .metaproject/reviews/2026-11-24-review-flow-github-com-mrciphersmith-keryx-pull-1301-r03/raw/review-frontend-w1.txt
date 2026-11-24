@@ -1,0 +1,67 @@
+STATUS: DONE
+
+## Frontend Review (round 4, delta, fix slice)
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98d..3ad918b66 (fix round 3), head 3ad918b66
+- Slice read in full: slice-01 (fix; apps/desktop/src/metaproject/useMetaprojectTree.ts)
+- Context read, not reviewed for findings: the whole useMetaprojectTree.ts at head; the delta hunks of platform/metaproject.ts, MetaprojectView.tsx, MetaprojectTree.tsx, MetaprojectTree.dom.test.tsx and MetaprojectView.dom.test.tsx; MetaprojectView.tsx:395-426 (catalog load path).
+- Not executed (exec budget 0). The test evidence is the supplied verify-tests-to-run-1.txt (exit 0 at head), which I did not re-run.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+The fix hunks bring no new frontend defect. Seven of the ten prior findings are fully or partly fixed in the code. The three left open are two info items on the `PERMIT_RETRIES` export and the PR body wording.
+
+### Prior findings
+- r3-regression-w1-F-001 (major): **closed**. settleFailure now parks a stale-snapshot read as `status: "stale"` (a folder) or `more: { status: "stale" }` (a page) (useMetaprojectTree.ts:182-187). A `reload` effect (:259-268) re-reads every parked parent or page each time the `reload` token changes. MetaprojectView passes `reload: catalog` (MetaprojectView.tsx:760-762), and every non-quiet catalog load calls `setCatalog(result)` with a new object (:414), even when the snapshotId is unchanged. So Refresh catalog with the pinned snapshot now re-reads the parked row. The quiet same-snapshot path returns before setCatalog (:410-412), so nothing re-reads in a loop. The ref guard (`loadedCatalog`) skips the mount run. A new snapshot clears the folders during render, before the effect runs, so nothing is re-read twice. Both variants now have tests: the folder variant in the extended stale view test, and the page variant in the new test "a next tree page answered for another snapshot is read again after Refresh catalog finds the same snapshot". Each asserts that no Loading… row is left and that the read was re-sent under s1.
+- r3-clean-code-w2-F-001 (minor): **closed**. The state the docs described the old way now has its own `"stale"` status. TreeFolder (:44-56), ensure (:70-73) and more (:78) document it. flatten and the reveal walk in MetaprojectTree.tsx handle it (:43, :144). `more()` refuses a stale page because it allows only an absent or failed `more` (:239).
+- r3-architecture-w1-F-001 (minor): **closed**. The refusal is now classified in the transport: `isMetaprojectPermitRefusal` and `METAPROJECT_PERMIT_REFUSAL` in platform/metaproject.ts:277-288. The hook imports the helper, and the DOM test imports the constant (MetaprojectTree.dom.test.tsx:82) instead of keeping its own copy. The suggested Rust-side comment was not added; the drift findings below carry that part.
+- r3-clean-code-w1-F-002 (minor): **closed**. The back-off is lifted into the module-scope `withPermitRetry` (:29-40). `read()` (:205-229) is about 25 lines and handles failures through `settleFailure`.
+- r3-clean-code-w1-F-003 (info): **partial**. The TypeScript side now has one owner (the platform module). metaproject.rs:199 still has no comment or test that pins the text, and the match is still on English message text.
+- r3-clean-code-w2-F-002 (info): **partial**. Same as above. Within platform/metaproject.ts the text is now written twice: `METAPROJECT_PERMIT_REFUSAL` (:281) and `PERMIT_REFUSAL_PREFIX` (:282). Nothing ties it to the Rust side.
+- r3-highload-w2-F-001 (info): **partial**. A shared constant exists on the TS side, but no Rust test asserts the refusal prefix.
+- r3-style-w1-F-002 (info): **open**. `export const PERMIT_RETRIES = 2;` (:21) still has no importer outside the module.
+- r3-style-w2-F-001 (info): **open**. Same symbol: the test file imports `MAX_TREE_READS` and `METAPROJECT_PERMIT_REFUSAL` but not `PERMIT_RETRIES`.
+- r3-pr-contract-w1-PC-001 (minor): **open**. The PR body still has the round-2 line "a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)". A stale read still renders a Loading… row (MetaprojectTree.tsx:43), now until the next catalog load. The round-3 line is accurate, but the round-2 sentence was not reworded. The brief says the PR body could not be edited this round.
+
+### Fix hunks reviewed as new code (slice-01)
+- `withPermitRetry`: checks liveness before it waits and again after. A refusal under a retired snapshot is neither waited on nor re-sent, and the caller's `.catch` drops it through `current()`. The delay is linear plus jitter, as before. Recursion is bounded by `retries`. No issue.
+- `settleFailure`: the stale, not-found and failed branches keep their earlier semantics, plus the stale parking. The callback deps (`setFolder`, `update`) are stable, and `onStale` is read through `latest`, so no stale closure. No issue.
+- The `reload` effect uses the documented "act on change" ref pattern. It iterates the `folders` map captured before its own `setFolder` calls replace `state.current`. That is safe, because each `reread` reads the live state. No issue.
+- MobX rows: not applicable (the hook uses React state and refs, no MobX store). TypeScript: no `any`, no `!`, the `TreeFolder.more` union is discriminated. `reload?: unknown` is an identity token, documented at :110-114.
+
+### Clean Areas
+React hook correctness (effect deps, ref guards, stale closures), view-model/transport boundary, TypeScript safety, state-machine completeness of TreeFolder status (loading / stale / ready / failed), and the tests for the regression fix.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Round 4 delta (b2043b98d..3ad918b66), slice-01 (useMetaprojectTree.ts fix hunks). No new findings. The stuck-Loading regression (r3-regression-w1-F-001) is closed: stale reads are parked as 'stale' and re-read on every catalog load, and the folder and page variants are tested. The doc drift, transport classification and SRP findings are closed. The three Rust-text-coupling info findings are partial: one TS owner now, still nothing on the Rust side. The PERMIT_RETRIES export (2 info) and the PR body round-2 wording (minor) are open. Not executed (exec budget 0).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ],
+  "inputs_unreadable": []
+}
+```
+
+Routing audit: graph_used: yes (payload layers block, graph at the PR head), wiki_used: not-relevant (a delta fix round; the payload's wiki layer is empty), ctx_used: yes (keryx ctx rg), raw_rg_used: no. Raw `git diff` was used, with a `keryx:raw` marker, for the exact fix hunks of the context files.
+KERYX_USAGE {"tokens_in":126991,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

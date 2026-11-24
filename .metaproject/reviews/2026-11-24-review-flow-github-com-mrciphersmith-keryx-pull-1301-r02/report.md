@@ -1,4 +1,4 @@
-Reviewed SHA: b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a (head of https://github.com/MrCipherSmith/keryx/pull/1301; delta round over f43a13c3f35e488744bb8906c2c275d433f8d98b..b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a; merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
+Reviewed SHA: b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a — the PR has since moved on (now 3ad918b66, fix round 3) (head of https://github.com/MrCipherSmith/keryx/pull/1301; delta round over f43a13c3f35e488744bb8906c2c275d433f8d98b..b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a; merge-base a5d1ab236fe85dee62a758a19390049dde4eb7f9)
 
 # Managed Review Report — round 3 (delta, fix round 2)
 
@@ -28,7 +28,7 @@ round cap: round 3 of 5
 
 ## Stage counts
 
-- Reviewer dispatches: 30 of 30 returned (11 FIX slice-01, 13 NEW slice-02/03, 6 SECOND-LOOK slice-04/05/06).
+- Reviewer dispatches: 31 of 31 returned (review-pr-contract-w1 dispatched late, after the slicer omitted its driver) (11 FIX slice-01, 13 NEW slice-02/03, 6 SECOND-LOOK slice-04/05/06).
 - Raw findings: 33; after merging two duplicate clusters: 20 canonical (0 blocker, 1 major, 7 minor, 12 info). Pre-filter dropped: 0.
 - Verifier (Wave C): 1 dispatch on the major — confirmed by execution.
 - Premise judge (Wave D) over 8: 7 upheld, 1 challenged and held for the operator (r3-style-w1-F-001), 0 downgraded.
@@ -41,7 +41,9 @@ round cap: round 3 of 5
 
 - [r3-regression-w1-F-001] (review-regression; premise: upheld) `apps/desktop/src/metaproject/useMetaprojectTree.ts` — Regression introduced by the fix for r2-ui-ux-w2-UX-001 / r2-frontend-w2-F-001. useMetaprojectTree.read() now returns right after onStale() on a stale-snapshot error. The folder stays {status: 'loading'}, or for a page read keeps more: {sta
 
-### Minor (7)
+### Minor (8)
+
+- [r3-pr-contract-w1-PC-001] (review-pr-contract; premise: not judged, added after Wave D) PR body says a stale-snapshot tree read shows only the banner; the row also stays Loading.
 
 - [r3-architecture-w1-F-001] (review-architecture; premise: upheld) `apps/desktop/src/metaproject/useMetaprojectTree.ts` — This answers r2-architecture-w1-F-001, which suggested treating the transport's 'unavailable' as a retryable back-off. The fix puts that classification in the view-model hook (useMetaprojectTree.ts), which matches the raw Rust error text 'u
 - [r3-clean-code-w1-F-001] (review-clean-code; premise: upheld) `apps/desktop/src/metaproject/useMetaprojectTree.ts` — Documentation drift introduced by the fix for r2-architecture-w1-F-001 and r2-clean-code-w1-F-002. The rewritten MAX_TREE_READS doc (:14-17) now says the permits are shared by every project window, that the cap 'only bounds this tree's shar
@@ -418,6 +420,38 @@ round cap: round 3 of 5
   "reviewer": "review-testing-practices",
   "publication": "finding",
   "source": "internal"
+ },
+ {
+  "id": "r3-pr-contract-w1-PC-001",
+  "severity": "minor",
+  "file": "apps/desktop/src/metaproject/useMetaprojectTree.ts",
+  "line": null,
+  "quote": "// stays loading; a Retry here would only send the retired snapshot again.",
+  "problem": "PR body, Review fixes, round 2: \"a stale-snapshot tree read shows only the banner (no Retry that cannot succeed)\". The diff (useMetaprojectTree.ts, catch of read(): \"Another snapshot answered: the explorer offers Refresh catalog, which re-reads the tree. The row stays loading; a Retry here would only send the retired snapshot again.\" followed by `latest.current.onStale(); return;`) does not clear the folder: it stays in status 'loading', so MetaprojectTree.flatten keeps rendering its `{ type: \"loading\" }` row (`<span role=\"status\">Loading…</span>`), and for a next page the Show more row keeps `loading: true` and reads 'Loading…' with aria-busy. The new tests assert only the absence of 'Could not load.' (MetaprojectView.dom.test.tsx deadRetry(); MetaprojectTree.dom.test.tsx 'a next page refused as stale-snapshot tells the explorer and leaves no dead Retry row'), not that only the banner shows. The current body (head 3ad918b66) still carries the same sentence.",
+  "impact": "A reviewer or tester trusting the body expects the folder to show nothing but the Refresh catalog banner; the app shows the banner plus a 'Loading…' status row that never resolves until a catalog load re-reads it, and the guide says a folder shows 'Loading…' only 'until they arrive'. The code is the intended design (operator decision: no dead Retry); the cost is a reader who misjudges what the stale state looks like.",
+  "suggested_fix": "Reword the round-2 line, e.g. 'a stale-snapshot tree read shows the Refresh catalog banner and leaves the row loading (no Retry that cannot succeed)'.",
+  "evidence": "pr-context.md 'Review fixes' round 2 bullet; slice-02 useMetaprojectTree.ts hunk @@ 171,210 @@ (catch: stale-snapshot -> onStale(); return; comment 'The row stays loading'); slice-02 MetaprojectTree.tsx hunk @@ 7,130 @@ flatten(): `if (!folder || folder.status === \"loading\") { ... rows.push({ type: \"loading\", ... }) }` and `rows.push({ type: \"more\", ..., loading: folder.more?.status === \"loading\" })`; slice-02 test hunks MetaprojectView.dom.test.tsx @@ 2129,2178 @@ and MetaprojectTree.dom.test.tsx @@ 403,579 @@; guide docs/docs/guides/desktop-metaproject.md:106-107 at b2043b98d ('shows **Loading…** until they arrive'). PR body at 3ad918b66 from the payload's review_context.pr.body.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "degradation_class": "diff-vs-description",
+  "source": "internal"
  }
 ]
 ```
+
+## Review parity
+
+- **Not verified:** slice-03 (apps/desktop/src/platform/metaproject.ts) shows two removed hunks, but the file is unchanged in f43a13c3f..b2043b98d and both hunks are still present at the head (metaproject.ts:268, :304-30 (review-clean-code-w2:fu1, narrowed, remains: slice-03 (apps/desktop/src/platform/metaproject.ts) shows two removed hunks, but the file is unchang))
+- **Not verified:** Slice generator: slice-03 for round 3 shows deletions in apps/desktop/src/platform/metaproject.ts that are not in f43a13c3f..b2043b98d (git diff --stat does not list the file). Check which base the sl (review-degradation-w2:fu1, narrowed, remains: Slice generator: slice-03 for round 3 shows deletions in apps/desktop/src/platform/metaproject.ts th))
+- **Not verified:** Check how slice-03 was built: it shows deletions in apps/desktop/src/platform/metaproject.ts, but the file has no change in f43a13c3f..b2043b98d. (review-highload-w2:fu1, narrowed, remains: Check how slice-03 was built: it shows deletions in apps/desktop/src/platform/metaproject.ts, but th))
+- **Not verified:** slice-03 content does not match the range's diff: apps/desktop/src/platform/metaproject.ts has no change in f43a13c3f..b2043b98d, yet the slice shows two hunks of removals. Check the slicer for this p (review-performance-w2:fu1, narrowed, remains: slice-03 content does not match the range's diff: apps/desktop/src/platform/metaproject.ts has no ch))
+- **Not verified:** Orchestrator: slice-03 holds removed lines of apps/desktop/src/platform/metaproject.ts that are not in the reviewed range (git diff --stat f43a13c3f b2043b98d lists no change to that file; lines 268 a (review-pr-contract-w1:fu1, narrowed, remains: slicer base for slice-03)
+- **Not verified:** slice-03.diff lists two removed lines in apps/desktop/src/platform/metaproject.ts that are not part of f43a13c3f..b2043b98d (git diff shows no change to that file in this range). Check how the slicer (review-regression-w2:fu1, narrowed, remains: slice-03.diff lists two removed lines in apps/desktop/src/platform/metaproject.ts that are not part ))
+- **Not verified:** Run mutant_candidates M1-M12 through `keryx review mutate` against the nearest suites (MetaprojectTree.dom.test.tsx, plus MetaprojectView.dom.test.tsx for M9). Run M4 and M5 both separately and togeth (review-testing-practices-w1:fu1, narrowed, remains: Run mutant_candidates M1-M12 through `keryx review mutate` against the nearest suites (MetaprojectTr))
+- **Not verified:** Run mutant_candidates M1-M14 with keryx review mutate against the nearest suite in apps/desktop; any green mutant is a minor 'gate unpinned' finding for this lane. (review-testing-practices-w2:fu1, narrowed, remains: Run mutant_candidates M1-M14 with keryx review mutate against the nearest suite in apps/desktop; any))
+- **Gaps without a launch after the plan was authorized: 1, longest 53 min (waits for operator cards are possible).**
+
+## Token spend
+
+token spend: 4217206 in, 0 out over 31 dispatch(es)

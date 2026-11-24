@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Range: b2043b98d..3ad918b66 (round 4, delta after fix round 3); head 3ad918b66
+- Scope mode: explicit-hash-range, supplied slice text
+- Slices read in full: slice-06 (second-look): docs/docs/cli-reference.md, docs/docs/guides/desktop-metaproject.md, src/integrations/metaproject-explorer-contract.ts, src/integrations/metaproject-explorer-v2.ts, src/integrations/metaproject-explorer-tree.test.ts
+- `git diff --stat b2043b98d..3ad918b66 -- src docs` is empty: fix round 3 did not touch any file in this slice. This second look is of code unchanged since round 3.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- Path traversal: a graph `parent` must pass `isMetaprojectRelativePath` (no absolute, drive-letter, backslash, control characters, empty, `.` or `..` segments; at most 4096 chars). It is used only as a string prefix over the in-memory graph node list (`graphTree`), never joined to a filesystem path. A wiki `parent` (`validId`, at most 4096 chars) is used only as a `Map` key; unknown keys answer `not-found` with a fixed message that does not echo input. Tests cover `/src`, `../outside`, `src/../outside`, `src/`, `""`, `C:/src`, non-string.
+- Input validation: `tree` accepts only `scope`/`parent`/`cursor` plus the common keys (`exact` allowlist), scope from a closed list, `expectedSnapshotId` must be a sha256.
+- Cursor integrity: tree cursors are bound to `hash(["tree", scope, parent])` and the snapshot id; `cursorValue` checks canonical base64url, shape, key and a positive safe-integer offset, and `offsetPage` bounds-checks the offset. A cursor from another request answers `invalid-input`, from another snapshot `stale-snapshot` (tested).
+- Resource bounds: each page is capped at 100 entries and 900 KiB (`TREE_ITEMS_BYTES`), under the 1 MiB v2 response limit; a single over-size entry answers `response-limit`. Per-request work is one linear pass over the in-memory nodes.
+- Injection / XSS / eval / secrets / crypto: none introduced; sha256 is used for snapshot and cursor keys (change detection, not authentication). Docs changes carry no secrets or commands beyond read-only examples.
+- Authorization: the action is a read-only local CLI reader of the open checkout; no new privilege boundary.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-06 (core tree contract, v2 reader, tests, docs). The round-4 delta does not touch these files. Tree parent validation, cursor binding, paging bounds and error messages are sound; no security finding.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-06", "coverage": "read in full; second-look; files unchanged in b2043b98d..3ad918b66", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Not verified: no tests were run by this reviewer (exec_budget_s = 0); the supplied test evidence was not re-read. Round-3 findings were not re-reported.
+
+Routing audit: graph_used: no (payload layers block consulted; not needed for a contained read-only parser/reader), wiki_used: no (not-relevant), ctx_used: yes (`keryx ctx read`, `keryx ctx rg`), raw_rg_used: no.
+KERYX_USAGE {"tokens_in":110263,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

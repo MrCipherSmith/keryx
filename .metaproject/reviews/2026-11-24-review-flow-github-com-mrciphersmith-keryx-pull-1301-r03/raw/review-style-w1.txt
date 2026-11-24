@@ -1,0 +1,70 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Round 4 delta (b2043b98d..3ad918b66), slice-01 (fix) of useMetaprojectTree.ts: the permit back-off lifted to a module-scope withPermitRetry and the failure classification lifted out of read() into settleFailure. Names are clear and in the file's idiom, read() is shorter and flatter, no readability threshold is crossed by the change (file 288 lines; no new condition over 3 clauses; the 4-clause not-found test in settleFailure moved unchanged from read()). No new style findings. The one prior style observation (PERMIT_RETRIES exported with no importer) is still open at info.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-01", "status": "DONE", "coverage": "read in full; the rest of useMetaprojectTree.ts, platform/metaproject.ts and the MetaprojectView.tsx hunk read for context and for prior dispositions only" }
+  ],
+  "prior_dispositions": [
+    { "id": "r3-architecture-w1-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-002", "disposition": "closed" },
+    { "id": "r3-clean-code-w1-F-003", "disposition": "partial" },
+    { "id": "r3-clean-code-w2-F-001", "disposition": "closed" },
+    { "id": "r3-clean-code-w2-F-002", "disposition": "partial" },
+    { "id": "r3-highload-w2-F-001", "disposition": "partial" },
+    { "id": "r3-regression-w1-F-001", "disposition": "closed" },
+    { "id": "r3-style-w1-F-002", "disposition": "open" },
+    { "id": "r3-style-w2-F-001", "disposition": "open" },
+    { "id": "r3-pr-contract-w1-PC-001", "disposition": "open" }
+  ]
+}
+```
+
+# Style Review Report
+
+## Summary
+The fix round improves readability: the permit back-off is now a named, documented module-scope helper (`withPermitRetry`) and read()'s catch collapses to one line that delegates to `settleFailure`. Names (`withPermitRetry`, `settleFailure`, `isMetaprojectPermitRefusal`, `METAPROJECT_PERMIT_REFUSAL`) follow the file's and the platform module's conventions. No new style findings.
+
+## Review Scope
+- Branch: `feat/desktop-metaproject-sidebar-tree`
+- Parent ref: `b2043b98d` (previous reviewed head)
+- Merge-base: `b2043b98dba98f8b86bbd444e1e2ac99a88a4e1a`
+- Scope mode: `explicit-hash-range` (b2043b98d..3ad918b66), slice-01 only
+- Changed files in slice: 1 (`apps/desktop/src/metaproject/useMetaprojectTree.ts`)
+
+## Stats
+- major: 0
+- minor: 0
+- info: 0
+
+## Prior dispositions (judged against the code at 3ad918b66)
+- r3-architecture-w1-F-001 — closed. The hook's string predicate is gone; `isMetaprojectPermitRefusal` lives in `apps/desktop/src/platform/metaproject.ts:285` beside the transport's error mapping, the hook imports it (`useMetaprojectTree.ts:9`, used at :35), and `MetaprojectTree.dom.test.tsx:82` now imports `METAPROJECT_PERMIT_REFUSAL` instead of keeping its own literal. The optional Rust-side comment was not added (`metaproject.rs` unchanged).
+- r3-clean-code-w1-F-002 — closed. `withPermitRetry<T>` is module-scope (`useMetaprojectTree.ts` ~:29-40) and read() calls `withPermitRetry(() => send(root, input), { wait: pause, live: current })` (:214); read() is now about 25 lines.
+- r3-clean-code-w1-F-003 — partial. The TS side has one source (platform module), but the match is still on English text and `src-tauri/src/metaproject.rs:199` carries no note or test tying it to the Desktop consumer; a Rust rewording still drops the retry unnoticed by the TS tests (platform/metaproject.test.ts:213 also throws a literal copy).
+- r3-clean-code-w2-F-001 — closed. The parked state now has its own name, `status: "stale"` / `more: { status: "stale" }`, and the TreeFolder, `more`, `ensure` and `more()` docs describe it.
+- r3-clean-code-w2-F-002 — partial. Same as r3-clean-code-w1-F-003: one TS constant, imported by the DOM test; no Rust-side marker or stable token.
+- r3-highload-w2-F-001 — partial. Same drift risk remains on the Rust side; no assertion in metaproject.rs's tests.
+- r3-regression-w1-F-001 — closed (by reading, not executed). A stale answer now parks the folder/page as `stale`; `useMetaprojectTree` takes `reload` and its effect (:261-268) re-reads every `stale` parent when it changes; MetaprojectView passes `reload: catalog`, so every non-quiet catalog load, including Refresh catalog with an unchanged snapshotId, re-reads it. `more()` (:239) no longer re-asks for a stale page, and `retry` still only acts on `failed`.
+- r3-style-w1-F-002 — open (info). `export const PERMIT_RETRIES = 2;` (:21) still has no importer: `keryx ctx rg` over apps/desktop finds it only in useMetaprojectTree.ts (declaration, default parameter of withPermitRetry, delay formula).
+- r3-style-w2-F-001 — open (info). Same site and evidence as r3-style-w1-F-002.
+- r3-pr-contract-w1-PC-001 — open. The PR body at 3ad918b66 still says round 2 made a stale read show "only the banner"; the code renders the `stale` row as loading. Brief notes the body could not be edited this round.
+
+## Minor & Info
+None new.
+
+## Positive Notes
+- `settleFailure` gives the three failure outcomes (stale, vanished, failed) one documented home, and its comments match the new `stale` status.
+- `withPermitRetry`'s JSDoc states both the retry and the liveness rule.
+
+## Not verified / skipped
+- Exec budget 0: nothing run; test results taken from the brief (verify-tests-to-run-1.txt, exit 0).
+- Hunks outside slice-01 (the `reload` option, `reread`, the effect, `more()`, platform/metaproject.ts, MetaprojectTree.tsx, tests) were read only to judge prior dispositions, not reviewed for new style findings.
+
+Routing audit: graph_used: no (payload supplied layers/affected set; narrow slice), wiki_used: not-relevant (style lens), ctx_used: yes (keryx ctx rg / read), raw_rg_used: no (two raw `git diff` reads marked keryx:raw for exact fix hunks).
+KERYX_USAGE {"tokens_in":115972,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

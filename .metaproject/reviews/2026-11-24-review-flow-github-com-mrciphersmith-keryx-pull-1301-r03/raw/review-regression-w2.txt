@@ -1,0 +1,22 @@
+STATUS: DONE
+
+review-regression, wave 2, round 4 (delta b2043b98d..3ad918b66), slices slice-02 and slice-03 read in full. No regression found in the blast radius.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B over the fix-round-3 delta. Blast radius used: the payload's layers.affected set for apps/desktop/src/platform/metaproject.ts at graph commit 3ad918b66 (depth 2, 9 files, truncated: [] so the cap dropped nothing), plus the changed files. Walked every consumer of the moved behaviour: (1) TreeFolder gained status/more 'stale' — the only readers of folder status and more.status are useMetaprojectTree.ts (ensure, more, reread, forgetVanished) and MetaprojectTree.tsx (flatten, reveal effect, empty-state check), enumerated with `keryx ctx rg --all \"folders\\.get|\\.more\\?\\.status|more\\.status|TreeFolder\" apps/desktop/src` (14 matches, 2 files); each treats 'stale' like 'loading' (flatten renders a Loading row and Show-more-loading via Boolean(folder.more), the reveal effect waits, ensure/more refuse), so no existing path changes outcome. (2) New `reload` input: optional, so the test Harness that omits it keeps the old behaviour; MetaprojectView passes `catalog`, which setCatalog changes only on a non-quiet catalog load or a quiet one with a new snapshot (MetaprojectView.tsx catalog effect), and the stale banner (markStale -> setSnapshotMismatch) never triggers a catalog load itself, so there is no re-read loop; the re-read effect only touches folders/pages in 'stale', never 'loading', 'failed' or 'ready', and on a snapshot change folders were already dropped during render. (3) Focus hand-off (handOff): entry rows still anchor to the row before them as in base; status rows now anchor within their own parent, root status rows ('d:' never exists) fall back to the old index rule as before; the element-to-row switch from DOM elements to `rows`/`shown.current` reads the same render's rows. (4) isMetaprojectPermitRefusal moved to platform/metaproject.ts: 'unavailable' is not in METAPROJECT_ERROR_CODES (src/integrations/metaproject-explorer-contract.ts:329), so requestMetaprojectV2 rethrows the Rust refusal as a plain Error and the classifier's MetaprojectRequestError exclusion never hides it; withPermitRetry keeps the two live() guards of the inline version. (5) slice-03's hunks show lines absent at head (`return 2` in negotiation, the expectedSnapshotId clause in matchesRequest) that are not part of this delta (git diff b2043b98d..3ad918b66 on metaproject.ts adds only the permit classifier); at head the snapshot check sits after validation in requestMetaprojectV2 (metaproject.ts:315-319) and negotiation returns {protocol, supportsTree} — behaviour from earlier rounds, unchanged here. Limits: the code graph carries no runtime edges (the Tauri invoke boundary to src-tauri/src/metaproject.rs, whose refusal text the classifier matches by string, is outside it); that contract is pinned only by the platform test feeding the literal message. Not executed by me (exec_budget_s 0); I relied on the recorded test run at 3ad918b66 (Desktop tsc and suite exit 0).",
+  "findings": [],
+  "slices": [
+    {"id": "slice-02", "coverage": "read in full (1510 lines): flow bookkeeping, MetaprojectTree.tsx, useMetaprojectTree.ts, MetaprojectView.tsx, platform/metaproject.ts and their tests", "status": "DONE"},
+    {"id": "slice-03", "coverage": "read in full (14 lines); cross-checked against git diff b2043b98d..3ad918b66 and the head file", "status": "DONE"}
+  ],
+  "inputs_unreadable": [],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Routing audit: graph_used: yes (payload layers.affected at graph commit 3ad918b66; no fresh gdgraph query needed), wiki_used: not-relevant (no domain question beyond the flow plan and the code), ctx_used: yes (keryx ctx rg for consumer enumeration), raw_rg_used: no. Raw git diff used once with an escape marker to read the exact delta hunk of platform/metaproject.ts.
+KERYX_USAGE {"tokens_in":147611,"tokens_out":0,"model":"claude-opus-5-5","by":"host"}

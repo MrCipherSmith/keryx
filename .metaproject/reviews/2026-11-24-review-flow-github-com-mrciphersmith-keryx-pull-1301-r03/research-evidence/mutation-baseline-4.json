@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree",
+  "command": "sh -c 'cd apps/desktop && bun test ./src/metaproject/MetaprojectTree.dom.test.tsx ./src/metaproject/MetaprojectView.dom.test.tsx ./src/platform/metaproject.test.ts'",
+  "baseline": {
+    "exitCode": 1,
+    "ms": 243,
+    "timedOut": false,
+    "cwd": "/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/data/review/mutate-scratch/keryx-mutate-geFsnx/tree",
+    "tail": "bun test v1.4.4 (38afee6c8)\n\nsrc/metaproject/MetaprojectTree.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\nerror: Cannot find module '@happy-dom/global-registrator' from '/Users/tsaitler.aleksandr/work/sandbox/keryx/.claude/worktrees/mp-sidebar-tree/.metaproject/data/review/mutate-scratch/keryx-mutate-geFsnx/tree/apps/desktop/src/test/dom.ts'\n-------------------------------\n\n\nsrc/metaproject/MetaprojectView.dom.test.tsx:\n\n# Unhandled error between tests\n-------------------------------\n-------------------------------\n\n\n 16 pass\n 2 fail\n 2 errors\n 66 expect() calls\nRan 18 tests across 3 files. [22.00ms]"
+  },
+  "mutants": [],
+  "totals": {
+    "killed": 0,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "startedAt": "2026-11-24T09:14:47.124Z",
+  "head": "3ad918b66a990c7f0b04180e17d9fb74fb82713a",
+  "treeHash": "aa558232587eefb5e3ac4ff01b6f7fe309b37eba16dbacc147576b17265f46c8",
+  "loadavg": [
+    12.0810546875,
+    17.5048828125,
+    18.833984375
+  ],
+  "provenanceMs": 485,
+  "copyMs": 23600
+}

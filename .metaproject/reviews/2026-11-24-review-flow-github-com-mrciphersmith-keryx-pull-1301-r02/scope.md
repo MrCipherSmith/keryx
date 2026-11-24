@@ -4,7 +4,7 @@ target: report
 ref: https://github.com/MrCipherSmith/keryx/pull/1301
 mode: ingest
 flow: 518 (explicit-flow-id)
-created_at: 2026-11-24T07:56:42.017Z
+created_at: 2026-11-24T08:53:17.083Z
 context_mode: light
 
 ## Stage counts
@@ -36,13 +36,13 @@ verdicts_capped_to_unverifiable: 0
 confirmed: 1
 refuted: 0
 unverifiable: 0
-unverified: 19
+unverified: 20
 
 ### Retained
 
-findings_in: 20
+findings_in: 21
 findings_removed_by_verifier: 0
-findings_retained: 20
+findings_retained: 21
 
 ### Verification claims discarded
 
@@ -58,10 +58,10 @@ cap that dropped nothing are different facts.
 ### Findings cap
 
 limit_per_reviewer: 10
-findings_seen: 20
-findings_retained: 20
+findings_seen: 21
+findings_retained: 21
 findings_truncated: 0
-blockers_exempt: 8
+blockers_exempt: 9
 reviewers_truncated: 0
 
 _the findings cap ran and truncated nothing_
@@ -100,7 +100,7 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 20
+total: 21
 dropped_prefilter: 0
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
@@ -108,7 +108,7 @@ dropped_scope_b: 0
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
 merged_duplicates: 0
-retained: 20
+retained: 21
 
 ### by_reason
 
