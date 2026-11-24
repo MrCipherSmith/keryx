@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type InteractiveTool, builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
+import { type InteractiveTool, builtinReadOnlyTools, confineToRoot, resolveReferenceFolders } from "./interactive-tools";
 
 let root: string;
 let tools: InteractiveTool[];
@@ -83,4 +83,31 @@ test("read_file outside-cwd refusal names the cause and the alternative", async 
   const result = await tool("read_file").invoke({ path: "/etc/hosts" });
   expect(result.output).toContain("working directory");
   expect(result.output).toContain("outside it use shell_exec `cat <path>`");
+});
+
+test("reference folders are discoverable and readable without allowing reads outside them", async () => {
+  const fixture = await realpath(await mkdtemp(join(tmpdir(), "keryx-references-")));
+  try {
+    const docs = join(fixture, "docs");
+    const outside = join(fixture, "other.txt");
+    await mkdir(docs);
+    await writeFile(join(docs, "guide.md"), "Guide");
+    await writeFile(outside, "Outside");
+    await symlink(outside, join(docs, "link.txt"));
+    const folders = resolveReferenceFolders([docs, docs]);
+    expect(folders).toEqual([docs]);
+    expect(() => resolveReferenceFolders([outside])).toThrow(/not a directory/);
+    expect(() => resolveReferenceFolders(["docs"])).toThrow(/absolute paths/);
+
+    const roster = new Map(builtinReadOnlyTools(root, { referenceFolders: folders })
+      .map(entry => [entry.definition.name, entry]));
+    expect([...roster.values()].every(entry => entry.definition.risk === "read")).toBe(true);
+    expect(await roster.get("list_reference_folders")!.invoke({})).toEqual({ output: JSON.stringify([docs]), isError: false });
+    expect((await roster.get("list_dir")!.invoke({ path: docs })).output).toContain("guide.md");
+    expect(await roster.get("read_file")!.invoke({ path: join(docs, "guide.md") })).toEqual({ output: "Guide", isError: false });
+    expect((await roster.get("read_file")!.invoke({ path: outside })).isError).toBe(true);
+    expect((await roster.get("read_file")!.invoke({ path: join(docs, "link.txt") })).isError).toBe(true);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });

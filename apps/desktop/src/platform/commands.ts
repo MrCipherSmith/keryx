@@ -36,8 +36,8 @@ export interface VersionCheck {
   required: string;
 }
 
-export const acpStart = (cwd: string, noProfile: boolean, preferBundled = false) =>
-  invoke<StartInfo>("acp_start", { cwd, noProfile, preferBundled });
+export const acpStart = (cwd: string, noProfile: boolean, preferBundled = false, sshHost?: string) =>
+  invoke<StartInfo>("acp_start", { cwd, noProfile, preferBundled, ...(sshHost === undefined ? {} : { sshHost }) });
 export const acpStop = () => invoke<void>("acp_stop");
 export const settingsGet = () => invoke<Settings>("settings_get");
 export const settingsSet = (settings: Settings) => invoke<Settings>("settings_set", { settings });

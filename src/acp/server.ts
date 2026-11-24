@@ -30,7 +30,7 @@ import {
   type ReasoningEffortLevel,
 } from "../commands/agent";
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
-import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { resolveReferenceFolders, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, renameSession, resolveProjectRoot, titleFromPrompt } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
@@ -1842,18 +1842,31 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   }
 
+  let referenceFolders: readonly string[] = [];
+
   function handleInitialize(params: unknown): AcpInitializeResponse {
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.initialize);
     const negotiation = negotiateProtocolVersion(obj["protocolVersion"]);
     if (negotiation.kind === "refuse") {
       refuse(negotiation.error);
     }
-    initialized = true;
     const rawCaps = obj["clientCapabilities"];
-    clientCapabilities =
+    const capabilities =
       typeof rawCaps === "object" && rawCaps !== null && !Array.isArray(rawCaps)
         ? (rawCaps as AcpClientCapabilities)
         : undefined;
+    const meta = capabilities?._meta?.keryx as { referenceFolders?: unknown } | undefined;
+    const requested = shellProfile ? meta?.referenceFolders : undefined;
+    if (requested !== undefined) {
+      if (initialized) refuse(invalidParams("initialize: reference folders cannot be changed on a live connection"));
+      try {
+        referenceFolders = resolveReferenceFolders(requested);
+      } catch (cause) {
+        refuse(invalidParams(cause instanceof Error ? cause.message : String(cause)));
+      }
+    }
+    initialized = true;
+    clientCapabilities = capabilities;
     return {
       protocolVersion: negotiation.version,
       agentCapabilities: KERYX_AGENT_CAPABILITIES,
@@ -1862,7 +1875,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // Shell profile only: the editor profile's answer stays byte-for-byte
       // what it was (AC2). `_keryx/info` answers the same in either profile.
       // `liveSessions: true` tells a client that opening a session releases none.
-      ...(shellProfile ? { _meta: { keryx: { ...keryxAcpProfileMeta(profile, clientPreparesReview(clientCapabilities)), ...(telegramControlEnabled() ? { extensions: [...keryxAcpProfileMeta(profile, clientPreparesReview(clientCapabilities)).extensions, ACP_TELEGRAM_SESSION_METHOD] } : {}) } } } : {}),
+      ...(shellProfile ? { _meta: { keryx: { ...keryxAcpProfileMeta(profile, clientPreparesReview(clientCapabilities)), ...(requested !== undefined ? { referenceFolders: true } : {}), ...(telegramControlEnabled() ? { extensions: [...keryxAcpProfileMeta(profile, clientPreparesReview(clientCapabilities)).extensions, ACP_TELEGRAM_SESSION_METHOD] } : {}) } } } : {}),
     };
   }
 
@@ -2102,6 +2115,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       ...(clientRunsTerminal(state.clientCapabilities) ? { runExternal: (request) => externalRunsFor(sessionId, state).startForModel(request) } : {}),
       // Read through the registry, not captured: `persistHistory` replaces the handle.
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
+      referenceFolders,
       metaprojectPort: metaprojectFor(root),
       ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
       ...(clientPreparesReview(state.clientCapabilities) ? { requestReviewDraft: reviewDraftFor(sessionId) } : {}),

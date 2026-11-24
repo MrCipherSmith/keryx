@@ -13,7 +13,7 @@
 
 import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { lstatSync, realpathSync } from "node:fs";
+import { lstatSync, realpathSync, statSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";
 import { resolveSpillReadable } from "../output-spill";
 
@@ -323,10 +323,39 @@ function realpathThroughAncestors(absolute: string): string | undefined {
  * so the spilled output the model is told about is openable. Omitted (subagents,
  * trigger/ACP rosters — none of which spill) → project root only, as before.
  */
+export function resolveReferenceFolders(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 16) throw new Error("Expected at most 16 reference folders");
+  const folders = new Set<string>();
+  for (const path of value) {
+    if (typeof path !== "string" || !isAbsolute(path) || /\p{Cc}/u.test(path)) {
+      throw new Error("Reference folders must be absolute paths without control characters");
+    }
+    try {
+      const folder = realpathSync(path);
+      if (!statSync(folder).isDirectory()) throw new Error("Not a directory");
+      folders.add(folder);
+    } catch {
+      throw new Error(`Reference folder is missing or not a directory: ${path}`);
+    }
+  }
+  return [...folders];
+}
+
 export function builtinReadOnlyTools(
   root: string,
-  options: { getSessionDir?: () => string | undefined } = {},
+  options: { getSessionDir?: () => string | undefined; referenceFolders?: readonly string[] } = {},
 ): InteractiveTool[] {
+  const folders = options.referenceFolders ?? [];
+  const referenceTarget = (path: string): string | null => {
+    if (folders.length === 0 || !isAbsolute(path)) return null;
+    const target = realpathThroughAncestors(resolve(path));
+    if (target === undefined) return null;
+    for (const folder of folders) {
+      const rel = relative(folder, target);
+      if (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`)) return target;
+    }
+    return null;
+  };
   const getCwd: InteractiveTool = {
     definition: {
       name: "get_cwd",
@@ -351,7 +380,7 @@ export function builtinReadOnlyTools(
     },
     invoke: async (input) => {
       const requested = typeof input.path === "string" ? input.path : ".";
-      const target = confineToRoot(root, requested);
+      const target = confineToRoot(root, requested) ?? referenceTarget(requested);
       if (target === null) {
         return { output: `path escapes the project root: ${requested}`, isError: true };
       }
@@ -397,7 +426,7 @@ export function builtinReadOnlyTools(
       // Flow 387 T14: the project root first; failing that, ONLY the live session's
       // spilled-output directory (read-only, realpath-confined, absolute paths).
       const target =
-        confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
+        confineToRoot(root, requested) ?? referenceTarget(requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
       if (target === null) {
         return {
           output:
@@ -433,5 +462,15 @@ export function builtinReadOnlyTools(
     },
   };
 
-  return [getCwd, listDir, readFileTool];
+  const tools = [getCwd, listDir, readFileTool];
+  if (folders.length > 0) tools.push({
+    definition: {
+      name: "list_reference_folders",
+      description: "List configured read-only reference folders. Use their absolute paths with list_dir and read_file.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      risk: "read",
+    },
+    invoke: async () => ({ output: JSON.stringify(folders), isError: false }),
+  });
+  return tools;
 }

@@ -279,7 +279,7 @@ export interface InitializeResult {
   protocolVersion: number;
   agentInfo?: { name?: string; version?: string } | null;
   agentCapabilities?: Record<string, unknown>;
-  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean; issuePreparation?: boolean } } & Meta;
+  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean; issuePreparation?: boolean; referenceFolders?: boolean } } & Meta;
 }
 
 /** ext notification: keryx stopped holding a session for this connection (idle cap); a return to it needs session/load. */

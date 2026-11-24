@@ -616,6 +616,13 @@ button { font: inherit; }
 
 /* ---------------- welcome & settings ---------------- */
 .welcome, .standalone { height: 100%; position: relative; overflow: auto; background: var(--bg-canvas); }
+.ssh-project { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--bg-canvas); }
+.ssh-project-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--titlebar-h); padding: 0 16px 0 80px; }
+.ssh-project-bar strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-project-sessions { justify-content: flex-start; padding: 6px 16px; }
+.ssh-project-sessions select { max-width: 65%; }
+.ssh-project-form, .ssh-project-form label { display: grid; gap: var(--sp-2); }
+.ssh-project-form input, .ssh-project-form select, .ssh-project-sessions select { color: inherit; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 8px; }
 .welcome-drag { position: absolute; top: 0; left: 0; right: 0; height: var(--titlebar-h); z-index: 1; }
 .welcome { display: grid; place-items: center; padding: var(--sp-6) var(--sp-5); }
 .welcome-col { width: 520px; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); position: relative; z-index: 2; }

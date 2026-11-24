@@ -339,6 +339,7 @@ pub async fn acp_start(
     cwd: String,
     no_profile: Option<bool>,
     prefer_bundled: Option<bool>,
+    ssh_host: Option<String>,
 ) -> Result<StartInfo, String> {
     let label = webview.label().to_string();
     // Numbered before the first await: see `begin_start`.
@@ -347,7 +348,10 @@ pub async fn acp_start(
     // the spawn all block: keep them off the async runtime's workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false), prefer_bundled.unwrap_or(false)))
+        state.start_session(&label, start, || match ssh_host.as_deref() {
+            Some(host) => launch_ssh(&app, &label, host, &cwd),
+            None => launch(&app, &label, &cwd, no_profile.unwrap_or(false), prefer_bundled.unwrap_or(false)),
+        })
     })
     .await
     .map_err(|e| format!("keryx start failed: {e}"))?
@@ -398,10 +402,9 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
         .map(|d| d.join(format!("keryx-acp-{label}.log")))
         .map_err(|e| e.to_string())?;
 
-    let emit_app = app.clone();
-    let emit_label = label.to_string();
-    let fs_pool = FsPool::new(fs_root);
-    let proc = AcpProcess::spawn(
+    let proc = spawn_bridge(
+        app,
+        label,
         SpawnConfig {
             program: located.path.clone(),
             args,
@@ -409,13 +412,64 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
             env,
             log_path: Some(log_path.clone()),
         },
+        Some(FsPool::new(fs_root)),
+    )?;
+    let info = StartInfo {
+        keryx_path: located.path.display().to_string(),
+        source: located.source,
+        note: located.note,
+        log_path: log_path.display().to_string(),
+        min_keryx_version: version::MIN_KERYX_VERSION,
+        can_fall_back,
+    };
+    Ok((proc, info))
+}
+
+fn launch_ssh(app: &AppHandle, label: &str, host: &str, cwd: &str) -> Result<(Arc<AcpProcess>, StartInfo), String> {
+    let args = crate::ssh::ssh_args(host, cwd)?;
+    let env = app.state::<AppState>().environment().clone();
+    let program = locator::which("ssh", env.get("PATH").map(std::ffi::OsStr::new))
+        .ok_or("OpenSSH (ssh) was not found on the desktop PATH.")?;
+    let log_path = app.path().app_log_dir()
+        .map(|dir| dir.join(format!("keryx-ssh-{label}.log")))
+        .map_err(|e| e.to_string())?;
+    let info = StartInfo {
+        keryx_path: format!("{host}:keryx"),
+        source: KeryxSource::Path,
+        note: None,
+        log_path: log_path.display().to_string(),
+        min_keryx_version: version::MIN_KERYX_VERSION,
+        can_fall_back: false,
+    };
+    let local_cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let proc = spawn_bridge(
+        app,
+        label,
+        SpawnConfig { program, args, cwd: local_cwd, env, log_path: Some(log_path) },
+        None,
+    )?;
+    Ok((proc, info))
+}
+
+fn spawn_bridge(
+    app: &AppHandle,
+    label: &str,
+    config: SpawnConfig,
+    fs_pool: Option<FsPool>,
+) -> Result<Arc<AcpProcess>, String> {
+    let emit_app = app.clone();
+    let emit_label = label.to_string();
+    let program = config.program.display().to_string();
+    AcpProcess::spawn(
+        config,
         move |proc, event| {
             if proc.is_stopped() {
                 return;
             }
             match event {
                 ProcessEvent::Line(line) => {
-                    if let Some(request) = fs::parse_request(&line) {
+                    let local_request = fs_pool.as_ref().and_then(|pool| fs::parse_request(&line).map(|request| (pool, request)));
+                    if let Some((fs_pool, request)) = local_request {
                         fs_pool.submit(proc, request);
                     } else {
                         let _ = emit_app.emit_to(emit_label.as_str(), "acp://message", line);
@@ -438,17 +492,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
             }
         },
     )
-    .map_err(|e| format!("Could not start keryx at {}: {e}", located.path.display()))?;
-
-    let info = StartInfo {
-        keryx_path: located.path.display().to_string(),
-        source: located.source,
-        note: located.note,
-        log_path: log_path.display().to_string(),
-        min_keryx_version: version::MIN_KERYX_VERSION,
-        can_fall_back,
-    };
-    Ok((proc, info))
+    .map_err(|e| format!("Could not start {program}: {e}"))
 }
 
 /// Queue a message for the window's keryx.
