@@ -11,10 +11,10 @@ import { isNotFound, writeFileAtomic } from "../lib/fs";
 import { PR_CONTEXT_MD, readPrContext } from "../review/context-collect";
 import { buildLayersBlock } from "../review/layers-payload";
 import { parseProjectPr, PR_CONTEXT_FILE } from "../review/pr-context";
-import { packWaves, structuralJsonPaths, waveBytesOf, type SliceManifest } from "../review/slice";
+import { structuralJsonPaths, type SliceManifest } from "../review/slice";
 import { readPriorFindings } from "../review/round-record";
 import { resolveReviewWave } from "../review/wave-key";
-import { REVIEW_TURN_MAX_WAVES, REVIEW_WAVE_MAX_CHILDREN } from "../review/wave-limits";
+import { desktopPassAllocator } from "../review/desktop-review-passes";
 import { roleDispatchWaves } from "../review/estimate";
 import { createPinnedSourceInput, prepareBlastInput } from "./review-plan-desktop-context";
 import type { PlanDeps, ReviewPlan } from "./review-plan";
@@ -47,23 +47,6 @@ export async function collectDesktopPlanContext(target: string, head: string, pa
   const context = await readPrContext(packageDir);
   if (!context || context.headSha !== head) throw new Error("The collected PR context does not match the pinned head. Refresh the board before retrying.");
   return context;
-}
-
-// Admission uses the same original slice packing and limits as the native spawn tool.
-export function desktopPassAllocator(manifest: SliceManifest) {
-  const slicePass = new Map<string, string>();
-  packWaves(manifest.slices.filter(slice => !slice.retryOf), waveBytesOf(manifest)).forEach((group, index) => {
-    for (const slice of group) slicePass.set(slice.id, `slices-${String(index + 1).padStart(3, "0")}`);
-  });
-  const counts = new Map<string, number>();
-  return (slices: readonly string[]) => {
-    const candidates = [...new Set(slices.map(id => slicePass.get(id)).filter((pass): pass is string => !!pass))];
-    const pass = (candidates.length ? candidates : ["round"]).find(key =>
-      (counts.get(key) ?? 0) < REVIEW_WAVE_MAX_CHILDREN && (counts.has(key) || counts.size < REVIEW_TURN_MAX_WAVES));
-    if (!pass) throw new Error("Desktop review exceeds the native wave admission limits; split the review plan.");
-    counts.set(pass, (counts.get(pass) ?? 0) + 1);
-    return pass;
-  };
 }
 
 export async function prepareDesktopDispatch(

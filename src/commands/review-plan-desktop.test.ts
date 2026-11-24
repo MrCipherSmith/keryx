@@ -1,3 +1,4 @@
+import { desktopPassAllocator, preflightDesktopPasses } from "../review/desktop-review-passes";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { refreshLayers } from "../review/layers";
@@ -12,7 +13,7 @@ import type { SliceEntry, SliceManifest } from "../review/slice";
 import { writeWaveDrivers } from "../review/wave-drivers";
 import { resolveReviewWave } from "../review/wave-key";
 import type { PlanDeps, ReviewPlan } from "./review-plan";
-import { desktopPassAllocator, prepareDesktopDispatch } from "./review-plan-desktop";
+import { prepareDesktopDispatch } from "./review-plan-desktop";
 
 let root: string, dir: string;
 beforeEach(async () => {
@@ -164,6 +165,10 @@ test("Desktop admits 100 native passes and refuses opening another in the same p
   expect(new Set(admitted).size).toBe(100);
   expect(() => allocate([slices[100]!.id])).toThrow("admission limits");
   expect(allocate([slices[0]!.id])).toBe(admitted[0]!);
+  const assignments = slices.map((entry, index) => ({ reviewer: "review-logic", wave: index + 1, slices: [entry.id] }));
+  expect(() => preflightDesktopPasses(manifestOf(slices), assignments)).toThrow("admission limits");
+  expect(() => preflightDesktopPasses(manifestOf(slices), assignments, 100)).not.toThrow();
+
 });
 
 test("scope B materializes unchanged callers at the reviewed head in the read-only child's context", async () => {
