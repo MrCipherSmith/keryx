@@ -30,6 +30,7 @@ import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskRe
   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, reviewReportDisclosure, scopedFile } from "./desk-review-report";
 import { readRoundNumber } from "./round-record";
 import { recordPartialRound } from "./round-registry";
+import type { PreviousRunInput } from "./update-round";
 import { mainReviewRoot } from "./report-overlay";
 import { askDesktopOperator } from "./desk-questions";
 import { estimatePlan, planConfirmed, recordPlanConfirmation } from "./plan-confirmation";
@@ -50,9 +51,10 @@ interface DeskExecutionOptions {
   /**
    * The earlier-round attempts this round may build on, in the order to try them (update-round.ts `previousRoundAttempts`).
    * The first whose package can be handed on is: a closed package, or, for an attempt that ended partial, a draft package
-   * with an ingested findings list, handed on as a partial round (flow 520 AC7, T14 B1).
+   * with an ingested findings list, handed on as a partial round (flow 520 AC7, T14 B1). Either only when its manifest
+   * names the range the attempt reviewed (T16 B3).
    */
-  previousRuns?: readonly { runDir: string; partial: boolean }[] | undefined;
+  previousRuns?: readonly PreviousRunInput[] | undefined;
   resumeRunDir?: string;
   guidance?: string;
   operatorRunId?: string;
@@ -91,6 +93,8 @@ interface ExecutorPorts {
   spawn?: SpawnChild;
   /** Test seam: the keryx config directory the round registry is written to. Default: the user's. */
   registryDir?: string;
+  /** Test seam: the partial-round record. Default: round-registry.ts `recordPartialRound`. */
+  recordPartialRound?: typeof recordPartialRound;
 }
 
 const exec = promisify(execFile);
@@ -522,16 +526,25 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
           resumePackage = manifest.reviewId;
         }
       }
+      const recordPartial = ports.recordPartialRound ?? recordPartialRound;
+      let registryFailed = false;
       for (const prior of resumePackage ? [] : options.previousRuns ?? []) {
         const previous = path.join(prior.runDir, "package");
         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
-        const usable = manifest?.target?.ref === subject && /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(previous);
+        // The package must be the one its attempt reviewed: the run store's range, not only the pull request (T16 B3).
+        const usable = manifest?.target?.ref === subject && manifest.target.base === prior.baseSha && manifest.target.head === prior.headSha &&
+          /^[\w.-]+$/.test(manifest.reviewId) && ![".", ".."].includes(manifest.reviewId) && await regularPackage(previous);
         // A closed package is a finished round. A partial attempt's package never got past its draft: only Desktop's own
         // record, written here from the user's run store, lets the next round cut from it (prior-round.ts, TM-04 §4d).
-        // One that cannot be handed on falls back to the next candidate, never to a first review (T14 B1).
-        const handOn = usable && (manifest.status === "closed" ||
-          (prior.partial && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));
-        if (!handOn) continue;
+        // One that cannot be handed on falls back to the next candidate, never to a first review (T14 B1). A registry that
+        // failed once (a lock timeout costs its whole wait) is not asked again for later partial candidates (T16 B5).
+        let handOn = usable && manifest.status === "closed";
+        if (usable && !handOn && prior.partial && !registryFailed) {
+          const recorded = recordPartial(previous, { cwd: checkout, dir: ports.registryDir });
+          if (recorded.error !== undefined) registryFailed = true;
+          handOn = recorded.file !== undefined;
+        }
+        if (!handOn || !manifest) continue;
         await cp(previous, path.join(checkout, ".metaproject", "reviews", manifest.reviewId), { recursive: true });
         break;
       }

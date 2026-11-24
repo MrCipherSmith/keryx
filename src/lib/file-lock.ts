@@ -15,7 +15,7 @@
 // read-modify-write is exactly the shape that loses one. That distinction is
 // the reason this exists.
 
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, linkSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -57,6 +57,43 @@ export interface FileLockOptions {
    * to the trash), which taking the lock must not bring back. Default `true`.
    */
   createDir?: boolean;
+  /**
+   * TEST SEAM, never set in production: called after a lock was judged stale and before it is broken, where another
+   * waiter may interleave. Tests inject a rival's take-over there instead of relying on timing.
+   */
+  raceHook?: (point: "stale-judged") => void;
+}
+
+/**
+ * Break the lock judged stale, and only that one (flow 520 T16 B4, the file form of `moveLeaseAside` in `src/lib/fs.ts`).
+ * Between the judgement and the removal another waiter may already have broken the same stale lock and taken a fresh
+ * one; a blind delete would remove that live lock and let a second holder in. So the lock is renamed aside, and only
+ * the file judged stale is deleted. Anything else is put back with an exclusive link, which never replaces a lock
+ * created meanwhile.
+ *
+ * Remaining window, as in the lease: a third waiter whose exclusive create lands on the empty path between the rename
+ * and the link-back. The link-back then fails and the moved lock is dropped; its holder's release sees another nonce
+ * and leaves the path alone. It needs three waiters on one stale lock inside a few file operations.
+ */
+function breakStaleLock(lockPath: string, judged: { dev: number; ino: number; mtimeMs: number }, staleMs: number): void {
+  const aside = `${lockPath}.aside.${process.pid}.${randomUUID()}`;
+  try {
+    renameSync(lockPath, aside);
+  } catch {
+    return; // Someone else already broke or released it.
+  }
+  try {
+    const moved = statSync(aside);
+    // dev+ino alone is not an identity: Linux hands a just-freed inode number straight to the next file created, so a
+    // rival's fresh lock routinely carries the stale lock's inode. The judged lock is also the one with the judged
+    // mtime, and it is still stale; a fresh lock fails both. (ctime is no witness: the rename itself updates it.)
+    const same = moved.dev === judged.dev && moved.ino === judged.ino && moved.mtimeMs === judged.mtimeMs &&
+      Date.now() - moved.mtimeMs > staleMs;
+    if (!same) linkSync(aside, lockPath);
+  } catch {
+    // The link-back lost to a lock created meanwhile (see the remaining window above).
+  }
+  rmSync(aside, { force: true });
 }
 
 /**
@@ -119,10 +156,11 @@ class LockAttempt {
       }
       if (this.options.createDir === false && (error as NodeJS.ErrnoException).code === "ENOENT") throw error;
     }
-    const age = statSync(this.lockPath, { throwIfNoEntry: false })?.mtimeMs;
-    if (age !== undefined && Date.now() - age > this.staleMs) {
+    const seen = statSync(this.lockPath, { throwIfNoEntry: false });
+    if (seen !== undefined && Date.now() - seen.mtimeMs > this.staleMs) {
+      this.options.raceHook?.("stale-judged");
       try {
-        rmSync(this.lockPath, { force: true });
+        breakStaleLock(this.lockPath, seen, this.staleMs);
       } catch {
         // Someone else broke it first, or we cannot remove it at all; either
         // way pause and retry until the deadline rather than spinning.

@@ -1,10 +1,10 @@
-// Flow 520 AC7: the worker picks the previous round of a new attempt with selectPriorAttempt alone, over the attempts of
-// the same Review from earlier rounds; the old "completed + complete + same options key" rule is gone.
+// Flow 520 AC7: the worker hands the executor every usable attempt of the same Review from earlier rounds, in the order
+// to try them (update-round.ts previousRunInputs); the old "completed + complete + same options key" rule is gone.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DESK_RUN_SCOPE, type DeskResult, type DeskRun } from "./desk-run-types";
-import { earlierRoundAttempts, previousRoundAttempt, previousRoundAttempts, previousRunInputs } from "./update-round";
+import { earlierRoundAttempts, previousRoundAttempts, previousRunInputs } from "./update-round";
 
 const SHA = (c: string): string => c.repeat(40);
 /** Overrides may set a field to undefined to model a legacy record that lacks it. */
@@ -44,7 +44,10 @@ function run(id: string, over: Loose<DeskRun> = {}): DeskRun {
 /** The attempt being executed: round 2 on a newer head of the same Review. */
 const current = run("current", { headSha: SHA("c"), round: 2, state: "running", result: null, effectiveOptionsKey: "settings-B" });
 
-describe("previousRoundAttempt", () => {
+/** Test-local: the first candidate. The worker passes the whole ordered list; the executor falls back (T14 B1). */
+const previousRoundAttempt = (runs: readonly DeskRun[], at: DeskRun) => previousRoundAttempts(runs, at)[0];
+
+describe("previousRoundAttempts", () => {
   test("a partial attempt of the previous round, run with other settings, is the previous round and is marked partial", () => {
     const partial = run("partial", { state: "partial", result: result({ coverage: "partial" }), effectiveOptionsKey: "settings-A" });
     expect(previousRoundAttempt([current, partial], current)).toEqual({ attempt: partial, partial: true });
@@ -89,13 +92,13 @@ describe("previousRoundAttempt", () => {
     expect(earlierRoundAttempts(runs, current).map((item) => item.id)).toEqual(["kept"]);
   });
 
-  test("T14: the executor input carries each candidate's run directory and partial flag, in order", () => {
+  test("T14, T16 B3: the executor input carries each candidate's run directory, partial flag and reviewed range, in order", () => {
     const round3 = run("current", { headSha: SHA("d"), round: 3, state: "running", result: null });
     const round2 = run("round-2", { headSha: SHA("c"), round: 2, state: "partial", result: result({ coverage: "partial" }) });
     const round1 = run("round-1", { round: 1 });
     expect(previousRunInputs([round3, round2, round1], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([
-      { runDir: "/runs/round-2", partial: true },
-      { runDir: "/runs/round-1", partial: false },
+      { runDir: "/runs/round-2", partial: true, baseSha: SHA("a"), headSha: SHA("c") },
+      { runDir: "/runs/round-1", partial: false, baseSha: SHA("a"), headSha: SHA("b") },
     ]);
     expect(previousRunInputs([round3], round3, (attemptId) => `/runs/${attemptId}`)).toEqual([]);
   });

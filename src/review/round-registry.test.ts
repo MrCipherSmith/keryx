@@ -1,7 +1,7 @@
 // Flow 520 T14: the round registry's own guarantees — a desk-partial record never vouches for a finished round (B4),
 // and an append racing a compaction is never lost (B3).
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { packageFacts } from "./round-record";
@@ -18,6 +18,7 @@ import {
   type RoundRegistryEntry,
 } from "./round-registry";
 import { isolateGitDiscovery } from "./test-git-fixture";
+import { withFileLock } from "../lib/file-lock";
 
 const HEAD = "a".repeat(40);
 let root: string;
@@ -64,33 +65,51 @@ test("T14 B4: a desk-partial record vouches only as a partial round, never throu
 const entry = (packageId: string, at: string): RoundRegistryEntry => ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: HEAD,
   manifestSha256: "b".repeat(64), findingsSha256: null, completedAt: at, event: "complete" });
 
-test("T14 B3: an append from another process while a compaction runs survives it", async () => {
+test("T14 B3: an append from another process while a compaction runs waits for it and survives it", async () => {
   const identity = "remote:race";
   const file = roundRegistryFile(identity, dataDir);
   mkdirSync(path.dirname(file), { recursive: true });
   const line = `${JSON.stringify(entry("old", "x".repeat(300)))}\n`;
   writeFileSync(file, line.repeat(Math.ceil(REGISTRY_COMPACT_BYTES / line.length) + 10));
-  const marker = path.join(root, "appended");
+  const started = path.join(root, "started");
   const script = path.join(root, "append.ts");
   writeFileSync(script, [
     `import { writeFileSync } from "node:fs";`,
     `import { appendRoundRegistry } from ${JSON.stringify(path.join(import.meta.dir, "round-registry.ts"))};`,
+    `writeFileSync(${JSON.stringify(started)}, "started");`,
     `appendRoundRegistry(${JSON.stringify(identity)}, ${JSON.stringify(entry("concurrent", "now"))}, ${JSON.stringify(dataDir)});`,
-    `writeFileSync(${JSON.stringify(marker)}, "done");`,
   ].join("\n"));
   let child: ReturnType<typeof Bun.spawn> | undefined;
+  let heldDuringCompaction: boolean | undefined;
   const written = appendRoundRegistry(identity, entry("compactor", "now"), dataDir, {
     beforeCompactionWrite() {
-      // Another writer starts between the compaction's read and its rename. Without the lock it appends at once, and the
-      // rename would drop that line; with it, it waits. Either way give it a bounded window to land before the rename.
+      // Between the compaction's read and its rename nobody else may take the registry lock: an append landing here
+      // would be dropped by the rename. A non-waiting acquire must fail.
+      heldDuringCompaction = withFileLock(`${file}.lock`, () => true, { timeoutMs: 0 }) === null;
+      // Another writer starts here; it must queue behind the lock. Wait until it is running (a state, not a time window).
       child = Bun.spawn([process.execPath, script], { cwd: root, stdout: "ignore", stderr: "inherit" });
-      const until = Date.now() + 2_000;
-      while (!existsSync(marker) && Date.now() < until) Bun.sleepSync(20);
+      const limit = Date.now() + 20_000;
+      while (!existsSync(started)) {
+        if (Date.now() > limit) throw new Error("the concurrent writer never started");
+        Bun.sleepSync(5);
+      }
     },
   });
+  expect(heldDuringCompaction).toBe(true);
   expect(written.compacted).toBeGreaterThan(500);
   expect(child).toBeDefined();
   expect(await child!.exited).toBe(0);
   expect(readRoundRegistry(identity, dataDir).map((item) => item.packageId)).toEqual(["old", "compactor", "concurrent"]);
   expect(existsSync(`${file}.lock`)).toBe(false);
 }, 30_000);
+
+test("T16: a registry lock another process holds is reported, not waited out silently or bypassed", () => {
+  const identity = "remote:held";
+  const file = roundRegistryFile(identity, dataDir);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(`${file}.lock`, "live-holder");
+  expect(() => appendRoundRegistry(identity, entry("blocked", "now"), dataDir, { lockTimeoutMs: 50 }))
+    .toThrow(`the local round registry ${file} is locked by another keryx process; the entry was not recorded`);
+  expect(existsSync(file)).toBe(false);
+  expect(readFileSync(`${file}.lock`, "utf8")).toBe("live-holder");
+});

@@ -18,7 +18,7 @@ import { buildRoundBlock, PUBLISHED_BODY_LIMIT, type ReviewEvent } from "./publi
 import { computeReadiness, failingItems } from "./readiness";
 import { readRoundNumber } from "./round-record";
 import type { ManagedReviewManifest } from "./types";
-import { earlierRoundAttempts, newerRoundOf } from "./update-round";
+import { earlierRoundAttempts, newerRoundOf, type NewerRound } from "./update-round";
 import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
 
 const uuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -130,12 +130,14 @@ function headMovedLine(moved: HeadMoved): string {
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
   key: DeskRunKey; auth: GithubConnection; request: Operation; current: boolean; headMoved?: HeadMoved; cache: PreviewCache;
+  /** The pull request is open on the reviewed base. */
+  open: boolean;
   /** Earlier-round attempts of the same Review, newest first: an attempt without a draft of its own takes their answers. */
   earlier: readonly string[];
   /** A later round of the same Review exists: this attempt is superseded and is not published as is (T14 B6). */
-  newerRound?: number | undefined;
+  newerRound?: NewerRound | undefined;
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current, headMoved, cache, earlier, newerRound } = input;
+  const { cwd, directory, run, key, auth, request, current, open, headMoved, cache, earlier, newerRound } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -293,9 +295,10 @@ async function prepare(input: {
     await json<string>(directory, DESK_TEMPLATE_SELECTION, 128) !== reportTemplateFingerprint(overlay);
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
-    : !current && newerRound !== undefined
-      ? `Round ${newerRound} of this review is newer. Publish from that round. You can still save this draft locally.`
-    : !current && !headMoved ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    // A closed pull request or a changed base comes first: no round of this review can publish then (T16 B2).
+    : !current && (!open || !headMoved && newerRound === undefined)
+      ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    : !current && newerRound !== undefined ? supersededReason(newerRound)
     : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
     : overlay?.kind === "slots" && !settings.general ? "Enable General comment to include the project report overlay."
@@ -318,6 +321,13 @@ async function prepare(input: {
     ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : skipped ? { skipped: true } : {}),
     ...(headMoved && { headMoved }) },
     comments, publicationBody: body, ...(discussion && { discussion }) };
+}
+
+/** Why a superseded attempt is not published, in terms of what its newer round can do (T16 B1). */
+function supersededReason({ round, status }: NewerRound): string {
+  if (status === "running") return `Round ${round} of this review is still running. Publish from it when it finishes. You can still save this draft locally.`;
+  if (status === "no-result") return `Round ${round} of this review is newer but has no result. Start a new round or save this draft locally.`;
+  return `Round ${round} of this review is newer. Publish from that round. You can still save this draft locally.`;
 }
 
 function englishReviewText(body: string): boolean {
@@ -351,10 +361,11 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     try {
       const found = store.byId(request.id);
       if (!found) return { attempt: found, earlier: [] as string[], newerRound: undefined };
-      // One rule for the attempts before this round (update-round.ts): same Review, earlier rounds, not withdrawn.
-      const runs = store.history(found.key).runs;
-      return { attempt: found, newerRound: newerRoundOf(runs, found.run),
-        earlier: earlierRoundAttempts(runs, found.run).slice(0, answerSourceLimit).map(item => store.directory(item.id)) };
+      // One rule for the attempts before this round (update-round.ts): same Review, earlier rounds, not withdrawn. The
+      // rules read placement only, so the lean query serves them without reports, receipts or transcripts (T16 B6).
+      const placements = store.roundPlacements(found.key);
+      return { attempt: found, newerRound: newerRoundOf(placements, found.run),
+        earlier: earlierRoundAttempts(placements, found.run).slice(0, answerSourceLimit).map(item => store.directory(item.id)) };
     } finally { store.close(); }
   })();
   const run = attempt?.run;
@@ -380,7 +391,7 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     ? { reviewedHead: run.headSha, currentHead: pr.headRefOid } : undefined;
   // The write requires the PR exactly as rendered: the reviewed range, or the as-is variant's current head.
   const expected = headMoved ? { baseSha: run.baseSha, headSha: headMoved.currentHead } : run;
-  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, ...(headMoved && { headMoved }), cache, earlier, newerRound });
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, open, ...(headMoved && { headMoved }), cache, earlier, newerRound });
   if (request.kind === "preview") {
     const { state } = await render();
     verifyGithubBindingUnchanged(connection);

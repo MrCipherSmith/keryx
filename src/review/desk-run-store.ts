@@ -9,10 +9,11 @@ import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/confi
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
 import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
-import { canContinueDeskRun, DESK_RUN_SCOPE } from "./desk-run-types";
+import { canContinueDeskRun, DESK_RUN_SCOPE, type DeskReviewAction } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
 import type { DeskFinish, DeskQuestion, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
+import type { RoundPlacement } from "./update-round";
 
 export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
 export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
@@ -487,6 +488,31 @@ export class DeskRunStore {
       return run;
     });
     return { version: 1, runs };
+  }
+
+  /**
+   * Read-only, for the round placement rules (update-round.ts, flow 520 T16 B6): each attempt of one pull request's
+   * history with only its placement and outcome, newest first, in {@link history}'s order and over the same rows (a deleted
+   * attempt is left out, a recoverable one reads as failed). No report, receipt, transcript or reviewer progress is read.
+   */
+  roundPlacements(key: DeskRunKey): RoundPlacement[] {
+    type Item = { id: string; state: string; source: DeskRun["source"]; action: string | null; baseSha: string; headSha: string;
+      reviewed: number; reviewId: string | null; round: number | null };
+    const placement = this.placement();
+    const rows = this.db.query<Item, [string, number, string]>(`SELECT id, state,
+        json_extract(details,'$.source') AS source, json_extract(details,'$.decision.action') AS action,
+        json_extract(details,'$.baseSha') AS baseSha, json_extract(details,'$.headSha') AS headSha,
+        coalesce(json_type(details,'$.result.reviewed') = 'object', 0) AS reviewed,
+        ${placement.reviewId} AS reviewId, ${placement.round} AS round
+      FROM runs WHERE repo=? AND pr=? AND viewer=? AND coalesce(json_extract(details,'$.decision.action'),'')!='delete'
+      ORDER BY json_extract(details,'$.createdAt') DESC, rowid DESC`).all(key.repositoryId, key.number, key.viewer);
+    return rows.map((row) => ({
+      id: row.id, source: row.source, state: (row.state === "recoverable" ? "failed" : row.state) as DeskRun["state"],
+      baseSha: row.baseSha, headSha: row.headSha,
+      ...(typeof row.reviewId === "string" && { reviewId: row.reviewId, ...(typeof row.round === "number" && { round: row.round }) }),
+      ...(row.action !== null && { decision: { action: row.action as DeskReviewAction } }),
+      result: row.reviewed ? { reviewed: true } : null,
+    }));
   }
 
   attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {

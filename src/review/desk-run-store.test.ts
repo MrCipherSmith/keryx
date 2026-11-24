@@ -1041,3 +1041,32 @@ test("a Review whose attempts are all archived is still listed; an interrupted a
     [13, [[interrupted, false, "failed"]]], [12, [[id, true, "completed"]]],
   ]);
 });
+
+test("T16 B6: roundPlacements answers the placement rules from the same rows as history, without reports", () => {
+  const first = started();
+  store.end(first, finish);
+  const second = store.request("/project", key, next)!;
+  store.end(store.byId(second)!, { state: "failed", phase: "Failed", reason: "x", result: null });
+  const archived = store.byId(first.run.id)!;
+  archived.run.decision = { action: "archive", reason: "r", at: "2026-11-24T01:00:00.000Z" };
+  store.save(archived);
+  const third = store.request("/project", key, { ...revision, headSha: "d".repeat(40) })!;
+  const deleted = store.byId(third)!;
+  deleted.run.decision = { action: "delete", reason: "r", at: "2026-11-24T01:00:00.000Z" };
+  store.save(deleted);
+  store.request("/project", other, revision);
+
+  const placements = store.roundPlacements(key);
+  const history = store.history(key).runs;
+  expect(placements.map((item) => item.id)).toEqual(history.map((run) => run.id));
+  expect(placements.map((item) => item.id)).not.toContain(third);
+  for (const [index, item] of placements.entries()) {
+    const run = history[index]!;
+    expect(item).toEqual({ id: run.id, source: run.source, state: run.state, baseSha: run.baseSha, headSha: run.headSha,
+      reviewId: run.reviewId, round: run.round, ...(run.decision && { decision: { action: run.decision.action } }),
+      result: run.result?.reviewed ? { reviewed: true } : null });
+    expect(Object.keys(item)).not.toContain("report");
+  }
+  expect(placements.find((item) => item.id === first.run.id)).toMatchObject({ decision: { action: "archive" }, result: { reviewed: true } });
+  expect(placements.find((item) => item.id === second)).toMatchObject({ state: "failed", result: null, round: 2 });
+});

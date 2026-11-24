@@ -11,7 +11,7 @@ const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: 
 const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
 const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
   "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS",
-  "FIXTURE_COMPARE", "FIXTURE_COMPARE_READS", "FIXTURE_DISCUSSION", "FIXTURE_DISCUSSION_READS"] as const;
+  "FIXTURE_COMPARE", "FIXTURE_COMPARE_READS", "FIXTURE_DISCUSSION", "FIXTURE_DISCUSSION_READS", "FIXTURE_POST_FAIL"] as const;
 let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
 let restoreGit: () => void;
 let root: string;
@@ -71,6 +71,7 @@ beforeEach(() => {
   delete process.env.GH_TOKEN;
   delete process.env.GITHUB_TOKEN;
   delete process.env.FIXTURE_NAMED_PR;
+  delete process.env.FIXTURE_POST_FAIL;
   setHead(revision.headSha);
   writeFileSync(process.env.FIXTURE_DIFF, "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n");
   const gh = path.join(root, "gh");
@@ -83,7 +84,9 @@ beforeEach(() => {
     '  api:--paginate) printf x >> "$FIXTURE_DISCUSSION_READS"; cat "$FIXTURE_DISCUSSION" ;;',
     `  api:repos/*/compare/*) printf '%s %s %s\\n' "$4" "$5" "$6" >> "$FIXTURE_COMPARE_READS"; read -r status < "$FIXTURE_COMPARE"`,
     `    case "$status" in fail:*) printf '%s\\n' "\${status#fail:}" >&2; exit 1 ;; *) printf '%s\\n' "$status" ;; esac ;;`,
-    '  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
+    // FIXTURE_POST_FAIL: the review POST fails with this stderr line, as gh reports an HTTP error.
+    '  api:--method) if [ -n "$FIXTURE_POST_FAIL" ]; then cat > /dev/null; printf \'%s\\n\' "$FIXTURE_POST_FAIL" >&2; exit 1; fi;' +
+      ' cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
     "  *) exit 1 ;;",
     "esac",
   ].join("\n"));
@@ -207,15 +210,19 @@ test("a head that no longer contains the reviewed commit keeps the refusal and p
   const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
     verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
   // A force-push or rebase (diverged), an older head (behind), and a compare call that fails for any reason.
-  for (const status of ["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"]) {
+  const statuses = ["diverged", "behind", "fail:HTTP 404: Not Found", "fail:connection reset"];
+  for (const status of statuses) {
     setCompare(status);
-    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+    // Each status is really previewed: a refresh asks GitHub again instead of reusing the previous definitive answer.
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings, refresh: true });
     expect(preview.headMoved).toBeUndefined();
     expect(preview.body).not.toContain("Reviewed commit");
     expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
     await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
       .rejects.toThrow("revision moved");
   }
+  // One compare per previewed status, plus one per refused submit whose cached answer was a failure (not cached).
+  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n").length).toBeGreaterThanOrEqual(statuses.length);
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
 });
 
@@ -245,9 +252,37 @@ test("a moved head re-reads the discussion an overlay requires, and a changed di
   expect(preview.canSubmit).toBe(true);
   expect(reads("FIXTURE_DISCUSSION_READS")).toBe("xxx");
   writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":1,"body":"A new comment"}]]\n');
+  // Changed before the submit: the submit's own render differs from the preview, so the digest refuses it.
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmFixture))
-    .rejects.toThrow(/^stale:/);
+    .rejects.toThrow("stale: The review preview changed");
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("a discussion that changes while the operator confirms is caught by the write-time re-read", async () => {
+  installDiscussionOverlay();
+  setHead(movedHead);
+  const settings = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
+    verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  expect(preview.canSubmit).toBe(true);
+  const confirmWhileSomeoneComments = async () => {
+    writeFileSync(process.env.FIXTURE_DISCUSSION!, '[[{"id":2,"body":"Posted during confirmation"}]]\n');
+  };
+  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings, digest: preview.digest }, confirmWhileSomeoneComments))
+    .rejects.toThrow("stale: The pull request discussion changed");
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
+});
+
+test("a review GitHub rejects with HTTP 422 is reported with the verdict hint and stays retryable", async () => {
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id,
+    settings: { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "changes", verdictOverride: "changes",
+      answers: { "fixture#F-002": "dismiss" } } });
+  expect(preview.canSubmit).toBe(true);
+  process.env.FIXTURE_POST_FAIL = "gh: Unprocessable Entity (HTTP 422)";
+  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: preview.settings, digest: preview.digest }, confirmFixture))
+    .rejects.toThrow("configuration: GitHub rejected this review. Check the verdict and inline comments.");
+  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
 });
 
 test("a moved head ignores a requested verdict and inline comments", async () => {
@@ -473,6 +508,8 @@ test("T14: answers come from the newest earlier round that saved a draft, walkin
 });
 
 test("T14: an attempt of another account or pull request never lends its answers", async () => {
+  // Positive control: the same Review's round 1 answers "uphold"; the newer foreign drafts below answer "dismiss".
+  roundOneDraft({ "fixture#F-002": "uphold" });
   for (const other of [{ ...key, viewer: "other-reviewer" }, { ...key, number: 8 }]) {
     const foreign = finishedAttempt(other, revision.headSha);
     json(path.join(foreign.attemptDirectory, "publication-draft.json"), { savedAt: "2026-11-24T00:00:00.000Z", settings: {
@@ -480,7 +517,7 @@ test("T14: an attempt of another account or pull request never lends its answers
       answers: { "fixture#F-002": "dismiss" } } });
   }
   const { next } = updateRound();
-  expect((await requestDeskPublication(project, key, { kind: "preview", id: next })).settings.answers).toEqual({});
+  expect((await requestDeskPublication(project, key, { kind: "preview", id: next })).settings.answers).toEqual({ "fixture#F-002": "uphold" });
 });
 
 test("T14 B2: an archived earlier round's draft answers are not carried", async () => {
@@ -540,8 +577,88 @@ test("T14 B6: an attempt superseded by a newer round of its Review is not offere
     keryxTemplate: true, overlay: true, verdict: "comment", verdictOverride: "comment", answers: { "fixture#F-002": "dismiss" } } });
   expect(preview.headMoved).toBeUndefined();
   expect(preview.canSubmit).toBe(false);
-  expect(preview.blockedReason).toContain("Round 2 of this review is newer");
+  expect(preview.blockedReason).toBe("Round 2 of this review is newer. Publish from that round. You can still save this draft locally.");
   expect(reads("FIXTURE_COMPARE_READS")).toBe("");
+});
+
+const answeredComment = { inline: false, general: true, keryxTemplate: true, overlay: true, verdict: "comment" as const,
+  verdictOverride: "comment" as const, answers: { "fixture#F-002": "dismiss" as const } };
+
+/** Round 2 of the same Review on `movedHead`, left in `state` (queued when only requested). */
+function newerRound(state: "queued" | "failed" | "cancelled"): string {
+  const store = new DeskRunStore();
+  try {
+    const next = store.request(project, key, { baseSha: revision.baseSha, headSha: movedHead })!;
+    if (state !== "queued") store.end(store.byId(next)!, { state, phase: state, reason: "Fixture", result: null });
+    expect(store.byId(next)!.run.round).toBe(2);
+    return next;
+  } finally {
+    store.close();
+  }
+}
+
+test("T16 B1: the superseded reason says what the newer round can do", async () => {
+  setHead(movedHead);
+  newerRound("queued");
+  const running = await requestDeskPublication(project, key, { kind: "preview", id, settings: answeredComment });
+  expect(running.blockedReason).toBe("Round 2 of this review is still running. Publish from it when it finishes. You can still save this draft locally.");
+  expect(running.headMoved).toBeUndefined();
+});
+
+test("T16 B1: a newer round that failed or was cancelled has no result to publish from", async () => {
+  setHead(movedHead);
+  for (const state of ["failed", "cancelled"] as const) {
+    const store = new DeskRunStore();
+    try {
+      for (const row of store.history(key).runs) {
+        const attempt = store.byId(row.id)!;
+        if (attempt.run.round === 2) { attempt.run.decision = { action: "delete", reason: "reset", at: "2026-11-24T01:00:00.000Z" }; store.save(attempt); }
+      }
+    } finally {
+      store.close();
+    }
+    newerRound(state);
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: answeredComment });
+    expect(preview.blockedReason).toBe("Round 2 of this review is newer but has no result. Start a new round or save this draft locally.");
+    expect(preview.canSubmit).toBe(false);
+  }
+});
+
+for (const action of ["archive", "delete"] as const) {
+  test(`T16 B1: a newer round withdrawn by ${action} no longer supersedes the round before it`, async () => {
+    const { next } = updateRound();
+    const store = new DeskRunStore();
+    try {
+      const newer = store.byId(next)!;
+      newer.run.decision = { action, reason: "Withdrawn", at: "2026-11-24T01:00:00.000Z" };
+      store.save(newer);
+    } finally {
+      store.close();
+    }
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: answeredComment });
+    expect(preview.blockedReason).toBeUndefined();
+    expect(preview.headMoved).toEqual({ reviewedHead: revision.headSha, currentHead: movedHead });
+  });
+}
+
+test("T16 B2: a superseded attempt on a closed pull request or a changed base gets the closed or moved reason", async () => {
+  updateRound();
+  for (const pull of [{ state: "CLOSED", headRefOid: movedHead }, { baseRefOid: "e".repeat(40), headRefOid: movedHead }]) {
+    setPull(pull);
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: answeredComment, refresh: true });
+    expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
+  }
+});
+
+test("T16: a compare status GitHub does not define is neither trusted nor cached", async () => {
+  setHead(movedHead);
+  setCompare("unexpected-status");
+  for (let i = 0; i < 2; i++) {
+    const preview = await requestDeskPublication(project, key, { kind: "preview", id, settings: answeredComment });
+    expect(preview.headMoved).toBeUndefined();
+    expect(preview.blockedReason).toBe("The pull request is closed or its revision moved. You can still save this draft locally.");
+  }
+  expect(reads("FIXTURE_COMPARE_READS").trim().split("\n")).toHaveLength(2);
 });
 
 test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {

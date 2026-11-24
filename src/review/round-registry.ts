@@ -135,6 +135,8 @@ export function compactEntries(entries: readonly RoundRegistryEntry[]): RoundReg
 /** Test seam for {@link appendRoundRegistry}: runs under the lock, after the re-read and before the compacted rewrite. */
 export interface RoundRegistryPorts {
   beforeCompactionWrite?: () => void;
+  /** How long to wait for the registry lock. Default: lib/file-lock.ts `LOCK_TIMEOUT_MS`. */
+  lockTimeoutMs?: number;
 }
 
 /**
@@ -166,7 +168,7 @@ export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry,
       return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
     }
     return { file };
-  });
+  }, ports.lockTimeoutMs === undefined ? {} : { timeoutMs: ports.lockTimeoutMs });
   if (written === null) throw new Error(`the local round registry ${file} is locked by another keryx process; the entry was not recorded`);
   return written;
 }

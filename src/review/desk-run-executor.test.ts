@@ -805,13 +805,16 @@ function previousAttempt(files: { status?: string; findings?: unknown; name?: st
   return previousRunDir;
 }
 
-type PreviousRuns = { runDir: string; partial: boolean }[];
-async function runWithPrevious(previousRuns: PreviousRuns, inspect: (checkout: string, registryDir: string) => Promise<void>) {
+/** A candidate's reviewed range defaults to the one {@link previousAttempt} writes into its manifest (base..base). */
+type PreviousRuns = { runDir: string; partial: boolean; baseSha?: string; headSha?: string }[];
+async function runWithPrevious(previousRuns: PreviousRuns, inspect: (checkout: string, registryDir: string) => Promise<void>,
+  ports: { recordPartialRound?: typeof import("./round-registry").recordPartialRound } = {}) {
   const registryDir = path.join(root, "registry");
   let inspected = false;
   let failure: unknown;
-  await executeDeskReview({ ...options(), previousRuns }, {
-    selectModel, remoteUrl: cwd, revision, registryDir,
+  const candidates = previousRuns.map((item) => ({ baseSha, headSha: baseSha, ...item }));
+  await executeDeskReview({ ...options(), previousRuns: candidates }, {
+    selectModel, remoteUrl: cwd, revision, registryDir, ...ports,
     spawn(spec) {
       const exited = inspect(spec.cwd, registryDir).then(() => { inspected = true; return 0; }, (error: unknown) => { failure = error; return 1; });
       return { exited, kill() {} };
@@ -874,4 +877,40 @@ test("T14 B1: only the first package that can be handed on reaches the checkout"
     expect(existsSync(path.join(checkout, ".metaproject/reviews/newer"))).toBe(true);
     expect(existsSync(path.join(checkout, ".metaproject/reviews/older"))).toBe(false);
   });
+});
+
+test("T16 B3: a candidate whose package names another head than its attempt is not handed on and falls through", async () => {
+  const { readRoundRegistry, repoIdentity } = await import("./round-registry");
+  const otherHead = "f".repeat(40);
+  const round2 = previousAttempt({ name: "round-2", reviewId: "round-2", findings: [priorFinding] });
+  const round1 = previousAttempt({ name: "round-1", reviewId: "round-1", status: "closed", findings: [priorFinding] });
+  const closedMismatch = previousAttempt({ name: "closed-mismatch", reviewId: "closed-mismatch", status: "closed", findings: [] });
+  await runWithPrevious([
+    { runDir: round2, partial: true, headSha: otherHead },
+    { runDir: closedMismatch, partial: false, baseSha: otherHead },
+    { runDir: round1, partial: false },
+  ], async (checkout, registryDir) => {
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-2"))).toBe(false);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/closed-mismatch"))).toBe(false);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/round-1/findings.json"))).toBe(true);
+    // The mismatching partial package was never recorded as a partial round.
+    expect(readRoundRegistry(repoIdentity(checkout), registryDir)).toEqual([]);
+  });
+});
+
+test("T16 B5: after the round registry fails once, further partial candidates are not recorded; a closed one is still tried", async () => {
+  const calls: string[] = [];
+  const failing = (packageDir: string) => {
+    calls.push(packageDir);
+    return { error: "the local round registry is locked by another keryx process; the entry was not recorded" };
+  };
+  const first = previousAttempt({ name: "partial-1", reviewId: "partial-1", findings: [priorFinding] });
+  const second = previousAttempt({ name: "partial-2", reviewId: "partial-2", findings: [priorFinding] });
+  const closed = previousAttempt({ name: "closed", reviewId: "closed", status: "closed", findings: [priorFinding] });
+  await runWithPrevious([{ runDir: first, partial: true }, { runDir: second, partial: true }, { runDir: closed, partial: false }], async (checkout) => {
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/partial-1"))).toBe(false);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/partial-2"))).toBe(false);
+    expect(existsSync(path.join(checkout, ".metaproject/reviews/closed/findings.json"))).toBe(true);
+  }, { recordPartialRound: failing });
+  expect(calls).toEqual([path.join(first, "package")]);
 });
