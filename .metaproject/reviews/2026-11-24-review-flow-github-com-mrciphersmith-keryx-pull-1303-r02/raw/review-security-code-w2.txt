@@ -1,0 +1,92 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 2)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Reviewed range: base `98bec59046d0ce30500b341e8c18ba5b767069bb` .. head `412258583206e539ce61727b9c4d71bb12fda3a0`
+- Scope mode: explicit-hash-range, payload slice `slice-02` (read in full, lines 1-2332)
+- Code files in the slice: `src/review/desk-publication-types.ts`, `desk-publication.ts`, `desk-run-executor.ts`, `desk-run-service.ts`, `head-move.ts`, `prior-round.ts`, `round-registry.ts`, `update-round.ts`, and their tests.
+- Extra context read at head (outside the slice): `prior-round.ts:730-748` (`weakReasons`) and `:900-964` (how a weak previous round is planned); `round-registry.ts:193-224` (`registryVouchesPackage`, `recordFinishedRound`); `premise-question.ts:180-204`; `desk-run-executor.ts:195-254` (checkout construction) and `:318-387` (`regularPackage`, `collectResult`). Wave-1 result `raw/review-security-code-w1.txt`.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Main question: can data a PR commits narrow a round? No.
+
+The TM-04 rule in the `prior-round.ts` header holds for the new desk-partial path. I checked four things.
+
+1. **Only Desktop writes the record.** A `desk-partial` entry is written only by `recordPartialRound`. Its one caller is `executeDeskReview` (`desk-run-executor.ts`, the `handOn` line), and it reads the package from `options.previousRunDir`. That directory is `store.directory(previous.attempt.id)` in the user's run store (`desk-run-service.ts`). The registry file lives under the user's config directory, outside every checkout. The hashes cover the manifest identity, findings.json and round.json. A PR cannot create a matching entry. The most it can do is commit a byte-identical copy of a package Desktop really ran, and that copy describes a real round.
+2. **The review checkout holds no PR files.** The checkout runs `sparse-checkout set --no-cone '!/*'` and then restores only the control paths from the verified default-branch commit (`desk-run-executor.ts:229-241`). `.metaproject/reviews` is not among them. So nothing the PR commits under `.metaproject/reviews/<id>` exists beside the copied package. A planted research.json, published.json or round.json cannot mix with the copy, and a symlinked destination cannot redirect the `cp` there. `localPackageCandidates` sees only what Desktop copied in.
+3. **A partial round never narrows coverage.** `weakReasons` adds "not completed" for every candidate whose `completed.ok` is false (`prior-round.ts:740`). For a weak previous round, `findPreviousRound` adds all unchanged merge-base..head code to `newHunks` instead of `secondLookHunks` (`:924-929`). The test at slice line 2099 asserts this. Trusting a partial round therefore changes how hunks are labelled (fix vs new) and which prior findings are carried. It never shrinks what is read.
+4. **A partial vouch cannot pass as completion.** `packageTrust` filters `desk-partial` out of the completion vouch (`registry.filter(entry => entry.event !== "desk-partial")`), and `partialRoundVouch` accepts only `desk-partial` entries that have a non-null findings hash. The test at slice line 2138 covers a branch committing the partial files marked `closed`: the result is fallback-first.
+
+The new path reuses one existing rule: the desk-partial branch returns before the git-history merged-base check and the branch-commit check, just as `vouched` already did for finished rounds ("whatever commit carries them"). This is the stated same-user limit and adds no new exposure. If an agent edits the copied package before `review start`, the hashes stop matching, the round falls back to fallback-first, and the system fails closed.
+
+### Other code in the slice
+- **`desk-publication.ts`, as-is variant (T11/T13):** both SHAs in the `compare/${reviewedHead}...${currentHead}` call pass `sha.test` (`run.headSha` at the access gate, `pr.headRefOid` before the call), so the gh argument cannot be injected. The `aheadHead` cache is read only for preview requests. On submit, `previewSubject` skips the cache file, so compare runs fresh. `verifyDeskSubject(expected)` then binds the write to the live head, and the digest includes `currentHead`. Automatic publication refuses a moved head before any compare or discussion read. The round 1 fix holds.
+- **`earlierAnswers` / `earlierAttemptDirectories`:** these read `publication-draft.json` only from run-store directories linked by `previousRunId`. `sameReview` filters by repo, repositoryId, viewer, number and reviewId, and the walk is bounded by `answerSourceLimit` (8) and a `seen` set. Carried answers are applied only when they match the current question ids and option ids, or equal `uphold` or `dismiss`. Verdict and other settings are not carried.
+- **`previousRoundAttempt` / `selectPriorAttempt`:** these operate on `store.history(key)`, which is scoped to the same PR key and viewer. Dropping the options-key comparison lets a round run with other settings be the previous round. That round is the user's own, and coverage weakness still comes from its package record. No PR input reaches this code.
+- **`head-move.ts`:** pure mapping. `parseOnHeadMove` allowlists stored values.
+
+### Findings
+
+### [F-001] `registryVouchesPackage` counts a `desk-partial` entry as a vouch, unlike `packageTrust`
+- **Severity**: info
+- **File**: src/review/round-registry.ts:193-199 (in the slice's context hunk, unchanged lines whose meaning the new event type changes)
+- **Attack vector**: none shown. The upgrade below needs a draft package that has a desk-partial entry and also has completion evidence, and nothing in this range produces that package.
+- **Problem**: the new `desk-partial` event is excluded from the completion vouch in `packageTrust` (`prior-round.ts:344`). The registry's other reader, `registryVouchesPackage`, still calls `registryVouches` over all entries. `answerPremiseQuestion` (`premise-question.ts:193`) uses that result to decide whether to re-record the package as `decide-premise`, which is a full-strength event, after a premise answer. `recordFinishedRound` refuses any package without completion evidence (`round-registry.ts:220`), so today a partial package is never upgraded. The two readers still disagree about what a `desk-partial` entry means.
+- **Why it matters**: the protection depends on one condition in another function. If `recordFinishedRound`'s completion gate is ever relaxed, a premise answer on a partial package would turn Desktop's weak vouch into a finished-round vouch.
+- **Fix**: filter `desk-partial` in `registryVouchesPackage` too, or move the filter into one helper (`completionVouch`) that both readers call.
+- **Settles it**: a test that answers a premise on a desk-partial-vouched draft and asserts that no `decide-premise` entry appears.
+
+### Clean Areas
+- **Injection:** the compare and gh arguments are SHA-validated, and `reviewId` matches `/^[\w.-]+$/` and is not `.` or `..` before it is used as a path. No new shell strings, queries, `eval` or HTML.
+- **Auth/IDOR:** the publication access gate is unchanged. Earlier-attempt reads are limited to the same key and Review. The write re-verifies viewer, repository id, OPEN, base and head.
+- **Path traversal:** the `cp` destination is under a sparse checkout with no PR files. The source is checked by `regularPackage` (only regular files and directories, no symlinks).
+- **Secrets/logging:** nothing new is logged. The preview cache key hashes the tokens, as before.
+- **Crypto, CSRF, open redirect:** not applicable.
+
+### Round obligations / carried notes
+- Wave-1 F-001 (Update review carries `autoPublish`) is not repeated. In this slice, the automatic publication gate (`desk-publication.ts`, access check) admits any attempt that is completed, has `run.options.autoPublish` and has no decision. An update round started with copied options would pass it at its own head. I did not trace who calls `publishCompletedDeskReview` after a round completes.
+- Round 1 security info (CLI `confirmSubmit` prompt) is outside this slice.
+
+### Not verified
+- No tests were run (read-only reviewer).
+- I did not verify Bun's `fs.promises.cp` behaviour on symlinked destinations, because the sparse checkout makes it moot here.
+- `keryx gdgraph affected` was not run. I enumerated the registry readers with `keryx ctx rg "registryVouches\(|readRoundRegistry\(|readRoundRegistryReport\(" src`: three readers, of which only `packageTrust` filters `desk-partial`.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "The prior-round trust change keeps TM-04: data a PR commits cannot narrow a round. Only the Desktop executor writes a desk-partial registry entry, from the user's run store into a registry outside the checkout. The review checkout is sparse with no PR files, so nothing the PR commits sits beside the copied package. A partial previous round is always weak ('not completed'), so all unchanged merge-base..head code is planned as new and coverage never shrinks. packageTrust keeps desk-partial entries out of the completion vouch. The as-is publication path validates SHAs, re-runs compare on submit and re-verifies the live head before the write. One info: registryVouchesPackage (the premise re-record gate) does not filter desk-partial as packageTrust does. Today only recordFinishedRound's completion gate stops it.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/round-registry.ts",
+      "line": 199,
+      "quote": "return registryVouches(readRoundRegistry(identity, options.dir), packageIdOf(packageDir, facts.manifest), facts.hashes) !== undefined;",
+      "problem": "The new desk-partial event is filtered out of the completion vouch in packageTrust (prior-round.ts:344), but registryVouchesPackage, which answerPremiseQuestion uses to decide whether to re-record a package as decide-premise (a full-strength event), still counts it. Today recordFinishedRound refuses packages without completion evidence (round-registry.ts:220), so no upgrade happens. The two registry readers disagree about what a desk-partial entry vouches for.",
+      "impact": "Not reachable in this range. If recordFinishedRound's completion gate is relaxed, a premise answer on a Desktop partial package would turn its weak vouch into a finished-round vouch.",
+      "suggested_fix": "Filter event !== 'desk-partial' in registryVouchesPackage too, or have both readers call one completion-vouch helper. Add a test that a premise answer on a desk-partial-vouched draft writes no decide-premise entry.",
+      "evidence": "keryx ctx rg over src for registryVouches( / readRoundRegistry( / readRoundRegistryReport(: three readers. prior-round.ts:344 filters desk-partial; round-registry.ts:199 does not; premise-question.ts:193 and :200 use it to gate recordFinishedRound(…, 'decide-premise').",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full, lines 1-2332", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant, the registry readers were enumerated with ctx rg); wiki_used: no (not-relevant, the trust model is stated in the prior-round.ts header); ctx_used: yes; raw_rg_used: no.

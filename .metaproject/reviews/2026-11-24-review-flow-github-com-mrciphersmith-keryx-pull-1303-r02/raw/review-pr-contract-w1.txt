@@ -1,0 +1,129 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-pr-contract — PR #1303, round 2 (slice-01, read in full)
+
+Inputs read: brief.md, driver, payload keys (review_context.pr.body matches pr-context.md "Intent"), pr-context.md, slice-01.diff (all 2268 lines), round 1 raw/review-pr-contract-w1.txt. Range: 98bec5904..412258583 (stage 3 only). Working tree is at head 412258583.
+
+Slice-01 holds: flow 520 files (acceptance-criteria, context, description, journal, plan, tasks, flow.json, resolved/T5–T7,T11–T13), ReviewPublishDialog.tsx, ReviewRuns.tsx, ReviewWorkspace.tsx, reviews/ReviewPanel.dom.test.tsx, docs/docs/desktop-app.md. The backend files (desk-publication.ts, desk-run-service.ts, desk-run-executor.ts, round-registry.ts, prior-round.ts, update-round.ts, head-move.ts and their tests) are NOT in this slice; claims that rest only on them are marked "outside slice" below, not verified here.
+
+## Round 1 verification
+
+- PC-001 (docs/docs/desktop-app.md said a moved PR can only be saved locally): FIXED. Commit c8fbdc947 is not an ancestor of head (it was rebased); its content landed as dca759d85 ("docs(desktop): describe publishing as is after the PR moved on"), in range. desktop-app.md:143-148 now reads "If new commits were pushed on top of the reviewed commit, the dialog names both commits and offers **Publish as is for** the reviewed commit instead ... If the PR was closed, its base changed, or its history was rewritten, you can still save the draft locally." Matches the diff (forced Comment, no inline, first-line notice, force-push refusal from T11). One gap remains in the same paragraph for the T13 button — filed as PC-001 below (new, not a regression of the round 1 fix).
+- PC-002 (info, "encodes the spec table"): body wording unchanged ("`headMoveResponse` encodes the spec table"). Not re-filed; head-move.ts is outside this slice. Still open as info.
+- PC-003 (info, per-file test counts): the body no longer states per-file counts; it now says "`bun test` passes for the review suites listed in the flow's acceptance criteria". The round 1 row is moot; the new wording has its own contradiction, PC-002 below.
+
+## Checklist form
+
+The PR body has no checkbox list. Each stated claim is one row.
+
+| Box or claim (quoted) | State | What the diff shows | Result |
+|---|---|---|---|
+| "In the head-moved dialog, the primary action is 'Update review to `<sha>`'" | claim | ReviewPublishDialog.tsx: `{updateOffered && headMoved && onUpdateReview && <button type="button" className="btn btn-primary" ...>Update review to <code>{shortSha(headMoved.currentHead)}</code></button>}` rendered first in the footer; the submit button becomes `className={updateOffered ? "btn" : "btn btn-primary"}` | holds |
+| "It starts an attempt on the current head with the reviewed attempt's options" | claim | ReviewWorkspace.tsx `local.request({ kind: "start", ...revision, ...(reviewed.options && { options: reviewed.options }) })`; ReviewRuns.tsx passes `{ baseSha: run.baseSha, headSha: currentHead }`; DOM test asserts `[{ kind: "start", baseSha: "base", headSha: currentHead, options }]` | holds |
+| "Stage 2's store makes that attempt round N+1 of the same Review" | claim | desk-run-store.ts is not in the stage 3 range (git diff --stat 98bec5904..head) | outside slice; consistent (no store change claimed) |
+| "Builds on the previous round ... `selectPriorAttempt` ... replaces the old rule" | claim | update-round.ts / desk-run-service.ts in range per stat, not in this slice | outside slice |
+| "Partial previous round ... `desk-partial` record ... Only Desktop's executor writes that record" | claim | round-registry.ts / desk-run-executor.ts / prior-round.ts in range, not in slice; journal T12 note matches | outside slice |
+| "Answers carry over ... matched by finding id. The new round's own draft always wins." | claim | desk-publication.ts in range, not in slice; journal T13: "answers only, own draft wins" | outside slice |
+| D1 items (headMoved, forced comment, first-line body, commit_id, stale preview, refusals, automatic refusal) | claim | backend not in slice; dialog side holds: notice names both commits, verdict radios and Inline `disabled={!!headMoved}`, label "Publish as is for <short>"; DOM test asserts each | dialog side holds; server side outside slice (verified in round 1 at 9e871b17f) |
+| "The dialog shows a warning that names both commits and explains why the controls are locked" | claim | `<div ... className="inline-banner tone-warn review-publish-head-moved" role="status">` "...inline comments are off because they cannot be placed on an earlier commit"; fieldsets `aria-describedby={headMovedNotice}` | holds |
+| "`on_head_move` (D2) ... `parseOnHeadMove` ... `headMoveResponse`" | claim | head-move.ts in range, not in slice | outside slice (round 1 verified) |
+| "Tests for the previous-round rules cover a partial previous round and changed settings, in the prior-round, desk-run-service, desk-run-executor and update-round tests" | claim | stat: prior-round.test.ts +105, desk-run-service.test.ts +84, desk-run-executor.test.ts +57, update-round.test.ts +92 | files present; content outside slice |
+| "`docs/docs/desktop-app.md` describes publishing as is" | claim | desktop-app.md:143-148 | holds; Update review undocumented — PC-001 |
+| "this PR does not touch `ReviewBoard.tsx`, `model.ts`, `ReviewResults.tsx`, `board-badges.ts`, `desk-run-store.ts` or `review.css`" | claim | none of them in `git diff --stat 98bec5904..412258583` | holds for the stage 3 range (the main-based PR diff includes stage 2, as the body says) |
+| Decision: "'Update review' starts the attempt directly with the previous attempt's options; it does not open the launch form. The user stays in the Reviews panel." | claim | `updateReview` calls `local.request({kind:"start"...})`, no `setLaunchCard`; `setPublishOpen(false)`, `setSessionId(null)`; DOM test asserts the new attempt's article is shown | holds |
+| Decision: "If the board has not seen the push yet, it is refreshed. If the current head already has an attempt, nothing new starts." | claim | `const boardBehind = !sameRange(card, revision); if (!boardBehind && action.open) return; ... .then(() => { if (boardBehind) onRefreshBoard?.(); })`; DOM tests for both | holds as stated for the board's known head (when the board is behind, the client does not check for an attempt on the new head; correctness is review-logic's lane) |
+| Decision: "With a moved head, Save locally stores the forced settings" | claim | backend, not in slice; dialog Save sends `settings` returned by the server | outside slice (round 1 verified) |
+| Decision: "A failed compare refuses the as-is variant: it fails closed." / "A retry on the same range builds only on earlier rounds" | claim | backend, not in slice; journal T12 "Behaviour change: a retry on the same range no longer builds on another attempt of its own round" | outside slice; consistent with journal |
+| Review: "Round 1: ... 12 reviewers. It found 0 blockers, 1 major and 11 minors." | claim | round 1 package raw/ holds 12 `*-w1.txt` files; journal.md (slice line 181-182) says "11 reviewers ... minor 10" | body matches the raw roster; the journal is the stale side. Not filed (journal is an internal log, not a reader-facing contract). |
+| Verification: "`bun test` passes for the review suites listed in the flow's acceptance criteria" | claim | AC3 command `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`; that file no longer exists (renamed by stage 2 to apps/desktop/src/reviews/ReviewPanel.dom.test.tsx, journal slice line 199) | contradicted — PC-002 |
+| Verification: "Desktop `src/review` and `src/reviews` suites pass, root and Desktop `tsc` clean", "`eslint` passes on `src/review`", ".tsx excluded from root ESLint" | claim | brief: Desktop src/review src/reviews 142 pass; tsc/eslint not in package evidence; flow.json T9 (verify) is still `"status": "todo"` | consistent with evidence for tests; tsc/eslint unverified here — PC-003 (info) |
+| Not verified: AC9, compare/422 via fixtures only, runDeskWorker not end to end, Rust CI only, out-of-scope list | claim | AC9 `[verify: judged]`; journal T12 "Not verified: runDeskWorker end to end" | consistent disclosure |
+
+## Documentation outside the diff
+
+Searched: `keryx ctx rg -i "review again|new review round|update review|Reviews tab|review round" docs README.md apps/desktop/README.md --all` (114 hits, none in docs/docs/desktop-app.md; the others are requirement/plan sources or unrelated "review round" CLI wording) and `keryx ctx rg -n "Reviews|round|Publish to GitHub" docs/docs/desktop-app.md --all` (no Reviews-tab or round section exists in the Desktop guide). Round 1 already checked docs/docs/cli-reference.md desk-publish text (still accurate).
+
+## Findings
+
+### [PC-001] The Desktop guide's head-moved paragraph omits the new primary action "Update review"
+- **Severity**: minor
+- **File**: docs/docs/desktop-app.md:143-144
+- **Problem**: The guide, updated in this range, says the head-moved dialog "names both commits and offers **Publish as is for** the reviewed commit instead." The diff (T13) makes "Update review to <sha>" the first, primary footer button of that same dialog (ReviewPublishDialog.tsx `className="btn btn-primary" ... Update review to <code>{shortSha(headMoved.currentHead)}</code>`) and demotes Publish as is to a secondary button. The PR body calls it "the primary action". No document names the button or says it starts the next round on the current head with the same settings.
+- **Why it matters**: A Desktop user who reads the guide before a pushed-to PR sees an unexplained primary button and is told only about publishing as is or saving locally; they do not learn that the recommended path is a new round that builds on the previous one and carries their keep/dismiss answers.
+- **Fix**: Add one sentence to that paragraph: the primary action **Update review to <sha>** starts the next round of the same review on the new commit with the same settings, builds on the earlier findings and pre-selects your earlier keep/dismiss answers; **Publish as is** remains available.
+
+### [PC-002] AC3's verify command points at a test file the rebase removed, while the body says the AC suites pass
+- **Severity**: minor
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md:20
+- **Problem**: PR body Verification: "`bun test` passes for the review suites listed in the flow's acceptance criteria." AC3 reads `[verify: exec \`sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'\`]` (also flow.json acKinds.AC3.check). `git ls-files | grep -i ReviewRuns.dom` returns nothing at head: stage 2 renamed it to apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (journal: "stage 2 renamed ReviewRuns.dom.test.tsx to reviews/ReviewPanel.dom.test.tsx"), where the AC3 tests now live. AC7, AC8 and AC10 were updated after the rebase; AC3 was not.
+- **Why it matters**: The command of the suite AC3 names finds no test file, so `keryx flow ac confirm 520 AC3` (exec) cannot pass as written, and a reader of the body believes every AC suite was run green. The tests themselves exist and pass (Desktop src/reviews in the brief's 142 pass); only the criterion's pointer is stale.
+- **Fix**: `keryx flow ac update 520 AC3` to `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx`, or narrow the body's claim.
+
+### [PC-003] Verification claims typecheck and lint, but the flow's verify task is still open and the package has no tsc/eslint evidence
+- **Severity**: info
+- **File**: .metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json (T9)
+- **Problem**: Body: "root and Desktop `tsc` are clean", "`eslint` passes on `src/review`". flow.json at head: T9 "Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff" has `"status": "todo"`; research-evidence holds only test runs. Unverified, not contradicted.
+- **Why it matters**: The AC8 invariant (which includes typecheck and eslint) has no recorded run in this round.
+- **Fix**: None for the body; run T9 (AC8 invariant) before flow completion. CI "Lint and typecheck: passing" at collection partly covers it.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Round 1 PC-001 is fixed (rebased as dca759d85; desktop-app.md:143-148 describes publishing as is). Every claim this slice can settle holds: Update review is the primary head-moved action, starts on the current head with the reviewed attempt's options, keeps the user in the panel, refreshes a stale board and skips a duplicate start; the untouched-file list holds for the stage 3 range. Two minors: the guide omits the new 'Update review' primary button, and AC3's verify command names a test file the stage 2 rename removed while the body says all AC suites pass. One info: tsc/eslint claimed, T9 still todo. Backend claims (desk-publication, selectPriorAttempt, desk-partial, answer carry-over) are outside this slice.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/desktop-app.md",
+      "line": 143,
+      "quote": "commits and offers **Publish as is for** the reviewed commit instead. That",
+      "problem": "The Desktop guide's head-moved paragraph names only 'Publish as is for' and the local save. The diff makes 'Update review to <sha>' the first, btn-primary footer button of that dialog (ReviewPublishDialog.tsx) and demotes Publish as is to secondary; the PR body calls it the primary action. No document describes it.",
+      "impact": "A Desktop user meets an undocumented primary button and does not learn that it starts the next round on the new commit with the same settings, building on earlier findings and carrying keep/dismiss answers.",
+      "suggested_fix": "Add a sentence: the primary action 'Update review to <sha>' starts the next round of the same review on the new commit with the same settings, builds on earlier findings and pre-selects earlier keep/dismiss answers; 'Publish as is' stays available.",
+      "evidence": "slice-01 ReviewPublishDialog.tsx `{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" ...>Update review to <code>...` and `className={updateOffered ? \"btn\" : \"btn btn-primary\"}`; docs/docs/desktop-app.md:143-148 at head. keryx ctx rg -i \"review again|new review round|update review|Reviews tab|review round\" docs README.md apps/desktop/README.md --all: no hit in desktop-app.md.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:desktop-app-doc-update-review"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+      "line": 20,
+      "quote": "[verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]",
+      "problem": "PR body: '`bun test` passes for the review suites listed in the flow's acceptance criteria.' AC3 (and flow.json acKinds.AC3.check) runs apps/desktop/src/review/ReviewRuns.dom.test.tsx, which does not exist at head: stage 2 renamed it to apps/desktop/src/reviews/ReviewPanel.dom.test.tsx (journal records the rename). AC7, AC8, AC10 were updated after the rebase; AC3 was not.",
+      "impact": "The AC3 exec check finds no test file, so confirming AC3 as written fails, and a reader of the body believes every AC suite ran green. The tests exist and pass under src/reviews.",
+      "suggested_fix": "keryx flow ac update 520 AC3 to `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`.",
+      "evidence": "slice-01 acceptance-criteria.md AC3 and flow.json acKinds.AC3; `git ls-files | grep -i ReviewRuns.dom` empty; `ls apps/desktop/src/review/ReviewRuns.dom.test.tsx` -> No such file; journal.md 'stage 2 renamed ReviewRuns.dom.test.tsx to reviews/ReviewPanel.dom.test.tsx'.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:ac3-stale-test-path"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+      "line": null,
+      "quote": "\"title\": \"Verify: backend + Desktop review suites, typecheck, lint, untouched-invariant diff\",",
+      "problem": "Body claims root and Desktop tsc clean and eslint passing on src/review. T9 (verify) is still 'todo' at head and the package holds only test-run evidence. Unverified, not contradicted.",
+      "impact": "The AC8 invariant (tests + typecheck + eslint + untouched diff) has no recorded run in this round.",
+      "suggested_fix": "Run T9 / the AC8 invariant before flow completion; no body change needed. CI 'Lint and typecheck' was passing at collection.",
+      "evidence": "slice-01 flow.json T9 status todo; research-evidence/verify-tests-to-run-1.txt, -2.txt; pr-context.md CI list.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Round obligations: round 1 PC-001 verified fixed (dca759d85, rebased from c8fbdc947). Round 1 PC-002 (info) unchanged, not re-filed. Round 1 PC-003 superseded by new body wording (see PC-002/PC-003).
+
+Not verified: backend claims (desk-publication.ts, desk-run-service.ts, desk-run-executor.ts, round-registry.ts, prior-round.ts, update-round.ts, head-move.ts) — outside slice-01; tsc/eslint results; real-PR behaviour (AC9).
+
+Routing audit: graph_used: no (not-relevant — doc search by text; contract lane needs no dependency walk); wiki_used: no (not-relevant — round 1 searched .metaproject/wiki with 0 hits for this behaviour; no new wiki surface); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no (one `git ls-files | grep` file listing, not a code search; raw git show/diff --stat with keryx:raw markers for short outputs).

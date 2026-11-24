@@ -1,0 +1,68 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage3`, base `98bec59046d0ce30500b341e8c18ba5b767069bb` (stage 2 tip), head `412258583206e539ce61727b9c4d71bb12fda3a0`, diff mode, round 2, wave 2.
+- I read slice-02 in full (2331 lines). It holds `src/review/desk-publication-types.ts`, `desk-publication.ts`, `desk-run-executor.ts`, `desk-run-service.ts`, `head-move.ts`, `prior-round.ts`, `round-registry.ts` and `update-round.ts`, plus their tests (`desk-publication.test.ts`, `desk-run-executor.test.ts`, `desk-run-service.test.ts`, `head-move.test.ts`, `prior-round.test.ts`, `update-round.test.ts`).
+- To check whether `cache.aheadHead` survives between previews, I also read `src/review/desk-publication.ts` at head: lines 53-66 (`previewSubject`), 258-268 (the cache write) and 376-391.
+- Read-only. I ran no tests (exec_budget_s 0).
+- Wave 1 (`raw/review-performance-w1.txt`) already covered the slice-01 Desktop UI, the round 1 F-001 fix at desk-publication.ts:385, `earlierAnswers` and `earlierAttemptDirectories`. I do not repeat those here.
+
+### Summary
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+### [F-001] A compare result of "not ahead" is not cached, so every dialog preview on a diverged or older head spawns another `gh api compare`
+- **Severity**: minor
+- **File**: src/review/desk-publication.ts (`reviewedHeadInPull`, slice-02 lines 115-128)
+- **Hot path**: Every `preview` request from the publish dialog. The dialog sends one per settings change or answer click. The cost applies only while the PR head has moved and GitHub reports it `diverged` or `behind`: a force-push or rebase, which is a common state for a PR.
+- **Problem**: `reviewedHeadInPull` caches only the positive result (`cache.aheadHead = currentHead`). A definitive `diverged` or `behind` status for the same (reviewedHead, currentHead) pair is not recorded. `previewSubject` returns the persisted cache within the 15 s TTL without a subject read (bound account), but the compare call still runs again on every preview. The test fixture shows this: in "a head that no longer contains the reviewed commit keeps the refusal…", every one of the four previews reaches the compare stub. Before this PR, a moved head ended the request with a local `blockedReason` and made no network call.
+- **Why it matters**: Each preview in that state pays one `gh` process spawn plus a GitHub round trip (typically several hundred ms). The answer cannot change while the current head stays the same, and the dialog stays blocked ("revision moved") either way. The cost is dialog latency and API quota. The result is still correct, so this is minor.
+- **Fix**: Record a definitive non-ahead status per current head, for example `cache.notAheadHead = currentHead` when `status` is `diverged`, `behind` or `identical`, and return false early when it matches. Keep the `catch` path (a failed or transient read) uncached, so fail-closed still asks again on the next preview, as the docstring promises.
+
+### Clean Areas
+- **Compare and discussion reads on the ahead path.** `aheadHead` is stored on the cache object, and the preview write persists it at desk-publication.ts:263-266. `previewSubject` carries it forward with `{ ...previous, subject }` while base and head are unchanged, so an ahead head is compared once per head (re-asked at most once per 15 s TTL expiry). The discussion re-read is newly reachable with `current || headMoved` at slice-02 line 239. It is required for the as-is variant and is cached in `cache.discussion` the same way. `save` and `submit` re-read on purpose, as a freshness check.
+- **Automatic publication.** It is refused before any compare or discussion read (desk-publication.ts:385). The new test at slice-02 lines 1648-1656 asserts zero reads.
+- **`prior-round.ts` registry read.** `readRoundRegistryReport(repoIdentity(cwd))` was moved earlier in `findPreviousRound`, but it is still read once per call, so there is no added spawn. `localPackageCandidates` now calls `partialRoundVouch` per non-eligible package, and `packageTrust` filters the registry per candidate. Each pass is O(registry entries). The registry is compacted at 512 KiB, and this runs once per review start, not on a hot path, so I have no finding. Hoisting the `desk-partial` filter out of the loop would be a micro-optimisation.
+- **`recordPartialRound` (round-registry.ts).** It runs once per attempt start that hands on a partial package: `packageFacts`, one findings read and parse, two `git` spawnSync in `repoIdentity`, and one append. Retries of the same round can append duplicate `desk-partial` entries for one package. Compaction keeps the newest entry per package, so growth is bounded.
+- **`desk-run-executor.ts` hand-on.** It runs one `cp` of the previous package per attempt start, as before, now also for a vouched partial package. It is not a hot path.
+- **`previousRoundAttempt` and `selectPriorAttempt`.** These are one linear filter and scan over `store.history(key).runs`, once per worker start. They replace the earlier `.find`, with the same complexity.
+- **`head-move.ts`.** Pure constant-time functions.
+- **`prepare` settings and digest.** Pure in-memory work, with no new I/O beyond what is noted above.
+- **Not in this slice's runtime surface.** N+1, indexes, pagination (the compare call uses `per_page=1`), React re-renders, bundle imports, and leaked timers or listeners: nothing new. The test files add fixtures only.
+
+### Not verified
+- No timing or verify-run measurements. The latency figure in F-001 is a reasoned estimate for one `gh api` spawn, not a measured value.
+
+Routing audit: graph_used: no (not-relevant: the slice and two targeted reads of desk-publication.ts settled every question) | wiki_used: not-relevant (perf lens, no domain question) | ctx_used: yes (`keryx ctx rg`, `keryx ctx read`) | raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "One minor finding in slice-02. reviewedHeadInPull caches only a positive 'ahead' compare result, so while the PR head is diverged or behind, every publish-dialog preview spawns another gh compare call whose answer cannot change for that head. The ahead path is cached per head and persisted with the preview cache, automatic publication still refuses before any read, and the T12 changes (previousRoundAttempt, recordPartialRound, partialRoundVouch, registry read move) run once per review start with bounded cost.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "  if (status !== \"ahead\") return false;\n  cache.aheadHead = currentHead;\n  return true;",
+      "problem": "reviewedHeadInPull caches only the positive result (cache.aheadHead). A definitive 'diverged' or 'behind' compare status for the same current head is not recorded, so each preview request repeats the gh api compare call even inside the 15 s preview-cache TTL. Before this PR, a moved head was refused locally with no network call.",
+      "impact": "While the PR head is force-pushed or rebased (diverged) or older (behind), every publish-dialog preview (one per settings change or answer click) pays an extra gh process spawn and GitHub round trip, typically several hundred ms, for an answer that cannot change. The dialog stays blocked either way. The cost is latency and API quota; the result is still correct.",
+      "suggested_fix": "Record a definitive non-ahead status per current head (e.g. cache.notAheadHead = currentHead for 'diverged', 'behind' or 'identical') and return false early when it matches. Leave the catch path (a failed or transient read) uncached so fail-closed still re-asks.",
+      "evidence": "slice-02 lines 115-128 (reviewedHeadInPull). desk-publication.ts:53-66: previewSubject reuses the persisted cache within the TTL. desk-publication.ts:263-266: the cache, including aheadHead, is persisted only for previews. The test at slice-02 lines 1525-1540 drives four previews in non-ahead states, and each reaches the compare stub.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "degradation_class": "performance"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-02"],
+  "inputs_unreadable": []
+}
+```

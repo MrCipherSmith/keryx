@@ -11,12 +11,12 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T08:46:49.192Z",
+  "updatedAt": "2026-11-24T09:51:12.372Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:0c603d2bd79870cd7cbbb088ef6bdcb7bf75f3c32a2722a0509e1fb7ff4e35b1",
+  "acChecksum": "sha256:137248605acbee3bc31841d56515a90018a1b54771c5abbd95c2329b79d6f135",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -266,6 +266,48 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:24:31.665Z",
+            "outcome": "started",
+            "detail": "520-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T09:24:31.922Z",
+            "outcome": "started",
+            "detail": "520-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -426,6 +468,41 @@
       "at": "2026-11-24T08:46:49.192Z",
       "event": "task-done",
       "detail": "T8: Item 3: Review again as update round of the same Review (blocked on stage 2 rounds)"
+    },
+    {
+      "at": "2026-11-24T09:17:24.760Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]\" -> \"The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action \"Publish as is for\" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]\" (Stage 2 renamed ReviewRuns.dom.test.tsx to src/reviews/ReviewPanel.dom.test.tsx; the verify command follows the file (round 2 logic F-001). The as-is action is no longer always the primary one since T13 made Update review primary when offered.)"
+    },
+    {
+      "at": "2026-11-24T09:24:30.152Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
+    },
+    {
+      "at": "2026-11-24T09:24:30.407Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
+    },
+    {
+      "at": "2026-11-24T09:24:31.665Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 520-T14"
+    },
+    {
+      "at": "2026-11-24T09:24:31.922Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 520-T15"
+    },
+    {
+      "at": "2026-11-24T09:32:22.490Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs"
+    },
+    {
+      "at": "2026-11-24T09:51:12.372Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is"
     }
   ],
   "acKinds": {
@@ -439,7 +516,7 @@
     },
     "AC3": {
       "kind": "exec",
-      "check": "sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'"
+      "check": "sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'"
     },
     "AC4": {
       "kind": "exec",

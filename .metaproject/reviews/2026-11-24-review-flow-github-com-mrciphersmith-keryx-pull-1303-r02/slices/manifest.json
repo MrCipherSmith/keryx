@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 128646,
+      "contentHash": "70dc502c7b6b57602b8d53ec4fdb250e14d653f9cdde9437aa82877d39a20d96",
+      "files": [
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/acceptance-criteria.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/context.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/description.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/journal.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/plan.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/tasks.md",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/flow.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T11.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T12.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T13.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T5.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T6.implement.json",
+        ".metaproject/flows/520-2026-11-24-desktop-review-v2-stage3/resolved/T7.implement.json",
+        "apps/desktop/src/review/ReviewPublishDialog.tsx",
+        "apps/desktop/src/review/ReviewRuns.tsx",
+        "apps/desktop/src/review/ReviewWorkspace.tsx",
+        "apps/desktop/src/reviews/ReviewPanel.dom.test.tsx",
+        "docs/docs/desktop-app.md"
+      ],
+      "domain": ".metaproject [docs], .metaproject, apps +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices",
+        "review-ui-ux"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/desktop/src/review/ReviewPublishDialog.tsx, apps/desktop/src/review/ReviewRuns.tsx, apps/desktop/src/review/ReviewWorkspace.tsx"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 140728,
+      "contentHash": "35dfe565af3a6b1b7748cdfabe71fb353da90e87de400278d5543fa1c4e99015",
+      "files": [
+        "src/review/desk-publication-types.ts",
+        "src/review/desk-publication.ts",
+        "src/review/desk-run-executor.ts",
+        "src/review/desk-run-service.ts",
+        "src/review/head-move.ts",
+        "src/review/prior-round.ts",
+        "src/review/round-registry.ts",
+        "src/review/update-round.ts",
+        "src/review/desk-publication.test.ts",
+        "src/review/desk-run-executor.test.ts",
+        "src/review/desk-run-service.test.ts",
+        "src/review/head-move.test.ts",
+        "src/review/prior-round.test.ts",
+        "src/review/update-round.test.ts"
+      ],
+      "domain": "src/review, src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/desk-publication-types.ts, src/review/desk-publication.ts, src/review/desk-run-executor.ts (+5)"
+        ]
+      }
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 269374,
+    "files": 32,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

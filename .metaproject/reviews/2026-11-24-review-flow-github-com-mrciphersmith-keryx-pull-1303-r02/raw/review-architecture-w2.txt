@@ -1,0 +1,102 @@
+STATUS: DONE
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Parent ref: stage 2 tip (stacked base)
+- Merge-base: `98bec59046d0ce30500b341e8c18ba5b767069bb` (head `412258583206e539ce61727b9c4d71bb12fda3a0`)
+- Scope mode: explicit-hash-range. slice-02 was read in full: desk-publication(-types).ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts, update-round.ts and their tests.
+- Stack detected: generic TS backend (`src/review`). No NestJS, React or MobX in this slice.
+
+### Summary
+T12 replaces the worker's old previous-attempt filter (completed, complete, same options key) with `previousRoundAttempt` → `selectPriorAttempt`. It also lets a partial Desktop attempt become a delta base through a new `desk-partial` registry event, which only the Desktop executor writes, from the user's run store. T13 adds the head-moved as-is variant on the server side: a same-base `ahead` compare, fail closed, a forced Comment with no inline comments, and the expected head re-verified before the write. It also carries answers from earlier attempts. The direction of dependencies is sound: update-round.ts is pure, the service imports it, the executor gets the registry dir through a port, and prior-round reads the registry as data. The round-1 fix from T11 ("as is only while the reviewed commit is in the PR") holds in `reviewedHeadInPull`. Wave-1 F-001 (the answers rule disagrees with selectPriorAttempt) is anchored in this slice and is not repeated here. I found two new minors.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Layer Violations
+None detected. The publication rules (when headMoved applies, the forced Comment, no inline comments, refusing automatic publication, the expected head for the write) all live in desk-publication.ts. The executor only carries out the handoff that the service decided on (`previousPartial`).
+
+### Dependency Direction
+None detected. Within this slice, update-round.ts imports only desk-run-types. desk-run-service → update-round. desk-run-executor → round-registry. prior-round → round-registry. No cycle is introduced.
+
+### Module Boundary Violations
+- [F-004] minor: the rule "a `desk-partial` entry vouches only for a partial round" is enforced by a caller-side filter in prior-round.ts, not inside the round-registry API. The registry's own `registryVouchesPackage` still counts desk-partial entries. Details are in REVIEW_RESULT.
+
+### Design Pattern Misuse
+- [F-005] minor: "the previous attempt has accepted findings" is checked by three different predicates across three modules. selectPriorAttempt can pick an attempt that the executor then refuses to hand on, and that attempt hides an older usable round. Details are in REVIEW_RESULT.
+
+### Dependency Inversion
+None detected. `ExecutorPorts.registryDir` is a test seam on the existing ports object. The default is the user's config directory.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A. Not detected in this slice.
+
+### Verified clean (sites)
+- T11 fix holds: `reviewedHeadInPull` (desk-publication.ts) accepts only `status === "ahead"`. Any failure, `diverged` or `behind` keeps the refusal. Automatic publication throws before any compare or discussion read. The write verifies `expected` (base plus current head) and posts with `commit_id: run.headSha`. The digest includes `currentHead`. The tests cover diverged, behind, gh failure, a non-sha head, head moved again, and automatic publication.
+- One rule for the worker's previous attempt: desk-run-service.ts:385 is `previousRoundAttempt(store.history(key).runs, run)`, and the options-key filter is gone. desk-run-service.test.ts pins this.
+- The trust boundary for the partial vouch: `recordPartialRound` has exactly one production caller, desk-run-executor.ts:529 (`keryx ctx rg --all "recordPartialRound|partialRoundVouch|desk-partial" src apps`). `recordFinishedRound` refuses non-completed packages, so a desk-partial vouch cannot be turned into a finished-round entry through decide-premise.
+- head-move.ts still has no production caller. That is the recorded follow-up from round 1, and I did not re-raise it.
+
+### Suggested Patches
+Not mechanical. See suggested_fix.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-02 keeps sound layering and dependency direction: update-round.ts is pure, the service imports it, the executor records desk-partial through a port, prior-round reads the registry as data, and the head-moved rules are server-side in desk-publication.ts. The T11 'as is only while the reviewed commit is in the PR' fix holds. Wave-1 F-001 (answers vs selectPriorAttempt) is anchored here and is not repeated. Two new minors: desk-partial vouch scoping is a caller-side filter that the registry's own registryVouchesPackage does not apply; and 'has accepted findings' is three predicates in three modules, so selectPriorAttempt can pick an attempt the executor will not hand on, hiding an older usable round.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/review/prior-round.ts",
+      "line": 344,
+      "quote": "const vouched = registryVouches(registry.filter((entry) => entry.event !== \"desk-partial\"), candidate.reviewId, candidate.hashes);",
+      "problem": "This is a module-boundary and encapsulation problem. T12 adds a registry event whose meaning differs from the other events: a `desk-partial` entry vouches for a partial round only, 'never for the same files claiming completion'. round-registry.ts does not enforce that invariant. Its exported `registryVouches` still matches desk-partial entries, and each caller has to remember to filter them out. prior-round.ts:344 does. round-registry.ts:199 (`registryVouchesPackage`, used by premise-question.ts:193) does not. It reports a package that only a desk-partial entry covers as vouched.",
+      "impact": "If the operator answers a premise question on a package that has only a desk-partial entry, `registryVouchesPackage` returns true. premise-question then calls reRecordRegistry. `recordFinishedRound` skips the draft and logs the warning 'the next round of this package runs full'. That warning is wrong in Desktop's flow: the executor re-records the partial round from the current files at the next handoff. Trust does not widen here, because recordFinishedRound refuses non-completed packages. The structural cost is that the next consumer of `registryVouches` can silently accept a desk-partial entry as a finished-round vouch.",
+      "suggested_fix": "Keep the event semantics inside round-registry.ts. Have `registryVouches` (or a renamed `finishedRoundVouch`) exclude `event === \"desk-partial\"` itself, keep `partialRoundVouch` as the only way to read desk-partial entries, and drop the caller-side filter at prior-round.ts:344. registryVouchesPackage then follows automatically. Add one test: a package with only a desk-partial entry is not reported as vouched by registryVouchesPackage.",
+      "evidence": "slice-02 prior-round.ts @@ 314,364 @@ (caller filter, comment 'A partial-round record vouches for a partial round only'); round-registry.ts at head :162 registryVouches (unfiltered), :178-180 partialRoundVouch, :193-199 registryVouchesPackage (unfiltered); premise-question.ts:193-202 read at head (vouched → reRecordRegistry → recordFinishedRound 'decide-premise' → skipped → warn); recordFinishedRound refuses !completion.completed.ok (round-registry.ts read at head).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "desk-partial-vouch-scoping-caller-side",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/prior-round.ts:344 (filters desk-partial)",
+          "src/review/round-registry.ts:199 registryVouchesPackage (does not filter)",
+          "src/review/round-registry.ts:180 partialRoundVouch (desk-partial only)"
+        ],
+        "enumeration_method": "keryx ctx rg --all 'registryVouches\\b|registryVouchesPackage|readRoundRegistry\\(|recordFinishedRound\\(' src (non-test): registryVouches is called at round-registry.ts:180, :199 and prior-round.ts:344; registryVouchesPackage has one caller, premise-question.ts:193"
+      }
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/review/desk-run-executor.ts",
+      "line": 529,
+      "quote": "(options.previousPartial === true && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined));",
+      "problem": "Round obligation 7 (one rule, one implementation). 'The previous attempt has accepted findings the next round builds on' is decided by three different predicates. (1) update-round.ts selectPriorAttempt: `result.findingsKnown === true`. (2) round-registry.ts recordPartialRound: findings.json parses to an array. (3) round-registry.ts partialRoundVouch: `findingsSha256 !== null`. The first one picks the attempt, and the second one decides whether it is handed on. findingsKnown can be true without an ingested findings.json: desk-run-executor-recovery.ts:238-241 sets it from `evaluated.source === \"raw reviewer results\"`, from `summary.findingsKnown`, or from non-zero legacy counts. In that case selectPriorAttempt returns a partial attempt, the executor skips the handoff, and nothing falls back to the next older usable attempt.",
+      "impact": "Trigger: the newest earlier-round attempt ended partial with raw reviewer results but no ingested findings.json, and an older attempt of the same Review completed with a closed package. Outcome: the update round gets no previous package at all and runs as a full review, although the old completed round was a valid delta base. Under the old filter (completed and complete) the older round was used. The cost is spend and lost carried findings, not wrong data. I did not reproduce it end to end.",
+      "suggested_fix": "Give 'has accepted findings' one definition. Either have selectPriorAttempt require the same evidence the handoff requires (for example, a result flag set only when findings.json is an ingested list), or have the service pass the ordered candidates so the executor can fall through to the next attempt whose package it can hand on. Pin the case with a test: a partial attempt whose findingsKnown comes from raw results, above an older completed one.",
+      "evidence": "slice-02 update-round.ts selectPriorAttempt (findingsKnown gate), desk-run-service.ts @@ 365,418 @@ (single previous, previousPartial), desk-run-executor.ts @@ 505,550 @@ (handOn: closed, or previousPartial and recordPartialRound wrote), round-registry.ts recordPartialRound (Array.isArray(findings) else skipped), partialRoundVouch (findingsSha256 null → undefined); desk-run-executor-recovery.ts:235-241 read at head (findingsKnown sources).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "accepted-findings-predicate-three-gates",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes for the orchestrator:
+- Wave-1 F-001 (dedupe_key `prior-attempt-rule-answers-vs-findings`) is anchored at desk-publication.ts earlierAttemptDirectories/earlierAnswers in this slice. It is not repeated here. Its open question is partly answered: desk-run-lifecycle.ts allows `restore` and `delete` after `archive`, so an archived attempt stays in the store and can still be reached by the previousRunId walk. I did not check whether its directory and draft stay on disk. One structural note for its fix: `previousRoundAttempt` lives in desk-run-service.ts (the module that spawns workers), not in the pure update-round.ts. If desk-publication reuses it, moving it into update-round.ts avoids a publication → service import.
+- This lens runs no tests. No finding depends on test output.
+
+Routing audit: graph_used: not-run (the slice and the targeted reads were enough; the payload layers were not consulted), wiki_used: not-relevant (the spec and TM-04 rules are quoted in the slice comments), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

@@ -82,3 +82,26 @@
 - Behaviour change: a retry on the same range no longer builds on another attempt of its own round (only earlier rounds count).
 - Not verified: runDeskWorker end to end (needs GitHub); live Desktop update round.
 - T8 open info-level follow-ups (not blocking): `findingsKnown: undefined` treated as unknown by selectPriorAttempt vs known elsewhere (degradation F-002); `reviews.on_head_move` column defaults to 'ask' for every Review incl. rule-created ones, while spec/D2 say rule runs default to follow — parseOnHeadMove/defaultOnHeadMove exist but nothing writes the default per source yet (architecture F-002).
+- 2026-11-24T09:17:24.760Z - ac-updated: AC3: "The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the primary action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/review/ReviewRuns.dom.test.tsx'`]" -> "The publish dialog with a moved head shows both commits, disables the verdict choice and inline comments, and labels the as-is action "Publish as is for" the short reviewed commit; with the current head the dialog is unchanged. [verify: exec `sh -c 'cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx'`]" (Stage 2 renamed ReviewRuns.dom.test.tsx to src/reviews/ReviewPanel.dom.test.tsx; the verify command follows the file (round 2 logic F-001). The as-is action is no longer always the primary one since T13 made Update review primary when offered.)
+- 2026-11-24T09:24:30.152Z - task-added: T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is
+- 2026-11-24T09:24:30.407Z - task-added: T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs
+- 2026-11-24T09:24:31.665Z - task-attempt: T14: started (attempt 1) — 520-T14
+- 2026-11-24T09:24:31.922Z - task-attempt: T15: started (attempt 1) — 520-T15
+- 2026-11-24T09:32:22.490Z - task-done: T15: Fix round 2 Desktop: Update busy/guard/autoPublish/Sessions, tests, docs
+
+## 2026-11-24 Review round 2 (PR #1303 head 412258583, range 98bec5904..head)
+
+- Package `.metaproject/reviews/2026-11-24-review-flow-github-com-mrciphersmith-keryx-pull-1303-r02`, roster from `keryx review plan` (10) + review-pr-contract from `review next`; 2 slices (flow+Desktop / backend), 20 dispatches, all results in raw/.
+- blast-radius refused to recount against the stacked base (100 files vs 32 recorded) — Not run; tests chosen with `keryx test related` and run through verify-run (-1, -2).
+- harness-robustness "whole process group" test fails at stage 2 tip 98bec5904 and passes at main: inherited from stage 2, reported in the shared notes.
+- Totals: blocker 0; major 2 (logic-w2 F-001 = architecture-w2 F-005 = degradation-w2 F-001: prior selection with no fallback; highload-w2 F-001 pre-existing registry compaction without lock); minors ~20 (deduplicated into T14 B1-B6 and T15 D1-D6 plus testing-w2 gaps forwarded to T14); infos ~15.
+- AC3 test path corrected (stage 2 rename). PR body: automatic publication refuses a moved head before the compare/discussion reads (one PR read happens) — wording fixed (pr-contract PC-004).
+- T15 accepted (DONE_WITH_CONCERNS): request() returns an outcome; Update disabled while busy; existing attempt on the target range shown instead of a second start; autoPublish not carried; Sessions offers no Update (explicit, tested); footer order Update, Publish as is, Close, Skip, Save. Toast texts decided by the orchestrator (listed in PR).
+- 2026-11-24T09:51:12.372Z - task-done: T14: Fix round 2 backend: prior selection fallback, one prior rule for answers, registry lock and vouch API, compare cache, superseded as-is
+
+## 2026-11-24 T14 accepted (DONE)
+
+- B1 one ordering rule `priorAttemptCandidates` (newest round first, complete before partial); executor takes `previousRuns[]` and hands on the first qualifying (closed, or partial with recordPartialRound ok). B2 answers from `earlierRoundAttempts` (same Review, earlier rounds, not deleted/archived), newest draft wins. B3 registry append+compaction under withFileLock (lock failure → error → next candidate). B4 registryVouches ignores desk-partial internally. B5 definitive compare status cached per head. B6 superseded round refuses as-is ("Round N of this review is newer…").
+- needs_operator (decided by orchestrator, listed in PR): B6 blocks on any newer round incl. a failed/running one.
+- testing-w2 gaps 1-4 pinned (worker-level runDeskWorker still has only a source check; same-Review guard pinned without a killed mutant).
+- Round 3 (verification of T14/T15) not run in this session: stopping point reported to the parent session.

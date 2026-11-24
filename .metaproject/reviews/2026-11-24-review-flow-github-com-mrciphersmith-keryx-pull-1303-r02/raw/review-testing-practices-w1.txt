@@ -1,0 +1,166 @@
+STATUS: DONE_WITH_CONCERNS
+
+# review-testing-practices, wave 1, round 2 (slice-01: Desktop dialog/runs/workspace + ReviewPanel.dom.test.tsx + flow docs)
+
+## Mutation pass (run, not predicted)
+
+Environment: scratch `git worktree add --detach <scratchpad>/mut 412258583206e539ce61727b9c4d71bb12fda3a0`, node_modules symlinked from the reviewed worktree, each mutant applied by anchor replacement, then the file was restored (python runner, try/finally). Worktree removed afterwards; `git status` of the reviewed tree shows only the two pre-existing untracked dirs. `keryx review mutate` was not used because it writes `mutation-<n>.json` into the package's research-evidence, and the brief allows me to write only my result file.
+
+Nearest suite: `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx` (baseline 37 pass / 0 fail, 0.45 s). Every survivor was then re-run against the full Desktop review suites `bun test src/review src/reviews` (baseline 142 pass) and survived there too.
+
+| id | mutation | nearest suite | full Desktop review suites |
+|---|---|---|---|
+| P1 | `updateOffered`: drop `!!headMoved &&` | **green 37/37** | **green 142/142** |
+| P2 | `updateOffered`: drop `&& !posted` | red ("Update review is offered only while the head has moved and the review is unpublished") | - |
+| P3 | `updateOffered`: drop `!!onUpdateReview &&` | **green 37/37** | **green 142/142** |
+| P4 | Update onClick passes `reviewedHead` instead of `currentHead` | red (2 tests) | - |
+| P5 | Submit button `className={updateOffered ? "btn" : "btn btn-primary"}` -> always `"btn btn-primary"` (presentation) | **green 37/37** | **green 142/142** |
+| P6 | label ternary -> always "Submit review" | red (several) | - |
+| P7 | Inline checkbox: drop `disabled={!!headMoved}` | red | - |
+| P8 | verdict radios: drop `disabled={!!headMoved}` | red | - |
+| P9 | "Use recommendation" radio: drop `disabled={!!headMoved}` | red | - |
+| P10 | verdict fieldset: drop `aria-describedby` | red | - |
+| P11 | Update review button `disabled={writing}` -> `disabled={false}` | **green 37/37** | **green 142/142** |
+| P12 | Update button JSX: drop the second `headMoved &&` | green (equivalent: `updateOffered` already requires `headMoved`; the JSX copy exists for TS narrowing) | green |
+| P13 | Update button JSX: drop `updateOffered &&` (round-1 U5 analogue) | red ("offered only while...") | - |
+| R1 | ReviewRuns: never pass `onUpdateReview` | red | - |
+| R2 | ReviewRuns: delete `setPublishOpen(false)` in the update handler | **green 37/37** | **green 142/142** |
+| R3 | ReviewRuns: revision head `run.headSha` instead of `currentHead` | red (2 tests) | - |
+| W1 | ReviewWorkspace: delete `setSessionId(null)` | red | - |
+| W2 | delete `if (!boardBehind && action.open) return;` | red ("does not start a second attempt") | - |
+| W3 | -> `if (action.open) return;` | red ("board that has not seen the push") | - |
+| W4 | -> `if (!boardBehind) return;` | red ("starts the next round ... on the current head") | - |
+| W5 | drop `...(reviewed.options && { options })` | red (2 tests) | - |
+| W6 | always `onRefreshBoard?.()` | red | - |
+| W7 | never refresh | red | - |
+| W8 | `boardBehind = card.headSha !== revision.headSha` (ignore base) | green (equivalent on reachable inputs: the as-is/update offer exists only while base is unchanged, and `revision.baseSha` is `run.baseSha`) | green |
+| W9 | start on `card` range instead of `revision` | red | - |
+
+Cap: 25 mutants written, 25 run (23 in the first pass plus P12/P13), 0 not reached. Survivors: P1, P3, P5, P11, R2 (gaps), P12, W8 (equivalent). Backend gates (slice-02: desk-publication.ts, desk-run-service.ts, desk-run-executor.ts, round-registry.ts, prior-round.ts, update-round.ts) are not in my driver's slices; they belong to the wave-2 testing lane and I listed no mutants for them.
+
+## Round-1 testing findings in my slice
+
+- Round 1 F-003 (Update review offer unpinned: U1b/U5 survived, U1 failed only through a TypeError): closed. The new test "Update review is offered only while the head has moved and the review is unpublished" mounts the dialog with `onUpdateReview` on a current-head state and on a published head-moved state; P2 (drop `!posted`) and P13 (drop `updateOffered` from the JSX) now fail on an assertion, not a crash. The producer does emit `headMoved` together with `publishedUrl` (src/review/desk-publication.ts:332-333), so the published fixture is a real state.
+- Round 1 F-001/F-002 (backend desk-publication.ts) are in slice-02, not reviewed here.
+
+## Findings
+
+### [F-001] The update handler's `setPublishOpen(false)` is unpinned; the "dialog closed" assertions ride a remount
+- Severity: minor
+- File: apps/desktop/src/review/ReviewRuns.tsx:179
+- Problem: Deleting `setPublishOpen(false)` (R2) leaves all 142 Desktop review tests green. The three Update-review tests assert `document.querySelector(".dialog")` is null only after `await click(...)` has flushed the start request; by then the article was replaced (new attempt becomes latest) or unmounted (`setSessionId(null)`, W1 red), so the assertion proves the remount, not that the handler closes the dialog.
+- Impact: Without the call, the publish dialog stays open (with "Publish as is" clickable) for as long as the start request is in flight, and permanently when the reviewed attempt stays the rendered one. No test would catch that regression.
+- Fix: In "Update review in a head-moved dialog starts the next round...", make the fixture's `start` return a held promise; click "Update review to ccccccc"; assert the dialog is gone before resolving it, then resolve and keep the existing assertions.
+
+### [F-002] The Update review button's `disabled={writing}` is unpinned
+- Severity: minor
+- File: apps/desktop/src/review/ReviewPublishDialog.tsx:159
+- Problem: `disabled={writing}` -> `disabled={false}` (P11) is green in both suites. No test holds a submit/save/skip request open while the head-moved dialog shows the Update review button.
+- Impact: If the guard is lost, a user can start an update round while "Publish as is" is posting, then the dialog closes mid-write (via the ReviewRuns handler) and the write result arrives at an unmounted dialog. That regression would be silent.
+- Fix: In "a moved head locks the dialog...", have `command` hold the `submit` request on a deferred promise; click "Publish as is for bbbbbbb" and assert `btn("Update review to ccccccc").disabled === true` before resolving.
+
+### [F-003] The primary-action swap (Update primary, Publish as is secondary) is unpinned
+- Severity: minor
+- File: apps/desktop/src/review/ReviewPublishDialog.tsx:154,167
+- Problem: The diff added `className={updateOffered ? "btn" : "btn btn-primary"}` (T13 decision: "Update is the primary button when offered; Publish as is becomes secondary"). Forcing it to `"btn btn-primary"` (P5) is green. So are P1 (drop `!!headMoved`) and P3 (drop `!!onUpdateReview`) from `updateOffered`, because the only other consumer of `updateOffered` is the button JSX, which re-checks both values. P1 would demote "Submit review" on every current-head dialog, and P3 would demote "Publish as is" when no caller offers an update. The tests assert the Update button's position ("first footer button"), not which button is primary.
+- Impact: This is styling, kind presentation. The spec's "update is the primary action" and the current-head dialog being "unchanged" (AC3) can regress without any test failing.
+- Fix: In "a moved head locks the dialog..." assert `btn("Publish as is for bbbbbbb").classList.contains("btn-primary") === false` and the Update button has `btn-primary`. In "the current head keeps the dialog's verdict choice and Submit review", mount through the workspace (which passes `onUpdateReview`) and assert `btn("Submit review").classList.contains("btn-primary")`. In the directly-mounted head-moved case without `onUpdateReview`, assert "Publish as is" stays primary.
+
+## Checklist notes (no further findings)
+- Boundary mocking: the tests mock the Tauri-side `reviewRun`/`reviewPublish` command seam that the component injects. That is the Desktop's network boundary; there is no MSW layer in apps/desktop. No real network, no clock, no sleeps.
+- Branch under test: test 51 ("does not start a second attempt") asserts the falsy `no start`, together with positive artifacts: the dialog closed and the history session cleared. W1 and W2 both fail it, so the test is not trivially green.
+- Fixture shape: `headMovedFixture` (`reviewed.result.reviewed = {base, reviewedHead}`, `next.previousRunId`), and the publish states with `canSubmit: true`, verdict `comment` and `inline: false`, match what `prepare` emits for a head-moved draft (desk-publication.ts:223, 333).
+- Tier: all new assertions are DOM component tests in the existing suite. No screenshot or e2e lane was used for cheap checks.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Ran 25 mutants of the Desktop gates T11/T13 added, in a scratch worktree. 18 failed a named test, including the round-1 F-003 gates (posted and offer gates), which are now pinned by assertions. 5 survive as real gaps: the update handler's setPublishOpen(false) (R2), the Update button's disabled={writing} (P11), and the primary-button class swap (P5, with P1/P3 surviving for the same reason). 2 survive as equivalent (P12, W8). No blocker or major. Backend slice-02 gates were not in this lane.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewRuns.tsx",
+      "line": 179,
+      "quote": "setPublishOpen(false);",
+      "problem": "Deleting setPublishOpen(false) in the Update-review handler leaves every Desktop review test green. The 'dialog is null' assertions run after the start request resolved and the attempt re-rendered or unmounted, so they pin the remount, not the close.",
+      "impact": "If the call is lost, the publish dialog stays open with 'Publish as is' clickable while the start request runs, or permanently if the reviewed attempt stays rendered, and no test fails.",
+      "suggested_fix": "In 'Update review in a head-moved dialog starts the next round of the same Review on the current head', let the fixture's start action return a held promise. Assert .dialog is null right after clicking 'Update review to ccccccc' and before resolving it, then resolve and keep the existing assertions.",
+      "evidence": "Mutation R2 in a scratch worktree at 41225858: `bun test src/reviews/ReviewPanel.dom.test.tsx` 37/37 green; `bun test src/review src/reviews` 142/142 green. W1 (drop setSessionId(null)) is red, which shows the remount is what the assertion observes.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": 159,
+      "quote": "{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}",
+      "problem": "The Update review button's disabled={writing} guard is unpinned. No test holds a write (submit/save/skip) open while the head-moved dialog offers Update review.",
+      "impact": "If the guard is lost, an update round can be started while 'Publish as is' is posting, and the dialog then closes mid-write. No test would catch it.",
+      "suggested_fix": "In 'a moved head locks the dialog to the as-is Comment for the reviewed commit', return a deferred promise for kind 'submit'. Click 'Publish as is for bbbbbbb', assert the 'Update review to ccccccc' button is disabled, then resolve.",
+      "evidence": "Mutation P11 (disabled={writing} -> disabled={false}) in a scratch worktree: nearest suite 37/37 green, full Desktop review suites 142/142 green.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": 167,
+      "quote": "<button type=\"button\" className={updateOffered ? \"btn\" : \"btn btn-primary\"}",
+      "problem": "The T13 primary-action swap is unpinned. Forcing the Submit/Publish-as-is button to btn-primary (P5) is green. Dropping !!headMoved (P1) or !!onUpdateReview (P3) from updateOffered is also green, because the button JSX re-checks both and the class is the only other consumer. Tests assert the Update button's position, not which action is primary.",
+      "impact": "Presentation only. The current-head dialog could lose its primary 'Submit review' (P1), or 'Publish as is' could be demoted with no update offered (P3), and AC3's 'with the current head the dialog is unchanged' would not catch it.",
+      "suggested_fix": "Assert btn-primary on 'Update review to ccccccc' and not on 'Publish as is for bbbbbbb' in the head-moved test. Assert btn-primary on 'Submit review' in 'the current head keeps the dialog's verdict choice and Submit review' (workspace-mounted, so onUpdateReview is passed). Assert btn-primary on 'Publish as is' when the dialog is mounted without onUpdateReview.",
+      "evidence": "Scratch worktree at 41225858: P5, P1 and P3 each green on ReviewPanel.dom.test.tsx (37/37) and on src/review + src/reviews (142/142).",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-003", "disposition": "closed"}
+  ],
+  "follow_ups": [
+    "Round-1 testing F-003 (Update offer gates) verified closed by P2 and P13 red; round-1 F-001/F-002 (desk-publication.ts) belong to slice-02 / wave-2 testing lane.",
+    "keryx review mutate not used: it writes mutation-<n>.json into the package; mutants were run by an anchor-replacement runner in a scratch worktree instead."
+  ],
+  "mutant_candidates": [
+    {"id":"P1","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"const updateOffered = !!headMoved && !!onUpdateReview && !posted;","replacement":"const updateOffered = !!onUpdateReview && !posted;","kind":"presentation"},
+    {"id":"P2","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"const updateOffered = !!headMoved && !!onUpdateReview && !posted;","replacement":"const updateOffered = !!headMoved && !!onUpdateReview;","kind":"behavior"},
+    {"id":"P3","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"const updateOffered = !!headMoved && !!onUpdateReview && !posted;","replacement":"const updateOffered = !!headMoved && !posted;","kind":"presentation"},
+    {"id":"P4","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"onClick={() => onUpdateReview(headMoved.currentHead)}","replacement":"onClick={() => onUpdateReview(headMoved.reviewedHead)}","kind":"behavior"},
+    {"id":"P5","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"className={updateOffered ? \"btn\" : \"btn btn-primary\"}","replacement":"className=\"btn btn-primary\"","kind":"presentation"},
+    {"id":"P6","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"{headMoved ? <>Publish as is for <code>{shortSha(headMoved.reviewedHead)}</code></> : \"Submit review\"}","replacement":"\"Submit review\"","kind":"behavior"},
+    {"id":"P7","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"checked={settings.inline} disabled={!!headMoved}","replacement":"checked={settings.inline}","kind":"behavior"},
+    {"id":"P8","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"checked={settings.verdictOverride === value} disabled={!!headMoved}","replacement":"checked={settings.verdictOverride === value}","kind":"behavior"},
+    {"id":"P9","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"checked={settings.verdictOverride == null} disabled={!!headMoved}","replacement":"checked={settings.verdictOverride == null}","kind":"behavior"},
+    {"id":"P10","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"<fieldset disabled={writing} aria-describedby={headMoved ? headMovedNotice : undefined}>\n            <legend>Review verdict","replacement":"<fieldset disabled={writing}>\n            <legend>Review verdict","kind":"presentation"},
+    {"id":"P11","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}","replacement":"{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={false}","kind":"behavior"},
+    {"id":"P12","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"{updateOffered && headMoved && onUpdateReview && <button","replacement":"{updateOffered && onUpdateReview && <button","kind":"behavior"},
+    {"id":"P13","file":"apps/desktop/src/review/ReviewPublishDialog.tsx","anchor":"{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}","replacement":"{headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}","kind":"behavior"},
+    {"id":"R1","file":"apps/desktop/src/review/ReviewRuns.tsx","anchor":"{...(updateReview && { onUpdateReview:","replacement":"{...(false && { onUpdateReview:","kind":"behavior"},
+    {"id":"R2","file":"apps/desktop/src/review/ReviewRuns.tsx","anchor":"        setPublishOpen(false);\n        // The as-is","replacement":"        // The as-is","kind":"behavior"},
+    {"id":"R3","file":"apps/desktop/src/review/ReviewRuns.tsx","anchor":"updateReview(run, { baseSha: run.baseSha, headSha: currentHead });","replacement":"updateReview(run, { baseSha: run.baseSha, headSha: run.headSha });","kind":"behavior"},
+    {"id":"W1","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"    setSessionId(null);\n    const boardBehind","replacement":"    const boardBehind","kind":"behavior"},
+    {"id":"W2","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"if (!boardBehind && action.open) return;","replacement":"","kind":"behavior"},
+    {"id":"W3","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"if (!boardBehind && action.open) return;","replacement":"if (action.open) return;","kind":"behavior"},
+    {"id":"W4","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"if (!boardBehind && action.open) return;","replacement":"if (!boardBehind) return;","kind":"behavior"},
+    {"id":"W5","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"...(reviewed.options && { options: reviewed.options })","replacement":"","kind":"behavior"},
+    {"id":"W6","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":".then(() => { if (boardBehind) onRefreshBoard?.(); });","replacement":".then(() => { onRefreshBoard?.(); });","kind":"behavior"},
+    {"id":"W7","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":".then(() => { if (boardBehind) onRefreshBoard?.(); });","replacement":".then(() => {});","kind":"behavior"},
+    {"id":"W8","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"const boardBehind = !sameRange(card, revision);","replacement":"const boardBehind = card.headSha !== revision.headSha;","kind":"behavior"},
+    {"id":"W9","file":"apps/desktop/src/review/ReviewWorkspace.tsx","anchor":"void local.request({ kind: \"start\", ...revision,","replacement":"void local.request({ kind: \"start\", baseSha: card.baseSha, headSha: card.headSha,","kind":"behavior"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 0}
+}
+```
+
+Mutant run command (for the main session): `cd apps/desktop && bun test src/reviews/ReviewPanel.dom.test.tsx` (package: apps/desktop). All 25 candidates above were already run: see the table.
+
+Routing audit: graph_used: no (not-relevant: the diff slice and driver named the files; the gates were located with `keryx ctx rg`), wiki_used: no (not-relevant: the testing lens over a named slice), ctx_used: yes (`keryx ctx read/rg`), raw_rg_used: no. One raw `wc`/`awk`/`head` over the slice file, marked `keryx:raw`, to index its section offsets.

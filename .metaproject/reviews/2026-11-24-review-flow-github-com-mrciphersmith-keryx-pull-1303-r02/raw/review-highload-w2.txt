@@ -1,0 +1,94 @@
+STATUS: DONE
+
+## High-Load Review
+Scope: branch feat/desktop-review-v2-stage3, base 98bec59046d0ce30500b341e8c18ba5b767069bb (stage 2 tip) .. head 412258583206e539ce61727b9c4d71bb12fda3a0, diff mode, round 2, wave 2. I read slice-02 in full (2331 lines). It covers desk-publication-types.ts, desk-publication.ts, desk-run-executor.ts, desk-run-service.ts, head-move.ts, prior-round.ts, round-registry.ts, update-round.ts and their tests. Load profile: not provided. Concrete triggers used: several Desktop workers (one per PR key) running at once for pull requests of the same repository, each handing a partial previous attempt on; a `review ingest|complete|publish` or premise answer in another session of the same repository at the same time; a push between the compare read and the write; an earlier attempt's draft saved while an update round's preview reads it. Files read beyond the slice, as context: src/review/round-registry.ts lines 100-170 (appendRoundRegistry, compactEntries), src/lib/config-dir.ts appendOwnerOnlyLine, .metaproject/rules/core/concurrency-patterns.mdc, and round 1's raw/review-highload-w1.txt.
+
+Summary: T12 and T13 add no unguarded race of their own. The new compare read fails closed, and it is re-run fresh at submit because the preview cache is read only for kind=preview. Its answer is fixed for a given pair of SHAs, and the write still re-verifies the PR at the exact current head. The answer walk is bounded at 8 attempts and reads files written by atomic rename. The one finding is pre-existing code that this PR now reaches from a new concurrent writer. The Desktop worker appends `desk-partial` entries to the per-repository round registry, and appendRoundRegistry compacts that file with an unlocked read-modify-write. Stats: blocker 0 | major 1 | minor 0 | info 1.
+
+Findings:
+
+CLI / Multi-Session
+### [F-001] Round registry compaction is an unlocked read-modify-write, now also reached from concurrent Desktop workers
+- Severity: major (location_class pre-existing: the compaction code is not in the diff; the new writer recordPartialRound is)
+- File: src/review/round-registry.ts:139 (appendRoundRegistry); new caller src/review/desk-run-executor.ts (recordPartialRound in the hand-on of a partial previous package)
+- Pattern: Part 0 / concurrency-patterns.mdc Rule 2. A read-modify-write of a shared state file holds no lock.
+- Failure mode: The registry is one file per repository identity, shared by every clone and worktree on the machine. appendRoundRegistry appends a line, which is safe. But once the file is past REGISTRY_COMPACT_BYTES (512 KB), it reads the file, compacts it and renames a rewrite over it, with no lock. Process X can read and compact while process Y appends. X's rename then drops Y's line. Two processes that can reach this are named: two Desktop workers for two PRs of the same repository, each running recordPartialRound in executeDeskReview; or one Desktop worker and a `keryx review ingest|complete|publish` or decide-premise in another session. The lost entry is a trust record. The `review start` in the update round's checkout then finds no `desk-partial` vouch for the package it was just handed. It falls back to a full review with the prior findings as context, so AC7's delta round is silently lost for that round. A lost `complete`/`publish`/`decide-premise` entry costs the same. No trust is granted wrongly, since a missing entry only removes trust. A second effect, in the same code: when the repository has more distinct packages than fit in 512 KB (about 1,500 entries), compaction cannot shrink the file below the threshold. Every append then rewrites the whole file and opens this window, and once the file passes the 1 MB read cap it is restarted with one entry, which drops every vouch.
+- Why major, not blocker: the table rates a lost write `blocker`. But what is lost here is a record whose absence the registry's own contract treats as one more full round ("costs at most one full round per package, never trust it should not give"). The race needs the file past 512 KB. And the code predates this PR, so as pre-existing it does not block the merge.
+- Fix: Take an exclusive-create lock file (O_EXCL, with PID or age stale recovery, released in finally) beside the registry for the compaction branch. Re-read the file under the lock before rewriting, so an append that landed after the first read is kept. Optionally compact on a count of distinct packages, with eviction of the oldest packages, so the file shrinks below the threshold instead of being rewritten on every append.
+
+Concurrency & Races — None detected in the new code. In desk-run-executor.ts, recordPartialRound hashes the previous package in the user's run store and then copies it into the checkout. If anything changed those files between the hash and the copy, the copy's hashes would not match the vouch, and `review start` falls back to a full review. That fails safe. dispatchNext keeps one active worker per PR key, so two update rounds of one Review do not hand on the same package at once. previousRoundAttempt reads store.history once and picks only terminal (completed or partial) attempts.
+
+Resources — None detected. earlierAttemptDirectories walks at most answerSourceLimit (8) previousRunId links, with a seen-set against cycles, inside one store open that closes in finally. earlierAnswers reads one draft per directory with the existing size cap. recordPartialRound runs `git config` synchronously through repoIdentity, once per worker start.
+
+Caching
+### [F-002] `aheadHead` in the preview cache is keyed only by the current head
+- Severity: info
+- File: src/review/desk-publication.ts (reviewedHeadInPull)
+- Pattern: Caching C — memoised remote answer
+- Failure mode: None today. The cached `ahead` is reused only when cache.aheadHead equals the current head. The cache is one per attempt directory, so the reviewed head is fixed. GitHub's compare status of two fixed SHAs does not change. The cache is read only for preview without refresh. A submit computes the compare result fresh, and verifyDeskSubject(expected) then re-checks base and current head before the write. Recorded so that a later change that shares the preview cache across attempts also adds the reviewed head to the memo key.
+- Fix: No change required. Optionally, store `{ reviewedHead, currentHead }` in place of `aheadHead`.
+
+Lock Contention — None detected. The new I/O under publication.lock is the verifyDeskSubject pair, now against `expected`, and the discussion re-read, now also for headMoved. The compare read and earlierAnswers run before the lock (render on the preview path), or inside render for writes, as before. No new lock is held across the network.
+
+Async / Queues — None detected. head-move.ts is a pure decision table, and no queue is added in this slice.
+
+Retry / Timeout / Circuit Breaker — None detected. No retry is added. The compare call goes through boardGh, like the other GitHub reads here. A failed compare is not retried; it refuses, and a refresh asks again.
+
+Idempotency & Distributed Invariants — None detected. The receipt is written before the POST and the marker is keyed by attempt id, so one attempt cannot post twice even when the head moves between a lost response and a retry. The digest includes headMoved.currentHead, so a further push makes an earlier as-is preview stale, which a test pins. Automatic publication refuses a moved head before any compare or discussion read. Each update round that hands on a partial package appends one more `desk-partial` line. That growth is bounded by the per-package compaction, apart from the F-001 case.
+
+Round obligations: round 1's highload F-001 (info, check-to-POST window: the as-is first line can name a head that a later push superseded) is unchanged at head, since the window between verifyDeskSubject(expected) and the POST is the same. No fix was requested, and it stays info. The T11 fix ("offer publish as is only while the reviewed commit is in the PR") holds under concurrency. reviewedHeadInPull fails closed on any failed or non-`ahead` compare, and tests cover diverged, behind, 404 and connection reset. The write re-verifies the exact current head, and a head that moves after the preview or inside confirmSubmit posts nothing and leaves no receipt.
+
+Clean Areas: Part 0 (except F-001), A, B, C (F-002 info only), D, E, F, G reviewed for slice-02.
+
+Not verified / notes:
+- No tests were run (read-only reviewer, exec_budget_s 0). Test evidence from the brief: backend `bun test src/review` 5499 pass / 2 fail (timing tests inherited from stage 2), Desktop 142 pass. No test covers concurrent appends to the registry during compaction.
+- I did not measure real registry sizes, so how often the 512 KB threshold is reached in practice is unknown.
+- Routing audit: graph_used no (not-relevant: the slice and payload named the files, and the writers were enumerated with ctx rg). wiki_used no (not-relevant). ctx_used yes (keryx ctx rg). raw_rg_used no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "T12/T13 add no unguarded race of their own. The compare read fails closed and is fresh at submit, the write re-verifies the exact current head, and the answer walk is bounded. One major, pre-existing: the per-repository round registry is compacted by an unlocked read-modify-write, and the PR adds concurrent Desktop workers as a writer (recordPartialRound), so a desk-partial vouch can be lost and the update round silently falls back to a full review. One info on the aheadHead memo key.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/round-registry.ts",
+      "line": 139,
+      "quote": "if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {",
+      "problem": "appendRoundRegistry compacts the shared per-repository registry by read, compact and atomic rename with no lock. An entry appended by another process between the read and the rename is dropped. This PR adds a new concurrent writer: the Desktop worker's recordPartialRound, run once per update round that hands on a partial previous package.",
+      "impact": "Trigger: the registry is past 512 KB while two Desktop workers for PRs of the same repository, or a worker and a review ingest/complete/publish/decide-premise in another session, append at once. The lost desk-partial entry makes the next review start fall back to a full review with the findings as context only, so the AC7 delta is silently lost. Lost complete/publish entries cost one full round. No trust is granted wrongly. With more than about 1,500 distinct packages, every append rewrites the file and opens the window.",
+      "suggested_fix": "Take an O_EXCL lock file with PID or age stale recovery (released in finally) around the compaction branch, and re-read the file under the lock before the rewrite. Optionally, evict the oldest packages so compaction gets below the threshold.",
+      "evidence": "round-registry.ts:139-155: appendOwnerOnlyLine, then readConfigFile, compactEntries, writeOwnerOnlyFileAtomic, with no lock. New caller in desk-run-executor.ts: `(options.previousPartial === true && recordPartialRound(previous, { cwd: checkout, dir: ports.registryDir }).file !== undefined)`. Other writers: publish.ts:179, premise-question.ts:200, managed.ts:1234, commands/review.ts:1306 (all through recordFinishedRound).",
+      "class_scope": {
+        "sites": ["src/review/round-registry.ts:139", "src/review/round-registry.ts:238", "src/review/round-registry.ts:278", "src/review/desk-run-executor.ts:529", "src/review/publish.ts:179", "src/review/premise-question.ts:200", "src/review/managed.ts:1234", "src/commands/review.ts:1306"],
+        "enumeration_method": "keryx ctx rg 'recordFinishedRound\\(|recordPartialRound\\(|appendRoundRegistry\\(' src --glob '!*.test.ts': one unlocked compaction site (appendRoundRegistry), reached by 2 recorders and 5 callers; the desk-run-executor caller is new in this range"
+      },
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing",
+      "publication": "omit"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "if (cache.aheadHead === currentHead) return true;",
+      "problem": "The memoised `ahead` answer is keyed by the current head only. That is correct today, because the preview cache is per attempt directory, so the reviewed head is fixed.",
+      "impact": "None today. A submit re-runs the compare and re-verifies the exact head before writing. Recorded so that a future shared cache adds the reviewed head to the key.",
+      "suggested_fix": "No change required. Optionally, store the pair { reviewedHead, currentHead }.",
+      "evidence": "previewSubject reads the cache only for kind=preview without refresh. The cache file publication-preview-cache.json lives in the attempt directory.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 },
+  "slices": ["slice-02"],
+  "inputs_unreadable": []
+}
+```

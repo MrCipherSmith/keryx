@@ -1,0 +1,81 @@
+STATUS: DONE
+
+## Frontend Review (round 2, wave 2)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Range: `98bec59046d0ce30500b341e8c18ba5b767069bb..412258583206e539ce61727b9c4d71bb12fda3a0` (stage 2 tip .. head)
+- Scope mode: diff (explicit range from payload)
+- Slice read in full: slice-02 (backend only: `desk-publication-types.ts`, `desk-publication.ts`, `desk-run-executor.ts`, `desk-run-service.ts`, `head-move.ts`, `prior-round.ts`, `round-registry.ts`, `update-round.ts` and their tests).
+- Context read outside the slice: `apps/desktop/src/review/ReviewPublishDialog.tsx` lines 55-164 (how the dialog sends preview/update requests and reads `headMoved`), `src/review/managed.ts` `assignGlobalIds` (2020-2032), `src/review/loop.ts` 160-185 (global_id minting across rounds).
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+Slice-02 holds no React or MobX code, so the observer, action, store, inter-store callback and component-API laws have nothing to apply to. This wave checked the backend contract the Desktop dialog consumes: `PublicationState.headMoved`, the forced settings, the blocked reasons, and the answers carried into an update round's draft.
+
+- `headMoved?: { reviewedHead; currentHead }` is optional and only spread in when set (`...(headMoved && { headMoved })`). The dialog reads it as `draft?.headMoved`, so a current-head draft is unchanged (AC3).
+- The forced `{ verdict: "comment", verdictOverride: "comment", inline: false }` comes back in `result.settings`. The dialog's `update()` echoes `currentSettings`, which is that forced object, so the locked controls and the server agree. The digest covers the forced settings, so a submit that carries the dialog's earlier settings still matches the test "a moved head ignores a requested verdict and inline comments".
+- Carried answers reach the dialog this way. The first preview (`{ kind: "preview", id, refresh: true }`, no settings) takes `saved?.answers ?? earlierAnswers(earlier)`. Later previews echo `result.settings.answers`, which keeps the carried answers until the user changes them or saves. The new round's own draft wins.
+
+### Round 1 fixes checked (where this lens touches them)
+- Round 1 major (as-is offered after a force-push): holds on the backend side. `reviewedHeadInPull` accepts only compare status `ahead`. `diverged`, `behind`, a failed `gh` call and a non-sha head all keep the refusal; tests cover each case, and none of them posts a review.
+- Round 1 frontend F-001 (refusal text pointed at the disabled Inline control): holds. The head-moved branch returns "Enable General comment. Inline comments are not available when publishing for an earlier commit.", and a test asserts it.
+
+### Findings
+
+### [F-001] (info) Answer carry-over works only for findings that keep their global_id across rounds, and the dialog cannot tell carried answers from the user's own
+- **Severity**: info
+- **File**: src/review/desk-publication.ts (`earlierAnswers`, `savedAnswers` in `prepare`; `questionId`)
+- **Rule**: canonical rubric (an observation with no concrete bug)
+- **Problem**: Answers carry over keyed by `questionId(entry) = global_id || entry.id`. `assignGlobalIds` (managed.ts:2026) mints `<reviewId>#<id>` for every finding that has no key, and the per-round package reviewId differs. So a held finding is matched only when the round N+1 reviewer carries round N's key through `prior_findings[].finding`. In a `fallback-first` (full) round, or when a reviewer re-reports a finding without carrying its key, nothing is pre-selected. The update-round tests use a constant `fixture#F-002` in both rounds, so they exercise only the carried-key path. The bare-`id` fallback (`F-002`) could in principle match a different finding in the next round, but only when both rounds lack global_ids, which the managed ingest prevents. The draft has no field marking answers as carried from the previous round: `savedAt` is absent and the answers look like the user's own. So the dialog cannot say "pre-selected from round N".
+- **Why it matters**: There is no wrong output on the designed path. AC10's pre-selection may show up less often in a real update round than the fixtures suggest. AC9/AC10 have not been run live.
+- **Fix**: Optional. Add a test where round N+1's findings carry no global_id (re-minted), to state that nothing is pre-selected then. If the UI should label inherited answers, return a marker such as `answersFrom: <previous attempt id>`.
+
+### Clean Areas
+- Observer / MobX / store laws: not applicable (no frontend code in slice-02).
+- API placement: no component code in this slice. On the Desktop side, the dialog keeps its IO behind the injected `command` (context read).
+- TypeScript: new optional fields follow `exactOptionalPropertyTypes` with conditional spreads (`...(headMoved && { headMoved })`, `...(previous ? { previousRunDir, previousPartial } : {})`). `HeadMoveResponse` is a discriminated union, `ON_HEAD_MOVE` is `as const`, and `parseOnHeadMove` narrows `unknown` without casts. No `any`. Non-null `!` appears only in tests.
+- Error handling: `earlierAnswers` swallows an unreadable earlier draft on purpose, with a comment saying why. `reviewedHeadInPull` fails closed, also with a comment. `recordPartialRound` returns its failure, and the executor then does not hand the package on.
+- Contract stability for the dialog: blocked-reason strings for the non-moved cases are unchanged (closed / changed base / diverged still read "revision moved").
+
+### Not verified / notes
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc` (named in the payload) is absent from this worktree, so severities come from the canonical rubric.
+- No tests run (read-only, exec budget 0). Brief evidence: Desktop `src/review src/reviews` 142 pass, backend `src/review` 5499 pass / 2 inherited timing failures.
+- No live Desktop run of publish as is or of an update round (AC9 not run, as the PR states).
+- Wave-1 findings (slice-01: Update review silently dropped while a mutation is pending; the existing-attempt guard semantics) are not repeated.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-frontend",
+  "summary": "Slice-02 is backend only (no React/MobX). The publication contract the Desktop dialog consumes is consistent: headMoved is optional and spread only when set, the forced comment/no-inline settings round-trip through the dialog's echo, and carried answers reach the first preview and survive later previews with the new round's own draft winning. The round 1 force-push and refusal-text fixes hold. One info: answer carry-over depends on global_id carry across rounds and is not marked as inherited for the UI.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/desk-publication.ts",
+      "line": null,
+      "quote": "const savedAnswers: Record<string, unknown> | undefined = saved?.answers ?? await earlierAnswers(earlier);",
+      "problem": "Carry-over is keyed by questionId = global_id || id. managed.ts assignGlobalIds mints <reviewId>#<id> per round, so a held finding matches only when the next round's reviewer carries the earlier key through prior_findings. A fallback-first round or a re-minted key gets no pre-selection. The tests use a constant fixture#F-002 in both rounds. The state has no marker that answers were inherited, so the dialog cannot label them.",
+      "impact": "No wrong output on the designed path. AC10 pre-selection may show up less often in a real update round than the fixtures suggest. Not run live.",
+      "suggested_fix": "Optional: add a test with re-minted global_ids (no pre-selection), and if the UI should label inherited answers, return a marker such as answersFrom: <previous attempt id>.",
+      "evidence": "desk-publication.ts prepare(): questionId uses text(recordFor(entry)?.global_id) || entry.id; managed.ts:2026-2031 assignGlobalIds mints mintGlobalFindingId(reviewId, id) when absent; loop.ts:164-169 documents that minted keys differ between rounds; desk-publication.test.ts updateRound() copies fixture#F-002 unchanged into round 2.",
+      "confidence": "medium",
+      "reviewer": "review-frontend",
+      "dedupe_key": "update-round-answer-carryover-depends-on-global-id-carry",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "slices": ["slice-02"],
+  "inputs_unreadable": [".metaproject/rules/stacks/react/code-style-patterns.mdc (absent in worktree)"]
+}
+```
+
+Routing audit: graph_used: no (not-relevant; payload `layers.affected` supplied the dependents); wiki_used: no (not-relevant; intent stated in PR body and code comments); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

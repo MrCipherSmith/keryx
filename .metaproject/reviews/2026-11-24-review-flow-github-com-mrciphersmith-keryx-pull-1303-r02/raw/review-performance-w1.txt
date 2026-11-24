@@ -1,0 +1,49 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch `feat/desktop-review-v2-stage3`, base `98bec59046d0ce30500b341e8c18ba5b767069bb` (stage 2 tip), head `412258583206e539ce61727b9c4d71bb12fda3a0`, diff mode, round 2, wave 1.
+- I read slice-01 in full (2268 lines). It holds the flow 520 records (acceptance-criteria, context, description, journal, plan, tasks, flow.json, resolved/T5-T7, T11-T13), `apps/desktop/src/review/ReviewPublishDialog.tsx`, `ReviewRuns.tsx`, `ReviewWorkspace.tsx`, `apps/desktop/src/reviews/ReviewPanel.dom.test.tsx` and `docs/docs/desktop-app.md`.
+- To check the round 1 obligation and the T13 server side the dialog calls on every preview, I also read `src/review/desk-publication.ts` at head: lines 60-200 and 355-400. That file is in another slice, so I did not review its whole diff.
+- Read-only. I ran no tests (exec_budget_s 0, allowed_tools read-only).
+
+### Summary
+- blocker: 0 | major: 0 | minor: 0 | info: 0
+
+### Round 1 obligation (performance F-001): holds
+Round 1 minor F-001 was that automatic publication on a moved head fetched the full PR discussion (three paginated `gh api` reads) and then refused anyway. That is fixed. `src/review/desk-publication.ts:385` now throws `configuration: This review needs a publication decision in Desktop.` for `request.kind === "automatic" && open && !current`. This happens before `reviewedHeadInPull` (the compare call) and before `prepare`, so `publicationDiscussion` is never reached. The `request.kind === "automatic"` term in the discussion guard at line 218 is now unreachable when the head has moved. It is harmless.
+
+### Findings
+None.
+
+### Clean Areas
+- **Dialog re-renders (`ReviewPublishDialog.tsx`).** The new values `headMoved` and `updateOffered` are derived from `draft` with no new state or effect. `useId()` for the notice is stable. `shortSha` is a 7-character slice. The new `disabled` and `aria-describedby` props cost nothing measurable. The dialog is opened on demand and is not a high-frequency surface.
+- **Preview traffic with a moved head.** Each settings change in the dialog sends a preview. That was already true. The new per-preview work is bounded:
+  - `reviewedHeadInPull` (desk-publication.ts:99-112) reuses `cache.aheadHead` and calls the compare API only once per new current head, with `per_page=1`.
+  - The subject cache keeps its 15 s TTL.
+  - `earlierAnswers` (lines 134-140) reads earlier drafts only when neither the request nor the attempt's own draft has answers (`saved?.answers ?? …`). The dialog sends `settings` on every request after the first, so in practice this runs once, on the first preview.
+  - `earlierAttemptDirectories` (lines 119-131) is capped by `answerSourceLimit` (8 hops), uses a seen-set against cycles, and makes one `store.byId` lookup per hop inside the single store open.
+- **`ReviewWorkspace.updateReview`.** It is a `useCallback` with deps `[card, action.open, local.request, onRefreshBoard]`. It runs once per click. The `publication` object literal it is placed into is rebuilt on every render, which defeats the callback's memoisation. That object was already rebuilt every render before this PR, and `ReviewRuns`/`RunAttempt` are not `React.memo`, so no re-render is added. This is not a finding.
+- **`ReviewRuns.tsx`.** The inline `onUpdateReview` arrow is created only while the dialog is open (`draft && publishOpen`) and is passed to an unmemoised dialog, so it adds no cost.
+- **Redundant calls.** "Update review" makes one `start` request. It refreshes the board only when the board is behind the push (`boardBehind`), and it starts nothing when the current head already has an attempt (`action.open`).
+- **Not affected by this slice.** N+1, indexes, pagination, memory leaks (no new listeners, timers or subscriptions), bundle imports (only type imports were added) and sync I/O on an interactive path: nothing new in slice-01. The flow records, docs and DOM test fixtures are not runtime code.
+
+### Not verified
+- I did not run timing or verify-run checks.
+- I did not review the T12 backend diff (`desk-run-service.ts`, `desk-run-executor.ts`, `round-registry.ts`, `prior-round.ts`, `update-round.ts`). It is outside my slice. I assume another wave's slice covers it.
+
+Routing audit: graph_used: no (the payload `layers` block supplied the affected files, which was enough for a Desktop-only slice) | wiki_used: not-relevant (no domain question; perf lens) | ctx_used: yes (`keryx ctx read`, `keryx ctx rg`) | raw_rg_used: no.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No findings in slice-01. Round 1 performance F-001 holds: automatic publication with a moved head is refused at desk-publication.ts:385, before the compare and discussion reads. The head-moved dialog and the Update review action add no re-render or redundant-call cost. The per-preview server work they trigger is cached (compare result per current head, subject TTL) or bounded (earlier-answer chain capped at 8 hops, read only without saved answers).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-01"],
+  "inputs_unreadable": []
+}
+```

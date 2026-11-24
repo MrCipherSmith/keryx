@@ -1,0 +1,81 @@
+STATUS: DONE
+
+## Security Review (round 2, wave 1)
+
+### Scope
+- Branch: `feat/desktop-review-v2-stage3`
+- Reviewed range: base `98bec59046d0ce30500b341e8c18ba5b767069bb` (stage 2 tip) .. head `412258583206e539ce61727b9c4d71bb12fda3a0`
+- Scope mode: explicit-hash-range, payload slice `slice-01` (read in full, lines 1-2263)
+- Code files in the slice: `apps/desktop/src/review/ReviewPublishDialog.tsx`, `apps/desktop/src/review/ReviewRuns.tsx`, `apps/desktop/src/review/ReviewWorkspace.tsx`, `apps/desktop/src/reviews/ReviewPanel.dom.test.tsx`, `docs/docs/desktop-app.md`. The rest of the slice is flow 520 metadata (acceptance criteria, journal, plan, tasks, flow.json, resolved/T5-T13 rule manifests) with no executable content.
+- Extra context read at head (outside the slice): `verifyDeskSubject` and `requestDeskRun` start path in `src/review/desk-run-service.ts:50-64, 247-274`; `DeskReviewOptions`/`parseDeskReviewOptions` in `src/review/desk-run-options.ts:7-40`; the `confirmSubmit` prompt line in `src/commands/review-desk-publish.ts:108`; round 1 result `raw/review-security-code-w1.txt` of package `...-pull-1303`.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 0
+
+The new client path in this slice is the "Update review" action (T13). I traced its one input that comes from outside the webview: `headMoved.currentHead` from the publication preview becomes the `headSha` of a `start` request. That request goes through `requestDeskRun`, which calls `verifyDeskSubject(cwd, key, revision)` before admitting the run (`desk-run-service.ts:258`): the viewer, the repository id, `state === "OPEN"`, and the exact base and head against a fresh GitHub read. A forged or stale `currentHead` is therefore refused with `stale:` and starts nothing. The copied `reviewed.options` are re-parsed by `parseDeskReviewOptions` (`desk-run-service.ts:272`), which allowlists fields and model names, so the update path widens no input. The dialog renders both SHAs as React text and `title` attributes, which React escapes. The publish-as-is write path is in slice-02 and was settled in round 1. Round 1 found no security defect to re-check in this slice.
+
+### Findings
+
+### [F-001] "Update review" silently carries automatic publication into the new round
+- **Severity**: minor
+- **File**: apps/desktop/src/review/ReviewWorkspace.tsx (`updateReview`)
+- **Attack vector**: none. No attacker is involved. This is an operator-consent observation about an outbound GitHub write.
+- **Problem**: `updateReview` starts the next round with `reviewed.options` copied verbatim, and it does not open the launch form (the PR body records that decision). `DeskReviewOptions.autoPublish` is one of those options. The trigger is an attempt launched with **Publish to GitHub automatically**. If its head moves, automatic publication refuses, so the attempt waits in the publish dialog. One click on "Update review to <sha>" then starts a round that posts to GitHub on its own after full coverage. Nothing in the dialog or the button says the new round will auto-publish.
+- **Why it matters**: the outcome is a GitHub review posted under the user's account that the user did not re-confirm for the new head. The user did choose auto-publish for the earlier attempt, so this is not a wrong write. It is a consent gap on the one-click path, which is why it is rated minor and not major. The overlay-approval gate still applies when the project requires it.
+- **Fix**: either drop `autoPublish` from the copied options, so the update round waits for a publish decision, or state it in the head-moved notice or the button text (for example "Update review to <sha> (publishes automatically)").
+- **Patch** (one option):
+```diff
+- void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: reviewed.options }) })
++ const { autoPublish: _auto, ...carried } = reviewed.options ?? {};
++ void local.request({ kind: "start", ...revision, ...(reviewed.options && { options: carried as DeskReviewOptions }) })
+```
+
+### Clean Areas
+- **Injection (XSS/command/SQL/SSTI):** new rendering only places SHAs in `<code>` text and `title` attributes through JSX, which escapes them. There is no `dangerouslySetInnerHTML`, no `eval`, and no new shell or query construction. The preview body still renders through the existing `ReviewReportMarkdown`.
+- **Auth/authz/IDOR:** the update start keeps the panel's `subject` key (repo, repositoryId, viewer, number). The backend re-verifies the viewer and the repository id before admitting the run. The PR URL gate on `draft` (`/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i`) is unchanged.
+- **Input validation:** `currentHead` is bound to the live PR head by `verifyDeskSubject`. Options are re-parsed with an allowlist. The update path uses `run.baseSha`, and the backend refuses it if the base moved.
+- **Duplicate or unintended writes:** `updateReview` returns without starting when the board's current range already has an open attempt (tested in "does not start a second attempt").
+- **Secrets/logging:** nothing new is logged. No credentials are touched.
+- **Crypto, CSRF, path traversal, open redirect:** not applicable. No new randomness, endpoints, file paths or navigation targets.
+- **Docs change:** it describes behaviour only. No secrets and no unsafe instructions.
+
+### Round obligations / carried notes
+- Round 1 security info F-001 (the CLI `confirmSubmit` prompt does not mention the as-is variant) is still the same at head (`src/commands/review-desk-publish.ts:108`). That file is not in this range, it was info-level, and it was not in the T11 fix list. It is not re-raised as a finding.
+
+### Not verified
+- No tests were run (read-only reviewer). Claims come from reading the slice and the cited code at head.
+- I did not trace whether the executor actually auto-publishes for an update round started this way (the `autoPublish` path in `desk-run-executor.ts`, slice-02). F-001 rests on the option being copied and on the automatic-publication contract in `docs/docs/desktop-app.md`.
+- Layers: `keryx gdgraph affected` was not run. The slice's client code reaches the backend only through `requestDeskRun`, which I read directly.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-01's new client path, Update review, is safe on input. The dialog's currentHead becomes a start request that requestDeskRun re-verifies against a live GitHub read (viewer, repository id, OPEN, exact base and head) before admitting the run, and the copied options are re-parsed with an allowlist. SHAs render as escaped React text. One minor: Update review copies the reviewed attempt's options, including autoPublish, without the launch form, so one click can start a round that posts to GitHub automatically without the user re-confirming. Round 1's info finding (CLI confirm prompt) is unchanged in a file outside this range.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/desktop/src/review/ReviewWorkspace.tsx",
+      "line": null,
+      "quote": "void local.request({ kind: \"start\", ...revision, ...(reviewed.options && { options: reviewed.options }) })",
+      "problem": "Update review starts the next round with the reviewed attempt's options copied verbatim and without the launch form, and DeskReviewOptions.autoPublish is among them. An attempt launched with Publish to GitHub automatically, whose head then moved (automatic publication refuses a moved head), sits in the publish dialog. One click on Update review starts a round that will post to GitHub on its own after full coverage, and neither the dialog nor the button says so.",
+      "impact": "A GitHub review is posted under the user's account for a new head without the user re-confirming. No attacker is involved. The user did opt into auto-publish for the earlier attempt, so this is a consent gap on a one-click path, not a wrong write.",
+      "suggested_fix": "Drop autoPublish from the options carried by updateReview, so the update round waits for a publish decision, or state it in the head-moved notice or the Update review button (for example '(publishes automatically)').",
+      "evidence": "ReviewWorkspace.tsx updateReview passes reviewed.options into the start request. src/review/desk-run-options.ts:10 declares autoPublish?: true in DeskReviewOptions, and parseDeskReviewOptions (desk-run-service.ts:272) keeps it. The PR body says Update review 'starts the attempt directly with the previous attempt's options; it does not open the launch form'. The executor's auto-publish path for the new round was not traced.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "read in full, lines 1-2263", "status": "DONE" }
+  ],
+  "inputs_unreadable": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

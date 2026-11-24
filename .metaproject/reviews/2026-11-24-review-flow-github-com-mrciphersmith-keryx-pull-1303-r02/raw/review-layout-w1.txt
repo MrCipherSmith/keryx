@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-layout, wave 1, round 2. slice-01 read in full. PR #1303, range 98bec5904..412258583.
+
+metaproject: .metaproject/index.md read, the hard gate was met. The review-layout SKILL.md, the brief, the driver, the payload's allowed_tools and exec_budget_s, layout-rendering.mdc and round 1's raw/review-layout-w1.txt were also read.
+
+## Measurements
+
+None were taken. Browser measurements did not run this round because nothing was rendered. allowed_tools is read-only and exec_budget_s is 0, so there was no real-CSS tier and no probe. Every statement below is a static reading of the CSS. Under layout-rendering.mdc Rule 1, each one is therefore `info` and marked unverified. The pixel figures are estimates from the tokens, not rects.
+
+Inputs to the estimate:
+- tokens.css: `--fs-md` is `calc(13px * var(--text-scale))`, `--sp-2` is 8px, `--sp-3` is 12px and `--sp-5` is 24px.
+- prefs.ts sets `TEXT_SCALES` to small 0.92, default 1, large 1.1 and larger 1.22.
+- components.css `.btn`: inline-flex, gap 6px, padding 0 12px, 1px border, nowrap, `flex: none`. `.overlay` has 24px of padding. `.dialog` has `max-width: 100%` and an inline width of 780. `.dialog-foot` has 24px inline padding and `flex-wrap`.
+- ReviewDetail.css `.review-publish-footer`: flex, wrap, gap 8px, `justify-content: flex-end`.
+- tauri.conf.json sets `minWidth` to 720.
+- The publish dialog is not inside `.review-session-overlay`, so the overlay and dialog paddings above apply unchanged.
+
+Estimated footer geometry at text-scale 1, with about 6.8px per proportional character and 7.8px per mono character:
+
+```
+button (head moved, unpublished, not skipped)   est. width
+Update review to <code>ccccccc</code> (primary)  ~189px
+Close                                             ~62px
+Skip publication                                 ~126px
+Save locally                                     ~100px
+Publish as is for <code>bbbbbbb</code>           ~187px
+sum + 4 gaps x 8px                               ~696px
+
+window   dialog   footer content   result
+720px    672px    624px            wraps: row 1 Update, Close, Skip, Save (~501px); row 2 Publish as is alone, right-aligned
+792px+   780px    732px            one row at scale 1
+any      780px    732px            at scale 1.22 (~811px) wraps even at full dialog width
+```
+
+## Round obligation: LY-001 from round 1
+
+Round 1 predicted that the footer wraps once "Update review" is offered. T13 now wires it (ReviewRuns → ReviewWorkspace.updateReview), so the five-button state is live. The prediction holds statically: about 696px of buttons against 624px of footer content width at the 720px minimum window.
+
+T13 changed the order. Update review is now the first button and is `btn-primary`, and Publish as is was demoted to plain `btn`. The wrap therefore leaves the primary at the start of row 1, and "Publish as is for …" drops alone onto row 2, at the trailing end. The two head-moved alternatives still land on different rows, which is the split LY-001 described.
+
+Nothing clips and nothing scrolls sideways. Every button is `flex: none` and nowrap, the footer wraps, and the widest button (about 189px, or about 223px at scale 1.22) fits inside any reachable footer width. Under Rule 2 this is not a reflow defect. It remains a cosmetic grouping concern, filed again as LY-001, info, unverified.
+
+## Other checks (no finding)
+
+1. The head-moved notice is now `div.inline-banner.tone-warn` instead of round 1's `p`. As a grid child of `.review-publish` (gap 12px), it keeps `.inline-banner`'s `margin: 0 0 var(--sp-3)`, so about 24px separates it from the settings grid where other items are 12px apart. The existing error banner in the same grid already behaves this way, so this matches the current pattern and introduces nothing new. The `span` is `flex: 1; min-width: 0` and wraps normally. Its `<code>` runs are 7-character short SHAs, so there is no unbreakable run.
+2. `<code>` inside `.btn` changes only the font family, so the 28px button height holds. The trailing space in "to " or "for " collapses at the flex-item boundary, and the 6px gap separates the text from the code instead.
+3. Disabled radios and checkbox (`disabled={!!headMoved}`) change no geometry.
+4. ReviewRuns.tsx and ReviewWorkspace.tsx changes are wiring only, with no rendered sizing.
+5. RTL: no physical property was added. `margin-inline-start: auto` and `justify-content: flex-end` mirror together, so in RTL the row 2 orphan sits at the inline end, which is the left edge.
+6. Locale: Desktop strings are hard-coded English with no catalog, so Rule 3 does not apply.
+7. 320px: the Desktop window cannot go below 720px (tauri minWidth). Even at 320px, each single button fits the roughly 224px footer content width at scale 1.
+
+## Findings
+
+### [LY-001] With Update review offered, the publish footer wraps at the 720px minimum window and leaves "Publish as is for …" alone on a second row (unmeasured)
+
+- **Severity**: info (unverified, no measurement)
+- **File**: apps/desktop/src/review/ReviewPublishDialog.tsx
+- **Problem**: In the head-moved, unpublished, not-skipped state, the footer holds five nowrap buttons: Update review (primary, first), Close, Skip publication, Save locally and Publish as is. That totals about 696px, against about 624px of footer content width at the 720px window. Flex-wrap moves Publish as is alone to row 2. At text-scale "larger" (1.22) the footer wraps even at the full 780px dialog width.
+- **Measurement**: none. These are token-based estimates (see the table above). Settle it with a Playwright or real-CSS probe that renders ReviewPublishDialog with `headMoved` and `onUpdateReview` at window widths 720, 792 and 1180 and text-scale 1 and 1.22, reading `getBoundingClientRect().top` per footer button.
+- **Why it matters**: The two mutually exclusive head-moved actions appear on different rows, and the primary is at the leading edge rather than the trailing one. Nothing is clipped and there is no sideways scroll, so this is cosmetic grouping only.
+- **Fix**: Group the head-moved pair in its own nowrap flex container so they wrap together, or place the primary last in the footer. Then measure at 720px.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Round 2 diff-mode layout review of the publish dialog, which now carries the T13 Update review primary action and the T11 head-moved notice as a warn inline-banner. No CSS changed. Browser measurements were not run this round (read-only, exec_budget_s 0, no render), so every layout statement is static and the only finding is info, unverified. Round 1's LY-001 prediction holds statically now that Update review is wired. Five nowrap buttons come to about 696px against about 624px of footer width at the 720px Desktop minimum, so the footer wraps and 'Publish as is for …' sits alone on row 2. Nothing clips or scrolls sideways. The notice banner keeps the existing inline-banner bottom margin, matching the error banner in the same grid. No RTL or locale exposure. Concern: no layout claim is measured.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/desktop/src/review/ReviewPublishDialog.tsx",
+      "line": null,
+      "quote": "{updateOffered && headMoved && onUpdateReview && <button type=\"button\" className=\"btn btn-primary\" disabled={writing}",
+      "problem": "With the head moved and Update review offered, .review-publish-footer holds five nowrap flex:none buttons: Update review (primary, first), Close, Skip publication, Save locally and Publish as is for <sha>. They total about 696px against about 624px of footer content width at the 720px Desktop minWidth, so the footer wraps and 'Publish as is for …' lands alone on a second row. At text-scale 1.22 it wraps even at the full 780px dialog width.",
+      "impact": "The two mutually exclusive head-moved actions are split across rows, and the primary sits at the leading edge. Cosmetic only: no clipping and no sideways scroll, because buttons are flex:none and the footer wraps.",
+      "suggested_fix": "Wrap the Update review / Publish as is pair in its own nowrap flex group so they wrap together, or order the primary last in the footer. Then measure the footer at 720px.",
+      "evidence": "Unverified: no measurement was taken (read-only dispatch, exec_budget_s 0, no render). The estimate uses tokens.css (--fs-md 13px * --text-scale, --sp-2 8px, --sp-3 12px, --sp-5 24px), prefs.ts TEXT_SCALES (max 1.22), components.css (.btn padding 0 12px, gap 6px, nowrap, flex none; .overlay padding 24px; .dialog-foot padding-inline 24px, flex-wrap), ReviewDetail.css (.review-publish-footer flex-wrap, gap 8px, justify-content flex-end), Dialog width 780 and tauri.conf.json minWidth 720. Settle it with a real-CSS probe that renders ReviewPublishDialog with headMoved and onUpdateReview at 720, 792 and 1180px and reads each footer button's rect top.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Notes
+
+- Browser measurements: not run this round (no render). All layout statements above are static estimates.
+- Test evidence in the brief is not a layout concern and was not investigated in this lane. The Desktop DOM suites run under a DOM stub, so they cannot observe wrap.
+- Routing audit: graph_used: no (not-relevant: the changed .tsx files and their stylesheets were named in the slice). wiki_used: no (not-relevant: the question is rendered CSS geometry). ctx_used: yes (keryx ctx rg for CSS rules, tokens, text scales and the Dialog; keryx ctx read for the driver, the round 1 result and the rule; a few raw sed reads of exact CSS and token lines, marked keryx:raw). raw_rg_used: no.
