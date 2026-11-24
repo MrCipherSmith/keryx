@@ -5,6 +5,20 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.56] - 2026-11-25
+
+Keryx Desktop 0.2.19 bundles Keryx 0.4.56.
+
+### Changed
+
+- Review plans use the pull request’s actual changed files and show file and line counts, selected checks, progress, and why each reviewer and model tier was chosen.
+- Reviews started in chat appear on the board. Opening a linked review card returns to its original conversation, including follow-up messages and earlier activity.
+- The default plan confirmation thresholds are now 160 dispatches and 400 estimated minutes. Desktop Auto can approve expansions within the configured limits and remaining budget. Resuming a pinned plan retains completed assignments.
+
+### Fixed
+
+- Single-reviewer runs can finish with partial coverage without repeated prompts to start a full review. Completed and partial runs keep their plan available in the review details.
+
 ## [0.4.55] - 2026-11-24
 
 **Keryx Desktop 0.2.18** bundles Keryx 0.4.55 and supports Keryx 0.4.50 or newer. The Reviews tab, **Update review** and **Fix findings** read commands added in Keryx 0.4.55: use the bundled Keryx or 0.4.55 or newer for them.
