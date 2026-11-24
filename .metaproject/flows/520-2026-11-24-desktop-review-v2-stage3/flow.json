@@ -11,7 +11,7 @@
   "title": "Desktop Review v2 stage 3: head move — publish-as-is (D1), on_head_move default (D2), update round, prior-round rules",
   "status": "in-progress",
   "createdAt": "2026-11-24T07:28:08.299Z",
-  "updatedAt": "2026-11-24T07:29:44.073Z",
+  "updatedAt": "2026-11-24T07:54:35.165Z",
   "source": {
     "type": "description",
     "ref": null
@@ -101,43 +101,64 @@
       "id": "T5",
       "title": "D1: publish as is for the reviewed commit (server + dialog + tests)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:54.815Z",
+            "outcome": "started",
+            "detail": "520-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "D2: on_head_move type, defaults and parse (head-move.ts + tests)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:54.994Z",
+            "outcome": "started",
+            "detail": "520-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T07:29:55.173Z",
+            "outcome": "started",
+            "detail": "520-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -245,6 +266,36 @@
     {
       "at": "2026-11-24T07:29:44.073Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-24T07:29:54.815Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 520-T5"
+    },
+    {
+      "at": "2026-11-24T07:29:54.994Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 520-T6"
+    },
+    {
+      "at": "2026-11-24T07:29:55.173Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 520-T7"
+    },
+    {
+      "at": "2026-11-24T07:32:02.125Z",
+      "event": "task-done",
+      "detail": "T6: D2: on_head_move type, defaults and parse (head-move.ts + tests)"
+    },
+    {
+      "at": "2026-11-24T07:35:54.838Z",
+      "event": "task-done",
+      "detail": "T7: Prior-attempt selection for update rounds (update-round.ts) + prior-round settings test"
+    },
+    {
+      "at": "2026-11-24T07:54:35.165Z",
+      "event": "task-done",
+      "detail": "T5: D1: publish as is for the reviewed commit (server + dialog + tests)"
     }
   ],
   "acKinds": {
