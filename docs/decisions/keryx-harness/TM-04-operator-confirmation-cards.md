@@ -6,7 +6,7 @@
 **Frozen**: 2026-10-15
 **Task**: flow 456
 **Amended**: 2026-10-19, flow 467 (§6b: the host-question path; reverses the `ask_user` rejection of §5 for four review acts)
-**Amended**: 2026-11-25 (§6c: the review cards in Keryx Desktop, recorded as `desktop-card`)
+**Amended**: 2026-11-25 (§6c: the operator cards in Keryx Desktop, recorded as `desktop-card`)
 **Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
 **Reviewer Track**: architecture
 
@@ -138,13 +138,13 @@ What the path refuses, with nothing recorded: an answer that is not one of the v
 
 **Two kinds of record.** A verified press (`tui-card`, `remote-card`) is a button pressed on a card keryx built and a token keryx checked; keryx saw it. A host question (`host-question`) is an answer an agent reports; keryx did not see it. Both are the operator's recorded decision, and the second is the weaker. The card stays the first choice wherever a card is available, and the skills and the verbs' help say so.
 
-## 6c. The review cards in Keryx Desktop (2026-11-25)
+## 6c. The operator cards in Keryx Desktop (2026-11-25)
 
 A Desktop session is `keryx acp --profile shell`, not `keryx shell`, so it was offered no card tool: a review there stopped at `review_decide_premise` or `review_complete` with nothing the operator could answer. The operator asked for the cards in Desktop.
 
-A shell-profile session is now offered the review card tools (`review_chunks_answer`, `review_confirm_plan`, `review_decide_premise`, `review_complete`, `review_publish`, `review_comments_reply`, `review_waive_coverage`, `review_waive_readiness`, `review_waive_mutation`, `review_override_reviewers`) when its client declares `_meta.keryx.operatorCards` in `initialize`. The framework is unchanged: the card is built from the state on disk, the call is a hard floor in every permission mode, the single-use token stays in the keryx process, and `apply` re-checks the state. The card travels on `session/request_permission` as `toolCall._meta.keryx.card` (title and lines), with no "always" option. Desktop shows it as a yes/no dialog with No focused; Esc declines and Enter never approves by itself. A yes is recorded as `confirmedVia: "desktop-card"`.
+A shell-profile session is now offered every card tool of §2, and `schedule_list`, when its client declares `_meta.keryx.operatorCards` in `initialize`. The review cards came first; the operator then asked for the rest (`flow_confirm`, the flow completion with exceptions, `external_apply`, the `learn_*` and `schedule_*` tools). The framework is unchanged: the card is built from the state on disk, the call is a hard floor in every permission mode, the single-use token stays in the keryx process, and `apply` re-checks the state. The card travels on `session/request_permission` as `toolCall._meta.keryx.card` (title and lines), with no "always" option. Desktop shows it as a yes/no dialog with No focused; Esc declines and Enter never approves by itself. A yes is recorded as `confirmedVia: "desktop-card"`.
 
-The other cards of §2 (`flow_confirm`, `external_apply`, the `learn_*` and `schedule_*` tools, the flow exception) are not offered to a Desktop session. They stay in `keryx shell`.
+A flow completion token minted from a Desktop card is signed `desktop-card-token`, and a completion with exceptions answered there records `confirmedVia: "desktop-card"`, so neither reads as a terminal or a shell answer. §4a applies to `flow_confirm` here as it does in the shell: one click mints the token, and the agent sees it.
 
 What a `desktop-card` proves: the ACP client that declared `operatorCards` answered "allow once" to this card's permission request, once, in the session that asked. With Keryx Desktop as the client, that is a click on Yes in the app window.
 

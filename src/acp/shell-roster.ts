@@ -26,12 +26,11 @@
 //   spawnTool               `spawn_subagent` over `buildSessionSpawnDeps` — the wiring `keryx shell`
 //                           uses — with native children only (`nativeOnly`) unless the client runs terminals (`runExternal`); the session's own
 //                           fleet-event closure, hook runtime and live parent model (`spawn`)
-//   operatorCards           the review decisions only the operator takes (`review_complete`,
-//                           `review_decide_premise`, ...), as cards the client shows; only for a client
-//                           that declared `_meta.keryx.operatorCards` (TM-04 §6c). The other operator
-//                           cards (flow completion, external apply, learn, schedules) stay in `keryx shell`
-//   bus, schedules,         M2: omitted, so the factory never builds them
-//   reviewAgents
+//   operatorCards           every decision only the operator takes (the review cards, `flow_confirm`,
+//                           `flow_complete_exceptions`, `external_apply`, `learn_*`, `schedule_*`), as cards
+//                           the client shows; only for a client that declared `_meta.keryx.operatorCards`
+//                           (TM-04 §6c)
+//   bus, reviewAgents       M2: omitted, so the factory never builds them
 //
 // `read_file` keeps the client-`fs` routing the editor profile has
 // (`acpAwareReadFileTool`).
@@ -48,8 +47,7 @@ import type { JobRegistry } from "../harness/tool/builtin/background-job-registr
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { createSpawnSubagentTool, type SpawnSubagentToolDeps } from "../harness/tool/builtin/spawn-subagent-tool";
 import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/spawn-deps";
-import { operatorConfirmTools } from "../commands/operator-confirm-tools";
-import { reviewConfirmSpecs } from "../commands/operator-confirm-review";
+import type { ScheduleToolBinding } from "../commands/schedule-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
@@ -79,10 +77,12 @@ export interface AcpShellRosterInput {
   /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
   readonly metaprojectPort?: MetaprojectPort;
   /**
-   * The client shows operator cards (`clientShowsOperatorCards`): the review card tools are offered, and a yes is
+   * The client shows operator cards (`clientShowsOperatorCards`): every operator card tool is offered, and a yes is
    * recorded as `desktop-card`. Absent → none of them is offered, as before.
    */
   readonly operatorCards?: boolean;
+  /** With `operatorCards`: the session's current provider and model, which `schedule_create` uses when the model names none. */
+  readonly scheduleDefaults?: ScheduleToolBinding["defaults"];
   /** The session's `spawn_subagent`. Absent → the tool is denied. */
   readonly spawnTool?: InteractiveTool;
   /**
@@ -118,10 +118,15 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),
     ...(input.mcp !== undefined ? { mcp: input.mcp } : {}),
     denyTools: acpShellDeniedTools(input.askUser !== undefined),
+    ...(input.operatorCards === true
+      ? {
+          operatorConfirm: { projectRoot: root, localVia: "desktop-card" as const },
+          schedules: { projectRoot: root, ...(input.scheduleDefaults !== undefined ? { defaults: input.scheduleDefaults } : {}) },
+        }
+      : {}),
   });
   if (input.requestReviewDraft) tools.push(prepareReviewTool(input.requestReviewDraft));
   if (input.sessionReviews) tools.push(input.sessionReviews);
-  if (input.operatorCards === true) tools.push(...operatorConfirmTools({ projectRoot: root, localVia: "desktop-card" }, reviewConfirmSpecs()));
   return tools.map((tool) =>
     tool.definition.name === "read_file"
       ? acpAwareReadFileTool(tool, root, input.clientCapabilities, input.readViaClient)

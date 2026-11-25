@@ -173,7 +173,7 @@ export type FlowGates = {
  * this AC checksum. It does not say who ran that step (see TM-03).
  */
 export type SignatureConfirmation = {
-  mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
+  mechanism: "terminal-token" | "tui-card-token" | "remote-card-token" | "desktop-card-token";
   /** A prefix of the stored hash, for correlation. Never the token. */
   tokenRef: string;
   mintedAt: string;
@@ -419,7 +419,7 @@ export type GateOutcome = {
 
 export type CompletionException = import("./completion-exceptions").CompletionExceptionSelection & {
   operatorWords: string;
-  confirmedVia: "host-question" | "terminal" | "shell-card";
+  confirmedVia: "host-question" | "terminal" | "shell-card" | "desktop-card";
   hostQuestion?: import("../review/types").HostQuestion;
   at: string;
 };

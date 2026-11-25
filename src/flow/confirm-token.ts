@@ -223,9 +223,11 @@ export async function consumeConfirmationToken(
     confirmTokenPath(cwd, dir),
     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
   );
-  // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+  // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token" / "desktop-card-token".
   const mechanism: SignatureConfirmation["mechanism"] =
-    stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
+    stored.confirmedVia === "tui-card" ? "tui-card-token"
+      : stored.confirmedVia === "remote-card" ? "remote-card-token"
+        : stored.confirmedVia === "desktop-card" ? "desktop-card-token" : "terminal-token";
   return {
     mechanism,
     tokenRef: stored.tokenRef,

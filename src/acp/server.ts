@@ -2118,7 +2118,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         requestReviewDraft: reviewDraftFor(sessionId),
         sessionReviews: sessionReviewsTool(() => readVisibleSessionReviews(root, sessionId, true)),
       } : {}),
-      ...(clientShowsOperatorCards(state.clientCapabilities) ? { operatorCards: true } : {}),
+      ...(clientShowsOperatorCards(state.clientCapabilities)
+        ? {
+            operatorCards: true,
+            scheduleDefaults: () => {
+              const { binding } = sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
+              return { provider: binding.providerId, model: binding.modelId };
+            },
+          }
+        : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
   }

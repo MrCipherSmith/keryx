@@ -485,6 +485,17 @@ test("456: a card-minted token is spent with a card mechanism in the signature",
   expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
 });
 
+test("a token minted from a Desktop card is signed as a desktop-card token, not as a terminal one", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({ cwd: ROOT, id, confirmation: { confirmedVia: "desktop-card", quote: "Confirm?: yes" } });
+  clock = new Date(clock.getTime() + 60_000);
+  const result = await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+  expect(result.passed).toBe(true);
+  const flow = await onDisk(dir);
+  expect(flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation?.mechanism).toBe("desktop-card-token");
+});
+
 test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
   const service = await fresh();
   const { id, dir } = await readyFlow(service);
