@@ -9,17 +9,62 @@
   "id": "524",
   "slug": "desktop-review-v3-live-review-session-pe",
   "title": "Desktop Review v3: live review session per round and review.json state",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-25T05:57:50.199Z",
-  "updatedAt": "2026-11-25T10:00:20.675Z",
+  "updatedAt": "2026-11-25T10:09:28.756Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-25T10:09:26.440Z",
+      "note": "docs/requirements/keryx-desktop-review-v3/{README,prd,specification,implementation-plan}.md merged in #1317; schema+migration, CLI verbs, status mapping, stages, v2 supersession, decisions V1-V8"
+    },
+    "AC2": {
+      "at": "2026-11-25T10:09:26.670Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC3": {
+      "at": "2026-11-25T10:09:26.905Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC4": {
+      "at": "2026-11-25T10:09:27.133Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC5": {
+      "at": "2026-11-25T10:09:27.370Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC6": {
+      "at": "2026-11-25T10:09:27.602Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC7": {
+      "at": "2026-11-25T10:09:27.846Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC8": {
+      "at": "2026-11-25T10:09:28.079Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC9": {
+      "at": "2026-11-25T10:09:28.308Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC10": {
+      "at": "2026-11-25T10:09:28.535Z",
+      "note": "both SKILL.md copies byte-identical (review-orchestrator-skill-parity test in CI); CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC11": {
+      "at": "2026-11-25T10:09:28.756Z",
+      "note": "PR #1317 merged a37b779d1 after CI green; not verified in the built app or on a real PR (recorded in implementation-plan Состояние этапа 1)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1317"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -219,6 +264,66 @@
       "at": "2026-11-25T10:00:20.675Z",
       "event": "ac-updated",
       "detail": "AC9: \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" -> \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:09:26.214Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1317 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-25T10:09:26.440Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: docs/requirements/keryx-desktop-review-v3/{README,prd,specification,implementation-plan}.md merged in #1317; schema+migration, CLI verbs, status mapping, stages, v2 supersession, decisions V1-V8 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:26.670Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:26.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.133Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.370Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.846Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.079Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.535Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: both SKILL.md copies byte-identical (review-orchestrator-skill-parity test in CI); CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.756Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PR #1317 merged a37b779d1 after CI green; not verified in the built app or on a real PR (recorded in implementation-plan Состояние этапа 1) (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -264,5 +369,128 @@
     "AC11": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-25T10:09:26.440Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:26.670Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:26.905Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.133Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.370Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.602Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.846Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.079Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.308Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.535Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.756Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    }
+  ]
 }

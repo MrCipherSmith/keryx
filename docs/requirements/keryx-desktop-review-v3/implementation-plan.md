@@ -1,7 +1,7 @@
 # План реализации · Review v3
 Version: 0.1.0
 
-Статус: этап 1 — в Flow 524 (`.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/`), Draft PR против `main`; этапы 2–4 не начаты. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md). Каждый этап выпускается отдельно и не ломает данные v2.
+Статус: этап 1 реализован в Flow 524 (`.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/`) и влит в `main` через PR #1317 (merge-коммит `a37b779d1`, CI на head `fd2e7e0aa` зелёный); этапы 2–4 не начаты. Номера требований — из [PRD](prd.md), разделы — из [спецификации](specification.md). Каждый этап выпускается отдельно и не ломает данные v2.
 
 ## Этапы
 
@@ -14,7 +14,7 @@ Version: 0.1.0
 
 ## Состояние этапа 1
 
-Реализован в Flow 524, Draft PR #1317 (не влит). Сделано: хранилище `review.json` и `journal.md` (`src/review/review-state.ts`), CLI `keryx review state open|round|publish|mark|note|show|list`, раздел «Desktop review state» в обеих копиях `review-orchestrator`; «Run review» на доске, во вкладке Reviews и в диалоге `/review` отправляет ход ревью в привязанную к PR сессию, «Continue review» — ход в ту же сессию (для попытки v2 без `review.json` ход называет попытку, её диапазон и команду `state open`). Ревью: два раунда; после первого исправлены три major (совпадение id у разных PR, переход `paused → ready`, продолжение попытки v2), второй раунд — без blocker и major. Двенадцать minor отложены и перечислены в `journal.md` Flow 524.
+Реализован в Flow 524 и влит в `main` через PR #1317 (merge-коммит `a37b779d1`). Flow 524 — `implemented`: `flow complete` отказывает по гейтам owner, health и review (раунды ревью шли субагентами, а не пакетами `keryx review`), решение за оператором. Сделано: хранилище `review.json` и `journal.md` (`src/review/review-state.ts`), CLI `keryx review state open|round|publish|mark|note|show|list`, раздел «Desktop review state» в обеих копиях `review-orchestrator`; «Run review» на доске, во вкладке Reviews и в диалоге `/review` отправляет ход ревью в привязанную к PR сессию, «Continue review» — ход в ту же сессию (для попытки v2 без `review.json` ход называет попытку, её диапазон и команду `state open`). Ревью: два раунда; после первого исправлены три major (совпадение id у разных PR, переход `paused → ready`, продолжение попытки v2), второй раунд — без blocker и major. Двенадцать minor отложены и перечислены в `journal.md` Flow 524.
 
 Что не проверено:
 
