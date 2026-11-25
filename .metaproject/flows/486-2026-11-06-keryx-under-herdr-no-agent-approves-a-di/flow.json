@@ -9,9 +9,9 @@
   "id": "486",
   "slug": "keryx-under-herdr-no-agent-approves-a-di",
   "title": "Keryx under herdr: no agent approves a dialog by accident; hc delegation is a conscious choice",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-11-06T22:23:44.020Z",
-  "updatedAt": "2026-11-07T00:46:44.138Z",
+  "updatedAt": "2026-11-07T07:29:11.282Z",
   "source": {
     "type": "description",
     "ref": null
@@ -570,6 +570,80 @@
       "at": "2026-11-07T00:46:44.138Z",
       "event": "ac-confirmed",
       "detail": "AC10: Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T06:32:27.185Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-07T06:32:31.572Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-11-07T06:32:31.573Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-11-07T06:32:35.973Z",
+      "event": "completing",
+      "detail": "merged commit: f1be856e514238ca2312baa7792b87f177cbde46"
+    },
+    {
+      "at": "2026-11-07T06:32:41.134Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-11-07T06:32:41.136Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-11-07T06:34:20.985Z",
+      "event": "completing",
+      "detail": "merged commit: f1be856e514238ca2312baa7792b87f177cbde46"
+    },
+    {
+      "at": "2026-11-07T06:34:25.570Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-11-07T06:34:25.571Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-11-07T06:34:36.091Z",
+      "event": "completing",
+      "detail": "merged commit: f1be856e514238ca2312baa7792b87f177cbde46"
+    },
+    {
+      "at": "2026-11-07T06:34:40.869Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: failed"
+    },
+    {
+      "at": "2026-11-07T06:34:40.872Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-11-07T06:35:25.359Z",
+      "event": "completing",
+      "detail": "merged commit: f1be856e514238ca2312baa7792b87f177cbde46"
+    },
+    {
+      "at": "2026-11-07T07:29:11.280Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 5: passed"
+    },
+    {
+      "at": "2026-11-07T07:29:11.282Z",
+      "event": "done",
+      "detail": "completed with exceptions: review:ingested-round: 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found.; reason: Three review rounds on earlier commits, recorded as they ran; no full round on the merged head; operator: y | review:terminal-dispositions: no ingested round to read findings from; reason: Three review rounds on earlier commits, recorded as they ran; no full round on the merged head; operator: y | review:head-commit: no ingested round to compare against the PR head; reason: Three review rounds on earlier commits, recorded as they ran; no full round on the merged head; operator: y | review:verifier-stats: no ingested round to read verification stats from; reason: Three review rounds on earlier commits, recorded as they ran; no full round on the merged head; operator: y"
     }
   ],
   "acKinds": {
@@ -742,6 +816,414 @@
       },
       "criterion": "AC10",
       "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T07:29:11.282Z",
+      "kind": "complete",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found.",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        }
+      ],
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b",
+      "headCommit": "f1be856e514238ca2312baa7792b87f177cbde46"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-11-07T06:32:31.572Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "486-2026-11-06-keryx-under-herdr-no-agent-approves-a-di is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T06:32:41.134Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "486-2026-11-06-keryx-under-herdr-no-agent-approves-a-di is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T06:34:25.570Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "486-2026-11-06-keryx-under-herdr-no-agent-approves-a-di is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T06:34:40.869Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "486-2026-11-06-keryx-under-herdr-no-agent-approves-a-di is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T07:29:11.280Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "f1be856e514238ca2312baa7792b87f177cbde46 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "17 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "486-2026-11-06-keryx-under-herdr-no-agent-approves-a-di is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): 3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1140: 0 comment(s) collected over 1 round(s) up to the PR head 495f53f61e2cda46b11ecbf5a8eafe0888e8aa68 (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "3 review package(s) exist and none is ingested: 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140 (30 in-scope file(s) are uncovered: fixtures/routing-shell-pty.ts, scripts/benchmark/run-ablation-long.ts, scripts/benchmark/run-ablation.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, … (+25). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02 (28 in-scope file(s) are uncovered: scripts/generate-commands-by-task.ts, scripts/native-lifecycle-parity.ts, scripts/smoke/keryx-native-machine.ts, scripts/stress/keryx-shell-stress.ts, scripts/verify-native-coverage.ts, … (+23). Run the missing work with `keryx review chunks next --package .metaproject/reviews/2026-11-06-review-flow-github-com-mrciphersmith-keryx-pull-1140-r02`, or pass `keryx review complete --waive-coverage \"<operator quote>\"` with the operator's own words.), 2026-11-07-review-flow-github-com-mrciphersmith-keryx-pull-1140 (research scope census is incomplete; review-architecture: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-degradation: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-highload: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-logic: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-performance: not run (no reviewer result recorded); a reviewer that did not run is never a clean pass; review-regression: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-security-code: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand; review-testing-practices: reviewer scope is incomplete (status \"complete\", scopeComplete false); a partial reviewer is retried per `keryx review retry-plan`, not declared complete by hand). A round that was never ingested cannot be cited — nothing durable records what it found.",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "Three review rounds on earlier commits, recorded as they ran; no full round on the merged head",
+          "operatorWords": "y",
+          "confirmedVia": "terminal",
+          "at": "2026-11-07T07:29:11.279Z"
+        }
+      ]
+    }
+  ],
+  "merged": {
+    "commit": "f1be856e514238ca2312baa7792b87f177cbde46",
+    "ref": "origin/main",
+    "at": "2026-11-07T07:29:11.282Z"
+  }
 }
