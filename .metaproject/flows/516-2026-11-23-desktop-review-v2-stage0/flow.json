@@ -9,15 +9,48 @@
   "id": "516",
   "slug": "desktop-review-v2-stage0",
   "title": "Desktop Review v2 stage 0: PR board fixes without model change",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-11-23T08:07:29.420Z",
-  "updatedAt": "2026-11-23T13:22:25.721Z",
+  "updatedAt": "2026-11-25T19:37:55.920Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-25T19:26:33.972Z",
+      "note": "model.test.ts: 'filterReviews does not bypass filters for an active review' (T5, 21e2110b1). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC2": {
+      "at": "2026-11-25T19:26:34.183Z",
+      "note": "ReviewBoard.dom.test.tsx keeps snapshot order with an active review on the second card (T5). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC3": {
+      "at": "2026-11-25T19:26:34.401Z",
+      "note": "ReviewBoard.dom.test.tsx: Done lane only when the state filter includes closed or merged; three lanes under the default filter (T5). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC4": {
+      "at": "2026-11-25T19:26:34.627Z",
+      "note": "ReviewBoard.dom.test.tsx indicator tests (T5, T16, T18, T22, T24); deviations (a) team requests not matched and (b) local review awaiting the viewer recorded in implementation-plan.md 'Состояние этапа 0'. Sixteen mutations of the attention code each fail a test (T24). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC5": {
+      "at": "2026-11-25T19:26:34.841Z",
+      "note": "desk-run-store.test.ts and board-badges.test.ts: outdated badge, precedence of current-range and active runs, one fixture per SQL term compared with localBadge (T6, T14, T19). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC6": {
+      "at": "2026-11-25T19:26:35.063Z",
+      "note": "ReviewResults/ReviewBoard DOM tests: 'Outdated review · <sha7>' in board and list, badgesEqual treats a changed outdated as a change (T7, T13, T20). The action label is 'Review again' by operator decision (d). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    },
+    "AC7": {
+      "at": "2026-11-25T19:26:35.287Z",
+      "note": "Judged by measurement: 1440px window minus 60px rail minus 560px PR panel = 820px toolbar; one row (55px) at 820px without the hidden-attention hint, real stylesheets and rebuilt toolbar markup (.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/research-evidence/layout-measurements-t24.md). With the hint shown it wraps at 810-908px (deviation (c)); not measured in the app with real data."
+    },
+    "AC8": {
+      "at": "2026-11-25T19:26:35.513Z",
+      "note": "Last local run at T24: apps/desktop bun test src 778 pass, tsc clean; root typecheck clean. CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check."
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1294"
   },
@@ -857,6 +890,120 @@
       "at": "2026-11-23T13:22:25.721Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1294 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-25T19:26:33.972Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: model.test.ts: 'filterReviews does not bypass filters for an active review' (T5, 21e2110b1). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:34.183Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ReviewBoard.dom.test.tsx keeps snapshot order with an active review on the second card (T5). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:34.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ReviewBoard.dom.test.tsx: Done lane only when the state filter includes closed or merged; three lanes under the default filter (T5). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:34.627Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: ReviewBoard.dom.test.tsx indicator tests (T5, T16, T18, T22, T24); deviations (a) team requests not matched and (b) local review awaiting the viewer recorded in implementation-plan.md 'Состояние этапа 0'. Sixteen mutations of the attention code each fail a test (T24). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:34.841Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: desk-run-store.test.ts and board-badges.test.ts: outdated badge, precedence of current-range and active runs, one fixture per SQL term compared with localBadge (T6, T14, T19). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:35.063Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: ReviewResults/ReviewBoard DOM tests: 'Outdated review · <sha7>' in board and list, badgesEqual treats a changed outdated as a change (T7, T13, T20). The action label is 'Review again' by operator decision (d). CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:35.287Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Judged by measurement: 1440px window minus 60px rail minus 560px PR panel = 820px toolbar; one row (55px) at 820px without the hidden-attention hint, real stylesheets and rebuilt toolbar markup (.metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294-r05/research-evidence/layout-measurements-t24.md). With the hint shown it wraps at 810-908px (deviation (c)); not measured in the app with real data. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:35.513Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Last local run at T24: apps/desktop bun test src 778 pass, tsc clean; root typecheck clean. CI on PR #1294 head b0f5023d8 (merged as ee824720f): all 28 checks green after one re-run of an apt infra failure, including typecheck-and-tests, Lint and typecheck, Core tests 1-4 and desktop check. (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T19:26:54.426Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-25T19:27:00.031Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-11-25T19:27:00.033Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Exception confirmation failed: --answer-text \"<text>\" is required and must not be blank: it holds the operator's own words. See `keryx review flow-complete --help`."
+    },
+    {
+      "at": "2026-11-25T19:27:12.915Z",
+      "event": "completing",
+      "detail": "merged commit: ee824720f406c03f90858c7a2b424365ef0d3b22"
+    },
+    {
+      "at": "2026-11-25T19:27:18.118Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-11-25T19:27:18.120Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Exception confirmation failed: Exception completion requires the operator's plain yes; nothing was recorded."
+    },
+    {
+      "at": "2026-11-25T19:34:05.924Z",
+      "event": "completing",
+      "detail": "merged commit: ee824720f406c03f90858c7a2b424365ef0d3b22"
+    },
+    {
+      "at": "2026-11-25T19:34:11.100Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-11-25T19:34:11.101Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Exception confirmation failed: Ask the current completion question verbatim: Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:terminal-dispositions: no ingested round to read findings from; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:head-commit: no ingested round to compare against the PR head; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:verifier-stats: no ingested round to read verification stats from; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}"
+    },
+    {
+      "at": "2026-11-25T19:34:22.053Z",
+      "event": "completing",
+      "detail": "merged commit: ee824720f406c03f90858c7a2b424365ef0d3b22"
+    },
+    {
+      "at": "2026-11-25T19:34:27.578Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: failed"
+    },
+    {
+      "at": "2026-11-25T19:34:27.580Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Exception confirmation failed: Ask the current completion question verbatim: Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}"
+    },
+    {
+      "at": "2026-11-25T19:37:45.408Z",
+      "event": "completing",
+      "detail": "merged commit: ee824720f406c03f90858c7a2b424365ef0d3b22"
+    },
+    {
+      "at": "2026-11-25T19:37:55.917Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 5: passed"
+    },
+    {
+      "at": "2026-11-25T19:37:55.920Z",
+      "event": "done",
+      "detail": "completed with exceptions: review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder; operator: yes | review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder; operator: yes | review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder; operator: yes | review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder; operator: yes"
     }
   ],
   "acKinds": {
@@ -891,5 +1038,687 @@
       "kind": "invariant",
       "check": "sh -c 'cd apps/desktop && bun test src/review && cd ../.. && bun test src/review/desk-run-store.test.ts && bun run typecheck'"
     }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-25T19:26:33.972Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:34.183Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:34.401Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:34.627Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:34.841Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:35.063Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:35.287Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:26:35.513Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:37:55.920Z",
+      "kind": "complete",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        }
+      ],
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
+      "headCommit": "ee824720f406c03f90858c7a2b424365ef0d3b22"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-11-25T19:27:00.031Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "24 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "516-2026-11-23-desktop-review-v2-stage0 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1294: 0 comment(s) collected over 1 round(s) up to the PR head b0f5023d82b4b5d7bf677146ecddc3c0437bc24c (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Exception confirmation failed: --answer-text \"<text>\" is required and must not be blank: it holds the operator's own words. See `keryx review flow-complete --help`."
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:27:18.118Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "24 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "516-2026-11-23-desktop-review-v2-stage0 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1294: 0 comment(s) collected over 1 round(s) up to the PR head b0f5023d82b4b5d7bf677146ecddc3c0437bc24c (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Exception confirmation failed: Exception completion requires the operator's plain yes; nothing was recorded."
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:34:11.100Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "24 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "516-2026-11-23-desktop-review-v2-stage0 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1294: 0 comment(s) collected over 1 round(s) up to the PR head b0f5023d82b4b5d7bf677146ecddc3c0437bc24c (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Exception confirmation failed: Ask the current completion question verbatim: Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:terminal-dispositions: no ingested round to read findings from; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:head-commit: no ingested round to compare against the PR head; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. review:verifier-stats: no ingested round to read verification stats from; reason: The five managed review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/2026-11-23-review-flow-github-com-mrciphersmith-keryx-pull-1294* and the branch round under .metaproject/reviews/2026-11-23-review-flow-feat-desktop-review-v2-stage0, not under the flow's reviews/ folder, so the gate cannot read them. After round 1 no round found a blocker or a major; round 5's six minor findings were fixed in 3166262f2 with sixteen mutations each failing a test. review-verifier did not run in any round. Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:34:27.578Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "24 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "516-2026-11-23-desktop-review-v2-stage0 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1294: 0 comment(s) collected over 1 round(s) up to the PR head b0f5023d82b4b5d7bf677146ecddc3c0437bc24c (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Exception confirmation failed: Ask the current completion question verbatim: Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14"
+    },
+    {
+      "at": "2026-11-25T19:37:55.917Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ee824720f406c03f90858c7a2b424365ef0d3b22 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "24 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "516-2026-11-23-desktop-review-v2-stage0 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1294: 0 comment(s) collected over 1 round(s) up to the PR head b0f5023d82b4b5d7bf677146ecddc3c0437bc24c (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "complete-flow-516-verbatim",
+            "questionText": "Complete flow 516 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/516-2026-11-23-desktop-review-v2-stage0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:terminal-dispositions: no ingested round to read findings from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:head-commit: no ingested round to compare against the PR head; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder review:verifier-stats: no ingested round to read verification stats from; reason: Review rounds of PR #1294 are recorded per pull request under .metaproject/reviews/, not in the flow folder Context: {\"head\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\",\"acChecksum\":\"sha256:6f9c8c75d3dd84531b8f560ec50f70fe3475f36d44241c43a4447582fe19ac14\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1294\",\"baseBranch\":\"main\",\"mergedCommit\":\"ee824720f406c03f90858c7a2b424365ef0d3b22\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T19:37:50.701Z"
+          },
+          "at": "2026-11-25T19:37:55.916Z"
+        }
+      ]
+    }
+  ],
+  "merged": {
+    "commit": "ee824720f406c03f90858c7a2b424365ef0d3b22",
+    "ref": "origin/main",
+    "at": "2026-11-25T19:37:55.919Z"
   }
 }
