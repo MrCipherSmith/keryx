@@ -13,7 +13,7 @@ mock.module("../platform/panels", () => ({
   ptyOpen: async () => tab(1),
   ptyOpenRun: async () => tab(1),
   ptyOpenCommand: async () => tab(1),
-  ptyTail: async () => "",
+  ptyTail: async () => ({ text: "", truncated: false }),
   onPtyExit: async () => () => {},
   ptyWrite: async () => {},
   ptyClose: async () => {},

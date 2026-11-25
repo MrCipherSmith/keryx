@@ -99,6 +99,14 @@ export function isUndeliveredRun(item: Item | undefined): boolean {
   return item?.kind === "terminalRun" && item.replayed !== true && item.state !== "sent" && item.state !== "sent-while-running";
 }
 
+/** States a run leaves only through its tab or its process (flow 523): the run store and the reducer read them alike. */
+export const FINAL_RUN_STATES: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["sent", "sent-while-running", "closed", "start-failed", "not-sent"]);
+
+/** A live run that can still change: its state is not final, or its tab is still open (its exit, Show tab). */
+export function runCanChange(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
+  return !FINAL_RUN_STATES.has(run.state) || run.tabOpen;
+}
+
 /**
  * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
  * as a collapsed card. Untrusted text (rendered verbatim, never as markup). Client-only, like a command card.
@@ -256,16 +264,22 @@ export function blockText(block: ContentBlock): string {
 }
 
 /**
- * Where the running turn's next streamed item goes (flow 523): the end, except before the undelivered Run
- * cards that trail it. A Run clicked while the agent writes adds its card at the end; the rest of the
- * reply still joins the message it belongs to, and the card stays after the turn's stream until its result
- * goes (`terminalSent` then moves it, and the follow-up turn starts after it).
+ * Where a turn's stream ends in `items` (flow 523): the end, except, while a turn streams, before the
+ * undelivered Run cards that trail it. A Run clicked while the agent writes adds its card at the end; the
+ * rest of the reply still joins the message it belongs to, and the card stays after the turn's stream
+ * until its result goes (`terminalSent` then moves it, and the follow-up turn starts after it). The
+ * reducer inserts streamed items here and the transcript marks the item before it as the one streaming.
  */
-function streamEnd(d: ConvState): number {
-  let at = d.items.length;
-  if (!d.busy && !d.telegramTurn) return at;
-  while (at > 0 && isUndeliveredRun(d.items[at - 1])) at -= 1;
+export function streamEndOf(items: readonly Item[], streaming: boolean): number {
+  let at = items.length;
+  if (!streaming) return at;
+  while (at > 0 && isUndeliveredRun(items[at - 1])) at -= 1;
   return at;
+}
+
+/** Where the running turn's next streamed item goes. */
+function streamEnd(d: ConvState): number {
+  return streamEndOf(d.items, d.busy || !!d.telegramTurn);
 }
 
 /**
@@ -688,9 +702,11 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
 /**
  * A reload (after /compact or /rewind, a return to a session keryx released, a restart) keeps the cards of
  * the runs the window still tracks (flow 523): a replayed note of such a run shows the live card in the
- * note's place, and a run whose result keryx has not stored (still running, waiting, not sent) keeps its
- * card at the end. A delivered run's card comes from keryx's note, as the history now has it, unless its
- * tab is still open (its exit and Show tab still change it).
+ * note's place, and a run that can still change (starting, running, waiting, or its tab still open: its
+ * exit and Show tab change it) keeps its card at the end. Any other card goes with the history it was
+ * in: a delivered run's card comes back from keryx's note, as the history now has it, and a run that ended
+ * without reaching the agent (closed, could not start, not sent) has no note, so it is not drawn again
+ * below newer messages, nor brought back from a turn /rewind removed.
  */
 function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
   const live = new Map<string, TerminalRunItem>();
@@ -704,7 +720,7 @@ function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
   });
   let nextId = loaded.nextId;
   for (const run of live.values()) {
-    if (isUndeliveredRun(run) || run.tabOpen) items.push({ ...run, id: nextId++ });
+    if (runCanChange(run)) items.push({ ...run, id: nextId++ });
   }
   return { ...loaded, items, nextId };
 }

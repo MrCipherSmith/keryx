@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T18:33:53.644Z",
+  "updatedAt": "2026-11-25T20:51:39.260Z",
   "source": {
     "type": "description",
     "ref": null
@@ -259,6 +259,62 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "spec 0.3.2 and decisions.md D-13 revised for PC-001..004, PC2-001, PC3-001, PC4-001, F-003, F-005, DEG-2 and the four owner answers; plan.md matrix and journal correction applied by the orchestrator; AC12 grep exits 0"
+    },
+    {
+      "id": "T13",
+      "title": "Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T20:22:16.814Z",
+            "outcome": "started",
+            "detail": "523-T13 fix round 2 server (brief dispatch/T13-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 2: desktop findings (R2-RR-001 openLoad order, R2-HL-002 re-send on lost connection, R2-UX-001, R2-FE-002, SC3-001 desktop half, LG2-002 ring drop, R2-AR-001 CI path, tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T20:22:17.436Z",
+            "outcome": "started",
+            "detail": "523-T14 fix round 2 desktop (brief dispatch/T14-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "17 desktop findings fixed (R2-RR-001 openLoad order, R2-HL-002 re-send on lost connection, R2-UX-001, R2-FE-002, SC3-001 desktop half, R2-LG-003, LG2-002 ring drop flag, R2-AR-001 CI path, R2-AR-002, R2-FE-004, tests); red on HEAD export for every behaviour fix, mutants for test gaps; desktop focused tests 90/0 and 60/0, five fixture scenarios exit 0, tsc 0, cargo pty 19/0, clippy -D warnings 0; result results/T14.json"
+    },
+    {
+      "id": "T15",
+      "title": "Fix round 2: spec, AC8/AC9, PR body and flow docs findings (R2-PC-003, R2-PC-004, R2-SC-001, R2-FE-004, R2-PC-002, R2-DG-003, PC-006, PC3-002, PC-007)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -449,6 +505,36 @@
       "at": "2026-11-25T18:33:53.644Z",
       "event": "task-done",
       "detail": "T11: Fix round 1: desktop findings (28 ids incl. HL-*, HL2-*, DEG-*, FE-W1-*, TP-*, UX-*, LG3-001, SC3-001, RR-001 client half)"
+    },
+    {
+      "at": "2026-11-25T20:21:12.569Z",
+      "event": "task-added",
+      "detail": "T13: Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)"
+    },
+    {
+      "at": "2026-11-25T20:21:13.160Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 2: desktop findings (R2-RR-001 openLoad order, R2-HL-002 re-send on lost connection, R2-UX-001, R2-FE-002, SC3-001 desktop half, LG2-002 ring drop, R2-AR-001 CI path, tests)"
+    },
+    {
+      "at": "2026-11-25T20:21:13.757Z",
+      "event": "task-added",
+      "detail": "T15: Fix round 2: spec, AC8/AC9, PR body and flow docs findings (R2-PC-003, R2-PC-004, R2-SC-001, R2-FE-004, R2-PC-002, R2-DG-003, PC-006, PC3-002, PC-007)"
+    },
+    {
+      "at": "2026-11-25T20:22:16.814Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 523-T13 fix round 2 server (brief dispatch/T13-brief.md)"
+    },
+    {
+      "at": "2026-11-25T20:22:17.436Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 523-T14 fix round 2 desktop (brief dispatch/T14-brief.md)"
+    },
+    {
+      "at": "2026-11-25T20:51:39.260Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 2: desktop findings (R2-RR-001 openLoad order, R2-HL-002 re-send on lost connection, R2-UX-001, R2-FE-002, SC3-001 desktop half, LG2-002 ring drop, R2-AR-001 CI path, tests)"
     }
   ],
   "origin": {

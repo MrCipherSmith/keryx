@@ -33,7 +33,7 @@ mock.module("../platform/panels", () => ({
     tabs = [...tabs, t];
     return t;
   },
-  ptyTail: async () => "",
+  ptyTail: async () => ({ text: "", truncated: false }),
   onPtyExit: async () => () => {},
   ptyWrite: async (id: number, data: string) => void calls.push(["write", id, data]),
   ptyClose: async (id: number) => void calls.push(["close", id]),

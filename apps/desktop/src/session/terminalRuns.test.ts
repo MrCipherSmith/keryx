@@ -31,6 +31,8 @@ function rig(opts: { accepts?: boolean | null } = {}) {
   const sent: Sent[] = [];
   const idle = new Set(["s1", "s2"]);
   const tails = new Map<number, string>();
+  /** Tabs whose host ring dropped earlier output. */
+  const truncated = new Set<number>();
   const tailCalls: Array<[number, number]> = [];
   const failTail = new Set<number>();
   /** Tails held until the test releases them: events that land while a tail is read. */
@@ -61,7 +63,7 @@ function rig(opts: { accepts?: boolean | null } = {}) {
       const gate = tailGates.get(id);
       if (gate) await gate;
       if (failTail.has(id)) throw new Error("no such tab");
-      return tails.get(id) ?? "";
+      return { text: tails.get(id) ?? "", truncated: truncated.has(id) };
     },
     showTab: (t) => void shown.push(t.id),
     dispatch: (a: Action) => {
@@ -95,7 +97,7 @@ function rig(opts: { accepts?: boolean | null } = {}) {
     };
   };
   return {
-    runs, sent, idle, tails, tailCalls, failTail, shown, later, items, card, start, settled, holdTail,
+    runs, sent, idle, tails, truncated, tailCalls, failTail, shown, later, items, card, start, settled, holdTail,
     advance: (ms: number) => void (clock += ms),
     setAccepts: (v: boolean | null) => void (accepts = v),
     win: () => win,
@@ -358,6 +360,22 @@ describe("host edges", () => {
     expect(r.sent[0]!.results[0]).toMatchObject({ runId, state: "exited", exitCode: 2 });
   });
 
+  test("LG2-002: output the host ring dropped is said, even when what is left is under the caps", async () => {
+    const r = rig();
+    const runId = r.start("bun run build", 5);
+    r.tails.set(5, "compiled\ndone");
+    r.truncated.add(5);
+    await r.runs.exited(5, 0);
+    expect(r.sent[0]!.results[0]).toMatchObject({ runId, output: `${RUN_OUTPUT_CUT}\ncompiled\ndone` });
+    // A tab whose ring kept everything says nothing.
+    const whole = r.start("ls", 6);
+    r.tails.set(6, "a");
+    r.sent[0]!.settle({ kind: "done" });
+    await r.settled();
+    await r.runs.exited(6, 0);
+    expect(r.sent[1]!.results[0]).toMatchObject({ runId: whole, output: "a" });
+  });
+
   test("a tail that cannot be read still sends the exit code, and says the output could not be read", async () => {
     const r = rig();
     const runId = r.start("ls", 5);
@@ -477,9 +495,15 @@ describe("HL2-001: a session keryx released, or a keryx shutting down: the resul
     r.runs.flush("s1"); // idle, but not held again yet
     r.runs.flush();
     expect(r.sent).toHaveLength(1);
+    // R2-RR-001: resume itself sends nothing (a turn the load's caller starts takes the slot first)…
     r.runs.resume("s1");
+    expect(r.sent).toHaveLength(1);
+    // …the next flush (the window's arbiter, after the load's render) does, once.
+    r.runs.flush();
     expect(r.sent).toHaveLength(2);
     expect(r.sent[1]!.results.map((x) => x.runId)).toEqual([runId]);
+    r.runs.flush();
+    expect(r.sent).toHaveLength(2);
   });
 });
 
@@ -542,7 +566,7 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     expect(r.card(runId).state).toBe("sent");
   });
 
-  test("a replayed note of a run still live shows the live card in the note's place; a delivered card keryx no longer replays is gone", async () => {
+  test("R2-FE-006: a replayed note of a run still live shows the live card in the note's place, before the reply that followed it; a delivered card keryx no longer replays is gone", async () => {
     const r = rig();
     const dev = r.start("bun run dev", 5);
     await r.runs.sendNow(dev);
@@ -553,16 +577,50 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     await r.settled();
     r.runs.closed(6);
     r.dispatch({ t: "loadStart", sessionId: "s1" });
-    r.dispatch({ t: "updates", updates: [{ sessionId: "s1", at: 1, update: {
-      sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
-      _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "running", durationMs: 0, output: "" } } },
-    } }] });
+    r.dispatch({ t: "updates", updates: [
+      { sessionId: "s1", at: 1, update: {
+        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
+        _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "running", durationMs: 0, output: "" } } },
+      } },
+      { sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "The server is up." } } },
+    ] });
+    const note = r.win().loading.s1!.items[0]!;
+    expect(note).toMatchObject({ kind: "terminalRun", runId: dev, replayed: true });
     r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
-    const runCards = r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun");
-    expect(runCards.map((c) => c.runId)).toEqual([dev]);
-    expect(runCards[0]).toMatchObject({ state: "sent-while-running", tabOpen: true });
-    expect(runCards[0]!.replayed).toBeUndefined();
-    expect(done).not.toBe(dev);
+    const items = r.items();
+    expect(items.map((i) => i.kind)).toEqual(["terminalRun", "agent"]);
+    expect(items[0]).toMatchObject({ id: note.id, runId: dev, state: "sent-while-running", tabOpen: true });
+    expect((items[0] as TerminalRunItem).replayed).toBeUndefined();
+    expect(items.some((i) => i.kind === "terminalRun" && i.runId === done)).toBe(false);
+  });
+
+  test("R2-UX-001: a run that can no longer change (closed, could not start, not sent, its tab closed) is not drawn again after a reload; one that can is kept at the end", async () => {
+    const r = rig();
+    const closed = r.start("sleep 60", 5);
+    r.runs.closed(5);
+    await r.runs.exited(5, 1);
+    const failed = r.runs.requested("bun test", { sessionId: "s1" });
+    r.runs.failed(failed, "no shell");
+    const long = r.start(`echo ${"a".repeat(RUN_COMMAND_MAX_CHARS)}`, 6);
+    await r.runs.exited(6, 0);
+    r.idle.delete("s1");
+    const waits = r.start("make", 7);
+    await r.runs.exited(7, 0);
+    expect([closed, failed, long, waits].map((id) => r.card(id).state)).toEqual(["closed", "start-failed", "not-sent", "waiting"]);
+    const reload = () => {
+      r.dispatch({ t: "loadStart", sessionId: "s1" });
+      r.dispatch({ t: "updates", updates: [{ sessionId: "s1", at: 1, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Newest reply." } } }] });
+      r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    };
+    const runIds = () => r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun").map((i) => i.runId);
+    reload();
+    // The not-sent run's tab is still open (Show tab, its exit): it can change, and stays with the waiting one.
+    expect(r.items().map((i) => i.kind)).toEqual(["agent", "terminalRun", "terminalRun"]);
+    expect(runIds()).toEqual([long, waits]);
+    // Its tab closed, it can no longer change: a later reload (a /rewind that removed its turn) does not bring it back.
+    r.runs.closed(6);
+    reload();
+    expect(runIds()).toEqual([waits]);
   });
 });
 
@@ -632,16 +690,45 @@ describe("TP-004: branches no other test reaches", () => {
     expect(r.sent).toHaveLength(1);
   });
 
-  test("a close during Send output now's read: nothing is sent and the card says closed", async () => {
+  test("R2-FE-004: a close during Send output now's read: that snapshot still goes, once, as read; the hang-up adds nothing", async () => {
+    const r = rig();
+    const runId = r.start("bun run dev", 5);
+    r.tails.set(5, "listening");
+    const release = r.holdTail(5);
+    const snapshot = r.runs.sendNow(runId);
+    r.runs.closed(5);
+    expect(r.card(runId)).toMatchObject({ state: "running", tabOpen: false });
+    await release();
+    await snapshot;
+    expect(r.sent.map((p) => p.results)).toEqual([[{ runId, command: "bun run dev", state: "running", durationMs: 0, output: "listening" }]]);
+    expect(r.card(runId)).toMatchObject({ state: "sent-while-running", tabOpen: false });
+    await r.runs.exited(5, null);
+    r.sent[0]!.settle({ kind: "done" });
+    await r.settled();
+    r.runs.flush();
+    expect(r.sent).toHaveLength(1);
+    expect(r.tailCalls).toHaveLength(1);
+    expect(r.runs.tracked()).toBe(0);
+  });
+
+  test("R2-FE-004: the hang-up landing during that read too: the snapshot goes once (saying the tail could not be read), and the hang-up is no result", async () => {
     const r = rig();
     const runId = r.start("bun run dev", 5);
     const release = r.holdTail(5);
     const snapshot = r.runs.sendNow(runId);
     r.runs.closed(5);
+    await r.runs.exited(5, null);
+    r.failTail.add(5); // the tab is gone by the time its tail is read
     await release();
     await snapshot;
-    expect(r.sent).toHaveLength(0);
-    expect(r.card(runId).state).toBe("closed");
+    expect(r.tailCalls).toHaveLength(1);
+    expect(r.sent).toHaveLength(1);
+    expect(r.sent[0]!.results).toEqual([{ runId, command: "bun run dev", state: "running", durationMs: 0, output: "[the output could not be read: no such tab]" }]);
+    r.sent[0]!.settle({ kind: "done" });
+    await r.settled();
+    r.runs.flush();
+    expect(r.sent).toHaveLength(1);
+    expect(r.runs.tracked()).toBe(0);
   });
 
   test("a command of exactly 4096 characters is sent; one more is not", async () => {
@@ -725,7 +812,7 @@ describe("AR-001: the desktop's copies of keryx's terminal-results contract are 
         sent.push([...results]);
         return new Promise<DeliveryOutcome>(() => {});
       },
-      tail: async (id) => (id === 1 ? Array.from({ length: 400 }, (_, i) => `line ${i} ${"€".repeat(40)}`).join("\n") : `out ${id}`),
+      tail: async (id) => ({ text: id === 1 ? Array.from({ length: 400 }, (_, i) => `line ${i} ${"€".repeat(40)}`).join("\n") : `out ${id}`, truncated: id === 5 }),
       showTab: () => {},
       dispatch: () => {},
       now: () => clock,
@@ -751,9 +838,13 @@ describe("AR-001: the desktop's copies of keryx's terminal-results contract are 
 });
 
 describe("capRunOutput", () => {
-  test("keeps the last lines and the last 16 KiB of UTF-8, never splitting a character, and says when it cut", () => {
+  const encoder = new TextEncoder();
+  /** The bytes a cut output has for the lines after its RUN_OUTPUT_CUT line. */
+  const room = RUN_OUTPUT_MAX_BYTES - encoder.encode(`${RUN_OUTPUT_CUT}\n`).length;
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => String(i)).join("\n");
+
+  test("keeps the last lines, and says when it cut", () => {
     expect(capRunOutput("a\nb\n")).toBe("a\nb");
-    const lines = (n: number) => Array.from({ length: n }, (_, i) => String(i)).join("\n");
     // Up to 200 lines nothing is cut, and nothing is said.
     expect(capRunOutput(lines(RUN_OUTPUT_LINES))).toBe(lines(RUN_OUTPUT_LINES));
     // More (the host is asked for one line more than a result keeps): the first line says earlier output was cut.
@@ -761,14 +852,64 @@ describe("capRunOutput", () => {
     expect(many).toHaveLength(RUN_OUTPUT_LINES);
     expect(many[0]).toBe(RUN_OUTPUT_CUT);
     expect(many.slice(1)).toEqual(Array.from({ length: RUN_OUTPUT_LINES - 1 }, (_, i) => String(i + 51)));
-    const wide = "ж".repeat(RUN_OUTPUT_MAX_BYTES); // 2 bytes each
-    const cut = capRunOutput(`x${wide}`);
-    expect(new TextEncoder().encode(cut).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
-    expect(cut.startsWith(`${RUN_OUTPUT_CUT}\n`)).toBe(true);
-    expect(cut.slice(RUN_OUTPUT_CUT.length + 1)).toMatch(/^ж+$/);
-    const euros = capRunOutput("€".repeat(6000));
-    expect(euros.includes("�")).toBe(false);
-    expect(new TextEncoder().encode(euros).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
-    expect(euros.split("\n")[0]).toBe(RUN_OUTPUT_CUT);
+  });
+
+  test("R2-TP-003: a byte cut keeps exactly the whole lines that fit beside the cut line, never splitting a character", () => {
+    // The cut lands where a line starts: that line and all after it fit exactly, to the last byte.
+    const tail = "ж".repeat(room / 2); // 2 bytes each
+    const cut = capRunOutput(`${"h".repeat(100)}\n${tail}`);
+    expect(cut).toBe(`${RUN_OUTPUT_CUT}\n${tail}`);
+    expect(encoder.encode(cut).length).toBe(RUN_OUTPUT_MAX_BYTES);
+    // A one-character line one byte before that place would pass the cap by one byte: it is left out.
+    const rest = "r".repeat(room - 1);
+    expect(capRunOutput(`${"h".repeat(100)}\nq\n${rest}`)).toBe(`${RUN_OUTPUT_CUT}\n${rest}`);
+    // Lines of 99 bytes: the cut lands inside one, which is left out; the 163 after it fit, and one more would not.
+    const rows = Array.from({ length: RUN_OUTPUT_LINES }, (_, i) => `${String(i).padStart(3, "0")}${"r".repeat(96)}`);
+    expect(capRunOutput(rows.join("\n"))).toBe([RUN_OUTPUT_CUT, ...rows.slice(-163)].join("\n"));
+    expect(encoder.encode([RUN_OUTPUT_CUT, ...rows.slice(-164)].join("\n")).length).toBeGreaterThan(RUN_OUTPUT_MAX_BYTES);
+    // Multi-byte lines: whole lines only, no broken character, within the cap.
+    const euros = capRunOutput(Array.from({ length: 150 }, () => "€".repeat(40)).join("\n")).split("\n");
+    expect(euros[0]).toBe(RUN_OUTPUT_CUT);
+    expect(euros.slice(1).every((l) => l === "€".repeat(40))).toBe(true);
+    expect(encoder.encode(euros.join("\n")).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
+    // One line longer than the caps: no whole line fits, so only the cut line goes.
+    expect(capRunOutput(`x${"ж".repeat(RUN_OUTPUT_MAX_BYTES)}`)).toBe(RUN_OUTPUT_CUT);
+  });
+
+  /** A text whose byte cut lands `at` bytes into `line`, and the text after that line. */
+  const cutInside = (line: string, at: number) => {
+    const rest = "r".repeat(room + at - line.length - 1);
+    return { text: `${"h".repeat(100)}\n${line}\n${rest}`, rest };
+  };
+
+  test("SC3-001: a byte cut inside a secret's line leaves that whole line out, so no fragment of it reaches keryx's redaction", () => {
+    const token = ["ghp", "A".repeat(36)].join("_");
+    const cases: ReadonlyArray<readonly [string, number]> = [
+      [`token ${token}`, "token g".length], // inside the ghp_ prefix
+      [`API_KEY=${"s".repeat(24)}`, "API_".length], // inside the NAME= label
+    ];
+    for (const [line, at] of cases) {
+      const { text, rest } = cutInside(line, at);
+      const out = capRunOutput(text);
+      expect(out).toBe(`${RUN_OUTPUT_CUT}\n${rest}`);
+      expect(out).not.toContain(line.slice(at, at + 8));
+    }
+  });
+
+  test("R2-LG-003: a long first line among 200 goes whole: at most 200 lines, the cut line included", () => {
+    const short = Array.from({ length: RUN_OUTPUT_LINES - 1 }, (_, i) => `line ${i}`);
+    const out = capRunOutput([`{${"x".repeat(20_000)}}`, ...short].join("\n")).split("\n");
+    expect(out).toHaveLength(RUN_OUTPUT_LINES);
+    expect(out[0]).toBe(RUN_OUTPUT_CUT);
+    expect(out.slice(1)).toEqual(short);
+  });
+
+  test("LG2-002: output the host already cut starts with the cut line, also under the caps, and within the 200 lines", () => {
+    expect(capRunOutput("a\nb", true)).toBe(`${RUN_OUTPUT_CUT}\na\nb`);
+    expect(capRunOutput("", true)).toBe(RUN_OUTPUT_CUT);
+    const full = capRunOutput(lines(RUN_OUTPUT_LINES), true).split("\n");
+    expect(full).toHaveLength(RUN_OUTPUT_LINES);
+    expect(full[0]).toBe(RUN_OUTPUT_CUT);
+    expect(full.slice(1)).toEqual(Array.from({ length: RUN_OUTPUT_LINES - 1 }, (_, i) => String(i + 1)));
   });
 });

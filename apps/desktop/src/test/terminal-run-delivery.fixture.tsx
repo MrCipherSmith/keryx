@@ -1,11 +1,16 @@
 // Flow 523 through the real `useAcpSession` hook, with keryx and the host faked over Tauri's IPC mocks. Run
 // as its own process (terminalRunDelivery.dom.test.tsx); the first argument picks the scenario:
-//   (none)       a Run from one session while another is shown, its exit, the one `session/prompt` that
-//                carries the result, and results that wait for a running turn;
-//   no-results   a keryx whose initialize lacks `_meta.keryx.terminalResults`;
-//   refusals     how keryx's answers to a results prompt land: busy, invalid params, a failed turn, a tab
-//                closed before the end, a command in flight, a queued prompt, a released session, a keryx
-//                shutting down, and a reconnect to a keryx without terminalResults.
+//   (none)          a Run from one session while another is shown, its exit, the one `session/prompt` that
+//                   carries the result, and results that wait for a running turn;
+//   no-results      a keryx whose initialize lacks `_meta.keryx.terminalResults`;
+//   refusals        how keryx's answers to a results prompt land: busy, invalid params, a failed turn,
+//                   "unknown session" for a held session, a tab closed before the end, a Telegram turn, a
+//                   command in flight (with and without a replay after it), a queued prompt, a released
+//                   session, a keryx shutting down, and a reconnect to a keryx without terminalResults;
+//   load-order      who takes the turn slot once a load holds a session again: resumed issue questions and a
+//                   review sent as the load resolves go before the results that waited for it;
+//   lost-connection a results prompt with no answer when keryx exits or is restarted: sent again to the next
+//                   keryx, which answers success for runs it had already stored.
 // Nothing waits on the wall clock: `settle` yields to the event loop with no delay and every wait is for a
 // state; the store's busy retry runs on the test's own clock (`useTestClock`).
 import assert from "node:assert/strict";
@@ -18,13 +23,18 @@ const { emit } = await import("@tauri-apps/api/event");
 const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
 
 type Json = Record<string, unknown>;
-type Scenario = "delivery" | "no-results" | "refusals";
-const scenario: Scenario = process.argv[2] === "no-results" ? "no-results" : process.argv[2] === "refusals" ? "refusals" : "delivery";
+const SCENARIOS = ["delivery", "no-results", "refusals", "load-order", "lost-connection"] as const;
+type Scenario = (typeof SCENARIOS)[number];
+const scenario: Scenario = SCENARIOS.find((s) => s === process.argv[2]) ?? "delivery";
 const cwd = "/fixture/runs";
 const prompts: Array<{ id: number; params: Json }> = [];
 const initializes: Json[] = [];
 /** `_keryx/command` requests, answered by the script. */
 const commandsHeld: Array<{ id: number; params: Json }> = [];
+/** `session/load` requests; answered with `loadAnswer` at once, or by the script while `holdLoads` is set. */
+const loads: Array<{ id: number; params: Json }> = [];
+let holdLoads = false;
+let loadAnswer: Json = {};
 const opened: Array<{ id: number; cwd: unknown; command: unknown; title: unknown }> = [];
 const tails = new Map<number, string>();
 let nextTab = 1;
@@ -62,7 +72,7 @@ mockIPC(
     if (cmd === "pty_tail") {
       // One line more than a result keeps: a full tail shows that earlier output was cut.
       assert.equal(a.lines, 201);
-      return tails.get(Number(a.id)) ?? "";
+      return { text: tails.get(Number(a.id)) ?? "", truncated: false };
     }
     if (cmd !== "acp_send") return null;
     const { method, params, id } = JSON.parse(String(a.message)) as { method?: string; params: Json; id?: number };
@@ -74,6 +84,11 @@ mockIPC(
     }
     if (method === "_keryx/command") {
       commandsHeld.push({ id, params });
+      return null;
+    }
+    if (method === "session/load") {
+      loads.push({ id, params });
+      if (!holdLoads) await reply(id, loadAnswer);
       return null;
     }
     if (method === "initialize") {
@@ -136,6 +151,21 @@ async function run(command: string): Promise<number> {
   return opened[before]!.id;
 }
 const idle = (what: string) => waitFor(() => !session.state.busy, what);
+/** Prompts the script has taken: `next` takes the one after them, `none` says no other came. */
+let seen = 0;
+async function next(what: string): Promise<{ id: number; params: Json }> {
+  await waitFor(() => prompts.length > seen, what);
+  return prompts[seen++]!;
+}
+function none(): void {
+  assert.equal(prompts.length, seen, `no further session/prompt (got ${prompts.length - seen} more)`);
+}
+const unknownSession = { code: -32002, message: "Unknown ACP session: s1", data: { sessionId: "s1" } };
+/** keryx's idle cap releases s1 while `prompt` (a results prompt) is on the wire, then answers "unknown session". */
+async function releaseUnder(prompt: { id: number }): Promise<void> {
+  await inbound({ method: "_keryx/session_released", params: { sessionId: "s1" } });
+  await refuse(prompt.id, unknownSession);
+}
 
 /** Timers of BUSY_RETRY_MS or longer (the store's busy retry) are held here and fired by the test on its own clock. */
 const heldTimers: Array<{ fire: () => void; ms: number }> = [];
@@ -244,31 +274,45 @@ async function refusals(): Promise<void> {
 
   // TP-003: a busy refusal puts the result back to waiting; the re-ask after the pause delivers it.
   await exit(await run("echo a"), 0);
-  await waitFor(() => prompts.length === 1, "a's prompt");
-  await refuse(prompts[0]!.id, { code: -32600, message: "session/prompt: session s1 is running a turn", data: { condition: "session-busy" } });
+  const a = await next("a's prompt");
+  await refuse(a.id, { code: -32600, message: "session/prompt: session s1 is running a turn", data: { condition: "session-busy" } });
   await waitFor(() => card("echo a")?.state === "waiting" && !session.state.busy, "a waiting after the busy refusal");
-  assert.equal(prompts.length, 1);
+  none();
   assert.equal(heldTimers.length, 1);
   await fireHeldTimers();
-  await waitFor(() => prompts.length === 2, "a asked again after the pause");
-  assert.deepEqual(commandsOf(prompts[1]!), ["echo a"]);
-  await reply(prompts[1]!.id, { stopReason: "end_turn" });
+  const aAgain = await next("a asked again after the pause");
+  assert.deepEqual(commandsOf(aAgain), ["echo a"]);
+  await reply(aAgain.id, { stopReason: "end_turn" });
   await waitFor(() => card("echo a")?.state === "sent" && !session.state.busy, "a delivered");
 
   // TP-003: invalid params are final: the card says keryx's reason, and it is never sent again.
   await exit(await run("echo b"), 0);
-  await waitFor(() => prompts.length === 3, "b's prompt");
-  await refuse(prompts[2]!.id, { code: -32602, message: "terminalResults[0].runId repeats an earlier result's runId" });
+  const b = await next("b's prompt");
+  await refuse(b.id, { code: -32602, message: "terminalResults[0].runId repeats an earlier result's runId" });
   await waitFor(() => card("echo b")?.state === "not-sent" && !session.state.busy, "b not sent");
   assert.match(card("echo b")!.error ?? "", /runId repeats/);
 
   // TP-003: a turn that failed after keryx stored the result: the card stays sent, the failure is a notice.
   await exit(await run("echo c"), 0);
-  await waitFor(() => prompts.length === 4, "c's prompt");
-  await refuse(prompts[3]!.id, { code: -32603, message: "the model failed" });
+  const c = await next("c's prompt");
+  await refuse(c.id, { code: -32603, message: "the model failed" });
   await waitFor(() => session.state.items.some((i) => i.kind === "notice" && i.text === "the model failed"), "the failure notice");
   assert.equal(card("echo c")!.state, "sent");
   await idle("idle after c");
+
+  // R2-TP-001: "unknown session" for a session the window still holds (no release came first) is final:
+  // the card says keryx's reason, and a later turn's end does not send it again.
+  await exit(await run("echo u"), 0);
+  const u = await next("u's prompt");
+  await refuse(u.id, unknownSession);
+  await waitFor(() => card("echo u")?.state === "not-sent" && !session.state.busy, "u not sent");
+  assert.match(card("echo u")!.error ?? "", /Unknown ACP session/);
+  assert.equal(session.sendPrompt("After u", "s1"), true);
+  const afterU = await next("the user's turn after u");
+  assert.equal(textOf(afterU), "After u");
+  await reply(afterU.id, { stopReason: "end_turn" });
+  await idle("idle after the turn after u");
+  none();
 
   // TP-003 / AC8: the tab closed before the command ends: closed, and its hang-up sends nothing. The next
   // run's exit is handled after the hang-up, so its prompt shows the hang-up added nothing.
@@ -277,74 +321,113 @@ async function refusals(): Promise<void> {
   assert.equal(card("sleep 60")!.state, "closed");
   await exit(d, 1);
   await exit(await run("echo e"), 0);
-  await waitFor(() => prompts.length === 5, "e's prompt");
-  assert.deepEqual(commandsOf(prompts[4]!), ["echo e"]);
-  await reply(prompts[4]!.id, { stopReason: "end_turn" });
+  const e = await next("e's prompt");
+  assert.deepEqual(commandsOf(e), ["echo e"]);
+  await reply(e.id, { stopReason: "end_turn" });
   await idle("idle after e");
 
+  // TP-003: a Telegram turn holds the session's turn slot: a result waits for it, and goes when it finishes.
+  const telegram = (phase: "started" | "finished") => React.act(async () => {
+    await inbound({ method: "session/update", params: { sessionId: "s1", update: { sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase, generation: "g1", updateId: 7 } } });
+  });
+  await telegram("started");
+  await waitFor(() => session.state.busy, "the Telegram turn");
+  await exit(await run("echo t"), 0);
+  await waitFor(() => card("echo t")?.state === "waiting", "t waiting for the Telegram turn");
+  await settle();
+  none();
+  await telegram("finished");
+  const t = await next("t sent once the Telegram turn finished");
+  assert.deepEqual(commandsOf(t), ["echo t"]);
+  await reply(t.id, { stopReason: "end_turn" });
+  await idle("idle after t");
+
   // FE-W1-003: a result that ends while a command runs in the session (keryx holds its turn slot for
-  // /compact) waits for the command, and goes when it ends.
+  // /compact) waits for the command, and goes when it ends (here a compaction that changed nothing).
   let compacting: Promise<boolean> = Promise.resolve(false);
   await React.act(async () => { compacting = session.runCommand("/compact", ui); });
   await waitFor(() => commandsHeld.length === 1, "the /compact request");
   await exit(await run("echo f"), 0);
   await waitFor(() => card("echo f")?.state === "waiting", "f waiting for the command");
-  assert.equal(prompts.length, 5);
+  none();
   await React.act(async () => {
-    await reply(commandsHeld[0]!.id, { text: "Compacted." });
+    await reply(commandsHeld[0]!.id, { text: "Nothing to compact." });
     await compacting;
   });
-  await waitFor(() => prompts.length === 6, "f sent once the command ended");
-  assert.deepEqual(commandsOf(prompts[5]!), ["echo f"]);
-  await reply(prompts[5]!.id, { stopReason: "end_turn" });
+  const f = await next("f sent once the command ended");
+  assert.deepEqual(commandsOf(f), ["echo f"]);
+  await reply(f.id, { stopReason: "end_turn" });
   await idle("idle after f");
+
+  // R2-FE-005 / TP-003: a compaction that removed messages answers with the `transcript` effect: the window
+  // replays the session, which it does not hold while that session/load runs, so the result stays off the
+  // wire until the replay is done, and then goes once.
+  await React.act(async () => { compacting = session.runCommand("/compact", ui); });
+  await waitFor(() => commandsHeld.length === 2, "the second /compact request");
+  await exit(await run("echo f2"), 0);
+  await waitFor(() => card("echo f2")?.state === "waiting", "f2 waiting for the command");
+  holdLoads = true;
+  const loadsBefore = loads.length;
+  await React.act(async () => {
+    await reply(commandsHeld[1]!.id, { text: "Compacted −2 context msgs.", _meta: { keryx: { effects: ["transcript"] } } });
+    await compacting;
+  });
+  await waitFor(() => loads.length === loadsBefore + 1, "the replay's session/load");
+  await settle();
+  none();
+  assert.equal(card("echo f2")?.state, "waiting");
+  holdLoads = false;
+  await reply(loads.at(-1)!.id, {});
+  const f2 = await next("f2 sent once the replay finished");
+  assert.deepEqual(commandsOf(f2), ["echo f2"]);
+  await reply(f2.id, { stopReason: "end_turn" });
+  await idle("idle after f2");
+  none();
 
   // AR-002: a prompt queued while a result waits: when the turn ends the results prompt goes first, the
   // queued prompt after that turn.
   assert.equal(session.sendPrompt("Turn one", "s1"), true);
-  await waitFor(() => prompts.length === 7, "the user's turn");
+  const one = await next("the user's turn");
   await React.act(async () => { await session.runCommand("Queued follow-up", ui); });
   await waitFor(() => session.state.queue.length === 1, "the queued prompt");
   await exit(await run("echo g"), 0);
   await waitFor(() => card("echo g")?.state === "waiting", "g waiting for the turn");
-  await reply(prompts[6]!.id, { stopReason: "end_turn" });
-  await waitFor(() => prompts.length === 8, "the prompt after the turn");
-  assert.deepEqual(commandsOf(prompts[7]!), ["echo g"]);
+  await reply(one.id, { stopReason: "end_turn" });
+  const g = await next("the prompt after the turn");
+  assert.deepEqual(commandsOf(g), ["echo g"]);
   assert.equal(session.state.queue.length, 1);
-  await reply(prompts[7]!.id, { stopReason: "end_turn" });
-  await waitFor(() => prompts.length === 9, "the queued prompt");
-  assert.equal(textOf(prompts[8]!), "Queued follow-up");
-  await reply(prompts[8]!.id, { stopReason: "end_turn" });
+  await reply(g.id, { stopReason: "end_turn" });
+  const queued = await next("the queued prompt");
+  assert.equal(textOf(queued), "Queued follow-up");
+  await reply(queued.id, { stopReason: "end_turn" });
   await waitFor(() => !session.state.busy && session.state.queue.length === 0, "idle after the queue");
 
   // HL2-001: keryx's idle cap releases s1 while its results prompt is on the wire, then answers "unknown
   // session": the result waits, and goes once s1 is held again.
   await exit(await run("echo h"), 0);
-  await waitFor(() => prompts.length === 10, "h's prompt");
-  const h = resultsOf(prompts[9]!)[0]!.runId;
-  await inbound({ method: "_keryx/session_released", params: { sessionId: "s1" } });
-  await refuse(prompts[9]!.id, { code: -32002, message: "Unknown ACP session: s1", data: { sessionId: "s1" } });
+  const h = await next("h's prompt");
+  await releaseUnder(h);
   await waitFor(() => card("echo h")?.state === "waiting" && !session.state.held, "h waiting while s1 is released");
-  assert.equal(prompts.length, 10);
+  none();
   await React.act(async () => { await session.loadSession("s1"); });
-  await waitFor(() => prompts.length === 11, "h sent once s1 is held again");
-  assert.deepEqual(resultsOf(prompts[10]!).map((r) => r.runId), [h]);
-  await reply(prompts[10]!.id, { stopReason: "end_turn" });
+  const hAgain = await next("h sent once s1 is held again");
+  assert.deepEqual(resultsOf(hAgain).map((r) => r.runId), resultsOf(h).map((r) => r.runId));
+  await reply(hAgain.id, { stopReason: "end_turn" });
   await idle("idle after h");
 
   // HL2-001: keryx shutting down: the result waits, is not asked again on the window's next change, and
   // goes to the next keryx once it holds the session.
   await exit(await run("echo i"), 0);
-  await waitFor(() => prompts.length === 12, "i's prompt");
-  await refuse(prompts[11]!.id, { code: -32600, message: "session/prompt: keryx acp is shutting down", data: { method: "session/prompt", condition: "shutting-down" } });
+  const i = await next("i's prompt");
+  await refuse(i.id, { code: -32600, message: "session/prompt: keryx acp is shutting down", data: { method: "session/prompt", condition: "shutting-down" } });
   await waitFor(() => card("echo i")?.state === "waiting" && !session.state.busy, "i waiting for the next keryx");
   await React.act(async () => session.notify("info", "the window changed"));
-  assert.equal(prompts.length, 12);
+  none();
   assert.equal(heldTimers.length, 0);
   await React.act(async () => session.restart());
-  await waitFor(() => prompts.length === 13, "i sent to the restarted keryx");
-  assert.deepEqual(commandsOf(prompts[12]!), ["echo i"]);
-  await reply(prompts[12]!.id, { stopReason: "end_turn" });
+  const iAgain = await next("i sent to the restarted keryx");
+  assert.deepEqual(commandsOf(iAgain), ["echo i"]);
+  await reply(iAgain.id, { stopReason: "end_turn" });
   await idle("idle after i");
 
   // TP-003: a result that ends while keryx restarts waits for its initialize; a keryx without
@@ -359,7 +442,81 @@ async function refusals(): Promise<void> {
   await reply(heldInitialize!, initializeResult());
   await waitFor(() => card("echo j")?.state === "not-sent", "j not sent to a keryx without terminalResults");
   assert.match(card("echo j")!.error ?? "", /does not take run results/);
-  assert.equal(prompts.length, 13);
+  none();
+}
+
+async function loadOrder(): Promise<void> {
+  // R2-RR-001: a result waits for s1 while keryx's idle cap holds it released; the load that holds it again
+  // answers that issue questions wait. The questions are resumed first; the result goes after that turn.
+  await exit(await run("echo h"), 0);
+  const h = await next("h's prompt");
+  await releaseUnder(h);
+  await waitFor(() => card("echo h")?.state === "waiting" && !session.state.held, "h waiting while s1 is released");
+  loadAnswer = { _meta: { keryx: { pendingIssueQuestions: true } } };
+  await React.act(async () => { await session.loadSession("s1"); });
+  const resume = await next("the resumed issue questions");
+  assert.deepEqual(resume.params._meta, { keryx: { resumeIssueQuestions: true } });
+  await settle();
+  none();
+  assert.equal(card("echo h")?.state, "waiting");
+  await reply(resume.id, { stopReason: "end_turn" });
+  const hAgain = await next("h after the resumed turn");
+  assert.deepEqual(resultsOf(hAgain).map((r) => r.runId), resultsOf(h).map((r) => r.runId));
+  await reply(hAgain.id, { stopReason: "end_turn" });
+  await idle("idle after h");
+
+  // R2-RR-001: a review sent as soon as the load resolves (App's startSessionReview, which says
+  // REVIEW_SESSION_BUSY when this send is refused) gets the slot; the result that waited goes after it.
+  loadAnswer = {};
+  await exit(await run("echo r"), 0);
+  const r = await next("r's prompt");
+  await releaseUnder(r);
+  await waitFor(() => card("echo r")?.state === "waiting" && !session.state.held, "r waiting while s1 is released");
+  let reviewSent = false;
+  await React.act(async () => {
+    await session.loadSession("s1");
+    reviewSent = session.sendPrompt("Review the pull request.", "s1");
+  });
+  assert.equal(reviewSent, true);
+  const review = await next("the review turn");
+  assert.equal(textOf(review), "Review the pull request.");
+  await settle();
+  none();
+  await reply(review.id, { stopReason: "end_turn" });
+  const rAgain = await next("r after the review turn");
+  assert.deepEqual(commandsOf(rAgain), ["echo r"]);
+  await reply(rAgain.id, { stopReason: "end_turn" });
+  await idle("idle after r");
+  none();
+}
+
+async function lostConnection(): Promise<void> {
+  // R2-HL-002: keryx exits while a results prompt has no answer. The prompt may never have reached it: the
+  // result waits (the card does not say sent, and no turn failure is reported), and goes again to the next
+  // keryx once it holds s1. That keryx had stored it: it answers that every run was a duplicate, which is
+  // delivered.
+  await exit(await run("echo x"), 0);
+  const x = await next("x's prompt");
+  await React.act(async () => { await emit("acp://exit", { code: 1, stderrTail: "killed" }); });
+  await waitFor(() => card("echo x")?.state === "waiting" && session.state.phase === "exited", "x waiting after keryx exited");
+  assert.equal(session.state.items.some((i) => i.kind === "notice" && i.level === "error"), false);
+  await React.act(async () => session.restart());
+  const xAgain = await next("x sent again to the restarted keryx");
+  assert.deepEqual(resultsOf(xAgain), resultsOf(x));
+  await reply(xAgain.id, { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: [resultsOf(x)[0]!.runId] } } } });
+  await waitFor(() => card("echo x")?.state === "sent" && !session.state.busy, "x delivered");
+
+  // R2-HL-002: the user restarts keryx while a results prompt has no answer: the window's client is
+  // replaced before the old one's rejection runs. The same: it waits, and goes to the new keryx.
+  await exit(await run("echo y"), 0);
+  const y = await next("y's prompt");
+  await React.act(async () => session.restart());
+  const yAgain = await next("y sent again after the restart");
+  assert.deepEqual(resultsOf(yAgain), resultsOf(y));
+  await reply(yAgain.id, { stopReason: "end_turn" });
+  await waitFor(() => card("echo y")?.state === "sent" && !session.state.busy, "y delivered");
+  await settle();
+  none();
 }
 
 try {
@@ -371,7 +528,9 @@ try {
   assert.equal(keryx?.terminalResults, true);
   if (scenario === "delivery") await delivery();
   else if (scenario === "no-results") await noResults();
-  else await refusals();
+  else if (scenario === "refusals") await refusals();
+  else if (scenario === "load-order") await loadOrder();
+  else await lostConnection();
 } finally {
   offRuns();
   await React.act(async () => root.unmount());

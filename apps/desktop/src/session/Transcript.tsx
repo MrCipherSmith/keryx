@@ -6,7 +6,7 @@ import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { DelegateResultCard } from "./DelegateResultCard";
 import { TerminalRunCard } from "./TerminalRunCard";
-import { blockText, isUndeliveredRun } from "./reducer";
+import { blockText, isUndeliveredRun, streamEndOf } from "./reducer";
 import { ContentBlockView } from "./ContentBlockView";
 import { formatDuration } from "./duration";
 import { Markdown, RunSessionContext } from "../components/Markdown";
@@ -400,10 +400,8 @@ function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRun
   const placement = useMemo(() => reviewCardPlacement(blocks, reviewCards), [blocks, reviewCards]);
   const cardsAfter = (index: number) => reviewCards.filter(card => placement.get(card.key) === index)
     .map(card => <Fragment key={`review-${card.key}`}>{card.node}</Fragment>);
-  // The turn's stream ends before the undelivered Run cards that trail it (reducer `streamEnd`).
-  let lastAt = items.length - 1;
-  while (busy && lastAt >= 0 && isUndeliveredRun(items[lastAt])) lastAt -= 1;
-  const last = items[lastAt];
+  // The item the turn streams into: the last before the undelivered Run cards that trail the turn.
+  const last = items[streamEndOf(items, busy) - 1];
   const streamingAgent = busy && last?.kind === "agent";
   const streamingThought = busy && last?.kind === "thought";
 

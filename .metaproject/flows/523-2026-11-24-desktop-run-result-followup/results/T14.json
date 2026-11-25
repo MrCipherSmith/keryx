@@ -1,0 +1,157 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T14",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 2, desktop: all 17 findings of fix2-desktop.json handled (R2-RR-001, R2-HL-002 client half, R2-UX-001, R2-FE-002, R2-LG-003, R2-AR-001, R2-AR-002, R2-FE-004, R2-FE-005, R2-FE-006, R2-TP-001, R2-TP-003, R2-PC-002, SC3-001, LG2-002, TP-003, AR-001 via R2-AR-001). Every behaviour fix has a test that is red on HEAD 39c7f6816 (run against a git-archive export of HEAD with the new tests); every pure test gap has a mutant the new test turns red. Concerns: four owner-visible behaviour changes (final run cards no longer survive a reload; one over-long line sends only the cut line; pty_tail returns an object; the run card's failure status is said assertively only on change), and three pre-existing role=alert rows in the same class were left as they are.",
+  "summary_markdown": "## Behaviour changes\n1. (user_visible) After a reload (/compact, /rewind, a return to a session keryx released, a restart) a run card whose run can no longer change (closed before it finished, could not start, not sent; its tab closed) is gone instead of moving below the newest message. Cards that can still change (starting, running, waiting, or with their tab open) stay at the end. Alternative: keep final cards in place after the item they followed (needs an anchor keryx does not store).\n2. (user_visible) A Run result whose output is one line longer than 16 KiB at the cut point now sends only the cut line: a byte cut never starts inside a line (SC3-001). Alternative: keep the fragment of a single over-long line, which reopens the secret-prefix case.\n3. (user_visible) Output the host's 1 MiB ring dropped is now said: the result starts with the cut line even under the caps, and the ring's partial first line is left out (LG2-002).\n4. (user_visible, screen readers) A live run card's status is role=status in every state; a change into closed / could not start / not sent is said assertively (aria-live), and nothing is said when a card mounts (reload, session switch). No role=alert any more.\n5. (user_visible) A results prompt that got no answer because keryx exited or was restarted goes back to waiting (the card no longer says sent) and is sent again once the session is held again; keryx (T13) answers success for runs it already stored.\n6. (user_visible) Once a load holds a session again, resumed issue questions and a turn started as the load resolves (a session review) go before the Run results that waited; an issue-question resume refused because the slot is taken is queued, and openIssueSession fails when the resume was neither sent nor queued.\n7. (user_visible) Send output now whose tail is being read when the tab closes still delivers that snapshot once (AC8's exception); the card stays 'running…' during that read instead of flashing 'closed'.\n8. (needs_operator: none) .github/workflows/desktop-check.yml also runs for src/acp/terminal-result.ts and src/session/terminal-note.ts.\n\n## Not verified\n- No screen reader was run; the announcement tests use a DOM model of the live-region rules.\n- The real app was not launched; the hook is covered through the IPC-mocked fixture only.\n- T13's duplicate answer was not exercised against the real keryx; the fixture hand-writes the agreed shape.\n- The whole desktop suite was not run (owner instruction: CI is the suite evidence).",
+  "acceptance": [
+    {
+      "criterion": "Each finding fixed with a test red without the fix, or a pure test gap with a test a deliberate break turns red",
+      "status": "met",
+      "evidence": "Red on HEAD export (scratch git archive + new tests, tail mock adapted to the old string shape): 11 store/card tests and fixture scenarios load-order (resume, review halves run separately) and lost-connection (exit, restart halves separately). Mutants on a scratch copy of the new code, each red: unknown-session-always-waits (refusals: 'u not sent'), no Telegram-turn gate ('t waiting for the Telegram turn'), no held gate (refusals none() at the replay's held load), keepLiveRuns drop-and-append (R2-FE-006), room without the cut line's newline and room with it twice (R2-TP-003), tail_of without the partial-line drop and with truncated always false (Rust)."
+    },
+    {
+      "criterion": "Focused web tests pass",
+      "status": "met",
+      "evidence": "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton src/panels/SidePanels: 90 pass, 0 fail across 5 files (baseline 79)."
+    },
+    {
+      "criterion": "Every other touched or directly related test file passes",
+      "status": "met",
+      "evidence": "cd apps/desktop && bun test src/panels/SideTabs src/session/reducer.test.ts src/session/Transcript.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx: 60 pass, 0 fail across 4 files (ProjectNavigation runs issue-question-resume.fixture.tsx, which drives openIssueSession)."
+    },
+    {
+      "criterion": "Type-check",
+      "status": "met",
+      "evidence": "bunx tsc --noEmit -p apps/desktop: exit 0, no output."
+    },
+    {
+      "criterion": "Rust pty tests and clippy",
+      "status": "met",
+      "evidence": "apps/desktop/src-tauri: cargo test --locked -- pty:: 19 passed, 0 failed; cargo clippy --locked --all-targets -- -D warnings exit 0. The sidecar binary already existed (src-tauri/binaries/keryx-aarch64-apple-darwin), so no stub was made or removed."
+    },
+    {
+      "criterion": "Scope: only apps/desktop/src/**, apps/desktop/src-tauri/src/**, .github/workflows/desktop-check.yml; no commit, stage or stash",
+      "status": "met",
+      "evidence": "git diff --stat lists 16 files, all inside those paths; this result file is the only other write. Nothing staged or committed; no stash used. Red/mutation runs used copies under the session scratchpad."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-25-review-flow-github-com-mrciphersmith-keryx-pull-1316-r02/research-evidence/fix2-desktop.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The 17 findings this round fixes (read only)."
+    },
+    {
+      "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/dispatch/T14-brief.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The dispatch brief and its decisions (read only)."
+    }
+  ],
+  "changed_files": [
+    { "path": "apps/desktop/src/session/reducer.ts", "change": "FINAL_RUN_STATES and runCanChange (shared with the store); exported streamEndOf (streamEnd uses it); keepLiveRuns re-appends only runs that can still change" },
+    { "path": "apps/desktop/src/session/terminalRuns.ts", "change": "capRunOutput(text, truncated): whole lines only after a byte cut, cut line within the 200-line cap, host truncation marked; tail deps return PtyTail; forgetIfDone uses runCanChange; resume only clears parked; a close during Send output now's read keeps the snapshot (closed() leaves it running, finish ignores the hang-up); DeliveryOutcome docs; contract-copy comment corrected" },
+    { "path": "apps/desktop/src/session/useAcpSession.ts", "change": "a non-RpcError failure and a replaced client (runTurn onLost) map a results prompt to wait; resumeIssueQuestions queues behind a running turn; openLoad leaves the results to the arbiter after loadDone and reports the issue-question resume; openIssueSession throws when no resume was sent or queued" },
+    { "path": "apps/desktop/src/session/TerminalRunCard.tsx", "change": "live status line role=status in every state, aria-live assertive for unsent states, polite otherwise; no role=alert" },
+    { "path": "apps/desktop/src/session/Transcript.tsx", "change": "the streaming item comes from reducer streamEndOf instead of a copied loop" },
+    { "path": "apps/desktop/src/platform/panels.ts", "change": "PtyTail { text, truncated }; ptyTail returns it" },
+    { "path": "apps/desktop/src-tauri/src/pty.rs", "change": "Ring::dropped, PtyTail, tail_of (drops the partial first line once the ring dropped bytes); Pty::tail and PtyManager::tail return PtyTail; new unit test; existing tail tests read .text" },
+    { "path": "apps/desktop/src-tauri/src/panels.rs", "change": "pty_tail returns PtyTail" },
+    { "path": ".github/workflows/desktop-check.yml", "change": "push and pull_request paths include src/acp/terminal-result.ts and src/session/terminal-note.ts" },
+    { "path": "apps/desktop/src/session/terminalRuns.test.ts", "change": "rig tail returns PtyTail; tests for LG2-002 (store and capRunOutput), R2-RR-001 (resume sends nothing), R2-UX-001, R2-FE-004 (two), R2-FE-006 (full replay, in-place), R2-TP-003 (exact lengths), SC3-001, R2-LG-003" },
+    { "path": "apps/desktop/src/session/terminalRunCard.dom.test.tsx", "change": "UX-001 test updated to role=status + aria-live; live-region announcement model; R2-FE-002 remount and state-change tests" },
+    { "path": "apps/desktop/src/test/terminal-run-delivery.fixture.tsx", "change": "relative prompt helpers (next/none), holdable session/load with a set answer, PtyTail mock; refusals gains R2-TP-001, the Telegram-turn gate, the /compact transcript-effect replay; new scenarios load-order and lost-connection" },
+    { "path": "apps/desktop/src/session/terminalRunDelivery.dom.test.tsx", "change": "runs the load-order and lost-connection scenarios" },
+    { "path": "apps/desktop/src/panels/RunButton.dom.test.tsx", "change": "ptyTail mock returns { text, truncated }" },
+    { "path": "apps/desktop/src/panels/SidePanels.dom.test.tsx", "change": "ptyTail mock returns { text, truncated }" },
+    { "path": "apps/desktop/src/panels/SideTabs.dom.test.tsx", "change": "ptyTail mock returns { text, truncated }" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T14-Q1",
+      "question": "After a reload, a run card that can no longer change (closed, could not start, not sent, tab closed) is now dropped. Keep that?",
+      "why": "R2-UX-001: decision 3 says only cards that can still change are re-appended; the reviewer also offered keeping final cards in place, which needs an anchor keryx does not store.",
+      "options": [
+        { "id": "drop", "label": "Drop them on a reload (as now)", "recommended": true },
+        { "id": "anchor", "label": "Keep them after the item they followed, on reloads that do not rewrite history", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T14-Q2",
+      "question": "A result whose last line alone is longer than 16 KiB now sends only the cut line. Keep that?",
+      "why": "SC3-001 decision 5 drops the partial first line after a byte cut; with no newline after the cut nothing whole is left.",
+      "options": [
+        { "id": "cut-line-only", "label": "Send only the cut line (no fragment of any line)", "recommended": true },
+        { "id": "keep-fragment", "label": "Keep the tail of a single over-long line", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T14-Q3",
+      "question": "Error notices (Transcript NoticeRow), error command cards and the 'Not sent' user note still use role=alert and re-announce on a session switch. Fix them in a follow-up?",
+      "why": "Same class as R2-FE-002 (pre-existing, not carried across a reload). Their announcement is on insertion, so a fix needs Transcript to tell a new item from a remount; out of this round's run-result scope.",
+      "options": [
+        { "id": "follow-up", "label": "A follow-up task", "recommended": true },
+        { "id": "leave", "label": "Leave them", "recommended": false }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 12,
+    "tests_passing": 90,
+    "tests_failing": 0,
+    "tests_changed": 9,
+    "findings": {
+      "R2-RR-001": "fixed (+R2-HL-001, R2-LG-001, R2-FE-001, R2-DG-001). resume() only clears parked; the arbiter effect sends after the load's render. A resume refused because a turn or Telegram turn holds the slot is queued (queueAdd resumeIssueQuestions); openLoad reports it and openIssueSession throws when no resume was sent or queued. Red on HEAD: fixture load-order (first prompt after the load was the results prompt, not resumeIssueQuestions; review-only half: sendPrompt false, i.e. REVIEW_SESSION_BUSY) and terminalRuns.test 'resume sends them once' (resume alone sent). Green now.",
+      "R2-HL-002": "fixed, client half. A non-RpcError failure (client closed on keryx exit, write failure) and a failure after the client was replaced (runTurn onLost) give outcome wait: the runs go back to waiting, the session is parked, and they are sent again once it is held again. A success answer, including T13's { stored: 0, duplicates } meta, stays done. Red on HEAD: fixture lost-connection ('x waiting after keryx exited' never reached; restart-only half: 'y sent again after the restart' never reached). Green now. Not handled: the parentTurn count terminalSent added for a resend keryx answers as all-duplicates is not taken back (cosmetic, subagent turn grouping).",
+      "R2-UX-001": "fixed (+R2-LG-002). keepLiveRuns re-appends only runCanChange runs; FINAL_RUN_STATES/runCanChange live in reducer.ts and the store's forgetIfDone uses the same predicate. Final cards with their tab closed are not drawn again (dropped), also after /rewind. Red on HEAD: terminalRuns.test 'R2-UX-001…' (closed and start-failed cards re-appended). Green now.",
+      "R2-FE-002": "fixed (+R2-DG-002, R2-UX-002) for the run card. role=status in every live state, aria-live assertive for unsent states; no role=alert. Red on HEAD: terminalRunCard.dom 'R2-FE-002: a kept card remounted…' (an alert inserted with text is announced) and the updated UX-001 test. The state-change test passes on HEAD too (regression guard). The class's three pre-existing role=alert rows (NoticeRow, CommandCard, UserMessage 'Not sent') were not changed: T14-Q3.",
+      "R2-LG-003": "fixed. The cut keeps at most 199 lines before the byte cut, and a byte cut drops the partial line, so the output holds at most 200 lines with the cut line. Red on HEAD: capRunOutput 'R2-LG-003…' (201 lines). Green now.",
+      "SC3-001": "fixed, desktop half (part 2). After a byte cut the output starts after the first newline past the cut (or holds only the cut line); the host ring does the same for its own 1 MiB cut. Red on HEAD: capRunOutput 'SC3-001…' with the cut inside ghp_ and inside API_KEY= (the fragment 'hp_AAAAA' / 'KEY=ssss' was sent). Green now. Diverged in one respect: a single line longer than the caps leaves only the cut line (T14-Q2).",
+      "R2-PC-002": "fixed in code: SC3-001 part 2 now exists with tests (above) and this result records it. Not done here (outside this lane's paths): correcting the T11 title / journal line that claims SC3-001, and T11.json's missing PF-001 metrics line; for the orchestrator.",
+      "LG2-002": "fixed. Ring::dropped and tail_of in pty.rs; pty_tail returns { text, truncated } through panels.rs and platform/panels.ts; capRunOutput(text, truncated) puts the cut line first even under the caps, within 200 lines. Red: on HEAD the store test 'LG2-002: output the host ring dropped is said…' and capRunOutput 'LG2-002…' fail; Rust mutants (no partial-line drop; truncated always false) fail the new pty test. cargo test pty:: 19 pass; clippy -D warnings clean.",
+      "R2-AR-001": "fixed. desktop-check.yml push and pull_request paths add src/acp/terminal-result.ts and src/session/terminal-note.ts; the terminalRuns.ts comment now says where the guard runs and names the copies no test compares (terminalNoteOf's note shape, the refusal condition strings). No test: a CI path filter.",
+      "AR-001": "handled through R2-AR-001's decision (copies kept, the drift test now triggered by keryx-only changes); no shared contract module (src/** is T13's lane).",
+      "R2-AR-002": "fixed. reducer.ts exports streamEndOf(items, streaming); streamEnd and Transcript use it. Behaviour unchanged; covered by the existing DEG-1 card test (streaming caret on the last streamed item with a trailing card) and Transcript.dom tests, which pass.",
+      "R2-FE-004": "fixed. closed() leaves a run with a Send output now read in flight running (tab closed); finish ignores an exit seen after the close; sendNow delivers the snapshot once, as read or with the '[the output could not be read …]' text. Red on HEAD: both 'R2-FE-004…' store tests (nothing sent). Green now.",
+      "R2-FE-005": "fixed (test). Fixture refusals: /compact answered with effects ['transcript'], the replay's session/load held: no prompt while it runs, exactly one results prompt after it; the no-op reply case kept. Passes on HEAD (test gap); mutant 'no held gate in sendTerminalResults' fails it at that step.",
+      "R2-FE-006": "fixed (test). The replay holds the note and an agent chunk; asserts kinds ['terminalRun','agent'] and the card has the note's id; the always-true id assertion is gone. Passes on HEAD; the drop-note-and-append mutant of keepLiveRuns fails it.",
+      "R2-TP-001": "fixed (test). Fixture refusals: -32002 for a held session is not-sent with /Unknown ACP session/ and a later turn end sends nothing. Passes on HEAD; mutant 'unknown session always waits' (R2TP-M03) fails it.",
+      "R2-TP-003": "fixed (test), diverged in the value: with SC3-001's whole-line cut the reviewer's single-line input now yields only the cut line, so exact results are pinned with a cut at a line start (output exactly 16384 bytes), a one-character line one byte before it (left out), and 99-byte rows (163 kept, 164 would pass the cap). Mutants 'room without the newline' and 'newline counted twice' both fail it.",
+      "TP-003": "fixed (test). The Telegram-turn gate and the held gate of sendTerminalResults are driven through the fixture (refusals: a result waits during a _keryx/telegram/turn and goes when it finishes; the held gate via the replay case). Mutants removing either gate fail the fixture."
+    },
+    "commands": {
+      "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton src/panels/SidePanels (baseline, before edits)": "79 pass, 0 fail, 5 files",
+      "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton src/panels/SidePanels": "90 pass, 0 fail, 5 files (final)",
+      "cd apps/desktop && bun test src/panels/SideTabs src/session/reducer.test.ts src/session/Transcript.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx": "60 pass, 0 fail, 4 files",
+      "cd apps/desktop && bun src/test/terminal-run-delivery.fixture.tsx [delivery|no-results|refusals|load-order|lost-connection]": "all five exit 0",
+      "bunx tsc --noEmit -p apps/desktop": "exit 0",
+      "apps/desktop/src-tauri: cargo test --locked -- pty::": "19 passed, 0 failed",
+      "apps/desktop/src-tauri: cargo clippy --locked --all-targets -- -D warnings": "exit 0",
+      "HEAD export (scratch): bun test src/session/terminalRuns.test.ts src/session/terminalRunCard.dom.test.tsx with the new tests": "50 pass, 13 fail: the 11 new or changed tests for the fixed findings, plus the 2 unchanged AR-001 tests, which cannot load keryx's module in the export (it lacks docs/, imported by src/integrations/matrix.ts)",
+      "HEAD export (scratch): fixture refusals / load-order / lost-connection": "refusals exit 0 (test gaps only); load-order exit 1 (results prompt first); lost-connection exit 1 ('x waiting after keryx exited')"
+    },
+    "noticed_not_touched": [
+      "Transcript NoticeRow error notices, CommandCard error cards and UserMessage's 'Not sent' note use role=alert and re-announce on a session switch (R2-FE-002's class, pre-existing): T14-Q3.",
+      "A results prompt whose write fails while the connection stays up and the session stays held is parked until the next load of that session; no retry timer brings it back sooner.",
+      "After a resend keryx answers as all-duplicates, the parentTurn count terminalSent added is not taken back (no turn ran).",
+      "Docs for the docs lane: docs/requirements/keryx-desktop-client/specification.md around lines 963 (pty_tail now returns { text, truncated }) and 980-983 (the cut rule: whole lines only, host truncation marked, cut line inside 200 lines); the run card's live-region wording, keepLiveRuns' rule for final cards, the transport-loss 'wait' row of the plan matrix and AC8's Send output now exception wording in acceptance-criteria.md / plan.md.",
+      "flow.json T11 title and journal line claim SC3-001; results/T11.json lacks a PF-001 metrics line (R2-PC-002 bookkeeping, outside this lane's paths)."
+    ],
+    "not_touched": [
+      "src/** (T13's lane) and docs (a later lane)."
+    ]
+  },
+  "timestamp_utc": "2026-11-25T20:47:47Z"
+}

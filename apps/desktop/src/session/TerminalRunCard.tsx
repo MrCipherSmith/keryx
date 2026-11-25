@@ -26,14 +26,17 @@ export function runStatusText(item: Pick<TerminalRunItem, "state" | "error">): s
   }
 }
 
-/** States whose result never reaches the agent: said as an alert, the rest as a status. */
+/** States whose result never reaches the agent: a change into one is said at once (assertive), the rest politely. */
 const UNSENT: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["closed", "start-failed", "not-sent"]);
 
 /**
  * A Run from this session (flow 523): the command, where its result stands, the exit code and duration,
  * the output tail behind a toggle, and the run's actions. Every field is the command's or the host's own
- * text, rendered as text, never as markup. A card replayed from history has no actions, and its status is
- * not announced (a session/load must not read history out); a live card's status is.
+ * text, rendered as text, never as markup. A card replayed from history has no actions and no live
+ * region. A live card's status line is a live region (`role="status"`) in every state, present from its
+ * mount: a screen reader says its text when the run's state changes, never because the card mounted (a
+ * reload keeps live cards under new ids and a session switch remounts the transcript, and neither may read
+ * old statuses out). A change into a state whose result will not reach the agent is said assertively.
  */
 export function TerminalRunCard({ item }: { item: TerminalRunItem }) {
   const [open, setOpen] = useState(false);
@@ -72,7 +75,8 @@ export function TerminalRunCard({ item }: { item: TerminalRunItem }) {
         tabIndex={-1}
         className={`run-card-status run-${item.state}`}
         data-run-status
-        role={live ? (UNSENT.has(item.state) ? "alert" : "status") : undefined}
+        role={live ? "status" : undefined}
+        aria-live={live ? (UNSENT.has(item.state) ? "assertive" : "polite") : undefined}
       >
         {runStatusText(item)}
       </div>

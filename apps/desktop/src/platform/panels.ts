@@ -24,8 +24,15 @@ export const ptyOpenRun = (cwd: string, argv: readonly string[], title: string, 
  */
 export const ptyOpenCommand = (cwd: string, command: string, title: string, cols: number, rows: number) =>
   invoke<PtyTab>("pty_open_command", { cwd, command, title, cols, rows });
-/** The last `lines` lines (1–2000) of a tab's output as plain text, escape sequences removed; also after its process exited, until the tab is closed. */
-export const ptyTail = (id: number, lines: number) => invoke<string>("pty_tail", { id, lines });
+/** A tab's output tail (`pty_tail`). */
+export interface PtyTail {
+  /** The last lines as plain text, escape sequences removed, whole lines only. */
+  text: string;
+  /** The host's buffer (the last 1 MiB of raw output) dropped earlier output, so the text is not all of it. */
+  truncated: boolean;
+}
+/** The last `lines` lines (1–2000) of a tab's output; also after its process exited, until the tab is closed. */
+export const ptyTail = (id: number, lines: number) => invoke<PtyTail>("pty_tail", { id, lines });
 export const ptyList = () => invoke<PtyTab[]>("pty_list");
 export const ptyWrite = (id: number, data: string) => invoke<void>("pty_write", { id, data });
 export const ptyResize = (id: number, cols: number, rows: number) => invoke<void>("pty_resize", { id, cols, rows });

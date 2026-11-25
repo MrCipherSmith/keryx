@@ -82,6 +82,32 @@ impl Ring {
         let skip = since.saturating_sub(start_mark).min(self.bytes.len() as u64) as usize;
         self.bytes.iter().skip(skip).copied().collect()
     }
+
+    /// Earlier output was dropped: what is kept starts wherever the cap cut it, mid-line as like as not.
+    fn dropped(&self) -> bool {
+        self.total > self.bytes.len() as u64
+    }
+}
+
+/// A tab's output tail (`pty_tail`): the last lines as plain text, and whether the ring dropped earlier output.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PtyTail {
+    pub text: String,
+    pub truncated: bool,
+}
+
+/// The last `lines` lines of kept output `bytes` as plain text. When the ring dropped earlier output
+/// (`truncated`), the kept bytes begin inside a line: that partial first line is left out, so the tail
+/// never starts with a fragment (a token without its prefix, a value without its `NAME=`), and the
+/// caller is told output is missing.
+pub fn tail_of(bytes: &[u8], truncated: bool, lines: usize) -> PtyTail {
+    let whole = if truncated {
+        bytes.iter().position(|&b| b == b'\n').map_or(&[][..], |at| &bytes[at + 1..])
+    } else {
+        bytes
+    };
+    PtyTail { text: tail_lines(&plain_text(whole), lines), truncated }
 }
 
 /// Decode `chunk` after the bytes `carry` held back; keep an incomplete
@@ -250,8 +276,12 @@ impl Pty {
     }
 
     /// The last `lines` lines of the kept output as plain text, also after the process exited.
-    pub fn tail(&self, lines: usize) -> String {
-        tail_lines(&plain_text(&self.output_since(0)), lines)
+    pub fn tail(&self, lines: usize) -> PtyTail {
+        let (bytes, truncated) = {
+            let ring = self.ring.lock().unwrap();
+            (ring.since(0), ring.dropped())
+        };
+        tail_of(&bytes, truncated, lines)
     }
 
     /// Wait until output stops arriving for `quiet` (after at least one chunk
@@ -483,7 +513,7 @@ impl PtyManager {
 
     /// The last `lines` lines (1 to `TAIL_MAX_LINES`) of a tab's kept output as plain text: also
     /// after its process exited, until the tab is closed.
-    pub fn tail(&self, window: &str, id: u64, lines: usize) -> Result<String, String> {
+    pub fn tail(&self, window: &str, id: u64, lines: usize) -> Result<PtyTail, String> {
         Ok(self.get(window, id)?.tail(lines.clamp(1, TAIL_MAX_LINES)))
     }
 
@@ -659,6 +689,24 @@ mod tests {
         assert_eq!(r.since(4), b"ef");
         r.push(b"0123456789");
         assert_eq!(r.since(0), b"6789");
+    }
+
+    #[test]
+    fn a_tail_says_when_the_ring_dropped_output_and_never_starts_inside_a_line() {
+        let mut whole = Ring::new(64);
+        whole.push(b"ok\nfine\n");
+        assert!(!whole.dropped());
+        assert_eq!(tail_of(&whole.since(0), whole.dropped(), 5), PtyTail { text: "ok\nfine".into(), truncated: false });
+        // The cap cuts the first line after `API_KEY=`: its value is not a line of the tail.
+        let mut cut = Ring::new(8);
+        cut.push(b"API_KEY=abcd\nok\n");
+        assert_eq!(cut.since(0), b"abcd\nok\n");
+        assert!(cut.dropped());
+        assert_eq!(tail_of(&cut.since(0), cut.dropped(), 5), PtyTail { text: "ok".into(), truncated: true });
+        // Nothing but a partial line is kept: an empty tail that still says output was dropped.
+        let mut long = Ring::new(4);
+        long.push(b"abcdefgh");
+        assert_eq!(tail_of(&long.since(0), long.dropped(), 5), PtyTail { text: String::new(), truncated: true });
     }
 
     #[test]
@@ -933,10 +981,10 @@ mod tests {
         let (pty, rx) = open_command(&mgr, dir.path(), &env, command);
         let id = pty.unwrap().id;
         assert_eq!(exit_code(&rx), Some(0));
-        assert_eq!(mgr.tail("w", id, 3).unwrap(), "one\ntwo\n100%");
-        assert_eq!(mgr.tail("w", id, 2).unwrap(), "two\n100%");
+        assert_eq!(mgr.tail("w", id, 3).unwrap(), PtyTail { text: "one\ntwo\n100%".into(), truncated: false });
+        assert_eq!(mgr.tail("w", id, 2).unwrap().text, "two\n100%");
         // Fewer than one line is one line.
-        assert_eq!(mgr.tail("w", id, 0).unwrap(), "100%");
+        assert_eq!(mgr.tail("w", id, 0).unwrap().text, "100%");
         assert!(mgr.tail("other", id, 2).is_err(), "another window's tab");
         mgr.close("w", id);
         assert!(mgr.tail("w", id, 2).is_err(), "a closed tab");
@@ -950,7 +998,7 @@ mod tests {
         let (pty, rx) = open_command(&mgr, dir.path(), &env, "i=1; while [ $i -le 2100 ]; do echo $i; i=$((i+1)); done");
         let id = pty.unwrap().id;
         assert_eq!(exit_code(&rx), Some(0));
-        let tail = mgr.tail("w", id, usize::MAX).unwrap();
+        let tail = mgr.tail("w", id, usize::MAX).unwrap().text;
         let lines: Vec<&str> = tail.split('\n').collect();
         assert_eq!((lines.len(), lines[0], lines[lines.len() - 1]), (TAIL_MAX_LINES, "101", "2100"));
         mgr.close_all();

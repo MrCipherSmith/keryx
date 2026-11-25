@@ -5,7 +5,7 @@
 //! another view is refused by `PtyManager::get`.
 
 use crate::bridge::AppState;
-use crate::pty::{ExitHook, OpenSpec, Owner, PtyEvent, PtyManager, TabInfo};
+use crate::pty::{ExitHook, OpenSpec, Owner, PtyEvent, PtyManager, PtyTail, TabInfo};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -183,9 +183,10 @@ pub async fn pty_open_command(
         .map_err(|e| e.to_string())?
 }
 
-/// The last `lines` lines of a tab's output as plain text, also after its process exited.
+/// The last `lines` lines of a tab's output as plain text, also after its process exited, and whether
+/// the tab's 1 MiB ring dropped earlier output (`truncated`).
 #[tauri::command]
-pub async fn pty_tail(app: AppHandle, view: Webview, id: u64, lines: usize) -> Result<String, String> {
+pub async fn pty_tail(app: AppHandle, view: Webview, id: u64, lines: usize) -> Result<PtyTail, String> {
     let label = view.label().to_string();
     // Up to the whole 1 MiB ring is decoded: off the main thread.
     tauri::async_runtime::spawn_blocking(move || app.state::<PtyManager>().tail(&label, id, lines))

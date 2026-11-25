@@ -235,15 +235,55 @@ test("FE-W1-002: a card not delivered yet opens no new agent turn; a delivered o
   expect(host.querySelectorAll(".agent-label")).toHaveLength(2);
 });
 
-test("UX-001: a live card's status is announced (an alert when the result will not reach the agent); a replayed one is not", async () => {
+test("UX-001: a live card's status line is a live region in every state (assertive where the result will not reach the agent); a replayed one is none", async () => {
   await render([run()]);
   expect(q("[data-run-status]")!.getAttribute("role")).toBe("status");
+  expect(q("[data-run-status]")!.getAttribute("aria-live")).toBe("polite");
   for (const state of ["not-sent", "closed", "start-failed"] as const) {
     await render([run({ state, tabOpen: false, error: "x" })]);
-    expect(q("[data-run-status]")!.getAttribute("role")).toBe("alert");
+    expect(q("[data-run-status]")!.getAttribute("role")).toBe("status");
+    expect(q("[data-run-status]")!.getAttribute("aria-live")).toBe("assertive");
   }
   await render([run({ state: "sent", exitCode: 0, tabOpen: false, replayed: true })]);
   expect(q("[data-run-status]")!.hasAttribute("role")).toBe(false);
+  expect(q("[data-run-status]")!.hasAttribute("aria-live")).toBe(false);
+});
+
+/**
+ * What a screen reader says while `change` runs, by the live-region rules: an alert is said when it is
+ * inserted; any other live region only when the text of one already present changes.
+ */
+async function announced(change: () => Promise<void>): Promise<Array<{ politeness: string; text: string }>> {
+  const live = "[role=status], [role=alert], [aria-live]:not([aria-live=off])";
+  const before = new Map(Array.from(host.querySelectorAll(live)).map((el) => [el, el.textContent]));
+  await change();
+  const said: Array<{ politeness: string; text: string }> = [];
+  for (const el of Array.from(host.querySelectorAll(live))) {
+    const alert = el.getAttribute("role") === "alert";
+    const politeness = el.getAttribute("aria-live") ?? (alert ? "assertive" : "polite");
+    const text = el.textContent ?? "";
+    if (before.has(el) ? before.get(el) !== text : alert && text !== "") said.push({ politeness, text });
+  }
+  return said;
+}
+
+test("R2-FE-002: a kept card remounted by a reload (a new id) or a session switch announces nothing; no alert is created", async () => {
+  const unsent = run({ state: "not-sent", exitCode: 0, tabOpen: false, error: "this keryx does not take run results" });
+  await render([unsent]);
+  // keepLiveRuns gives a kept card a new id on every loadDone: a new key, a fresh mount.
+  expect(await announced(() => render([{ ...unsent, id: 7 }]))).toEqual([]);
+  // A session switch remounts the whole transcript.
+  expect(await announced(async () => {
+    await act(() => root.render(null));
+    await render([{ ...unsent, id: 8 }]);
+  })).toEqual([]);
+  expect(host.querySelector("[role=alert]")).toBeNull();
+});
+
+test("R2-FE-002: a change of state is still announced: politely, and assertively into a state whose result will not reach the agent", async () => {
+  await render([run()]);
+  expect(await announced(() => render([run({ state: "waiting", exitCode: 0 })]))).toEqual([{ politeness: "polite", text: "waiting for the agent's turn to end" }]);
+  expect(await announced(() => render([run({ state: "not-sent", exitCode: 0, error: "invalid params" })]))).toEqual([{ politeness: "assertive", text: "not sent: invalid params" }]);
 });
 
 test("UX-002: Send output now keeps the keyboard focus in the card when its button goes away, also after the card moves", async () => {

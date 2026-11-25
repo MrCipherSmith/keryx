@@ -15,6 +15,14 @@ test("AC8: a keryx whose initialize lacks terminalResults gets no prompt, and th
   expect(typeof run("no-results")).toBe("string");
 });
 
-test("keryx's answers to a results prompt: busy waits and is asked again, a final refusal is not sent, a failed turn is a notice; a closed tab, a command in flight, a queued prompt, a released session, a keryx shutting down and a reconnect each hold the result as the waiting rule says", () => {
+test("keryx's answers to a results prompt: busy waits and is asked again, a final refusal is not sent, a failed turn is a notice; a closed tab, a Telegram turn, a command in flight (and the replay after it), a queued prompt, a released session, a keryx shutting down and a reconnect each hold the result as the waiting rule says", () => {
   expect(typeof run("refusals")).toBe("string");
+});
+
+test("R2-RR-001: once a load holds a session again, resumed issue questions and a review sent as the load resolves take the turn slot before the results that waited for it", () => {
+  expect(typeof run("load-order")).toBe("string");
+});
+
+test("R2-HL-002: a results prompt with no answer when keryx exits or is restarted waits and goes to the next keryx; its duplicate answer is delivered", () => {
+  expect(typeof run("lost-connection")).toBe("string");
 });
