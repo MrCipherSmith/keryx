@@ -11,7 +11,7 @@
   "title": "Desktop Review v3: live review session per round and review.json state",
   "status": "in-progress",
   "createdAt": "2026-11-25T05:57:50.199Z",
-  "updatedAt": "2026-11-25T06:21:06.192Z",
+  "updatedAt": "2026-11-25T07:12:01.454Z",
   "source": {
     "type": "description",
     "ref": null
@@ -83,7 +83,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -91,7 +91,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -112,7 +113,7 @@
       "id": "T6",
       "title": "Run related suites, typecheck and health",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -126,7 +127,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -182,6 +184,16 @@
       "at": "2026-11-25T06:21:06.192Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — verify suites"
+    },
+    {
+      "at": "2026-11-25T07:12:01.252Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-25T07:12:01.454Z",
+      "event": "task-done",
+      "detail": "T6: Run related suites, typecheck and health"
     }
   ],
   "acKinds": {
