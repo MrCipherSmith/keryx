@@ -150,7 +150,7 @@ import {
   keryxAcpProfileMeta,
   type AcpProfile,
 } from "./profile";
-import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
+import { buildAcpShellSessionTools, clientShowsOperatorCards, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
 import type { ShellConfirmAction, ShellView } from "./shell-views";
 import type { FlatPickerProvider } from "../harness/routing/table";
 import { ROUTING_AVAILABILITY_TTL_MS } from "../harness/routing/snapshot-adapter";
@@ -2118,6 +2118,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         requestReviewDraft: reviewDraftFor(sessionId),
         sessionReviews: sessionReviewsTool(() => readVisibleSessionReviews(root, sessionId, true)),
       } : {}),
+      ...(clientShowsOperatorCards(state.clientCapabilities) ? { operatorCards: true } : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
   }

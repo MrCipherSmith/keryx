@@ -64,7 +64,7 @@ const PRESSED_AT = "2026-10-15T18:30:00.000Z";
 /** The test gate: lifts a counter's ceiling. Its card reads "state" the test controls. */
 function testGate(
   state: { ceiling: number; refuse?: string },
-  binding: { allowedUserIds?: () => readonly number[] | undefined; now?: () => Date } = {},
+  binding: { allowedUserIds?: () => readonly number[] | undefined; now?: () => Date; localVia?: "tui-card" | "desktop-card" } = {},
 ) {
   const applied: { input: Record<string, unknown>; confirmation: OperatorConfirmation; prepared: { ceiling: number } | undefined }[] = [];
   const spec: OperatorConfirmSpec<{ ceiling: number }> = {
@@ -416,6 +416,27 @@ describe("AC2: a remote answer is accepted only for this question, once, within 
     expect(result.isError).toBe(true);
     expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
     expect(gate.applied).toEqual([]);
+  });
+});
+
+describe("a card answered in the Desktop app (TM-04 §6c)", () => {
+  test("a host that says its cards are desktop cards records the yes as desktop-card", async () => {
+    const gate = testGate({ ceiling: 25 }, { localVia: "desktop-card" });
+    const asked = await gate.tool.confirmation!({ to: 31 });
+    if ("error" in asked) throw new Error(asked.error);
+    await gate.tool.invoke({ to: 31 }, { confirmationToken: asked.token as string, confirmationVia: "local" });
+    expect(gate.applied).toHaveLength(1);
+    const confirmation = gate.applied[0]!.confirmation;
+    expect(confirmation.confirmedVia).toBe("desktop-card");
+    expect("pressedBy" in confirmation).toBe(false);
+  });
+
+  test("without that, a local answer stays a tui-card", async () => {
+    const gate = testGate({ ceiling: 25 });
+    const asked = await gate.tool.confirmation!({ to: 31 });
+    if ("error" in asked) throw new Error(asked.error);
+    await gate.tool.invoke({ to: 31 }, { confirmationToken: asked.token as string, confirmationVia: "local" });
+    expect(gate.applied[0]!.confirmation.confirmedVia).toBe("tui-card");
   });
 });
 

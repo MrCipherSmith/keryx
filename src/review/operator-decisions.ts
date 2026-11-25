@@ -42,7 +42,7 @@ export type AnyOperatorDecisionKind = OperatorDecisionKind | typeof PREMISE_DECI
  * press and takes the question and the answer as the agent reports them. A record of it carries `hostQuestion`.
  */
 export type OperatorDecisionVia = ConfirmedVia | "terminal" | "host-question";
-const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
+const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "desktop-card", "terminal", "host-question"];
 
 /** Who answers a premise question. Both writers record this one label; how it was confirmed is `confirmedVia`. */
 export const PREMISE_DECISION_ACTOR = "operator";

@@ -159,7 +159,7 @@
             "quote": { "type": "string", "minLength": 1, "description": "The operator's own words: what they typed at the terminal, or the card text they said yes to." },
             "at": { "type": "string", "minLength": 1 },
             "actor": { "type": "string", "minLength": 1 },
-            "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card", "terminal", "host-question"] },
+            "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card", "desktop-card", "terminal", "host-question"] },
             "hostQuestion": {
               "type": "object",
               "additionalProperties": false,

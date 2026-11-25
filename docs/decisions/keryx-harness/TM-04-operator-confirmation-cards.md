@@ -6,6 +6,7 @@
 **Frozen**: 2026-10-15
 **Task**: flow 456
 **Amended**: 2026-10-19, flow 467 (§6b: the host-question path; reverses the `ask_user` rejection of §5 for four review acts)
+**Amended**: 2026-11-25 (§6c: the review cards in Keryx Desktop, recorded as `desktop-card`)
 **Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
 **Reviewer Track**: architecture
 
@@ -136,6 +137,24 @@ What it does not prove:
 What the path refuses, with nothing recorded: an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`, `yes` for `confirm-plan`, `waive` for `waive-mutation`, `override` for `override-reviewers`), a decline, `decide-premise` words that name the other choice or none, an empty answer or question, a missing or malformed `--answered-by`, an unknown package, an unknown or not-held finding, a stale plan, a missing `--reason`. Free text is not a decision. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag, since no operator is there to have answered. With no `--answered-by`, the verbs refuse without a terminal exactly as before.
 
 **Two kinds of record.** A verified press (`tui-card`, `remote-card`) is a button pressed on a card keryx built and a token keryx checked; keryx saw it. A host question (`host-question`) is an answer an agent reports; keryx did not see it. Both are the operator's recorded decision, and the second is the weaker. The card stays the first choice wherever a card is available, and the skills and the verbs' help say so.
+
+## 6c. The review cards in Keryx Desktop (2026-11-25)
+
+A Desktop session is `keryx acp --profile shell`, not `keryx shell`, so it was offered no card tool: a review there stopped at `review_decide_premise` or `review_complete` with nothing the operator could answer. The operator asked for the cards in Desktop.
+
+A shell-profile session is now offered the review card tools (`review_chunks_answer`, `review_confirm_plan`, `review_decide_premise`, `review_complete`, `review_publish`, `review_comments_reply`, `review_waive_coverage`, `review_waive_readiness`, `review_waive_mutation`, `review_override_reviewers`) when its client declares `_meta.keryx.operatorCards` in `initialize`. The framework is unchanged: the card is built from the state on disk, the call is a hard floor in every permission mode, the single-use token stays in the keryx process, and `apply` re-checks the state. The card travels on `session/request_permission` as `toolCall._meta.keryx.card` (title and lines), with no "always" option. Desktop shows it as a yes/no dialog with No focused; Esc declines and Enter never approves by itself. A yes is recorded as `confirmedVia: "desktop-card"`.
+
+The other cards of §2 (`flow_confirm`, `external_apply`, the `learn_*` and `schedule_*` tools, the flow exception) are not offered to a Desktop session. They stay in `keryx shell`.
+
+What a `desktop-card` proves: the ACP client that declared `operatorCards` answered "allow once" to this card's permission request, once, in the session that asked. With Keryx Desktop as the client, that is a click on Yes in the app window.
+
+What it does not prove, beyond §4:
+
+- **That the client is Keryx Desktop.** `operatorCards` is a declaration. Any program that speaks ACP over the pipe can declare it and answer its own permission requests. keryx does not authenticate the client. A `desktop-card` is as strong as the process that started `keryx acp`.
+- **That the card was shown as built.** keryx sends the text; the client renders it. A client may show something else, or nothing.
+- **That a Telegram session answered it.** It cannot: a card request is never projected to the session's Telegram topic, so there is no `remote-card` from a Desktop session.
+
+A `desktop-card` is therefore weaker than a `tui-card` in one respect (the answering surface is a separate program keryx trusts by declaration) and equal in the rest. A record always says which it is.
 
 ## 7. Unattended runs
 

@@ -560,6 +560,7 @@ button { font: inherit; }
 .approval-content > .inline-banner { margin-bottom: var(--sp-3); }
 .approval-hint { margin: 0 auto 0 0 !important; align-self: center; font-size: var(--fs-sm); color: var(--fg-muted); }
 .approval-hint.is-blocked { color: var(--warn); font-weight: 500; }
+.operator-card-lines { list-style: none; margin: var(--sp-3) 0 0; padding: var(--sp-3); display: grid; gap: 4px; background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r-md); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .approval-queue { margin: 4px 0 0 !important; font-size: var(--fs-sm); color: var(--fg-subtle); }
 .approval-foot { display: grid; gap: var(--sp-3); width: 100%; }
 .approval-main { display: flex; justify-content: flex-end; gap: var(--sp-2); }

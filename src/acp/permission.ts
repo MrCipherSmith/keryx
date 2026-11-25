@@ -154,6 +154,22 @@ export function acpPermissionReasons(meta?: ApprovalMeta): AcpPermissionReasons 
 }
 
 /**
+ * An operator-confirmed card as the shell profile sends it on the permission request
+ * (`toolCall._meta.keryx.card`): the yes/no question and the decision lines, exactly as keryx built them from the
+ * state on disk. A client that declared `operatorCards` shows this text, not the model's arguments.
+ */
+export interface AcpOperatorCard {
+  title: string;
+  lines: string[];
+}
+
+/** `ApprovalMeta.card` (title first when it leads the lines) as an {@link AcpOperatorCard}. */
+export function acpOperatorCard(card: readonly string[], title?: string): AcpOperatorCard {
+  const heading = title ?? card[0] ?? "";
+  return { title: heading, lines: card[0] === heading ? card.slice(1) : [...card] };
+}
+
+/**
  * The options keryx offers the client for one gated call.
  *
  * Always at least one allow and one reject: a client that can only cancel has

@@ -641,7 +641,7 @@ export function useAcpSession(cwd: string) {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
+            _meta: { keryx: { askUser: true, prepareReview: true, operatorCards: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });

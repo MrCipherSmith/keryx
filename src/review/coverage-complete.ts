@@ -96,7 +96,7 @@ export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefine
   const waiver = record(record(dispatch)?.coverageWaiver);
   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;
   const files = Array.isArray(waiver.files) ? waiver.files.filter(text) : [];
-  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" || waiver.confirmedVia === "host-question" ? waiver.confirmedVia : undefined;
+  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" || waiver.confirmedVia === "desktop-card" || waiver.confirmedVia === "host-question" ? waiver.confirmedVia : undefined;
   const pressedBy = typeof waiver.pressedBy === "number" && Number.isSafeInteger(waiver.pressedBy) ? waiver.pressedBy : undefined;
   const pressedAt = text(waiver.pressedAt) ? waiver.pressedAt : undefined;
   return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }), ...cardPressFields({ pressedBy, pressedAt }), ...(via === "host-question" && isHostQuestion(waiver.hostQuestion) ? { hostQuestion: waiver.hostQuestion } : {}) };
