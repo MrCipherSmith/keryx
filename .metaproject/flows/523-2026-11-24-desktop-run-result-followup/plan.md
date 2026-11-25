@@ -18,7 +18,9 @@ Status: ready for freeze (2026-11-25)
    a shell tab (new host command `pty_open_command(cwd, command, title, cols, rows)`). The process exit
    is the command's exit: `panel://pty-exit {id, code}` already reports it for run tabs.
 2. **The output tail comes from the host.** New host command `pty_tail(id, lines)` returns the last
-   `lines` lines of the tab's ring buffer as plain text (`plain_text` + `tail_lines`, escapes removed).
+   `lines` lines of the tab's ring buffer as plain text (`plain_text` + `tail_lines`, escapes removed);
+   since fix round 2 it returns `{ text, truncated }`, `truncated` when the ring dropped earlier output
+   (its partial first line is then left out, review LG2-002).
 3. **The result starts the follow-up turn.** The desktop sends `session/prompt` to the run's own
    session with `_meta.keryx.terminalResults: [{ runId, command, state, exitCode, durationMs, output }]`
    (`state`: `exited` | `running` for a snapshot). keryx (shell profile) stores each result as a
@@ -71,13 +73,21 @@ Status: ready for freeze (2026-11-25)
 |---|---|---|---|---|---|---|---|
 | starting (tab opening) | — | — | — | — | no change | no change | run lost, nothing sent |
 | start failed | — | — | — | — | — | — | — |
-| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC9) | no change | no change: the run belongs to its own session (AC3) | no change | process dies with the window (existing PTY close); nothing sent |
-| waiting (finished, or a "Send output now" snapshot asked for; session busy) | — | card stays; result still sent (a waiting snapshot of a still-running command too: delivered once, the exit the close causes is shown, not sent; owner 2026-11-25, F-002) | — | turn ends → waiting results of that session in ONE prompt, up to 8; the rest after that turn (AC4) | no change | kept, also when the release crosses a prompt already sent (unknown-session refusal) or keryx is shutting down; delivered once the session is held again (owner 2026-11-25, HL2-001) | lost, nothing sent |
+| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) — except while a "Send output now" tail read is in flight: the card stays "running…" and that snapshot is still delivered once (AC8's exception, R2-FE-004) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC9) — unless the process ends with its tab open before keryx took the snapshot (during its tail read, while it waits, or when its prompt comes back busy or "wait"): then the exit's result goes instead, once | no change | no change: the run belongs to its own session (AC3) | no change | reload: the run store (web view memory) is lost, the PTY keeps running and its tab stays in the panel, untracked, no card; app quit: the PTY closes (SIGHUP, SIGKILL after 500 ms); nothing sent either way (PC3-002) |
+| waiting (finished, or a "Send output now" snapshot asked for; session busy) | a waiting snapshot (tab open) is replaced by the exit's result, one entry per run (AC9); a finished result: — | card stays; result still sent (a waiting snapshot of a still-running command too: delivered once, the exit the close causes is shown, not sent; owner 2026-11-25, F-002) | — | turn ends → waiting results of that session in ONE prompt, up to 8; the rest after that turn (AC4) | no change | kept, also when the release crosses a prompt already sent (unknown-session refusal) or keryx is shutting down; delivered once the session is held again (owner 2026-11-25, HL2-001) | lost, nothing sent (on a reload its tab stays in the panel) |
 | delivered | — | no change | — | — | — | — | after `session/load` the card comes from the stored note; no new turn (AC7) |
 
 "start failed": the host could not start the shell → error toast "Could not run the command" and a
 card "could not start: <error>"; nothing sent (AC8). Two Runs in flight are independent rows; both
 waiting → one prompt (AC4).
+
+A results prompt on its way that gets no answer (the connection closed or broke under it, or a keryx
+restart replaced the connection) goes back to `waiting` and is sent again once the session is held
+again; keryx stores a result at most once per run id and answers an all-duplicate prompt with
+`stored: 0` and no turn, which the desktop counts as delivered (review R2-HL-002). A session reload
+inside the window (`/compact`, `/rewind`, a released session, a keryx restart) keeps a live card only
+where its note is replayed or its run can still change (not final, or its tab open); a final card
+whose tab is closed is dropped (review R2-UX-001).
 
 ### Tasks (see tasks.md for ids)
 

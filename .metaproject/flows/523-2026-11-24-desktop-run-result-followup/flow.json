@@ -11,12 +11,12 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T20:59:08.231Z",
+  "updatedAt": "2026-11-25T21:17:49.671Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:e424af6d64cbc9ccc177c7bd70184cba857f34f272719082e134d6d9f4a58320",
+  "acChecksum": "sha256:e7f43d6132a04534044ac2fa090a9c684bab8164206f4c3933e30dc2dc02a23d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -308,15 +308,23 @@
       "id": "T15",
       "title": "Fix round 2: spec, AC8/AC9, PR body and flow docs findings (R2-PC-003, R2-PC-004, R2-SC-001, R2-FE-004, R2-PC-002, R2-DG-003, PC-006, PC3-002, PC-007)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T21:03:38.094Z",
+            "outcome": "started",
+            "detail": "523-T15 fix round 2 docs (brief dispatch/T15-brief.md)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "docs fix round 2: spec 0.3.2 §3.9.5b and §4.4, plan matrix, cli-reference Discovery; AC9 and AC2 rewritten via flow ac update; AC8 holds; AC12 exit 0"
     }
   ],
   "history": [
@@ -547,6 +555,26 @@
       "at": "2026-11-25T20:59:08.231Z",
       "event": "task-done",
       "detail": "T13: Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)"
+    },
+    {
+      "at": "2026-11-25T21:03:38.094Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 523-T15 fix round 2 docs (brief dispatch/T15-brief.md)"
+    },
+    {
+      "at": "2026-11-25T21:17:35.722Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"\"Send output now\" on a running run delivers one snapshot (`state: \"running\"`, no `exitCode`) and starts a follow-up turn; the run's later exit updates the card and is not delivered again. [verify: exec `cd apps/desktop && bun test src/session/terminalRun`]\" -> \"\"Send output now\" on a running run delivers one snapshot (`state: \"running\"`, no `exitCode`) and starts a follow-up turn, unless the process ends with its tab open before keryx took the snapshot (while its tail is read, while it waits, or when its prompt comes back busy or \"wait\"): then the exit's result (`state: \"exited\"`) goes instead, once; once keryx took the snapshot, the run's later exit updates the card and is not delivered again. [verify: exec `cd apps/desktop && bun test src/session/terminalRun`]\" (review round 2 finding R2-PC-003 (upheld): the store replaces a snapshot that was waiting or still being read when the process ended with its tab open by the exit's result (T7 decision 3, kept by fix round 2); AC9 now states that exception; the verify command is unchanged)"
+    },
+    {
+      "at": "2026-11-25T21:17:36.339Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"The host command `pty_open_command(cwd, command, title, cols, rows)` runs `<login shell> -l -i -c <command>` in the project root with a shell tab's login environment, the command's exit code arrives as `panel://pty-exit {id, code}`, and `pty_tail(id, lines)` returns the last `lines` lines of the tab's output as plain text with escape sequences removed. [verify: exec `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml run_command`]\" -> \"The host command `pty_open_command(cwd, command, title, cols, rows)` runs `<login shell> -l -i -c <command>` in the project root with a shell tab's login environment, the command's exit code arrives as `panel://pty-exit {id, code}`, and `pty_tail(id, lines)` returns the last `lines` lines of the tab's output as plain text with escape sequences removed. [verify: exec `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml pty::tests::run_command_`]\" (round-1 finding PC-007 (partial in round 2): the filter `run_command` also matched two unrelated tests in flows/actions.rs; `pty::tests::run_command_` matches exactly the seven run_command_* tests in pty.rs; the criterion is unchanged)"
+    },
+    {
+      "at": "2026-11-25T21:17:49.671Z",
+      "event": "task-done",
+      "detail": "T15: Fix round 2: spec, AC8/AC9, PR body and flow docs findings (R2-PC-003, R2-PC-004, R2-SC-001, R2-FE-004, R2-PC-002, R2-DG-003, PC-006, PC3-002, PC-007)"
     }
   ],
   "origin": {
@@ -561,7 +589,7 @@
     },
     "AC2": {
       "kind": "exec",
-      "check": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml run_command"
+      "check": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml pty::tests::run_command_"
     },
     "AC3": {
       "kind": "exec",
