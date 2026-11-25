@@ -197,8 +197,8 @@ export async function readPlanThresholds(projectRoot: string): Promise<PlanThres
 // `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
 // ---------------------------------------------------------------------------
 
-export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal" | "host-question" | "auto-policy";
-const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal", "host-question", "auto-policy"];
+export type PlanConfirmedVia = "tui-card" | "remote-card" | "desktop-card" | "terminal" | "host-question" | "auto-policy";
+const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "desktop-card", "terminal", "host-question", "auto-policy"];
 
 export type PlanConfirmation = {
   planKey: string;

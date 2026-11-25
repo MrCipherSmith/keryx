@@ -33,8 +33,11 @@ import { flowExceptionSpec } from "./operator-confirm-flow-exceptions";
 import { otherConfirmSpecs } from "./operator-confirm-other";
 import { reviewConfirmSpecs } from "./operator-confirm-review";
 
-/** How the operator's yes reached the tool: this shell's card, or the remote topic's mirror of it. */
-export type ConfirmedVia = "tui-card" | "remote-card";
+/**
+ * How the operator's yes reached the tool: this shell's card, the remote topic's mirror of it, or the card dialog of
+ * the Desktop app (an ACP client that declared it shows operator cards; TM-04 §6c says what that press proves).
+ */
+export type ConfirmedVia = "tui-card" | "remote-card" | "desktop-card";
 
 /** What the operator is shown. Built from state, never from the model's input alone. */
 export interface OperatorCard {
@@ -112,6 +115,11 @@ export interface OperatorConfirmBinding {
    * returning nothing, no remote answer is accepted.
    */
   readonly allowedUserIds?: () => readonly number[] | undefined;
+  /**
+   * What a card answered in this host is recorded as. `tui-card` (the default) for `keryx shell`; `desktop-card` for
+   * a `keryx acp` session whose client shows the card itself.
+   */
+  readonly localVia?: "tui-card" | "desktop-card";
 }
 
 /** Flow 464: a remote card answer counts for one hour after the card was asked. */
@@ -119,7 +127,7 @@ export const REMOTE_CARD_TTL_MS = 60 * 60 * 1000;
 
 /** Appended to every spec's description, so the model never tells the operator to go to a terminal. */
 export const OPERATOR_CONFIRM_NOTE =
-  " The operator ALWAYS sees a yes/no card in the shell and must answer it — you cannot confirm it, and you " +
+  " The operator ALWAYS sees a yes/no card in keryx (the shell, or the Desktop app) and must answer it — you cannot confirm it, and you " +
   "must not ask them to run a command in a terminal instead.";
 
 /**
@@ -224,7 +232,7 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
         quote: `${entry.card.title}: yes`,
         answer: "yes",
         at: now().toISOString(),
-        confirmedVia: remote ? "remote-card" : "tui-card",
+        confirmedVia: remote ? "remote-card" : (binding.localVia ?? "tui-card"),
         ...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),
         subject: entry.card.subject,
         card: entry.shown,

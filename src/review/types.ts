@@ -86,7 +86,7 @@ export type ReviewCoverageEntry = {
 
 /** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
 /** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
-export type ConfirmedVia = "tui-card" | "remote-card" | "host-question";
+export type ConfirmedVia = "tui-card" | "remote-card" | "desktop-card" | "host-question";
 
 /** Flow 464: the Telegram user id that pressed a remote card and the ISO time on the shell's clock when the press arrived (not Telegram's time). Set only with `confirmedVia: "remote-card"`. */
 export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };

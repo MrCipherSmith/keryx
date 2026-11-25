@@ -432,6 +432,22 @@ describe("createAcpAgentIo — why keryx asks (security-code-w7 SEC-W7R3-001)", 
     });
   });
 
+  test("an operator card travels with the ask as toolCall._meta.keryx.card, title apart from its lines", async () => {
+    const { asks, io } = gated(true);
+    await io.requestApproval?.("review_complete", "{}", {
+      fingerprint: "fp",
+      destructive: false,
+      alwaysAsk: true,
+      card: ["Close review pkg-1?", "head: abc123", "subject: package pkg-1"],
+      cardTitle: "Close review pkg-1?",
+    });
+    expect(asks[0]?.toolCall._meta).toEqual({
+      keryx: { reasons: { alwaysAsk: true }, card: { title: "Close review pkg-1?", lines: ["head: abc123", "subject: package pkg-1"] } },
+    });
+    // A card is a hard floor: no "always" answer is offered for it.
+    expect(asks[0]?.options.map((option) => option.kind)).toEqual(["allow_once", "reject_once", "reject_always"]);
+  });
+
   test("a routine ask carries an empty reasons object", async () => {
     const { asks, io } = gated(true);
     await io.requestApproval?.("shell_exec", "{}", { fingerprint: "fp", destructive: false });
