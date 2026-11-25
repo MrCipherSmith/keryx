@@ -3,16 +3,50 @@
 import { setPrefs } from "../lib/prefs";
 import { ptyClose, type PtyTab } from "../platform/panels";
 
-type RunListener = (command: string) => void;
+/** Where a Run click came from (flow 523): the session whose transcript showed the button. */
+export interface RunOrigin {
+  sessionId: string;
+  source: "message" | "tool";
+}
+
+/** A Run for the terminal panel: a tab of its own running `command`; `runId` when the run is tracked. */
+export interface RunRequest {
+  command: string;
+  runId?: string;
+}
+
+/**
+ * The window's tracker of Runs that came from a session (`session/terminalRuns.ts`): the click, the
+ * tab the panel opened for it, or why it could not.
+ */
+export interface RunTracker {
+  /** A Run with an origin; returns the run's id. */
+  requested(command: string, origin: RunOrigin): string;
+  opened(runId: string, tab: PtyTab): void;
+  failed(runId: string, error: string): void;
+}
+
+let tracker: RunTracker | null = null;
+export function setRunTracker(next: RunTracker | null): void {
+  tracker = next;
+}
+
+type RunListener = (request: RunRequest) => void;
 
 let listener: RunListener | null = null;
-let pending: string[] = [];
+let pending: RunRequest[] = [];
 
-/** Type `command` and Enter into the active terminal tab, opening the panel (and a tab) when needed. */
-export function runInTerminal(command: string): void {
+/**
+ * Run `command` in a new terminal tab of its own, opening the panel when needed (D-13). With `origin`
+ * the run is tracked and its result goes to that session; without (Markdown outside a session) it is
+ * just the tab.
+ */
+export function runInTerminal(command: string, origin?: RunOrigin): void {
   setPrefs({ sidePanel: "terminal" });
-  if (listener) listener(command);
-  else pending.push(command);
+  const runId = origin && tracker ? tracker.requested(command, origin) : undefined;
+  const request: RunRequest = runId === undefined ? { command } : { command, runId };
+  if (listener) listener(request);
+  else pending.push(request);
 }
 
 /** The terminal panel takes run requests; ones made before it mounted are delivered at once. */
@@ -20,10 +54,28 @@ export function onRunRequest(l: RunListener): () => void {
   listener = l;
   const queued = pending;
   pending = [];
-  queued.forEach((c) => l(c));
+  queued.forEach((r) => l(r));
   return () => {
     if (listener === l) listener = null;
   };
+}
+
+/** The panel opened the run's tab. */
+export function runOpened(request: RunRequest, tab: PtyTab): void {
+  if (request.runId !== undefined) tracker?.opened(request.runId, tab);
+}
+
+/** The panel could not open the run's tab. */
+export function runFailed(request: RunRequest, error: string): void {
+  if (request.runId !== undefined) tracker?.failed(request.runId, error);
+}
+
+const TITLE_MAX = 32;
+
+/** A run tab's title: the command on one line, shortened. */
+export function runTabTitle(command: string): string {
+  const line = command.replace(/\\\r?\n/g, " ").replace(/\s+/g, " ").trim();
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line;
 }
 
 type TabListener = (tab: PtyTab) => void;

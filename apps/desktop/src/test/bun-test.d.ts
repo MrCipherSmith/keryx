@@ -16,6 +16,7 @@ declare module "bun:test" {
     toMatch(expected: RegExp | string): void;
     toHaveLength(n: number): void;
     toBeGreaterThan(n: number): void;
+    toBeLessThanOrEqual(n: number): void;
     toThrow(expected?: unknown): void;
   }
   export function describe(name: string, fn: () => void): void;

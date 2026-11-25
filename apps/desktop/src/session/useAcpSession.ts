@@ -16,10 +16,12 @@ import {
 import { acpStart, acpTransport, acpStop, listenBridge, versionCheck } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { buildUserPrompt, type UserPromptContext } from "./userPrompt";
-import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
-import { closeTerminalTab, onTabClosed, showTerminalTab } from "../panels/panelBus";
+import { onPtyExit, panelMcpServers, ptyOpenRun, ptyTail } from "../platform/panels";
+import { closeTerminalTab, onTabClosed, setRunTracker, showTerminalTab } from "../panels/panelBus";
 import { notifyDelegateChange, setDelegateApi } from "./delegateBus";
 import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminals";
+import { createTerminalRuns, type DeliveryOutcome, type TerminalResultEntry } from "./terminalRuns";
+import { setTerminalRunApi } from "./terminalRunBus";
 import {
   canOrganizeSessions,
   hasLiveSessions,
@@ -82,6 +84,22 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** keryx refused a prompt because the session already runs a turn. */
+function isBusyRefusal(e: unknown): boolean {
+  return e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
+}
+
+/**
+ * JSON-RPC errors keryx answers a prompt with before it stores anything or starts a turn: invalid request
+ * (busy, opening, stopping), method not found, invalid params, unknown session.
+ */
+const PRE_TURN_REFUSALS: ReadonlySet<number> = new Set([-32600, -32601, -32602, -32002]);
+
+/** The display line of a results prompt; keryx ignores it and stores its own continuation line. */
+function terminalResultsLine(results: readonly TerminalResultEntry[]): string {
+  return results.length === 1 ? "The result of a command run from the Run button." : `The results of ${results.length} commands run from the Run button.`;
+}
+
 
 interface Turn {
   client: AcpClient;
@@ -98,6 +116,8 @@ interface Live {
   commandMethod: boolean;
   /** `initialize._meta.keryx.extensions`: the extension methods this keryx serves. */
   extensions: readonly string[];
+  /** `initialize._meta.keryx.terminalResults`: this keryx takes Run results in `session/prompt` (flow 523). */
+  terminalResults: boolean;
   unlisten: (() => void) | null;
   /** Which sessions keryx holds for this window, their turns, and which one is shown. */
   reg: SessionRegistry<Turn>;
@@ -144,7 +164,7 @@ export function useAcpSession(cwd: string) {
   /** The keryx this window runs (`acp_start`), for project commands run in a terminal tab. */
   const [keryxPath, setKeryxPath] = useState<string | null>(null);
   const challengeListeners = useRef(new Set<(c: LoginChallenge) => void>());
-  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], unlisten: null, reg: new SessionRegistry<Turn>() });
+  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], terminalResults: false, unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
@@ -372,26 +392,21 @@ export function useAcpSession(cwd: string) {
     [dialogs, dispatch],
   );
 
-  /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
-  const sendPrompt = useCallback(
-    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number, issue?: { issueLaunchId: string } | { resumeIssueQuestions: true }): boolean => {
-      const extra = context?.blocks ?? [];
+  /**
+   * One prompt turn of `sessionId`, whatever started it: the busy mark, the turn slot, keryx's stop-reason
+   * notices and the end-of-turn bookkeeping. `onFailed` hears a failure on this connection (a busy refusal
+   * included). Resolves when the turn is over; never rejects.
+   */
+  const runTurn = useCallback(
+    (client: AcpClient, sessionId: string, params: Record<string, unknown>, onFailed: (e: unknown) => void): Promise<void> => {
       const l = live.current;
-      const client = l.client;
-      const sessionId = target ?? l.reg.shown;
-      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
-        l.reg.telegramTurns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
-      const restoringQuestions = !!issue && "resumeIssueQuestions" in issue;
-      const sendId = ++sendSequence.current;
-      if (!restoringQuestions) dispatch({ t: "userSent", sessionId, sendId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       l.reg.turns.set(sessionId, turn);
       turn.done = (async () => {
         let busyRefusal = false;
         try {
-          const prompt = buildUserPrompt(text, extra, literal);
-          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, ...params });
           if (l.client !== client) return;
           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
           if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
@@ -400,10 +415,8 @@ export function useAcpSession(cwd: string) {
           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
         } catch (e) {
           if (l.client === client) {
-            busyRefusal = e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
-            if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
-            dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
-              text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
+            busyRefusal = isBusyRefusal(e);
+            onFailed(e);
           }
         } finally {
           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
@@ -416,10 +429,92 @@ export function useAcpSession(cwd: string) {
           }
         }
       })();
-      return true;
+      return turn.done;
     },
     [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
   );
+
+  /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
+  const sendPrompt = useCallback(
+    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number, issue?: { issueLaunchId: string } | { resumeIssueQuestions: true }): boolean => {
+      const extra = context?.blocks ?? [];
+      const l = live.current;
+      const client = l.client;
+      const sessionId = target ?? l.reg.shown;
+      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
+        l.reg.telegramTurns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
+      const restoringQuestions = !!issue && "resumeIssueQuestions" in issue;
+      const sendId = ++sendSequence.current;
+      if (!restoringQuestions) dispatch({ t: "userSent", sessionId, sendId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
+      const prompt = buildUserPrompt(text, extra, literal);
+      void runTurn(client, sessionId, { prompt, ...(issue ? { _meta: { keryx: issue } } : {}) }, (e) => {
+        const busyRefusal = isBusyRefusal(e);
+        if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
+        dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
+          text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
+      });
+      return true;
+    },
+    [dispatch, runTurn],
+  );
+
+  /**
+   * Run results (flow 523) to `sessionId` as one prompt, when it can take one now (null otherwise). No
+   * user bubble: keryx stores its own continuation line for the turn and the run cards show what was sent.
+   */
+  const sendTerminalResults = useCallback(
+    (sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.initialized || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) return null;
+      let outcome: DeliveryOutcome = { kind: "done" };
+      const params = { prompt: [{ type: "text", text: terminalResultsLine(results) }], _meta: { keryx: { terminalResults: results } } };
+      return runTurn(client, sessionId, params, (e) => {
+        if (isBusyRefusal(e)) outcome = { kind: "busy" };
+        else if (e instanceof RpcError && PRE_TURN_REFUSALS.has(e.code)) outcome = { kind: "refused", error: errMessage(e) };
+        // The results were stored and the follow-up turn failed: said like any failed turn.
+        else dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+      }).then(() => outcome);
+    },
+    [dispatch, runTurn],
+  );
+  const sendResults = useRef(sendTerminalResults);
+  sendResults.current = sendTerminalResults;
+
+  /** Run clicks from this window's transcripts (flow 523): tracked runs whose results go back to their sessions. */
+  const terminalRuns = useMemo(
+    () =>
+      createTerminalRuns({
+        acceptsResults: () => (live.current.initialized ? live.current.terminalResults : null),
+        send: (sessionId, results) => sendResults.current(sessionId, results),
+        tail: (id, lines) => ptyTail(id, lines),
+        showTab: showTerminalTab,
+        dispatch,
+        now: () => Date.now(),
+        newRunId: () => `run-${crypto.randomUUID()}`,
+        later: (fn, ms) => void window.setTimeout(fn, ms),
+      }),
+    [dispatch],
+  );
+  useEffect(() => {
+    setRunTracker(terminalRuns);
+    setTerminalRunApi({ showTab: (runId) => terminalRuns.showTab(runId), sendNow: (runId) => void terminalRuns.sendNow(runId) });
+    return () => {
+      setRunTracker(null);
+      setTerminalRunApi(null);
+    };
+  }, [terminalRuns]);
+  useEffect(() => {
+    let alive = true;
+    let off: (() => void) | null = null;
+    void onPtyExit((e) => void terminalRuns.exited(e.id, e.code)).then((u) => (alive ? (off = u) : u()));
+    const offClosed = onTabClosed((id) => terminalRuns.closed(id));
+    return () => {
+      alive = false;
+      off?.();
+      offClosed();
+    };
+  }, [terminalRuns]);
 
   const resumeIssueQuestions = useCallback((sessionId: string) =>
     sendPrompt("Resume the pending issue questions.", sessionId, undefined, false, undefined, { resumeIssueQuestions: true }),
@@ -538,6 +633,7 @@ export function useAcpSession(cwd: string) {
       l.usable = false;
       l.commandMethod = false;
       l.extensions = [];
+      l.terminalResults = false;
       setExtensions([]);
       setCanPrepareIssue(false);
       l.reg.reset();
@@ -649,6 +745,7 @@ export function useAcpSession(cwd: string) {
         l.initialized = true;
         l.commandMethod = hasCommandExtension(init);
         l.extensions = extensionsOf(init);
+        l.terminalResults = init._meta?.keryx?.terminalResults === true;
         setExtensions(l.extensions);
         setCanPrepareIssue(init._meta?.keryx?.issuePreparation === true);
 
@@ -826,6 +923,12 @@ export function useAcpSession(cwd: string) {
     },
     [dispatch],
   );
+
+  /**
+   * Run results waiting for a session go out once it can take a prompt (its turn ended, it is held
+   * again), ahead of prompts the user queued meanwhile.
+   */
+  useEffect(() => terminalRuns.flush(), [win.convs, terminalRuns]);
 
   /** Prompts queued while a turn ran go out in order, one per ended turn. */
   useEffect(() => {

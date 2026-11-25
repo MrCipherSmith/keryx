@@ -1,0 +1,12 @@
+/* A Run from the session's transcript (flow 523): the command, where its result stands, the output tail, actions. */
+.run-card { min-width: 0; max-width: 100%; margin: var(--sp-2) 0; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-md); background: var(--bg-surface); }
+.run-card[data-run-state="closed"], .run-card[data-run-state="start-failed"], .run-card[data-run-state="not-sent"] { border-left-color: var(--warn); }
+.run-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+.run-card-command { min-width: 0; flex: 1; font-family: var(--mono); color: var(--fg); overflow-wrap: anywhere; white-space: pre-wrap; }
+.run-card-dur { font-size: var(--fs-xs); color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.run-card-status { padding: var(--sp-1) var(--sp-3) var(--sp-2); font-size: var(--fs-sm); color: var(--fg-muted); }
+.run-card-status.run-start-failed, .run-card-status.run-not-sent, .run-card-status.run-closed { color: var(--warn); }
+.run-card-body { display: grid; gap: var(--sp-1); padding: 0 var(--sp-2) var(--sp-2); min-width: 0; }
+.run-card-body > .btn { justify-self: start; }
+.run-card-output { margin: 0 var(--sp-1); }
+.run-card-actions { display: flex; gap: var(--sp-1); padding: 0 var(--sp-2) var(--sp-2); }

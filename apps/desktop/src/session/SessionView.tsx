@@ -436,6 +436,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         {/* Keyed by session: item ids restart in every session, so rows must not carry state across. */}
         <Transcript
           key={state.sessionId ?? ""}
+          sessionId={state.sessionId}
           items={state.items}
           busy={state.busy}
           reviewActivity={reviewActivity}

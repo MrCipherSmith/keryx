@@ -12,6 +12,8 @@ mock.module("../platform/panels", () => ({
   ptyList: async () => [],
   ptyOpen: async () => tab(1),
   ptyOpenRun: async () => tab(1),
+  ptyOpenCommand: async () => tab(1),
+  ptyTail: async () => "",
   onPtyExit: async () => () => {},
   ptyWrite: async () => {},
   ptyClose: async () => {},

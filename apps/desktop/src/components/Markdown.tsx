@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { Marked, marked } from "marked";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "./Menu";
 import { decoratePrReferences, type PrLinks } from "./prLinks";
 import { githubPrUrl } from "../lib/githubPr";
@@ -79,12 +79,19 @@ export function renderInline(src: string): string {
   return DOMPurify.sanitize(html, SANITIZE) as string;
 }
 
+/**
+ * The session whose transcript renders this Markdown (set by the transcript): a Run clicked in it is
+ * that session's run and its result goes back to it (flow 523). Null elsewhere (wiki pages, PR text),
+ * where Run only opens the tab.
+ */
+export const RunSessionContext = createContext<string | null>(null);
+
 /** Prevent native WebView navigation; only explicitly handled links can open a browser. */
 function blockLinks(e: React.MouseEvent<HTMLElement>) {
   if ((e.target as HTMLElement).closest("a")) e.preventDefault();
 }
 
-function onClick(e: React.MouseEvent<HTMLDivElement>) {
+function onClick(e: React.MouseEvent<HTMLDivElement>, runSession: string | null) {
   const target = e.target as HTMLElement;
   blockLinks(e);
   const image = clickedImageLink(target);
@@ -99,7 +106,7 @@ function onClick(e: React.MouseEvent<HTMLDivElement>) {
   if (run) {
     const block = run.closest<HTMLElement>(".code-block");
     const command = runnableCommand(codeBlockCopyText(block ?? null, block?.querySelector("code") ?? null));
-    if (command) runInTerminal(command);
+    if (command) runInTerminal(command, runSession === null ? undefined : { sessionId: runSession, source: "message" });
     return;
   }
   const copy = target.closest<HTMLButtonElement>("button.code-copy");
@@ -177,8 +184,8 @@ function decorateCodeBlocks(html: string): string {
       st.append(add, del);
       head.append(st);
     }
-    // One shell command gets Run (D-13): it is typed into the side panel's terminal. A block that
-    // had hidden characters revealed never does.
+    // One shell command gets Run (D-13): it runs in a terminal tab of its own. A block that had
+    // hidden characters revealed never does.
     if (isShellLang(lang) && wrap.dataset.raw === undefined && runnableCommand(code?.textContent ?? "") !== null) {
       const runBtn = doc.createElement("button");
       runBtn.className = "code-run";
@@ -261,6 +268,7 @@ const SETTLE_MS = 250;
 
 export const Markdown = memo(function Markdown({ text, className, prLinks }: { text: string; className?: string; prLinks?: PrLinks }) {
   const ref = useRef<HTMLDivElement>(null);
+  const runSession = useContext(RunSessionContext);
   const [prMenu, setPrMenu] = useState<{ anchor: HTMLAnchorElement; url: string } | null>(null);
   const menuRef = useRef(prMenu);
   const closePrMenu = useCallback(() => {
@@ -384,7 +392,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
         if (prLinks && url) {
           e.preventDefault();
           prLinks.openExternal(url);
-        } else onClick(e);
+        } else onClick(e, runSession);
       }}
       onContextMenu={(e) => { if (showPrMenu(e.target)) e.preventDefault(); else blockLinks(e); }}
       onKeyDown={(e) => {

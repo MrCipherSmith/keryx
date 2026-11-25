@@ -1,13 +1,15 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { BrandMark } from "../components/BrandMark";
 import type { ToolCallContent, ToolKind } from "../acp/types";
-import type { CommandItem, DelegateResultItem, Item } from "./reducer";
+import type { CommandItem, DelegateResultItem, Item, TerminalRunItem } from "./reducer";
 import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { DelegateResultCard } from "./DelegateResultCard";
+import { TerminalRunCard } from "./TerminalRunCard";
 import { blockText } from "./reducer";
 import { ContentBlockView } from "./ContentBlockView";
-import { Markdown } from "../components/Markdown";
+import { formatDuration } from "./duration";
+import { Markdown, RunSessionContext } from "../components/Markdown";
 import type { PrLinks } from "../components/prLinks";
 import { UserMessage } from "./UserMessage";
 import type { UserPromptContext } from "./userPrompt";
@@ -47,12 +49,6 @@ function pretty(v: unknown): string {
   } catch {
     return String(v);
   }
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
 /**
@@ -169,6 +165,7 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
   const hasBody = item.content.length > 0 || raw !== "" || hasRestArgs(item.rawInput);
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
   const runnable = useMemo(() => runnableToolCommand(item), [item]);
+  const runSession = useContext(RunSessionContext);
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
       <button className="tool-row" onClick={() => setOpen((o) => !o)} aria-expanded={hasBody ? open : undefined} disabled={!hasBody}>
@@ -198,7 +195,11 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
               <div className="tool-label">
                 {primary.label}
                 {runnable !== null ? (
-                  <button className="tool-run" onClick={() => runInTerminal(runnable)} title="Run in the terminal panel">
+                  <button
+                    className="tool-run"
+                    onClick={() => runInTerminal(runnable, runSession === null ? undefined : { sessionId: runSession, source: "tool" })}
+                    title="Run in the terminal panel"
+                  >
                     <Icon name="play" size={10} /> Run
                   </button>
                 ) : null}
@@ -264,7 +265,8 @@ type Block =
   | { type: "userBlock"; item: BlockItem }
   | { type: "agentBlock"; item: BlockItem; first: boolean }
   | { type: "command"; item: CommandItem }
-  | { type: "delegate"; item: DelegateResultItem };
+  | { type: "delegate"; item: DelegateResultItem }
+  | { type: "terminalRun"; item: TerminalRunItem };
 
 function toBlocks(items: Item[]): Block[] {
   const out: Block[] = [];
@@ -285,6 +287,12 @@ function toBlocks(items: Item[]): Block[] {
     }
     if (it.kind === "delegate") {
       out.push({ type: "delegate", item: it });
+      continue;
+    }
+    // A run's result starts the agent's follow-up turn, as a user message would.
+    if (it.kind === "terminalRun") {
+      out.push({ type: "terminalRun", item: it });
+      agentTurnOpen = false;
       continue;
     }
     if (it.kind === "block" && it.role === "user") {
@@ -318,9 +326,19 @@ interface Props {
   /** The session's subagents: a tool card whose call spawned one links to it. */
   subagents?: readonly Subagent[];
   onShowSubagent?: (id: string) => void;
+  /** The session shown: a Run clicked in this transcript is its run, and its result goes back to it (flow 523). */
+  sessionId?: string | null;
 }
 
-export function Transcript({ items, busy, replaying, empty, reviewActivity, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
+export function Transcript(props: Props) {
+  return (
+    <RunSessionContext.Provider value={props.sessionId ?? null}>
+      <TranscriptView {...props} />
+    </RunSessionContext.Provider>
+  );
+}
+
+function TranscriptView({ items, busy, replaying, empty, reviewActivity, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -427,6 +445,8 @@ export function Transcript({ items, busy, replaying, empty, reviewActivity, onRu
                 );
               case "delegate":
                 return <DelegateResultCard key={b.item.id} item={b.item} />;
+              case "terminalRun":
+                return <TerminalRunCard key={b.item.id} item={b.item} />;
               case "command":
                 return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
               case "userBlock":

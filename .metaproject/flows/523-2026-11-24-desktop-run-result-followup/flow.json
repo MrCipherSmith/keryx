@@ -11,12 +11,12 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-24T21:07:51.092Z",
+  "updatedAt": "2026-11-25T04:45:17.939Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:b500410e0cc5090e708a8b4e957d3e7d921ac4b90ded29d194fa7130b9138d91",
+  "acChecksum": "sha256:8a4ae75e5eeaf3bf1032f4e6361456ad6d9bfa6b8349c73b77ebc457f9536817",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -93,29 +93,43 @@
       "id": "T5",
       "title": "Host: pty_open_command and pty_tail with Rust tests and TS wrappers",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T21:08:47.649Z",
+            "outcome": "started",
+            "detail": "523-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "keryx: terminalResults prompt meta, untrusted notes, floor, replay, initialize meta, system-instruction guidance",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T21:08:48.787Z",
+            "outcome": "started",
+            "detail": "523-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -127,8 +141,14 @@
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-24T21:35:29.460Z",
+            "outcome": "started",
+            "detail": "523-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -225,6 +245,36 @@
       "at": "2026-11-24T21:07:51.092Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-24T21:08:47.649Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 523-T5"
+    },
+    {
+      "at": "2026-11-24T21:08:48.787Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 523-T6"
+    },
+    {
+      "at": "2026-11-24T21:32:28.009Z",
+      "event": "task-done",
+      "detail": "T5: Host: pty_open_command and pty_tail with Rust tests and TS wrappers"
+    },
+    {
+      "at": "2026-11-24T21:34:55.281Z",
+      "event": "task-done",
+      "detail": "T6: keryx: terminalResults prompt meta, untrusted notes, floor, replay, initialize meta, system-instruction guidance"
+    },
+    {
+      "at": "2026-11-24T21:35:29.460Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 523-T7"
+    },
+    {
+      "at": "2026-11-25T04:45:17.939Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"Root typecheck and lint, and the desktop build (its `tsc --noEmit` and `vite build`), pass on the final head. [verify: exec `bun run typecheck && bun run lint && bun --cwd apps/desktop run build`]\" -> \"Root typecheck and lint, and the desktop build (its `tsc --noEmit` and `vite build`), pass on the final head. [verify: exec `bun run typecheck && bun run lint && (cd apps/desktop && bun run build)`]\" (verify command fix: from the repository root bun 1.4.2 treats 'bun --cwd apps/desktop run build' as usage output and exits 0 without building (found by 523-T7); the criterion itself is unchanged)"
     }
   ],
   "origin": {
@@ -278,7 +328,7 @@
     },
     "AC11": {
       "kind": "exec",
-      "check": "bun run typecheck && bun run lint && bun --cwd apps/desktop run build"
+      "check": "bun run typecheck && bun run lint && (cd apps/desktop && bun run build)"
     },
     "AC12": {
       "kind": "invariant",

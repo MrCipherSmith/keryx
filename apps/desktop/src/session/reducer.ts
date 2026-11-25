@@ -49,7 +49,50 @@ export type Item =
   /** A non-text content block (image, resource link, embedded resource) of a message, shown as itself. */
   | { kind: "block"; id: number; role: "user" | "agent"; block: ContentBlock }
   | DelegateResultItem
-  | CommandItem;
+  | CommandItem
+  | TerminalRunItem;
+
+/** Where a Run click's run stands (flow 523), as its card says it. */
+export type TerminalRunState =
+  | "starting"
+  | "running"
+  /** Its result is ready and waits for the session's turn to end. */
+  | "waiting"
+  | "sent"
+  /** "Send output now" sent a snapshot; the process kept running. */
+  | "sent-while-running"
+  | "closed"
+  | "start-failed"
+  | "not-sent";
+
+/**
+ * A Run click in this session's transcript (flow 523): the command in a terminal tab of its own and,
+ * once it ends or on "Send output now", its result sent to the agent, which continues on its own.
+ * A live run is the window's (`terminalRuns.ts`); a replayed note (`_meta.keryx.terminalResult`) draws it
+ * again in a sent state, with no actions. The output is the command's, untrusted: shown as text only.
+ */
+export interface TerminalRunItem {
+  kind: "terminalRun";
+  id: number;
+  runId: string;
+  command: string;
+  state: TerminalRunState;
+  /** The process's exit code once it ended, null when it ended by a signal; absent while it runs. */
+  exitCode?: number | null;
+  /** How long it ran, once it ended. */
+  durationMs?: number;
+  /** The output tail as sent (or as it would have been). */
+  output?: string;
+  /** Why it could not start, or why its result was not sent. */
+  error?: string;
+  /** The run's tab is still in the terminal panel. */
+  tabOpen: boolean;
+  /** Drawn from the session's history on load. */
+  replayed?: boolean;
+}
+
+/** A run card's fields; the reducer keeps its id. */
+export type TerminalRunView = Omit<TerminalRunItem, "kind" | "id">;
 
 /**
  * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
@@ -301,6 +344,31 @@ function replayDate(meta: unknown): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * `_meta.keryx.terminalResult` of a replayed user chunk (flow 523): a Run's result as keryx stored it,
+ * drawn as a sent run card. Null for anything else.
+ */
+function terminalNoteOf(meta: unknown): TerminalRunView | null {
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  const n = isRecord(keryx) ? keryx["terminalResult"] : undefined;
+  if (!isRecord(n) || typeof n.runId !== "string" || typeof n.command !== "string" || typeof n.output !== "string") return null;
+  if (n.state !== "exited" && n.state !== "running") return null;
+  const base: TerminalRunView = { runId: n.runId, command: n.command, output: n.output, tabOpen: false, replayed: true, state: "sent-while-running" };
+  if (n.state === "running") return base;
+  const durationMs = typeof n.durationMs === "number" && Number.isFinite(n.durationMs) && n.durationMs >= 0 ? { durationMs: n.durationMs } : {};
+  return { ...base, ...durationMs, state: "sent", exitCode: typeof n.exitCode === "number" ? n.exitCode : null };
+}
+
+/** `_meta.keryx.terminalContinuation`: keryx's own user line of a terminal-results turn, never drawn. */
+function isTerminalContinuation(meta: unknown): boolean {
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  return isRecord(keryx) && keryx["terminalContinuation"] === true;
+}
+
 function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }, startedAt?: number): boolean {
   d.items.push({ kind: "delegate", id: d.nextId, runId: n.runId, agentId: n.agentId, turn: n.turn, text: n.text });
   d.nextId += 1;
@@ -379,10 +447,18 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       if (!d.replaying && !d.telegramTurn) return false; // Desktop user text is added locally on send
       const c = u as ChunkUpdate;
       const note = delegateNoteOf((u as { _meta?: unknown })._meta);
+      const terminal = terminalNoteOf(c._meta);
       const parentTurn = (c._meta as { keryx?: { parentTurn?: number } } | undefined)?.keryx?.parentTurn;
       if (typeof parentTurn === "number" && Number.isSafeInteger(parentTurn) && parentTurn >= 0) d.parentTurn = parentTurn;
-      else if (!note && d.items.at(-1)?.kind !== "user") d.parentTurn++;
+      else if (!note && !terminal && d.items.at(-1)?.kind !== "user") d.parentTurn++;
       if (note) return replayDelegateNote(d, note, replayDate(c._meta));
+      if (terminal) {
+        d.items.push({ ...terminal, kind: "terminalRun", id: d.nextId });
+        d.nextId += 1;
+        return true;
+      }
+      // The turn it starts is counted above; the line itself is keryx's, not the operator's: no bubble.
+      if (isTerminalContinuation(c._meta)) return true;
       if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "user", c.content);
       const source = d.telegramTurn || (c._meta as { keryx?: { source?: string } } | undefined)?.keryx?.source === "telegram" ? "telegram" : undefined;
       const messageId = c.messageId ?? (d.telegramTurn ? `telegram:${d.telegramTurn.generation}:${d.telegramTurn.updateId}` : undefined);
@@ -513,6 +589,13 @@ export type Action =
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
   /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
   | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
+  /** A Run's run changed (flow 523): its card is added, or replaced in place (same runId). */
+  | { t: "terminalRun"; sessionId: string; run: TerminalRunView }
+  /**
+   * Run results went to the agent in one prompt and its follow-up turn begins: their cards move to the
+   * end, so the reply that streams in comes after them (as after a note on reload), and the turn is counted.
+   */
+  | { t: "terminalSent"; sessionId: string; runIds: readonly string[] }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
   | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string; resumeIssueQuestions?: true }
   | { t: "queueRemove"; sessionId: string; index: number }
@@ -639,6 +722,19 @@ export function reducer(state: WindowState, a: Action): WindowState {
         nextId: c.nextId + 1,
         items: [...c.items, { kind: "delegate", id: c.nextId, runId: a.runId, agentId: a.agentId, turn: a.turn, text: a.text }],
       }));
+    case "terminalRun":
+      return withConv(state, a.sessionId, (c) => {
+        const at = c.items.findIndex((i) => i.kind === "terminalRun" && i.runId === a.run.runId);
+        if (at < 0) return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.run, kind: "terminalRun", id: c.nextId }] };
+        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id } : i)) };
+      });
+    case "terminalSent":
+      return withConv(state, a.sessionId, (c) => {
+        const sent = new Set(a.runIds);
+        const isSent = (i: Item): i is TerminalRunItem => i.kind === "terminalRun" && sent.has(i.runId);
+        const cards = a.runIds.flatMap((id) => c.items.filter((i): i is TerminalRunItem => isSent(i) && i.runId === id));
+        return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !isSent(i)), ...cards] };
+      });
     case "queueAdd":
       return withConv(state, a.sessionId, c => {
         if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId)) || (a.resumeIssueQuestions && c.queue.some(prompt => prompt.resumeIssueQuestions))) return c;
