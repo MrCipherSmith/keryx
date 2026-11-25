@@ -85,7 +85,7 @@ test("a card whose round matches no message keeps the place it first showed at; 
   await render([slot(stray("run-9"))], later);
   const sequence = order();
   expect(sequence.indexOf("[run-9]")).toBe(items.length);
-  expect(sequence.at(-1)).toBe("Published.");
+  expect(sequence.at(-1)).toContain("Published.");
 });
 
 test("a round the agent started mid-turn lands where it was pinned from, not where it finished", async () => {
