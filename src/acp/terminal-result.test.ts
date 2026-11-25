@@ -5,13 +5,16 @@
 
 import { describe, expect, test } from "bun:test";
 import { buildAgentSystemInstruction } from "../commands/agent";
+import type { NormalizedMessage } from "../harness/provider/types";
 import { delegateResultNote } from "./delegate-turn-hook";
 import {
   clientTakesTerminalResults,
   parseTerminalResultNote,
   parseTerminalResults,
+  storedTerminalRunIds,
   TERMINAL_COMMAND_MAX_CHARS,
   TERMINAL_CONTINUATION_LINE,
+  TERMINAL_OUTPUT_CUT_LINE,
   TERMINAL_RESULT_MAX_BYTES,
   TERMINAL_RESULTS_MAX,
   TERMINAL_RESULTS_PROMPT,
@@ -230,6 +233,44 @@ describe("terminalResultNote", () => {
     expect(stored).toStartWith("[… 4 earlier bytes not kept]\n");
   });
 
+  test("R2-LG-004: the desktop's cut line stays first through keryx's own cut, and keryx's marker claims no total", () => {
+    // A combined-format request log: the desktop's byte cap fired, so it sent its cut line and the last
+    // 16 KiB; every `127.0.0.1` grows by 4 bytes under redaction, so keryx has to cut again.
+    const last = "127.0.0.1 - - \"GET /api/health HTTP/1.1\" 200 2 \"-\" \"curl/8.4\" SUMMARY";
+    const line = "127.0.0.1 - - [25/Nov/2026:10:00:00 +0000] \"GET /api/items?page=2 HTTP/1.1\" 200 5120 \"-\" \"Mozilla/5.0\"";
+    const room = TERMINAL_RESULT_MAX_BYTES - Buffer.byteLength(`${TERMINAL_OUTPUT_CUT_LINE}\n\n${last}`, "utf8");
+    const lines = Array.from({ length: Math.floor(room / (line.length + 1)) }, () => line);
+    const padding = "x".repeat(room - Buffer.byteLength(lines.join("\n"), "utf8") - 1);
+    const output = `${TERMINAL_OUTPUT_CUT_LINE}\n${padding}\n${lines.join("\n")}\n${last}`;
+    expect(Buffer.byteLength(output, "utf8")).toBe(TERMINAL_RESULT_MAX_BYTES);
+    const stored = parseTerminalResultNote(terminalResultNote(accepted(exited({ exitCode: 0, output })), NONCE))?.output ?? "";
+    const [first, second] = stored.split("\n");
+    expect(first).toBe(TERMINAL_OUTPUT_CUT_LINE);
+    expect(second).toMatch(/^\[… \d+ more bytes cut here\]$/);
+    expect(stored).not.toContain("earlier bytes not kept");
+    expect(stored).not.toContain("127.0.0.1");
+    expect(stored.endsWith("\"curl/8.4\" SUMMARY")).toBe(true);
+    // What follows keryx's marker is at most what the cap leaves after the cut line.
+    const kept = stored.slice(`${first}\n${second}\n`.length);
+    expect(Buffer.byteLength(kept, "utf8")).toBeLessThanOrEqual(TERMINAL_RESULT_MAX_BYTES - Buffer.byteLength(`${TERMINAL_OUTPUT_CUT_LINE}\n`, "utf8"));
+  });
+
+  test("R2-LG-004: a desktop tail under the cap keeps its cut line and gets no keryx marker", () => {
+    const output = `${TERMINAL_OUTPUT_CUT_LINE}\nline 51\nline 52\nexit summary`;
+    expect(parseTerminalResultNote(terminalResultNote(accepted(exited({ output })), NONCE))?.output).toBe(output);
+  });
+
+  test("R2-SC-003: a key cut by the desktop's tail masks the body lines and keeps the cut line above them", () => {
+    const body = ["VTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK", "4eWAoJ8qkGfqzuXTMRJ0aH1pQAhUyNIsdNbS"];
+    const output = `${TERMINAL_OUTPUT_CUT_LINE}\n${body.join("\n")}\n-----END RSA PRIVATE KEY-----\n-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----`;
+    const stored = parseTerminalResultNote(terminalResultNote(accepted(exited({ command: "cat key.pem chain.pem", output })), NONCE))?.output ?? "";
+    expect(stored.split("\n")[0]).toBe(TERMINAL_OUTPUT_CUT_LINE);
+    for (const line of body) expect(stored).not.toContain(line);
+    expect(stored).not.toContain("-----END RSA PRIVATE KEY-----");
+    expect(stored).toContain("[REDACTED");
+    expect(stored).toContain("-----BEGIN CERTIFICATE-----");
+  });
+
   test("a multi-byte character the tail cut lands in is dropped whole, never split", () => {
     // 2 bytes per `é` and one trailing byte: the last 16 KiB start in the middle of an `é`.
     const output = `${"é".repeat(TERMINAL_RESULT_MAX_BYTES)}x`;
@@ -285,6 +326,24 @@ describe("parseTerminalResultNote", () => {
     expect(parseTerminalResultNote(note.replace('command: "bun test src/acp"', "command: bun test"))).toBeUndefined();
     expect(parseTerminalResultNote(TERMINAL_CONTINUATION_LINE)).toBeUndefined();
     expect(parseTerminalResultNote("")).toBeUndefined();
+  });
+});
+
+describe("storedTerminalRunIds (R2-HL-002): the runs a session already stored a note for", () => {
+  test("only notes keryx stored count: injected harness user messages whose first line is a head line, across every history given", () => {
+    const note = (entry: Record<string, unknown>): string => terminalResultNote(accepted(entry), NONCE);
+    const live: NormalizedMessage[] = [
+      { role: "user", content: note(exited({ runId: "run-1" })), provenance: "harness", injected: true },
+      { role: "user", content: note(running({ runId: "run-2" })), provenance: "harness", injected: true },
+      // The operator typed a note's shape: not stored by keryx.
+      { role: "user", content: note(exited({ runId: "typed" })), provenance: "project" },
+      // A harness line that only mentions a head line further down.
+      { role: "user", content: `hint\n${note(exited({ runId: "inner" }))}`, provenance: "harness", injected: true },
+      { role: "assistant", content: note(exited({ runId: "said" })), provenance: "model" },
+    ];
+    const archived: NormalizedMessage[] = [{ role: "user", content: note(exited({ runId: "run-0", exitCode: null })), provenance: "harness", injected: true }];
+    expect([...storedTerminalRunIds(archived, live)].sort()).toEqual(["run-0", "run-1", "run-2"]);
+    expect(storedTerminalRunIds().size).toBe(0);
   });
 });
 

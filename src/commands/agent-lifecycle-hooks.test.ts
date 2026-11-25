@@ -876,6 +876,35 @@ test("flow 523 review AR2-001: a terminal-results turn's line is keryx's — no 
   expect(history.at(-1)).toMatchObject({ role: "assistant", content: "ok" });
 });
 
+test("flow 523 review R2-TP-002: the terminal-results origin alone turns the untrusted-content floor on (no untrustedPrompt)", async () => {
+  const runTurn = async (options: Parameters<typeof runAgentTurn>[4]): Promise<{ asks: number; untrustedAsks: number; ran: boolean }> => {
+    const { tool, ran } = fakeTool("shell_exec", "shell");
+    let asks = 0;
+    let untrustedAsks = 0;
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => "trust",
+      requestApproval: async (_tool, _input, meta) => {
+        asks += 1;
+        if (meta?.untrustedOrigin === true) untrustedAsks += 1;
+        return false;
+      },
+    };
+    await runAgentTurn(
+      io,
+      { provider: scriptedProvider(callScript("shell_exec", '{"command":"touch result-ran"}')), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq },
+      [],
+      "The commands you proposed ran; continue.",
+      options,
+    );
+    return { asks, untrustedAsks, ran: ran() };
+  };
+  // Control: the same mutating call in trust mode, on an operator line, runs unasked.
+  expect(await runTurn(undefined)).toEqual({ asks: 0, untrustedAsks: 0, ran: true });
+  // The origin by itself, with no untrustedPrompt beside it: the call is asked for as untrusted, and refused, it does not run.
+  expect(await runTurn({ origin: "terminal-results" })).toEqual({ asks: 1, untrustedAsks: 1, ran: false });
+});
+
 // --- tool-name alias mapping ----------------------------------------------
 
 test("HOOK_TOOL_NAME_ALIASES maps shell_exec to Bash and apply_patch to Edit", () => {

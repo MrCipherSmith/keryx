@@ -168,6 +168,7 @@ import {
   clientTakesTerminalResults,
   parseTerminalResultNote,
   parseTerminalResults,
+  storedTerminalRunIds,
   TERMINAL_RESULTS_PROMPT,
   terminalResultNote,
   terminalResultsMeta,
@@ -2363,6 +2364,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return parsed.results;
   }
 
+  /**
+   * `results` split by whether the session already stored a note for the run (review R2-HL-002): its
+   * live history and its archive, which keeps the notes a compaction took out of the history.
+   */
+  function withoutStoredRuns(state: AcpSessionState, results: readonly TerminalResult[]): { fresh: readonly TerminalResult[]; duplicates: string[] } {
+    const stored = storedTerminalRunIds(state.archive.messages, state.history);
+    return {
+      fresh: results.filter((result) => !stored.has(result.runId)),
+      duplicates: results.filter((result) => stored.has(result.runId)).map((result) => result.runId),
+    };
+  }
+
   /** One labelled untrusted note per terminal result, each with its own nonce, stored before the turn they start. */
   function appendTerminalResultNotes(sessionId: string, results: readonly TerminalResult[]): void {
     const notes = results.map((result) => terminalResultNote(result, randomBytes(6).toString("hex")));
@@ -2585,6 +2598,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     requireProvider(ACP_AGENT_METHODS.sessionPrompt);
     touch(sessionId);
+    // Review R2-HL-002: a result is stored at most once per run id. The desktop re-sends results whose
+    // prompt was lost with its connection, so an entry whose run already has a stored note is skipped;
+    // a prompt holding nothing else stores nothing, starts no turn and is answered as delivered.
+    const freshResults = terminalResults === undefined ? undefined : withoutStoredRuns(state, terminalResults);
+    if (freshResults !== undefined && freshResults.fresh.length === 0) {
+      return { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } };
+    }
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
     if ((obj["_meta"] as { keryx?: { resumeIssueQuestions?: unknown } } | undefined)?.keryx?.resumeIssueQuestions === true)
@@ -2823,7 +2843,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // turn `/rewind` recorded above, so rewinding this turn takes them out with it. The turn is
       // keryx's (`origin: "terminal-results"`, review AR2-001): its line is not the operator's, so no
       // `UserPromptSubmit` hook sees or refuses it, and nothing can leave these notes without their turn.
-      if (terminalResults !== undefined) appendTerminalResultNotes(sessionId, terminalResults);
+      if (freshResults !== undefined) appendTerminalResultNotes(sessionId, freshResults.fresh);
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
         ...(terminalResults !== undefined ? { origin: "terminal-results" as const } : {}),

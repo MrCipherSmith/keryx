@@ -57,6 +57,9 @@ export function parseHistoryArgs(args: string): HistoryArgs {
  * becomes an agent item) and is itself an item; an assistant message that emitted tool calls
  * discards the text gathered so far in this turn; a later assistant message without calls
  * replaces it. A turn that ended on tool calls with no closing text yields no agent item.
+ * keryx's own continuation line, which starts the turn a Run's result started (flow 523,
+ * marked `terminalContinuation`), closes the turn before it the same way but is no item:
+ * the operator did not write it (review R2-DG-004).
  */
 export function qualifyingHistory(
   history: readonly NormalizedMessage[],
@@ -75,6 +78,10 @@ export function qualifyingHistory(
       } else if (message.content.trim().length > 0) {
         pending = message.content;
       }
+      continue;
+    }
+    if (message.role === "user" && message.terminalContinuation === true) {
+      flush();
       continue;
     }
     if (isOperatorMessage(message) && message.content.trim().length > 0) {

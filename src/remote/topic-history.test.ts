@@ -177,6 +177,35 @@ describe("which messages qualify", () => {
     expect(picked).toEqual([{ role: "agent", text: "The answer so f" }]);
   });
 
+  // Flow 523 review R2-DG-004: keryx's continuation line starts the turn a Run's result started; it is
+  // no operator line, but it ends the turn before it, so the reply that proposed the Run is kept.
+  test("keryx's continuation line closes the turn before it without being an item: the reply that proposed the Run stays", () => {
+    const note = (runId: string): NormalizedMessage => ({
+      role: "user",
+      content: `[terminal run ${runId} result: exit 1]\nUNTRUSTED TERMINAL OUTPUT\n<terminal-result-0123456789ab>\ncommand: "bun test"\nduration: 10 ms\noutput:\n1 fail\n</terminal-result-0123456789ab>`,
+      provenance: "harness",
+      injected: true,
+    });
+    const continuation: NormalizedMessage = {
+      role: "user",
+      content: "The commands you proposed ran in the operator's terminal; continue.",
+      provenance: "harness",
+      injected: true,
+      terminalContinuation: true,
+    };
+    const history = [user("fix the tests"), agent("Run this:\n```sh\nbun test\n```"), note("run-1"), note("run-2"), continuation, agentCalling("let me look"), tool("src/a.ts"), agent("Two tests fail.")];
+    expect(qualifyingHistory(history)).toEqual([
+      { role: "user", text: "fix the tests" },
+      { role: "agent", text: "Run this:\n```sh\nbun test\n```" },
+      { role: "agent", text: "Two tests fail." },
+    ]);
+    // Without a round in between, each turn's own final text is kept as well.
+    expect(qualifyingHistory([user("q1"), agent("Run it"), note("run-3"), continuation, agent("It passed.")]).map((item) => item.text)).toEqual(["q1", "Run it", "It passed."]);
+    // A harness line with the same text but no marker is no boundary: the later text replaces the earlier one.
+    const unmarked: NormalizedMessage = { role: "user", content: continuation.content, provenance: "harness", injected: true };
+    expect(qualifyingHistory([user("q1"), agent("Run it"), unmarked, agent("It passed.")]).map((item) => item.text)).toEqual(["q1", "It passed."]);
+  });
+
   test("an empty or short history gives what there is; a count above it gives all of it", () => {
     expect(qualifyingHistory([])).toEqual([]);
     expect(selectHistory([user("only"), agent("one")], 10)).toHaveLength(2);

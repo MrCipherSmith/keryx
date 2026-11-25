@@ -338,6 +338,105 @@ describe("AC5: the notes, the continuation line and the turn", () => {
   }, TIMEOUT_MS);
 });
 
+describe("R2-HL-002: a result is stored at most once per run id", () => {
+  const noteCount = (h: ShellHarness, sessionId: string, runId: string): number =>
+    storedNotes(h, sessionId).filter((m) => m.content.startsWith(`[terminal run ${runId} `)).length;
+  const NEW_RESULT = { runId: "run-3", command: "bun run lint", state: "exited", exitCode: 0, durationMs: 900, output: "no problems" } as const;
+
+  test("a prompt with stored and new results stores only the new ones and runs the turn on them", async () => {
+    const { h, sent } = desktop([textRound("one test fails"), textRound("lint is clean")]);
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    await settle(h, promptWithResults(h, sessionId, [RESULTS[0]]));
+    expect(sent).toHaveLength(1);
+
+    const { reply } = await settle(h, promptWithResults(h, sessionId, [RESULTS[0], NEW_RESULT]));
+    expect(reply.error).toBeUndefined();
+    expect(reply.result?.["stopReason"]).toBe("end_turn");
+    expect(sent).toHaveLength(2);
+    expect(noteCount(h, sessionId, "run-1")).toBe(1);
+    expect(noteCount(h, sessionId, "run-3")).toBe(1);
+    // The new turn's notes are the new result only, then keryx's line.
+    const tail = sent[1]?.messages.slice(-2) ?? [];
+    expect(tail[0]?.content).toStartWith("[terminal run run-3 result: exit 0]\n");
+    expect(tail[1]?.content).toBe(TERMINAL_CONTINUATION_LINE);
+  }, TIMEOUT_MS);
+
+  test("a prompt whose every result is stored stores nothing, runs no turn and is answered as delivered with the duplicates named", async () => {
+    const { h, sent } = desktop([textRound("one test fails"), textRound("must not be used")]);
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    await settle(h, promptWithResults(h, sessionId, RESULTS));
+    expect(sent).toHaveLength(1);
+    const before = loadContext(h.projectDir, sessionId, dataDirOf(h));
+    const framesBefore = h.frames.length;
+
+    const id = promptWithResults(h, sessionId, [RESULTS[1], RESULTS[0]]);
+    const reply = await h.waitFor((f) => f.id === id && f.method === undefined);
+    expect(reply.error).toBeUndefined();
+    expect(reply.result).toEqual({ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: ["run-2", "run-1"] } } } });
+    expect(sent).toHaveLength(1);
+    expect(loadContext(h.projectDir, sessionId, dataDirOf(h))).toEqual(before);
+    expect(h.frames.slice(framesBefore).filter((f) => f.method === ACP_CLIENT_METHODS.sessionUpdate && f.params?.sessionId === sessionId)).toEqual([]);
+    // The turn slot was never taken: the next prompt runs.
+    const { reply: next } = await settle(h, promptWithResults(h, sessionId, [NEW_RESULT]));
+    expect(next.result?.["stopReason"]).toBe("end_turn");
+    expect(sent).toHaveLength(2);
+  }, TIMEOUT_MS);
+
+  test("after session/load the stored notes count, including one a compaction left only in the archive", async () => {
+    const d = desktop([textRound("must not be used")]);
+    const parsed = parseTerminalResults([RESULTS[0], RESULTS[1]]);
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const [inContext, compactedAway] = parsed.results;
+    const note = (result: TerminalResult | undefined, nonce: string): NormalizedMessage => ({
+      role: "user",
+      content: terminalResultNote(result as TerminalResult, nonce),
+      provenance: "harness",
+      injected: true,
+    });
+    const archived: NormalizedMessage[] = [
+      { role: "user", content: "run the tests", provenance: "project" },
+      note(compactedAway, "ba9876543210"),
+      { role: "assistant", content: "the dev server is up", provenance: "model" },
+      note(inContext, "0123456789ab"),
+      { role: "assistant", content: "one test fails", provenance: "model" },
+    ];
+    const context = [archived[0] as NormalizedMessage, ...archived.slice(3)];
+    const handle = persistHistory(createSession({ cwd: d.h.projectDir, provider: "test", model: "test-model", dataDir: dataDirOf(d.h) }), context, {
+      provider: "test",
+      model: "test-model",
+      archive: archived,
+    });
+    await d.h.initialize();
+    const load = d.h.request(ACP_AGENT_METHODS.sessionLoad, { sessionId: handle.summary.id, cwd: d.h.projectDir, mcpServers: [] });
+    expect((await d.h.waitFor((f) => f.id === load)).error).toBeUndefined();
+
+    const id = promptWithResults(d.h, handle.summary.id, [RESULTS[0], RESULTS[1]]);
+    const reply = await d.h.waitFor((f) => f.id === id && f.method === undefined);
+    expect(reply.result).toEqual({ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: ["run-1", "run-2"] } } } });
+    expect(d.sent).toHaveLength(0);
+  }, TIMEOUT_MS);
+});
+
+describe("R2-HL-003: a terminal-results prompt refused as shutting down stores nothing", () => {
+  test("once the shutdown began, the prompt is invalid request with condition shutting-down and no note is stored", async () => {
+    const stop = new AbortController();
+    const { h, sent } = desktop([textRound("must not be used")], { serverOptions: { shutdown: stop.signal } });
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    stop.abort();
+    // The read loop is raced, not cancelled: this line is still dispatched.
+    const id = promptWithResults(h, sessionId, RESULTS);
+    const reply = await h.waitFor((f) => f.id === id && f.method === undefined);
+    expect(reply.error?.code).toBe(JSON_RPC_ERROR_CODES.invalidRequest);
+    expect((reply.error?.data as { condition?: string } | undefined)?.condition).toBe("shutting-down");
+    await h.done;
+    expect(storedNotes(h, sessionId)).toEqual([]);
+    expect(sent).toHaveLength(0);
+  }, TIMEOUT_MS);
+});
+
 describe("AC6: the follow-up turn runs under the untrusted-content floor", () => {
   const touch = (name: string) => ({ command: `touch ${name}` });
   const shellAsks = (asks: readonly Frame[]) =>

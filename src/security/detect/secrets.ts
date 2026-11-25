@@ -34,12 +34,79 @@ function nextMatch(pattern: RegExp, content: string, from: number): RegExpExecAr
   return pattern.exec(content);
 }
 
+// What may come before a key line in a tool's listing: a line number (`cat -n`, `grep -n`/`rg -n`
+// with or without a path, keryx's own `ctx rg` summary item), then indentation (a YAML or JSON value).
+const LINE_PREFIX = String.raw`(?:\s*\d+\t|(?:[^\s:]*:)?\d+[:-]|\s*- \d+:\d+ )?\s*`;
+// A line of key body: base64, the PGP checksum line (`=abcd`) included.
+const PEM_BODY_LINE = new RegExp(String.raw`^${LINE_PREFIX}=?[A-Za-z0-9+/]+={0,2}\s*$`);
+// A header field between a key's BEGIN line and its body (RFC 1421 PEM, OpenPGP armor).
+const PEM_HEADER_FIELD = new RegExp(String.raw`^${LINE_PREFIX}(?:Proc-Type|DEK-Info|Content-Domain|Version|Comment|Hash|Charset|MessageID): `);
+// Nothing but a line prefix: the text an END line may have before its marker and still be a key line.
+const LINE_PREFIX_ONLY = new RegExp(String.raw`^${LINE_PREFIX}$`);
+
+const NEWLINE = 10;
+const BACKSLASH = 92;
+
+function isBase64Code(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 43 || code === 47 || code === 61;
+}
+
+// True when the `n` or `r` at `index` ends a `\n` / `\r` escape: an odd number of backslashes before it.
+function endsEscape(content: string, index: number, from: number): boolean {
+  let slashes = 0;
+  for (let i = index - 1; i >= from && content.charCodeAt(i) === BACKSLASH; i--) slashes += 1;
+  return slashes % 2 === 1;
+}
+
+// Where an END line with no header before it starts its mask (flow 523 review R2-SC-003): the start
+// of the key body directly above it, never further back than `from`. On the END's own line the body
+// is the run of base64 and `\n`/`\r` escapes before the marker (a key serialized into one line, as
+// JSON does); the run ends at any other character, a quote included, so a JSON string stays whole.
+// When that run fills the line (after a line prefix), the lines above that look like key body — base64
+// lines, PEM header fields, blank lines between them — are masked too, each from its start, up to the
+// first line that does not (the line a tail cut starts after, a frame keryx wrote, a record). Linear:
+// each character between `from` and the END line is read at most once.
+function orphanBodyStart(content: string, endIndex: number, from: number): number {
+  let run = endIndex;
+  while (run > from) {
+    const code = content.charCodeAt(run - 1);
+    if ((code === 110 || code === 114) && endsEscape(content, run - 1, from)) {
+      run -= 2;
+    } else if (isBase64Code(code)) {
+      run -= 1;
+    } else {
+      break;
+    }
+  }
+  let lineStart = run;
+  while (lineStart > from && content.charCodeAt(lineStart - 1) !== NEWLINE) lineStart -= 1;
+  if (!LINE_PREFIX_ONLY.test(content.slice(lineStart, run))) return run;
+  let start = lineStart;
+  let headerSeen = false;
+  let below = lineStart;
+  while (below > from) {
+    const lineEnd = below - 1; // the newline that ends the line above
+    let lineBegin = lineEnd;
+    while (lineBegin > from && content.charCodeAt(lineBegin - 1) !== NEWLINE) lineBegin -= 1;
+    const line = content.slice(lineBegin, lineEnd);
+    below = lineBegin;
+    if (line.trim().length === 0) continue; // masked only under a key line above it
+    if (PEM_HEADER_FIELD.test(line)) {
+      headerSeen = true; // header fields sit above the body: only more of them can follow
+    } else if (headerSeen || !PEM_BODY_LINE.test(line)) {
+      break;
+    }
+    start = lineBegin;
+  }
+  return start;
+}
+
 // Both cuts of a window fail closed. A header with no END line (`head -20 id_rsa`, a cut-off paste)
-// masks to the end of the input; an END line with no header before it (`tail -20 id_rsa`, a
-// terminal tail cut inside the key — flow 523 review SC3-001) masks from the end of the previous
-// block, or the start of the input, to that END line: its body lines are key material whatever
-// cut them. Each pattern is searched forward from where the last block ended, and a header found
-// ahead is kept until it is reached, so the scan stays linear.
+// masks to the end of the input. An END line with no header before it (`tail -20 id_rsa`, a terminal
+// tail cut inside the key — flow 523 review SC3-001) masks the key body directly above it and the END
+// line (`orphanBodyStart`): its body lines are key material whatever cut them, but the text above
+// them is not (review R2-SC-003). Each pattern is searched forward from where the last block ended,
+// and a header found ahead is kept until it is reached, so the scan stays linear.
 function scanPrivateKeyBlocks(content: string): Array<[number, number]> {
   const spans: Array<[number, number]> = [];
   let from = 0;
@@ -48,7 +115,7 @@ function scanPrivateKeyBlocks(content: string): Array<[number, number]> {
   while (begin !== null || end !== null) {
     if (end !== null && (begin === null || end.index < begin.index)) {
       const stop = end.index + end[0].length;
-      spans.push([from, stop]);
+      spans.push([orphanBodyStart(content, end.index, from), stop]);
       from = stop;
       end = nextMatch(PRIVATE_KEY_END, content, stop);
       continue;

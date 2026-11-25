@@ -1,0 +1,162 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T13",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 2, keryx server (src/**): all 14 findings of fix2-server.json fixed (R2-SC-003, R2-HL3-001, R2-SC-002, R2-AR-003, R2-DG-004, R2-LG-004, R2-HL-002 server half, R2-HL-003, R2-PC-001, R2-TP-002, R2-TP-005..008), each by the brief's decision. The note grammar now has one home, src/session/terminal-note.ts, used by the producer/parser and by compaction. An orphan private-key END line masks only the key body directly above it (never a frame, a cut line or a JSON quote). In-turn compaction counts the Run-result head against the tail budget, keeps the newest notes that fit and names the rest, and compactWithFallback halves the tail until the cut fits. Summaries name removed runs by keryx's head line only. keryx keeps the desktop's cut line first through its own tail cut. A terminal-results entry whose run id already has a stored note (history or archive) is skipped; an all-duplicate prompt answers {stopReason: end_turn, _meta.keryx.terminalResults: {stored: 0, duplicates}} with no turn. The Telegram/Hub history restore keeps the reply that proposed a Run. 37 tests added; every fix test was red on the HEAD source or under a named mutant. Concerns: the unclosed-BEGIN mirror of R2-SC-003 is unchanged (outside decision 1), so ctx rg over secrets.test.ts still loses 2 of 28 records; two wording/behaviour choices for the owner.",
+  "summary_markdown": "## Behavior changes\n1. (user_visible, needs_operator) Wording: when the desktop cut a Run output and keryx has to cut again, the stored note (and the replayed card) reads `[… earlier output was cut; the end of the output follows]`, then `[… N more bytes cut here]`, then the tail. Before, the desktop's line was cut away and `[… N earlier bytes not kept]` stood alone. Outputs without the desktop's line keep the old marker. Alternative: `[… keryx dropped N more bytes here]`.\n2. (user_visible, decided) `detectSecrets`, shared by every redaction consumer: an `-----END … PRIVATE KEY-----` with no header before it now masks only the key body above it: base64 lines (also with a cat -n, grep/rg -n or ctx rg line-number prefix, or indented), PEM header fields, and the blank lines between them. On the END's own line it masks the run of base64 and `\\n`/`\\r` escapes, which stops at a quote. Before, it masked back to the previous block or the start of the input. Fails open for a key tail laid out in a way this does not recognise (for example `> ` quoted lines or a space-joined body): then only the END marker and its same-line base64 run are masked.\n3. (model-facing, decided) A compaction summary's Run-results section lists `- [terminal run <id> result: <outcome>]` only, without the command. Items carried from an older summary lose their command text too.\n4. (model-facing, decided; reaches non-Run sessions too) In-turn compaction counts the Run-result head against the tail. Its share is the budget minus the messages after it, which take at most half. Over its share, keryx's line and the newest notes that fit are kept and the older notes are only named. `compactWithFallback` now checks `fits` on the in-turn cut. When the cut does not fit, it halves the tail, down to 1,000 tokens, and takes the largest tail that fits, or the smallest one tried when none fits. When `fits([])` is false (the overflow retry with no known limit), it keeps the full-tail cut as before. This applies to every in-turn cut, not only to Run results.\n5. (wire, shared with T14) A terminal-results prompt whose every run id already has a stored note gets `{stopReason: \"end_turn\", _meta: {keryx: {terminalResults: {stored: 0, duplicates: [...]}}}}`: nothing is stored, no turn runs and no model call is made. With some new entries, only those are stored and the turn runs; that answer carries no extra meta. Duplicates are found in the live history and the archive, so a note that compaction removed still counts.\n6. (user_visible) The Telegram/Hub history restore now shows the agent reply that proposed a Run (the continuation line ends the turn and is not an item).\n\n## For the orchestrator / docs lane\n- The spec should name the all-duplicate answer, the head-only Run-results items and the head budget rule (metrics.doc_deltas).\n- `TERMINAL_OUTPUT_CUT_LINE` (src/acp/terminal-result.ts) equals the desktop's `RUN_OUTPUT_CUT` today. Nothing pins the two together yet: the desktop drift test could (T14 lane).",
+  "acceptance": [
+    {
+      "criterion": "R2-SC-003 decision 1: an orphan END masks the key body directly above it. A cut key in Run output keeps the line above its body (the desktop's cut line), a peer-agent frame above an orphan END survives, a JSON document holding an orphan END in a string value still parses after redaction, and the text before a lone END line in a test file is not masked. The scan stays linear.",
+      "status": "met",
+      "evidence": "secrets.test.ts: 9 new orphan-END cases. All 9 were red with the old span `[from, stop]` and are green now. terminal-result.test.ts 'R2-SC-003: a key cut by the desktop's tail…' is red→green the same way. Linear-time tests: 8000 orphan ENDs and 20,000 body+END blocks, both green. `ctx rg --all -n \"END [A-Z0-9 ]{0,40}PRIVATE KEY\" src/security/detect/secrets.test.ts` now lists 26 of 28 lines. Before, it listed 5 of 7 lines of the old file."
+    },
+    {
+      "criterion": "R2-HL3-001 decision 2: the pinned head counts against the budget; over its share it keeps the newest notes that fit (always the continuation line) and names the rest; the in-turn cut respects `fits`. Test: 8 near-maximum notes on a small window give a request that fits.",
+      "status": "met",
+      "evidence": "compact-fallback.test.ts 'R2-HL3-001: eight near-maximum results…' (default tail, fits < 16K tokens) and 'R2-HL3-001: the head counts against the tail…' are red against HEAD's compact.ts. They also fail under the mutants share=∞ (both), no fits search (the first) and no reserve for the rounds after the head (the second)."
+    },
+    {
+      "criterion": "R2-SC-002 decision 3: the summary keeps only keryx's validated head line per removed note, never the client-supplied command text.",
+      "status": "met",
+      "evidence": "compact-fallback.test.ts 'R2-SC-002: the summary names a removed Run by keryx's head line only…' (an instruction-shaped command) and 'R2-SC-002: an earlier summary that carried a command keeps only the head line…' are red against HEAD and green now."
+    },
+    {
+      "criterion": "R2-AR-003 decision 4: the note grammar lives in src/session/terminal-note.ts, used by src/acp/terminal-result.ts and src/session/compact.ts; the compaction tests build their notes with the producer.",
+      "status": "met",
+      "evidence": "terminal-note.ts holds the run-id pattern, head-line builder and reader, the outcome words, the command/duration/output/tag prefixes and storedTerminalNoteHead. terminal-result.ts builds and parses the note from it: NOTE_HEAD is gone and the parser reads line by line. compact.ts no longer has its own RUN_RESULT_HEAD. compact-fallback.test.ts builds its notes with parseTerminalResults + terminalResultNote. terminal-note.test.ts adds 9 tests. The producer/parser tests (57) pass unchanged in substance."
+    },
+    {
+      "criterion": "R2-DG-004 decision 5: a terminalContinuation user line closes the turn in qualifyingHistory without adding an item.",
+      "status": "met",
+      "evidence": "topic-history.test.ts 'keryx's continuation line closes the turn before it…' is red against HEAD's history.ts and green now."
+    },
+    {
+      "criterion": "R2-LG-004 decision 6: keryx's tail cut keeps the desktop's leading cut line first; its marker says only how many further bytes keryx dropped. Test with output that grows under redaction.",
+      "status": "met",
+      "evidence": "terminal-result.test.ts 'R2-LG-004: the desktop's cut line stays first…' uses a 16 KiB request log full of 127.0.0.1. It is red under the plain tail-cut mutant (HEAD's code) and green now. 'R2-LG-004: a desktop tail under the cap keeps its cut line and gets no keryx marker' is green."
+    },
+    {
+      "criterion": "R2-HL-002 decision 7 (server half): skip entries whose runId already has a stored note; store only new ones; an all-duplicate prompt stores nothing, starts no turn, makes no model call and answers end_turn with _meta.keryx.terminalResults {stored: 0, duplicates}. Tests for all three cases.",
+      "status": "met",
+      "evidence": "terminal-result.server.test.ts 'R2-HL-002' covers three cases: mixed, all duplicates, and after session/load with one note only in the archive. All 3 are red with the dedupe removed. The load case is also red when only the history is scanned. T14's fixture answers with the same shape (apps/desktop/src/test/terminal-run-delivery.fixture.tsx:506)."
+    },
+    {
+      "criterion": "R2-HL-003 decision 8: a test pins that a terminal-results prompt refused as shutting down stores nothing.",
+      "status": "met",
+      "evidence": "terminal-result.server.test.ts 'R2-HL-003…' expects -32600 with condition shutting-down and no stored notes. It is red when the append is moved between refuseIfBusy and refuseIfStopping."
+    },
+    {
+      "criterion": "R2-PC-001 decision 9: the KeryxAcpProfileMeta doc comment names the terminalResults client capability.",
+      "status": "met",
+      "evidence": "src/acp/profile.ts doc comment reworded (no test: comment only)."
+    },
+    {
+      "criterion": "Decision 10, tests: R2-TP-002, R2-TP-005..008.",
+      "status": "met",
+      "evidence": "TP-002: agent-lifecycle-hooks 'R2-TP-002…' is red when `options.origin === \"terminal-results\"` is deleted at agent.ts:3511. TP-005: 'a head of several notes…' is red under M54 (marker) and M53 (while→if); 'a tail walk that reaches the head…' is red under M55 (no jump); M56 (keptHead) turns 8 tests red. TP-006: outcomes, newest 24 and the carried section checked with toEqual, all red at HEAD; the 200-character command clip became the SC-002 tests, since commands are no longer listed. TP-007: 'orphan END after orphan END' is red under the old span; 'END that shares the header's closing dashes' is red when the re-search is deleted; the 8000-END test now checks the span count and shape. TP-008: noop false plus the positive request assertion, red under a mutant that stops treating the look-alike as an operator message."
+    },
+    {
+      "criterion": "Nothing else in src/** regressed (focused tests, typecheck, eslint on changed files).",
+      "status": "met",
+      "evidence": "Brief set `bun test src/acp/terminal-result src/session/compact src/security/detect/secrets src/remote/history`: 163 pass, 0 fail (8 files). terminal-note, topic-history, agent-lifecycle-hooks and delegate-turn-hook: 103 pass, 0 fail (4 files). `bun test src/acp/`: 537 pass, 0 fail (52 files). src/session/ plus the agent context-guard, overflow-retry and repeat-guard tests: 724 pass, 0 fail (71 files). src/security/: 1034 pass, 8 fail; all 8 are in read-source.test.ts, which fails in setup because the local git template hook refuses the test's author email (environmental, file untouched). `bun run typecheck`: exit 0. eslint on the 15 changed files: exit 0. core-package/core-graph boundary tests: 19 pass."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-25-review-flow-github-com-mrciphersmith-keryx-pull-1316-r02/research-evidence/fix2-server.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The 14 findings this round fixes (read only)."
+    },
+    {
+      "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/dispatch/T13-brief.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The dispatch brief with the decisions followed."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/session/terminal-note.ts", "change": "new pure module: the note grammar (TERMINAL_RUN_ID, terminalNoteHeadLine, parseTerminalNoteHeadLine, the line prefixes, storedTerminalNoteHead) (R2-AR-003)" },
+    { "path": "src/session/terminal-note.test.ts", "change": "new: head line per outcome round trip, non-head lines, run-id pattern, storedTerminalNoteHead" },
+    { "path": "src/acp/terminal-result.ts", "change": "head line, run-id pattern and prefixes from terminal-note.ts; parser reads line by line (NOTE_HEAD removed); new TERMINAL_OUTPUT_CUT_LINE and capOutput keeping the desktop's cut line first (R2-LG-004); new storedTerminalRunIds (R2-HL-002); existing exports kept" },
+    { "path": "src/acp/delegate-turn-hook.ts", "change": "capResultText gains options.tailMarker (marker wording of a tail cut); default unchanged" },
+    { "path": "src/acp/server.ts", "change": "handleSessionPrompt skips terminal results whose run id is already stored (history + archive), answers an all-duplicate prompt with stored: 0 and the duplicates and runs no turn; appends only the fresh results (R2-HL-002)" },
+    { "path": "src/acp/profile.ts", "change": "KeryxAcpProfileMeta doc comment: acceptance needs the terminalResults client capability (R2-PC-001)" },
+    { "path": "src/security/detect/secrets.ts", "change": "orphan END span starts at the key body directly above it (orphanBodyStart: same-line base64/escape run, then PEM body/header/blank lines with optional line-number prefix or indentation), bounded by the previous block, linear (R2-SC-003)" },
+    { "path": "src/session/compact.ts", "change": "uses terminal-note.ts; digests and carried items are keryx's head line only (R2-SC-002); in-turn cut counts the Run-result head and trims it to the newest notes that fit its share; compactWithFallback halves the in-turn tail until the cut fits (R2-HL3-001)" },
+    { "path": "src/remote/history.ts", "change": "qualifyingHistory: a terminalContinuation user line flushes the pending reply and adds no item (R2-DG-004)" },
+    { "path": "src/security/detect/secrets.test.ts", "change": "orphan-END cases (cut line, frame, JSON, code line, cat -n, YAML, PEM headers, shell view, two key tails), END sharing header dashes, span shape of 8000 ENDs, linear time over many body lines; one expectation updated (an orphan END after a block no longer starts at that block's end)" },
+    { "path": "src/acp/terminal-result.test.ts", "change": "R2-LG-004 (cut line kept, under the cap), R2-SC-003 at the producer, storedTerminalRunIds" },
+    { "path": "src/acp/terminal-result.server.test.ts", "change": "R2-HL-002 mixed / all-duplicate / after-load-with-archive, R2-HL-003 shutting-down" },
+    { "path": "src/session/compact-fallback.test.ts", "change": "notes built by the producer; R2-SC-002 x2, R2-TP-006 x2, R2-TP-005 x2, R2-HL3-001 x2; DEG2-1 summary test now expects head-only items; look-alike test gets its positive side (R2-TP-008)" },
+    { "path": "src/remote/topic-history.test.ts", "change": "R2-DG-004: continuation line closes the turn, marked vs unmarked" },
+    { "path": "src/commands/agent-lifecycle-hooks.test.ts", "change": "R2-TP-002: origin terminal-results alone turns the floor on, with a trust-mode control" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T13-Q1",
+      "question": "R2-SC-003's mirror site, an unclosed BEGIN, still masks to the end of the input (or to the next END anywhere after it). Bound it forward over the key body the same way?",
+      "why": "Decision 1 covered the orphan END only. The BEGIN-side span cannot strip a frame, but it still merges records: ctx rg over secrets.test.ts lists 26 of 28 lines because one record's BEGIN pairs with a later record's END, and JSON after an unclosed BEGIN still breaks. Bounding it risks a key whose body is not line-shaped (space-joined) after a cut header. The current test 'an unterminated header (head -20 id_rsa) fails closed to the end of the input' pins today's rule.",
+      "options": [
+        { "id": "keep", "label": "Keep the BEGIN side failing closed to the end of the input", "recommended": true },
+        { "id": "bound", "label": "Bound the BEGIN side forward over body lines too, in a separate change with its own tests" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T13-Q2",
+      "question": "When the desktop already cut an output and keryx cuts again, the marker under the desktop's line reads `[… N more bytes cut here]`. Keep this wording?",
+      "why": "User-visible text on the replayed run card. Decision 6 fixed the meaning (only keryx's own count, no total) but not the words.",
+      "options": [
+        { "id": "keep", "label": "Keep `[… N more bytes cut here]`", "recommended": true },
+        { "id": "named", "label": "Use `[… keryx dropped N more bytes here]`" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 37,
+    "tests_passing": 266,
+    "tests_failing": 0,
+    "findings": {
+      "R2-SC-003": "fixed (+R2-DG-005, R2-LG-006): orphanBodyStart bounds the span to the key body above the END (base64 lines, PEM header fields, blank lines between them; optional line-number prefix or indentation; on the END's own line the base64/escape run, never across a quote). Red→green: 9 secrets.test.ts orphan-END cases + terminal-result.test.ts 'R2-SC-003…' red with the old span. LG-006's shell-view site is covered by 'a shell view's omission marker…'. The class's consumer sites (store persist, compaction summary, ctx rg, JSON-serialised redaction) are fixed through the detector. Not done: suggested fixes (1) redact before framing and (2) redact parsed JSON values (outside decision 1), and the unclosed-BEGIN mirror (T13-Q1).",
+      "R2-HL3-001": "fixed (+R2-DG-006, R2-PF-002): keptRunResultsHead counts the head (share = budget − min(after, budget/2)), keeps the line + newest notes that fit, names the rest; inTurnCutThatFits halves the tail to 1,000 while the cut does not fit. Red→green: 'R2-HL3-001: eight near-maximum results…' and 'R2-HL3-001: the head counts against the tail…' (red at HEAD).",
+      "R2-SC-002": "fixed: runResultDigest = keryx's head line rebuilt from run id + outcome; carriedRunResult drops an older item's command. Red→green: the two 'R2-SC-002…' compaction tests (red at HEAD).",
+      "R2-AR-003": "fixed: src/session/terminal-note.ts is the single grammar; terminal-result.ts and compact.ts both use it; compaction fixtures built by terminalResultNote. Structural: terminal-note.test.ts (9) + the unchanged producer/parser tests.",
+      "R2-DG-004": "fixed (+R2-LG-005): qualifyingHistory flushes at a terminalContinuation line, adds no item. Red→green: topic-history 'keryx's continuation line closes the turn before it…' (red at HEAD).",
+      "R2-LG-004": "fixed: capOutput keeps TERMINAL_OUTPUT_CUT_LINE first and cuts after it with `[… N more bytes cut here]`. Red→green: 'R2-LG-004: the desktop's cut line stays first…' (red under HEAD's plain tail cut).",
+      "R2-HL-002": "fixed (server half): withoutStoredRuns over history + archive; all-duplicate answer {stored: 0, duplicates}. Red→green: 3 'R2-HL-002' server tests (red without the dedupe; the load case also red with a history-only scan).",
+      "R2-HL-003": "fixed (test): 'R2-HL-003…' red when the append is placed between refuseIfBusy and refuseIfStopping.",
+      "R2-PC-001": "fixed: doc comment only.",
+      "R2-TP-002": "fixed (test): red when the origin switch is deleted at agent.ts:3511.",
+      "R2-TP-005": "fixed (tests): M53, M54, M55, M56 each turn at least one test red.",
+      "R2-TP-006": "fixed (tests): outcomes, newest-24, carried section with toEqual (red at HEAD). The 200-char command clip test is replaced by the SC-002 tests (commands are no longer listed, so the clip was removed with MAX_RUN_COMMAND_CHARS).",
+      "R2-TP-007": "fixed (tests): orphan after orphan (red under the old span), END sharing header dashes (red without the re-search), span count/shape of 8000 ENDs.",
+      "R2-TP-008": "fixed (test): noop false + '1. [terminal run run-9 result: exit 0]'; red under a mutant that stops treating the look-alike as an operator message."
+    },
+    "verification": {
+      "brief_set": "bun test src/acp/terminal-result src/session/compact src/security/detect/secrets src/remote/history: 163 pass, 0 fail, 8 files",
+      "other_touched": "bun test src/session/terminal-note src/remote/topic-history src/commands/agent-lifecycle-hooks src/acp/delegate-turn-hook: 103 pass, 0 fail, 4 files",
+      "acp_dir": "bun test src/acp/: 537 pass, 0 fail, 52 files",
+      "session_and_compaction_consumers": "bun test src/commands/agent.context-guard src/commands/agent.overflow-retry src/commands/agent.repeat-guard-prune src/harness/provider/context-guard src/session/: 724 pass, 0 fail, 71 files",
+      "security_dir": "bun test src/security/: 1034 pass, 8 fail (all src/security/read-source.test.ts; setup commit refused by the local git template hook: author email check; file untouched)",
+      "desktop_drift": "apps/desktop: bun test src/session/terminalRuns.test.ts -t AR-001: 2 pass (keryx's contract module still loads with the names it imports)",
+      "typecheck": "bun run typecheck: exit 0",
+      "eslint": "bunx eslint on the 15 changed src files: exit 0"
+    },
+    "doc_deltas": [
+      "Spec 3.9.5b: a terminal-results prompt whose every run id is already stored is answered {stopReason: end_turn, _meta.keryx.terminalResults: {stored: 0, duplicates: [...]}} with no turn; a mixed prompt stores only the new entries.",
+      "Spec (compaction): the Run-results section lists `[terminal run <id> result: <outcome>]` only; the head of a Run-started turn counts against the in-turn tail and keeps only the newest notes that fit its share (no longer 'verbatim, whatever the budget').",
+      "Spec 3.9.5b (output cap): a desktop cut line stays first through keryx's cut, followed by `[… N more bytes cut here]` when keryx cut again.",
+      "Spec (redaction): an orphan END line masks the key body directly above it, not everything back to the previous block."
+    ]
+  },
+  "timestamp_utc": "2026-11-25T20:58:00Z"
+}

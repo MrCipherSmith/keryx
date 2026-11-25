@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T20:51:39.260Z",
+  "updatedAt": "2026-11-25T20:59:08.231Z",
   "source": {
     "type": "description",
     "ref": null
@@ -264,7 +264,7 @@
       "id": "T13",
       "title": "Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -278,7 +278,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "dup"
     },
     {
       "id": "T14",
@@ -535,6 +537,16 @@
       "at": "2026-11-25T20:51:39.260Z",
       "event": "task-done",
       "detail": "T14: Fix round 2: desktop findings (R2-RR-001 openLoad order, R2-HL-002 re-send on lost connection, R2-UX-001, R2-FE-002, SC3-001 desktop half, LG2-002 ring drop, R2-AR-001 CI path, tests)"
+    },
+    {
+      "at": "2026-11-25T20:59:07.604Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)"
+    },
+    {
+      "at": "2026-11-25T20:59:08.231Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)"
     }
   ],
   "origin": {

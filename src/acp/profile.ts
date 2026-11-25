@@ -147,8 +147,10 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
  * held and running until the idle cap releases it (`_keryx/session_released`)
  * or the connection ends — switching between them releases nothing.
  * `terminalResults` (shell profile only, flow 523): `session/prompt` accepts
- * `_meta.keryx.terminalResults` (the result of a Run in the client's terminal) from a
- * client that advertised `_meta.keryx.terminal`; a client sends none to a keryx without it.
+ * `_meta.keryx.terminalResults` (the result of a Run in the client's terminal) only from a
+ * client that advertised `initialize.clientCapabilities._meta.keryx.terminalResults: true`
+ * (`clientTakesTerminalResults` in `terminal-result.ts`); `_meta.keryx.terminal` alone is the
+ * `/delegate` capability and is refused. A client sends none to a keryx without it.
  */
 export interface KeryxAcpProfileMeta {
   readonly profile: AcpProfile;
