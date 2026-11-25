@@ -9695,9 +9695,9 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       // AC14 (flow 268): a new turn supersedes the previous next-step suggestion.
-      suggestionGate.cancel("new turn started");
       // Typing only hides a shown suggestion (it returns when the composer is emptied); a turn is what retires it.
       chrome.clearSuggestion();
+      suggestionGate.cancel("new turn started");
       const fromHub = source === "hub";
       if (fromHub) skipSlashRouting = true;
       if (source === undefined && origin === "operator" && !skipSlashRouting) {
