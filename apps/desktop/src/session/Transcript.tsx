@@ -12,6 +12,7 @@ import { formatDuration } from "./duration";
 import { Markdown, RunSessionContext } from "../components/Markdown";
 import type { PrLinks } from "../components/prLinks";
 import { UserMessage } from "./UserMessage";
+import { readReviewCardPlaces, rememberReviewCardPlaces } from "../review/reviewPlacement";
 import type { UserPromptContext } from "./userPrompt";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
@@ -319,7 +320,9 @@ function toBlocks(items: Item[]): Block[] {
  * message containing one of `anchors` (tried in order: the round's head commit, the typed request, the pull request URL).
  * Cards are given oldest round first; a round claims the first matching message after the one the previous round of the
  * same `group` (pull request) claimed, so two rounds on one head land on their own start messages. A card no message
- * matches goes after the last item. Cards sharing a place keep the given (oldest first) order.
+ * matches (the agent started the review mid-turn) keeps the place it first showed at, `places[key]`: it follows the item
+ * that was last then, and the conversation continues below it. Only a card with neither goes after the last item, until
+ * its place is recorded. Cards sharing a place keep the given (oldest first) order.
  */
 export interface ReviewCardSlot {
   key: string;
@@ -336,8 +339,15 @@ function containsAnchor(text: string, needle: string): boolean {
   return false;
 }
 
+/** The id of a block's first item. */
+function blockItemId(block: { item?: unknown; items?: readonly unknown[] }): number | undefined {
+  const id = ((block.item ?? block.items?.[0]) as { id?: unknown } | undefined)?.id;
+  return typeof id === "number" ? id : undefined;
+}
+
 /** The block index each card follows (-1: after the last block). */
-export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: unknown }>, cards: readonly ReviewCardSlot[]): Map<string, number> {
+export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: unknown; items?: readonly unknown[] }>,
+  cards: readonly ReviewCardSlot[], places?: ReadonlyMap<string, number>): Map<string, number> {
   const placed = new Map<string, number>();
   const claimed = new Map<string, number>();
   for (const card of cards) {
@@ -352,8 +362,17 @@ export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?:
       });
       if (at >= 0) break;
     }
-    placed.set(card.key, at);
     if (at >= 0) claimed.set(card.group, at);
+    else {
+      // Item ids only grow, so the remembered item's block is the last one starting at or before it.
+      const place = places?.get(card.key);
+      if (place !== undefined) {
+        for (let index = blocks.length - 1; index >= 0 && at < 0; index--) {
+          if ((blockItemId(blocks[index]!) ?? Infinity) <= place) at = index;
+        }
+      }
+    }
+    placed.set(card.key, at);
   }
   return placed;
 }
@@ -369,12 +388,17 @@ interface Props {
   empty: ReactNode;
   /** Finished review rounds, each placed where its round started. Running rounds are pinned by SessionView instead. */
   reviewCards?: readonly ReviewCardSlot[];
+  /** Keys of the rounds SessionView pins: the transcript notes where each started, the place its card takes once it finishes. */
+  pinnedReviewKeys?: readonly string[];
   /** The session's subagents: a tool card whose call spawned one links to it. */
   subagents?: readonly Subagent[];
   onShowSubagent?: (id: string) => void;
   /** The session shown: a Run clicked in this transcript is its run, and its result goes back to it (flow 523). */
   sessionId?: string | null;
 }
+
+const NO_CARDS: readonly ReviewCardSlot[] = [];
+const NO_KEYS: readonly string[] = [];
 
 export function Transcript(props: Props) {
   return (
@@ -384,7 +408,7 @@ export function Transcript(props: Props) {
   );
 }
 
-function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
+function TranscriptView({ items, busy, replaying, empty, reviewCards = NO_CARDS, pinnedReviewKeys = NO_KEYS, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -397,7 +421,15 @@ function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRun
   /** The user just opened or closed something: the growth that follows is theirs, not the stream's. */
   const userGrew = useRef(false);
   const blocks = useMemo(() => toBlocks(items), [items]);
-  const placement = useMemo(() => reviewCardPlacement(blocks, reviewCards), [blocks, reviewCards]);
+  const [places, setPlaces] = useState(readReviewCardPlaces);
+  const placement = useMemo(() => reviewCardPlacement(blocks, reviewCards, places), [blocks, reviewCards, places]);
+  // A round first seen (pinned or already finished) takes its place after the newest item; later items go below it.
+  useEffect(() => {
+    const newest = items[items.length - 1];
+    if (replaying || !newest) return;
+    const keys = [...pinnedReviewKeys, ...reviewCards.map(card => card.key)];
+    if (keys.length) setPlaces(rememberReviewCardPlaces(keys.map(key => [key, newest.id] as const)));
+  }, [items, replaying, reviewCards, pinnedReviewKeys]);
   const cardsAfter = (index: number) => reviewCards.filter(card => placement.get(card.key) === index)
     .map(card => <Fragment key={`review-${card.key}`}>{card.node}</Fragment>);
   // The item the turn streams into: the last before the undelivered Run cards that trail the turn.

@@ -66,6 +66,30 @@
 .panel-tab-btn { display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 24px; padding: 0 6px; border: 0; background: none; color: inherit; font-size: var(--fs-sm); cursor: default; }
 .panel-empty { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-4); color: var(--fg-muted); font-size: var(--fs-sm); text-align: center; }
 
+/* Files tab: a tab strip, the project tree in the first tab, one read-only code tab per opened file. */
+.files-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.files-tree, .files-viewer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.files-tree[hidden] { display: none; }
+.files-search { display: flex; align-items: center; gap: 6px; margin: var(--sp-2); padding: 0 8px; height: 28px; flex: none; color: var(--fg-muted); background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r-md); }
+.files-search:focus-within { border-color: var(--accent); }
+.files-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--fg); font: inherit; font-size: var(--fs-sm); }
+.files-list { flex: 1; min-height: 0; overflow: auto; padding-bottom: var(--sp-2); }
+.files-row { display: flex; align-items: center; gap: 6px; width: 100%; height: 24px; padding-right: var(--sp-3); border: 0; background: none; color: var(--fg); font-size: var(--fs-sm); text-align: left; cursor: default; }
+.files-row > .icon { flex: none; color: var(--fg-muted); }
+.files-row:hover { background: var(--bg-sunken); }
+.files-row:focus-visible { outline: 0; box-shadow: inset 0 0 0 1px var(--accent); }
+.files-row.is-open { background: var(--bg-selected); }
+.files-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-note { padding: 8px var(--sp-3); font-size: var(--fs-sm); color: var(--fg-muted); flex: none; }
+.files-error { display: flex; align-items: center; gap: var(--sp-2); padding: 8px var(--sp-3); font-size: var(--fs-sm); color: var(--danger); flex: none; }
+.files-viewer-head { display: flex; align-items: center; gap: var(--sp-2); padding: 4px var(--sp-2) 4px var(--sp-3); border-bottom: 1px solid var(--border); flex: none; }
+.files-viewer-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: calc(12px * var(--text-scale)) var(--mono); color: var(--fg-muted); }
+/* The gutter and the code are two columns of one scroller with the same line height, so the numbers stay on their lines. */
+.files-code { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; font: calc(12px * var(--text-scale))/1.5 var(--mono); color: var(--code-fg); }
+.files-code > pre { margin: 0; padding: 6px 0; font: inherit; white-space: pre; tab-size: 2; }
+.files-code > .files-code-gutter { position: sticky; left: 0; flex: none; min-width: 4ch; padding-inline: var(--sp-3) 10px; text-align: right; color: var(--fg-subtle); background: var(--bg-canvas); user-select: none; }
+.files-code > .files-viewer-body { flex: 1; padding-inline: 4px var(--sp-3); }
+
 .term-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .term-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--term-bg); }
 .term-view { flex: 1; min-height: 0; padding: 6px 0 0 8px; }

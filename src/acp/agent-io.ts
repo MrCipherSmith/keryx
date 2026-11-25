@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
 import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { acpPermissionReasons, approvalFromPermissionResponse, permissionIsEscalated, permissionOptionsFor } from "./permission";
+import { acpOperatorCard,
+  acpPermissionReasons, approvalFromPermissionResponse, permissionIsEscalated, permissionOptionsFor } from "./permission";
 import {
   SYSTEM_NOTE_META,
   textBlock,
@@ -332,7 +333,9 @@ export function createAcpAgentIo(
         // carried is superseded here and again by the result update.
         status: "pending",
         rawInput: tryParseJson(input),
-        ...(ioOptions.permissionReasons === true ? { _meta: { keryx: { reasons: acpPermissionReasons(meta) } } } : {}),
+        ...(ioOptions.permissionReasons === true
+          ? { _meta: { keryx: { reasons: acpPermissionReasons(meta), ...(meta?.card !== undefined ? { card: acpOperatorCard(meta.card, meta.cardTitle) } : {}) } } }
+          : {}),
       },
       options,
     });

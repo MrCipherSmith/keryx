@@ -2078,6 +2078,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "same head hoping for more.\n" +
     "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
     "to run a known keryx workflow.\n" +
+    "- Handing the user a command: when a step is the user's own to run (a decision or command you may not run, " +
+    "one that needs their terminal, one that was refused to you), say in ONE sentence why they must run it and what it " +
+    "does, then give the command alone in a fenced ```bash block, one command per block. The reason comes first, in the " +
+    "same reply as the command; a client that can run it shows a Run button on that block. Never leave such a command " +
+    "inline in a sentence, and never give it without the reason.\n" +
     (ctx.clientReturnsRunResults === true ? CLIENT_RUNS_TERMINAL_RULE : "") +
     "- Tool-call budget: shell_exec, file-mutating shell, workspace_create/workspace_propose, and spawn_subagent " +
     "all share ONE small per-turn pool (distinct non-read actions), separate from the much larger read-tool pool. " +

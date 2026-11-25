@@ -35,7 +35,7 @@ export function flowExceptionSpec(service: () => Promise<FlowService> = defaultS
         mergedCommit: prepared.mergedCommit, confirmToken: prepared.confirmToken,
         confirmExceptions: async (current, context) => {
           if (JSON.stringify(current) !== JSON.stringify(prepared.selected) || JSON.stringify(context) !== JSON.stringify(prepared.context)) throw new CompletionConfirmationError("Refusals changed; ask again.");
-          return { operatorWords: confirmation.answer, confirmedVia: "shell-card" };
+          return { operatorWords: confirmation.answer, confirmedVia: confirmation.confirmedVia === "desktop-card" ? "desktop-card" : "shell-card" };
         },
       });
       return { output: `flow ${prepared.id}: ${result.passed ? "done with exceptions" : "not completed"}`, isError: !result.passed };

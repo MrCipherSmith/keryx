@@ -125,17 +125,89 @@ function useOverflowRead(getEl: () => HTMLElement | null, deps: readonly unknown
   return { overflows, readToEnd };
 }
 
-export function PermissionDialog({
-  pending,
-  modeId,
-  queued,
-  onAnswer,
-}: {
+/** An operator card keryx built for a decision only the operator takes (`toolCall._meta.keryx.card`). */
+export interface OperatorCard {
+  title: string;
+  lines: string[];
+}
+
+/** `toolCall._meta.keryx.card`, or null when the request carries none or it is malformed. */
+export function operatorCard(meta: unknown): OperatorCard | null {
+  const raw = (meta as { keryx?: { card?: unknown } } | undefined)?.keryx?.card;
+  if (!raw || typeof raw !== "object") return null;
+  const { title, lines } = raw as { title?: unknown; lines?: unknown };
+  if (typeof title !== "string" || !title.trim() || !Array.isArray(lines)) return null;
+  return { title, lines: lines.filter((line): line is string => typeof line === "string") };
+}
+
+interface PermissionDialogProps {
   pending: PendingPermission;
   modeId: string | null;
   queued: number;
   onAnswer: (p: PendingPermission, o: PermissionOutcome) => void;
-}) {
+}
+
+/** A permission request: the operator's yes/no card when keryx sent one, the tool approval otherwise. */
+export function PermissionDialog(props: PermissionDialogProps) {
+  const card = operatorCard(props.pending.req.toolCall._meta);
+  return card ? <OperatorCardDialog {...props} card={card} /> : <ToolPermissionDialog {...props} />;
+}
+
+/**
+ * A decision only the operator takes (close a review round, uphold a finding's premise, waive a gate), asked as a
+ * card. The text is the one keryx built from the state the decision changes, not the model's arguments. No is the
+ * default: Esc and the focused button decline, and Yes takes a click or a deliberate move to it.
+ */
+function OperatorCardDialog({ pending, queued, onAnswer, card }: PermissionDialogProps & { card: OperatorCard }) {
+  const options = pending.req.options ?? [];
+  const allow = options.find((o) => o.kind === "allow_once");
+  const reject = defaultReject(options);
+  const decline = () => onAnswer(pending, reject ? { outcome: "selected", optionId: reject.optionId } : { outcome: "cancelled" });
+  return (
+    <Dialog
+      title={visibleProse(card.title)}
+      icon="shield"
+      tone="warn"
+      onClose={null}
+      ownEscape
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || e.nativeEvent.isComposing || e.defaultPrevented) return;
+        e.preventDefault();
+        decline();
+      }}
+      width={560}
+      footer={
+        <div className="approval-main">
+          <button className="btn" data-autofocus onClick={decline}>
+            No <Kbd>esc</Kbd>
+          </button>
+          <button className="btn btn-primary" disabled={!allow} onClick={() => allow && onAnswer(pending, { outcome: "selected", optionId: allow.optionId })}>
+            Yes
+          </button>
+        </div>
+      }
+    >
+      <div className="approval-content operator-card" data-testid="operator-card">
+        <div className="approval-tool">
+          <span className="tag">your decision</span>
+          <span className="approval-title">{visibleText(pending.req.toolCall.title ?? pending.req.toolCall.toolCallId)}</span>
+        </div>
+        <ul className="operator-card-lines">
+          {card.lines.map((line, i) => (
+            <li key={i} className="is-prose" dir="auto">{visibleProse(line)}</li>
+          ))}
+        </ul>
+        <p className="approval-why">
+          <Icon name="info" size={13} />
+          <span>Only you can take this decision. keryx records your answer with this card; No changes nothing.</span>
+        </p>
+        {queued > 0 ? <p className="approval-queue">{queued} more request{queued > 1 ? "s" : ""} waiting</p> : null}
+      </div>
+    </Dialog>
+  );
+}
+
+function ToolPermissionDialog({ pending, modeId, queued, onAnswer }: PermissionDialogProps) {
   const { req } = pending;
   const options = req.options ?? [];
   const allow = defaultAllow(options);

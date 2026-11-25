@@ -54,6 +54,8 @@ interface Props {
   reviewCards?: readonly ReviewCardSlot[];
   /** Review rounds that run or wait: pinned above the composer, like the plan card. */
   pinnedReviews?: ReactNode;
+  /** Card keys of the pinned rounds, for the transcript to note where each started. */
+  pinnedReviewKeys?: readonly string[];
   reviewLinks?: readonly SessionReviewLink[];
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onRouting?: () => void;
@@ -66,7 +68,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewCards, pinnedReviews, reviewLinks }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewCards, pinnedReviews, pinnedReviewKeys, reviewLinks }, composerRef) {
   const { state } = s;
   const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
@@ -443,6 +445,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           items={state.items}
           busy={state.busy}
           reviewCards={reviewCards}
+          pinnedReviewKeys={pinnedReviewKeys}
           onRunCommand={(line, o) => run(line, o)}
           prLinks={prLinks}
           onEditMessage={disabledReason === null && !state.busy ? editMessage : undefined}

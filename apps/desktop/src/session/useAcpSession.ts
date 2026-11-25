@@ -782,7 +782,7 @@ export function useAcpSession(cwd: string) {
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
             // `terminalResults`: a Run click is tracked and its result comes back as a `session/prompt`
             // (flow 523); keryx gives the Run guidance and takes results only from a client that says so.
-            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, terminalResults: true, telegramSession: true } : {}) } },
+            _meta: { keryx: { askUser: true, prepareReview: true, operatorCards: true, ...(isTauri() ? { terminal: true, terminalResults: true, telegramSession: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });

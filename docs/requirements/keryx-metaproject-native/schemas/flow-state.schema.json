@@ -530,7 +530,8 @@
               "enum": [
                 "terminal-token",
                 "tui-card-token",
-                "remote-card-token"
+                "remote-card-token",
+                "desktop-card-token"
               ]
             },
             "tokenRef": {

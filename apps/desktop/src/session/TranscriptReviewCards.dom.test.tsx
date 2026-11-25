@@ -76,10 +76,30 @@ test("two rounds give two cards, each where its own round started; the conversat
   expect(sequence.indexOf("[run-2]")).toBe(sequence.length - 2);
 });
 
-test("a card whose round matches no message goes after the last item", async () => {
-  const stray: SessionReviewLink = { ...round1, id: "run-9", key: { ...key, number: 99 }, revision: { ...round1.revision, headSha: "f".repeat(40) } };
-  await render([slot(stray)]);
+const stray = (id: string): SessionReviewLink => ({ ...round1, id, key: { ...key, number: 99 }, revision: { ...round1.revision, headSha: "f".repeat(40) } });
+const later: Item[] = [...items, { kind: "user", id: 7, text: "Publish the reply." }, { kind: "agent", id: 8, text: "Published." }];
+
+test("a card whose round matches no message keeps the place it first showed at; the conversation continues below it", async () => {
+  await render([slot(stray("run-9"))]);
   expect(order().at(-1)).toBe("[run-9]");
+  await render([slot(stray("run-9"))], later);
+  const sequence = order();
+  expect(sequence.indexOf("[run-9]")).toBe(items.length);
+  expect(sequence.at(-1)).toContain("Published.");
+});
+
+test("a round the agent started mid-turn lands where it was pinned from, not where it finished", async () => {
+  // Pinned (no card in the timeline) while the first six items are the whole conversation; it finishes two items later.
+  await act(() => root.render(createElement(Transcript, { items, busy: true, replaying: false, empty: null, pinnedReviewKeys: ["run-10"] })));
+  expect(order()).not.toContain("[run-10]");
+  await render([slot(stray("run-10"))], later);
+  expect(order().indexOf("[run-10]")).toBe(items.length);
+});
+
+test("a card's place is not taken while the session's history is still loading", async () => {
+  await act(() => root.render(createElement(Transcript, { items: items.slice(0, 2), busy: false, replaying: true, empty: null, reviewCards: [slot(stray("run-11"))] })));
+  await render([slot(stray("run-11"))], later);
+  expect(order().at(-1)).toBe("[run-11]");
 });
 
 test("running or waiting rounds are pinned, the others stay in the timeline; one card per round", () => {

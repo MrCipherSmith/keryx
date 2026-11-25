@@ -1560,7 +1560,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         try {
           const decision = await confirmExceptions?.(structuredClone(selection.exceptions), structuredClone(exceptionContext));
           if (!decision || !/^(yes|да|y)$/iu.test(decision.operatorWords.trim()) ||
-              !["host-question", "terminal", "shell-card"].includes(decision.confirmedVia)) {
+              !["host-question", "terminal", "shell-card", "desktop-card"].includes(decision.confirmedVia)) {
             confirmationError = "Accepted exceptions require an affirmative operator decision.";
           } else if (decision.confirmedVia === "host-question" && (!decision.hostQuestion ||
               flow.completionAttempts?.some((attempt) => attempt.exceptions?.some((item) =>

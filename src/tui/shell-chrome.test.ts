@@ -1322,7 +1322,7 @@ test("theme repaint updates existing styled prose, syntax, diff backgrounds, and
   expect(tableChunk.fg).toBe(nextPalette.tableHeader);
 });
 
-otuiTest("next-step suggestion: shows in the composer placeholder while empty, and clears on input", async () => {
+otuiTest("next-step suggestion: shows in the composer placeholder while empty, hides on input and returns when the text is erased", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   h.chrome.showSuggestion("git push origin main");
@@ -1331,11 +1331,25 @@ otuiTest("next-step suggestion: shows in the composer placeholder while empty, a
   expect(h.captureCharFrame()).toContain("git push origin main");
   expect(h.chrome.suggestionActive()).toBe(true);
 
-  // Typing dismisses the hint (the key still lands in the composer).
+  // Typing hides the hint (the key still lands in the composer) without dropping it.
   await h.mockInput.pressKeys(["h"]);
   await h.flush();
-  expect(h.chrome.suggestionActive()).toBe(false);
   expect(h.chrome.input.value).toBe("h");
+  expect(h.captureCharFrame()).not.toContain("git push origin main");
+  expect(h.chrome.suggestionActive()).toBe(true);
+
+  // Erasing the typed text brings it back, still acceptable with Tab.
+  h.mockInput.pressBackspace();
+  await h.flush();
+  expect(h.chrome.input.value).toBe("");
+  expect(h.captureCharFrame()).toContain("git push origin main");
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(h.chrome.input.value).toBe("git push origin main");
+
+  // A new turn retires it.
+  h.chrome.clearSuggestion();
+  expect(h.chrome.suggestionActive()).toBe(false);
   h.destroy();
 });
 
@@ -1351,7 +1365,8 @@ otuiTest("next-step suggestion: Tab inserts it without submitting", async () => 
   h.mockInput.pressTab();
   await h.flush();
   expect(h.chrome.input.value).toBe("run the tests");
-  expect(h.chrome.suggestionActive()).toBe(false);
+  // Stored until a new turn, so erasing the accepted text shows it again.
+  expect(h.chrome.suggestionActive()).toBe(true);
   expect(submitted).toEqual([]);
   h.destroy();
 });
@@ -1385,7 +1400,6 @@ otuiTest("next-step suggestion: bare Enter on an empty composer does not submit 
   h.mockInput.pressTab();
   await h.flush();
   expect(h.chrome.input.value).toBe("commit the fix");
-  expect(h.chrome.suggestionActive()).toBe(false);
   h.destroy();
 });
 
