@@ -1,13 +1,13 @@
 // Flow 523 (AC5, AC7 server half, AC10), the pure half of the desktop Run result: the
 // `_meta.keryx.terminalResults` validator, the labelled untrusted note keryx stores for each result,
-// the replay parser, keryx's continuation line and the system-instruction sentence. The same
-// contract over the real server is `terminal-result.server.test.ts`.
+// the replay parser, keryx's continuation line, the client capability and the system-instruction
+// sentence. The same contract over the real server is `terminal-result.server.test.ts`.
 
 import { describe, expect, test } from "bun:test";
 import { buildAgentSystemInstruction } from "../commands/agent";
 import { delegateResultNote } from "./delegate-turn-hook";
 import {
-  isTerminalContinuation,
+  clientTakesTerminalResults,
   parseTerminalResultNote,
   parseTerminalResults,
   TERMINAL_COMMAND_MAX_CHARS,
@@ -202,14 +202,51 @@ describe("terminalResultNote", () => {
     expect(note).toContain("ok");
   });
 
-  test("the output is capped at 16 KiB with a truncation marker; a long command is kept whole", () => {
+  test("the output keeps its LAST 16 KiB behind a marker naming what was cut; a long command is kept whole", () => {
     const command = `echo ${"c".repeat(TERMINAL_COMMAND_MAX_CHARS - 5)}`;
-    const note = terminalResultNote(accepted(exited({ command, output: "x".repeat(TERMINAL_RESULT_MAX_BYTES * 3) })), NONCE);
+    const output = `${"x".repeat(TERMINAL_RESULT_MAX_BYTES * 3)}\nthe end`;
+    const note = terminalResultNote(accepted(exited({ command, output })), NONCE);
     const parsed = parseTerminalResultNote(note);
     expect(parsed?.command).toBe(command);
-    const [kept, marker] = (parsed?.output ?? "").split("\n[… truncated: ");
-    expect(Buffer.byteLength(kept ?? "", "utf8")).toBe(TERMINAL_RESULT_MAX_BYTES);
-    expect(marker).toBe(`${TERMINAL_RESULT_MAX_BYTES * 2} more bytes]`);
+    const dropped = Buffer.byteLength(output, "utf8") - TERMINAL_RESULT_MAX_BYTES;
+    const marker = `[… ${dropped} earlier bytes not kept]\n`;
+    expect(parsed?.output.startsWith(marker)).toBe(true);
+    const kept = (parsed?.output ?? "").slice(marker.length);
+    expect(Buffer.byteLength(kept, "utf8")).toBe(TERMINAL_RESULT_MAX_BYTES);
+    expect(kept.endsWith("x\nthe end")).toBe(true);
+  });
+
+  test("LG2-001: a desktop tail at the cap that redaction lengthens still keeps its last line", () => {
+    // The desktop sends the last 16 KiB; `127.0.0.1` grows to `[REDACTED:ip]`, so the redacted text is over the cap.
+    const last = "SUMMARY 3 failed";
+    const head = "vite dev server listening on http://127.0.0.1:5173\n";
+    const filler = "x".repeat(TERMINAL_RESULT_MAX_BYTES - Buffer.byteLength(head + last, "utf8") - 1);
+    const output = `${head}${filler}\n${last}`;
+    expect(Buffer.byteLength(output, "utf8")).toBe(TERMINAL_RESULT_MAX_BYTES);
+    const stored = parseTerminalResultNote(terminalResultNote(accepted(exited({ exitCode: 1, output })), NONCE))?.output ?? "";
+    expect(stored.endsWith(`\n${last}`)).toBe(true);
+    expect(stored).not.toContain("truncated");
+    expect(stored).not.toContain("127.0.0.1");
+    expect(stored).toStartWith("[… 4 earlier bytes not kept]\n");
+  });
+
+  test("a multi-byte character the tail cut lands in is dropped whole, never split", () => {
+    // 2 bytes per `é` and one trailing byte: the last 16 KiB start in the middle of an `é`.
+    const output = `${"é".repeat(TERMINAL_RESULT_MAX_BYTES)}x`;
+    const stored = parseTerminalResultNote(terminalResultNote(accepted(exited({ output })), NONCE))?.output ?? "";
+    expect(stored).not.toContain("�");
+    expect(stored).toStartWith(`[… ${Buffer.byteLength(output, "utf8") - (TERMINAL_RESULT_MAX_BYTES - 1)} earlier bytes not kept]\n`);
+    expect(stored.slice(stored.indexOf("\n") + 1)).toBe(`${"é".repeat(TERMINAL_RESULT_MAX_BYTES / 2 - 1)}x`);
+  });
+
+  test("SC3-001: the tail of a private key (its END line, no header in the window) stores no body line", () => {
+    const body = ["MIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun", "VTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK"];
+    const output = `${body.join("\n")}\n-----END RSA PRIVATE KEY-----\n$ echo done\ndone`;
+    const note = terminalResultNote(accepted(exited({ command: "tail -4 ~/.ssh/id_rsa; echo done", output })), NONCE);
+    for (const line of body) expect(note).not.toContain(line);
+    expect(note).not.toContain("-----END RSA PRIVATE KEY-----");
+    expect(note).toContain("[REDACTED");
+    expect(note).toContain("$ echo done\ndone");
   });
 
   test("a nonce that is not lowercase hex is refused: it would make the envelope forgeable", () => {
@@ -258,19 +295,23 @@ describe("the continuation line", () => {
     expect(TERMINAL_CONTINUATION_LINE).toContain("continue the task");
     expect(TERMINAL_RESULTS_PROMPT).toEqual({ text: TERMINAL_CONTINUATION_LINE, untrusted: true, trustedText: "" });
   });
+});
 
-  test("isTerminalContinuation recognises the line (also with a hook's context appended) and nothing else", () => {
-    expect(isTerminalContinuation(TERMINAL_CONTINUATION_LINE)).toBe(true);
-    expect(isTerminalContinuation(`${TERMINAL_CONTINUATION_LINE}\n\n[hook context]\nbranch: main`)).toBe(true);
-    expect(isTerminalContinuation(`${TERMINAL_CONTINUATION_LINE} please`)).toBe(false);
-    expect(isTerminalContinuation(`x ${TERMINAL_CONTINUATION_LINE}`)).toBe(false);
-    expect(isTerminalContinuation("continue")).toBe(false);
+describe("clientTakesTerminalResults (F-001/RR-001): the run-tracking client capability", () => {
+  test("true only for initialize.clientCapabilities._meta.keryx.terminalResults === true; terminal: true alone is /delegate's", () => {
+    expect(clientTakesTerminalResults({ _meta: { keryx: { terminal: true, terminalResults: true } } })).toBe(true);
+    expect(clientTakesTerminalResults({ _meta: { keryx: { terminalResults: true } } })).toBe(true);
+    expect(clientTakesTerminalResults({ _meta: { keryx: { terminal: true } } })).toBe(false);
+    expect(clientTakesTerminalResults({ _meta: { keryx: { terminalResults: "true" } } })).toBe(false);
+    expect(clientTakesTerminalResults({ _meta: { keryx: null } })).toBe(false);
+    expect(clientTakesTerminalResults({})).toBe(false);
+    expect(clientTakesTerminalResults(undefined)).toBe(false);
   });
 });
 
-describe("AC10: the system instruction for a client that runs terminals", () => {
-  test("with clientRunsTerminal: Run button, untrusted terminal-result note, the next turn starts by itself, end the turn instead of asking for pasted output", () => {
-    const text = buildAgentSystemInstruction(undefined, { clientRunsTerminal: true });
+describe("AC10: the system instruction for a client that returns Run results", () => {
+  test("with clientReturnsRunResults: Run button, untrusted terminal-result note, the next turn starts by itself, end the turn instead of asking for pasted output", () => {
+    const text = buildAgentSystemInstruction(undefined, { clientReturnsRunResults: true });
     const bullet = text.split("\n").find((line) => line.includes("Run button")) ?? "";
     expect(bullet).toContain("shell code block");
     expect(bullet).toContain("exactly one command");
@@ -286,8 +327,8 @@ describe("AC10: the system instruction for a client that runs terminals", () => 
     const plain = buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m" });
     expect(plain).not.toContain("Run button");
     expect(plain).not.toContain("terminal-result");
-    expect(buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientRunsTerminal: false })).toBe(plain);
-    const withFlag = buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientRunsTerminal: true });
+    expect(buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientReturnsRunResults: false })).toBe(plain);
+    const withFlag = buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientReturnsRunResults: true });
     expect(withFlag.length).toBeGreaterThan(plain.length);
     expect(withFlag.split("\n").filter((line) => !line.includes("Run button")).join("\n")).toBe(plain);
   });

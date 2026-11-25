@@ -1,13 +1,14 @@
 // The result of a command the operator ran from Keryx Desktop's Run button (flow 523, plan "Wire
 // contract"). The desktop runs the command in a tab of its own and, when it ends (or on "Send output
 // now"), sends `session/prompt` with `_meta.keryx.terminalResults`; keryx (shell profile) stores each
-// result as a labelled untrusted note, puts its own continuation sentence in the turn's user line, and
-// runs that turn with the untrusted-content floor on (`server.ts`).
+// result as a labelled untrusted note, then runs a keryx-started turn (`origin: "terminal-results"`)
+// whose user line is keryx's own continuation sentence, under the untrusted-content floor (`server.ts`).
 //
 // The note has the shape of a `/delegate` result note (`delegateResultNote`): a head line keryx writes
 // from validated fields, an UNTRUSTED line, then the command and its output inside an envelope whose
 // tags carry a nonce the text cannot know. The nonce is removed from the text, so the output can
-// neither forge nor close the envelope; the text is redacted like web content and capped.
+// neither forge nor close the envelope; the text is redacted like web content, then capped to its
+// last 16 KiB (the end of a command's output is where its outcome is).
 //
 // Pure: importing this reads nothing and spawns nothing.
 
@@ -21,7 +22,11 @@ export const TERMINAL_RESULTS_MAX = 8;
 /** The longest command accepted, in characters. */
 export const TERMINAL_COMMAND_MAX_CHARS = 4096;
 
-/** What a note keeps of one run's output, in bytes: the desktop sends at most this much (AC3). */
+/**
+ * What a note keeps of one run's output, in bytes: the desktop sends at most this much (AC3). Redaction
+ * runs first and its masks can be longer than what they replace, so a full desktop tail can exceed it;
+ * the cut then keeps the end (review LG2-001).
+ */
 export const TERMINAL_RESULT_MAX_BYTES = 16 * 1024;
 
 const RUN_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -50,6 +55,17 @@ export type TerminalResultsParse = { readonly ok: true; readonly results: readon
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * True when the client advertised `initialize.clientCapabilities._meta.keryx.terminalResults === true`:
+ * it tracks its Run buttons and sends their results (owner 2026-11-25, review F-001/RR-001). Only that
+ * client may send `terminalResults` and gets the Run guidance. `_meta.keryx.terminal: true` alone is the
+ * D-14 `/delegate` capability: desktops released before flow 523 send it and return no Run results.
+ */
+export function clientTakesTerminalResults(capabilities: { readonly _meta?: Record<string, unknown> | undefined } | undefined): boolean {
+  const keryx = capabilities?._meta?.["keryx"];
+  return isRecord(keryx) && keryx["terminalResults"] === true;
 }
 
 /** `params._meta.keryx.terminalResults` as sent; `undefined` when the prompt carries none (`null` is carried). */
@@ -114,14 +130,15 @@ function outcomeOf(result: TerminalResult): string {
  * What the session's history gets for one result: a labelled user-role note, the command and the
  * output inside an envelope that carries `nonce` (lowercase hex, fresh per note). The nonce is
  * removed from the command and the output, so neither can forge or close the envelope. The command
- * is one JSON string line, so a command with newlines cannot shift the lines after it. Throws on a
- * nonce that is not lowercase hex, which would leave the envelope forgeable.
+ * is one JSON string line, so a command with newlines cannot shift the lines after it. The output is
+ * redacted whole, then cut to its last {@link TERMINAL_RESULT_MAX_BYTES} (a cut before redaction could
+ * split a secret). Throws on a nonce that is not lowercase hex, which would leave the envelope forgeable.
  */
 export function terminalResultNote(result: TerminalResult, nonce: string): string {
   if (!NONCE.test(nonce)) throw new Error(`terminal result note: the nonce must be lowercase hex, got ${JSON.stringify(nonce)}`);
   const strip = (text: string): string => text.split(nonce).join("");
   const command = strip(redactSensitiveText(result.command));
-  const output = strip(capResultText(redactSensitiveText(result.output), TERMINAL_RESULT_MAX_BYTES));
+  const output = strip(capResultText(redactSensitiveText(result.output), TERMINAL_RESULT_MAX_BYTES, { keep: "tail" }));
   const tag = `terminal-result-${nonce}`;
   return [
     `[terminal run ${result.runId} result: ${outcomeOf(result)}]`,
@@ -166,7 +183,9 @@ export function parseTerminalResultNote(content: string): TerminalResult | undef
 
 /**
  * The turn's user line for a terminal-results prompt, written by keryx, never by the client: the
- * owner's decision is that the agent continues on its own after the run.
+ * owner's decision is that the agent continues on its own after the run. `runAgentTurn` stores it as an
+ * injected harness line marked `terminalContinuation` (review AR2-001); replay reads the marker, never
+ * this text, so the wording can change without breaking stored sessions.
  */
 export const TERMINAL_CONTINUATION_LINE =
   "The commands you proposed ran in the operator's terminal; their results are in the terminal run notes above. " +
@@ -175,14 +194,10 @@ export const TERMINAL_CONTINUATION_LINE =
 /**
  * What a terminal-results prompt renders to: keryx's continuation line, untrusted from its start (the
  * notes before it hold untrusted output, so the turn runs under the floor), and no text the operator
- * wrote — nothing in it may make a decision only the operator's own words can make.
+ * wrote — nothing in it may make a decision only the operator's own words can make. The server runs it
+ * with `origin: "terminal-results"`, which also turns the floor on.
  */
 export const TERMINAL_RESULTS_PROMPT: RenderedAcpPrompt = { text: TERMINAL_CONTINUATION_LINE, untrusted: true, trustedText: "" };
-
-/** True for a stored continuation line, also with a `UserPromptSubmit` hook's context appended after it. */
-export function isTerminalContinuation(content: string): boolean {
-  return content === TERMINAL_CONTINUATION_LINE || content.startsWith(`${TERMINAL_CONTINUATION_LINE}\n\n`);
-}
 
 /** The plain text a replayed note shows in a client that does not read `_meta.keryx.terminalResult`. */
 export function terminalResultText(result: TerminalResult): string {

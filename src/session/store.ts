@@ -114,6 +114,8 @@ interface TranscriptLine {
   trailStep?: number;
   packed?: true;
   slateFrame?: true;
+  /** Flow 523 review AR2-001: keryx's continuation line of a terminal-results turn (see `NormalizedMessage`). */
+  terminalContinuation?: true;
   /**
    * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
    * redacted flag, and opaque provider replay items. Round-tripped so a
@@ -484,6 +486,7 @@ function serializeJsonl(history: readonly NormalizedMessage[], checkpointTs: str
       ...(m.trailStep !== undefined ? { trailStep: m.trailStep } : {}),
       ...(m.packed === true ? { packed: true as const } : {}),
       ...(m.slateFrame === true ? { slateFrame: true as const } : {}),
+      ...(m.role === "user" && m.terminalContinuation === true ? { terminalContinuation: true as const } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
@@ -630,6 +633,7 @@ function readJsonl(file: string): NormalizedMessage[] {
           : {}),
         ...(o.packed === true ? { packed: true as const } : {}),
         ...(o.slateFrame === true ? { slateFrame: true as const } : {}),
+        ...(o.role === "user" && o.terminalContinuation === true ? { terminalContinuation: true as const } : {}),
         // Carried forward so a resumed session's next flush reuses the
         // message's ORIGINAL append time instead of re-stamping it with the
         // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`

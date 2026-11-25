@@ -165,7 +165,7 @@ import { recordSessionReviewRequest, readVisibleSessionReviews, sessionReviewSum
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
 import {
-  isTerminalContinuation,
+  clientTakesTerminalResults,
   parseTerminalResultNote,
   parseTerminalResults,
   TERMINAL_RESULTS_PROMPT,
@@ -2565,10 +2565,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         data: { sessionId },
       });
     }
-    if (terminalResults !== undefined && !clientRunsTerminal(state.clientCapabilities)) {
+    // Owner 2026-11-25 (review F-001/RR-001): only a run-tracking client sends results. `terminal: true`
+    // alone is /delegate's capability, which desktops released before flow 523 send as well.
+    if (terminalResults !== undefined && !clientTakesTerminalResults(state.clientCapabilities)) {
       refuse(
         invalidParams(
-          `${ACP_AGENT_METHODS.sessionPrompt}: _meta.keryx.terminalResults is accepted only from a client that advertised _meta.keryx.terminal in initialize`,
+          `${ACP_AGENT_METHODS.sessionPrompt}: _meta.keryx.terminalResults is accepted only from a client that advertised _meta.keryx.terminalResults in its initialize client capabilities`,
           { field: "_meta.keryx.terminalResults" },
         ),
       );
@@ -2641,8 +2643,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         providerId,
         modelId,
         toolNames,
-        // Flow 523: the desktop's Run button and the result note that comes back from it.
-        ...(shellProfile && clientRunsTerminal(state.clientCapabilities) ? { clientRunsTerminal: true } : {}),
+        // Flow 523: the desktop's Run button and the result note that comes back from it — for a client
+        // that returns Run results, and never on a Telegram turn, whose operator has no Run button.
+        ...(shellProfile && telegram === undefined && clientTakesTerminalResults(state.clientCapabilities) ? { clientReturnsRunResults: true } : {}),
       }),
       controlNonce: controlNonceFor(sessionId),
       idSeq,
@@ -2817,10 +2820,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const goalTurn = slate !== undefined && slate.goalPrompt !== undefined && slate.goalPrompt === userLine;
       if (slate !== undefined) delete slate.goalPrompt;
       // Flow 523: the results go in right before the continuation line the turn pushes, inside the
-      // turn `/rewind` recorded above, so rewinding this turn takes them out with it.
+      // turn `/rewind` recorded above, so rewinding this turn takes them out with it. The turn is
+      // keryx's (`origin: "terminal-results"`, review AR2-001): its line is not the operator's, so no
+      // `UserPromptSubmit` hook sees or refuses it, and nothing can leave these notes without their turn.
       if (terminalResults !== undefined) appendTerminalResultNotes(sessionId, terminalResults);
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
+        ...(terminalResults !== undefined ? { origin: "terminal-results" as const } : {}),
         ...(rendered.untrusted ? { untrustedPrompt: true, operatorText: rendered.trustedText } : {}),
         ...(telegram === undefined ? {} : { source: "telegram", automaticReview: false }),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
@@ -3112,8 +3118,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The role mapping F-9 asks every implementation to decide explicitly:
    *
    *   `user`      -> `user_message_chunk` (a delegate note: its text + `_meta.keryx.delegateResult`;
-   *                  a terminal-result note: `_meta.keryx.terminalResult`, its continuation line
-   *                  `_meta.keryx.terminalContinuation`;
+   *                  a terminal-result note: `_meta.keryx.terminalResult`, keryx's continuation line
+   *                  (the message marked `terminalContinuation`) `_meta.keryx.terminalContinuation`;
    *                  skipped when the content is empty —
    *                  mirrors `AgentIO.write`/`onSystem`'s own "nothing to
    *                  say" no-op below).
@@ -3150,6 +3156,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
       if (message.role === "user") {
         if (message.content.length === 0) continue;
+        // Flow 523 review AR2-001: keryx's continuation line is injected (not the operator's), but it
+        // starts the turn a Run's result began, as the desktop counts it live. Read by its marker,
+        // never its text: the operator may type the same sentence, and the wording may change.
+        if (message.terminalContinuation === true) {
+          parentTurn++;
+          sendUpdate(sessionId, {
+            sessionUpdate: "user_message_chunk",
+            content: textBlock(message.content),
+            _meta: { keryx: { terminalContinuation: true, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
+          });
+          continue;
+        }
         // A delegate note replays as what it is: the result text with the run it came from in `_meta`,
         // never the envelope (the model-facing history keeps it). A client that does not know the
         // meta shows the plain text.
@@ -3165,21 +3183,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           continue;
         }
         // Flow 523: a terminal-result note replays as its parsed fields (the desktop draws a run card),
-        // never the envelope, and keryx's continuation line is marked so it is not drawn as a bubble.
+        // never the envelope. Only an injected note: an operator line of the same shape is their text.
         const terminal = injected ? parseTerminalResultNote(message.content) : undefined;
         if (terminal !== undefined) {
           sendUpdate(sessionId, {
             sessionUpdate: "user_message_chunk",
             content: textBlock(terminalResultText(terminal)),
             _meta: { keryx: { terminalResult: terminal, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
-          });
-          continue;
-        }
-        if (!injected && isTerminalContinuation(message.content)) {
-          sendUpdate(sessionId, {
-            sessionUpdate: "user_message_chunk",
-            content: textBlock(message.content),
-            _meta: { keryx: { terminalContinuation: true, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
           });
           continue;
         }

@@ -44,6 +44,22 @@ describe("secrets.private-key-block", () => {
     expect(spans(`$ head -20 ~/.ssh/id_rsa\n${truncated}`, "secrets.private-key-block")).toEqual([truncated]);
   });
 
+  test("an END line with no header before it (tail -20 id_rsa, a window cut inside the key) fails closed from the start of the input", () => {
+    // Flow 523 review SC3-001: a tail window keeps the key's last body lines and its END line.
+    const tail = `${BODY}${BODY}-----END RSA PRIVATE KEY-----`;
+    expect(spans(tail, "secrets.private-key-block")).toEqual([tail]);
+    // The text after the END line is not masked; a later complete block is masked on its own.
+    const whole = `-----BEGIN EC PRIVATE KEY-----\n${BODY}-----END EC PRIVATE KEY-----`;
+    expect(spans(`${tail}\nafter the key\n${whole}`, "secrets.private-key-block")).toEqual([tail, whole]);
+    // After a complete block, an orphan END is masked from that block's end, not from the start.
+    expect(spans(`${whole}\n${tail}`, "secrets.private-key-block")).toEqual([whole, `\n${tail}`]);
+  });
+
+  test("many orphan END lines before a header scan in linear time", () => {
+    const content = `${"-----END PRIVATE KEY-----".repeat(8000)}${"a".repeat(100_000)}-----BEGIN PRIVATE KEY-----`;
+    expect(timed(content)).toBeLessThan(250);
+  });
+
   test("public keys and certificates are not private keys", () => {
     const pub = `-----BEGIN PUBLIC KEY-----\n${BODY}-----END PUBLIC KEY-----`;
     const cert = `-----BEGIN CERTIFICATE-----\n${BODY}-----END CERTIFICATE-----`;

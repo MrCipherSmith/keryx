@@ -48,6 +48,19 @@ const FILES_MODIFIED_PREFIX = "Files modified: ";
 const TOOLS_RUN_PREFIX = "Tools run: ";
 /** Most paths listed per "Files …" line. */
 const MAX_LISTED_FILES = 40;
+/** Flow 523 review DEG2-1: the summary section naming the Run results (terminal-result notes) a cut removed. */
+const RUN_RESULTS_HEADER = "Run results removed from the active context (terminal-result notes):";
+const RUN_RESULT_ITEM = "- ";
+/** Most Run results listed in that section; the newest are kept. */
+const MAX_LISTED_RUNS = 24;
+/** The longest command shown per listed Run result. */
+const MAX_RUN_COMMAND_CHARS = 200;
+/**
+ * The head line keryx writes for a Run's result note from validated fields only (`terminalResultNote`,
+ * `src/acp/terminal-result.ts`), then the command as one JSON string line.
+ */
+const RUN_RESULT_HEAD = /^\[terminal run [A-Za-z0-9_-]{1,64} result: (?:exit -?\d+|ended by a signal|still running)\]$/;
+const RUN_RESULT_COMMAND_PREFIX = "command: ";
 /** Banners of harness-injected notifications that predate the `injected` marker. */
 const LEGACY_INJECTED_PREFIXES: readonly string[] = [
   "[system] A shell task finished",
@@ -73,6 +86,40 @@ export function isOperatorMessage(m: NormalizedMessage): boolean {
     return false;
   }
   return !isLegacyInjectedContent(m.content);
+}
+
+/**
+ * Flow 523: a Run's result note as the ACP host stores it — an injected harness user message whose
+ * first line is keryx's head line. A message the operator typed in that shape is not one. Pure.
+ */
+function isRunResultNote(m: NormalizedMessage | undefined): boolean {
+  if (m === undefined || m.role !== "user" || m.injected !== true || m.provenance !== "harness") return false;
+  const newline = m.content.indexOf("\n");
+  return RUN_RESULT_HEAD.test(newline < 0 ? m.content : m.content.slice(0, newline));
+}
+
+/** One summary line for a removed Run result: keryx's head line and the command it ran. Pure. */
+function runResultDigest(m: NormalizedMessage): string {
+  const lines = m.content.split("\n", 5);
+  const command = lines.find((line) => line.startsWith(RUN_RESULT_COMMAND_PREFIX));
+  return command === undefined ? (lines[0] ?? "") : `${lines[0] ?? ""} ${clip(command, MAX_RUN_COMMAND_CHARS)}`;
+}
+
+/**
+ * Flow 523 review DEG2-1: the latest turn a Run's result started after `turnStart` — keryx's
+ * continuation line (`terminalContinuation`) and the result notes right before it, which hold the
+ * output that turn acts on. Inclusive indexes; `undefined` when no such turn started after it. Pure.
+ */
+function runResultsHead(history: readonly NormalizedMessage[], turnStart: number): { start: number; end: number } | undefined {
+  for (let i = history.length - 1; i > turnStart; i--) {
+    const m = history[i];
+    if (m?.role === "user" && m.terminalContinuation === true) {
+      let start = i;
+      while (start - 1 > turnStart && isRunResultNote(history[start - 1])) start -= 1;
+      return { start, end: i };
+    }
+  }
+  return undefined;
 }
 
 function isLegacyInjectedContent(content: string): boolean {
@@ -112,12 +159,14 @@ function clip(s: string, max: number): string {
   return `${one.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Requests and file lists carried by an earlier compaction summary. */
-function parsePreviousSummary(content: string): { requests: string[]; read: string[]; modified: string[] } {
+/** Requests, file lists and removed Run results carried by an earlier compaction summary. */
+function parsePreviousSummary(content: string): { requests: string[]; read: string[]; modified: string[]; runs: string[] } {
   const requests: string[] = [];
   const read: string[] = [];
   const modified: string[] = [];
+  const runs: string[] = [];
   let inRequests = false;
+  let inRuns = false;
   for (const line of content.split("\n")) {
     if (line === REQUESTS_HEADER) {
       inRequests = true;
@@ -129,13 +178,22 @@ function parsePreviousSummary(content: string): { requests: string[]; read: stri
         inRequests = false;
       }
     }
+    if (line === RUN_RESULTS_HEADER) {
+      inRuns = true;
+    } else if (inRuns) {
+      if (line.startsWith(`${RUN_RESULT_ITEM}[terminal run `)) {
+        runs.push(line.slice(RUN_RESULT_ITEM.length));
+      } else {
+        inRuns = false;
+      }
+    }
     if (line.startsWith(FILES_READ_PREFIX)) {
       read.push(...splitList(line.slice(FILES_READ_PREFIX.length)));
     } else if (line.startsWith(FILES_MODIFIED_PREFIX)) {
       modified.push(...splitList(line.slice(FILES_MODIFIED_PREFIX.length)));
     }
   }
-  return { requests, read, modified };
+  return { requests, read, modified, runs };
 }
 
 function splitList(text: string): string[] {
@@ -245,6 +303,8 @@ function buildSummary(
     .map((m) => parsePreviousSummary(m.content));
   const operatorRequests = prefix.filter(isOperatorMessage).map((m) => clip(m.content, maxPrompt));
   const requests = [...previous.flatMap((p) => p.requests), ...operatorRequests];
+  // Flow 523 review DEG2-1: a removed Run result is named (run, outcome, command), not lost without a trace.
+  const runs = [...previous.flatMap((p) => p.runs), ...prefix.filter(isRunResultNote).map(runResultDigest)].slice(-MAX_LISTED_RUNS);
 
   const files = filesFromToolCalls(prefix);
   const filesRead = uniqueCapped([...previous.flatMap((p) => p.read), ...files.read]);
@@ -272,6 +332,9 @@ function buildSummary(
     REQUESTS_HEADER,
     ...(requests.length > 0 ? requests.map((p, i) => `${i + 1}. ${p}`) : ["(none)"]),
   ];
+  if (runs.length > 0) {
+    lines.push("", RUN_RESULTS_HEADER, ...runs.map((run) => `${RUN_RESULT_ITEM}${run}`));
+  }
   if (filesRead.length > 0) {
     lines.push("", `${FILES_READ_PREFIX}${filesRead.join(", ")}`);
   }
@@ -330,7 +393,9 @@ export const IN_TURN_TAIL_TOKENS = 20_000;
  * operator typed "continue", the model then ran 150 tool calls) removed nothing.
  *
  * Keeps, in order: a summary of everything removed, the anchors block, the operator
- * message that started the current turn, and a verbatim tail of about `tailTokens`.
+ * message that started the current turn, the head of the latest turn a Run's result
+ * started inside it (its result notes and keryx's continuation line, flow 523 review
+ * DEG2-1: the output that turn acts on), and a verbatim tail of about `tailTokens`.
  * The cut never lands between an assistant `tool_calls` message and its results, so
  * no tool result is orphaned. Pure; noop when the turn has nothing to cut.
  */
@@ -351,10 +416,16 @@ export function compactInTurn(
   if (turnStart < 0) {
     return noop;
   }
+  // Kept whatever the budget; the tail is sized without it and never starts inside it.
+  const head = runResultsHead(history, turnStart);
   // Walk back until the tail's estimate passes the budget; `cut` is the first kept index.
   let cut = history.length;
   let tokens = 0;
   while (cut > turnStart + 1) {
+    if (head !== undefined && cut - 1 >= head.start && cut - 1 <= head.end) {
+      cut = head.start;
+      continue;
+    }
     const m = history[cut - 1];
     // Flow 387 review r1 F-012: the shared estimator, so replayed reasoning is counted
     // (the old local one sized only content + tool-call arguments).
@@ -385,8 +456,13 @@ export function compactInTurn(
   }
 
   const turnMessage = history[turnStart] as NormalizedMessage;
-  const removed = [...history.slice(0, turnStart), ...history.slice(turnStart + 1, cut)];
-  const tail = history.slice(cut);
+  // A cut after the head keeps it between the operator message and the tail; a cut before it keeps it in the tail.
+  const keptHead = head !== undefined && cut > head.end ? history.slice(head.start, head.end + 1) : [];
+  const removed =
+    keptHead.length > 0 && head !== undefined
+      ? [...history.slice(0, turnStart), ...history.slice(turnStart + 1, head.start), ...history.slice(head.end + 1, cut)]
+      : [...history.slice(0, turnStart), ...history.slice(turnStart + 1, cut)];
+  const tail = [...keptHead, ...history.slice(cut)];
   const summary = buildSummary(removed, {
     maxPrompt: Math.max(MIN_PROMPT_CHARS, opts.maxPromptChars ?? MIN_PROMPT_CHARS),
     focus: opts.focus?.trim() ?? "",

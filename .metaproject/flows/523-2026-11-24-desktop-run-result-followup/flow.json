@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T18:03:46.645Z",
+  "updatedAt": "2026-11-25T18:23:23.849Z",
   "source": {
     "type": "description",
     "ref": null
@@ -198,7 +198,7 @@
       "id": "T10",
       "title": "Fix round 1: keryx server findings (AR2-001, DEG2-1, HL4-001, F-001/RR-001 server half, LG2-001, TP-005, TP2-001)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -212,7 +212,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "server fixes AR2-001, DEG2-1, F-001/RR-001 server half, LG2-001, SC3-001 red-to-green; HL4-001 did not reproduce (busy test added); TP-005, TP2-001 tests added with mutation checks; bun test src/acp/terminal-result 68/0, 14 related files 269/0, typecheck and eslint exit 0; result results/T10.json"
     },
     {
       "id": "T11",
@@ -435,6 +437,11 @@
       "at": "2026-11-25T18:03:46.645Z",
       "event": "task-done",
       "detail": "T12: Fix round 1: spec, decisions and flow docs findings (PC-*, PC2-001, PC3-001, PC4-001, F-003, F-005)"
+    },
+    {
+      "at": "2026-11-25T18:23:23.849Z",
+      "event": "task-done",
+      "detail": "T10: Fix round 1: keryx server findings (AR2-001, DEG2-1, HL4-001, F-001/RR-001 server half, LG2-001, TP-005, TP2-001)"
     }
   ],
   "origin": {

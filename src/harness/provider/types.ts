@@ -311,6 +311,15 @@ export interface NormalizedMessage {
    */
   slateFrame?: true;
   /**
+   * Flow 523 review AR2-001: user only; `true` on keryx's own continuation line, the user line of a
+   * turn a Run's result started (`RunAgentTurnOptions.origin: "terminal-results"`). Such a line is
+   * `provenance: "harness"` and `injected`, so nothing reads it as the operator's; this marker is what
+   * still makes it a turn boundary (ACP replay, compaction keeps its result notes). Store-only like
+   * `slateFrame`: persisted in `context.jsonl`, never sent to a provider. Read from this field, never
+   * from the text, so a later rewording of the line cannot break replay.
+   */
+  terminalContinuation?: true;
+  /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
    * it to disk). Optional and store-only bookkeeping: no request builder

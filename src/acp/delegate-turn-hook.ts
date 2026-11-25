@@ -78,10 +78,21 @@ export function prepareDelegateRunFile(file: string): void {
   writeFileSync(file, "", { flag: "w" });
 }
 
-/** `text` cut to at most `maxBytes` of UTF-8, with a marker saying how much was dropped. */
-export function capResultText(text: string, maxBytes: number = DELEGATE_RESULT_MAX_BYTES): string {
+/**
+ * `text` cut to at most `maxBytes` of UTF-8, with a marker saying how much was dropped. By default the
+ * start is kept (an agent's answer); `keep: "tail"` keeps the end behind a leading marker, for output
+ * whose last lines carry the outcome (a command's result, flow 523 review LG2-001). Neither cut splits
+ * a character.
+ */
+export function capResultText(text: string, maxBytes: number = DELEGATE_RESULT_MAX_BYTES, options: { readonly keep?: "head" | "tail" } = {}): string {
   const bytes = Buffer.from(text, "utf8");
   if (bytes.length <= maxBytes) return text;
+  if (options.keep === "tail") {
+    let start = bytes.length - maxBytes;
+    // Never start inside a character: skip the UTF-8 continuation bytes (10xxxxxx) of the one the cut lands in.
+    while (start < bytes.length && ((bytes[start] ?? 0) & 0xc0) === 0x80) start += 1;
+    return `[… ${start} earlier bytes not kept]\n${bytes.subarray(start).toString("utf8")}`;
+  }
   const kept = bytes.subarray(0, maxBytes).toString("utf8").replace(/�+$/u, "");
   return `${kept}\n[… truncated: ${bytes.length - Buffer.byteLength(kept, "utf8")} more bytes]`;
 }

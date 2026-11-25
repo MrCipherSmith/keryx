@@ -29,22 +29,43 @@ type Rule = {
 const PRIVATE_KEY_BEGIN = /-----BEGIN (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
 const PRIVATE_KEY_END = /-----END (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
 
+function nextMatch(pattern: RegExp, content: string, from: number): RegExpExecArray | null {
+  pattern.lastIndex = from;
+  return pattern.exec(content);
+}
+
+// Both cuts of a window fail closed. A header with no END line (`head -20 id_rsa`, a cut-off paste)
+// masks to the end of the input; an END line with no header before it (`tail -20 id_rsa`, a
+// terminal tail cut inside the key — flow 523 review SC3-001) masks from the end of the previous
+// block, or the start of the input, to that END line: its body lines are key material whatever
+// cut them. Each pattern is searched forward from where the last block ended, and a header found
+// ahead is kept until it is reached, so the scan stays linear.
 function scanPrivateKeyBlocks(content: string): Array<[number, number]> {
   const spans: Array<[number, number]> = [];
-  PRIVATE_KEY_BEGIN.lastIndex = 0;
-  let begin: RegExpExecArray | null;
-  while ((begin = PRIVATE_KEY_BEGIN.exec(content)) !== null) {
-    PRIVATE_KEY_END.lastIndex = begin.index + begin[0].length;
-    const end = PRIVATE_KEY_END.exec(content);
+  let from = 0;
+  let begin = nextMatch(PRIVATE_KEY_BEGIN, content, 0);
+  let end = nextMatch(PRIVATE_KEY_END, content, 0);
+  while (begin !== null || end !== null) {
+    if (end !== null && (begin === null || end.index < begin.index)) {
+      const stop = end.index + end[0].length;
+      spans.push([from, stop]);
+      from = stop;
+      end = nextMatch(PRIVATE_KEY_END, content, stop);
+      continue;
+    }
+    if (begin === null) break;
+    const headerEnd = begin.index + begin[0].length;
+    if (end !== null && end.index < headerEnd) end = nextMatch(PRIVATE_KEY_END, content, headerEnd);
     if (end === null) {
-      // No END line (`head -20 id_rsa`, a cut-off paste): fail closed and mask
-      // to the end of the input. No later header can close either, so stop.
+      // No later header can close either, so stop.
       spans.push([begin.index, content.length]);
       break;
     }
     const stop = end.index + end[0].length;
     spans.push([begin.index, stop]);
-    PRIVATE_KEY_BEGIN.lastIndex = stop;
+    from = stop;
+    begin = nextMatch(PRIVATE_KEY_BEGIN, content, stop);
+    end = nextMatch(PRIVATE_KEY_END, content, stop);
   }
   return spans;
 }
