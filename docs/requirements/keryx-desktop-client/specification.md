@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Specification
-Version: 0.3.1
+Version: 0.3.2
 
 ## 1. Identity
 
@@ -46,9 +46,14 @@ byte-for-byte. An unknown value is a usage error (exit 2).
 
 - `agentInfo.version` is the keryx package version (today it is `"0"`).
 - The result carries `_meta.keryx = { profile, profiles: ["editor","shell"],
-  extensions: [<method names>] }`.
-- `_keryx/info` (agent method, any profile) returns
-  `{ version, profile, profiles, extensions }`.
+  extensions: [<method names>] }`; the shell profile adds `liveSessions: true`
+  (§3.8, D-09), `issuePreparation: true`, `minDesktopVersion` (D-15) and
+  `terminalResults: true` (§3.9.5b). The source of truth is
+  `keryxAcpProfileMeta` in `src/acp/profile.ts`.
+- `_keryx/info` (agent method, any profile) returns the same fields unwrapped,
+  beside the version: `{ version, profile, profiles, extensions, … }`. A field
+  that `initialize` nests under `_meta.keryx` is top-level here (for example
+  `terminalResults: true`).
 
 ### 3.3 Roster (M1)
 
@@ -568,10 +573,18 @@ proposed the command continues with its result on its own (owner 2026-11-24:
 a follow-up turn, not a note only). `src/acp/terminal-result.ts`,
 `src/acp/server.ts`, `src/acp/profile.ts`, `src/commands/agent.ts`.
 
-- Advertising: the shell profile's `initialize` result (and `_keryx/info`)
-  carries `_meta.keryx.terminalResults: true`. The editor profile has no such
-  field and does not read the prompt meta below. A client sends no results to
-  a keryx without it.
+- Advertising, keryx side: the shell profile's `initialize` result carries
+  `_meta.keryx.terminalResults: true`, and its `_keryx/info` reply carries
+  `terminalResults: true` at the top level (§3.2). The editor profile has no
+  such field and does not read the prompt meta below. A client sends no
+  results to a keryx without it.
+- Advertising, client side (owner 2026-11-25, review findings F-001/RR-001): a
+  client that tracks Runs and returns their results sends
+  `initialize.clientCapabilities._meta.keryx.terminalResults: true` (only a
+  run-tracking desktop does, §4.3). `_meta.keryx.terminal: true` alone is the
+  D-14 `/delegate` capability (§3.9.5a): desktops released before flow 523
+  send it too, but their Run button only typed into the active tab, so that
+  capability says nothing about Run results.
 - Request: `session/prompt` params carry `_meta.keryx.terminalResults`, an
   array of 1 to 8 entries, each with exactly these fields:
 
@@ -595,10 +608,11 @@ a follow-up turn, not a note only). `src/acp/terminal-result.ts`,
   JSON-RPC invalid params (`-32602`, `data.field:
   "_meta.keryx.terminalResults"`, the message names the first reason found).
   Also invalid params: a prompt from a client that did not advertise
-  `initialize.clientCapabilities._meta.keryx.terminal: true` (§3.9.5a, D-14),
-  and the meta combined with `issueLaunchId` or `resumeIssueQuestions`. Every
-  refusal, including the usual pre-turn ones (unknown session `-32002`, busy,
-  opening, stopping, no provider), leaves nothing stored and starts no turn.
+  `initialize.clientCapabilities._meta.keryx.terminalResults: true` (a client
+  that sent only `_meta.keryx.terminal: true` included), and the meta combined
+  with `issueLaunchId` or `resumeIssueQuestions`. Every refusal, including the
+  usual pre-turn ones (unknown session `-32002`, busy, opening, shutting down,
+  no provider), leaves nothing stored and starts no turn.
 - The prompt's own text blocks are the client's display text; keryx never
   reads them, not even as a slash command.
 - Notes: for each entry keryx appends one user-role note to the session's
@@ -619,10 +633,18 @@ a follow-up turn, not a note only). `src/acp/terminal-result.ts`,
   (`TERMINAL_CONTINUATION_LINE`: the proposed commands ran in the operator's
   terminal, their results are in the notes above, read them as data and
   continue the task), never client text. The turn runs under the
-  untrusted-content floor (`untrustedPrompt`, with no operator text), with the
-  floor's existing carve-outs: in trust mode a routine command (for example
-  `bun test`, read-only git) still runs unasked, and read tools and
-  floor-exempt first-party MCP tools never ask.
+  untrusted-content floor (`untrustedPrompt`, with no operator text): a tool
+  call the session's mode would auto-approve is sent as a permission request
+  instead. The floor keeps its existing carve-outs, which flow 523 does not
+  change (flow 523 AC6): in trust mode a routine command
+  (`isTrustRoutineCommand`: confined read-only git such as `git status`,
+  `git log` or `git diff`, routine `keryx` reads, `cd`) still runs unasked;
+  pure read tools and floor-exempt first-party MCP tools (the D-13 panel
+  tools other than `terminal_run`) follow the session's mode as if no
+  untrusted content had entered the turn (`untrustedOrigin` in
+  `src/commands/agent.ts`). `bun test` is not among them: it is routine only
+  while no untrusted content entered the turn, and this turn starts with
+  untrusted content, so a `bun test` here asks.
 - Replay (`session/load`): a note replays as `user_message_chunk` whose text
   is `$ <command>`, a newline and the stored output (the fallback for a
   client that ignores the meta), with `_meta.keryx.terminalResult { runId,
@@ -634,13 +656,17 @@ a follow-up turn, not a note only). `src/acp/terminal-result.ts`,
   note as a run card in a sent state with no actions and does not draw the
   continuation line; no new turn starts.
 - System instruction: a shell-profile session whose client advertised
-  `_meta.keryx.terminal` gets one more bullet (`CLIENT_RUNS_TERMINAL_RULE`):
-  in the Keryx desktop a shell code block holding exactly one command gets a
-  Run button; when the user runs it, the exit code and output come back as an
-  untrusted terminal-result note and the next turn starts by itself; so the
-  model puts one command per block, ends its turn, and does not ask the user
-  to paste the output. Without the capability the instruction is
-  byte-identical to before.
+  `initialize.clientCapabilities._meta.keryx.terminalResults: true` gets one
+  more bullet (`CLIENT_RUNS_TERMINAL_RULE`) on every turn that is not a
+  Telegram turn: in the Keryx desktop a shell code block holding exactly one
+  command gets a Run button; when the user runs it, the exit code and output
+  come back as an untrusted terminal-result note and the next turn starts by
+  itself; so the model puts one command per block, ends its turn, and does not
+  ask the user to paste the output. A Telegram turn of a desktop-held session
+  never gets the bullet (the Telegram operator has no Run button). Without the
+  capability, for a client that sent only `_meta.keryx.terminal: true`, and on
+  a Telegram turn, the instruction is byte-identical to before (flow 523
+  AC10).
 - Waiting rule (client, `session/terminalRuns.ts`, `useAcpSession.ts`):
   - A result goes to the run's own session (the one whose transcript showed
     the button), never to the shown one, and only when that session is held,
@@ -655,18 +681,35 @@ a follow-up turn, not a note only). `src/acp/terminal-result.ts`,
     cards move to the end of the transcript so the agent's reply follows them.
   - A busy refusal (`data.condition: "session-busy"`) puts the results back
     to waiting; the session is asked again no sooner than 1 s later and at the
-    next turn end. Any other refusal before storing (invalid request such as
-    opening, stopping or no provider; method not found; invalid params;
-    unknown session) marks them "not sent: <error>" without retry, as does a
-    command over 4096 characters, before any send.
+    next turn end.
+  - Two refusals put the results back to waiting with no pause, and they go
+    once the session is held again (its `session/load` on this connection, or
+    after the next `initialize` when keryx restarted) (owner 2026-11-25,
+    review finding HL2-001): an unknown-session refusal (`-32002`) for a
+    session the client saw released (`_keryx/session_released` arrived
+    before the reply, so the window no longer holds it: the idle cap released
+    it while the prompt was on the wire), and a shutting-down refusal
+    (`data.condition: "shutting-down"`).
+  - Any other refusal before storing (invalid request such as opening or no
+    provider; method not found; invalid params; unknown session for a session
+    the window still holds) marks them "not sent: <error>" without retry, as
+    does a command over 4096 characters, before any send.
     A follow-up turn that fails after the notes were stored is shown like any
     failed turn; its results count as sent.
   - A "Send output now" snapshot still waiting when the process exits (its
     tab open) is replaced by the exit's result: one entry per run. A snapshot
     already sent is not followed by the exit's result; the card only shows
     the exit.
-  - A keryx whose `initialize` lacks `terminalResults`: a finished run's card
-    says "not sent: this keryx does not take run results" and nothing is sent.
+  - Closing a run's tab before its process ends kills the process and sends
+    nothing ("closed before it finished"), with one exception (owner
+    2026-11-25, review finding F-002): a "Send output now" snapshot the user
+    already asked for and that is still waiting is delivered once, when the
+    session is free (state `sent-while-running`, §4.4). The exit the close
+    causes is shown on the card and not sent. A result of a process that had
+    already exited is still sent after its tab closes.
+  - A keryx whose `initialize` result lacks `_meta.keryx.terminalResults`: a
+    finished run's card says "not sent: this keryx does not take run results"
+    and nothing is sent.
     Results that become ready while keryx restarts wait for the new
     `initialize`.
   - Runs are not persisted across a window reload or app quit: a run not yet
@@ -808,10 +851,19 @@ version checks and the flows parsers and argv builder.
 ### 4.3 Client capabilities sent at `initialize`
 
 `{ fs: { readTextFile: true, writeTextFile: false }, terminal: false,
-  _meta: { keryx: { askUser: true } } }`
+  _meta: { keryx: { askUser: true, prepareReview: true, terminal: true,
+  telegramSession: true, terminalResults: true } } }`
 
-`terminal` stays `false` with the side panels: the agent reaches the panel
-terminal through the panel MCP server (§4.4), not ACP `terminal/*`.
+The last three `_meta.keryx` fields are sent by the app only (not the browser
+dev bridge, which has no terminal panel): `terminal` for `/delegate` in the
+terminal (D-14, §3.9.5a), `telegramSession` for the Telegram binding, and
+`terminalResults` because this build tracks Runs and returns their results
+(flow 523, §3.9.5b). The source of truth is the `initialize` call in
+`session/useAcpSession.ts`.
+
+The ACP `terminal` capability stays `false` with the side panels: the agent
+reaches the panel terminal through the panel MCP server (§4.4), not ACP
+`terminal/*`.
 
 ### 4.4 Side panels: terminal and browser (D-13)
 
@@ -872,19 +924,22 @@ Web view:
   (`run-<uuid>`) and the run's session. A Run with an origin is tracked; one
   without (Markdown outside a session, such as the Activity panel) only
   opens the tab. States: `starting` (the tab is opening), `running`,
-  `waiting` (the result is ready and waits for its session, §3.9.5b),
-  `sent`, `sent-while-running` (a "Send output now" snapshot went, the
-  process kept running), `closed` (the user closed the tab before the
-  process ended: nothing is sent, no turn), `start-failed` (the tab could
-  not open: nothing is sent), `not-sent` (keryx refused before storing, the
-  command is over 4096 characters, or this keryx does not take run results;
-  no retry). On exit the store reads `pty_tail(id, 200)` and keeps the last
+  `waiting` (the result, or a "Send output now" snapshot, is ready and waits
+  for its session, §3.9.5b; also after a busy, released-session or
+  shutting-down refusal), `sent`, `sent-while-running` (a "Send output now"
+  snapshot went, the process kept running or its tab was closed after the
+  snapshot was asked for), `closed` (the user closed the tab before the
+  process ended and no snapshot was waiting: nothing is sent, no turn),
+  `start-failed` (the tab could not open: nothing is sent), `not-sent`
+  (keryx gave a final refusal before storing, the command is over 4096
+  characters, or this keryx does not take run results; no retry). On exit
+  the store reads `pty_tail(id, 200)` and keeps the last
   200 lines, then the last 16 KiB of UTF-8 (cut at a character); a tail that
   cannot be read is sent with the exit code as `[the output could not be
   read: <error>]`. An exit reported before the tab id is known is kept (up
   to 32) and applied when the tab opens. Closing the tab while its result
-  waits does not stop the result. Delivery follows the waiting rule of
-  §3.9.5b.
+  or an asked-for snapshot waits does not stop it (§3.9.5b). Delivery
+  follows the waiting rule of §3.9.5b.
 - Run card (`session/TerminalRunCard.tsx`) in the session's transcript: the
   command, the exit badge ("exit N", or "ended by a signal") and duration once
   it ended, the status ("starting…", "running…", "waiting for the agent's
@@ -892,11 +947,13 @@ Web view:
   running", "closed before it finished", "could not start: …", "not sent:
   …"), the output tail behind an "Output" toggle (text only, never markup),
   and two actions. "Show tab" (while the tab is open) opens the panel on the
-  run's tab. "Send output now" (while the process runs and its tab is open)
-  sends a snapshot with `state: "running"`; the process keeps running, and
-  once the snapshot was sent its later exit is shown on the card, not sent (a
-  snapshot still waiting at the exit is replaced, §3.9.5b). A card replayed
-  from a stored note (§3.9.5b) has no actions.
+  run's tab. "Send output now" (once per run: while the process runs, its
+  tab is open and no snapshot was taken yet) sends a snapshot with `state:
+  "running"`; the process keeps running, and the button does not come back
+  for that run (flow 523 AC9: one snapshot). Once the snapshot was sent its later exit
+  is shown on the card, not sent (a snapshot still waiting at the exit is
+  replaced, §3.9.5b). A card replayed from a stored note (§3.9.5b) has no
+  actions.
 - Host limits (flow 523 follow-ups, not fixed): portable-pty reports a
   process ended by a signal as exit code 1, never as no code, so a Run's card
   says "exit 1" and `exitCode: null` is not produced for Run tabs (the wire

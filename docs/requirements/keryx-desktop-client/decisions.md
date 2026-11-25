@@ -164,10 +164,28 @@ Chosen:
   group; closing a tab or the window, or quitting the app, sends SIGHUP to the
   group, then SIGKILL after a short grace. Tabs belong to the window, not to a
   session.
-- **Run button**: a fenced block tagged `bash`/`sh`/`zsh`/`shell`/`console`
-  that holds one command, and an `execute` tool call's command, get a Run
-  button that types the command plus Enter into the active terminal tab,
-  opening the panel (and a tab) when needed. Nothing is sent to keryx.
+- **Run button** (owner, revised 2026-11-24 and 2026-11-25 in flow 523): a
+  fenced block tagged `bash`/`sh`/`zsh`/`shell`/`console` that holds one
+  command, and an `execute` tool call's command, get a Run button. As first
+  shipped it typed the command plus Enter into the active terminal tab and
+  sent nothing to keryx. Since flow 523:
+  - Every Run opens a tab of its own whose process is the user's login shell
+    running exactly that command (`pty_open_command`); no other tab gets any
+    input (owner 2026-11-24: one tab per Run, not shell integration in an
+    existing tab).
+  - When the command ends, or on "Send output now", its exit code and output
+    go back to the session that showed the button as `session/prompt` with
+    `_meta.keryx.terminalResults`. keryx stores each result as a labelled
+    untrusted note and starts a follow-up turn by itself, under the
+    untrusted-content floor (owner 2026-11-24: the agent continues, not a
+    note only). So Run output now reaches the model and starts a turn.
+  - Only a client that advertises
+    `initialize.clientCapabilities._meta.keryx.terminalResults: true` gets
+    the Run guidance in its system instruction and may send results;
+    `_meta.keryx.terminal: true` alone stays the D-14 `/delegate` capability,
+    and Telegram turns never get the guidance (owner 2026-11-25).
+  - Spec §3.9.5b (wire contract, waiting rule) and §4.4 (run tabs, run store,
+    run card) hold the details.
 - **Browser**: a child WKWebView in the project window (Tauri multi-webview,
   `unstable` feature), one per browser tab, laid over the panel's body.
   Localhost and external sites; the user signs in inside the panel; no import

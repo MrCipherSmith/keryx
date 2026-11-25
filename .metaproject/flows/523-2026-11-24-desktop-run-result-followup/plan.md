@@ -71,8 +71,8 @@ Status: ready for freeze (2026-11-25)
 |---|---|---|---|---|---|---|---|
 | starting (tab opening) | — | — | — | — | no change | no change | run lost, nothing sent |
 | start failed | — | — | — | — | — | — | — |
-| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC11) | no change | no change: the run belongs to its own session (AC3) | no change | process dies with the window (existing PTY close); nothing sent |
-| waiting (finished, session busy) | — | card stays; result still sent | — | turn ends → every waiting result of that session in ONE prompt (AC4) | no change | kept; delivered once the session is held again | lost, nothing sent |
+| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC9) | no change | no change: the run belongs to its own session (AC3) | no change | process dies with the window (existing PTY close); nothing sent |
+| waiting (finished, or a "Send output now" snapshot asked for; session busy) | — | card stays; result still sent (a waiting snapshot of a still-running command too: delivered once, the exit the close causes is shown, not sent; owner 2026-11-25, F-002) | — | turn ends → waiting results of that session in ONE prompt, up to 8; the rest after that turn (AC4) | no change | kept, also when the release crosses a prompt already sent (unknown-session refusal) or keryx is shutting down; delivered once the session is held again (owner 2026-11-25, HL2-001) | lost, nothing sent |
 | delivered | — | no change | — | — | — | — | after `session/load` the card comes from the stored note; no new turn (AC7) |
 
 "start failed": the host could not start the shell → error toast "Could not run the command" and a
