@@ -45,12 +45,12 @@ const items: Item[] = [
 ];
 
 function slot(link: SessionReviewLink): ReviewCardSlot {
-  return { key: link.id, anchors: placement.reviewCardAnchors(link),
+  return { key: link.id, group: placement.reviewCardGroup(link), anchors: placement.reviewCardAnchors(link),
     node: createElement("article", { className: "test-review-card", "data-round": link.id }, `card ${link.id}`) };
 }
 
-async function render(cards: ReviewCardSlot[]) {
-  await act(() => root.render(createElement(Transcript, { items, busy: false, replaying: false, empty: null, reviewCards: cards })));
+async function render(cards: ReviewCardSlot[], shown: Item[] = items) {
+  await act(() => root.render(createElement(Transcript, { items: shown, busy: false, replaying: false, empty: null, reviewCards: cards })));
 }
 
 /** The transcript's children in order, cards named by their round and messages by their text. */
@@ -92,4 +92,25 @@ test("running or waiting rounds are pinned, the others stay in the timeline; one
   const done = placement.withReviewActive(active, "run-2", false);
   expect(placement.splitReviewCards([round2, round1], done).timeline.map(link => link.id)).toEqual(["run-2", "run-1"]);
   expect(placement.reviewCardAnchors(round1)).toEqual([head1, url]);
+});
+
+test("two rounds on the same head each sit after their own start message, oldest first", async () => {
+  const start = (id: number) => ({ kind: "user" as const, id, text: `Review pull request ${url} with the review-orchestrator skill.\nReview this revision: base ${"b".repeat(40)}, head ${head1}.` });
+  const sameHead: Item[] = [start(1), { kind: "agent", id: 2, text: "Round one stopped." }, start(3), { kind: "agent", id: 4, text: "Round two running." }];
+  const again: SessionReviewLink = { ...round1, id: "run-1b" };
+  await render([slot(round1), slot(again)], sameHead);
+  const sequence = order();
+  expect(sequence.indexOf("[run-1]")).toBe(1);
+  expect(sequence.indexOf("[run-1b]")).toBe(4);
+});
+
+test("a pull request URL anchor does not match a longer pull request number", async () => {
+  const other: Item[] = [{ kind: "user", id: 1, text: "look at https://github.com/org/project/pull/123 first" },
+    { kind: "user", id: 2, text: `now ${url}` }];
+  const v2: SessionReviewLink = { ...round1, id: "run-v2", revision: { ...round1.revision, headSha: "e".repeat(40) } };
+  await render([slot(v2)], other);
+  const sequence = order();
+  expect(sequence).toHaveLength(3);
+  expect(sequence[0]).toContain("pull/123");
+  expect(sequence.indexOf("[run-v2]")).toBe(2);
 });

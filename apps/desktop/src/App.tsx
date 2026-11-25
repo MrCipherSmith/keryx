@@ -27,8 +27,8 @@ import type { FixFindingsFlow } from "./reviews/model";
 import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
-import { SessionReviewActivity } from "./review/SessionReviewActivity";
-import { reviewCardAnchors, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
+import { SessionReviewActivity, type ReviewCardMemory } from "./review/SessionReviewActivity";
+import { reviewCardAnchors, reviewCardGroup, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { reviewRun } from "./platform/reviewRuns";
 import { REVIEW_SESSION_BUSY, reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
@@ -702,13 +702,17 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   // One card per review round: pinned above the composer while it runs or waits, in the timeline where it started after.
   const [activeReviews, setActiveReviews] = useState<ReadonlySet<string>>(() => new Set());
   const markReviewActive = useCallback((id: string, active: boolean) => setActiveReviews(previous => withReviewActive(previous, id, active)), []);
+  // A card that moves between the pinned slot and the timeline mounts anew; this keeps its dialog, expansion and draft.
+  const reviewCardMemory = useRef<ReviewCardMemory>(new Map());
   const reviewSlots = useMemo(() => {
     if (reviewDisconnected || !sessionReviews.length) return { pinned: undefined, cards: undefined };
     const { pinned, timeline } = splitReviewCards(sessionReviews, activeReviews);
-    const common = { cwd, allLinks: sessionReviews, visible: view === "session", onContinueTurn: continueSessionReview, onActiveChange: markReviewActive };
+    const common = { cwd, allLinks: sessionReviews, visible: view === "session", onContinueTurn: continueSessionReview, onActiveChange: markReviewActive,
+      memory: reviewCardMemory.current };
     return {
       pinned: pinned.length ? <SessionReviewActivity {...common} links={pinned} pinned /> : undefined,
-      cards: timeline.map(link => ({ key: `${link.sessionId}:${link.id}`, anchors: reviewCardAnchors(link),
+      // Oldest round first: each round claims the first start message after the previous round's (see reviewCardPlacement).
+      cards: [...timeline].reverse().map(link => ({ key: `${link.sessionId}:${link.id}`, group: reviewCardGroup(link), anchors: reviewCardAnchors(link),
         node: <SessionReviewActivity {...common} links={[link]} /> })),
     };
   }, [reviewDisconnected, sessionReviews, activeReviews, cwd, view, continueSessionReview, markReviewActive]);

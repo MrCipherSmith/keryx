@@ -46,6 +46,27 @@ export function compactSummary(run: DeskRun): string {
   return parts.join(" · ");
 }
 
+/**
+ * What a round's card keeps when it moves between the pinned slot and the timeline (a move mounts it anew): whether it
+ * is expanded, its open dialog, the unsent Continue note and the last run it read. Keyed `sessionId:id`; the caller
+ * holds one map for the window.
+ */
+export type ReviewCardMemory = Map<string, { expanded?: boolean; open?: boolean; guidance?: string; run?: DeskRun | null }>;
+
+/** `useState` whose value outlives the component in `memory[key][field]`. */
+function useRemembered<K extends "expanded" | "open" | "guidance" | "run">(memory: ReviewCardMemory | undefined, key: string, field: K,
+  initial: NonNullable<ReturnType<ReviewCardMemory["get"]>>[K]) {
+  const [value, setValue] = useState(() => memory?.get(key)?.[field] ?? initial);
+  const set = useCallback((next: typeof value | ((previous: typeof value) => typeof value)) => {
+    setValue(previous => {
+      const resolved = typeof next === "function" ? (next as (previous: typeof value) => typeof value)(previous) : next;
+      if (memory) memory.set(key, { ...memory.get(key), [field]: resolved });
+      return resolved;
+    });
+  }, [memory, key, field]);
+  return [value, set] as const;
+}
+
 /** Reports whether a round's card belongs pinned above the composer (running or waiting) or in the timeline. */
 export type ReviewActiveChange = (id: string, active: boolean) => void;
 
@@ -62,7 +83,7 @@ export function continuableLink(all: readonly SessionReviewLink[], link: Session
  * The review cards of a session: one card per round (link), compact until expanded. `onActiveChange` tells the caller
  * where each card belongs: pinned above the composer while its round runs or waits, in the timeline once it finished.
  */
-export function SessionReviewActivity({ cwd, links, allLinks = links, visible, pinned = false, onContinueTurn, onActiveChange, runCommand = reviewRun }: {
+export function SessionReviewActivity({ cwd, links, allLinks = links, visible, pinned = false, onContinueTurn, onActiveChange, memory, runCommand = reviewRun }: {
   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
   /** Every link of the session, newest first: decides which card may Continue. Defaults to `links`. */
   allLinks?: readonly SessionReviewLink[] | undefined;
@@ -70,6 +91,8 @@ export function SessionReviewActivity({ cwd, links, allLinks = links, visible, p
   pinned?: boolean | undefined;
   onContinueTurn: ContinueReviewTurn;
   onActiveChange?: ReviewActiveChange | undefined;
+  /** Keeps each card's state across a move between the pinned slot and the timeline. */
+  memory?: ReviewCardMemory | undefined;
   /** The review_run command; injected by tests. */
   runCommand?: typeof reviewRun | undefined;
 }) {
@@ -77,21 +100,23 @@ export function SessionReviewActivity({ cwd, links, allLinks = links, visible, p
     aria-label={pinned ? "Review in progress" : "Review activity"}>
     {links.map(link => <FollowedReview cwd={cwd} link={link} visible={visible} key={`${link.sessionId}:${link.id}`}
       canContinue={continuableLink(allLinks, link)} onContinueTurn={onContinueTurn} onActiveChange={onActiveChange}
-      reviewRun={runCommand} />).reverse()}
+      memory={memory} reviewRun={runCommand} />).reverse()}
   </section>;
 }
 
-function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onActiveChange, reviewRun }: {
+function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onActiveChange, memory, reviewRun }: {
   cwd: string; link: SessionReviewLink; visible: boolean; canContinue: boolean;
   onContinueTurn: ContinueReviewTurn; onActiveChange?: ReviewActiveChange | undefined;
+  memory?: ReviewCardMemory | undefined;
   reviewRun: typeof import("../platform/reviewRuns").reviewRun;
 }) {
-  const [run, setRun] = useState<DeskRun | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [open, setOpen] = useState(false);
+  const remembered = `${link.sessionId}:${link.id}`;
+  const [run, setRun] = useRemembered(memory, remembered, "run", null);
+  const [expanded, setExpanded] = useRemembered(memory, remembered, "expanded", false);
+  const [open, setOpen] = useRemembered(memory, remembered, "open", false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
-  const [guidance, setGuidance] = useState("");
+  const [guidance, setGuidance] = useRemembered(memory, remembered, "guidance", "");
   const [history, setHistory] = useState<{ events: CoordinatorEvent[]; before?: number }>();
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -130,8 +155,9 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
     } finally { inFlight.current = false; }
   }, [cwd, link, reviewRun]);
   const pending = !run || runActive(run);
-  // Placement follows the round's state once it is known: running or waiting pins the card, anything else is history.
-  const active = run ? runActive(run) : undefined;
+  // Placement follows the round's state once it is known: running, or waiting on the user's answer, pins the card;
+  // anything else (finished, paused, stopped) is history. A run that vanished or can no longer be read unpins it.
+  const active = run ? runActive(run) || pendingManualQuestions(run).length > 0 : error ? false : undefined;
   useEffect(() => {
     if (active !== undefined) onActiveChange?.(link.id, active);
   }, [active, link.id, onActiveChange]);

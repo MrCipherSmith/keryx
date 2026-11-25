@@ -55,9 +55,11 @@ async function flush() {
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 }
 
-async function render(rig: ReturnType<typeof harness>, onActiveChange?: (id: string, active: boolean) => void) {
+async function render(rig: ReturnType<typeof harness>, onActiveChange?: (id: string, active: boolean) => void,
+  memory?: import("./SessionReviewActivity").ReviewCardMemory, pinned = false) {
   await act(() => root.render(createElement(SessionReviewActivity, {
     cwd: "/dev/project", links: [link], visible: true, onContinueTurn: rig.onContinueTurn, runCommand: rig.runCommand, onActiveChange,
+    memory, pinned, key: pinned ? "pinned" : "timeline",
   })));
   await flush();
 }
@@ -151,4 +153,26 @@ test("a running round reports itself active, so the caller pins its card above t
   const reports: Array<[string, boolean]> = [];
   await render(harness(true, { ...partial, state: "running", finishedAt: null }), (id, active) => reports.push([id, active]));
   expect(reports).toEqual([["run-1", true]]);
+});
+
+test("a card moving from the pinned slot to the timeline keeps its expansion and unsent note", async () => {
+  await act(() => root.render(null));
+  const memory: import("./SessionReviewActivity").ReviewCardMemory = new Map();
+  const rig = harness(true);
+  await render(rig, undefined, memory, true);
+  await typeNote("Half-written note");
+  // The round finished: the caller now renders the card in the timeline, a new tree.
+  await render(rig, undefined, memory, false);
+  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Hide details");
+  expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+  expect(host.querySelector<HTMLTextAreaElement>(".session-review-item textarea")?.value).toBe("Half-written note");
+});
+
+test("a pinned round whose attempt can no longer be found reports itself inactive, so it leaves the pinned slot", async () => {
+  await act(() => root.render(null));
+  const reports: Array<[string, boolean]> = [];
+  const rig = harness(true);
+  rig.runCommand = (async () => ({ version: 1, runs: [] })) as typeof ReviewRun;
+  await render(rig, (id, active) => reports.push([id, active]));
+  expect(reports).toEqual([["run-1", false]]);
 });

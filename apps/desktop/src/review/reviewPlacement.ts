@@ -23,6 +23,11 @@ export function reviewCardAnchors(link: SessionReviewLink): string[] {
     .filter(text => text.trim() !== "");
 }
 
+/** The pull request a round belongs to: rounds of one pull request claim their start messages in order. */
+export function reviewCardGroup(link: SessionReviewLink): string {
+  return `${link.key.repositoryId}#${link.key.number}#${link.key.viewer.toLowerCase()}`;
+}
+
 /** `previous` with `id` marked active or not; the same set when nothing changed, so React skips the render. */
 export function withReviewActive(previous: ReadonlySet<string>, id: string, active: boolean): ReadonlySet<string> {
   if (previous.has(id) === active) return previous;

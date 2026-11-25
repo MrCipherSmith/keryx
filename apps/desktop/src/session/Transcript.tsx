@@ -306,27 +306,42 @@ function toBlocks(items: Item[]): Block[] {
 }
 
 /**
- * A finished review round's card in the timeline. It sits right after the first user message containing one of
- * `anchors` (tried in order: the round's head commit, then its pull request URL), so the conversation that follows the
- * round continues below it; a card no message matches goes after the last item.
+ * A finished review round's card in the timeline. It sits right after the user message its round started from: the first
+ * message containing one of `anchors` (tried in order: the round's head commit, the typed request, the pull request URL).
+ * Cards are given oldest round first; a round claims the first matching message after the one the previous round of the
+ * same `group` (pull request) claimed, so two rounds on one head land on their own start messages. A card no message
+ * matches goes after the last item. Cards sharing a place keep the given (oldest first) order.
  */
 export interface ReviewCardSlot {
   key: string;
+  group: string;
   anchors: readonly string[];
   node: ReactNode;
+}
+
+/** Whether `text` holds `needle` as a whole token: a needle ending in a digit is not followed by another digit. */
+function containsAnchor(text: string, needle: string): boolean {
+  for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+    if (!/\d$/.test(needle) || !/\d/.test(text.charAt(at + needle.length))) return true;
+  }
+  return false;
 }
 
 /** The block index each card follows (-1: after the last block). */
 export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: { text?: unknown } }>, cards: readonly ReviewCardSlot[]): Map<string, number> {
   const placed = new Map<string, number>();
+  const claimed = new Map<string, number>();
   for (const card of cards) {
+    const after = claimed.get(card.group) ?? -1;
     let at = -1;
     for (const needle of card.anchors) {
-      if (!needle) continue;
-      at = blocks.findIndex(block => block.type === "user" && typeof block.item?.text === "string" && block.item.text.includes(needle));
+      if (!needle.trim()) continue;
+      at = blocks.findIndex((block, index) => index > after && block.type === "user" && typeof block.item?.text === "string" &&
+        containsAnchor(block.item.text, needle));
       if (at >= 0) break;
     }
     placed.set(card.key, at);
+    if (at >= 0) claimed.set(card.group, at);
   }
   return placed;
 }
