@@ -6,7 +6,7 @@ import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { DelegateResultCard } from "./DelegateResultCard";
 import { TerminalRunCard } from "./TerminalRunCard";
-import { blockText } from "./reducer";
+import { blockText, isUndeliveredRun } from "./reducer";
 import { ContentBlockView } from "./ContentBlockView";
 import { formatDuration } from "./duration";
 import { Markdown, RunSessionContext } from "../components/Markdown";
@@ -16,7 +16,7 @@ import type { UserPromptContext } from "./userPrompt";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
-import { runInTerminal, runnableCommand } from "../panels/panelBus";
+import { runButtonTitle, runInTerminal, runnableCommand } from "../panels/panelBus";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 type BlockItem = Extract<Item, { kind: "block" }>;
@@ -197,8 +197,8 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
                 {runnable !== null ? (
                   <button
                     className="tool-run"
-                    onClick={() => runInTerminal(runnable, runSession === null ? undefined : { sessionId: runSession, source: "tool" })}
-                    title="Run in the terminal panel"
+                    onClick={() => runInTerminal(runnable, runSession === null ? undefined : { sessionId: runSession })}
+                    title={runButtonTitle(runSession !== null)}
                   >
                     <Icon name="play" size={10} /> Run
                   </button>
@@ -289,10 +289,11 @@ function toBlocks(items: Item[]): Block[] {
       out.push({ type: "delegate", item: it });
       continue;
     }
-    // A run's result starts the agent's follow-up turn, as a user message would.
+    // A delivered run's result starts the agent's follow-up turn, as a user message would; a card whose
+    // result has not gone is no turn boundary (the turn it was clicked in may still be writing).
     if (it.kind === "terminalRun") {
       out.push({ type: "terminalRun", item: it });
-      agentTurnOpen = false;
+      if (!isUndeliveredRun(it)) agentTurnOpen = false;
       continue;
     }
     if (it.kind === "block" && it.role === "user") {
@@ -399,7 +400,10 @@ function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRun
   const placement = useMemo(() => reviewCardPlacement(blocks, reviewCards), [blocks, reviewCards]);
   const cardsAfter = (index: number) => reviewCards.filter(card => placement.get(card.key) === index)
     .map(card => <Fragment key={`review-${card.key}`}>{card.node}</Fragment>);
-  const last = items[items.length - 1];
+  // The turn's stream ends before the undelivered Run cards that trail it (reducer `streamEnd`).
+  let lastAt = items.length - 1;
+  while (busy && lastAt >= 0 && isUndeliveredRun(items[lastAt])) lastAt -= 1;
+  const last = items[lastAt];
   const streamingAgent = busy && last?.kind === "agent";
   const streamingThought = busy && last?.kind === "thought";
 
@@ -444,21 +448,20 @@ function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRun
     el.scrollTo({ top: el.scrollHeight, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
-  const renderBlock = (b: (typeof blocks)[number], i: number) => {
-    const isLast = i === blocks.length - 1;
+  const renderBlock = (b: (typeof blocks)[number]) => {
     switch (b.type) {
               case "user":
           return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <AgentMessage key={b.item.id} first={b.first} text={b.item.text} prLinks={prLinks}
-                    streaming={isLast && streamingAgent} />
+                    streaming={streamingAgent && b.item === last} />
                 );
               case "thought":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>
                     {b.first ? <AgentLabel /> : null}
-                    <Thought text={b.item.text} live={isLast && streamingThought} />
+                    <Thought text={b.item.text} live={streamingThought && b.item === last} />
                   </div>
                 );
               case "tools":
@@ -519,7 +522,7 @@ function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRun
           {items.length === 0 && reviewCards.length === 0 && !replaying ? empty : null}
           {blocks.map((b, i) => (
             <Fragment key={b.type === "tools" ? `t-${b.items[0]!.id}` : `b-${b.item.id}`}>
-              {renderBlock(b, i)}
+              {renderBlock(b)}
               {cardsAfter(i)}
             </Fragment>
           ))}

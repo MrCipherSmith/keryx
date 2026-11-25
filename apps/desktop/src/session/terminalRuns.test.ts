@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 import type { PtyTab } from "../platform/panels";
 import { initialState, reducer, type Action, type Item, type TerminalRunItem } from "./reducer";
 import {
+  BUSY_RETRY_MAX_MS,
+  BUSY_RETRY_MS,
   capRunOutput,
   createTerminalRuns,
+  newRunId,
   RESULTS_PER_PROMPT,
+  RUN_COMMAND_MAX_CHARS,
+  RUN_OUTPUT_CUT,
   RUN_OUTPUT_LINES,
   RUN_OUTPUT_MAX_BYTES,
   type DeliveryOutcome,
@@ -28,6 +33,8 @@ function rig(opts: { accepts?: boolean | null } = {}) {
   const tails = new Map<number, string>();
   const tailCalls: Array<[number, number]> = [];
   const failTail = new Set<number>();
+  /** Tails held until the test releases them: events that land while a tail is read. */
+  const tailGates = new Map<number, Promise<void>>();
   const shown: number[] = [];
   const later: Array<{ fn: () => void; ms: number }> = [];
   let accepts: boolean | null = opts.accepts === undefined ? true : opts.accepts;
@@ -51,6 +58,8 @@ function rig(opts: { accepts?: boolean | null } = {}) {
     },
     tail: async (id, lines) => {
       tailCalls.push([id, lines]);
+      const gate = tailGates.get(id);
+      if (gate) await gate;
       if (failTail.has(id)) throw new Error("no such tab");
       return tails.get(id) ?? "";
     },
@@ -70,13 +79,23 @@ function rig(opts: { accepts?: boolean | null } = {}) {
   };
   /** A Run click in s1's transcript whose tab opened as `tabId`. */
   const start = (command: string, tabId: number, sid = "s1") => {
-    const runId = runs.requested(command, { sessionId: sid, source: "message" });
+    const runId = runs.requested(command, { sessionId: sid });
     runs.opened(runId, tab(tabId));
     return runId;
   };
   const settled = () => new Promise<void>((r) => setTimeout(r, 0));
+  /** Hold the next tail reads of `tabId` until the returned function is called. */
+  const holdTail = (tabId: number): (() => Promise<void>) => {
+    let release = () => {};
+    tailGates.set(tabId, new Promise<void>((r) => (release = r)));
+    return async () => {
+      tailGates.delete(tabId);
+      release();
+      await settled();
+    };
+  };
   return {
-    runs, sent, idle, tails, tailCalls, failTail, shown, later, items, card, start, settled,
+    runs, sent, idle, tails, tailCalls, failTail, shown, later, items, card, start, settled, holdTail,
     advance: (ms: number) => void (clock += ms),
     setAccepts: (v: boolean | null) => void (accepts = v),
     win: () => win,
@@ -87,7 +106,7 @@ function rig(opts: { accepts?: boolean | null } = {}) {
 describe("a Run is a tracked run of the session that showed the button", () => {
   test("the click adds a starting card; the open tab makes it running with Show tab", () => {
     const r = rig();
-    const runId = r.runs.requested("bun test", { sessionId: "s1", source: "tool" });
+    const runId = r.runs.requested("bun test", { sessionId: "s1" });
     expect(r.card(runId)).toMatchObject({ kind: "terminalRun", command: "bun test", state: "starting", tabOpen: false });
     r.runs.opened(runId, tab(5));
     expect(r.card(runId)).toMatchObject({ state: "running", tabOpen: true });
@@ -103,7 +122,8 @@ describe("a Run is a tracked run of the session that showed the button", () => {
     r.tails.set(5, lines.join("\n"));
     r.advance(1500);
     await r.runs.exited(5, 3);
-    expect(r.tailCalls).toEqual([[5, RUN_OUTPUT_LINES]]);
+    // One line more than a result keeps: a full tail shows that earlier output was cut.
+    expect(r.tailCalls).toEqual([[5, RUN_OUTPUT_LINES + 1]]);
     expect(r.sent).toHaveLength(1);
     const [prompt] = r.sent;
     expect(prompt!.sessionId).toBe("s1");
@@ -114,6 +134,8 @@ describe("a Run is a tracked run of the session that showed the button", () => {
     expect(new TextEncoder().encode(entry.output).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
     expect(entry.output.split("\n").length).toBeLessThanOrEqual(RUN_OUTPUT_LINES);
     expect(entry.output.endsWith(lines[299]!)).toBe(true);
+    // LG2-002: the cut is said, at the head of the output, inside the same 200 lines.
+    expect(entry.output.split("\n")[0]).toBe(RUN_OUTPUT_CUT);
     expect(r.card(runId)).toMatchObject({ state: "sent", exitCode: 3, durationMs: 1500, output: entry.output });
   });
 
@@ -277,7 +299,7 @@ describe("AC8: failure paths send nothing and start no turn", () => {
 
   test("a shell that cannot start: the card names the error; nothing is sent", async () => {
     const r = rig();
-    const runId = r.runs.requested("bun test", { sessionId: "s1", source: "message" });
+    const runId = r.runs.requested("bun test", { sessionId: "s1" });
     r.runs.failed(runId, "no such file: /bin/zsh");
     expect(r.card(runId)).toMatchObject({ state: "start-failed", error: "no such file: /bin/zsh", tabOpen: false });
     r.runs.opened(runId, tab(5)); // a late answer changes nothing
@@ -329,7 +351,7 @@ describe("host edges", () => {
   test("a process that ends before its tab id is known is not lost", async () => {
     const r = rig();
     await r.runs.exited(9, 2);
-    const runId = r.runs.requested("false", { sessionId: "s1", source: "message" });
+    const runId = r.runs.requested("false", { sessionId: "s1" });
     r.runs.opened(runId, tab(9));
     await r.settled();
     expect(r.sent).toHaveLength(1);
@@ -363,15 +385,390 @@ describe("host edges", () => {
   });
 });
 
+describe("HL2-002 / HL-002: once the process ended with its tab open, a running snapshot is never what goes", () => {
+  test("a snapshot waiting while the exit's tail is read is not sent: the exit's result goes, once", async () => {
+    const r = rig();
+    r.idle.delete("s1");
+    const runId = r.start("bun run build", 5);
+    r.tails.set(5, "half");
+    await r.runs.sendNow(runId);
+    expect(r.card(runId).state).toBe("waiting");
+    r.tails.set(5, "half\ndone");
+    const release = r.holdTail(5);
+    const exiting = r.runs.exited(5, 0);
+    // The turn ends while the exit's tail is still being read.
+    r.idle.add("s1");
+    r.runs.flush("s1");
+    expect(r.sent).toHaveLength(0);
+    await release();
+    await exiting;
+    expect(r.sent).toHaveLength(1);
+    expect(r.sent[0]!.results).toEqual([{ runId, command: "bun run build", state: "exited", exitCode: 0, durationMs: 0, output: "half\ndone" }]);
+  });
+
+  test("a snapshot refused as busy after the process ended is rebuilt from the exit before it is sent again", async () => {
+    const r = rig();
+    const runId = r.start("bun run dev", 5);
+    r.tails.set(5, "listening");
+    await r.runs.sendNow(runId);
+    expect(r.sent[0]!.results[0]).toMatchObject({ state: "running" });
+    r.tails.set(5, "listening\nstopped");
+    await r.runs.exited(5, 0); // while the snapshot's prompt is on its way
+    r.sent[0]!.settle({ kind: "busy" });
+    await r.settled();
+    expect(r.card(runId).state).toBe("waiting");
+    r.advance(r.later[0]!.ms);
+    r.later[0]!.fn();
+    expect(r.sent).toHaveLength(2);
+    expect(r.sent[1]!.results).toEqual([{ runId, command: "bun run dev", state: "exited", exitCode: 0, durationMs: 0, output: "listening\nstopped" }]);
+  });
+});
+
+describe("HL-001: a refused results prompt leaves no trace of a turn, and busy retries back off", () => {
+  test("the follow-up turn counted when the prompt went out is taken back when keryx did not take it", async () => {
+    const outcomes: DeliveryOutcome[] = [{ kind: "busy" }, { kind: "refused", error: "no" }, { kind: "wait" }];
+    for (const outcome of outcomes) {
+      const r = rig();
+      const before = r.win().convs.s1!.parentTurn;
+      r.start("ls", 5);
+      await r.runs.exited(5, 0);
+      expect(r.win().convs.s1!.parentTurn).toBe(before + 1);
+      r.sent[0]!.settle(outcome);
+      await r.settled();
+      expect(r.win().convs.s1!.parentTurn).toBe(before);
+    }
+  });
+
+  test("each busy refusal in a row doubles the pause, up to a cap; a prompt keryx takes resets it", async () => {
+    const r = rig();
+    const runId = r.start("ls", 5);
+    await r.runs.exited(5, 0);
+    const pauses: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      r.sent.at(-1)!.settle({ kind: "busy" });
+      await r.settled();
+      const next = r.later.at(-1)!;
+      pauses.push(next.ms);
+      r.advance(next.ms);
+      next.fn();
+    }
+    expect(pauses).toEqual([1, 2, 4, 8, 16, 32, 64].map((n) => Math.min(n * BUSY_RETRY_MS, BUSY_RETRY_MAX_MS)));
+    expect(pauses.at(-1)).toBe(BUSY_RETRY_MAX_MS);
+    expect(r.sent.at(-1)!.results.map((x) => x.runId)).toEqual([runId]);
+    r.sent.at(-1)!.settle({ kind: "done" });
+    await r.settled();
+    r.start("pwd", 6);
+    await r.runs.exited(6, 0);
+    r.sent.at(-1)!.settle({ kind: "busy" });
+    await r.settled();
+    expect(r.later.at(-1)!.ms).toBe(BUSY_RETRY_MS);
+  });
+});
+
+describe("HL2-001: a session keryx released, or a keryx shutting down: the results wait until the session is held again", () => {
+  test("a 'wait' answer puts the results back to waiting with no retry; resume sends them once", async () => {
+    const r = rig();
+    const runId = r.start("ls", 5);
+    await r.runs.exited(5, 0);
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    expect(r.card(runId).state).toBe("waiting");
+    expect(r.later).toHaveLength(0);
+    r.runs.flush("s1"); // idle, but not held again yet
+    r.runs.flush();
+    expect(r.sent).toHaveLength(1);
+    r.runs.resume("s1");
+    expect(r.sent).toHaveLength(2);
+    expect(r.sent[1]!.results.map((x) => x.runId)).toEqual([runId]);
+  });
+});
+
+describe("PF-002: a run that can no longer change is dropped from the store; its card stays", () => {
+  test("sent and closed, closed before its end and hung up, start-failed: dropped; waiting, or with its tab open: kept", async () => {
+    const r = rig();
+    const sent = r.start("ls", 5);
+    await r.runs.exited(5, 0);
+    expect(r.runs.tracked()).toBe(1); // the reply is not in yet
+    r.sent[0]!.settle({ kind: "done" });
+    await r.settled();
+    expect(r.runs.tracked()).toBe(1); // its tab is still open: Show tab works
+    r.runs.closed(5);
+    expect(r.runs.tracked()).toBe(0);
+    expect(r.card(sent)).toMatchObject({ state: "sent", tabOpen: false });
+
+    r.start("sleep 60", 6);
+    r.runs.closed(6);
+    expect(r.runs.tracked()).toBe(1); // the hang-up has not arrived
+    await r.runs.exited(6, 1);
+    expect(r.runs.tracked()).toBe(0);
+
+    const failed = r.runs.requested("bun test", { sessionId: "s1" });
+    r.runs.failed(failed, "no shell");
+    expect(r.runs.tracked()).toBe(0);
+
+    r.idle.delete("s1");
+    const waits = r.start("make", 7);
+    await r.runs.exited(7, 0);
+    r.runs.closed(7);
+    expect(r.runs.tracked()).toBe(1);
+    r.idle.add("s1");
+    r.runs.flush("s1");
+    r.sent.at(-1)!.settle({ kind: "done" });
+    await r.settled();
+    expect(r.runs.tracked()).toBe(0);
+    expect(r.card(waits).state).toBe("sent");
+
+    const dev = r.start("bun run dev", 8);
+    await r.runs.sendNow(dev);
+    r.sent.at(-1)!.settle({ kind: "done" });
+    await r.settled();
+    await r.runs.exited(8, 0);
+    expect(r.runs.tracked()).toBe(1);
+    r.runs.closed(8);
+    expect(r.runs.tracked()).toBe(0);
+  });
+});
+
+describe("FE-W1-001: a reload of the session keeps the cards of the runs the window still tracks", () => {
+  test("a running run's card survives loadStart/loadDone with its actions, and its exit updates that one card", async () => {
+    const r = rig();
+    const runId = r.start("bun run dev", 5);
+    r.dispatch({ t: "loadStart", sessionId: "s1" });
+    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    expect(r.card(runId)).toMatchObject({ state: "running", tabOpen: true });
+    expect(r.card(runId).replayed).toBeUndefined();
+    await r.runs.exited(5, 0);
+    expect(r.items().filter((i) => i.kind === "terminalRun")).toHaveLength(1);
+    expect(r.card(runId).state).toBe("sent");
+  });
+
+  test("a replayed note of a run still live shows the live card in the note's place; a delivered card keryx no longer replays is gone", async () => {
+    const r = rig();
+    const dev = r.start("bun run dev", 5);
+    await r.runs.sendNow(dev);
+    r.sent[0]!.settle({ kind: "done" });
+    const done = r.start("ls", 6);
+    await r.runs.exited(6, 0);
+    r.sent[1]!.settle({ kind: "done" });
+    await r.settled();
+    r.runs.closed(6);
+    r.dispatch({ t: "loadStart", sessionId: "s1" });
+    r.dispatch({ t: "updates", updates: [{ sessionId: "s1", at: 1, update: {
+      sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
+      _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "running", durationMs: 0, output: "" } } },
+    } }] });
+    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    const runCards = r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun");
+    expect(runCards.map((c) => c.runId)).toEqual([dev]);
+    expect(runCards[0]).toMatchObject({ state: "sent-while-running", tabOpen: true });
+    expect(runCards[0]!.replayed).toBeUndefined();
+    expect(done).not.toBe(dev);
+  });
+});
+
+describe("TP-004: branches no other test reaches", () => {
+  test("a result that waited through a reconnect to a keryx without terminalResults is not sent", async () => {
+    const r = rig({ accepts: null });
+    const runId = r.start("ls", 5);
+    await r.runs.exited(5, 0);
+    expect(r.card(runId).state).toBe("waiting");
+    r.setAccepts(false);
+    r.runs.flush();
+    expect(r.sent).toHaveLength(0);
+    expect(r.card(runId)).toMatchObject({ state: "not-sent", error: "this keryx does not take run results" });
+  });
+
+  test("a waiting snapshot whose tab was closed before the process ended goes as it was: the hang-up is not read", async () => {
+    const r = rig();
+    r.idle.delete("s1");
+    const runId = r.start("bun run dev", 5);
+    r.tails.set(5, "ready");
+    await r.runs.sendNow(runId);
+    r.runs.closed(5);
+    await r.runs.exited(5, 1);
+    expect(r.tailCalls).toHaveLength(1);
+    r.idle.add("s1");
+    r.runs.flush("s1");
+    expect(r.sent[0]!.results).toEqual([{ runId, command: "bun run dev", state: "running", durationMs: 0, output: "ready" }]);
+  });
+
+  test("a close while the exit's tail is read: the exit happened with the tab open, so its result is sent", async () => {
+    const r = rig();
+    const runId = r.start("ls", 5);
+    r.tails.set(5, "a");
+    const release = r.holdTail(5);
+    const exiting = r.runs.exited(5, 0);
+    r.runs.closed(5);
+    await release();
+    await exiting;
+    expect(r.sent[0]!.results).toEqual([{ runId, command: "ls", state: "exited", exitCode: 0, durationMs: 0, output: "a" }]);
+    expect(r.card(runId)).toMatchObject({ state: "sent", tabOpen: false });
+  });
+
+  test("Send output now, then the exit during its tail read: one result, the exit's", async () => {
+    const r = rig();
+    const runId = r.start("make", 5);
+    r.tails.set(5, "built");
+    const release = r.holdTail(5);
+    const snapshot = r.runs.sendNow(runId);
+    const exiting = r.runs.exited(5, 2);
+    await release();
+    await snapshot;
+    await exiting;
+    expect(r.sent).toHaveLength(1);
+    expect(r.sent[0]!.results).toEqual([{ runId, command: "make", state: "exited", exitCode: 2, durationMs: 0, output: "built" }]);
+  });
+
+  test("a second Send output now during the first one's read does nothing", async () => {
+    const r = rig();
+    const runId = r.start("bun run dev", 5);
+    const release = r.holdTail(5);
+    const first = r.runs.sendNow(runId);
+    const second = r.runs.sendNow(runId);
+    await release();
+    await first;
+    await second;
+    expect(r.tailCalls).toHaveLength(1);
+    expect(r.sent).toHaveLength(1);
+  });
+
+  test("a close during Send output now's read: nothing is sent and the card says closed", async () => {
+    const r = rig();
+    const runId = r.start("bun run dev", 5);
+    const release = r.holdTail(5);
+    const snapshot = r.runs.sendNow(runId);
+    r.runs.closed(5);
+    await release();
+    await snapshot;
+    expect(r.sent).toHaveLength(0);
+    expect(r.card(runId).state).toBe("closed");
+  });
+
+  test("a command of exactly 4096 characters is sent; one more is not", async () => {
+    const r = rig();
+    const longest = "a".repeat(RUN_COMMAND_MAX_CHARS);
+    const ok = r.start(longest, 5);
+    await r.runs.exited(5, 0);
+    expect(r.card(ok).state).toBe("sent");
+    r.sent[0]!.settle({ kind: "done" });
+    await r.settled();
+    const over = r.start(`${longest}b`, 6);
+    await r.runs.exited(6, 0);
+    expect(r.card(over).state).toBe("not-sent");
+    expect(r.sent).toHaveLength(1);
+  });
+
+  test("a waiting snapshot replaced by its exit keeps its place in the delivery order", async () => {
+    const r = rig();
+    r.idle.delete("s1");
+    const a = r.start("make a", 5);
+    await r.runs.sendNow(a);
+    const b = r.start("make b", 6);
+    await r.runs.exited(6, 0);
+    await r.runs.exited(5, 1);
+    r.idle.add("s1");
+    r.runs.flush("s1");
+    expect(r.sent[0]!.results.map((x) => [x.runId, x.state])).toEqual([[a, "exited"], [b, "exited"]]);
+  });
+
+  test("exits of unknown tabs are kept for the 32 newest only", async () => {
+    const r = rig();
+    for (let id = 1000; id <= 1032; id++) await r.runs.exited(id, 0);
+    const evicted = r.runs.requested("first", { sessionId: "s1" });
+    r.runs.opened(evicted, tab(1000));
+    await r.settled();
+    expect(r.card(evicted).state).toBe("running");
+    const kept = r.runs.requested("last", { sessionId: "s1" });
+    r.runs.opened(kept, tab(1032));
+    await r.settled();
+    expect(r.card(kept).state).toBe("sent");
+  });
+
+  test("a failure reported after the tab opened changes nothing", () => {
+    const r = rig();
+    const runId = r.start("ls", 5);
+    r.runs.failed(runId, "late");
+    expect(r.card(runId)).toMatchObject({ state: "running", tabOpen: true });
+    expect(r.card(runId).error).toBeUndefined();
+  });
+});
+
+/** The slice of keryx's own contract module (`src/acp/terminal-result.ts`) these tests hold the desktop to. */
+interface KeryxTerminalResultContract {
+  TERMINAL_RESULTS_MAX: number;
+  TERMINAL_COMMAND_MAX_CHARS: number;
+  TERMINAL_RESULT_MAX_BYTES: number;
+  parseTerminalResults(raw: unknown): { ok: true; results: readonly unknown[] } | { ok: false; reason: string };
+}
+
+// Loaded by URL when the test runs: the web view never imports keryx's module (its redaction reads
+// node:fs), and this tsconfig does not type keryx's node-side code.
+const keryxContract = (): Promise<KeryxTerminalResultContract> => import(new URL("../../../../src/acp/terminal-result.ts", import.meta.url).href);
+
+describe("AR-001: the desktop's copies of keryx's terminal-results contract are keryx's", () => {
+  test("the limits match keryx's own constants", async () => {
+    const keryx = await keryxContract();
+    expect(RESULTS_PER_PROMPT).toBe(keryx.TERMINAL_RESULTS_MAX);
+    expect(RUN_COMMAND_MAX_CHARS).toBe(keryx.TERMINAL_COMMAND_MAX_CHARS);
+    expect(RUN_OUTPUT_MAX_BYTES).toBe(keryx.TERMINAL_RESULT_MAX_BYTES);
+  });
+
+  test("a full batch the store builds passes keryx's own validator", async () => {
+    const keryx = await keryxContract();
+    const sent: TerminalResultEntry[][] = [];
+    let busy = true;
+    let clock = 1000;
+    const runs = createTerminalRuns({
+      acceptsResults: () => true,
+      send: (_sid, results) => {
+        if (busy) return null;
+        sent.push([...results]);
+        return new Promise<DeliveryOutcome>(() => {});
+      },
+      tail: async (id) => (id === 1 ? Array.from({ length: 400 }, (_, i) => `line ${i} ${"€".repeat(40)}`).join("\n") : `out ${id}`),
+      showTab: () => {},
+      dispatch: () => {},
+      now: () => clock,
+      newRunId,
+      later: () => {},
+    });
+    for (let i = 1; i <= RESULTS_PER_PROMPT; i++) {
+      clock += 7;
+      const runId = runs.requested(i === 2 ? "x".repeat(RUN_COMMAND_MAX_CHARS) : `cmd ${i}`, { sessionId: "s1" });
+      runs.opened(runId, tab(i));
+      clock += 13;
+      if (i === 3) await runs.sendNow(runId);
+      else await runs.exited(i, i === 4 ? null : i);
+    }
+    busy = false;
+    runs.flush("s1");
+    expect(sent).toHaveLength(1);
+    const batch = sent[0]!;
+    expect(batch).toHaveLength(RESULTS_PER_PROMPT);
+    expect(batch.map((x) => x.state).filter((s) => s === "running")).toHaveLength(1);
+    expect(keryx.parseTerminalResults(batch)).toEqual({ ok: true, results: batch });
+  });
+});
+
 describe("capRunOutput", () => {
-  test("keeps the last 200 lines, then the last 16 KiB of UTF-8, never splitting a character", () => {
+  test("keeps the last lines and the last 16 KiB of UTF-8, never splitting a character, and says when it cut", () => {
     expect(capRunOutput("a\nb\n")).toBe("a\nb");
-    const many = Array.from({ length: 250 }, (_, i) => String(i)).join("\n");
-    expect(capRunOutput(many).split("\n")).toEqual(Array.from({ length: 200 }, (_, i) => String(i + 50)));
+    const lines = (n: number) => Array.from({ length: n }, (_, i) => String(i)).join("\n");
+    // Up to 200 lines nothing is cut, and nothing is said.
+    expect(capRunOutput(lines(RUN_OUTPUT_LINES))).toBe(lines(RUN_OUTPUT_LINES));
+    // More (the host is asked for one line more than a result keeps): the first line says earlier output was cut.
+    const many = capRunOutput(lines(250)).split("\n");
+    expect(many).toHaveLength(RUN_OUTPUT_LINES);
+    expect(many[0]).toBe(RUN_OUTPUT_CUT);
+    expect(many.slice(1)).toEqual(Array.from({ length: RUN_OUTPUT_LINES - 1 }, (_, i) => String(i + 51)));
     const wide = "ж".repeat(RUN_OUTPUT_MAX_BYTES); // 2 bytes each
     const cut = capRunOutput(`x${wide}`);
     expect(new TextEncoder().encode(cut).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
-    expect(cut).toBe("ж".repeat(RUN_OUTPUT_MAX_BYTES / 2));
-    expect(capRunOutput("€".repeat(6000)).includes("�")).toBe(false);
+    expect(cut.startsWith(`${RUN_OUTPUT_CUT}\n`)).toBe(true);
+    expect(cut.slice(RUN_OUTPUT_CUT.length + 1)).toMatch(/^ж+$/);
+    const euros = capRunOutput("€".repeat(6000));
+    expect(euros.includes("�")).toBe(false);
+    expect(new TextEncoder().encode(euros).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
+    expect(euros.split("\n")[0]).toBe(RUN_OUTPUT_CUT);
   });
 });

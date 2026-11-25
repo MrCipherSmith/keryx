@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
-import type { Item, TerminalRunItem } from "./reducer";
+import type { SessionUpdate } from "../acp/types";
+import type { Action, Item, TerminalRunItem } from "./reducer";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let root: Root;
@@ -159,21 +160,117 @@ test("AC7: replayed terminalResult chunks draw run cards in a sent state with no
   expect(Array.from(host.querySelectorAll(".turn-agent.turn-start > .md")).map((m) => m.textContent?.trim())).toEqual(["Run this:", "Two tests fail."]);
 });
 
-test("a live delivery draws no user bubble: the card shows sent and the agent's reply streams after it as its own message", async () => {
+/** A window with s1 shown, and helpers that play keryx's stream into it. */
+function liveSession() {
   const { initialState, reducer } = reducerMod;
   let win = reducer({ ...initialState, phase: "ready" }, { t: "created", sessionId: "s1", show: true });
-  win = reducer(win, { t: "updates", updates: [{ sessionId: "s1", at: 1, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Run `ls`." } } }] });
-  win = reducer(win, { t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "ls", state: "running", tabOpen: true } });
-  win = reducer(win, { t: "updates", updates: [{ sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: " More text." } } }] });
-  win = reducer(win, { t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "ls", state: "sent", exitCode: 0, durationMs: 40, output: "a", tabOpen: true } });
-  win = reducer(win, { t: "terminalSent", sessionId: "s1", runIds: ["run-1"] });
-  win = reducer(win, { t: "updates", updates: [{ sessionId: "s1", at: 3, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Found a." } } }] });
-  const items = win.convs.s1!.items;
-  expect(items.map((i) => i.kind)).toEqual(["agent", "agent", "terminalRun", "agent"]);
+  let at = 0;
+  const update = (u: SessionUpdate) => {
+    win = reducer(win, { t: "updates", updates: [{ sessionId: "s1", at: ++at, update: u }] });
+  };
+  return {
+    act: (a: Action) => void (win = reducer(win, a)),
+    agent: (text: string) => update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } }),
+    tool: (toolCallId: string) => update({ sessionUpdate: "tool_call", toolCallId, title: "read", kind: "read", status: "completed" }),
+    items: () => win.convs.s1!.items,
+  };
+}
+
+test("a live delivery draws no user bubble: the card shows sent and the agent's reply streams after it as its own message", async () => {
+  const s = liveSession();
+  s.act({ t: "busy", sessionId: "s1", busy: true });
+  s.agent("Run `ls`.");
+  s.act({ t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "ls", state: "running", tabOpen: true } });
+  s.agent(" More text.");
+  s.act({ t: "busy", sessionId: "s1", busy: false });
+  s.act({ t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "ls", state: "sent", exitCode: 0, durationMs: 40, output: "a", tabOpen: true } });
+  s.act({ t: "terminalSent", sessionId: "s1", runIds: ["run-1"] });
+  s.act({ t: "busy", sessionId: "s1", busy: true });
+  s.agent("Found a.");
+  const items = s.items();
+  // DEG2-2: the reply the card was clicked in stays one message.
+  expect(items.map((i) => i.kind)).toEqual(["agent", "terminalRun", "agent"]);
+  expect(items[0]).toMatchObject({ kind: "agent", text: "Run `ls`. More text." });
   await render(items);
   expect(host.querySelector(".turn-user")).toBeNull();
   expect(status()).toBe("sent to the agent");
   expect(host.querySelector(".run-card + .turn-agent.turn-start, [data-run] + .turn-agent.turn-start")).not.toBeNull();
+});
+
+test("DEG-1: a Run clicked while the turn streams does not cut the reply: one message, one label, the card after the turn's stream", async () => {
+  const s = liveSession();
+  s.act({ t: "busy", sessionId: "s1", busy: true });
+  s.agent("Run this:\n\n```bash\nbun test");
+  s.act({ t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "bun test", state: "starting", tabOpen: false } });
+  s.agent(" src\n```\n\nThen look at the output.");
+  s.tool("call-1");
+  s.agent("Done reading.");
+  const items = s.items();
+  expect(items.map((i) => i.kind)).toEqual(["agent", "tool", "agent", "terminalRun"]);
+  expect(items[0]).toMatchObject({ text: "Run this:\n\n```bash\nbun test src\n```\n\nThen look at the output." });
+  // A fresh mount: a message the previous render showed would stream its new text in on a frame.
+  await act(() => root.render(null));
+  await act(() => root.render(createElement(Transcript, { items, busy: true, replaying: false, empty: null, sessionId: "s1" })));
+  // One agent turn: one label, the whole fence in one code block, the live message still streaming.
+  expect(host.querySelectorAll(".agent-label")).toHaveLength(1);
+  expect(host.querySelectorAll(".code-block")).toHaveLength(1);
+  expect(host.querySelector(".code-block code")!.textContent).toContain("bun test src");
+  expect(host.querySelectorAll(".md.is-streaming")).toHaveLength(1);
+  expect(host.querySelector(".md.is-streaming")!.textContent).toContain("Done reading.");
+  expect(host.querySelector(".working")).toBeNull();
+  const order = Array.from(host.querySelectorAll(".transcript-inner > *")).map((el) => (el.matches("[data-run]") ? "card" : el.className));
+  expect(order.at(-1)).toBe("card");
+});
+
+test("FE-W1-002: a card not delivered yet opens no new agent turn; a delivered one does", async () => {
+  const s = liveSession();
+  s.agent("First.");
+  s.act({ t: "terminalRun", sessionId: "s1", run: { runId: "run-1", command: "ls", state: "closed", tabOpen: false } });
+  s.agent(" Second.");
+  await render(s.items());
+  expect(host.querySelectorAll(".agent-label")).toHaveLength(1);
+  s.act({ t: "terminalRun", sessionId: "s1", run: { runId: "run-2", command: "pwd", state: "sent", exitCode: 0, tabOpen: false } });
+  s.agent("Reply to the result.");
+  await render(s.items());
+  expect(host.querySelectorAll(".agent-label")).toHaveLength(2);
+});
+
+test("UX-001: a live card's status is announced (an alert when the result will not reach the agent); a replayed one is not", async () => {
+  await render([run()]);
+  expect(q("[data-run-status]")!.getAttribute("role")).toBe("status");
+  for (const state of ["not-sent", "closed", "start-failed"] as const) {
+    await render([run({ state, tabOpen: false, error: "x" })]);
+    expect(q("[data-run-status]")!.getAttribute("role")).toBe("alert");
+  }
+  await render([run({ state: "sent", exitCode: 0, tabOpen: false, replayed: true })]);
+  expect(q("[data-run-status]")!.hasAttribute("role")).toBe(false);
+});
+
+test("UX-002: Send output now keeps the keyboard focus in the card when its button goes away, also after the card moves", async () => {
+  bus.setTerminalRunApi({ showTab: () => true, sendNow: () => {} });
+  const other: Item = { kind: "notice", id: 2, level: "info", text: "later line" };
+  await render([run(), other]);
+  const button = q<HTMLButtonElement>("[data-run-send-now]")!;
+  button.focus();
+  await click(button);
+  await render([run({ state: "sent-while-running" }), other]);
+  expect(q("[data-run-send-now]")).toBeNull();
+  expect(document.activeElement).toBe(q("[data-run-status]"));
+  // terminalSent moves the card to the end: the focus stays on it.
+  await render([other, run({ state: "sent-while-running" })]);
+  expect(document.activeElement).toBe(q("[data-run-status]"));
+});
+
+test("UX-002: a card does not take the focus the user moved elsewhere", async () => {
+  bus.setTerminalRunApi({ showTab: () => true, sendNow: () => {} });
+  const elsewhere = document.createElement("button");
+  document.body.append(elsewhere);
+  await render([run()]);
+  await click(q<HTMLButtonElement>("[data-run-send-now]")!);
+  elsewhere.focus();
+  await render([run({ state: "sent-while-running" })]);
+  expect(document.activeElement).toBe(elsewhere);
+  elsewhere.remove();
 });
 
 test("the card's styles use the theme tokens", async () => {
@@ -181,4 +278,6 @@ test("the card's styles use the theme tokens", async () => {
   expect(css).toContain(".run-card {");
   expect(css).toMatch(/\.run-card \{[^}]*var\(--border\)/);
   expect(css).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  // UX-005: the duration is small text, so it takes the muted foreground (4.5:1 on the surface), not the subtle one.
+  expect(css).toMatch(/\.run-card-dur \{[^}]*color: var\(--fg-muted\)/);
 });

@@ -8,7 +8,7 @@ import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
 import { highlightToHtml } from "./highlight";
 import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
-import { isShellLang, runInTerminal, runnableCommand } from "../panels/panelBus";
+import { isShellLang, runButtonTitle, runInTerminal, runnableCommand } from "../panels/panelBus";
 import { localImage } from "../platform/commands";
 import { clickedImageLink, decorateImageLinks, loadCached, openImagePreview } from "./imagePreview";
 
@@ -106,7 +106,7 @@ function onClick(e: React.MouseEvent<HTMLDivElement>, runSession: string | null)
   if (run) {
     const block = run.closest<HTMLElement>(".code-block");
     const command = runnableCommand(codeBlockCopyText(block ?? null, block?.querySelector("code") ?? null));
-    if (command) runInTerminal(command, runSession === null ? undefined : { sessionId: runSession, source: "message" });
+    if (command) runInTerminal(command, runSession === null ? undefined : { sessionId: runSession });
     return;
   }
   const copy = target.closest<HTMLButtonElement>("button.code-copy");
@@ -125,8 +125,11 @@ function onClick(e: React.MouseEvent<HTMLDivElement>, runSession: string | null)
   }
 }
 
-/** Wrap every fenced block with a header carrying its language and a copy button. */
-function decorateCodeBlocks(html: string): string {
+/**
+ * Wrap every fenced block with a header carrying its language and a copy button. `tracked`: the message is
+ * in a session's transcript, where a Run's result goes back to the agent (the Run button says so).
+ */
+function decorateCodeBlocks(html: string, tracked: boolean): string {
   if (!html.includes("<pre>")) return html;
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   const root = doc.body.firstElementChild;
@@ -190,7 +193,7 @@ function decorateCodeBlocks(html: string): string {
       const runBtn = doc.createElement("button");
       runBtn.className = "code-run";
       runBtn.type = "button";
-      runBtn.title = "Run in the terminal panel";
+      runBtn.title = runButtonTitle(tracked);
       runBtn.textContent = "Run";
       head.append(runBtn);
     }
@@ -202,8 +205,8 @@ function decorateCodeBlocks(html: string): string {
 }
 
 /** The final rendering: what every finished message shows. */
-function renderFinal(src: string, repository?: string): string {
-  return decorateCodeBlocks(decoratePrReferences(renderMarkdown(src), repository));
+function renderFinal(src: string, tracked: boolean, repository?: string): string {
+  return decorateCodeBlocks(decoratePrReferences(renderMarkdown(src), repository), tracked);
 }
 
 /** What the message element currently shows. */
@@ -283,11 +286,13 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
     if (menuRef.current && !ref.current?.contains(menuRef.current.anchor)) closePrMenu();
   }, [closePrMenu]);
   const repository = prLinks?.repository;
+  const tracked = runSession !== null;
   const renderTokens = useMemo<RenderTokens>(() => (tokens) =>
-    decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository)), [repository]);
+    decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository), tracked), [repository, tracked]);
   const r = useRef({
     renderedText: null as string | null,
     repository,
+    tracked,
     latest: text,
     // Kept across a settle: the text usually keeps growing from where it was.
     cache: emptyCache(),
@@ -303,15 +308,16 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
     const el = ref.current;
     if (!el) return;
     st.latest = text;
-    if (st.renderedText === null || st.repository !== repository) {
+    if (st.renderedText === null || st.repository !== repository || st.tracked !== tracked) {
       if (st.raf) cancelAnimationFrame(st.raf);
       window.clearTimeout(st.settle);
       st.raf = 0;
       st.settle = 0;
       st.repository = repository;
+      st.tracked = tracked;
       st.cache = emptyCache();
       st.renderedText = text;
-      showFinal(el, st.view, renderFinal(text, repository));
+      showFinal(el, st.view, renderFinal(text, tracked, repository));
       closeDetachedMenu();
       return;
     }
@@ -333,7 +339,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       if (st.raf) cancelAnimationFrame(st.raf);
       st.raf = 0;
       st.renderedText = st.latest;
-      const final = renderFinal(st.latest, repository);
+      const final = renderFinal(st.latest, tracked, repository);
       // When the streamed view already reads exactly like the one-shot rendering, keep its nodes: a
       // pause must not replace the message under the user's selection.
       const frame = renderStreaming(st.latest, st.cache, renderTokens);
@@ -341,7 +347,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       else showFinal(el, st.view, final);
       closeDetachedMenu();
     }, SETTLE_MS);
-  }, [text, repository, renderTokens, closeDetachedMenu]);
+  }, [text, repository, tracked, renderTokens, closeDetachedMenu]);
 
   // Local-image links get thumbnails, also as the message streams in (throttled to a frame).
   useEffect(() => {

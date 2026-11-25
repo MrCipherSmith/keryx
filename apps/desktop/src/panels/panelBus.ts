@@ -6,7 +6,11 @@ import { ptyClose, type PtyTab } from "../platform/panels";
 /** Where a Run click came from (flow 523): the session whose transcript showed the button. */
 export interface RunOrigin {
   sessionId: string;
-  source: "message" | "tool";
+}
+
+/** What a Run button says it does; in a session's transcript its result also goes back to the agent (flow 523). */
+export function runButtonTitle(tracked: boolean): string {
+  return tracked ? "Run in a new terminal tab; the result goes back to the agent" : "Run in a new terminal tab";
 }
 
 /** A Run for the terminal panel: a tab of its own running `command`; `runId` when the run is tracked. */
@@ -72,10 +76,14 @@ export function runFailed(request: RunRequest, error: string): void {
 
 const TITLE_MAX = 32;
 
-/** A run tab's title: the command on one line, shortened. */
+/**
+ * A run tab's title: the command on one line, shortened to `TITLE_MAX` characters. It is cut between code
+ * points, never inside a surrogate pair: the title goes to the host, whose JSON parse refuses a lone one.
+ */
 export function runTabTitle(command: string): string {
   const line = command.replace(/\\\r?\n/g, " ").replace(/\s+/g, " ").trim();
-  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line;
+  const chars = Array.from(line);
+  return chars.length > TITLE_MAX ? `${chars.slice(0, TITLE_MAX - 1).join("")}…` : line;
 }
 
 type TabListener = (tab: PtyTab) => void;

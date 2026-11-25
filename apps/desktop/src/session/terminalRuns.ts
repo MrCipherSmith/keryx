@@ -9,6 +9,11 @@ import type { PtyTab } from "../platform/panels";
 import type { RunOrigin } from "../panels/panelBus";
 import type { Action, TerminalRunState, TerminalRunView } from "./reducer";
 
+// The wire limits below are copies of keryx's own (`src/acp/terminal-result.ts`: TERMINAL_RESULTS_MAX,
+// TERMINAL_COMMAND_MAX_CHARS, TERMINAL_RESULT_MAX_BYTES, its runId pattern and TerminalResult). The web
+// view cannot import that module, which reads node:fs through its redaction; terminalRuns.test.ts loads it
+// and fails when a copy differs, or when a batch built here does not pass keryx's validator.
+
 /** The most results one prompt carries (keryx refuses more); the rest go after that turn ends. */
 export const RESULTS_PER_PROMPT = 8;
 /** The output tail a result carries: at most this many lines… */
@@ -17,11 +22,19 @@ export const RUN_OUTPUT_LINES = 200;
 export const RUN_OUTPUT_MAX_BYTES = 16 * 1024;
 /** The longest command keryx takes in a result, in characters. */
 export const RUN_COMMAND_MAX_CHARS = 4096;
-/** After a busy refusal the session is asked again no sooner than this. */
+/** After a busy refusal the session is asked again no sooner than this; each refusal in a row doubles it… */
 export const BUSY_RETRY_MS = 1000;
+/** …up to this. */
+export const BUSY_RETRY_MAX_MS = 30_000;
+
+/** The first line of an output that lost its beginning to the line or byte cap: the agent is told it is a tail. */
+export const RUN_OUTPUT_CUT = "[… earlier output was cut; the end of the output follows]";
 
 /** What the card says when keryx's `initialize` did not offer `_meta.keryx.terminalResults`. */
 export const RESULTS_UNSUPPORTED = "this keryx does not take run results";
+
+/** A fresh run id, matching keryx's `^[A-Za-z0-9_-]{1,64}$`. */
+export const newRunId = (): string => `run-${crypto.randomUUID()}`;
 
 /** One entry of `_meta.keryx.terminalResults`: exactly these fields, which keryx validates strictly. */
 export type TerminalResultEntry =
@@ -32,17 +45,22 @@ export type TerminalResultEntry =
 export type DeliveryOutcome =
   /** It took the results (the follow-up turn ran, or failed after they were stored). */
   | { kind: "done" }
-  /** A turn was already running: nothing was stored. */
+  /** A turn was already running: nothing was stored. Asked again after a pause. */
   | { kind: "busy" }
-  /** It refused the prompt before storing anything (invalid params, unknown session). */
-  | { kind: "refused"; error: string };
+  /** It refused the prompt before storing anything (invalid params, unknown session): final. */
+  | { kind: "refused"; error: string }
+  /**
+   * It could not take it now and will once the window holds the session again (keryx released it, or is
+   * shutting down): nothing was stored; the results wait for `resume`.
+   */
+  | { kind: "wait" };
 
 export interface TerminalRunDeps {
   /** keryx's `initialize._meta.keryx.terminalResults`; null while no `initialize` was answered on this connection. */
   acceptsResults(): boolean | null;
   /**
    * Send one `session/prompt` carrying `results` to `sessionId`, or null when that session cannot take a
-   * prompt now (not held, not initialized, a turn running). The promise settles when keryx answers.
+   * prompt now (not held, not initialized, a turn or a command running). The promise settles when keryx answers.
    */
   send(sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null;
   /** The last `lines` lines of a tab's output as plain text. */
@@ -51,7 +69,7 @@ export interface TerminalRunDeps {
   showTab(tab: PtyTab): void;
   dispatch(a: Action): void;
   now(): number;
-  /** A fresh id matching keryx's `^[A-Za-z0-9_-]{1,64}$`. */
+  /** A fresh id matching keryx's `^[A-Za-z0-9_-]{1,64}$` (`newRunId`). */
   newRunId(): string;
   /** Run `fn` once, `ms` from now. */
   later(fn: () => void, ms: number): void;
@@ -72,8 +90,15 @@ export interface TerminalRuns {
   sendNow(runId: string): Promise<void>;
   /** "Show tab"; false when the run is unknown or its tab is closed. */
   showTab(runId: string): boolean;
-  /** Deliver what waits for `sessionId` (every session when omitted) if it can take a prompt now. */
-  flush(sessionId?: string): void;
+  /**
+   * Deliver what waits for `sessionId` (every session when omitted) if it can take a prompt now. Returns
+   * the sessions a results prompt went to: their turn slot is taken.
+   */
+  flush(sessionId?: string): ReadonlySet<string>;
+  /** The window holds `sessionId` again (its load finished): results that answered "wait" are delivered. */
+  resume(sessionId: string): void;
+  /** How many runs the store still holds; one that can no longer change is dropped (its card stays). */
+  tracked(): number;
 }
 
 interface Run {
@@ -84,26 +109,37 @@ interface Run {
   tab: PtyTab | null;
   tabOpen: boolean;
   startedAt: number;
-  exit: { code: number | null; durationMs: number } | null;
+  /** The process's end; `tabOpen` says whether its tab was still open then (a real end, not the hang-up of a close). */
+  exit: { code: number | null; durationMs: number; tabOpen: boolean } | null;
   result: TerminalResultEntry | null;
   /** Its place in the delivery order, from the first time its result was ready. */
   seq: number;
   error?: string;
-  /** A "Send output now" read of the tail is in flight. */
-  reading: boolean;
+  /** Reads of the tab's tail in flight ("Send output now", the exit's result). */
+  reads: number;
+  /** A results prompt carrying this run is on its way and keryx has not answered. */
+  sending: boolean;
 }
 
-/** The last `RUN_OUTPUT_LINES` lines of `text`, then its last `RUN_OUTPUT_MAX_BYTES` bytes, cut at a character. */
+/**
+ * The last `RUN_OUTPUT_LINES` lines of `text`, then its last `RUN_OUTPUT_MAX_BYTES` bytes, cut at a
+ * character. A text that lost its beginning (more lines than that: the host is asked for one more than is
+ * kept, so a full tail shows it) starts with `RUN_OUTPUT_CUT`, within the same caps.
+ */
 export function capRunOutput(text: string): string {
   const body = text.endsWith("\n") ? text.slice(0, -1) : text;
   const lines = body.split("\n");
-  const kept = lines.length > RUN_OUTPUT_LINES ? lines.slice(-RUN_OUTPUT_LINES).join("\n") : body;
-  const bytes = new TextEncoder().encode(kept);
-  if (bytes.length <= RUN_OUTPUT_MAX_BYTES) return kept;
-  let start = bytes.length - RUN_OUTPUT_MAX_BYTES;
+  const linesCut = lines.length > RUN_OUTPUT_LINES;
+  const kept = linesCut ? lines.slice(-(RUN_OUTPUT_LINES - 1)).join("\n") : body;
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(kept);
+  const room = RUN_OUTPUT_MAX_BYTES - encoder.encode(`${RUN_OUTPUT_CUT}\n`).length;
+  if (!linesCut && bytes.length <= RUN_OUTPUT_MAX_BYTES) return kept;
+  if (bytes.length <= room) return `${RUN_OUTPUT_CUT}\n${kept}`;
+  let start = bytes.length - room;
   // UTF-8 continuation bytes are 10xxxxxx: start at the next character's first byte.
   while (start < bytes.length && ((bytes[start] ?? 0) & 0xc0) === 0x80) start += 1;
-  return new TextDecoder().decode(bytes.subarray(start));
+  return `${RUN_OUTPUT_CUT}\n${new TextDecoder().decode(bytes.subarray(start))}`;
 }
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -111,8 +147,18 @@ const errText = (e: unknown): string => (e instanceof Error ? e.message : String
 /** Exits of tabs not (yet) known as runs, kept for a run whose tab id arrives after its exit. */
 const EARLY_EXITS_KEPT = 32;
 
-/** A result waits for delivery only in this state; a waiting snapshot is replaced by the exit's result. */
-const deliverable = (run: Run): run is Run & { result: TerminalResultEntry } => run.state === "waiting" && run.result !== null;
+/** States a run leaves only through its tab or its process: with both done, nothing changes it again. */
+const FINAL: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["sent", "sent-while-running", "closed", "start-failed", "not-sent"]);
+
+/**
+ * A waiting "Send output now" snapshot of a run whose process has ended with its tab open: the exit's
+ * result replaces it (a snapshot whose tab was closed first goes as it is).
+ */
+const superseded = (run: Run): boolean => run.exit !== null && run.exit.tabOpen && run.result?.state === "running";
+
+/** A result waits for delivery only in this state, and never as a snapshot its exit replaces. */
+const deliverable = (run: Run): run is Run & { result: TerminalResultEntry } =>
+  run.state === "waiting" && run.result !== null && !superseded(run);
 
 export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
   const runs = new Map<string, Run>();
@@ -120,6 +166,10 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
   const early = new Map<number, number | null>();
   /** Sessions that refused as busy: not asked again before this time. */
   const pausedUntil = new Map<string, number>();
+  /** Busy refusals in a row per session, for the next pause. */
+  const busyStreak = new Map<string, number>();
+  /** Sessions that answered "wait": asked again only on `resume`. */
+  const parked = new Set<string>();
   let seq = 0;
 
   const view = (run: Run): TerminalRunView => ({
@@ -131,7 +181,20 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
     ...(run.result ? { output: run.result.output } : {}),
     ...(run.error !== undefined ? { error: run.error } : {}),
   });
-  const show = (run: Run): void => deps.dispatch({ t: "terminalRun", sessionId: run.sessionId, run: view(run) });
+  /** Nothing can change the run any more: it leaves the store, its card keeps what it shows. */
+  const forget = (run: Run): void => {
+    runs.delete(run.runId);
+    if (run.tab) byTab.delete(run.tab.id);
+  };
+  /** Its state is final, its tab closed, its process's end (if it had a tab) seen, nothing read or sent for it in flight. */
+  const forgetIfDone = (run: Run): void => {
+    const done = FINAL.has(run.state) && !run.tabOpen && (run.tab === null || run.exit !== null) && run.reads === 0 && !run.sending;
+    if (done) forget(run);
+  };
+  const show = (run: Run): void => {
+    deps.dispatch({ t: "terminalRun", sessionId: run.sessionId, run: view(run) });
+    forgetIfDone(run);
+  };
   const runOfTab = (tabId: number): Run | undefined => {
     const id = byTab.get(tabId);
     return id === undefined ? undefined : runs.get(id);
@@ -139,11 +202,14 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
   const elapsed = (run: Run): number => Math.max(0, Math.round(deps.now() - run.startedAt));
 
   /** The tail as a result carries it; a tail that cannot be read says so instead of passing for empty output. */
-  const readOutput = async (tab: PtyTab): Promise<string> => {
+  const readOutput = async (run: Run, tab: PtyTab): Promise<string> => {
+    run.reads += 1;
     try {
-      return capRunOutput(await deps.tail(tab.id, RUN_OUTPUT_LINES));
+      return capRunOutput(await deps.tail(tab.id, RUN_OUTPUT_LINES + 1));
     } catch (e) {
       return `[the output could not be read: ${errText(e)}]`;
+    } finally {
+      run.reads -= 1;
     }
   };
 
@@ -164,36 +230,52 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
   };
 
   const settle = (sessionId: string, batch: readonly Run[], outcome: DeliveryOutcome): void => {
-    if (outcome.kind === "done") return;
+    for (const run of batch) run.sending = false;
+    if (outcome.kind !== "busy") busyStreak.delete(sessionId);
+    if (outcome.kind === "done") {
+      for (const run of batch) forgetIfDone(run);
+      return;
+    }
+    // keryx stored nothing: the follow-up turn `terminalSent` counted did not start.
+    deps.dispatch({ t: "terminalUnsent", sessionId });
     for (const run of batch) {
       if (run.state !== "sent" && run.state !== "sent-while-running") continue;
-      if (outcome.kind === "refused") notSent(run, outcome.error);
-      else {
-        run.state = "waiting";
-        show(run);
+      if (outcome.kind === "refused") {
+        notSent(run, outcome.error);
+        continue;
       }
+      run.state = "waiting";
+      show(run);
+      // A snapshot whose process ended while it was on its way: the exit's result goes instead.
+      if (superseded(run) && run.reads === 0) void finish(run);
     }
+    if (outcome.kind === "wait") parked.add(sessionId);
     if (outcome.kind === "busy") {
-      // Asked again after a pause and at the next turn end, not on the refused send's own end.
-      pausedUntil.set(sessionId, deps.now() + BUSY_RETRY_MS);
-      deps.later(() => flush(sessionId), BUSY_RETRY_MS);
+      // Asked again after a pause that doubles with each refusal in a row, and at a turn end after it.
+      const streak = busyStreak.get(sessionId) ?? 0;
+      busyStreak.set(sessionId, streak + 1);
+      const pause = Math.min(BUSY_RETRY_MS * 2 ** streak, BUSY_RETRY_MAX_MS);
+      pausedUntil.set(sessionId, deps.now() + pause);
+      deps.later(() => flush(sessionId), pause);
     }
   };
 
-  const deliver = (sessionId: string, accepts: boolean): void => {
+  /** True when a results prompt went to `sessionId`. */
+  const deliver = (sessionId: string, accepts: boolean): boolean => {
     const waiting = [...runs.values()].filter((r) => r.sessionId === sessionId).filter(deliverable).sort((a, b) => a.seq - b.seq);
-    if (waiting.length === 0) return;
+    if (waiting.length === 0) return false;
     if (!accepts) {
       for (const run of waiting) notSent(run, RESULTS_UNSUPPORTED);
-      return;
+      return false;
     }
-    if ((pausedUntil.get(sessionId) ?? 0) > deps.now()) return;
+    if (parked.has(sessionId) || (pausedUntil.get(sessionId) ?? 0) > deps.now()) return false;
     const batch = waiting.slice(0, RESULTS_PER_PROMPT);
     const reply = deps.send(sessionId, batch.map((r) => r.result));
-    if (reply === null) return;
+    if (reply === null) return false;
     pausedUntil.delete(sessionId);
     for (const run of batch) {
       run.state = run.result.state === "running" ? "sent-while-running" : "sent";
+      run.sending = true;
       show(run);
     }
     deps.dispatch({ t: "terminalSent", sessionId, runIds: batch.map((r) => r.runId) });
@@ -201,22 +283,25 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
       (outcome) => settle(sessionId, batch, outcome),
       (e: unknown) => settle(sessionId, batch, { kind: "refused", error: errText(e) }),
     );
+    return true;
   };
 
-  function flush(sessionId?: string): void {
+  function flush(sessionId?: string): ReadonlySet<string> {
+    const took = new Set<string>();
     const accepts = deps.acceptsResults();
-    if (accepts === null) return; // reconnecting: decided once keryx answers initialize
+    if (accepts === null) return took; // reconnecting: decided once keryx answers initialize
     const sessions = sessionId !== undefined ? [sessionId] : [...new Set([...runs.values()].filter(deliverable).map((r) => r.sessionId))];
-    for (const s of sessions) deliver(s, accepts);
+    for (const s of sessions) if (deliver(s, accepts)) took.add(s);
+    return took;
   }
 
   /** The process ended: the exit's result replaces whatever was not sent yet; otherwise the card only shows the exit. */
   const finish = async (run: Run): Promise<void> => {
     const tab = run.tab;
-    const replaces = (): boolean => run.state === "running" || (run.state === "waiting" && run.result?.state === "running" && run.tabOpen);
+    const replaces = (): boolean => run.state === "running" || (run.state === "waiting" && superseded(run));
     if (tab === null || !run.exit || !replaces()) return show(run);
-    const output = await readOutput(tab);
-    // A waiting snapshot may have been sent while the tail was read: then the exit only updates the card.
+    const output = await readOutput(run, tab);
+    // Sent, closed or refused while the tail was read: then the exit only updates the card.
     if (!replaces()) return show(run);
     run.result = { runId: run.runId, command: run.command, state: "exited", exitCode: run.exit.code, durationMs: run.exit.durationMs, output };
     ready(run);
@@ -227,7 +312,7 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
       const runId = deps.newRunId();
       const run: Run = {
         runId, sessionId: origin.sessionId, command, state: "starting", tab: null, tabOpen: false,
-        startedAt: deps.now(), exit: null, result: null, seq: 0, reading: false,
+        startedAt: deps.now(), exit: null, result: null, seq: 0, reads: 0, sending: false,
       };
       runs.set(runId, run);
       show(run);
@@ -262,9 +347,11 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
         if (early.size > EARLY_EXITS_KEPT) early.delete(early.keys().next().value ?? tabId);
         return;
       }
-      // The hang-up after a close, or a second report: the run already ended.
-      if (run.exit || run.state === "closed") return;
-      run.exit = { code, durationMs: elapsed(run) };
+      // The hang-up after a close: the run already ended, and now nothing can change it.
+      if (run.state === "closed") return forget(run);
+      // A second report.
+      if (run.exit) return;
+      run.exit = { code, durationMs: elapsed(run), tabOpen: run.tabOpen };
       await finish(run);
     },
     closed(tabId) {
@@ -276,10 +363,8 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
     },
     async sendNow(runId) {
       const run = runs.get(runId);
-      if (!run || run.state !== "running" || run.exit || !run.tab || run.reading) return;
-      run.reading = true;
-      const output = await readOutput(run.tab);
-      run.reading = false;
+      if (!run || run.state !== "running" || run.exit || !run.tab || run.reads > 0) return;
+      const output = await readOutput(run, run.tab);
       // It ended (or was closed) meanwhile: the exit's own result goes instead.
       if (run.state !== "running" || run.exit) return;
       run.result = { runId: run.runId, command: run.command, state: "running", durationMs: elapsed(run), output };
@@ -292,6 +377,11 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
       return true;
     },
     flush,
+    resume(sessionId) {
+      parked.delete(sessionId);
+      flush(sessionId);
+    },
+    tracked: () => runs.size,
   };
   return api;
 }

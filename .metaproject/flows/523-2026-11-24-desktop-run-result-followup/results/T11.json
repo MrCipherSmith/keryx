@@ -1,0 +1,335 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T11",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 1, desktop web view: AR-001, AR-002, DEG-1, DEG2-2, FE-W1-001..004, HL-001, HL-002, HL2-001, HL2-002, LG2-002, LG3-001, PF-001, PF-002, TP-001..004, UX-001..005 and the client half of RR-001/F-001 fixed in apps/desktop/src/** with tests (red before the fix, or for test-only findings shown sensitive by a deliberate break). DEG-2/F-002 left as the owner decided. Eight user-visible choices need the operator (questions T11-Q1..Q8).",
+  "summary_markdown": "## Behavior changes\n1. (user_visible, needs_operator) Run button titles: 'Run in a new terminal tab; the result goes back to the agent' in a session transcript, 'Run in a new terminal tab' elsewhere (UX-004). Alternative: a shorter title.\n2. (user_visible, needs_operator) A cut output starts with '[… earlier output was cut; the end of the output follows]', within 200 lines / 16 KiB; pty_tail is asked for 201 lines (LG2-002). Alternative: T10's '[… N earlier bytes not kept]' wording.\n3. (user_visible, needs_operator) A card clicked during a running turn stays at the end; the turn streams in above it and it is no turn boundary until delivered (DEG-1, FE-W1-002, UX-003). Alternative: composer dock (UX-003).\n4. (user_visible, needs_operator) A session reload keeps live cards: live view on a replayed note, undelivered cards at the end, a delivered card without a replayed note dropped unless its tab is open (FE-W1-001). Alternative: keep every live card.\n5. (user_visible, needs_operator) Busy retry backs off 1 s -> 30 s (HL-001). Alternative: fixed 1 s.\n6. (user_visible, needs_operator) Focus after Send output now goes to the card's status line (UX-002). Alternative: Show tab.\n7. (user_visible, needs_operator) .run-card-dur uses --fg-muted; the global --fg-subtle token is unchanged (UX-005). Alternative: darken the token.\n8. (user_visible, needs_operator) Results wait while any slash command runs in the session (FE-W1-003). No alternative offered: the desktop cannot tell /compact from other commands.\n\n## Spec deltas for the docs lane (T12 committed before these changes)\n- 3.9.5b waiting rule: a command in flight counts as busy; busy pause 1 s doubling to 30 s; the counted turn is taken back on busy/refused/wait; a snapshot whose process ended (tab open) is never sent and is rebuilt after a busy or wait answer; a session reload keeps live cards.\n- 4.4: RunOrigin has no `source` (spec line ~902); pty_tail(id, 201) and the cut marker (line ~936); Run button titles; status roles and focus on the card.\n\n## Not verified\n- No full desktop suite (owner); no ESLint (the root config ignores apps/desktop/**); no live run in the app; no screen-reader check; happy-dom only for focus.\n- The telegramTurns gate of sendTerminalResults is not driven by a test.\n",
+  "acceptance": [
+    {
+      "criterion": "AC1",
+      "status": "met",
+      "evidence": "cd apps/desktop && bun test src/panels/RunButton: 14 pass, 0 fail."
+    },
+    {
+      "criterion": "AC3",
+      "status": "met",
+      "evidence": "bun test src/session/terminalRun: 57 pass, 0 fail (store AC3 tests, delivery fixture default scenario)."
+    },
+    {
+      "criterion": "AC4",
+      "status": "met",
+      "evidence": "same run: one prompt for results that waited, 8 per prompt then the rest; fixture AC4 batch; results go before a queued prompt (refusals scenario)."
+    },
+    {
+      "criterion": "AC7 (client half)",
+      "status": "met",
+      "evidence": "terminalRunCard.dom.test AC7 replay test passes; reload keeps live cards (FE-W1-001)."
+    },
+    {
+      "criterion": "AC8",
+      "status": "met",
+      "evidence": "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton: 71 pass, 0 fail; no-results scenario waits on the not-sent card; the Send-now exception pinned by a store test."
+    },
+    {
+      "criterion": "AC9",
+      "status": "met",
+      "evidence": "store AC9 test and HL-002/HL2-002 tests: one snapshot, the later exit not delivered again, a superseded snapshot never sent."
+    },
+    {
+      "criterion": "Every listed finding fixed with a test that fails before and passes after (or a note)",
+      "status": "met",
+      "evidence": "per-finding lines in metrics.findings; AR-001, AR-002, FE-W1-004 and TP-* are not present defects, shown by deliberate breaks instead."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-25-review-flow-github-com-mrciphersmith-keryx-pull-1316/research-evidence/fix-desktop.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The findings this round fixes (read only)."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "apps/desktop/src/session/terminalRuns.ts",
+      "change": "wire-limit copy decision comment; newRunId; BUSY_RETRY_MAX_MS backoff; RUN_OUTPUT_CUT marker and 201-line tail ask in capRunOutput/readOutput; DeliveryOutcome 'wait' with parked sessions and resume(); exit records tabOpen; superseded snapshots never sent and rebuilt after busy/wait; terminalUnsent on any non-done outcome; reads counter and sending flag; final runs forgotten (tracked()); flush returns the sessions it took"
+    },
+    {
+      "path": "apps/desktop/src/session/reducer.ts",
+      "change": "isUndeliveredRun; streamEnd inserts a running turn's stream before trailing undelivered Run cards (chunks, new tools, agent blocks, system notes); terminalUnsent action; loadDone keeps live run cards (keepLiveRuns)"
+    },
+    {
+      "path": "apps/desktop/src/session/Transcript.tsx",
+      "change": "an undelivered card opens no agent turn; streaming state skips trailing undelivered cards; tool Run button title and origin without source"
+    },
+    {
+      "path": "apps/desktop/src/session/useAcpSession.ts",
+      "change": "initialize advertises _meta.keryx.terminalResults: true; results gate also on reg.commands; 'wait' outcome for -32002 on a released session and shutting-down; resume after loadDone; command end flushes its session; one effect arbitrates results before queued prompts; newRunId from terminalRuns"
+    },
+    {
+      "path": "apps/desktop/src/session/TerminalRunCard.tsx",
+      "change": "status role status/alert on live cards, none on replayed; focus kept on the status line when Send output now goes away"
+    },
+    {
+      "path": "apps/desktop/src/panels/panelBus.ts",
+      "change": "RunOrigin without source; runButtonTitle(tracked); runTabTitle cut by code points"
+    },
+    {
+      "path": "apps/desktop/src/components/Markdown.tsx",
+      "change": "Run button title from runButtonTitle, re-rendered when the transcript context changes; origin without source"
+    },
+    {
+      "path": "apps/desktop/src/styles/runs.css",
+      "change": ".run-card-dur uses --fg-muted"
+    },
+    {
+      "path": "apps/desktop/src/session/terminalRuns.test.ts",
+      "change": "tests for HL2-002, HL-002, HL-001, HL2-001, PF-002, FE-W1-001, TP-004, AR-001 (keryx contract tie), LG2-002 marker; rig holds tails"
+    },
+    {
+      "path": "apps/desktop/src/session/terminalRunCard.dom.test.tsx",
+      "change": "DEG2-2 rewritten; DEG-1, FE-W1-002, UX-001, UX-002 x2 tests; UX-005 CSS assertion"
+    },
+    {
+      "path": "apps/desktop/src/session/terminalRunDelivery.dom.test.tsx",
+      "change": "runs the new 'refusals' scenario"
+    },
+    {
+      "path": "apps/desktop/src/test/terminal-run-delivery.fixture.tsx",
+      "change": "zero-delay settle and state waits (TP-001), test clock for the busy retry, RR-001 initialize assertion, pty_tail 201, 'refusals' scenario (TP-003, FE-W1-003, AR-002, HL2-001, reconnect)"
+    },
+    {
+      "path": "apps/desktop/src/panels/RunButton.dom.test.tsx",
+      "change": "LG3-001, UX-004, TP-004 list-merge tests; gated ptyList mock; origins without source"
+    },
+    {
+      "path": "apps/desktop/src/panels/SidePanels.dom.test.tsx",
+      "change": "TP-002: New terminal click, its tab active, then closing the active tab"
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T11-Q1",
+      "question": "Both Run buttons in a session transcript now say 'Run in a new terminal tab; the result goes back to the agent' (elsewhere 'Run in a new terminal tab'). Keep this wording?",
+      "why": "User-visible wording (UX-004); the reviewer's suggested text was taken, nothing decided it.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep the wording",
+          "recommended": true
+        },
+        {
+          "id": "shorter",
+          "label": "A shorter title, e.g. 'Run; the agent gets the result'",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q2",
+      "question": "A Run output that lost its beginning now starts with '[… earlier output was cut; the end of the output follows]' inside the 200 lines / 16 KiB (shown to the agent and on the card). Keep it? T10's server cap uses '[… N earlier bytes not kept]' for its own (rare) second cut.",
+      "why": "Model- and user-visible wording (LG2-002); two layers now mark cuts with different text.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep both as they are",
+          "recommended": true
+        },
+        {
+          "id": "align",
+          "label": "Align the desktop line with T10's wording",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q3",
+      "question": "A Run clicked while the turn streams: its card stays at the end and the rest of the turn streams in above it (the card is no turn boundary until delivered). Keep this, or show undelivered cards in the composer dock as UX-003 suggested?",
+      "why": "Where an undelivered card sits during a running turn is not settled by the plan matrix.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep the card at the end of the transcript",
+          "recommended": true
+        },
+        {
+          "id": "dock",
+          "label": "Move undelivered cards to the composer dock",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q4",
+      "question": "On a session reload (/compact, /rewind, return after release, restart) the live cards stay: a replayed note of a tracked run shows the live card, an undelivered card stays at the end, and a delivered card whose note keryx no longer replays is dropped unless its tab is still open. Keep?",
+      "why": "FE-W1-001; the matrix covers window reload, not a session reload with the store alive.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep this rule",
+          "recommended": true
+        },
+        {
+          "id": "all",
+          "label": "Keep every live card, delivered ones too",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q5",
+      "question": "After busy refusals in a row the results are asked again after 1 s, 2 s, 4 s ... up to 30 s (was always 1 s). Keep the backoff?",
+      "why": "Retry timing (HL-001 part 3); the 1 s pause was a recorded worker choice.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep the backoff",
+          "recommended": true
+        },
+        {
+          "id": "fixed",
+          "label": "Back to a fixed 1 s",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q6",
+      "question": "After 'Send output now' the keyboard focus moves to the card's status line (it was lost). Keep, or move it to 'Show tab'?",
+      "why": "Where focus lands (UX-002) is a user-visible choice the reviewer left open.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Status line",
+          "recommended": true
+        },
+        {
+          "id": "show-tab",
+          "label": "Show tab button when there is one",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q7",
+      "question": "The run card's duration now uses --fg-muted; --fg-subtle in the default light palette (3.86:1, also used by .tool-dur) is unchanged. Keep the local fix?",
+      "why": "UX-005 offered a global token change; that touches every --fg-subtle use.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep the local fix",
+          "recommended": true
+        },
+        {
+          "id": "token",
+          "label": "Darken --fg-subtle in tokens.css instead",
+          "recommended": false
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T11-Q8",
+      "question": "Results now also wait while any slash command runs in the session (not only /compact and /rewind, which the desktop cannot tell apart). Keep?",
+      "why": "FE-W1-003 gate; a short extra wait during other commands.",
+      "options": [
+        {
+          "id": "keep",
+          "label": "Keep: any command in flight",
+          "recommended": true
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 30,
+    "tests_passing": 177,
+    "tests_failing": 0,
+    "findings": {
+      "AR-001": "suggested_fix diverged: no shared src/acp contract module (src/** is another lane). The desktop keeps its copies, a comment in terminalRuns.ts records why (keryx's module reads node:fs through its redaction), and terminalRuns.test.ts 'AR-001' loads keryx's own src/acp/terminal-result.ts at run time: the three limits must equal TERMINAL_RESULTS_MAX / TERMINAL_COMMAND_MAX_CHARS / TERMINAL_RESULT_MAX_BYTES, and a full 8-result batch the store builds (snapshot, signal exit, 4096-char command, cut tail, newRunId ids) must pass keryx's parseTerminalResults. Not a present defect (copies agree), so no red before; sensitivity: RESULTS_PER_PROMPT=9 and a 'run:' id each turn the test red.",
+      "AR-002": "one effect arbitrates each session's free turn slot: terminalRuns.flush() (now returns the sessions it took) runs first, and the queue skips a session whose slot a results prompt took. Fixture 'refusals' step AR-002 (queued prompt while g waits: the results prompt goes first, the queued one after that turn). The old two-effect order also passed it (fragility, not a defect); sensitivity: queue-first mutation turns the fixture red.",
+      "DEG-1": "reducer streamEnd: while a turn runs, agent/thought chunks, new tool calls, agent media blocks and keryx system notes go before the undelivered Run cards that trail the items, so the reply stays one message and the card stays after the turn's stream. Red->green: terminalRunCard.dom.test 'DEG-1' (red: kinds split around the card).",
+      "DEG2-2": "the test now sets busy and asserts ['agent','terminalRun','agent'] with 'Run `ls`. More text.' as one message. Red->green (red: ['agent','agent','terminalRun','agent']).",
+      "FE-W1-001": "reducer loadDone keepLiveRuns: a replayed note of a run the window still tracks shows the live card in the note's place; an undelivered live card (or one whose tab is open) is kept at the end. Red->green: terminalRuns.test 'FE-W1-001' x2 (red: 'no card for run-1'; replayed card had no live view).",
+      "FE-W1-002": "Transcript toBlocks ends the agent turn only at a delivered or replayed run card. Red->green: terminalRunCard.dom.test 'FE-W1-002' (red: two agent labels).",
+      "FE-W1-003": "sendTerminalResults returns null while a _keryx/command is in flight for the session; trackCommand's end flushes that session. Red->green: fixture 'refusals' step f (red: 'never reached: f waiting for the command').",
+      "FE-W1-004": "RunOrigin.source removed (type, Markdown.tsx and Transcript.tsx call sites, tests). No behaviour to reproduce; tsc proves no reader is left. The spec still documents it (specification.md line ~902): docs follow-up.",
+      "HL-001": "(1) the commands gate as FE-W1-003; (2) new action terminalUnsent takes back the parentTurn terminalSent counted when keryx stored nothing (busy, refused, wait); (3) busy pause 1 s doubling per refusal in a row, capped at 30 s, reset by any other outcome (no jitter: one client). Red->green: terminalRuns.test 'HL-001' x2 (red: parentTurn stayed +1; pauses all 1000).",
+      "HL-002": "settle's busy/wait branch rebuilds a snapshot whose process ended (tab open) from the exit (finish) before it can be sent again. Red->green: terminalRuns.test 'a snapshot refused as busy after the process ended...' (red: state 'running' re-sent).",
+      "HL2-001": "owner decision (b) uphold: new DeliveryOutcome 'wait' for -32002 on a session the window no longer holds and for condition 'shutting-down'; the results go back to waiting with no pause and the session is parked until terminalRuns.resume, which openLoad calls after loadDone. Red->green: terminalRuns.test 'HL2-001' and fixture 'refusals' steps h (release + -32002 -> waiting -> loadSession -> one prompt with the same runId) and i (shutting-down -> no re-send on a window change -> delivered after restart); mutations dropping the mapping or the resume turn the fixture red.",
+      "HL2-002": "deliverable() never sends a waiting snapshot superseded by an exit that happened with the tab open (exit records tabOpen at exit time); finish then sends the exit's result once. Red->green: terminalRuns.test 'a snapshot waiting while the exit's tail is read...' (red: snapshot sent during the tail read).",
+      "LG2-002": "the host is asked for 201 lines; capRunOutput keeps at most 200 lines / 16 KiB and, when it cut lines or bytes, makes its first line RUN_OUTPUT_CUT ('[… earlier output was cut; the end of the output follows]'). Red->green: capRunOutput test, AC3 test (marker first line, tail call 201), fixture pty_tail lines 201.",
+      "LG3-001": "runTabTitle cuts by code points (Array.from), never inside a surrogate pair. Red->green: RunButton.dom.test 'LG3-001' (red: lone 0xD83D before '…').",
+      "PF-002": "a run whose state is final, tab closed, end seen (if it had a tab), with no read or send in flight leaves the store (runs and byTab); the closed run leaves on its hang-up exit. New tracked() reports the count. Red->green: terminalRuns.test 'PF-002' (red: tracked never dropped).",
+      "TP-001": "fixture no longer waits on wall time: settle() is one zero-delay event-loop turn, every wait is for a state, the no-results branch waits for the not-sent card, the AC4 tail asserts every card is sent instead of ticking, and the store's busy retry (>= 1 s timers) runs on the test's own clock (held timers fired by the test, Date.now offset). Sensitivity: with both 'does not take results' checks removed the no-results scenario goes red.",
+      "TP-002": "SidePanels test clicks New terminal again: a second ['open','/proj'], a new visible tab, the run tabs hidden; then closes the active tab. Behaviour existed (test gap); sensitivity: open() without setActive turns it red.",
+      "TP-003": "fixture scenario 'refusals' drives through the real hook: busy -> waiting -> re-asked after the pause; -32602 -> not sent with keryx's reason; -32603 -> notice, card sent; tab closed before the end -> closed, hang-up sends nothing; command in flight; queued prompt; released session; shutting down; reconnect to a keryx without terminalResults -> not sent. Sensitivity: removing the busy mapping, dropping -32602 from the final set, or unhooking onTabClosed each turn it red. The telegramTurns gate is not driven.",
+      "TP-004": "store tests for the reconnect !accepts branch, a snapshot whose tab closed before the end, a close / exit / second Send now / close during tail reads, the 4096 boundary, seq order of a replaced snapshot, the 32 early exits, failed() after opened(); RunButton test for the tab list taken before a run tab opened. Test gap; sensitivity: mutations of (1) !accepts, (3) sendNow recheck, (4) '>=' and (6) the list merge each turn a test red.",
+      "UX-001": "a live card's status line has role 'status', or 'alert' for closed / start-failed / not-sent; a replayed card's has none. Red->green: terminalRunCard.dom.test 'UX-001'.",
+      "UX-002": "when the used Send output now button goes away and the focus went nowhere, the status line (tabIndex -1) takes it; React keeps it across the terminalSent move; a focus the user moved elsewhere is left alone. Red->green: terminalRunCard.dom.test 'UX-002' (red: focus lost).",
+      "UX-003": "suggested_fix diverged: fixed with DEG-1/FE-W1-002 (the undelivered card stays after the running turn's stream and opens no turn) instead of moving undelivered cards to the composer dock.",
+      "UX-004": "runButtonTitle(tracked) on both Run buttons: in a session transcript 'Run in a new terminal tab; the result goes back to the agent', elsewhere 'Run in a new terminal tab'. Red->green: RunButton.dom.test 'UX-004'.",
+      "UX-005": "suggested_fix alternative taken: .run-card-dur uses --fg-muted (5.86:1) instead of darkening the global --fg-subtle token. Red->green: the card's CSS test.",
+      "RR-001/F-001 (client half)": "owner decision (a): initialize clientCapabilities._meta.keryx carries terminalResults: true next to terminal: true (app only). Red->green: fixture asserts it for every scenario (red: undefined).",
+      "DEG-2/F-002": "owner dismissed: no code change; a waiting snapshot whose tab was closed before the end is still delivered, pinned by terminalRuns.test 'a waiting snapshot whose tab was closed before the process ended goes as it was'."
+    },
+    "commands": {
+      "cd apps/desktop && bun test src/session/terminalRun": "57 pass, 0 fail",
+      "cd apps/desktop && bun test src/panels/RunButton": "14 pass, 0 fail",
+      "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton": "71 pass, 0 fail",
+      "cd apps/desktop && bun test src/session/terminalRun src/panels/RunButton src/panels/SidePanels": "79 pass, 0 fail (final)",
+      "cd apps/desktop && bun test src/panels/SidePanels src/session/reducer.test.ts src/session/Transcript.dom.test.tsx src/session/TranscriptReviewCards.dom.test.tsx src/session/DelegateResultCard.dom.test.tsx src/session/feedSplit.test.ts src/components/Markdown.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx": "98 pass, 0 fail",
+      "bunx tsc --noEmit -p apps/desktop": "exit 0",
+      "red before the fix": "store 10 fail / 31 pass, card 6 fail / 7 pass, panels 3 fail; fixture red at RR-001, LG2-002 tail size, FE-W1-003",
+      "mutations (deliberate breaks, restored)": "hook 6/6 red, coverage 8/8 red after one re-pick (TP-001), AR-001 2/2 red"
+    },
+    "noticed_not_touched": [
+      {
+        "what": ".tool-dur shares the 3.86:1 --fg-subtle on --bg-surface pair in the default light palette",
+        "where": "apps/desktop/src/styles/styles.css (.tool-dur), apps/desktop/src/styles/tokens.css:50"
+      },
+      {
+        "what": "the issue-question resume fixture waits with 10 ms real timers, the TP-001 class",
+        "where": "apps/desktop/src/test/issue-question-resume.fixture.tsx:60"
+      },
+      {
+        "what": "sendPrompt and the queued-prompt send also ignore reg.commands (a prompt during /compact is refused as busy; no auto retry)",
+        "where": "apps/desktop/src/session/useAcpSession.ts sendPrompt, pendingQueueSend use"
+      },
+      {
+        "what": "keryx sends no messageId, so a turn with no user item (resumeIssueQuestions) merges its reply into the previous agent message",
+        "where": "apps/desktop/src/session/reducer.ts appendChunk"
+      },
+      {
+        "what": "Send output now followed by a tab close during its tail read drops the snapshot (closed), a one-read window of the AC8 exception",
+        "where": "apps/desktop/src/session/terminalRuns.ts sendNow"
+      },
+      {
+        "what": "a session parked by a shutting-down answer while the old keryx keeps it held waits until the session is loaded again",
+        "where": "apps/desktop/src/session/terminalRuns.ts parked / resume"
+      }
+    ],
+    "not_touched": [
+      {
+        "path": "apps/desktop/src/session/terminalRunBus.ts",
+        "reason": "no finding there"
+      }
+    ],
+    "tests_changed": 4
+  },
+  "timestamp_utc": "2026-11-25T18:35:00Z"
+}

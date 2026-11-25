@@ -94,6 +94,11 @@ export interface TerminalRunItem {
 /** A run card's fields; the reducer keeps its id. */
 export type TerminalRunView = Omit<TerminalRunItem, "kind" | "id">;
 
+/** A live run card whose result has not gone to the agent (yet, or ever): not a turn of its own. */
+export function isUndeliveredRun(item: Item | undefined): boolean {
+  return item?.kind === "terminalRun" && item.replayed !== true && item.state !== "sent" && item.state !== "sent-while-running";
+}
+
 /**
  * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
  * as a collapsed card. Untrusted text (rendered verbatim, never as markup). Client-only, like a command card.
@@ -251,6 +256,19 @@ export function blockText(block: ContentBlock): string {
 }
 
 /**
+ * Where the running turn's next streamed item goes (flow 523): the end, except before the undelivered Run
+ * cards that trail it. A Run clicked while the agent writes adds its card at the end; the rest of the
+ * reply still joins the message it belongs to, and the card stays after the turn's stream until its result
+ * goes (`terminalSent` then moves it, and the follow-up turn starts after it).
+ */
+function streamEnd(d: ConvState): number {
+  let at = d.items.length;
+  if (!d.busy && !d.telegramTurn) return at;
+  while (at > 0 && isUndeliveredRun(d.items[at - 1])) at -= 1;
+  return at;
+}
+
+/**
  * The update helpers below mutate a draft: a shallow copy of the conversation whose `items` array is
  * already a private copy. Item objects themselves are never mutated (memoised rows compare them).
  */
@@ -263,13 +281,15 @@ function appendChunk(
 ): boolean {
   if (text === "") return false;
   const items = d.items;
-  const last = items[items.length - 1];
+  // A user chunk opens a turn: it goes at the very end.
+  const end = kind === "user" ? items.length : streamEnd(d);
+  const last = items[end - 1];
   if (last && last.kind === kind && (last.kind !== "user" || last.source === source) &&
     (messageId == null || last.messageId == null || last.messageId === messageId)) {
-    items[items.length - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
+    items[end - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
     return true;
   }
-  items.push({ kind, id: d.nextId, text, messageId, ...(kind === "user" && source ? { source } : {}) });
+  items.splice(end, 0, { kind, id: d.nextId, text, messageId, ...(kind === "user" && source ? { source } : {}) });
   d.nextId += 1;
   return true;
 }
@@ -322,7 +342,7 @@ function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number)
     d.items[idx] = next;
     return true;
   }
-  d.items.push(next);
+  d.items.splice(streamEnd(d), 0, next);
   d.nextId += 1;
   return true;
 }
@@ -399,7 +419,7 @@ const MEDIA_BLOCKS = new Set(["image", "resource_link", "resource"]);
 
 /** A message's image or resource: its own item, so the text around it stays two separate messages. */
 function pushBlock(d: ConvState, role: "user" | "agent", block: ContentBlock): true {
-  d.items.push({ kind: "block", id: d.nextId, role, block });
+  d.items.splice(role === "user" ? d.items.length : streamEnd(d), 0, { kind: "block", id: d.nextId, role, block });
   d.nextId += 1;
   return true;
 }
@@ -408,7 +428,7 @@ function pushBlock(d: ConvState, role: "user" | "agent", block: ContentBlock): t
 function pushSystemNote(d: ConvState, text: string): boolean {
   const note = parseSystemNote(text);
   if (note.body === "" && note.tag === null) return false;
-  d.items.push({ kind: "notice", id: d.nextId, level: note.level, text: note.body, system: { tag: note.tag } });
+  d.items.splice(streamEnd(d), 0, { kind: "notice", id: d.nextId, level: note.level, text: note.body, system: { tag: note.tag } });
   d.nextId += 1;
   return true;
 }
@@ -596,6 +616,8 @@ export type Action =
    * end, so the reply that streams in comes after them (as after a note on reload), and the turn is counted.
    */
   | { t: "terminalSent"; sessionId: string; runIds: readonly string[] }
+  /** keryx stored nothing of a results prompt (busy, refused, wait): the turn `terminalSent` counted did not start. */
+  | { t: "terminalUnsent"; sessionId: string }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
   | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string; resumeIssueQuestions?: true }
   | { t: "queueRemove"; sessionId: string; index: number }
@@ -661,6 +683,30 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
     else convs = { ...convs, [sid]: next };
   }
   return convs === state.convs && loading === state.loading ? state : { ...state, convs, loading };
+}
+
+/**
+ * A reload (after /compact or /rewind, a return to a session keryx released, a restart) keeps the cards of
+ * the runs the window still tracks (flow 523): a replayed note of such a run shows the live card in the
+ * note's place, and a run whose result keryx has not stored (still running, waiting, not sent) keeps its
+ * card at the end. A delivered run's card comes from keryx's note, as the history now has it, unless its
+ * tab is still open (its exit and Show tab still change it).
+ */
+function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
+  const live = new Map<string, TerminalRunItem>();
+  for (const i of previous) if (i.kind === "terminalRun" && i.replayed !== true) live.set(i.runId, i);
+  if (live.size === 0) return loaded;
+  const items = loaded.items.map((i): Item => {
+    const run = i.kind === "terminalRun" ? live.get(i.runId) : undefined;
+    if (!run) return i;
+    live.delete(run.runId);
+    return { ...run, id: i.id };
+  });
+  let nextId = loaded.nextId;
+  for (const run of live.values()) {
+    if (isUndeliveredRun(run) || run.tabOpen) items.push({ ...run, id: nextId++ });
+  }
+  return { ...loaded, items, nextId };
 }
 
 /** Detached children have no verified live runtime in this connection. */
@@ -735,6 +781,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
         const cards = a.runIds.flatMap((id) => c.items.filter((i): i is TerminalRunItem => isSent(i) && i.runId === id));
         return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !isSent(i)), ...cards] };
       });
+    case "terminalUnsent":
+      return withConv(state, a.sessionId, (c) => (c.parentTurn > 0 ? { ...c, parentTurn: c.parentTurn - 1 } : c));
     case "queueAdd":
       return withConv(state, a.sessionId, c => {
         if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId)) || (a.resumeIssueQuestions && c.queue.some(prompt => prompt.resumeIssueQuestions))) return c;
@@ -773,8 +821,9 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "loadStart":
       return { ...state, loading: { ...state.loading, [a.sessionId]: newConv(a.sessionId, { replaying: true }) } };
     case "loadDone": {
-      const loaded = state.loading[a.sessionId];
-      if (!loaded) return state;
+      const replayed = state.loading[a.sessionId];
+      if (!replayed) return state;
+      const loaded = keepLiveRuns(replayed, state.convs[a.sessionId]?.items ?? []);
       const conv: ConvState = {
         ...loaded,
         replaying: false,

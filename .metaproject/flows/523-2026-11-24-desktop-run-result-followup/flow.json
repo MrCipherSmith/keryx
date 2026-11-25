@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T18:23:23.849Z",
+  "updatedAt": "2026-11-25T18:33:53.644Z",
   "source": {
     "type": "description",
     "ref": null
@@ -220,7 +220,7 @@
       "id": "T11",
       "title": "Fix round 1: desktop findings (28 ids incl. HL-*, HL2-*, DEG-*, FE-W1-*, TP-*, UX-*, LG3-001, SC3-001, RR-001 client half)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -234,7 +234,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "28 desktop findings fixed with tests (red-to-green for defects, deliberate breaks for test gaps); client sends terminalResults; HL2-001 re-queue; TP-001 fixture on its own clock; F-002/DEG-2 kept by owner decision and pinned by a test; desktop focused tests 79/0 and 98/0, tsc exit 0; result results/T11.json"
     },
     {
       "id": "T12",
@@ -442,6 +444,11 @@
       "at": "2026-11-25T18:23:23.849Z",
       "event": "task-done",
       "detail": "T10: Fix round 1: keryx server findings (AR2-001, DEG2-1, HL4-001, F-001/RR-001 server half, LG2-001, TP-005, TP2-001)"
+    },
+    {
+      "at": "2026-11-25T18:33:53.644Z",
+      "event": "task-done",
+      "detail": "T11: Fix round 1: desktop findings (28 ids incl. HL-*, HL2-*, DEG-*, FE-W1-*, TP-*, UX-*, LG3-001, SC3-001, RR-001 client half)"
     }
   ],
   "origin": {

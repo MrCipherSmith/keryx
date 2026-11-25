@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { formatDuration } from "./duration";
-import type { TerminalRunItem } from "./reducer";
+import type { TerminalRunItem, TerminalRunState } from "./reducer";
 import { sendTerminalRunNow, showTerminalRunTab } from "./terminalRunBus";
 
 /** Where the run's result stands, in words. */
@@ -26,17 +26,31 @@ export function runStatusText(item: Pick<TerminalRunItem, "state" | "error">): s
   }
 }
 
+/** States whose result never reaches the agent: said as an alert, the rest as a status. */
+const UNSENT: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["closed", "start-failed", "not-sent"]);
+
 /**
  * A Run from this session (flow 523): the command, where its result stands, the exit code and duration,
  * the output tail behind a toggle, and the run's actions. Every field is the command's or the host's own
- * text, rendered as text, never as markup. A card replayed from history has no actions.
+ * text, rendered as text, never as markup. A card replayed from history has no actions, and its status is
+ * not announced (a session/load must not read history out); a live card's status is.
  */
 export function TerminalRunCard({ item }: { item: TerminalRunItem }) {
   const [open, setOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+  /** "Send output now" was used: when its button goes away the keyboard focus stays in the card. */
+  const sendNowUsed = useRef(false);
   const ended = item.exitCode !== undefined;
   const ok = item.exitCode === 0;
   const live = item.replayed !== true;
   const canSendNow = live && item.state === "running" && !ended && item.tabOpen;
+  useLayoutEffect(() => {
+    if (canSendNow || !sendNowUsed.current) return;
+    sendNowUsed.current = false;
+    // Only a focus that went nowhere (the removed button's) is taken; one the user moved elsewhere stays.
+    const active = document.activeElement;
+    if (active === null || active === document.body || !active.isConnected) statusRef.current?.focus({ preventScroll: true });
+  }, [canSendNow]);
   return (
     <section className="run-card" data-run={item.runId} data-run-state={item.state}>
       <header className="run-card-head">
@@ -53,7 +67,13 @@ export function TerminalRunCard({ item }: { item: TerminalRunItem }) {
           </span>
         ) : null}
       </header>
-      <div className={`run-card-status run-${item.state}`} data-run-status>
+      <div
+        ref={statusRef}
+        tabIndex={-1}
+        className={`run-card-status run-${item.state}`}
+        data-run-status
+        role={live ? (UNSENT.has(item.state) ? "alert" : "status") : undefined}
+      >
         {runStatusText(item)}
       </div>
       {item.output !== undefined ? (
@@ -76,7 +96,16 @@ export function TerminalRunCard({ item }: { item: TerminalRunItem }) {
             </button>
           ) : null}
           {canSendNow ? (
-            <button type="button" className="btn btn-sm btn-ghost" data-run-send-now title="Send the output so far to the agent" onClick={() => sendTerminalRunNow(item.runId)}>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              data-run-send-now
+              title="Send the output so far to the agent"
+              onClick={() => {
+                sendNowUsed.current = true;
+                sendTerminalRunNow(item.runId);
+              }}
+            >
               Send output now
             </button>
           ) : null}

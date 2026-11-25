@@ -14,3 +14,7 @@ test("AC3/AC4: a Run from a session not shown is delivered to it as one session/
 test("AC8: a keryx whose initialize lacks terminalResults gets no prompt, and the card says the result was not sent", () => {
   expect(typeof run("no-results")).toBe("string");
 });
+
+test("keryx's answers to a results prompt: busy waits and is asked again, a final refusal is not sent, a failed turn is a notice; a closed tab, a command in flight, a queued prompt, a released session, a keryx shutting down and a reconnect each hold the result as the waiting rule says", () => {
+  expect(typeof run("refusals")).toBe("string");
+});

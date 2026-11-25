@@ -123,7 +123,19 @@ test("the panel opens a first tab in the project; each Run opens a tab of its ow
   expect(host.querySelectorAll("[data-term]").length).toBe(3);
   expect(calls.some((c) => c[0] === "write")).toBe(false);
 
-  // Closing the active tab closes its PTY and activates the remaining one.
+  // TP-002: New terminal opens a shell tab of its own and makes it the active one; the run tabs stay, hidden.
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="New terminal"]')!.click());
+  await flush();
+  expect(calls.filter((c) => c[0] === "open")).toEqual([["open", "/proj"], ["open", "/proj"]]);
+  expect(host.querySelectorAll("[data-term]").length).toBe(4);
+  expect(host.querySelector('[data-term="4"]')!.hasAttribute("hidden")).toBe(false);
+  for (const id of [1, 2, 3]) expect(host.querySelector(`[data-term="${id}"]`)!.hasAttribute("hidden")).toBe(true);
+
+  // Closing the active tab closes its PTY and activates the last remaining one.
+  await act(async () => host.querySelectorAll<HTMLButtonElement>('button[aria-label="Close zsh"]')[1]!.click());
+  await flush();
+  expect(calls).toContainEqual(["close", 4]);
+  expect(host.querySelector('[data-term="3"]')!.hasAttribute("hidden")).toBe(false);
   await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close ls"]')!.click());
   await flush();
   expect(calls).toContainEqual(["close", 3]);

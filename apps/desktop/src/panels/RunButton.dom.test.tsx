@@ -11,10 +11,17 @@ const calls: Array<[string, ...unknown[]]> = [];
 let tabs: PtyTab[] = [];
 let nextId = 1;
 let failOpenCommand: string | null = null;
+/** Holds the panel's tab list until released; the list is the one taken when it was asked for. */
+let listGate: Promise<void> | null = null;
 const tab = (id: number, title = "zsh"): PtyTab => ({ id, title, owner: "user", cwd: "/proj", running: true, exitCode: null });
 
 mock.module("../platform/panels", () => ({
-  ptyList: async () => (calls.push(["list"]), tabs),
+  ptyList: async () => {
+    calls.push(["list"]);
+    const taken = tabs;
+    if (listGate) await listGate;
+    return taken;
+  },
   ptyOpen: async (cwd: string) => {
     calls.push(["open", cwd]);
     const t = tab(nextId++);
@@ -112,6 +119,7 @@ beforeEach(async () => {
   tabs = [];
   nextId = 1;
   failOpenCommand = null;
+  listGate = null;
   bus.setRunTracker(null);
 });
 
@@ -155,6 +163,18 @@ test("a run tab's title is the command, shortened to one line", () => {
   const long = bus.runTabTitle(`echo ${"a".repeat(80)}`);
   expect(long.length).toBeLessThanOrEqual(32);
   expect(long.endsWith("…")).toBe(true);
+});
+
+test("LG3-001: a shortened title never ends inside a surrogate pair (the host's JSON parse refuses a lone one)", () => {
+  const loneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  // The 31st UTF-16 unit of this command is the first half of 🚀.
+  const title = bus.runTabTitle('git commit -m "feat: add test 🚀 for runs"');
+  expect(loneSurrogate.test(title)).toBe(false);
+  expect(Array.from(title).length).toBeLessThanOrEqual(32);
+  expect(title.endsWith("…")).toBe(true);
+  for (let pad = 0; pad < 4; pad++) {
+    expect(loneSurrogate.test(bus.runTabTitle(`${"x".repeat(26 + pad)} 🚀🎉👍 done and more`))).toBe(false);
+  }
 });
 
 test("a single-command bash block gets Run; outside a session the click is just a run request with no origin", async () => {
@@ -217,7 +237,7 @@ test("AC1: Run on a message block and on an execute tool card each open a new ta
   await act(async () => host.querySelector<HTMLButtonElement>("button.code-run")!.click());
   await flush();
   expect(calls).toContainEqual(["opencommand", "/proj", "bun run desktop:build", "bun run desktop:build", 80, 24]);
-  expect(t.requested).toEqual([{ command: "bun run desktop:build", origin: { sessionId: "s1", source: "message" } }]);
+  expect(t.requested).toEqual([{ command: "bun run desktop:build", origin: { sessionId: "s1" } }]);
   expect(t.opened).toEqual([["run-1", 2]]);
   expect(host.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain("bun run desktop:build");
   expect(host.querySelector('[data-term="2"]')!.hasAttribute("hidden")).toBe(false);
@@ -228,12 +248,25 @@ test("AC1: Run on a message block and on an execute tool card each open a new ta
   await act(async () => host.querySelector<HTMLButtonElement>("button.tool-run")!.click());
   await flush();
   expect(calls).toContainEqual(["opencommand", "/proj", "git status", "git status", 80, 24]);
-  expect(t.requested[1]).toEqual({ command: "git status", origin: { sessionId: "s1", source: "tool" } });
+  expect(t.requested[1]).toEqual({ command: "git status", origin: { sessionId: "s1" } });
   expect(t.opened).toEqual([["run-1", 2], ["run-2", 3]]);
 
   // Nothing was ever typed into a tab.
   expect(calls.filter((c) => c[0] === "write")).toEqual([]);
   expect(host.querySelectorAll("[data-term]")).toHaveLength(3);
+});
+
+test("UX-004: in a session's transcript both Run buttons say the result goes back to the agent; elsewhere only that it runs", async () => {
+  tracker();
+  await mountSession();
+  const tracked = bus.runButtonTitle(true);
+  expect(tracked).toContain("agent");
+  expect(host.querySelector("button.code-run")!.getAttribute("title")).toBe(tracked);
+  await act(async () => host.querySelector<HTMLButtonElement>(".tool-row")!.click());
+  expect(host.querySelector("button.tool-run")!.getAttribute("title")).toBe(tracked);
+  await act(() => root.render(createElement(Markdown, { text: MESSAGE })));
+  expect(host.querySelector("button.code-run")!.getAttribute("title")).toBe(bus.runButtonTitle(false));
+  expect(bus.runButtonTitle(false)).not.toContain("agent");
 });
 
 test("AC8: a shell that cannot start shows the 'Could not run the command' toast and the tracker hears the error", async () => {
@@ -263,13 +296,29 @@ test("a Run outside a session (no origin) still opens its own tab, and nothing i
 
 test("a Run that opens the panel opens only the run tab, not an extra shell tab", async () => {
   const t = tracker();
-  bus.runInTerminal("bun test", { sessionId: "s1", source: "message" });
+  bus.runInTerminal("bun test", { sessionId: "s1" });
   await act(async () => root.render(createElement(ToastProvider, null, createElement(TerminalPanel, { cwd: "/proj" }))));
   await flush();
   expect(calls.filter((c) => c[0] === "open")).toEqual([]);
   expect(calls).toContainEqual(["opencommand", "/proj", "bun test", "bun test", 80, 24]);
   expect(host.querySelectorAll("[data-term]")).toHaveLength(1);
   expect(t.opened).toHaveLength(1);
+});
+
+test("TP-004: a tab list taken before a run tab opened keeps the run tab, shown, next to the listed ones", async () => {
+  tabs = [tab(1)];
+  nextId = 2;
+  let release = () => {};
+  listGate = new Promise<void>((r) => (release = r));
+  await act(async () => root.render(createElement(ToastProvider, null, createElement(TerminalPanel, { cwd: "/proj" }))));
+  await act(async () => bus.runInTerminal("bun test"));
+  await flush();
+  expect(host.querySelectorAll("[data-term]")).toHaveLength(1);
+  await act(async () => release());
+  await flush();
+  expect(Array.from(host.querySelectorAll("[data-term]")).map((t) => t.getAttribute("data-term"))).toEqual(["1", "2"]);
+  expect(host.querySelector('[data-term="2"]')!.hasAttribute("hidden")).toBe(false);
+  expect(calls.filter((c) => c[0] === "open")).toEqual([]);
 });
 
 test("shortcuts: Ctrl+` is the terminal, Cmd+Shift+B the browser; toggling closes the open tab", () => {

@@ -20,7 +20,7 @@ import { onPtyExit, panelMcpServers, ptyOpenRun, ptyTail } from "../platform/pan
 import { closeTerminalTab, onTabClosed, setRunTracker, showTerminalTab } from "../panels/panelBus";
 import { notifyDelegateChange, setDelegateApi } from "./delegateBus";
 import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminals";
-import { createTerminalRuns, type DeliveryOutcome, type TerminalResultEntry } from "./terminalRuns";
+import { createTerminalRuns, newRunId, type DeliveryOutcome, type TerminalResultEntry } from "./terminalRuns";
 import { setTerminalRunApi } from "./terminalRunBus";
 import {
   canOrganizeSessions,
@@ -94,6 +94,19 @@ function isBusyRefusal(e: unknown): boolean {
  * (busy, opening, stopping), method not found, invalid params, unknown session.
  */
 const PRE_TURN_REFUSALS: ReadonlySet<number> = new Set([-32600, -32601, -32602, -32002]);
+/** keryx's "unknown ACP session" (resourceNotFound). */
+const UNKNOWN_SESSION = -32002;
+
+/**
+ * keryx refused a results prompt for a reason that passes (flow 523, plan "State × event matrix": a
+ * released session's results are kept and delivered once it is held again): the session was released
+ * (the window saw `_keryx/session_released` before the "unknown session" answer), or keryx is shutting down.
+ */
+function waitsForHold(e: unknown, stillHeld: boolean): boolean {
+  if (!(e instanceof RpcError)) return false;
+  if (e.code === UNKNOWN_SESSION) return !stillHeld;
+  return (e.data as { condition?: unknown } | undefined)?.condition === "shutting-down";
+}
 
 /** The display line of a results prompt; keryx ignores it and stores its own continuation line. */
 function terminalResultsLine(results: readonly TerminalResultEntry[]): string {
@@ -461,16 +474,20 @@ export function useAcpSession(cwd: string) {
   /**
    * Run results (flow 523) to `sessionId` as one prompt, when it can take one now (null otherwise). No
    * user bubble: keryx stores its own continuation line for the turn and the run cards show what was sent.
+   * A command in flight counts as busy: keryx holds the session's turn slot for /compact and /rewind, and
+   * the command's end asks again (`trackCommand`).
    */
   const sendTerminalResults = useCallback(
     (sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null => {
       const l = live.current;
       const client = l.client;
-      if (!client || !l.initialized || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) return null;
+      if (!client || !l.initialized || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
+        l.reg.telegramTurns.has(sessionId) || l.reg.commands.has(sessionId)) return null;
       let outcome: DeliveryOutcome = { kind: "done" };
       const params = { prompt: [{ type: "text", text: terminalResultsLine(results) }], _meta: { keryx: { terminalResults: results } } };
       return runTurn(client, sessionId, params, (e) => {
         if (isBusyRefusal(e)) outcome = { kind: "busy" };
+        else if (waitsForHold(e, l.reg.held.has(sessionId))) outcome = { kind: "wait" };
         else if (e instanceof RpcError && PRE_TURN_REFUSALS.has(e.code)) outcome = { kind: "refused", error: errMessage(e) };
         // The results were stored and the follow-up turn failed: said like any failed turn.
         else dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
@@ -491,7 +508,7 @@ export function useAcpSession(cwd: string) {
         showTab: showTerminalTab,
         dispatch,
         now: () => Date.now(),
-        newRunId: () => `run-${crypto.randomUUID()}`,
+        newRunId,
         later: (fn, ms) => void window.setTimeout(fn, ms),
       }),
     [dispatch],
@@ -548,6 +565,8 @@ export function useAcpSession(cwd: string) {
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
+        // Held again: Run results that waited for it (released, keryx restarting) go now.
+        terminalRuns.resume(sessionId);
         if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) resumeIssueQuestions(sessionId);
         return true;
       } catch (e) {
@@ -560,7 +579,7 @@ export function useAcpSession(cwd: string) {
         return false;
       }
     },
-    [cwd, dispatch, resumeIssueQuestions],
+    [cwd, dispatch, resumeIssueQuestions, terminalRuns],
   );
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
@@ -737,7 +756,9 @@ export function useAcpSession(cwd: string) {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
+            // `terminalResults`: a Run click is tracked and its result comes back as a `session/prompt`
+            // (flow 523); keryx gives the Run guidance and takes results only from a client that says so.
+            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true, terminalResults: true, telegramSession: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });
@@ -925,19 +946,19 @@ export function useAcpSession(cwd: string) {
   );
 
   /**
-   * Run results waiting for a session go out once it can take a prompt (its turn ended, it is held
-   * again), ahead of prompts the user queued meanwhile.
+   * One arbiter for every session's free turn slot (spec 3.9.5b). Run results waiting for a session go
+   * first, once it can take a prompt (its turn ended, it is held again); a prompt the user queued meanwhile
+   * goes only where no results prompt took the slot, one per ended turn.
    */
-  useEffect(() => terminalRuns.flush(), [win.convs, terminalRuns]);
-
-  /** Prompts queued while a turn ran go out in order, one per ended turn. */
   useEffect(() => {
     const l = live.current;
+    const tookSlot = terminalRuns.flush();
     for (const c of Object.values(win.convs)) {
+      if (tookSlot.has(c.sessionId)) continue;
       const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId));
       if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
-  }, [win.convs, sendPrompt, dispatch]);
+  }, [win.convs, sendPrompt, dispatch, terminalRuns]);
 
   /** Replay a held session from keryx (after /compact or /rewind changed its history). */
   const reloadSession = useCallback(
@@ -1026,12 +1047,19 @@ export function useAcpSession(cwd: string) {
           openTerminal,
           prepareReview,
           ui,
-          trackCommand: (target) => l.reg.beginCommand(target),
+          trackCommand: (target) => {
+            const end = l.reg.beginCommand(target);
+            return () => {
+              end();
+              // Run results that waited for the command go now (a command that ends with no card changes nothing else).
+              terminalRuns.flush(target);
+            };
+          },
         },
         opts,
       );
     },
-    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal, prepareReview],
+    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal, prepareReview, terminalRuns],
   );
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
