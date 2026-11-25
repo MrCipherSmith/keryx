@@ -27,7 +27,8 @@ import type { FixFindingsFlow } from "./reviews/model";
 import { ReviewsView, type ReviewsFocus, type ReviewsTabIndicator } from "./reviews/ReviewsView";
 import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
-import { SessionReviewActivity } from "./review/SessionReviewActivity";
+import { SessionReviewActivity, type ReviewCardMemory } from "./review/SessionReviewActivity";
+import { reviewCardAnchors, reviewCardGroup, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { reviewRun } from "./platform/reviewRuns";
 import { REVIEW_SESSION_BUSY, reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
@@ -698,6 +699,23 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       ...(link.prompt === undefined && { prompt: remembered.find(item => item.id === link.id)?.prompt }),
     }))];
   }, [durableReviewLinks, reviewLinks, reviewSessionId, viewer]);
+  // One card per review round: pinned above the composer while it runs or waits, in the timeline where it started after.
+  const [activeReviews, setActiveReviews] = useState<ReadonlySet<string>>(() => new Set());
+  const markReviewActive = useCallback((id: string, active: boolean) => setActiveReviews(previous => withReviewActive(previous, id, active)), []);
+  // A card that moves between the pinned slot and the timeline mounts anew; this keeps its dialog, expansion and draft.
+  const reviewCardMemory = useRef<ReviewCardMemory>(new Map());
+  const reviewSlots = useMemo(() => {
+    if (reviewDisconnected || !sessionReviews.length) return { pinned: undefined, cards: undefined };
+    const { pinned, timeline } = splitReviewCards(sessionReviews, activeReviews);
+    const common = { cwd, allLinks: sessionReviews, visible: view === "session", onContinueTurn: continueSessionReview, onActiveChange: markReviewActive,
+      memory: reviewCardMemory.current };
+    return {
+      pinned: pinned.length ? <SessionReviewActivity {...common} links={pinned} pinned /> : undefined,
+      // Oldest round first: each round claims the first start message after the previous round's (see reviewCardPlacement).
+      cards: [...timeline].reverse().map(link => ({ key: `${link.sessionId}:${link.id}`, group: reviewCardGroup(link), anchors: reviewCardAnchors(link),
+        node: <SessionReviewActivity {...common} links={[link]} /> })),
+    };
+  }, [reviewDisconnected, sessionReviews, activeReviews, cwd, view, continueSessionReview, markReviewActive]);
   const sessionTitle = reviewSessionTitle(state.title?.trim(), sessionReviews.at(-1)) || "New session";
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -762,8 +780,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks}
-          reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
-            onContinueTurn={continueSessionReview} /> : undefined}
+          reviewCards={reviewSlots.cards} pinnedReviews={reviewSlots.pinned}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (

@@ -37,12 +37,12 @@ const partial: DeskRun = {
   startedAt: "2026-11-20T00:00:01Z", finishedAt: "2026-11-20T00:10:00Z", result: null,
 };
 
-function harness(accept: boolean) {
+function harness(accept: boolean, run: DeskRun = partial) {
   const actions: ReviewRunAction[] = [];
   const turns: Array<{ link: SessionReviewLink; note: string }> = [];
   const runCommand = (async (_cwd, _key, action) => {
     actions.push(action);
-    return { version: 1, runs: [partial] } satisfies DeskRunSnapshot;
+    return { version: 1, runs: [run] } satisfies DeskRunSnapshot;
   }) as typeof ReviewRun;
   const onContinueTurn = (target: SessionReviewLink, note: string) => {
     turns.push({ link: target, note });
@@ -55,14 +55,23 @@ async function flush() {
   for (let i = 0; i < 5; i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
 }
 
-async function render(rig: ReturnType<typeof harness>) {
+async function render(rig: ReturnType<typeof harness>, onActiveChange?: (id: string, active: boolean) => void,
+  memory?: import("./SessionReviewActivity").ReviewCardMemory, pinned = false) {
   await act(() => root.render(createElement(SessionReviewActivity, {
-    cwd: "/dev/project", links: [link], visible: true, onContinueTurn: rig.onContinueTurn, runCommand: rig.runCommand,
+    cwd: "/dev/project", links: [link], visible: true, onContinueTurn: rig.onContinueTurn, runCommand: rig.runCommand, onActiveChange,
+    memory, pinned, key: pinned ? "pinned" : "timeline",
   })));
   await flush();
 }
 
+async function expand() {
+  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Show details");
+  expect(toggle).not.toBeUndefined();
+  await act(() => toggle!.click());
+}
+
 async function typeNote(text: string) {
+  await expand();
   const field = host.querySelector<HTMLTextAreaElement>(".session-review-item textarea");
   expect(field).not.toBeNull();
   await act(() => {
@@ -117,4 +126,53 @@ test("AC8 a busy session refuses the continue turn: no turn, no detached continu
   expect(host.querySelector('.session-review-item [role="alert"]')?.textContent).toContain("The session is running a turn. Send the review when it finishes.");
   expect(field.value).toBe("Check the API contract.");
   expect(continueButton().disabled).toBe(false);
+});
+
+test("a round's card is compact by default: round, verdict and findings, with details behind a toggle", async () => {
+  await act(() => root.render(null));
+  const reviewed: DeskRun = { ...partial, state: "completed", round: 2, result: { reviewed: link.revision, verdict: "request-changes",
+    coverage: "complete", findingsKnown: true, findings: { blocker: 0, major: 2, minor: 1, info: 0 }, report: "# Report" } };
+  const reports: Array<[string, boolean]> = [];
+  await render(harness(true, reviewed), (id, active) => reports.push([id, active]));
+  expect(host.querySelector(".session-review-summary")?.textContent).toContain("Round 2 · verdict request-changes · 2 major, 1 minor");
+  expect(host.querySelector(".review-plan-summary")).toBeNull();
+  expect(host.querySelector(".review-session-outcome")).toBeNull();
+  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Show details")!;
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  await act(() => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(toggle.textContent).toBe("Hide details");
+  expect(host.querySelector(".review-plan-summary")).not.toBeNull();
+  expect(host.querySelector(".review-session-outcome")).not.toBeNull();
+  // A finished round reports itself inactive: its card belongs in the timeline.
+  expect(reports).toEqual([["run-1", false]]);
+});
+
+test("a running round reports itself active, so the caller pins its card above the composer", async () => {
+  await act(() => root.render(null));
+  const reports: Array<[string, boolean]> = [];
+  await render(harness(true, { ...partial, state: "running", finishedAt: null }), (id, active) => reports.push([id, active]));
+  expect(reports).toEqual([["run-1", true]]);
+});
+
+test("a card moving from the pinned slot to the timeline keeps its expansion and unsent note", async () => {
+  await act(() => root.render(null));
+  const memory: import("./SessionReviewActivity").ReviewCardMemory = new Map();
+  const rig = harness(true);
+  await render(rig, undefined, memory, true);
+  await typeNote("Half-written note");
+  // The round finished: the caller now renders the card in the timeline, a new tree.
+  await render(rig, undefined, memory, false);
+  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Hide details");
+  expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+  expect(host.querySelector<HTMLTextAreaElement>(".session-review-item textarea")?.value).toBe("Half-written note");
+});
+
+test("a pinned round whose attempt can no longer be found reports itself inactive, so it leaves the pinned slot", async () => {
+  await act(() => root.render(null));
+  const reports: Array<[string, boolean]> = [];
+  const rig = harness(true);
+  rig.runCommand = (async () => ({ version: 1, runs: [] })) as typeof ReviewRun;
+  await render(rig, (id, active) => reports.push([id, active]));
+  expect(reports).toEqual([["run-1", false]]);
 });

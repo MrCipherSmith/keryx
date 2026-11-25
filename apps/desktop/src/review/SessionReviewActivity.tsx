@@ -33,31 +33,92 @@ export function sessionReviewPublication(cwd: string, key: SessionReviewLink["ke
  */
 export type ContinueReviewTurn = (link: SessionReviewLink, note: string) => boolean | Promise<boolean>;
 
-export function SessionReviewActivity({ cwd, links, visible, onContinueTurn, runCommand = reviewRun }: {
+/** The compact line of a round's card: round, verdict and finding counts, the parts a collapsed card keeps. */
+export function compactSummary(run: DeskRun): string {
+  const parts = [`Round ${run.round ?? 1}`];
+  if (run.result?.verdict) parts.push(`verdict ${run.result.verdict}`);
+  const findings = run.result?.findingsKnown === false ? undefined : run.result?.findings;
+  if (findings) {
+    const counts = (["blocker", "major", "minor", "info"] as const).filter(level => findings[level] > 0)
+      .map(level => `${findings[level]} ${level}`);
+    parts.push(counts.length ? counts.join(", ") : "no findings");
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * What a round's card keeps when it moves between the pinned slot and the timeline (a move mounts it anew): whether it
+ * is expanded, its open dialog, the unsent Continue note and the last run it read. Keyed `sessionId:id`; the caller
+ * holds one map for the window.
+ */
+export type ReviewCardMemory = Map<string, { expanded?: boolean; open?: boolean; guidance?: string; run?: DeskRun | null }>;
+
+type RememberedField<K extends "expanded" | "open" | "guidance" | "run"> = Exclude<NonNullable<ReturnType<ReviewCardMemory["get"]>>[K], undefined>;
+
+/** `useState` whose value outlives the component in `memory[key][field]`. */
+function useRemembered<K extends "expanded" | "open" | "guidance" | "run">(memory: ReviewCardMemory | undefined, key: string, field: K,
+  initial: RememberedField<K>) {
+  const [value, setValue] = useState<RememberedField<K>>(() => (memory?.get(key)?.[field] as RememberedField<K> | undefined) ?? initial);
+  const set = useCallback((next: RememberedField<K> | ((previous: RememberedField<K>) => RememberedField<K>)) => {
+    setValue(previous => {
+      const resolved = typeof next === "function" ? (next as (previous: RememberedField<K>) => RememberedField<K>)(previous) : next;
+      if (memory) memory.set(key, { ...memory.get(key), [field]: resolved });
+      return resolved;
+    });
+  }, [memory, key, field]);
+  return [value, set] as const;
+}
+
+/** Reports whether a round's card belongs pinned above the composer (running or waiting) or in the timeline. */
+export type ReviewActiveChange = (id: string, active: boolean) => void;
+
+/** Whether `link` may offer Continue: no newer link (earlier in `all`) follows the same PR, account and range. */
+export function continuableLink(all: readonly SessionReviewLink[], link: SessionReviewLink): boolean {
+  const index = all.findIndex(item => item.id === link.id && item.sessionId === link.sessionId);
+  const newer = index < 0 ? [] : all.slice(0, index);
+  return !newer.some(next => next.key.repositoryId === link.key.repositoryId && next.key.number === link.key.number &&
+    next.key.viewer.toLowerCase() === link.key.viewer.toLowerCase() && next.revision.headSha === link.revision.headSha &&
+    next.revision.baseSha === link.revision.baseSha);
+}
+
+/**
+ * The review cards of a session: one card per round (link), compact until expanded. `onActiveChange` tells the caller
+ * where each card belongs: pinned above the composer while its round runs or waits, in the timeline once it finished.
+ */
+export function SessionReviewActivity({ cwd, links, allLinks = links, visible, pinned = false, onContinueTurn, onActiveChange, memory, runCommand = reviewRun }: {
   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
+  /** Every link of the session, newest first: decides which card may Continue. Defaults to `links`. */
+  allLinks?: readonly SessionReviewLink[] | undefined;
+  /** Rendered in the pinned slot above the composer rather than in the transcript. */
+  pinned?: boolean | undefined;
   onContinueTurn: ContinueReviewTurn;
+  onActiveChange?: ReviewActiveChange | undefined;
+  /** Keeps each card's state across a move between the pinned slot and the timeline. */
+  memory?: ReviewCardMemory | undefined;
   /** The review_run command; injected by tests. */
   runCommand?: typeof reviewRun | undefined;
 }) {
-  const [limit, setLimit] = useState(5);
-  return <section className="session-review-activity" aria-label="Review activity">
-    {links.length > limit && <button className="btn btn-sm" onClick={() => setLimit(value => value + 5)}>Show earlier reviews</button>}
-    {links.slice(0, limit).map((link, index) => <FollowedReview cwd={cwd} link={link} visible={visible} key={link.id}
-      canContinue={!links.slice(0, index).some(next => next.key.repositoryId === link.key.repositoryId && next.key.number === link.key.number &&
-        next.key.viewer.toLowerCase() === link.key.viewer.toLowerCase() && next.revision.headSha === link.revision.headSha && next.revision.baseSha === link.revision.baseSha)}
-      onContinueTurn={onContinueTurn} reviewRun={runCommand} />).reverse()}
+  return <section className={`session-review-activity${pinned ? " session-review-pinned" : ""}`}
+    aria-label={pinned ? "Review in progress" : "Review activity"}>
+    {links.map(link => <FollowedReview cwd={cwd} link={link} visible={visible} key={`${link.sessionId}:${link.id}`}
+      canContinue={continuableLink(allLinks, link)} onContinueTurn={onContinueTurn} onActiveChange={onActiveChange}
+      memory={memory} reviewRun={runCommand} />).reverse()}
   </section>;
 }
 
-function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, reviewRun }: {
+function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onActiveChange, memory, reviewRun }: {
   cwd: string; link: SessionReviewLink; visible: boolean; canContinue: boolean;
-  onContinueTurn: ContinueReviewTurn; reviewRun: typeof import("../platform/reviewRuns").reviewRun;
+  onContinueTurn: ContinueReviewTurn; onActiveChange?: ReviewActiveChange | undefined;
+  memory?: ReviewCardMemory | undefined;
+  reviewRun: typeof import("../platform/reviewRuns").reviewRun;
 }) {
-  const [run, setRun] = useState<DeskRun | null>(null);
-  const [open, setOpen] = useState(false);
+  const remembered = `${link.sessionId}:${link.id}`;
+  const [run, setRun] = useRemembered(memory, remembered, "run", null);
+  const [expanded, setExpanded] = useRemembered(memory, remembered, "expanded", false);
+  const [open, setOpen] = useRemembered(memory, remembered, "open", false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
-  const [guidance, setGuidance] = useState("");
+  const [guidance, setGuidance] = useRemembered(memory, remembered, "guidance", "");
   const [history, setHistory] = useState<{ events: CoordinatorEvent[]; before?: number }>();
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -96,19 +157,32 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, revie
     } finally { inFlight.current = false; }
   }, [cwd, link, reviewRun]);
   const pending = !run || runActive(run);
+  // Placement follows the round's state once it is known: running, or waiting on the user's answer, pins the card;
+  // anything else (finished, paused, stopped) is history. A run that vanished or can no longer be read unpins it.
+  const active = run ? runActive(run) || pendingManualQuestions(run).length > 0 : error ? false : undefined;
+  useEffect(() => {
+    if (active !== undefined) onActiveChange?.(link.id, active);
+  }, [active, link.id, onActiveChange]);
   const automaticPublication = run?.options?.autoPublish && run.publication === "pending" ? run.finishedAt : null;
+  // After an accepted Continue the session may resume this round at any moment: keep reading for two minutes so the
+  // card pins as soon as the round runs again.
+  const [followUntil, setFollowUntil] = useState(0);
+  // Every mount reads the run once, whatever it remembers: a remembered run is a placeholder until the read lands.
+  useEffect(() => {
+    if (visible) void refresh();
+  }, [visible, refresh]);
   useEffect(() => {
     if (!visible) return;
-    if (pending) void refresh();
     const poll = () => {
       if (document.visibilityState !== "hidden") void refresh(true);
     };
-    const timer = pending || automaticPublication ? window.setInterval(() => {
-      if (pending || (automaticPublication && Date.now() - Date.parse(automaticPublication) < 120_000)) poll();
+    const following = followUntil > Date.now();
+    const timer = pending || automaticPublication || following ? window.setInterval(() => {
+      if (pending || Date.now() < followUntil || (automaticPublication && Date.now() - Date.parse(automaticPublication) < 120_000)) poll();
     }, 6000) : undefined;
     window.addEventListener("focus", poll);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", poll); };
-  }, [visible, pending, automaticPublication, refresh]);
+  }, [visible, pending, automaticPublication, followUntil, refresh]);
 
   const mutate = useCallback(async (action: Extract<ReviewRunAction, { kind: "cancel" | "answer" }>) => {
     if (writing.current) return false;
@@ -151,6 +225,8 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, revie
       // The note stays in the form until the turn is accepted: a busy session keeps what the user typed.
       if (!(await onContinueTurn(link, guidance.trim()))) throw new Error(REVIEW_SESSION_BUSY);
       if (current === generation.current) setGuidance("");
+      setFollowUntil(Date.now() + 120_000);
+      void refresh();
       return true;
     } catch (failure) {
       if (current === generation.current) setError(errMessage(failure));
@@ -159,7 +235,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, revie
       writing.current = false;
       setWorking(false);
     }
-  }, [link, onContinueTurn]);
+  }, [link, onContinueTurn, refresh, setGuidance]);
 
   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
     const snapshot = await reviewRun(cwd, link.key, action);
@@ -229,9 +305,16 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, revie
             aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} /></button>
         </div>}
       </header>
-      {link.prompt && <blockquote className="session-review-request">{link.prompt}</blockquote>}
+      {run && <div className="session-review-summary">
+        <span>{compactSummary(run)}</span>
+        <button className="btn btn-sm session-review-toggle" type="button" aria-expanded={expanded}
+          aria-label={`${expanded ? "Hide" : "Show"} details of review #${link.key.number}${run.round ? ` round ${run.round}` : ""}`}
+          onClick={() => setExpanded(value => !value)}>{expanded ? "Hide details" : "Show details"}</button>
+      </div>}
       {error && <div className="session-review-message" role="alert">{prefix} {error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry status</button></div>}
-      {run && <>
+      {awaitAnswer && <p className="session-review-message">{questions.length} {questions.length === 1 ? "question is" : "questions are"} waiting for a reply.</p>}
+      {expanded && link.prompt && <blockquote className="session-review-request">{link.prompt}</blockquote>}
+      {run && expanded && <>
         <ReviewPlanSummary data={{
           title: run.pullRequestTitle ?? `${link.key.repo} #${link.key.number}`,
           headSha: run.headSha,
@@ -245,7 +328,6 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, revie
         }} />
         {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
         {terminal && <ReviewOutcome run={run} />}
-        {awaitAnswer && <p className="session-review-message">{questions.length} {questions.length === 1 ? "question is" : "questions are"} waiting for a reply.</p>}
         {canResume && <form className="review-question" onSubmit={event => {
           event.preventDefault();
           void continueReview(guidance);
