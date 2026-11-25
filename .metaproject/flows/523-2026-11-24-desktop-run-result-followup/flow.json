@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T04:45:17.939Z",
+  "updatedAt": "2026-11-25T04:46:27.384Z",
   "source": {
     "type": "description",
     "ref": null
@@ -135,7 +135,7 @@
       "id": "T7",
       "title": "Desktop: run tracking, delivery on idle, run card and replay",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -152,7 +152,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -163,8 +164,14 @@
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T04:46:27.384Z",
+            "outcome": "started",
+            "detail": "523-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -275,6 +282,16 @@
       "at": "2026-11-25T04:45:17.939Z",
       "event": "ac-updated",
       "detail": "AC11: \"Root typecheck and lint, and the desktop build (its `tsc --noEmit` and `vite build`), pass on the final head. [verify: exec `bun run typecheck && bun run lint && bun --cwd apps/desktop run build`]\" -> \"Root typecheck and lint, and the desktop build (its `tsc --noEmit` and `vite build`), pass on the final head. [verify: exec `bun run typecheck && bun run lint && (cd apps/desktop && bun run build)`]\" (verify command fix: from the repository root bun 1.4.2 treats 'bun --cwd apps/desktop run build' as usage output and exits 0 without building (found by 523-T7); the criterion itself is unchanged)"
+    },
+    {
+      "at": "2026-11-25T04:46:26.214Z",
+      "event": "task-done",
+      "detail": "T7: Desktop: run tracking, delivery on idle, run card and replay"
+    },
+    {
+      "at": "2026-11-25T04:46:27.384Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 523-T8"
     }
   ],
   "origin": {
