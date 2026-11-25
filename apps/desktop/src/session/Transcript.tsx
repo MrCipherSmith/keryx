@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { BrandMark } from "../components/BrandMark";
 import type { ToolCallContent, ToolKind } from "../acp/types";
 import type { CommandItem, DelegateResultItem, Item, TerminalRunItem } from "./reducer";
@@ -313,6 +313,50 @@ function toBlocks(items: Item[]): Block[] {
   return out;
 }
 
+/**
+ * A finished review round's card in the timeline. It sits right after the user message its round started from: the first
+ * message containing one of `anchors` (tried in order: the round's head commit, the typed request, the pull request URL).
+ * Cards are given oldest round first; a round claims the first matching message after the one the previous round of the
+ * same `group` (pull request) claimed, so two rounds on one head land on their own start messages. A card no message
+ * matches goes after the last item. Cards sharing a place keep the given (oldest first) order.
+ */
+export interface ReviewCardSlot {
+  key: string;
+  group: string;
+  anchors: readonly string[];
+  node: ReactNode;
+}
+
+/** Whether `text` holds `needle` as a whole token: a needle ending in a digit is not followed by another digit. */
+function containsAnchor(text: string, needle: string): boolean {
+  for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+    if (!/\d$/.test(needle) || !/\d/.test(text.charAt(at + needle.length))) return true;
+  }
+  return false;
+}
+
+/** The block index each card follows (-1: after the last block). */
+export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: unknown }>, cards: readonly ReviewCardSlot[]): Map<string, number> {
+  const placed = new Map<string, number>();
+  const claimed = new Map<string, number>();
+  for (const card of cards) {
+    const after = claimed.get(card.group) ?? -1;
+    let at = -1;
+    for (const needle of card.anchors) {
+      if (!needle.trim()) continue;
+      at = blocks.findIndex((block, index) => {
+        if (index <= after || block.type !== "user") return false;
+        const text = (block.item as { text?: unknown } | undefined)?.text;
+        return typeof text === "string" && containsAnchor(text, needle);
+      });
+      if (at >= 0) break;
+    }
+    placed.set(card.key, at);
+    if (at >= 0) claimed.set(card.group, at);
+  }
+  return placed;
+}
+
 interface Props {
   items: Item[];
   /** Runs a command line a card's view sends; returns when its result is shown. */
@@ -322,7 +366,8 @@ interface Props {
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
-  reviewActivity?: ReactNode;
+  /** Finished review rounds, each placed where its round started. Running rounds are pinned by SessionView instead. */
+  reviewCards?: readonly ReviewCardSlot[];
   /** The session's subagents: a tool card whose call spawned one links to it. */
   subagents?: readonly Subagent[];
   onShowSubagent?: (id: string) => void;
@@ -338,7 +383,7 @@ export function Transcript(props: Props) {
   );
 }
 
-function TranscriptView({ items, busy, replaying, empty, reviewActivity, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
+function TranscriptView({ items, busy, replaying, empty, reviewCards = [], onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -351,6 +396,9 @@ function TranscriptView({ items, busy, replaying, empty, reviewActivity, onRunCo
   /** The user just opened or closed something: the growth that follows is theirs, not the stream's. */
   const userGrew = useRef(false);
   const blocks = useMemo(() => toBlocks(items), [items]);
+  const placement = useMemo(() => reviewCardPlacement(blocks, reviewCards), [blocks, reviewCards]);
+  const cardsAfter = (index: number) => reviewCards.filter(card => placement.get(card.key) === index)
+    .map(card => <Fragment key={`review-${card.key}`}>{card.node}</Fragment>);
   const last = items[items.length - 1];
   const streamingAgent = busy && last?.kind === "agent";
   const streamingThought = busy && last?.kind === "thought";
@@ -396,28 +444,9 @@ function TranscriptView({ items, busy, replaying, empty, reviewActivity, onRunCo
     el.scrollTo({ top: el.scrollHeight, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
-  return (
-    <div className="transcript-wrap">
-      <div className="transcript" ref={ref} aria-live="off">
-        <div
-          className="transcript-inner"
-          ref={innerRef}
-          onClickCapture={(e) => {
-            if (!(e.target as HTMLElement).closest(".tool-row, .thought-row, details > summary")) return;
-            userGrew.current = true;
-            // Only the resize this click causes; a click that changes nothing must not skip a later pin.
-            window.setTimeout(() => (userGrew.current = false), 150);
-          }}
-        >
-          {replaying ? (
-            <div className="loading-row centered">
-              <Spinner /> Loading session…
-            </div>
-          ) : null}
-          {items.length === 0 && !reviewActivity && !replaying ? empty : null}
-          {blocks.map((b, i) => {
-            const isLast = i === blocks.length - 1;
-            switch (b.type) {
+  const renderBlock = (b: (typeof blocks)[number], i: number) => {
+    const isLast = i === blocks.length - 1;
+    switch (b.type) {
               case "user":
           return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
               case "agent":
@@ -466,9 +495,35 @@ function TranscriptView({ items, busy, replaying, empty, reviewActivity, onRunCo
                 );
               case "notice":
                 return <NoticeRow key={b.item.id} item={b.item} />;
-            }
-          })}
-          {reviewActivity}
+    }
+  };
+
+  return (
+    <div className="transcript-wrap">
+      <div className="transcript" ref={ref} aria-live="off">
+        <div
+          className="transcript-inner"
+          ref={innerRef}
+          onClickCapture={(e) => {
+            if (!(e.target as HTMLElement).closest(".tool-row, .thought-row, details > summary")) return;
+            userGrew.current = true;
+            // Only the resize this click causes; a click that changes nothing must not skip a later pin.
+            window.setTimeout(() => (userGrew.current = false), 150);
+          }}
+        >
+          {replaying ? (
+            <div className="loading-row centered">
+              <Spinner /> Loading session…
+            </div>
+          ) : null}
+          {items.length === 0 && reviewCards.length === 0 && !replaying ? empty : null}
+          {blocks.map((b, i) => (
+            <Fragment key={b.type === "tools" ? `t-${b.items[0]!.id}` : `b-${b.item.id}`}>
+              {renderBlock(b, i)}
+              {cardsAfter(i)}
+            </Fragment>
+          ))}
+          {cardsAfter(-1)}
           {busy && !streamingAgent && !streamingThought ? (
             <div className="working" role="status">
               <span className="working-dots" aria-hidden>

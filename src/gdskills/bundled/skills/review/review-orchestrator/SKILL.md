@@ -65,6 +65,22 @@ license: "MIT"
 6. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
 7. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
 
+## Desktop review state
+
+Applies when the turn names a Desktop review, or `KERYX_REVIEW_SESSION_ID` is set and the target is a pull request: keep the round's durable state (`.metaproject/reviews/pr/<id>/review.json`) with `keryx review state` at each step below (`keryx review state --help` for the flags). A missed call breaks nothing: the session's live status stays right and the next call restores the state. **Continuing** (the turn says so, or `open` prints `reused`) means `keryx review state show --review <id>`, the round's `package`, and the step its state names; never start a new package for the same head.
+
+| Step | Call |
+|---|---|
+| Before `keryx review start` (or `plan`) | `keryx review state open --pr <url> --base <sha> --head <sha> [--viewer <login>] [--settings <key>]`; it prints the review id |
+| After `start` | `keryx review state round --review <id> --package <the package start printed> --state planning` |
+| Plan ready (`review plan` / `slice`) | `keryx review state round --review <id> --state dispatching --plan <slices>,<waves>,0/<assignments>` |
+| A wave ends | `keryx review state round --review <id> --plan <slices>,<waves>,<done>/<total> --reviewer <role>=done:<n>… --usage <tokens>[,<usd>]` |
+| Reconciling (`ingest`, `verdict`) | `keryx review state round --review <id> --state reconciling --findings <b>,<M>,<m>,<i>` |
+| Report ready | `keryx review state round --review <id> --state ready --verdict approve\|comment\|request-changes --findings … --usage …` |
+| Stopped without a report (provider error, unanswered question, turn end) | `keryx review state round --review <id> --state paused`, the reason with `keryx review state note --review <id> --text "<reason>"` |
+| Continue | `keryx review state show --review <id>`: reuse its `package` and resume at the step the round's state names (a paused round may go straight to `ready`); no review.json yet → open the round as the turn says, then continue from the named earlier attempt |
+| Publish | after `keryx review publish`, `keryx review state publish --review <id> --verdict <v> [--url <review url>]` |
+
 ## Clean context — the round starts empty
 
 Context comes only from your own context stages: scope, the Review Context Pack, the memory stage and the layers. Your session memory, the auto-memory index (`MEMORY.md`), remembered feedback and the earlier conversation are not inputs: do not read, quote or apply them.
@@ -283,8 +299,7 @@ keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
 
 `#B` is its own conversation. Collect and reply on it exactly as always: its record is filed under `#B`'s own number.
 
-- **Never run a reply pass against a pull request the dispatch named as the
-  caller's.** When `constraints` says the caller owns the reply for `#A` — or the target resolves onto a pull request another skill declared — collect if the round needs the record and stop there. `review-pr-feedback` answers `#A` once, after the merge; a mid-loop reply would make that post-merge reply be skipped as already answered.
+- **Never run a reply pass against a pull request the dispatch named as the caller's.** When `constraints` says the caller owns the reply for `#A` — or the target resolves onto a pull request another skill declared — collect if the round needs the record and stop there. `review-pr-feedback` answers `#A` once, after the merge; a mid-loop reply would make that post-merge reply be skipped as already answered.
 - **Absent such a constraint this orchestrator owns the reply.**
 - The reply is the only thing that moves; collection, classification, the verifier exemption and the cap exemption are unchanged.
 
@@ -608,9 +623,7 @@ Dispatch selected reviewers in parallel when independent — this engine dispatc
 
 ### Wave C — verification, and what it replaced
 
-Wave C replaced `review-strict`, a meta-pass that re-read the findings and adjusted severity with no new evidence. It was **removed, not improved**, on measured evidence:
-self-correction fell 95.5 → 91.5 → 89.0 (GPT-4, GSM8K) and 75.8 → 38.1 (GPT-3.5, CommonSenseQA), arXiv:2310.01798; Self-Refine's +49.2 on dialogue response generation is +0.2 on maths
-(arXiv:2303.17651), so re-reading helps subjective tasks and not verifiable ones. A verifier that **runs something** rejects most false reports.
+Wave C replaced `review-strict`, a meta-pass that re-read the findings and adjusted severity with no new evidence. It was **removed, not improved**, on measured evidence: self-correction fell 95.5 → 91.5 → 89.0 (GPT-4, GSM8K) and 75.8 → 38.1 (GPT-3.5, CommonSenseQA), arXiv:2310.01798; Self-Refine's +49.2 on dialogue response generation is +0.2 on maths (arXiv:2303.17651), so re-reading helps subjective tasks and not verifiable ones. A verifier that **runs something** rejects most false reports.
 Do not restore the re-score because it looks useful.
 
 `review-verifier` **never votes**: agreement between reviewers is not evidence and must never be recorded as verification.
@@ -728,16 +741,10 @@ the reviewer feels about it:
 4. **An unimplemented acceptance criterion** — the change claims work the diff
    does not contain.
 
-Everything else is at most `major`. "This will definitely cause problems later"
-is not one of the four. Neither is "this violates the architecture", "this fails
+Everything else is at most `major`. "This will definitely cause problems later" is not one of the four. Neither is "this violates the architecture", "this fails
 the linter", or "this is how the last outage started".
 
-**An unshipped dependency is shape 1 or shape 2, and the list stays closed.**
-When a producer is recorded `state: open` with `merge_order: producer_first` and
-nothing stops this change merging first, the consumer calls what is not there
-(shape 1) or reads the default the producer has not changed yet (shape 2). File it
-against the consuming call site, and say in the fix that the remedy is a merge gate,
-a flag, or a fallback — never a change to the diff. A missing deploy note with no
+**An unshipped dependency is shape 1 or shape 2, and the list stays closed.** When a producer is recorded `state: open` with `merge_order: producer_first` and nothing stops this change merging first, the consumer calls what is not there (shape 1) or reads the default the producer has not changed yet (shape 2). File it against the consuming call site, and say in the fix that the remedy is a merge gate, a flag, or a fallback — never a change to the diff. A missing deploy note with no
 recorded producer state behind it is the `minor` in the Context Pack.
 
 ### `major` / `minor` / `info` — the boundary test
@@ -778,8 +785,7 @@ Read the review activity rule before the code: `.metaproject/rules/project/activ
 
 ### Class scope — required for `blocker` and `major`
 
-Every `blocker` and `major` finding must carry `class_scope`: **every** site that
-holds the shape you found, and **how you enumerated them** — the grep or query
+Every `blocker` and `major` finding must carry `class_scope`: **every** site that holds the shape you found, and **how you enumerated them** — the grep or query
 you ran, or the guard that derives the set.
 
 ```yaml
@@ -872,16 +878,13 @@ After findings are consolidated, decide whether any of them should re-train a pr
   keryx skills learn --from-review <report-path> --skill <module>/<skill>
 ```
 
-If no findings map to a project-skill, write `## Skill Learning\n- none`.
-Never run `skills learn apply` from the reviewer — proposal review and apply are
-the orchestrator's step.
+If no findings map to a project-skill, write `## Skill Learning\n- none`. Never run `skills learn apply` from the reviewer — proposal review and apply are the orchestrator's step.
 
 ---
 
 ## PR Review Report Publication
 
-When the review target is a GitHub pull request, ask whether to publish after
-the report exists, unless `publish_pr_review_report` is already set:
+When the review target is a GitHub pull request, ask whether to publish after the report exists, unless `publish_pr_review_report` is already set:
 
 ```text
 Publish this review report to the PR?
@@ -899,19 +902,15 @@ Automation values, names unchanged:
 - `comment-and-ai-artifact` -> the PR review plus the follow-up file.
 - `none` or legacy `false` -> do not publish.
 
-Unattended: do not publish; hand the rendered body back to the caller.
-
-Default is do not publish. No resolvable PR number means skip and say so.
+Unattended: do not publish; hand the rendered body back to the caller. Default is do not publish. No resolvable PR number means skip and say so.
 
 The review body is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Name the workflow and reviewers that actually ran, with models, tools, skills and subagents. Never identify the operator from `gh auth status`, git config or a credential; do not sign the review as a person, reviewer or model. A project overlay adds content only through the template's overlay slots. If a project skill under `.metaproject/project-skills/orchestration` provides `templates/report-overlay.md` extending this engine, read it and its required project rules. Compose its English slot text from the round's evidence. Put the evidence in a fenced `json keryx:report-slots` block with the overlay id and named `slots`. In a Vantage review, give every mandatory check its own `- Label — evidence or explicit status` line in `verified-clean`. A check without evidence is not verified. Write the input report to a separate draft file and pass it to `review ingest --report`; the planner already owns the package's `report.md`.
 
 The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. The body goes out as one formal review whose state follows *Where it is posted* in the template, through the one keryx path to GitHub, held by the readiness checklist: `keryx review publish <package> --event COMMENT|REQUEST_CHANGES|APPROVE` (`--partial` when the package is not ready; a merged or closed PR is refused, so its report stays local). Publishing is the operator's decision: the `review_publish` card in keryx shell, elsewhere they run it in their terminal, where it shows the body first. You never pass `--yes`, and never post around it with `gh pr review` or `gh pr comment`.
 
-**No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
-Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
+**No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body. Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
-Re-read the thread before posting; a head that differs from the round's head, however it moved,
-follows `SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
+Re-read the thread before posting; a head that differs from the round's head, however it moved, follows `SKILL.detail.md` § "Head moved". Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 

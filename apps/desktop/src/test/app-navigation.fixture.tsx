@@ -22,7 +22,14 @@ const barePrUrl = "https://github.com/org/project/pull/13";
 const bareStarts: unknown[] = [];
 const boardRunId = "9c8a02c5-1d65-4faa-a407-8f263f83ac53";
 let boardOrigin = "";
-const originalRequests = new Map<string, string>();
+/** The skill in #14's session has registered its attempt (it does so while the review turn runs, here once it is released). */
+let boardRegistered = false;
+/** Detached starts for #14; Desktop Review v3 sends none. */
+const boardStarts: unknown[] = [];
+/** The review turns (text naming `keryx review state open`) each session received, in order. */
+const reviewTurns: Array<{ sessionId: string; text: string }> = [];
+/** While set, a `session/prompt` answers only once it resolves: that session's turn is in flight. */
+let holdPrompt: Promise<void> | undefined;
 const boardPrUrl = "https://github.com/org/project/pull/14";
 let origin = "";
 let bareOrigin = "";
@@ -91,23 +98,32 @@ mockIPC(async (cmd, args) => {
       calls.push(method);
       if (["session/load", "session/resume", "_keryx/session_shown"].includes(method)) loaded.push(String((params as { sessionId?: string }).sessionId));
       let result: unknown;
-      if (method === "_keryx/session_review_request") {
-        const { attemptId, text } = params as { attemptId: string; text: string };
-        originalRequests.set(attemptId, text);
-        result = text;
-      } else if (method === "_keryx/session_reviews") {
+      if (method === "_keryx/session_reviews") {
         const sessionId = (params as { sessionId: string }).sessionId;
         const candidates = [{ id: runId, number: 12, sessionId: origin, revision: { baseSha: run.baseSha, headSha: run.headSha } },
           { id: bareRunId, number: 13, sessionId: bareOrigin, revision: { baseSha: bareRun.baseSha, headSha: bareRun.headSha } },
-          { id: boardRunId, number: 14, sessionId: boardOrigin, revision: { baseSha: boardRun.baseSha, headSha: boardRun.headSha } }];
+          { id: boardRunId, number: 14, sessionId: boardRegistered ? boardOrigin : "", revision: { baseSha: boardRun.baseSha, headSha: boardRun.headSha } }];
         result = account === "me" ? candidates.filter(candidate => candidate.sessionId === sessionId).map(candidate => ({
-          ...candidate, prompt: originalRequests.get(candidate.id), key: { repo: "org/project", repositoryId: "RID", viewer: "me", number: candidate.number },
+          ...candidate, key: { repo: "org/project", repositoryId: "RID", viewer: "me", number: candidate.number },
         })) : [];
       } else if (method === "session/prompt") {
         const { sessionId, prompt } = params as { sessionId: string; prompt: { text: string }[] };
         prompted.push(sessionId);
         saved.add(sessionId);
-        transcript.set(sessionId, prompt[0]?.text ?? "");
+        const text = prompt[0]?.text ?? "";
+        transcript.set(sessionId, text);
+        // The review-orchestrator skill in that session registers its package as the PR's attempt (v2 data in
+        // runs.sqlite): from then on the session's review list and the run status show it for this session.
+        if (text.includes("keryx review state open")) {
+          reviewTurns.push({ sessionId, text });
+          if (text.includes(`--pr ${prUrl} `)) origin = sessionId;
+          if (text.includes(`--pr ${barePrUrl} `)) bareOrigin = sessionId;
+          if (text.includes(`--pr ${boardPrUrl} `)) {
+            boardOrigin = sessionId;
+            if (!stored.has(sessionId)) stored.set(sessionId, { sessionId, cwd, title: "New session", updatedAt: "2026-11-20T00:00:00Z", _meta: { keryx: {} } });
+          }
+        }
+        await holdPrompt;
         result = { stopReason: "end_turn" };
       } else if (method === "session/load") {
         const { sessionId } = params as { sessionId: string };
@@ -143,7 +159,7 @@ mockIPC(async (cmd, args) => {
       if ((args as {reviewsOnly?: boolean}).reviewsOnly) {
         reviewReads.push(String((args as {cwd:string}).cwd));
         // Once the session starts a review, PR #12 has a running Review in this list.
-        const reviews = starts.length ? [{ id: "review-12", number: 12, state: "running", freshness: { kind: "current" }, onHeadMove: "ask",
+        const reviews = origin ? [{ id: "review-12", number: 12, state: "running", freshness: { kind: "current" }, onHeadMove: "ask",
           closedAt: null, latestRound: 1, reviewed: null, archived: false, findings: null, publication: null, source: "manual", flowId: null, tokens: null,
           card: { number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
           rounds: [{ number: 1, baseSha: run.baseSha, headSha: run.headSha, previousRunId: null, attempts: [] }] }] : [];
@@ -153,26 +169,24 @@ mockIPC(async (cmd, args) => {
       reads.push(String((args as {cwd:string}).cwd));
       if (offline) throw new Error("unavailable: connection lost");
       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
-        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" },
-          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha,updatedAt:"2026-11-18T00:00:00Z" },
-          { number:14,title:"Board proof",url:boardPrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:boardRun.headSha,baseSha:boardRun.baseSha, ...(boardOrigin && account === "me" && { localReview: { active: true, ready: false, runState: "running", sessionId: boardOrigin, runId: boardRunId } }),updatedAt:"2026-11-17T00:00:00Z" }] };
+        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha, ...(origin && account === "me" && { localReview: { active: true, ready: false, runState: "running", sessionId: origin, runId } }),updatedAt:"2026-11-19T00:00:00Z" },
+          { number:13,title:"Bare proof",url:barePrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:bareRun.headSha,baseSha:bareRun.baseSha, ...(bareOrigin && account === "me" && { localReview: { active: true, ready: false, runState: "running", sessionId: bareOrigin, runId: bareRunId } }),updatedAt:"2026-11-18T00:00:00Z" },
+          { number:14,title:"Board proof",url:boardPrUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:boardRun.headSha,baseSha:boardRun.baseSha, ...(boardRegistered && account === "me" && { localReview: { active: true, ready: false, runState: "running", sessionId: boardOrigin, runId: boardRunId } }),updatedAt:"2026-11-17T00:00:00Z" }] };
     case "review_run": {
       const { action, target } = args as { action: { kind: string; activityId?: string; activityBefore?: number; sessionId?: string }; target: { number: number } };
       if (target.number === 14) {
         if (action.kind === "start") {
-          boardOrigin = action.sessionId ?? "";
-          stored.set(boardOrigin, { sessionId: boardOrigin, cwd, title: "New session", updatedAt: "2026-11-20T00:00:00Z", _meta: { keryx: {} } });
-          return { version: 1, runs: [{ ...boardRun, sessionId: boardOrigin }], startedRunId: boardRunId };
+          boardStarts.push(action);
+          return { version: 1, runs: [{ ...boardRun, sessionId: action.sessionId }], startedRunId: boardRunId };
         }
-        return { version: 1, runs: boardOrigin ? [{ ...boardRun, sessionId: boardOrigin }] : [] };
+        return { version: 1, runs: boardRegistered ? [{ ...boardRun, sessionId: boardOrigin }] : [] };
       }
       if (target.number === 13) {
         if (action.kind === "start") {
           bareStarts.push(action);
-          bareOrigin = action.sessionId ?? "";
-          return { version: 1, runs: [{ ...bareRun, sessionId: bareOrigin }], startedRunId: bareRunId };
+          return { version: 1, runs: [{ ...bareRun, sessionId: action.sessionId }], startedRunId: bareRunId };
         }
-        return { version: 1, runs: bareStarts.length && action.activityId === bareRunId ? [{ ...bareRun, sessionId: bareOrigin }] : [] };
+        return { version: 1, runs: bareOrigin && (action.activityId === undefined || action.activityId === bareRunId) ? [{ ...bareRun, sessionId: bareOrigin }] : [] };
       }
       assert.equal(target.number, 12);
       if (action.activityBefore !== undefined) {
@@ -181,8 +195,7 @@ mockIPC(async (cmd, args) => {
       }
       if (action.kind === "start") {
         starts.push(action);
-        origin = action.sessionId ?? "";
-        return { version: 1, runs: [{ ...run, sessionId: origin }], startedRunId: runId };
+        return { version: 1, runs: [{ ...run, sessionId: action.sessionId }], startedRunId: runId };
       }
       if (action.kind === "answer") {
         replies.push(action);
@@ -192,7 +205,7 @@ mockIPC(async (cmd, args) => {
         }
         questions = questions.filter(q => q.id !== (action as { questionId?: string }).questionId);
       }
-      return { version: 1, runs: starts.length && (action.activityId === runId || action.kind === "answer")
+      return { version: 1, runs: origin && (action.activityId === runId || action.kind === "answer")
         ? [{ ...run, sessionId: origin, pendingQuestions: questions, coordinatorActivityBefore: 88 }] : [] };
     }
     case "review_watcher": return { version: 1, state:"disabled", events:[] };
@@ -363,10 +376,23 @@ try {
   const apply = [...dialog.querySelectorAll("button")].find(button => button.textContent === "Apply");
   assert.ok(apply && !apply.disabled);
   await React.act(() => apply.click());
-  assert.deepEqual(starts, [{ kind: "start", baseSha: run.baseSha, headSha: run.headSha, sessionId: "nav-session",
-    options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] }, flowId: "505" } }]);
-  assert.match(host.textContent ?? "", /2 questions are waiting for a reply/);
-  assert.equal(originalRequests.get(runId), `Сделай адаптивное ревью ${prUrl} с review-orchestrator`);
+  // AC6 (Desktop Review v3): Apply sends the review turn into this same session and starts no detached worker.
+  await waitFor("the review turn reaches the requesting session", () => reviewTurns.length === 1);
+  assert.deepEqual(starts, [], "Apply sends no review_run start");
+  assert.equal(reviewTurns[0]!.sessionId, "nav-session"); // length checked above
+  const firstTurn = reviewTurns[0]!.text;
+  for (const part of ["review-orchestrator", prUrl, `--base ${run.baseSha} --head ${run.headSha}`, "keryx review state open", "--session nav-session",
+    "--source desktop", "Flow 505", `Request: Сделай адаптивное ревью ${prUrl} с review-orchestrator`]) {
+    assert.ok(firstTurn.includes(part), `The review turn names ${part}`);
+  }
+  assert.ok(!calls.includes("_keryx/session_review_request"), "No v2 launch receipt is written");
+  // AC9: the attempt the skill registered for this session (v2 data) shows in the session review card.
+  await waitFor("the session review card shows the registered attempt", () => /2 questions are waiting for a reply/.test(host.textContent ?? ""));
+  // The running round is pinned above the composer, not the last transcript item, and stays compact until expanded.
+  await waitFor("the running round's card is pinned above the composer", () => !!host.querySelector(".composer-dock .session-review-pinned .session-review-item"));
+  assert.equal(host.querySelector(".transcript .session-review-item"), null, "A running round is not in the transcript");
+  assert.equal([...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity"), undefined, "Compact by default");
+  await React.act(() => namedButton("Show details").click());
   const activity = [...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity");
   assert.ok(activity);
   await React.act(() => activity.click());
@@ -394,9 +420,11 @@ try {
   const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
   assert.deepEqual(replies, [reply, reply]);
   assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
-  assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
+  assert.deepEqual(prompted, ["nav-session"], "Answers and status reads send no turn: the review turn is the only one");
   await go("Pull requests");
-  // The review started from the session is the card's review link, without a manual refresh.
+  // The board learns of the session's registered attempt from its next read (v2 data on the card slot).
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh pull requests"]')!.click());
+  await waitFor("#12's slot shows the registered attempt", () => /^Review · (running|needs your answer)$/.test(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? ""));
   assert.match(host.querySelector('[aria-label="Keryx work for #12"] [data-slot="review"]')?.textContent ?? "", /^Review · (running|needs your answer)$/);
   // The card opens the exact ACP conversation that started this review.
   const countBeforeReopen = newSessions;
@@ -414,11 +442,12 @@ try {
   const shownComposer = () => [...host.querySelectorAll<HTMLTextAreaElement>("textarea")].find(t => !t.closest("[hidden]"));
   const opened = () => calls.filter(method => method === "session/new").length;
   const firstOpen = opened();
+  const turnsBeforeOpen = prompted.length;
   const timers = trackTimers();
   await React.act(() => namedButton("Open in session for #12").click());
   await waitFor("the composer holds the PR URL", () => shownComposer()?.value === prUrl);
   assert.equal(opened(), firstOpen + 1);
-  assert.ok(!calls.includes("session/prompt"), "The PR URL is not sent");
+  assert.equal(prompted.length, turnsBeforeOpen, "The PR URL is not sent");
   // keryx has not saved the new session yet: it refuses the binding, which waits for the first turn without a notice.
   const flagWrites = () => calls.filter(method => method === "_keryx/session_flags").length;
   // TP-R4-006: every notice element added from here on, with the turns sent when it appeared.
@@ -426,7 +455,7 @@ try {
   const notices: number[] = [];
   const watcher = new MutationObserver(records => {
     for (const record of records) for (const node of record.addedNodes) {
-      if (node instanceof Element && node.matches(".notice") && notSaved.test(node.textContent ?? "")) notices.push(prompted.length);
+      if (node instanceof Element && node.matches(".notice") && notSaved.test(node.textContent ?? "")) notices.push(prompted.length - turnsBeforeOpen);
     }
   });
   watcher.observe(host, { childList: true, subtree: true });
@@ -440,7 +469,7 @@ try {
   // The first turn saves the session; the binding is tried again after it and keryx answers without subject.
   await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.click());
   await waitFor("the notice that the binding was not saved", () => /did not save the pull request binding/.test(host.textContent ?? ""));
-  assert.equal(prompted.length, 1, "One turn was sent");
+  assert.equal(prompted.length, turnsBeforeOpen + 1, "One turn was sent");
   assert.ok(flagWrites() > refusedWrites, "The binding was tried again after the turn");
   const olderTurns = [...prompted];
   // A keryx that stores the subject: the second press opens a bound session, the third opens the same one.
@@ -542,24 +571,51 @@ try {
   const bareApply = [...bareLaunch.querySelectorAll("button")].find(button => button.textContent === "Apply");
   assert.ok(bareApply && !bareApply.disabled);
   await React.act(() => bareApply.click());
-  await waitFor("the launch dialog closes after the start", () => bareStarts.length === 1 && !host.querySelector('[role="dialog"]'));
-  assert.deepEqual(bareStarts, [{ kind: "start", baseSha: bareRun.baseSha, headSha: bareRun.headSha, sessionId: bareSession,
-    options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] } } }]);
-  assert.equal(host.querySelector('[role="dialog"]'), null, "The launch dialog closes after the start");
-  // The started run is the card's review link, without a manual refresh.
+  await waitFor("the launch dialog closes after the review turn", () => reviewTurns.length === 2 && !host.querySelector('[role="dialog"]'));
+  assert.deepEqual(bareStarts, [], "Apply sends no review_run start");
+  assert.equal(reviewTurns[1]!.sessionId, bareSession, "The review turn goes into #13's bound session"); // length checked above
+  for (const part of ["review-orchestrator", barePrUrl, `--base ${bareRun.baseSha} --head ${bareRun.headSha}`, "keryx review state open", `--session ${bareSession}`]) {
+    assert.ok(reviewTurns[1]!.text.includes(part), `#13's review turn names ${part}`);
+  }
+  assert.ok(!reviewTurns[1]!.text.includes("Request:"), "A bare /review carries no request line");
+  // The attempt the skill registered is the card's review link once the board reads again.
   await go("Pull requests");
-  await waitFor("#13's review slot shows the started run", () => bareSlot("review") === "Review · running");
+  await React.act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh pull requests"]')!.click());
+  await waitFor("#13's review slot shows the registered attempt", () => bareSlot("review") === "Review · running");
   assert.equal(bareSlot("flow"), "Create Flow");
   assert.equal(bareSlot("session"), "Session");
-  assert.deepEqual(prompted, olderTurns, "Neither the PR URL nor /review is sent as a prompt");
+  assert.deepEqual(prompted, [...olderTurns, bareSession], "Neither the PR URL nor /review is sent as a prompt; the review turn is");
   const openBeforeBoardLaunch = newSessions;
+  // AC5: Run review on the board opens a new session bound to #14 (none is bound yet) and sends the review turn there.
+  // The turn stays in flight until `releasePrompt`, so a second Run review meets a busy session (AC8).
+  let releasePrompt!: () => void;
+  holdPrompt = new Promise(resolve => { releasePrompt = resolve; });
   await React.act(() => namedButton("Run review for #14").click());
   await waitFor("the board launch dialog", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
   await React.act(() => namedButton("Apply").click());
-  await waitFor("the board launch creates its owning conversation", () =>
-    !!boardOrigin && host.querySelector(".titlebar")?.textContent?.includes("Review #14") === true);
+  await waitFor("the board launch sends its review turn and closes", () => !!boardOrigin && !host.querySelector('[role="dialog"]'));
   assert.equal(newSessions, openBeforeBoardLaunch + 1);
-  assert.deepEqual(prompted, olderTurns, "Board launch does not submit an artificial prompt");
+  assert.deepEqual(boardStarts, [], "Run review sends no review_run start");
+  assert.deepEqual(reviewTurns.slice(2).map(turn => turn.sessionId), [boardOrigin]);
+  for (const part of ["review-orchestrator", boardPrUrl, `--base ${boardRun.baseSha} --head ${boardRun.headSha}`, "keryx review state open", `--session ${boardOrigin}`]) {
+    assert.ok(reviewTurns[2]!.text.includes(part), `#14's review turn names ${part}`); // three turns asserted above
+  }
+  await waitFor("the new session is bound to #14", () => host.querySelector(".titlebar")?.textContent?.includes("PR org/project#14") === true);
+  // AC8: the bound session is running that turn: a second Run review sends nothing, starts nothing and says why.
+  const turnsWhileBusy = prompted.length;
+  await go("Pull requests");
+  await React.act(() => namedButton("Run review for #14").click());
+  await waitFor("the board launch dialog again", () => !!host.querySelector('[role="dialog"]')?.textContent?.includes("Run review"));
+  await React.act(() => namedButton("Apply").click());
+  await waitFor("the busy refusal in the launch dialog", () => /running a turn/.test(host.querySelector('[role="dialog"]')?.textContent ?? ""));
+  assert.equal(prompted.length, turnsWhileBusy, "A busy session gets no second turn");
+  assert.deepEqual(boardStarts, [], "A busy session starts no detached worker");
+  assert.equal(newSessions, openBeforeBoardLaunch + 1, "The busy session is reused, not replaced");
+  await React.act(() => [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button => button.textContent === "Cancel")!.click());
+  holdPrompt = undefined;
+  boardRegistered = true;
+  await React.act(async () => { releasePrompt(); });
+  await waitFor("the review turn finishes", () => !host.querySelector('button[aria-label="Stop"]'));
   const boardComposer = host.querySelector<HTMLTextAreaElement>(".composer textarea");
   assert.ok(boardComposer && !boardComposer.disabled);
   await React.act(() => {
@@ -580,10 +636,11 @@ try {
   await waitFor("the original session is restored without Desktop review storage", () =>
     host.querySelector(".titlebar")?.textContent?.includes("Review #14") === true);
   assert.equal(newSessions, beforeColdOpen);
-  assert.deepEqual(loaded.slice(beforeColdLoad), [boardOrigin]);
+  // The bound session is now the newest stored one, so the reopened window may already show it: no second load then.
+  assert.ok(loaded.slice(beforeColdLoad).every(id => id === boardOrigin) && loaded.at(-1) === boardOrigin, "The original session is the one shown");
   assert.match(host.textContent ?? "", /How is the review going\?/);
   assert.equal(localStorage.getItem("keryx.session-reviews.v1:" + cwd), null);
-  assert.equal(host.querySelector(".session-review-request")?.textContent, `Review ${boardPrUrl}`);
+  await waitFor("the reopened session shows its registered review", () => /\[Review #14\]/.test(host.querySelector(".session-review-activity")?.textContent ?? ""));
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
@@ -596,7 +653,7 @@ try {
   assert.equal(host.querySelector(".review-detail-panel"), null, "A handled header focus is not replayed by a remounted board");
   await go("Sessions");
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
-  assert.equal(host.querySelector(".session-review-request"), null, "Another account cannot see the previous account's launch receipt");
+  assert.equal(host.querySelector(".session-review-activity"), null, "Another account cannot see the previous account's review");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());
   assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");

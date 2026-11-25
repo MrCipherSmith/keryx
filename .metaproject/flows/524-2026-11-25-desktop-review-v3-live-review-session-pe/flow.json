@@ -1,0 +1,1006 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "524",
+  "slug": "desktop-review-v3-live-review-session-pe",
+  "title": "Desktop Review v3: live review session per round and review.json state",
+  "status": "done",
+  "createdAt": "2026-11-25T05:57:50.199Z",
+  "updatedAt": "2026-11-25T10:30:58.492Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-25T10:09:26.440Z",
+      "note": "docs/requirements/keryx-desktop-review-v3/{README,prd,specification,implementation-plan}.md merged in #1317; schema+migration, CLI verbs, status mapping, stages, v2 supersession, decisions V1-V8"
+    },
+    "AC2": {
+      "at": "2026-11-25T10:09:26.670Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC3": {
+      "at": "2026-11-25T10:09:26.905Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC4": {
+      "at": "2026-11-25T10:09:27.133Z",
+      "note": "src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC5": {
+      "at": "2026-11-25T10:09:27.370Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC6": {
+      "at": "2026-11-25T10:09:27.602Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC7": {
+      "at": "2026-11-25T10:09:27.846Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC8": {
+      "at": "2026-11-25T10:09:28.079Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC9": {
+      "at": "2026-11-25T10:09:28.308Z",
+      "note": "apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC10": {
+      "at": "2026-11-25T10:09:28.535Z",
+      "note": "both SKILL.md copies byte-identical (review-orchestrator-skill-parity test in CI); CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1"
+    },
+    "AC11": {
+      "at": "2026-11-25T10:09:28.756Z",
+      "note": "PR #1317 merged a37b779d1 after CI green; not verified in the built app or on a real PR (recorded in implementation-plan Состояние этапа 1)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1317"
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T06:04:30.344Z",
+            "outcome": "started",
+            "detail": "524-T2 backend+desktop lanes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Write docs/requirements/keryx-desktop-review-v3",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run related suites, typecheck and health",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T06:21:06.192Z",
+            "outcome": "started",
+            "detail": "verify suites"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-25T05:57:50.199Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-25T06:03:48.286Z",
+      "event": "task-added",
+      "detail": "T5: Write docs/requirements/keryx-desktop-review-v3"
+    },
+    {
+      "at": "2026-11-25T06:03:48.562Z",
+      "event": "task-added",
+      "detail": "T6: Run related suites, typecheck and health"
+    },
+    {
+      "at": "2026-11-25T06:03:56.100Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-25T06:03:56.377Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-25T06:03:56.698Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-25T06:04:07.713Z",
+      "event": "task-done",
+      "detail": "T5: Write docs/requirements/keryx-desktop-review-v3"
+    },
+    {
+      "at": "2026-11-25T06:04:30.344Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 524-T2 backend+desktop lanes"
+    },
+    {
+      "at": "2026-11-25T06:21:05.630Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-25T06:21:05.911Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-25T06:21:06.192Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — verify suites"
+    },
+    {
+      "at": "2026-11-25T07:12:01.252Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-25T07:12:01.454Z",
+      "event": "task-done",
+      "detail": "T6: Run related suites, typecheck and health"
+    },
+    {
+      "at": "2026-11-25T10:00:19.803Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"\"Run review\" from the Pull requests board and the Reviews tab sends no `review_run start`; it opens the newest session bound to the PR (or a new session bound via subject) and sends a review turn there that names the review-orchestrator skill, the PR URL, the reviewed base and head, and the `keryx review state open` command. [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts`]\" -> \"\"Run review\" from the Pull requests board and the Reviews tab sends no `review_run start`; it opens the newest session bound to the PR (or a new session bound via subject) and sends a review turn there that names the review-orchestrator skill, the PR URL, the reviewed base and head, and the `keryx review state open` command. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.028Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"Apply in the session `/review` launch dialog sends the review turn into that same session and sends no `review_run start`. [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx`]\" -> \"Apply in the session `/review` launch dialog sends the review turn into that same session and sends no `review_run start`. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.252Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"\"Continue review\" in the session review card sends a continue turn (naming the review id and `keryx review state show`) into the shown session and sends no `review_run continue`. [verify: exec `bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts`]\" -> \"\"Continue review\" in the session review card sends a continue turn (naming the review id and `keryx review state show`) into the shown session and sends no `review_run continue`. [verify: exec `cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.466Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Failure scenario: when the target session is already running a turn, Start and Continue send no turn, start no detached worker, and show the user why. [verify: exec `bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx`]\" -> \"Failure scenario: when the target session is already running a turn, Start and Continue send no turn, start no detached worker, and show the user why. [verify: exec `cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.675Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" -> \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:09:26.214Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1317 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-25T10:09:26.440Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: docs/requirements/keryx-desktop-review-v3/{README,prd,specification,implementation-plan}.md merged in #1317; schema+migration, CLI verbs, status mapping, stages, v2 supersession, decisions V1-V8 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:26.670Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:26.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.133Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/review/review-state.test.ts and src/commands/review-state.test.ts in CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.370Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:27.846Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.079Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: apps/desktop tests (ProjectNavigation fixture, reviewTurn, SessionReviewActivity, reviews) in Desktop Check CI; CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.535Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: both SKILL.md copies byte-identical (review-orchestrator-skill-parity test in CI); CI green on fd2e7e0aa (29 pass, 1 skipped), merged a37b779d1 (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:09:28.756Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PR #1317 merged a37b779d1 after CI green; not verified in the built app or on a real PR (recorded in implementation-plan Состояние этапа 1) (signed: 147050692+aleksandr-tsaitler@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-25T10:17:48.998Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (operator decision 2026-11-25 (relayed by the coordinating session): owner MrCipherSmith)"
+    },
+    {
+      "at": "2026-11-25T10:19:06.632Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-25T10:19:11.932Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-11-25T10:19:11.934Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Gate review is not currently failing."
+    },
+    {
+      "at": "2026-11-25T10:19:44.364Z",
+      "event": "completing",
+      "detail": "merged commit: a37b779d1ca8a4a4968d0c823c066ecda41a7d99"
+    },
+    {
+      "at": "2026-11-25T10:28:12.870Z",
+      "event": "completion-recovered",
+      "detail": "terminal confirmation prompt stopped with Ctrl-C: the operator's answer did not reach the Terminal-panel prompt; confirming through the host-question protocol instead (last event before the interruption: completing at 2026-11-25T10:19:44.364Z; acceptance criteria: intact)"
+    },
+    {
+      "at": "2026-11-25T10:28:13.105Z",
+      "event": "completing",
+      "detail": "merged commit: a37b779d1ca8a4a4968d0c823c066ecda41a7d99"
+    },
+    {
+      "at": "2026-11-25T10:28:17.992Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-11-25T10:28:17.994Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | confirmation: Exception confirmation failed: Exception completion requires the operator's plain yes; nothing was recorded."
+    },
+    {
+      "at": "2026-11-25T10:30:46.632Z",
+      "event": "completing",
+      "detail": "merged commit: a37b779d1ca8a4a4968d0c823c066ecda41a7d99"
+    },
+    {
+      "at": "2026-11-25T10:30:58.490Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-11-25T10:30:58.492Z",
+      "event": "done",
+      "detail": "completed with exceptions: review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md; operator: yes | review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md; operator: yes | review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md; operator: yes | review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md; operator: yes | review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md; operator: yes"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/review-state.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/review-state.test.ts src/commands/review-state.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-state.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews"
+    },
+    "AC10": {
+      "kind": "invariant",
+      "check": "diff .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+    },
+    "AC11": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-25T10:09:26.440Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:26.670Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:26.905Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.133Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.370Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.602Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:27.846Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.079Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.308Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.535Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:09:28.756Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:30:58.491Z",
+      "kind": "complete",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "external-comments",
+          "detail": "the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        }
+      ],
+      "identity": {
+        "value": "147050692+aleksandr-tsaitler@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405",
+      "headCommit": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "completionAttempts": [
+    {
+      "at": "2026-11-25T10:19:11.932Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "524-2026-11-25-desktop-review-v3-live-review-session-pe is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "unobserved",
+              "detail": "the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Gate review is not currently failing."
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:28:17.992Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "524-2026-11-25-desktop-review-v3-live-review-session-pe is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "unobserved",
+              "detail": "the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        },
+        {
+          "name": "confirmation",
+          "status": "fail",
+          "detail": "Exception confirmation failed: Exception completion requires the operator's plain yes; nothing was recorded."
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405"
+    },
+    {
+      "at": "2026-11-25T10:30:58.490Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "524-2026-11-25-desktop-review-v3-live-review-session-pe is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "unobserved",
+              "detail": "the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "external-comments",
+          "detail": "the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md",
+          "operatorWords": "yes",
+          "confirmedVia": "host-question",
+          "hostQuestion": {
+            "source": "claude-code",
+            "ref": "flow-524-completion-card",
+            "questionText": "Complete flow 524 with exceptions? review:ingested-round: no managed review package exists under `.metaproject/flows/524-2026-11-25-desktop-review-v3-live-review-session-pe/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:terminal-dispositions: no ingested round to read findings from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:head-commit: no ingested round to compare against the PR head; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:external-comments: the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1317 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1317.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1317 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md review:verifier-stats: no ingested round to read verification stats from; reason: operator decision 2026-11-25: the two review rounds on PR 1317 ran as reviewer subagents, not keryx review packages; no blocker or major left; minors deferred in journal.md Context: {\"head\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\",\"acChecksum\":\"sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405\",\"prUrl\":\"https://github.com/MrCipherSmith/keryx/pull/1317\",\"baseBranch\":\"main\",\"mergedCommit\":\"a37b779d1ca8a4a4968d0c823c066ecda41a7d99\"}",
+            "answerText": "yes",
+            "time": "2026-11-25T10:30:52.194Z"
+          },
+          "at": "2026-11-25T10:30:58.489Z"
+        }
+      ]
+    }
+  ],
+  "merged": {
+    "commit": "a37b779d1ca8a4a4968d0c823c066ecda41a7d99",
+    "ref": "origin/main",
+    "at": "2026-11-25T10:30:58.491Z"
+  }
+}

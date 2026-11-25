@@ -18,7 +18,7 @@ import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { SubagentArchive } from "./SubagentArchive";
-import { Transcript } from "./Transcript";
+import { Transcript, type ReviewCardSlot } from "./Transcript";
 import type { LocalAttachment } from "./chatImages";
 import { textWithLineComments, type LineComment } from "./lineComments";
 import { ChangesPanel } from "../panels/ChangesPanel";
@@ -50,7 +50,10 @@ interface Props {
   githubAccount?: ProjectGitHubAccount;
   onProjectSettings?: () => void;
   narrow: boolean;
-  reviewActivity?: ReactNode;
+  /** Finished review rounds, placed in the transcript where each round started. */
+  reviewCards?: readonly ReviewCardSlot[];
+  /** Review rounds that run or wait: pinned above the composer, like the plan card. */
+  pinnedReviews?: ReactNode;
   reviewLinks?: readonly SessionReviewLink[];
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onRouting?: () => void;
@@ -63,7 +66,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewActivity, reviewLinks }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, onTelegramSettings, visible = true, githubAccount, onProjectSettings, narrow, onProviders, onRouting, reviewCards, pinnedReviews, reviewLinks }, composerRef) {
   const { state } = s;
   const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
@@ -439,7 +442,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           sessionId={state.sessionId}
           items={state.items}
           busy={state.busy}
-          reviewActivity={reviewActivity}
+          reviewCards={reviewCards}
           onRunCommand={(line, o) => run(line, o)}
           prLinks={prLinks}
           onEditMessage={disabledReason === null && !state.busy ? editMessage : undefined}
@@ -450,6 +453,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         />
 
         <div className="composer-dock">
+          {pinnedReviews}
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
           <QueueChips queue={state.queue} onRemove={s.removeQueued} />
           <Composer

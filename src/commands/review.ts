@@ -9,6 +9,7 @@ import { DESK_PUBLISH_USAGE, runReviewDeskPublish } from "./review-desk-publish"
 import { BOARD_USAGE, runReviewBoard } from "./review-board";
 import { REVIEWS_USAGE, runReviewReviews } from "./review-reviews";
 import { ADVANCE_USAGE, runReviewAdvance } from "./review-advance";
+import { runReviewState, STATE_USAGE } from "./review-state";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -825,6 +826,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "advance") {
       await runReviewAdvance(args.slice(1));
+      return;
+    }
+    if (command === "state") {
+      await runReviewState(args.slice(1));
       return;
     }
     if (command === "attach") {
@@ -5426,6 +5431,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["board", () => console.log(BOARD_USAGE)],
   ["reviews", () => console.log(REVIEWS_USAGE)],
   ["advance", () => console.log(ADVANCE_USAGE)],
+  ["state", () => console.log(STATE_USAGE)],
   ["rules", () => console.log(RULES_USAGE)],
   ["watch", () => console.log(WATCH_USAGE)],
   ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
@@ -5598,6 +5604,8 @@ Usage:
                         Lists this account's local Reviews of a connected repository with state, freshness and rounds.
   ${ADVANCE_USAGE}
                         Opens the update round of a pull request's Review on its current head (Desktop and sessions).
+  keryx review state open|round|publish|mark|note|show|list ... [--json] [--cwd <dir>]
+                        Keeps a pull request review's review.json and journal.md (Desktop review state; see \`keryx review state --help\`).
   ${WATCH_USAGE}
   ${RULES_USAGE}
                         Manages the local macOS pull request watcher.
