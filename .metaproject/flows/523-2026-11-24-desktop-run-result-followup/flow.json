@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T04:46:27.384Z",
+  "updatedAt": "2026-11-25T04:54:27.753Z",
   "source": {
     "type": "description",
     "ref": null
@@ -159,7 +159,7 @@
       "id": "T8",
       "title": "Spec: run tab, wire meta, waiting rule in the desktop specification",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -175,7 +175,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -292,6 +293,11 @@
       "at": "2026-11-25T04:46:27.384Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — 523-T8"
+    },
+    {
+      "at": "2026-11-25T04:54:27.753Z",
+      "event": "task-done",
+      "detail": "T8: Spec: run tab, wire meta, waiting rule in the desktop specification"
     }
   ],
   "origin": {
