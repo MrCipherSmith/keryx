@@ -11,12 +11,12 @@
   "title": "Desktop Review v3: live review session per round and review.json state",
   "status": "in-progress",
   "createdAt": "2026-11-25T05:57:50.199Z",
-  "updatedAt": "2026-11-25T07:12:01.454Z",
+  "updatedAt": "2026-11-25T10:00:20.675Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:f309c01b342706df4659aeae63ef081465871aab291a326d11f80725675780c6",
+  "acChecksum": "sha256:dac2d58dd752771532aa9bf04315f80640090e67be94bbcbe2260d53ec925405",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -194,6 +194,31 @@
       "at": "2026-11-25T07:12:01.454Z",
       "event": "task-done",
       "detail": "T6: Run related suites, typecheck and health"
+    },
+    {
+      "at": "2026-11-25T10:00:19.803Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"\"Run review\" from the Pull requests board and the Reviews tab sends no `review_run start`; it opens the newest session bound to the PR (or a new session bound via subject) and sends a review turn there that names the review-orchestrator skill, the PR URL, the reviewed base and head, and the `keryx review state open` command. [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts`]\" -> \"\"Run review\" from the Pull requests board and the Reviews tab sends no `review_run start`; it opens the newest session bound to the PR (or a new session bound via subject) and sends a review turn there that names the review-orchestrator skill, the PR URL, the reviewed base and head, and the `keryx review state open` command. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.028Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"Apply in the session `/review` launch dialog sends the review turn into that same session and sends no `review_run start`. [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx`]\" -> \"Apply in the session `/review` launch dialog sends the review turn into that same session and sends no `review_run start`. [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.252Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"\"Continue review\" in the session review card sends a continue turn (naming the review id and `keryx review state show`) into the shown session and sends no `review_run continue`. [verify: exec `bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts`]\" -> \"\"Continue review\" in the session review card sends a continue turn (naming the review id and `keryx review state show`) into the shown session and sends no `review_run continue`. [verify: exec `cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.466Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Failure scenario: when the target session is already running a turn, Start and Continue send no turn, start no detached worker, and show the user why. [verify: exec `bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx`]\" -> \"Failure scenario: when the target session is already running a turn, Start and Continue send no turn, start no detached worker, and show the user why. [verify: exec `cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
+    },
+    {
+      "at": "2026-11-25T10:00:20.675Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" -> \"v2 Reviews, rounds and attempts from runs.sqlite keep displaying on the board slot, the Reviews tab and the session review card (read-only compatibility). [verify: exec `cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews`]\" (CI verify-exec-files resolves test paths from the repo root and understands only a leading \"cd <dir> &&\"; same tests, same meaning, working directory moved from bun --cwd to cd)"
     }
   ],
   "acKinds": {
@@ -214,23 +239,23 @@
     },
     "AC5": {
       "kind": "exec",
-      "check": "bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts"
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/review/reviewTurn.test.ts"
     },
     "AC6": {
       "kind": "exec",
-      "check": "bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx"
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx"
     },
     "AC7": {
       "kind": "exec",
-      "check": "bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts"
+      "check": "cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/review/reviewTurn.test.ts"
     },
     "AC8": {
       "kind": "exec",
-      "check": "bun --cwd apps/desktop test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx"
+      "check": "cd apps/desktop && bun test src/review/SessionReviewActivity.dom.test.tsx src/shell/ProjectNavigation.dom.test.tsx"
     },
     "AC9": {
       "kind": "exec",
-      "check": "bun --cwd apps/desktop test src/shell/ProjectNavigation.dom.test.tsx src/reviews"
+      "check": "cd apps/desktop && bun test src/shell/ProjectNavigation.dom.test.tsx src/reviews"
     },
     "AC10": {
       "kind": "invariant",
