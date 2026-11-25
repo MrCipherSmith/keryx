@@ -32,8 +32,13 @@ export interface NextStepHistoryMessage {
 export const NEXT_STEP_USER_TAIL = 800;
 export const NEXT_STEP_ASSISTANT_TAIL = 3000;
 
+/**
+ * The suggestion is the user's next message TO THE ASSISTANT: Tab puts it in the composer and Enter sends it as a
+ * turn. So it must be an instruction the assistant can carry out, in the user's voice and language, never advice about
+ * what the user should go and do by hand.
+ */
 export const NEXT_STEP_SYSTEM_PROMPT =
-  "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .";
+  "You predict the next message a user will send to a coding assistant in a terminal. Based on the user's last request and the assistant's final reply, write ONE short message in the user's own voice, addressed to the assistant, asking it to do the most natural next step (for example: run the tests, commit this, fix the failing check). It must be something the assistant itself can carry out, never advice or a task for the user to do by hand, and never a reply from the assistant. Imperative, in the language of the user's last request, no quotes, no markdown, at most 80 characters. If no natural next step exists, reply with exactly one dot: .";
 
 /**
  * Build the next-step advisor's prompt from the turn history.

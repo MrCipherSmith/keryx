@@ -533,7 +533,7 @@ export interface ShellChrome {
    * has text.
    */
   showSuggestion(text: string): void;
-  /** Drop the active suggestion and restore the default placeholder. */
+  /** Drop the stored suggestion and restore the default placeholder (a new turn started). */
   clearSuggestion(): void;
   /** True while a suggestion is set (test seam / footer hint). */
   suggestionActive(): boolean;
@@ -1650,11 +1650,13 @@ export async function createShellChrome(
   });
 
   // --- next-step suggestion (Claude-style placeholder + Tab/Right accept) ---
-  // A model-generated "what to do next" shown as the composer placeholder while
-  // it is empty. Tab/Right fills it in without submitting; typing dismisses it.
+  // A model-generated next message to the agent, shown as the composer
+  // placeholder while it is empty. Tab/Right fills it in without submitting;
+  // typing only hides it, and emptying the composer shows it again. It stays
+  // until `clearSuggestion` (a new turn) or a newer suggestion replaces it.
   // AC14 (flow 268): Enter does NOT accept it — a bare Enter on an empty
   // composer is always a no-op upstream, suggestion or not. The mechanism
-  // is a placeholder swap + tab/right accept + dismiss on input, without an
+  // is a placeholder swap + tab/right accept + hide on input, without an
   // enter-accepts variant.
   const defaultPlaceholder = opts.placeholder;
   let suggestion: string | null = null;
@@ -1676,8 +1678,8 @@ export async function createShellChrome(
   // REQUEST still in flight (no shown text yet) can key its own cancellation
   // off of. See `onComposerActivity` below.
   const composerActivityHandlers = new Set<() => void>();
-  // Dismiss the suggestion the moment the composer gets text (typing or
-  // paste), and restore it when the field is emptied again — a live
+  // Hide the suggestion the moment the composer gets text (typing, paste or
+  // accepting it), and restore it when the field is emptied again — a live
   // placeholder, not a one-shot swap.
   const prevContentChange = textarea.onContentChange;
   textarea.onContentChange = (event) => {
@@ -1690,19 +1692,12 @@ export async function createShellChrome(
     if (menu.visible && menuNav) return; // the `/`-menu owns Tab while open
     if (key.name === "tab" || key.name === "right") {
       if (input.value.length === 0) {
+        // Kept, not cleared: erasing the accepted text shows it again.
         input.value = suggestion;
-        clearSuggestion();
+        syncPlaceholder();
         key.preventDefault();
         key.stopPropagation();
-        return;
       }
-      return;
-    }
-    // Any other printable input dismisses the hint (the key still goes to the
-    // composer normally — we only preventDefault'd above where we consumed it).
-    const ch = key.sequence;
-    if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-      clearSuggestion();
     }
   });
 
