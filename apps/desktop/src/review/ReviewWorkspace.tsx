@@ -53,7 +53,8 @@ export function RunLaunchDialog({ cwd, subject, card, stale, models, flows, defa
         throw new Error("The PR revision changed. Refresh the board and open the launch form again.");
       }
       const snapshot = await runCommand(cwd, key, { kind: "start", ...revision, options });
-      if (!snapshot.startedRunId || !snapshot.runs.some(run => run.id === snapshot.startedRunId)) {
+      // A v3 start is a turn in a session (startedSessionId); a v2 start is a confirmed attempt (startedRunId).
+      if (!snapshot.startedSessionId && (!snapshot.startedRunId || !snapshot.runs.some(run => run.id === snapshot.startedRunId))) {
         throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
       }
       onRunSnapshot?.(key, revision, snapshot);
