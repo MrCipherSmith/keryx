@@ -184,7 +184,7 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
 async function gitCommonDir(dir: string): Promise<string | undefined> {
   const { execFile } = await import("node:child_process");
   const out = await new Promise<string | undefined>((resolve) => {
-    execFile("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"], { timeout: 5000 }, (error, stdout) =>
+    execFile("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: dir, timeout: 5000 }, (error, stdout) =>
       resolve(error ? undefined : stdout.trim()));
   });
   if (!out) return undefined;
