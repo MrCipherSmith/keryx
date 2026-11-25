@@ -55,6 +55,19 @@ test("AC7 the continue turn names the review id and state show, with the user's 
   ]);
 });
 
+test("the continue turn of a link names the attempt and its revision and falls back to opening the round", () => {
+  const attemptId = "0b9f6c1e-4a2d-4c6b-9e1f-3a5d7c9e1b2a";
+  const lines = reviewContinueTurn({ key, note: "Go on.", attemptId, revision, sessionId: "nav-session" }).split("\n");
+  expect(lines).toEqual([
+    `Continue the Desktop review of ${url} in this session (review org-project-12-me).`,
+    `Attempt ${attemptId} revision: base ${revision.baseSha}, head ${revision.headSha}.`,
+    "Run `keryx review state show --review org-project-12-me`, take the round's package and carry on from the step its state names; do not start a new package for the same head.",
+    `If \`state show\` reports no review, run \`${reviewStateOpenCommand({ key, revision, sessionId: "nav-session" })}\` and continue the earlier Desktop attempt ${attemptId} (its findings: \`keryx review desk-run status --json --repo Org/Project --repository-id RID --viewer Me --number 12 --id ${attemptId}\`).`,
+    "Go on.",
+  ]);
+  expect(lines[3]).toContain(`keryx review state open --pr ${url} --base ${revision.baseSha} --head ${revision.headSha} --viewer Me --session nav-session --source desktop`);
+});
+
 test("the continue turn of a viewer-less key uses the id without an account and no note line", () => {
   const text = reviewContinueTurn({ key: { ...key, viewer: "" } });
   expect(text).toContain("(review org-project-12)");

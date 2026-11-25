@@ -124,6 +124,37 @@ describe("round rule R5 (AC2)", () => {
     expect(existsSync(reviewStatePath(root, ID))).toBe(false);
   });
 
+  test("another pull request whose id collides is refused and the record is left alone", async () => {
+    const cases: { first: OpenRoundInput["pr"] & { viewer: string | null }; second: OpenRoundInput["pr"] & { viewer: string | null }; id: string }[] = [
+      {
+        first: { repo: "x.y/z", number: 3, url: "https://github.com/x.y/z/pull/3", viewer: null },
+        second: { repo: "x-y/z", number: 3, url: "https://github.com/x-y/z/pull/3", viewer: null },
+        id: "x-y-z-3",
+      },
+      {
+        first: { repo: "o/r", number: 1, url: "https://github.com/o/r/pull/1", viewer: "2" },
+        second: { repo: "o/r-1", number: 2, url: "https://github.com/o/r-1/pull/2", viewer: null },
+        id: "o-r-1-2",
+      },
+    ];
+    for (const { first, second, id } of cases) {
+      const { viewer: firstViewer, ...firstPr } = first;
+      const { viewer: secondViewer, ...secondPr } = second;
+      expect((await open({ pr: firstPr, viewer: firstViewer })).review.id).toBe(id);
+      const before = readFileSync(reviewStatePath(root, id), "utf8");
+      const journalBefore = readFileSync(reviewJournalPath(root, id), "utf8");
+      await refused(open({ pr: secondPr, viewer: secondViewer }), "refused", /ids collide/);
+      expect(readFileSync(reviewStatePath(root, id), "utf8")).toBe(before);
+      expect(readFileSync(reviewJournalPath(root, id), "utf8")).toBe(journalBefore);
+    }
+  });
+
+  test("the same pull request in another letter case is the same review", async () => {
+    await open();
+    const result = await open({ pr: { ...pr, repo: "org/repo" }, viewer: "Alice" });
+    expect(result.action).toBe("reused");
+  });
+
   test("a review without a viewer has the bare PR id", async () => {
     const result = await open({ viewer: null });
     expect(result.review.id).toBe("org-repo-7");
@@ -147,9 +178,21 @@ describe("round updates (AC3)", () => {
     await open();
     await updateReviewRound(root, ID, { state: "reconciling" }, opts);
     await refused(updateReviewRound(root, ID, { state: "planning" }, opts), "refused", /cannot go from reconciling to planning/);
-    expect(roundTransitionAllowed("paused", "ready")).toBe(false);
+    expect(roundTransitionAllowed("paused", "ready")).toBe(true);
     expect(roundTransitionAllowed("ready", "paused")).toBe(false);
+    expect(roundTransitionAllowed("ready", "planning")).toBe(false);
     expect(roundTransitionAllowed("dispatching", "dispatching")).toBe(true);
+  });
+
+  test("a continuation after a pause finishes the round: paused to ready keeps verdict and findings", async () => {
+    await open();
+    await updateReviewRound(root, ID, { state: "reconciling" }, opts);
+    await updateReviewRound(root, ID, { state: "paused" }, opts);
+    const findings = { blocker: 0, major: 2, minor: 1, info: 0, carried: 0, rechecked: 0 };
+    const ready = await updateReviewRound(root, ID, { state: "ready", verdict: "request-changes", findings }, opts);
+    expect(ready.round).toMatchObject({ state: "ready", verdict: "request-changes", findings });
+    expect(ready.review.state).toBe("ready");
+    expect((await readReviewState(root, ID))?.rounds[0]).toMatchObject({ state: "ready", verdict: "request-changes", findings });
   });
 
   test("a ready round takes only verdict, findings and usage", async () => {

@@ -78,7 +78,7 @@ Applies when the turn names a Desktop review, or `KERYX_REVIEW_SESSION_ID` is se
 | Reconciling (`ingest`, `verdict`) | `keryx review state round --review <id> --state reconciling --findings <b>,<M>,<m>,<i>` |
 | Report ready | `keryx review state round --review <id> --state ready --verdict approve\|comment\|request-changes --findings … --usage …` |
 | Stopped without a report (provider error, unanswered question, turn end) | `keryx review state round --review <id> --state paused`, the reason with `keryx review state note --review <id> --text "<reason>"` |
-| Continue | `keryx review state show --review <id>`: reuse its `package` and resume at the step the round's state names |
+| Continue | `keryx review state show --review <id>`: reuse its `package` and resume at the step the round's state names (a paused round may go straight to `ready`); no review.json yet → open the round as the turn says, then continue from the named earlier attempt |
 | Publish | after `keryx review publish`, `keryx review state publish --review <id> --verdict <v> [--url <review url>]` |
 
 ## Clean context — the round starts empty

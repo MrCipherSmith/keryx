@@ -207,6 +207,14 @@ function addSession(round: ReviewRound, sessionId: string, at: string): void {
   round.sessionId = sessionId;
 }
 
+/** Whether a record is the review of this pull request and account (repo and viewer case-insensitive; null ≠ a login). */
+function samePullRequest(review: ReviewRecord, repo: string, number: number, viewer: string | null): boolean {
+  const recordViewer = typeof review.viewer === "string" ? review.viewer.toLowerCase() : null;
+  return String(review.pr.repo).toLowerCase() === repo.toLowerCase()
+    && review.pr.number === number
+    && recordViewer === (viewer === null ? null : viewer.toLowerCase());
+}
+
 export interface OpenRoundInput {
   pr: { repo: string; number: number; url: string; repositoryId?: string };
   viewer?: string | null;
@@ -241,6 +249,14 @@ export async function openReviewRound(projectRoot: string, input: OpenRoundInput
   const id = reviewStateId(input.pr.repo, input.pr.number, viewer);
 
   return writeReview<OpenRoundResult>(projectRoot, id, "open", options, (current, at) => {
+    // Two pull requests can slug to one id (x.y/z#3 and x-y/z#3; o/r#1 viewer 2 and o/r-1#2): the record is never
+    // taken over by the other one.
+    if (current && !samePullRequest(current, input.pr.repo, input.pr.number, viewer)) {
+      throw new ReviewStateError(
+        "refused",
+        `review ${id} belongs to ${current.pr.repo}#${current.pr.number}${current.viewer ? ` (viewer ${current.viewer})` : ""}, not ${input.pr.repo}#${input.pr.number}${viewer ? ` (viewer ${viewer})` : ""}; the ids collide and the record is left unchanged`,
+      );
+    }
     if (current?.state === "closed" && !input.reopen) {
       throw new ReviewStateError("refused", `review ${id} is closed; pass --reopen to open a round on it`);
     }
@@ -324,14 +340,15 @@ const FORWARD: readonly RoundState[] = ["planning", "dispatching", "reconciling"
 
 /**
  * The round transitions. Forward along planning → dispatching → reconciling → ready, skipping a step allowed (the spec:
- * a missed call is recovered by the next one); `paused` from any state but ready; out of `paused` only to planning,
- * dispatching or reconciling; nothing out of `ready`. Staying in the same state is a no-op, so a repeated call is safe.
+ * a missed call is recovered by the next one); `paused` from any state but ready; out of `paused` to any forward state,
+ * ready included (a continuation may finish the report); nothing out of `ready`. Staying in the same state is a no-op,
+ * so a repeated call is safe.
  */
 export function roundTransitionAllowed(from: RoundState, to: RoundState): boolean {
   if (from === to) return true;
   if (from === "ready") return false;
   if (to === "paused") return true;
-  if (from === "paused") return to === "planning" || to === "dispatching" || to === "reconciling";
+  if (from === "paused") return FORWARD.includes(to);
   return FORWARD.indexOf(to) > FORWARD.indexOf(from);
 }
 

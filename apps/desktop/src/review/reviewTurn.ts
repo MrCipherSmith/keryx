@@ -77,13 +77,39 @@ export function reviewStartTurn(input: ReviewStartTurnInput): string {
   ].join("\n");
 }
 
+export interface ReviewContinueTurnInput {
+  key: DeskRunKey;
+  note?: string | undefined;
+  /** The earlier Desktop attempt the Continue button belongs to (a v2 attempt may have no review.json yet). */
+  attemptId?: string | undefined;
+  /** The attempt's revision: with `sessionId`, the turn can open the round when the review has no review.json. */
+  revision?: DeskRevision | undefined;
+  /** The session the turn goes into. */
+  sessionId?: string | undefined;
+}
+
+/** `keryx review desk-run status` for one attempt, with the flags that command requires. */
+function deskRunStatusCommand(key: DeskRunKey, attemptId: string): string {
+  const args = ["--json", "--repo", key.repo, "--repository-id", key.repositoryId, "--viewer", key.viewer,
+    "--number", String(key.number), "--id", attemptId];
+  return ["keryx review desk-run status", ...args.map(shellWord)].join(" ");
+}
+
 /** The turn that continues a Desktop review in the session that holds it. */
-export function reviewContinueTurn({ key, note }: { key: DeskRunKey; note?: string | undefined }): string {
+export function reviewContinueTurn({ key, note, attemptId, revision, sessionId }: ReviewContinueTurnInput): string {
   const id = reviewStateId(key.repo, key.number, key.viewer || null);
   const text = note?.trim();
+  const attempt = attemptId?.trim();
+  const findings = attempt && key.viewer && key.repositoryId ? ` (its findings: \`${deskRunStatusCommand(key, attempt)}\`)` : "";
+  // Review v2 attempts are imported into review.json only at stage 2: until then `state show` finds no review.
+  const fallback = revision && sessionId
+    ? [`If \`state show\` reports no review, run \`${reviewStateOpenCommand({ key, revision, sessionId })}\`${attempt ? ` and continue the earlier Desktop attempt ${attempt}${findings}` : ""}.`]
+    : [];
   return [
     `Continue the Desktop review of ${reviewPullRequestUrl(key)} in this session (review ${id}).`,
+    ...(revision ? [`Attempt${attempt ? ` ${attempt}` : ""} revision: base ${revision.baseSha}, head ${revision.headSha}.`] : []),
     `Run \`keryx review state show --review ${id}\`, take the round's package and carry on from the step its state names; do not start a new package for the same head.`,
+    ...fallback,
     ...(text ? [text] : []),
   ].join("\n");
 }

@@ -93,9 +93,12 @@ test("AC7 Continue review sends the continue turn into the shown session and no 
   expect(field.value).toBe("");
   expect(host.querySelector('.session-review-item [role="alert"]')).toBeNull();
   // The App sends exactly this text: the review id and `keryx review state show`, then the note.
-  const text = reviewContinueTurn({ key: rig.turns[0]!.link.key, note: rig.turns[0]!.note });
+  const sent = rig.turns[0]!.link;
+  const text = reviewContinueTurn({ key: sent.key, note: rig.turns[0]!.note, attemptId: sent.id, revision: sent.revision, sessionId: sent.sessionId });
   expect(text).toContain("(review org-project-12-me)");
   expect(text).toContain("keryx review state show --review org-project-12-me");
+  expect(text).toContain("If `state show` reports no review, run `keryx review state open --pr https://github.com/org/project/pull/12");
+  expect(text).toContain("continue the earlier Desktop attempt run-1");
   expect(text.endsWith("\nLook at the migration again.")).toBe(true);
 });
 

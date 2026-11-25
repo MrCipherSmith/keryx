@@ -655,7 +655,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     return { ...history, startedSessionId: sessionId };
   }, [cwd, openSubject]);
   const continueSessionReview = useCallback((link: SessionReviewLink, note: string) =>
-    acp.current.sendPrompt(reviewContinueTurn({ key: link.key, note }), link.sessionId), []);
+    acp.current.sendPrompt(reviewContinueTurn({ key: link.key, note, attemptId: link.id, revision: link.revision, sessionId: link.sessionId }), link.sessionId), []);
   const boardReviewRun = useCallback<typeof reviewRun>((project, key, action) => {
     return action.kind === "start" ? startSessionReview(key, action, action.options) : reviewRun(project, key, action);
   }, [startSessionReview]);
