@@ -181,6 +181,34 @@ async function register(input: RegisterSessionInput, store: DeskRunStore, manife
   return { record };
 }
 
+async function gitCommonDir(dir: string): Promise<string | undefined> {
+  const { execFile } = await import("node:child_process");
+  const out = await new Promise<string | undefined>((resolve) => {
+    execFile("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"], { timeout: 5000 }, (error, stdout) =>
+      resolve(error ? undefined : stdout.trim()));
+  });
+  if (!out) return undefined;
+  return realpath(out).catch(() => undefined);
+}
+
+/**
+ * The project a review command belongs to when an ACP session's shell runs it: the session's project root, when `cwd`
+ * is that root or a checkout of the same repository (a linked git worktree, where an agent reviews a pull request
+ * beside the project). Undefined outside a session, or in an unrelated directory.
+ *
+ * A Desktop session and the Reviews board list attempts by the project's root. An attempt registered under the
+ * worktree's own path is in the store and on neither of them, so every registration from such a shell uses this root.
+ */
+export async function sessionProjectRoot(cwd: string, env: Readonly<Record<string, string | undefined>> = process.env): Promise<string | undefined> {
+  const root = env["KERYX_REVIEW_SESSION_PROJECT_ROOT"];
+  if (!env["KERYX_REVIEW_SESSION_ID"] || !root) return undefined;
+  const [project, here] = await Promise.all([realpath(root).catch(() => ""), realpath(cwd).catch(() => "")]);
+  if (project === "" || here === "") return undefined;
+  if (project === here) return root;
+  const [projectGit, hereGit] = await Promise.all([gitCommonDir(project), gitCommonDir(here)]);
+  return projectGit !== undefined && projectGit === hereGit ? root : undefined;
+}
+
 /**
  * Registers a package against the project's selected GitHub account, as Desktop reads it. Throws with the reason when it
  * was not registered, so the caller can say so.

@@ -125,7 +125,7 @@ import {
 import type { CrossFamilyReviewDecision } from "../lib/provider-config";
 import { githubAdapter, githubPrFiles } from "../flow/tracker/github";
 import { githubFindPublished, githubPostPullReview, githubReviewedHeadInPull } from "../review/session-publish-github";
-import { laterRoundOf, registerSessionPackageForProject, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
+import { laterRoundOf, registerSessionPackageForProject, sessionProjectRoot, sessionPublication, type SessionRegistrar } from "../review/session-attempt";
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type HeadInPull, type PostResult, type ReviewEvent } from "../review/publish";
@@ -1309,7 +1309,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const sessionId = process.env.KERYX_REVIEW_SESSION_ID;
     const sessionRoot = process.env.KERYX_REVIEW_SESSION_PROJECT_ROOT;
     if (mode === "review-flow" && targetKind === "pr" && sessionId && sessionRoot && process.env.KERYX_DESK_REVIEW_SHELL !== "1" &&
-        await (await import("node:fs/promises")).realpath(sessionRoot).catch(() => "") === await (await import("node:fs/promises")).realpath(cwd).catch(() => "!") &&
+        // The project itself, or a worktree of it: an agent that reviews a pull request in its own checkout still owns the round.
+        await sessionProjectRoot(cwd) !== undefined &&
         (await import("../session")).findSession(sessionRoot, sessionId, process.env.KERYX_REVIEW_SESSION_DATA_DIR || undefined)?.id === sessionId) {
       try {
         const ownerText = process.env.KERYX_REVIEW_SESSION_OWNER;
@@ -1343,7 +1344,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     if (registered.warning !== undefined) console.error(`warning: ${registered.warning}`);
     if (targetKind === "pr" && process.env.KERYX_DESK_REVIEW_SHELL !== "1" &&
         await (await import("../review/session-attempt")).readSessionAttempt(result.path)) {
-      try { await registerSessionPackageForProject(cwd, result.path); }
+      try { await registerSessionPackageForProject(await sessionProjectRoot(cwd) ?? cwd, result.path); }
       catch (error) { console.error(`warning: review not registered in Desktop (${error instanceof Error ? error.message : String(error)})`); }
     }
   }
@@ -5100,7 +5101,7 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   });
   const readiness = { prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles };
   // Flow 521: the package is (re)registered as a Desktop Attempt first, so both publish paths share one receipt.
-  const register = seams === undefined ? (dir: string) => registerSessionPackageForProject(process.cwd(), dir, readiness) : seams.registerSession;
+  const register = seams === undefined ? async (dir: string) => registerSessionPackageForProject(await sessionProjectRoot(process.cwd()) ?? process.cwd(), dir, readiness) : seams.registerSession;
   const publication = await sessionPublication(packageDir, register, (text) => console.error(`warning: ${text}`));
   const result = await publishReview(packageDir, {
     event,
@@ -5204,7 +5205,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   }
   // Flow 521: a session's PR review becomes an Attempt of its Review, listed and publishable in Desktop.
   const register = seams === undefined
-    ? (dir: string) => registerSessionPackageForProject(process.cwd(), dir, { prLookup: trackerPrLookup, prFiles: githubPrFiles })
+    ? async (dir: string) => registerSessionPackageForProject(await sessionProjectRoot(process.cwd()) ?? process.cwd(), dir, { prLookup: trackerPrLookup, prFiles: githubPrFiles })
     : seams.registerSession;
   if (register !== undefined) {
     const recorded = await sessionPublication(await resolveReviewPackagePath(process.cwd(), ref), register, (text) => console.error(`warning: ${text}`));
