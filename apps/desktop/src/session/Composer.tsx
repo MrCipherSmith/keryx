@@ -601,7 +601,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         <span className="composer-hint truncate" title={disabled ? undefined : sendHint}>{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
         {busy ? (
           <button className="send-btn is-stop" onClick={onStop} title="Stop the current turn (Esc)" aria-label="Stop">
-            <Icon name="stop" size={12} strokeWidth={0} className="filled" />
+            {/* The glyph is a 10/24 square of the icon box: 24 gives a 10px square in the 30px button. */}
+                  <Icon name="stop" size={24} strokeWidth={0} className="filled" />
           </button>
         ) : (
           <button className="send-btn" onClick={() => void send()} disabled={disabled || localDraft.pending || (!text.trim() && !hasAttachments)} title="Send" aria-label="Send">
