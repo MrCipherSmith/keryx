@@ -371,7 +371,8 @@ describe("clientTakesTerminalResults (F-001/RR-001): the run-tracking client cap
 describe("AC10: the system instruction for a client that returns Run results", () => {
   test("with clientReturnsRunResults: Run button, untrusted terminal-result note, the next turn starts by itself, end the turn instead of asking for pasted output", () => {
     const text = buildAgentSystemInstruction(undefined, { clientReturnsRunResults: true });
-    const bullet = text.split("\n").find((line) => line.includes("Run button")) ?? "";
+    // The Run-results bullet is found by its own words: main's command-handoff bullet also mentions a Run button.
+    const bullet = text.split("\n").find((line) => line.includes("terminal-result note")) ?? "";
     expect(bullet).toContain("shell code block");
     expect(bullet).toContain("exactly one command");
     expect(bullet).toContain("exit code and output");
@@ -384,11 +385,11 @@ describe("AC10: the system instruction for a client that returns Run results", (
 
   test("without the flag (absent or false) the sentence is absent and the instruction is byte-identical", () => {
     const plain = buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m" });
-    expect(plain).not.toContain("Run button");
+    expect(plain).not.toContain("gets a Run button");
     expect(plain).not.toContain("terminal-result");
     expect(buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientReturnsRunResults: false })).toBe(plain);
     const withFlag = buildAgentSystemInstruction(undefined, { providerId: "p", modelId: "m", clientReturnsRunResults: true });
     expect(withFlag.length).toBeGreaterThan(plain.length);
-    expect(withFlag.split("\n").filter((line) => !line.includes("Run button")).join("\n")).toBe(plain);
+    expect(withFlag.split("\n").filter((line) => !line.includes("terminal-result note")).join("\n")).toBe(plain);
   });
 });

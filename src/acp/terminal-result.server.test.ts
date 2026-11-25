@@ -157,11 +157,11 @@ describe("initialize and the system instruction (AC10, F-001/RR-001)", () => {
 
     // F-001/RR-001: a desktop released before flow 523 sends terminal: true for /delegate, but its Run returns nothing.
     const delegateOnly = await instructionOf({ capabilities: DELEGATE_ONLY_CAPS });
-    expect(delegateOnly).not.toContain("Run button");
+    expect(delegateOnly).not.toContain("gets a Run button");
     expect(delegateOnly).not.toContain("terminal-result");
-    expect(await instructionOf({ capabilities: {} })).not.toContain("Run button");
+    expect(await instructionOf({ capabilities: {} })).not.toContain("gets a Run button");
     // TP-005: the editor profile never gets it, whatever the client advertised.
-    expect(await instructionOf({ profile: "editor" })).not.toContain("Run button");
+    expect(await instructionOf({ profile: "editor" })).not.toContain("gets a Run button");
   }, TIMEOUT_MS);
 
   test("RR-001: a Telegram turn of a run-tracking desktop's session never carries the sentence; the desktop's own turns do", async () => {
@@ -189,7 +189,7 @@ describe("initialize and the system instruction (AC10, F-001/RR-001)", () => {
     await h.waitFor((f) => f.params?.update?.sessionUpdate === "_keryx/telegram/turn" && (f.params.update as { phase?: string }).phase === "finished");
     expect(sent).toHaveLength(2);
     expect(sent[1]?.messages.at(-1)?.content).toBe("from the phone");
-    expect(sent[1]?.systemInstruction).not.toContain("Run button");
+    expect(sent[1]?.systemInstruction).not.toContain("gets a Run button");
     expect(sent[1]?.systemInstruction).not.toContain("terminal-result");
   }, TIMEOUT_MS);
 });
