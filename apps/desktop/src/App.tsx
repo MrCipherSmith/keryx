@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { DeskRevision, DeskRun, DeskRunKey } from "../../../src/review/desk-run-types";
-import { SESSION_REVIEW_REQUEST_LIMIT, SESSION_REVIEW_REQUEST_METHOD, SESSION_REVIEWS_METHOD, type SessionReviewSummary } from "../../../src/acp/session-reviews-contract";
+import type { DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot } from "../../../src/review/desk-run-types";
+import { SESSION_REVIEWS_METHOD, type SessionReviewSummary } from "../../../src/acp/session-reviews-contract";
 import type { DeskReviewOptions } from "../../../src/review/desk-run-options";
 import { isTauri } from "./platform/backend";
 import {
@@ -29,7 +29,8 @@ import { RoutingDialog } from "./shell/RoutingDialog";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
-import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
+import { reviewRun } from "./platform/reviewRuns";
+import { REVIEW_SESSION_BUSY, reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
 import { modelChoices, providerOf } from "./session/Composer";
 import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
 import { IssuesView } from "./issues/IssuesView";
@@ -608,10 +609,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
   const reviewsIndicator = !reviewDisconnected && reviewsNotice?.binding === reviewViewer ? reviewsNotice?.indicator ?? null : null;
-  const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
-  const linkReviewContinuation = useCallback((link: SessionReviewLink) => {
-    setReviewLinks(previous => [link, ...previous.filter(item => item.id !== link.id || item.sessionId !== link.sessionId)].slice(0, 100));
-  }, []);
+  // Links Desktop remembered from v2 launches; v3 starts are turns in the session, so nothing is added here any more.
+  const [reviewLinks] = useState(() => readSessionReviewLinks(cwd));
   const openOriginReviewSession = useCallback(async (sessionId: string) => {
     if (!(await s.loadSession(sessionId))) {
       throw new Error("The originating session could not be opened in this project.");
@@ -622,39 +621,41 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (!run.sessionId) throw new Error("This review has no originating session.");
     await openOriginReviewSession(run.sessionId);
   }, [openOriginReviewSession]);
-  const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string) => {
-    const sessionId = owner ?? await s.newSession();
-    if (!sessionId) throw new Error("Could not create the review session.");
-    const { baseSha, headSha } = revision;
-    const snapshot = await reviewRun(cwd, key, { kind: "start", baseSha, headSha, ...(options && { options }), sessionId });
-    const run = snapshot.runs.find(attempt => attempt.id === snapshot.startedRunId);
-    if (!run) throw new Error("The selected Keryx CLI did not confirm the review attempt.");
-    publishSessionReview(cwd, key, snapshot);
-    if (run.sessionId !== sessionId) {
-      const remembered = !run.sessionId ? readSessionReviewLinks(cwd).find(link =>
-        link.id === run.id && link.key.repositoryId === key.repositoryId &&
-        link.key.viewer.toLowerCase() === key.viewer.toLowerCase()) : undefined;
-      const origin = run.sessionId ?? remembered?.sessionId;
-      s.notify("info", origin ? "Opening the review already recorded for this revision." : "This revision already has a review. Opening its details.");
-      if (origin) {
-        void openOriginReviewSession(origin).catch(() => openInReviews(key));
-      } else {
-        openInReviews(key);
-      }
-      return snapshot;
+  /**
+   * Desktop Review v3, stage 1: a manual review is a turn in a live session, never a detached worker. The `/review`
+   * dialog's own session (`owner`) gets the turn; a board or Reviews tab start goes to the PR's newest bound session, or
+   * a new session bound to the PR. A busy session gets no turn and nothing is queued: the caller shows the error.
+   * Resolves the PR's current attempt history (empty when it cannot be read) with the session the turn went into.
+   */
+  const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string): Promise<DeskRunSnapshot> => {
+    const session = acp.current;
+    let sessionId = owner;
+    if (!sessionId) {
+      const subject = prSubject({ number: key.number, url: reviewPullRequestUrl(key) }, key.repo, key.repositoryId);
+      const opened = await openSubject({
+        sessions: () => subjectSessionsRef.current,
+        loadSession: async id => { await session.loadSession(id); },
+        newSession: () => session.newSession(),
+        bind: (id, value) => void session.bindSubject(id, value),
+        // The review is sent as a turn: no composer draft is touched.
+        fill: () => {},
+        isShown: session.isShown,
+      }, subject, "latest", "");
+      if (!opened) throw new Error("Could not open the review session.");
+      sessionId = opened.sessionId;
     }
-    const request = (prompt || `Review https://github.com/${key.repo}/pull/${key.number}`).slice(0, SESSION_REVIEW_REQUEST_LIMIT);
-    let savedRequest: string | undefined;
-    if (s.extensions.includes(SESSION_REVIEW_REQUEST_METHOD)) {
-      const persisted = await s.rpc<string | null>(SESSION_REVIEW_REQUEST_METHOD, { sessionId, attemptId: run.id, text: request }).catch(() => null);
-      if (typeof persisted === "string") savedRequest = persisted;
-      else s.notify("warn", "The review started, but its original request could not be saved.");
-    }
-    linkReviewContinuation({ id: run.id, sessionId, key, ...(savedRequest && { prompt: savedRequest }),
-      revision: { baseSha: run.baseSha, headSha: run.headSha } });
+    // A typed `/review [target]` is the command that opened the dialog, not a request: its target is already resolved.
+    const request = prompt && !/^\/review(\s|$)/.test(prompt.trim()) ? prompt : undefined;
+    const turn = reviewStartTurn({ key, revision, sessionId, options, request });
+    // Refused (busy): the launch form stays where it was and shows why; nothing is queued.
+    if (!session.sendPrompt(turn, sessionId)) throw new Error(REVIEW_SESSION_BUSY);
     if (!owner) setView("session");
-    return snapshot;
-  }, [cwd, linkReviewContinuation, s.newSession, s.notify, s.extensions, s.rpc, openOriginReviewSession, openInReviews]);
+    // The turn is already running: a failed history read must not report the start as failed, so it shows no attempts.
+    const history = await reviewRun(cwd, key, { kind: "status" }).catch((): DeskRunSnapshot => ({ version: 1, runs: [] }));
+    return { ...history, startedSessionId: sessionId };
+  }, [cwd, openSubject]);
+  const continueSessionReview = useCallback((link: SessionReviewLink, note: string) =>
+    acp.current.sendPrompt(reviewContinueTurn({ key: link.key, note }), link.sessionId), []);
   const boardReviewRun = useCallback<typeof reviewRun>((project, key, action) => {
     return action.kind === "start" ? startSessionReview(key, action, action.options) : reviewRun(project, key, action);
   }, [startSessionReview]);
@@ -762,7 +763,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
-            onContinuation={linkReviewContinuation} /> : undefined}
+            onContinueTurn={continueSessionReview} /> : undefined}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (

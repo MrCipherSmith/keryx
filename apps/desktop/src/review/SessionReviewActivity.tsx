@@ -3,6 +3,7 @@ import { canContinueDeskRun, type CoordinatorEvent, type DeskRun } from "../../.
 import { errMessage } from "../lib/format";
 import { Icon } from "../components/Icon";
 import { publishSessionReview, reviewRun, type ReviewRunAction } from "../platform/reviewRuns";
+import { REVIEW_SESSION_BUSY } from "./reviewTurn";
 import { pendingManualQuestions, ReviewProgress, runStatusLabel } from "./ReviewProgress";
 import { ReviewRunDialog } from "./ReviewRunDialog";
 import { ReviewQuestion } from "./ReviewQuestion";
@@ -26,9 +27,17 @@ export function sessionReviewPublication(cwd: string, key: SessionReviewLink["ke
   return { cwd, target: key, url: `https://github.com/${key.repo}/pull/${key.number}` };
 }
 
-export function SessionReviewActivity({ cwd, links, visible, onContinuation }: {
+/**
+ * Sends a continue turn into the link's session (Desktop Review v3); false when the session refused it (busy). Continue
+ * is a turn in the live session, never a new detached attempt (`review_run continue`).
+ */
+export type ContinueReviewTurn = (link: SessionReviewLink, note: string) => boolean | Promise<boolean>;
+
+export function SessionReviewActivity({ cwd, links, visible, onContinueTurn, runCommand = reviewRun }: {
   cwd: string; links: readonly SessionReviewLink[]; visible: boolean;
-  onContinuation: (link: SessionReviewLink) => void;
+  onContinueTurn: ContinueReviewTurn;
+  /** The review_run command; injected by tests. */
+  runCommand?: typeof reviewRun | undefined;
 }) {
   const [limit, setLimit] = useState(5);
   return <section className="session-review-activity" aria-label="Review activity">
@@ -36,13 +45,13 @@ export function SessionReviewActivity({ cwd, links, visible, onContinuation }: {
     {links.slice(0, limit).map((link, index) => <FollowedReview cwd={cwd} link={link} visible={visible} key={link.id}
       canContinue={!links.slice(0, index).some(next => next.key.repositoryId === link.key.repositoryId && next.key.number === link.key.number &&
         next.key.viewer.toLowerCase() === link.key.viewer.toLowerCase() && next.revision.headSha === link.revision.headSha && next.revision.baseSha === link.revision.baseSha)}
-      onContinuation={onContinuation} />).reverse()}
+      onContinueTurn={onContinueTurn} reviewRun={runCommand} />).reverse()}
   </section>;
 }
 
-function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
+function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, reviewRun }: {
   cwd: string; link: SessionReviewLink; visible: boolean; canContinue: boolean;
-  onContinuation: (link: SessionReviewLink) => void;
+  onContinueTurn: ContinueReviewTurn; reviewRun: typeof import("../platform/reviewRuns").reviewRun;
 }) {
   const [run, setRun] = useState<DeskRun | null>(null);
   const [open, setOpen] = useState(false);
@@ -85,7 +94,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
       }
       setError(message);
     } finally { inFlight.current = false; }
-  }, [cwd, link]);
+  }, [cwd, link, reviewRun]);
   const pending = !run || runActive(run);
   const automaticPublication = run?.options?.autoPublish && run.publication === "pending" ? run.finishedAt : null;
   useEffect(() => {
@@ -131,21 +140,17 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
     } finally { writing.current = false; setWorking(false); }
     void refresh();
     return true;
-  }, [cwd, link, refresh]);
+  }, [cwd, link, reviewRun, refresh]);
   const continueReview = useCallback(async (guidance: string) => {
     if (writing.current) return false;
     writing.current = true;
-    const current = ++generation.current;
+    const current = generation.current;
     setWorking(true);
     setError("");
     try {
-      const note = guidance.trim();
-      const result = await reviewRun(cwd, link.key, { kind: "continue", id: link.id, ...(note && { guidance: note }) });
-      const next = result.runs.find(item => item.id === result.startedRunId);
-      if (!next || next.continuation?.previousId !== link.id)
-        throw new Error("Could not confirm the continuation. Refresh the review before trying again.");
-      onContinuation({ ...link, id: next.id, prompt: note || "Continue review" });
-      publishSessionReview(cwd, link.key, result);
+      // The note stays in the form until the turn is accepted: a busy session keeps what the user typed.
+      if (!(await onContinueTurn(link, guidance.trim()))) throw new Error(REVIEW_SESSION_BUSY);
+      if (current === generation.current) setGuidance("");
       return true;
     } catch (failure) {
       if (current === generation.current) setError(errMessage(failure));
@@ -154,7 +159,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
       writing.current = false;
       setWorking(false);
     }
-  }, [cwd, link, onContinuation]);
+  }, [link, onContinueTurn]);
 
   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
     const snapshot = await reviewRun(cwd, link.key, action);
@@ -166,7 +171,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinuation }: {
       publishSessionReview(cwd, link.key, snapshot);
     }
     return snapshot;
-  }, [cwd, link]);
+  }, [cwd, link, reviewRun]);
 
   const prefix = `[Review #${link.key.number}]`;
   const status = run ? runStatusLabel(run) : "Checking review status…";

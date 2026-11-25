@@ -182,6 +182,8 @@ export interface DeskRun extends DeskRevision {
 export interface DeskRunSnapshot {
   completion?: { checks: DeskReviewCheck[] };
   startedRunId?: string;
+  /** Desktop Review v3: the session a review turn was sent into, when a start ran as a session turn and not as an attempt. */
+  startedSessionId?: string;
   version: 1;
   runs: DeskRun[]; // newest request first, including any queued revision
 }
