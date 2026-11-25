@@ -328,7 +328,7 @@ function containsAnchor(text: string, needle: string): boolean {
 }
 
 /** The block index each card follows (-1: after the last block). */
-export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: { text?: unknown } }>, cards: readonly ReviewCardSlot[]): Map<string, number> {
+export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?: unknown }>, cards: readonly ReviewCardSlot[]): Map<string, number> {
   const placed = new Map<string, number>();
   const claimed = new Map<string, number>();
   for (const card of cards) {
@@ -336,8 +336,11 @@ export function reviewCardPlacement(blocks: ReadonlyArray<{ type: string; item?:
     let at = -1;
     for (const needle of card.anchors) {
       if (!needle.trim()) continue;
-      at = blocks.findIndex((block, index) => index > after && block.type === "user" && typeof block.item?.text === "string" &&
-        containsAnchor(block.item.text, needle));
+      at = blocks.findIndex((block, index) => {
+        if (index <= after || block.type !== "user") return false;
+        const text = (block.item as { text?: unknown } | undefined)?.text;
+        return typeof text === "string" && containsAnchor(text, needle);
+      });
       if (at >= 0) break;
     }
     placed.set(card.key, at);

@@ -53,13 +53,15 @@ export function compactSummary(run: DeskRun): string {
  */
 export type ReviewCardMemory = Map<string, { expanded?: boolean; open?: boolean; guidance?: string; run?: DeskRun | null }>;
 
+type RememberedField<K extends "expanded" | "open" | "guidance" | "run"> = Exclude<NonNullable<ReturnType<ReviewCardMemory["get"]>>[K], undefined>;
+
 /** `useState` whose value outlives the component in `memory[key][field]`. */
 function useRemembered<K extends "expanded" | "open" | "guidance" | "run">(memory: ReviewCardMemory | undefined, key: string, field: K,
-  initial: NonNullable<ReturnType<ReviewCardMemory["get"]>>[K]) {
-  const [value, setValue] = useState(() => memory?.get(key)?.[field] ?? initial);
-  const set = useCallback((next: typeof value | ((previous: typeof value) => typeof value)) => {
+  initial: RememberedField<K>) {
+  const [value, setValue] = useState<RememberedField<K>>(() => (memory?.get(key)?.[field] as RememberedField<K> | undefined) ?? initial);
+  const set = useCallback((next: RememberedField<K> | ((previous: RememberedField<K>) => RememberedField<K>)) => {
     setValue(previous => {
-      const resolved = typeof next === "function" ? (next as (previous: typeof value) => typeof value)(previous) : next;
+      const resolved = typeof next === "function" ? (next as (previous: RememberedField<K>) => RememberedField<K>)(previous) : next;
       if (memory) memory.set(key, { ...memory.get(key), [field]: resolved });
       return resolved;
     });
@@ -162,18 +164,25 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
     if (active !== undefined) onActiveChange?.(link.id, active);
   }, [active, link.id, onActiveChange]);
   const automaticPublication = run?.options?.autoPublish && run.publication === "pending" ? run.finishedAt : null;
+  // After an accepted Continue the session may resume this round at any moment: keep reading for two minutes so the
+  // card pins as soon as the round runs again.
+  const [followUntil, setFollowUntil] = useState(0);
+  // Every mount reads the run once, whatever it remembers: a remembered run is a placeholder until the read lands.
+  useEffect(() => {
+    if (visible) void refresh();
+  }, [visible, refresh]);
   useEffect(() => {
     if (!visible) return;
-    if (pending) void refresh();
     const poll = () => {
       if (document.visibilityState !== "hidden") void refresh(true);
     };
-    const timer = pending || automaticPublication ? window.setInterval(() => {
-      if (pending || (automaticPublication && Date.now() - Date.parse(automaticPublication) < 120_000)) poll();
+    const following = followUntil > Date.now();
+    const timer = pending || automaticPublication || following ? window.setInterval(() => {
+      if (pending || Date.now() < followUntil || (automaticPublication && Date.now() - Date.parse(automaticPublication) < 120_000)) poll();
     }, 6000) : undefined;
     window.addEventListener("focus", poll);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", poll); };
-  }, [visible, pending, automaticPublication, refresh]);
+  }, [visible, pending, automaticPublication, followUntil, refresh]);
 
   const mutate = useCallback(async (action: Extract<ReviewRunAction, { kind: "cancel" | "answer" }>) => {
     if (writing.current) return false;
@@ -216,6 +225,8 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
       // The note stays in the form until the turn is accepted: a busy session keeps what the user typed.
       if (!(await onContinueTurn(link, guidance.trim()))) throw new Error(REVIEW_SESSION_BUSY);
       if (current === generation.current) setGuidance("");
+      setFollowUntil(Date.now() + 120_000);
+      void refresh();
       return true;
     } catch (failure) {
       if (current === generation.current) setError(errMessage(failure));
@@ -224,7 +235,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
       writing.current = false;
       setWorking(false);
     }
-  }, [link, onContinueTurn]);
+  }, [link, onContinueTurn, refresh, setGuidance]);
 
   const lifecycle = useCallback<ReviewLifecycleCommand>(async action => {
     const snapshot = await reviewRun(cwd, link.key, action);

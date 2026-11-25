@@ -72,7 +72,7 @@ test("two rounds give two cards, each where its own round started; the conversat
   const sequence = order();
   expect(sequence.filter(entry => entry.startsWith("[run-"))).toEqual(["[run-1]", "[run-2]"]);
   // Round 1's card stays above the fix-findings exchange; round 2's card follows the second review message.
-  expect(sequence.indexOf("[run-1]")).toBeLessThan(sequence.findIndex(entry => entry.includes("Fix the two")));
+  expect(sequence.indexOf("[run-1]") < sequence.findIndex(entry => entry.includes("Fix the two"))).toBe(true);
   expect(sequence.indexOf("[run-2]")).toBe(sequence.length - 2);
 });
 
